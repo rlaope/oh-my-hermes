@@ -311,13 +311,17 @@ test("40 nodes: no two cards overlap, the layout takes under 50 ms, crossings ar
   expect(await box.getByTestId("run-canvas").evaluate((e) => getComputedStyle(e).transform)).toBe("none");
 });
 
-test("a run larger than the panel opens on its running node, with edge fades and an 'Open full view' hint", async ({ page }) => {
+test("zoomed past the panel, a run opens on its running node, with edge fades and an 'Open full view' hint", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openRuns(page, "default");
   await pickRow(page, "Big run");
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", BIG);
   const graph = box.getByTestId("run-graph");
+  // it fits at first (compact cards); two steps of + make it larger than the box
+  await expect(graph).toHaveAttribute("data-overflow", "false");
+  await box.getByTestId("run-zoom-in").click();
+  await box.getByTestId("run-zoom-in").click();
   await expect(graph).toHaveAttribute("data-overflow", "true");
   // the first running node is in the visible part of the graph box, whole
   const live = box.locator('[data-testid="run-node"][data-state="running"]').first();
@@ -379,6 +383,105 @@ test("a run only a little wider than the panel is shown whole, scaled to fit, wi
   await expect(box.getByTestId("run-full-hint")).toHaveCount(0);
 });
 
+test("a run too wide even scaled goes compact: two-line titles over a logo and a state, no chips, all on screen, 16px margins", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page, "default");
+  await pickRow(page, "Big run");
+  const box = panel(page);
+  const graph = box.getByTestId("run-graph");
+  await expect(graph).toHaveAttribute("data-compact", "true");
+  await expect(graph).toHaveAttribute("data-overflow", "false");
+  expect(Number(await graph.getAttribute("data-fit"))).toBeGreaterThanOrEqual(0.6);
+  await expect(box.locator(".rg-card.enter")).toHaveCount(0);
+  const cards = box.getByTestId("run-node");
+  await expect(cards).toHaveCount(40);
+  // no chips and no time on a compact card: its title, the logo and the state
+  await expect(box.getByTestId("route-pill")).toHaveCount(0);
+  await expect(box.locator(".rg-card .rg-mt")).toHaveCount(0);
+  for (const c of await cards.all()) {
+    await expect(c.getByTestId("node-mark")).toHaveCount(1);
+    await expect(c.locator(".rg-st")).toHaveCount(1);
+  }
+  // every card whole in the box, with the 16px margin on all sides, and every title whole in its card
+  const geo = await box.evaluate((b) => {
+    const g = b.querySelector("[data-testid=run-graph]")!.getBoundingClientRect();
+    const rs = [...b.querySelectorAll("[data-testid=run-node]")].map((c) => c.getBoundingClientRect());
+    const t = [...b.querySelectorAll("[data-testid=run-node] .rg-t")].map((e) => [e.scrollHeight, e.clientHeight, (e as HTMLElement).innerText.split("\n").length]);
+    return { l: Math.min(...rs.map((r) => r.left)) - g.left, r: g.right - Math.max(...rs.map((r) => r.right)), b: g.bottom - Math.max(...rs.map((r) => r.bottom)), t };
+  });
+  for (const k of ["l", "r", "b"] as const) expect(geo[k], k).toBeGreaterThanOrEqual(15);
+  for (const [sh, ch, lines] of geo.t) {
+    expect(sh).toBeLessThanOrEqual(ch + 1);
+    expect(lines).toBeGreaterThanOrEqual(1);
+  }
+  // the panel keeps the full view as it was
+  await page.getByTestId("graph-expand").click();
+  await expect(full(page).getByTestId("run-graph")).not.toHaveAttribute("data-compact", /.*/);
+  await expect(full(page).getByTestId("route-pill").first()).toBeVisible();
+});
+
+test("never a stub: zoomed in, a clipped side gets a fade and a '‹ N more' cue, and edges to it fade out", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page, "default");
+  await pickRow(page, "Big run");
+  const box = panel(page);
+  const graph = box.getByTestId("run-graph");
+  const fit0 = Number(await graph.getAttribute("data-fit"));
+  // fitted: every edge has both ends on screen, no mask, no cue
+  await expect(box.getByTestId("run-edges-clip")).toHaveAttribute("data-mask", "false");
+  await expect(box.locator(".rg-edge.off")).toHaveCount(0);
+  await expect(box.locator(".rg-more")).toHaveCount(0);
+  for (let i = 0; i < 3; i++) await box.getByTestId("run-zoom-in").click();
+  await expect(graph).toHaveAttribute("data-overflow", "true");
+  expect(Number(await graph.getAttribute("data-fit"))).toBeGreaterThan(fit0);
+  await graph.evaluate((e) => (e.scrollLeft = e.scrollWidth / 2 - e.clientWidth / 2));
+  await expect(box.getByTestId("run-fade-l")).toHaveAttribute("data-on", "true");
+  await expect(box.getByTestId("run-fade-r")).toHaveAttribute("data-on", "true");
+  // the cue counts the cards cut on its side
+  const cut = await box.evaluate((b) => {
+    const g = b.querySelector("[data-testid=run-graph]")!.getBoundingClientRect();
+    const rs = [...b.querySelectorAll("[data-testid=run-node]")].map((c) => c.getBoundingClientRect());
+    return { l: rs.filter((r) => r.left < g.left - 1).length, r: rs.filter((r) => r.left >= g.left - 1 && r.right > g.right + 1).length };
+  });
+  await expect(box.getByTestId("run-more-l")).toHaveText(`‹ ${cut.l} more`);
+  await expect(box.getByTestId("run-more-r")).toHaveText(`${cut.r} more ›`);
+  // every edge with an end off screen is the quiet kind, and the edges fade out at the box's sides
+  await expect(box.getByTestId("run-edges-clip")).toHaveAttribute("data-mask", "true");
+  const bad = await box.evaluate((b) => {
+    const g = b.querySelector("[data-testid=run-graph]")!.getBoundingClientRect();
+    const on = (id: string) => {
+      const r = b.querySelector(`[data-testid=run-node][data-node="${id}"]`)!.getBoundingClientRect();
+      return r.right > g.left + 8 && r.left < g.right - 8 && r.bottom > g.top + 8 && r.top < g.bottom - 8;
+    };
+    return [...b.querySelectorAll<SVGGElement>("[data-testid=run-edge]")].filter((e) => (!on(e.dataset.from!) || !on(e.dataset.to!)) && !e.classList.contains("off")).length;
+  });
+  expect(bad).toBe(0);
+  // Fit brings it back whole
+  await box.getByTestId("run-zoom-fit").click();
+  await expect(graph).toHaveAttribute("data-overflow", "false");
+  expect(Number(await graph.getAttribute("data-fit"))).toBe(fit0);
+  await expect(box.locator(".rg-more")).toHaveCount(0);
+});
+
+test("the graph box is as tall as the run: no empty canvas under a short run; zoom sits in the legend row", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page);
+  await pickRow(page, "Ship the API fix", "cli-run-row");
+  const box = panel(page);
+  const wrap = (await box.locator(".rn-gwrap").boundingBox())!;
+  const g = (await box.getByTestId("run-graph").boundingBox())!;
+  expect(wrap.height - g.height).toBeLessThanOrEqual(2);
+  const lowest = Math.max(...(await box.getByTestId("run-node").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().bottom))));
+  expect(g.y + g.height - lowest).toBeLessThanOrEqual(24);
+  // − / Fit / + in the legend row, on its line
+  const legend = (await box.getByTestId("run-legend").boundingBox())!;
+  for (const id of ["run-zoom-out", "run-zoom-fit", "run-zoom-in"]) {
+    const b = (await box.getByTestId(id).boundingBox())!;
+    expect(b.y).toBeGreaterThanOrEqual(legend.y - 1);
+    expect(b.y + b.height).toBeLessThanOrEqual(legend.y + legend.height + 1);
+  }
+});
+
 test("the run list shows the 12 newest, running first, with 'Show all (N)'", async ({ page }) => {
   // 44 runs, as on a real profile: the mock's own four plus 40 finished copies
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
@@ -436,9 +539,9 @@ test("a selected run folds the list into its header; 'All runs' unfolds it; pick
   const live = (await panel(page).locator('[data-testid="run-node"][data-state="running"]').boundingBox())!;
   expect(live.y + live.height).toBeLessThanOrEqual(800);
   expect(await page.locator(".details .pn-scroll").evaluate((e) => e.scrollTop)).toBe(0);
-  // the graph box takes the rest of the panel (at least 320px) and the legend stays inside it
+  // the graph box is as tall as the run (no empty canvas under it) and the legend stays inside the panel
   const wrap = (await panel(page).locator(".rn-gwrap").boundingBox())!;
-  expect(wrap.height).toBeGreaterThanOrEqual(320);
+  expect(wrap.height - g.height).toBeLessThanOrEqual(2);
   const pane = (await page.locator(".details .pn-scroll").boundingBox())!;
   const leg = (await panel(page).getByTestId("run-legend").boundingBox())!;
   expect(leg.y + leg.height).toBeLessThanOrEqual(pane.y + pane.height + 0.5);
@@ -733,7 +836,9 @@ test("plan card: title, goal, layers as chips, counts and time, first in the pan
   await expect(plan).toContainText("3 layers · 6 parts");
   // the panel keeps the goal in the card's tooltip; the full view prints it
   expect(await plan.getAttribute("title")).toContain("OMH suggests its own skills");
-  expect(await plan.getByTestId("run-plan-layer").allInnerTexts()).toEqual(["L1 · 2", "L2 · 3", "L3 · 1"]);
+  // one name per layer, the same in the chips and over the graph's columns
+  expect(await plan.getByTestId("run-plan-layer").allInnerTexts()).toEqual(["L1 · Plan", "L2 · Repair", "L3 · Verify"]);
+  expect(await panel(page).getByTestId("run-col").allInnerTexts()).toEqual(["L1 · Plan", "L2 · Repair", "L3 · Verify"]);
   const counts = plan.getByTestId("run-plan-counts");
   // the failed node's two repairs are done: it counts as repaired, not as an open failure
   for (const t of ["3 done", "1 running", "1 waiting", "1 repaired"]) await expect(counts).toContainText(t);
@@ -763,23 +868,38 @@ test("a run that has not started: 'Starts in 0:..' with Start now / Edit, which 
 
 // ---- T5: helpers' models and routes ----
 
-test("cards show the helper's model and a one-line route pill from the route record", async ({ page }) => {
+test("cards show the helper's model and a one-line route pill from the route record; a pill that does not fit is left out", async ({ page }) => {
+  await openRuns(page);
+  await pickRow(page, "Codex coexistence fixes");
+  // a route pill shows whole or not at all (one line, never cut); a routed card without one names it in its tooltip
+  const pills = panel(page).getByTestId("route-pill");
+  const routed = (await mock("runs.get", { bot: "kami", run: FAN })).run.nodes.filter((n: any) => n.route);
+  expect(routed.length).toBeGreaterThan(0);
+  for (const n of routed) {
+    const c = panel(page).locator(`[data-testid="run-node"][data-node="${n.id}"]`);
+    if ((await c.getByTestId("route-pill").count()) === 0) expect(await c.getAttribute("title")).toContain(`route: ${n.route}`);
+  }
+  for (const pill of await pills.all()) {
+    const p = await pill.evaluate((e) => [e.getBoundingClientRect().height, e.scrollWidth <= e.clientWidth + 1, getComputedStyle(e).whiteSpace, getComputedStyle(e).fontSize]);
+    expect(p[0]).toBeLessThanOrEqual(16); // one line, never wraps
+    expect(p[1]).toBe(true); // whole, never "r…"
+    expect(p[2]).toBe("nowrap");
+    expect(p[3]).toBe("9.5px");
+  }
   await openRuns(page, "default");
   await pickRow(page, "omher v0.2");
   const box = panel(page);
   const card = box.locator('[data-node="t7-t10-usage"]');
   await expect(card.getByTestId("node-mark")).toHaveAttribute("data-mark", "claude");
-  const pill = card.getByTestId("route-pill");
-  await expect(pill).toHaveText("visual-engineering");
-  const p = await pill.evaluate((e) => [e.getBoundingClientRect().height, e.scrollWidth >= e.clientWidth, getComputedStyle(e).whiteSpace, getComputedStyle(e).fontSize]);
-  expect(p[0]).toBeLessThanOrEqual(16); // one line, never wraps
-  expect(p[2]).toBe("nowrap");
-  expect(p[3]).toBe("9.5px");
+  // "visual-engineering" does not fit this card: no pill (never a letter and "…"); the card's tooltip names it
+  await expect(card.getByTestId("route-pill")).toHaveCount(0);
+  expect(await card.getAttribute("title")).toContain("route: visual-engineering");
+  for (const pill of await box.getByTestId("route-pill").all()) expect(await pill.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
   // a node no helper ran yet: the model its route goes to (OMH's route records), never a hollow glyph
   const t9 = box.locator('[data-node="t9-verify"]');
   await expect(t9.getByTestId("node-mark")).toHaveAttribute("data-mark", "claude");
   await expect(t9.getByTestId("node-mark")).toHaveAttribute("data-source", "route");
-  await expect(t9.getByTestId("route-pill")).toHaveText("review");
+  expect(await t9.getAttribute("title")).toContain("route: review");
   // the drawer names the model and effort from the delegation log
   await card.click();
   await expect(page.getByTestId("run-drawer")).toContainText("Opus 5.5 · high");

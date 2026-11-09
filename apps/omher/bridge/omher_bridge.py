@@ -690,6 +690,9 @@ def read_task_log(path: Path) -> dict:
             st = re.search(r"status=(\S+)", body)
             if st:
                 out.setdefault("status", st.group(1))
+            took = re.search(r"\bduration=(\d+(?:\.\d+)?)s\b", body.split("summary:", 1)[0])
+            if took:
+                out["duration"] = float(took.group(1))
     return out
 
 
@@ -775,6 +778,10 @@ class Delegations:
                 started = _local_ts(head.get("started"), self.tz)
                 if started is not None:
                     task["started"] = started
+                    # the task's own end (its final line's duration): a fan-out still running has no `completed`
+                    # yet, and its finished tasks must not keep counting
+                    if head.get("duration") is not None and task["status"] != "running":
+                        task["ended"] = round(started + head["duration"], 3)
                 model = t.get("model") or d.get("model")
                 if isinstance(model, str) and model:
                     task["model"] = model
@@ -850,8 +857,9 @@ def delegation_to_run(d: dict, bot: str) -> dict:
         att = {"n": 1, "outcome": t["status"]}
         if t.get("started") is not None or d["started"]:
             att["started"] = t.get("started", d["started"])
-        if state != "running" and d.get("ended") is not None:
-            att["ended"] = d["ended"]
+        end = t.get("ended", d.get("ended"))
+        if state != "running" and end is not None:
+            att["ended"] = end
         if state in ("failed", "cancelled") and (t.get("error") or t.get("summary")):
             att["reason"] = t.get("error") or t.get("summary")
         node = {"id": f"task-{t['index']}", "label": t["goal"] or f"Task {t['index'] + 1}", "deps": [], "layer": 0,

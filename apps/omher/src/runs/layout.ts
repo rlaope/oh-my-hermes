@@ -71,6 +71,9 @@ export interface LayoutOpts {
   gateW?: number;
   /** The graph may be wider than `width` (the full view pans): the gate always gets `gateW`. */
   loose?: boolean;
+  /** Several edges into (or out of) one card meet its side at their own points, spread over its middle 70% in the
+   *  order of their other ends, instead of all at the middle (the panel's compact cards: traceable edges). */
+  ports?: boolean;
 }
 
 type N = Pick<RunNode, "id" | "deps" | "layer" | "state" | "label"> & { repairOf?: string; route?: string; role?: string };
@@ -103,7 +106,8 @@ export function routeEdge(x1: number, y1: number, x2: number, y2: number, lanes:
   };
   // straight leads out of and into every card side, sized by the gutter they sit in: all curves in one gutter
   // start and end at the same x, so edges converging on one card nest instead of crossing
-  const lead = (gap: number) => Math.min(28, Math.max(6, gap / 3.5));
+  // (a narrow gutter, as in the panel's compact cards, keeps most of its width for the curve)
+  const lead = (gap: number) => Math.min(28, Math.max(Math.min(6, gap / 5), gap / 3.5));
   // the gutters the edge passes: [left, right] of each free band between x1, the crossed columns and x2
   const walls = [x1, ...lanes.flatMap((l) => [l.x, l.x + l.w]), x2];
   const leads = walls.flatMap((_, k) => (k % 2 === 0 && k + 1 < walls.length ? [lead(walls[k + 1] - walls[k])] : []));
@@ -261,6 +265,13 @@ export function columnLabel(nodes: N[], layer: number): string {
   return `${name} · ${nodes.length}`;
 }
 
+/** A layer's one name, the same in the panel's chips and its column labels: "L4 · Verify" (the column label's
+ *  leading role, without its count). */
+export function layerName(layer: number, label: string): string {
+  const role = label.replace(/ · \d+$/, "").split(" + ")[0];
+  return role ? `L${layer + 1} · ${role}` : `L${layer + 1}`;
+}
+
 export function layoutRun(nodes: N[], o: LayoutOpts): Layout {
   const t0 = performance.now();
   const { order, crossings } = orderLayers(nodes);
@@ -305,15 +316,31 @@ export function layoutRun(nodes: N[], o: LayoutOpts): Layout {
     x += colW[l] + o.gutter;
   });
   const lanes: Lane[] = order.map((col, l) => ({ x: columns[l].x, w: colW[l], spans: col.map((id) => [pos.get(id)!.y, size.get(id)!.h] as [number, number]) }));
+  // ports: the k-th of n edges on a card's side meets it at (k + 1) / (n + 1) of its middle 70%
+  const port = new Map<string, number>();
+  if (o.ports) {
+    const mid = (id: string) => pos.get(id)!.y + size.get(id)!.h / 2;
+    for (const [side, end, other] of [["in", "to", "from"], ["out", "from", "to"]] as const) {
+      const by = new Map<string, typeof links>();
+      for (const e of links) (by.get(e[end]) ?? by.set(e[end], []).get(e[end])!).push(e);
+      for (const [id, es] of by) {
+        if (es.length < 2) continue;
+        const h = size.get(id)!.h;
+        [...es]
+          .sort((p, q) => mid(p[other]) - mid(q[other]))
+          .forEach((e, k) => port.set(`${side}:${e.from}>${e.to}`, Math.round(pos.get(id)!.y + h * 0.15 + h * 0.7 * ((k + 1) / (es.length + 1)))));
+      }
+    }
+  }
   const edges: Edge[] = links.map((e) => {
     const a = pos.get(e.from)!;
     const b = pos.get(e.to)!;
     const sa = size.get(e.from)!;
     const sb = size.get(e.to)!;
     const x1 = a.x + sa.w;
-    const y1 = a.y + sa.h / 2;
+    const y1 = port.get(`out:${e.from}>${e.to}`) ?? a.y + sa.h / 2;
     const x2 = b.x;
-    const y2 = b.y + sb.h / 2;
+    const y2 = port.get(`in:${e.from}>${e.to}`) ?? b.y + sb.h / 2;
     const src = byId.get(e.from)!;
     return {
       key: `${e.from}>${e.to}`,

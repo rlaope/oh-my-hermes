@@ -299,6 +299,8 @@ export interface Delegation {
     goal: string;
     status: string;
     started?: number;
+    /** The task's own end (its log's final line: started + duration), before the whole fan-out completes. */
+    ended?: number;
     model?: string;
     summary?: string;
     error?: string;
@@ -340,7 +342,8 @@ export function fromDelegation(d: Delegation, bot: string): AgentRun {
     const state = TASK_STATE[t.status] ?? "running";
     const att: RunAttempt = { n: 1, outcome: t.status };
     if (t.started !== undefined || d.started) att.started = t.started ?? d.started;
-    if (state !== "running" && d.ended !== undefined) att.ended = d.ended;
+    const end = t.ended ?? d.ended;
+    if (state !== "running" && end !== undefined) att.ended = end;
     if ((state === "failed" || state === "cancelled") && (t.error || t.summary)) att.reason = t.error || t.summary;
     const node: RunNode = { id: `task-${t.index}`, label: t.goal || `Task ${t.index + 1}`, deps: [], layer: 0, state, attempts: [att] };
     Object.assign(node, taskFields(t, d));

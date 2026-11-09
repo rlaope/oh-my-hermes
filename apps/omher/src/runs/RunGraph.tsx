@@ -1,4 +1,6 @@
-// The Runs graph, in two sizes. "panel": compact cards that fit the 440px side panel, no zoom. "full": the whole
+// The Runs graph, in two sizes. "panel": cards that fit the 440px side panel; a run wider than the panel is scaled to
+// fit (down to 0.8), else drawn with compact cards (title, logo, state) scaled down to 0.6, else it scrolls with a
+// "‹ 3 more" cue on the clipped side; − / Fit / + in the legend row zoom it. "full": the whole
 // run large over the chat column, with titles in full, model marks, durations, attempts and a handoff snippet on
 // hover; there you can drag a card (its position only, kept per run), pan, zoom and Fit. Nothing here changes a
 // run: no connecting, deleting, reordering, retrying or cancelling.
@@ -6,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { AgentRun, RunNode } from "../lib/runs";
 import { isRepaired, nodeModel, span } from "../lib/runs";
 import { markFor, ModelIcon } from "../ui";
-import { distinctLabels, layoutRun, routeEdge, type Box, type Lane, type Layout, type Size } from "./layout";
+import { distinctLabels, layerName, layoutRun, routeEdge, type Box, type Lane, type Layout, type Size } from "./layout";
 import { clampWords, modelLabel, plainSnippet, reducedMotion, STATE_WORD, textWidth } from "./format";
 
 export type GraphMode = "panel" | "full";
@@ -14,7 +16,10 @@ export type GraphMode = "panel" | "full";
 // card heights carry the node's weight: a lead (plans, or unblocks several parts) is tallest, a leaf compact, the
 // closing gate sits in a wider column
 const SIZE = {
-  panel: { cardH: 80, heights: { lead: 90, normal: 80, leaf: 64, gate: 80 }, gateW: 1.15, gutter: 30, rowGap: 14, pad: 12, minCard: 100, maxCard: 300, labelH: 24, mark: 14 },
+  panel: { cardH: 80, heights: { lead: 90, normal: 80, leaf: 64, gate: 80 }, gateW: 1.15, gutter: 30, rowGap: 14, pad: 16, minCard: 100, maxCard: 406, labelH: 24, mark: 14 },
+  // the panel's compact cards: the title (up to COMPACT_LINES lines) over the logo and the state, no chips; the
+  // card is as tall as the longest title needs
+  compact: { cardH: 50, heights: {}, gateW: 1, ports: true, gutter: 18, rowGap: 20, pad: 16, minCard: 64, maxCard: 150, labelH: 22, mark: 12 },
   full: { cardH: 160, heights: { lead: 180, normal: 160, leaf: 140, gate: 168 }, gateW: 1.2, loose: true, gutter: 88, rowGap: 36, pad: 24, minCard: 220, maxCard: 280, labelH: 32, mark: 18 },
 };
 const STAGGER = { panel: 50, full: 70 };
@@ -24,7 +29,46 @@ const MAX_ENTRANCE = { panel: 950, full: 1500 };
 const DRAG_PX = 4;
 const DRAWER_W = 392;
 const MIN_FIT = 0.72; // below this the cards stop being readable: Fit keeps this scale and shows the open card
-const PANEL_MIN_FIT = 0.8; // the panel shrinks a run that is a little too large to fit whole; past this it scrolls
+const PANEL_MIN_FIT = 0.8; // the panel shrinks a run with full cards down to this; past it the cards go compact
+const COMPACT_MIN_FIT = 0.6; // compact cards shrink down to this; past it they keep COMPACT_SCROLL and the box scrolls
+const COMPACT_SCROLL = 0.8;
+const COMPACT_LINES = 6;
+const COMPACT_LINE_H = 13;
+const COMPACT_CHROME = 32; // a compact card's padding, gap and its logo + state row
+const COMPACT_FONT = () => `550 10px ${FONT()}`;
+/** A compact card's title: up to `lines` lines at word breaks in a card `w` wide. */
+// (the room is the card less its padding and borders, a failed card's 3px rail included: 4 + 3 | 5 + 1)
+const compactTitle = (label: string, w: number, lines = COMPACT_LINES) => clampWords(label, w - 13, lines, (s) => textWidth(s, COMPACT_FONT()));
+const PANEL_MARGIN = 16; // the panel graph's inner margin, on screen, at any scale
+export const PANEL_ZOOM = { min: 0.4, max: 1.6, step: 1.2 };
+
+/** How the panel draws a run: full cards at 1, else full cards scaled to fit (down to PANEL_MIN_FIT), else compact
+ *  cards at 1 or scaled to fit (down to COMPACT_MIN_FIT), else compact at COMPACT_SCROLL (the box scrolls). A scaled
+ *  layout is laid out at width/k with a margin of PANEL_MARGIN/k, so the margin on screen stays PANEL_MARGIN. */
+export function panelPlan(nodes: RunNode[], width: number, maxH = Infinity): { compact: boolean; k: number; lay: Layout; lines: number } {
+  const M = PANEL_MARGIN;
+  // compact cards are as tall as the longest of their titles at the width they get (at most COMPACT_LINES lines),
+  // as long as the run still fits the box's height
+  const labels = distinctLabels(nodes);
+  const probe = layoutRun(nodes, { ...SIZE.compact, width, pad: M });
+  const need = Math.max(2, ...nodes.map((n) => compactTitle(labels.get(n.id) ?? n.label, probe.cardW).split("\n").length));
+  let compactO = { ...SIZE.compact, cardH: need * COMPACT_LINE_H + COMPACT_CHROME, lines: need };
+  for (let l = need; l > 2; l--) {
+    compactO = { ...SIZE.compact, cardH: l * COMPACT_LINE_H + COMPACT_CHROME, lines: l };
+    if (layoutRun(nodes, { ...compactO, width, pad: M }).h <= maxH) break;
+  }
+  for (const [compact, o, min] of [
+    [false, SIZE.panel, PANEL_MIN_FIT],
+    [true, compactO, COMPACT_MIN_FIT],
+  ] as const) {
+    const lay = layoutRun(nodes, { ...o, width, pad: M });
+    if (lay.w <= width + 0.5 && lay.h <= maxH + 0.5) return { compact, k: 1, lay, lines: compactO.lines };
+    const k = Math.floor(Math.min(1, (width - 2 * M) / (lay.w - 2 * M), (maxH - 2 * M) / (lay.h - 2 * M)) * 1000) / 1000;
+    if (k >= min) return { compact, k, lay: layoutRun(nodes, { ...o, width: width / k, pad: M / k }), lines: compactO.lines };
+  }
+  const k = COMPACT_SCROLL;
+  return { compact: true, k, lay: layoutRun(nodes, { ...compactO, width: width / k, pad: M / k }), lines: compactO.lines };
+}
 
 const GLYPH: Record<RunNode["state"], string> = {
   done: "✓",
@@ -108,7 +152,7 @@ function edgePath(a: Box, sa: Size, b: Box, sb: Size, lanes: Lane[], rowGap: num
 }
 
 /** The legend as a slim row (under the panel graph); `extra` sits at its right end (the full-view hint). */
-export function Legend({ run, extra }: { run: AgentRun; extra?: React.ReactNode }) {
+export function Legend({ run, extra, tools }: { run: AgentRun; extra?: React.ReactNode; tools?: React.ReactNode }) {
   const lay = layoutRun(run.nodes, { width: 400, ...SIZE.panel });
   return (
     <div className="rg-legend row" aria-label="Legend" data-testid="run-legend">
@@ -119,6 +163,7 @@ export function Legend({ run, extra }: { run: AgentRun; extra?: React.ReactNode 
         </span>
       ))}
       {extra}
+      {tools}
     </div>
   );
 }
@@ -144,6 +189,7 @@ export function RunGraph({
   bot,
   onOverflow,
   maxH,
+  zoom = 1,
 }: {
   run: AgentRun;
   handoffs: Record<string, string>;
@@ -153,6 +199,8 @@ export function RunGraph({
   onOverflow?: (over: boolean, hidden: number) => void;
   /** Panel: the box's height cap (what the side panel has left under the plan card). */
   maxH?: number;
+  /** Panel: the person's zoom over the fitted scale (1 = Fit; the legend row's − / Fit / +). */
+  zoom?: number;
   /** The bot's own model: the last fallback for a node's logo. */
   bot?: BotModel;
   /** Width to lay out into (the box's inner width). */
@@ -161,8 +209,13 @@ export function RunGraph({
   onOpen: (id: string | null) => void;
   nowS: number;
 }) {
-  const z = SIZE[mode];
-  const lay: Layout = useMemo(() => layoutRun(run.nodes, { width: Math.max(width, 200), ...z }), [run.nodes, width, mode]);
+  // panel: full cards, scaled to fit, else compact cards (panelPlan); the full view lays out at its own size
+  const plan = useMemo(() => (mode === "panel" ? panelPlan(run.nodes, Math.max(width, 200), maxH ?? 460) : null), [run.nodes, width, mode, maxH]);
+  const compact = !!plan?.compact;
+  const z = mode === "full" ? SIZE.full : compact ? SIZE.compact : SIZE.panel;
+  const lay: Layout = useMemo(() => plan?.lay ?? layoutRun(run.nodes, { width: Math.max(width, 200), ...SIZE.full }), [plan, run.nodes, width]);
+  // the panel's scale: the plan's, times the person's zoom
+  const pk = plan ? Math.min(PANEL_ZOOM.max, Math.max(PANEL_ZOOM.min, Math.round(plan.k * zoom * 1000) / 1000)) : 1;
   const byId = useMemo(() => new Map(run.nodes.map((n) => [n.id, n])), [run.nodes]);
 
   // full view: dragged positions override the layout's, per run
@@ -325,59 +378,62 @@ export function RunGraph({
     requestAnimationFrame(() => fit(drawerOpen ? DRAWER_W : 0));
   };
 
-  // ---- panel: the box scrolls both ways when the run is larger; it opens on the first running (else failed)
-  // node, and soft fades on the sides that hold more
+  // ---- panel: the run fits the box (panelPlan); zoomed in, or past the smallest scale, the box scrolls both ways.
+  // It opens on the first running (else failed) node; a clipped side gets a soft fade and a "‹ 3 more" cue.
   const pbox = useRef<HTMLDivElement>(null);
-  const [more, setMore] = useState({ l: false, r: false, t: false, b: false });
+  const [more, setMore] = useState({ l: 0, r: 0, t: false, b: false });
   // how many parts are not whole on screen: the panel's "Open full view" hint says so ("7 more")
   const [hid, setHid] = useState(0);
+  // edges with an end off screen: drawn faint (never a bright stub out of nothing)
+  const [offIds, setOffIds] = useState<Set<string>>(() => new Set());
+  const [win, setWin] = useState<[number, number] | null>(null);
   const measure = useCallback(() => {
     const el = pbox.current;
     if (!el) return;
-    const m = {
-      l: el.scrollLeft > 1,
-      r: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
-      t: el.scrollTop > 1,
-      b: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
-    };
-    setMore((p) => (p.l === m.l && p.r === m.r && p.t === m.t && p.b === m.b ? p : m));
-    // the box shows the run at its own size (a scaled one never overflows), so layout boxes compare with the scroll
-    const [x0, y0, x1, y1] = [el.scrollLeft, el.scrollTop, el.scrollLeft + el.clientWidth, el.scrollTop + el.clientHeight];
+    // the window on screen, in layout coordinates
+    const [x0, y0, x1, y1] = [el.scrollLeft / pk, el.scrollTop / pk, (el.scrollLeft + el.clientWidth) / pk, (el.scrollTop + el.clientHeight) / pk];
+    const e = 1 / pk;
     let h = 0;
+    let l = 0;
+    let r = 0;
+    const off = new Set<string>();
     for (const [id, p] of lay.pos) {
       const s = lay.size.get(id)!;
-      if (p.x < x0 - 1 || p.x + s.w > x1 + 1 || p.y < y0 - 1 || p.y + s.h > y1 + 1) h++;
+      const left = p.x < x0 - e;
+      const right = p.x + s.w > x1 + e;
+      if (left) l++;
+      else if (right) r++;
+      if (left || right || p.y < y0 - e || p.y + s.h > y1 + e) h++;
+      if (p.x + s.w < x0 + 8 || p.x > x1 - 8 || p.y + s.h < y0 + 8 || p.y > y1 - 8) off.add(id);
     }
+    const m = { l, r, t: el.scrollTop > 1, b: el.scrollTop + el.clientHeight < el.scrollHeight - 1 };
+    setMore((p) => (p.l === m.l && p.r === m.r && p.t === m.t && p.b === m.b ? p : m));
     setHid(h);
-  }, [lay]);
-  // a run only a little larger than the box is shown whole, scaled down (auto-fit); a larger one keeps its size and
-  // the box scrolls to its focus node
-  const fitK = useMemo(() => {
-    if (mode !== "panel") return 1;
-    const k = Math.min(1, width / lay.w, (maxH ?? 460) / lay.h);
-    return k < 1 && k >= PANEL_MIN_FIT ? Math.floor(k * 1000) / 1000 : 1;
-  }, [mode, width, lay, maxH]);
+    setOffIds((p) => (p.size === off.size && [...off].every((id) => p.has(id)) ? p : off));
+    setWin((p) => (p && Math.abs(p[0] - x0) < 0.5 && Math.abs(p[1] - x1) < 0.5 ? p : [x0, x1]));
+  }, [lay, pk]);
   const focusedFor = useRef<string | null>(null);
   useLayoutEffect(() => {
     const el = pbox.current;
     if (mode !== "panel" || !el) return;
-    const key = `${run.id}@${maxH ?? ""}@${fitK}`;
+    const key = `${run.id}@${maxH ?? ""}@${pk}`;
     if (focusedFor.current !== key) {
-      // once per run (and box height): later refreshes keep wherever the person scrolled to
+      // once per run, box height and scale: later refreshes keep wherever the person scrolled to
       focusedFor.current = key;
       const f = focusNode(run, lay.pos);
-      if (f) {
+      if (f && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) {
         const p = lay.pos.get(f.id)!;
         const s = lay.size.get(f.id)!;
-        // start at a column's left edge or at the run's right end: of the starts that show the whole focus card, the
-        // one that puts it nearest the middle, so the parts after it (a repair, the closing check) show too. A column
-        // cut at the box's side sits under that side's fade.
+        // start at a column's left edge (less the margin) or at the run's right end: of the starts that show the
+        // whole focus card, the one that puts it nearest the middle, so the parts after it (a repair, the closing
+        // check) show too
+        const [px, pw] = [p.x * pk, s.w * pk];
         const maxL = el.scrollWidth - el.clientWidth;
-        const mid = p.x + s.w / 2 - el.clientWidth / 2;
-        const starts = [...lay.columns.map((c) => Math.max(0, c.x - z.pad)).filter((x) => x < maxL), maxL];
-        const fits = starts.filter((x) => x <= p.x && p.x + s.w + z.pad <= x + el.clientWidth).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))[0];
+        const mid = px + pw / 2 - el.clientWidth / 2;
+        const starts = [...lay.columns.map((c) => Math.max(0, c.x * pk - PANEL_MARGIN)).filter((x) => x < maxL), maxL];
+        const fits = starts.filter((x) => x <= px && px + pw + PANEL_MARGIN <= x + el.clientWidth).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))[0];
         el.scrollLeft = Math.min(maxL, fits ?? Math.max(0, mid));
-        el.scrollTop = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, p.y + s.h / 2 - el.clientHeight / 2));
+        el.scrollTop = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, (p.y + s.h / 2) * pk - el.clientHeight / 2));
       } else {
         el.scrollLeft = 0;
         el.scrollTop = 0;
@@ -385,8 +441,8 @@ export function RunGraph({
     }
     measure();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run.id, mode, lay, maxH, fitK]);
-  const overflows = more.l || more.r || more.t || more.b;
+  }, [run.id, mode, lay, maxH, pk]);
+  const overflows = more.l > 0 || more.r > 0 || more.t || more.b;
   useEffect(() => {
     if (mode === "panel") onOverflow?.(overflows, overflows ? hid : 0);
   }, [overflows, hid, mode, onOverflow]);
@@ -407,21 +463,17 @@ export function RunGraph({
   }
   const edges = moved ? lay.edges.map((e) => ({ ...e, ...edgePath(at(e.from), sz(e.from), at(e.to), sz(e.to), lanes, z.rowGap) })) : lay.edges;
   const labels = useMemo(() => distinctLabels(run.nodes), [run.nodes]);
-  // panel: each column's label sits just over its own first card (a short column is centred against the tallest
-  // one, and a label at the top of the box then floats far above it)
-  const colTop = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const n of run.nodes) {
-      const y = lay.pos.get(n.id)!.y - z.labelH;
-      m.set(n.layer, Math.min(m.get(n.layer) ?? Infinity, y));
-    }
-    return m;
-  }, [run.nodes, lay, z.labelH]);
   // edges meeting at one card share one arrowhead (the last solid one wins, so a dashed edge never colours it)
+  // (edges meeting a card at their own ports each keep their arrowhead)
   const arrowFor = new Map<string, string>();
-  for (const e of [...edges].sort((a, b) => Number(!a.broken) - Number(!b.broken))) arrowFor.set(e.to, e.key);
+  for (const e of [...edges].sort((a, b) => Number(!a.broken) - Number(!b.broken))) arrowFor.set(`${e.to}@${e.y2}`, e.key);
   const mixed = new Set<string>();
   for (const e of edges) if (edges.some((f) => f.to === e.to && f.broken !== e.broken)) mixed.add(e.to);
+  // panel: where the box clips the run left or right, edges fade out over the last 24px before its side
+  const fadeMask =
+    mode === "panel" && win && (more.l > 0 || more.r > 0)
+      ? { x0: win[0], x1: win[1], l: more.l > 0, r: more.r > 0, a: Math.min(0.2, 28 / pk / Math.max(1, win[1] - win[0])), f: Math.min(0.35, 84 / pk / Math.max(1, win[1] - win[0])) }
+      : null;
   const lastIn = (e: { from: string; to: string }) => Math.max(appear.get(e.from)!.delay, appear.get(e.to)!.delay) + APPEAR[mode] * 0.6;
 
   const canvas = (
@@ -431,12 +483,33 @@ export function RunGraph({
       data-testid="run-canvas"
     >
       {lay.columns.map((c) => (
-        <div key={c.layer} className="rg-col" style={{ left: c.x, top: mode === "panel" ? (colTop.get(c.layer) ?? c.y) : c.y, width: lay.cardW }} data-testid="run-col">
-          {mode === "panel" && lay.columns.length > 1 ? `L${c.layer + 1} ${c.label}` : c.label}
+        <div
+          key={c.layer}
+          className="rg-col"
+          style={{ left: c.x, top: c.y, width: lay.cardW, ...(mode === "panel" ? { maxWidth: lay.cardW + z.gutter - 4 } : {}) }}
+          title={mode === "panel" ? `${layerName(c.layer, c.label)} · ${c.count} ${c.count === 1 ? "part" : "parts"}` : undefined}
+          data-testid="run-col"
+        >
+          {mode === "panel" ? (lay.columns.length > 1 ? layerName(c.layer, c.label) : c.label.replace(/ · \d+$/, "")) : c.label}
         </div>
       ))}
       <svg className={`rg-edges${hover ? " focus" : ""}`} width={lay.w} height={lay.h} aria-hidden overflow="visible">
         <defs>
+          {fadeMask && (
+            <>
+              <linearGradient id={`mg-${cssId(run.id)}`} gradientUnits="userSpaceOnUse" x1={fadeMask.x0} y1={0} x2={fadeMask.x1} y2={0}>
+                <stop offset="0" stopColor="#fff" stopOpacity={fadeMask.l ? 0 : 1} />
+                <stop offset={fadeMask.a} stopColor="#fff" stopOpacity={fadeMask.l ? 0 : 1} />
+                <stop offset={fadeMask.f} stopColor="#fff" stopOpacity={1} />
+                <stop offset={1 - fadeMask.f} stopColor="#fff" stopOpacity={1} />
+                <stop offset={1 - fadeMask.a} stopColor="#fff" stopOpacity={fadeMask.r ? 0 : 1} />
+                <stop offset="1" stopColor="#fff" stopOpacity={fadeMask.r ? 0 : 1} />
+              </linearGradient>
+              <mask id={`m-${cssId(run.id)}`} maskUnits="userSpaceOnUse" x={0} y={0} width={lay.w} height={lay.h}>
+                <rect x={0} y={0} width={lay.w} height={lay.h} fill={`url(#mg-${cssId(run.id)})`} />
+              </mask>
+            </>
+          )}
           {edges.map((e) => (
             <linearGradient key={e.key} id={`g-${cssId(run.id)}-${cssId(e.key)}`} gradientUnits="userSpaceOnUse" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}>
               <stop offset="0" className={`rg-stop s-${byId.get(e.from)!.state}`} />
@@ -444,12 +517,15 @@ export function RunGraph({
             </linearGradient>
           ))}
         </defs>
+        <g mask={fadeMask ? `url(#m-${cssId(run.id)})` : undefined} data-testid="run-edges-clip" data-mask={fadeMask ? "true" : "false"}>
         {edges.map((e) => {
           const into = byId.get(e.to)!.state === "running";
+          // panel: an edge with an end off screen is quieter, and the mask fades it out at the box's side
+          const off = mode === "panel" && (offIds.has(e.from) || offIds.has(e.to));
           return (
             <g
               key={e.key}
-              className={`rg-edge${e.broken ? " broken" : ""}${e.kind === "repair" ? " repair" : ""}${into ? " flow" : ""}${animate ? " enter" : ""}${hover && (e.from === hover || e.to === hover) ? " lit" : ""}`}
+              className={`rg-edge${e.broken ? " broken" : ""}${e.kind === "repair" ? " repair" : ""}${into ? " flow" : ""}${animate ? " enter" : ""}${hover && (e.from === hover || e.to === hover) ? " lit" : ""}${off ? " off" : ""}`}
               style={{ "--d": `${Math.round(lastIn(e))}ms`, "--draw": `${DRAW[mode]}ms` } as CSSProperties}
               data-testid="run-edge"
               data-from={e.from}
@@ -467,7 +543,7 @@ export function RunGraph({
           );
         })}
         {edges
-          .filter((e) => arrowFor.get(e.to) === e.key)
+          .filter((e) => arrowFor.get(`${e.to}@${e.y2}`) === e.key)
           .map((e) => (
             <path
               key={`a-${e.key}`}
@@ -477,6 +553,7 @@ export function RunGraph({
               data-testid="run-arrow"
             />
           ))}
+        </g>
       </svg>
       {run.nodes.map((n) => {
         const p = at(n.id);
@@ -487,6 +564,7 @@ export function RunGraph({
             n={n}
             label={labels.get(n.id)!}
             mode={mode}
+            compact={compact ? plan!.lines : undefined}
             p={p}
             w={sz(n.id).w}
             h={sz(n.id).h}
@@ -498,8 +576,8 @@ export function RunGraph({
             bot={bot}
             note={mode === "full" ? handoffs[n.id] : undefined}
             on={n.id === open}
-            hov={mode === "full" && n.id === hover}
-            dim={mode === "full" && !!hover && n.id !== hover && !edges.some((e) => (e.from === hover && e.to === n.id) || (e.to === hover && e.from === n.id))}
+            hov={n.id === hover}
+            dim={!!hover && n.id !== hover && !edges.some((e) => (e.from === hover && e.to === n.id) || (e.to === hover && e.from === n.id))}
             appear={a.i}
             delay={animate ? a.delay : null}
             nowS={nowS}
@@ -508,41 +586,54 @@ export function RunGraph({
               onDown(e, n.id);
             }}
             onClick={mode === "panel" ? () => onOpen(n.id === open ? null : n.id) : undefined}
-            onHover={mode === "full" ? setHover : undefined}
+            onHover={setHover}
           />
         );
       })}
     </div>
   );
 
-  if (mode === "panel")
+  if (mode === "panel") {
+    const [W, H] = [Math.floor(lay.w * pk), Math.ceil(lay.h * pk)];
     return (
       <>
         <div
           ref={pbox}
-          className={`rg rg-panel${still ? " still" : ""}`}
+          className={`rg rg-panel${compact ? " compact" : ""}${still ? " still" : ""}`}
           data-testid="run-graph"
           data-cols={lay.columns.length}
           data-layout-ms={lay.ms.toFixed(2)}
           data-crossings={lay.crossings}
           data-overflow={overflows ? "true" : "false"}
-          data-fit={fitK < 1 ? fitK.toFixed(2) : undefined}
-          style={{ height: Math.ceil(lay.h * fitK), ...(maxH ? { maxHeight: maxH } : {}) }}
+          data-fit={pk !== 1 ? pk.toFixed(2) : undefined}
+          data-compact={compact ? "true" : "false"}
+          style={{ height: H, ...(maxH ? { maxHeight: maxH } : {}) }}
           onScroll={measure}
         >
-          {fitK < 1 ? (
-            <div className="rg-fit" style={{ width: Math.floor(lay.w * fitK), height: Math.ceil(lay.h * fitK) }}>
-              <div style={{ transform: `scale(${fitK})`, transformOrigin: "0 0" }}>{canvas}</div>
+          {pk !== 1 ? (
+            <div className="rg-fit" style={{ width: W, height: H }}>
+              <div style={{ transform: `scale(${pk})`, transformOrigin: "0 0" }}>{canvas}</div>
             </div>
           ) : (
             canvas
           )}
         </div>
-        {(["l", "r", "t", "b"] as const).map((k) => (
-          <i key={k} className={`rg-fade ${k}${more[k] ? " on" : ""}`} aria-hidden data-testid={`run-fade-${k}`} data-on={more[k] ? "true" : "false"} />
-        ))}
+        {(["l", "r", "t", "b"] as const).map((k) => {
+          const n = k === "l" ? more.l : k === "r" ? more.r : 0;
+          const on = k === "l" || k === "r" ? n > 0 : more[k];
+          return (
+            <i key={k} className={`rg-fade ${k}${on ? " on" : ""}`} aria-hidden data-testid={`run-fade-${k}`} data-on={on ? "true" : "false"}>
+              {n > 0 && (
+                <span className="rg-more" data-testid={`run-more-${k}`}>
+                  {k === "l" ? `‹ ${n} more` : `${n} more ›`}
+                </span>
+              )}
+            </i>
+          );
+        })}
       </>
     );
+  }
   return (
     <div
       ref={box}
@@ -707,6 +798,7 @@ function Card({
   n,
   label,
   mode,
+  compact,
   p,
   w,
   h,
@@ -730,6 +822,8 @@ function Card({
   n: RunNode;
   label: string;
   mode: GraphMode;
+  /** Panel: the compact card (title of up to this many lines, logo, state; no chips). */
+  compact?: number;
   p: Box;
   w: number;
   h: number;
@@ -754,10 +848,12 @@ function Card({
 }) {
   const t = n.started === undefined ? "" : span((n.ended ?? nowS) - n.started);
   const title = useMemo(() => {
+    // the panel shows two lines of title (the card's height), so the "…" lands on the second; the full view three
+    if (compact) return compactTitle(label, w, compact);
     const font = mode === "panel" ? `550 11px ${FONT()}` : `600 13px ${FONT()}`;
     const room = mode === "panel" ? w - 16 - 3 - (kind === "gate" ? 16 : 0) : w - 28 - 3 - 18 - 12 - 12 - 6 - (kind === "gate" ? 22 : 0);
-    return clampWords(label, room, kind === "leaf" ? 2 : 3, (s) => textWidth(s, font));
-  }, [label, mode, w, kind]);
+    return clampWords(label, room, mode === "panel" || kind === "leaf" ? 2 : 3, (s) => textWidth(s, font));
+  }, [label, mode, w, kind, compact]);
   const tries = n.attempts.length > 1 ? `×${n.attempts.length}` : "";
   const m = nodeModel(n, bot);
   const model = m ? modelLabel(m, n.effort ?? n.planned?.effort) : "";
@@ -776,8 +872,21 @@ function Card({
       : waitsOn.length
         ? `Waits on ${waitsOn.length} ${waitsOn.length === 1 ? "part" : "parts"}: ${waitsOn.filter((d) => d.state === "done").length} done`
         : "";
-  // panel: one meta line, time and tries first, the route pill on the right (pending says so by its outline)
+  // panel: one meta line, time and tries first, the route pill on the right (pending says so by its outline). A
+  // pill that does not fit whole is left out, never cut to a letter.
   const meta = [t, tries].filter(Boolean).join(" · ");
+  const pill = n.route?.replace(/^unspecified-/, "") ?? "";
+  // measured where it is drawn: a pill the meta line cuts is dropped (the card's tooltip still names the route)
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const [pillCut, setPillCut] = useState(false);
+  useLayoutEffect(() => {
+    setPillCut(false);
+  }, [pill, w]);
+  useLayoutEffect(() => {
+    const el = pillRef.current;
+    if (el && !pillCut && el.scrollWidth > el.clientWidth + 1) setPillCut(true);
+  });
+  const pillFits = mode === "panel" && !compact && !!pill && !pillCut;
   return (
     <button
       type="button"
@@ -790,14 +899,23 @@ function Card({
       data-size={kind}
       data-appear={appear}
       aria-pressed={on}
-      title={mode === "panel" ? `${n.label}${tries ? ` · ${n.attempts.length} attempts` : ""}` : undefined}
+      title={mode === "panel" ? [n.label, t, tries && `${n.attempts.length} attempts`, n.route && `route: ${n.route}`].filter(Boolean).join(" · ") : undefined}
       aria-label={`${n.label}, ${word}`}
       onPointerDown={onPointerDown}
       onClick={onClick}
       onMouseEnter={onHover ? () => onHover(n.id) : undefined}
       onMouseLeave={onHover ? () => onHover(null) : undefined}
     >
-      {mode === "panel" ? (
+      {compact ? (
+        <>
+          <span className="rg-t">{title}</span>
+          <span className="rg-meta">
+            <Mark node={n} size={mark} bot={bot} />
+            {kind === "gate" && <GateIcon size={11} />}
+            <StateMark state={n.state} word={word} fixed={repaired} />
+          </span>
+        </>
+      ) : mode === "panel" ? (
         <>
           <span className="rg-top">
             <span className="rg-t">{title}</span>
@@ -806,9 +924,9 @@ function Card({
           <span className="rg-meta">
             <Mark node={n} size={mark} bot={bot} />
             {meta && <span className="rg-mt">{meta}</span>}
-            {n.route && (
-              <span className="rg-route" data-testid="route-pill" title={n.routeWhy ? `route: ${n.route} · ${n.routeWhy}` : `route: ${n.route}`}>
-                {n.route.replace(/^unspecified-/, "")}
+            {n.route && pillFits && (
+              <span ref={pillRef} className="rg-route" data-testid="route-pill" title={n.routeWhy ? `route: ${n.route} · ${n.routeWhy}` : `route: ${n.route}`}>
+                {pill}
               </span>
             )}
             <StateMark state={n.state} word={word} fixed={repaired} />

@@ -9,7 +9,7 @@ import { getStore, useStore } from "../state/store";
 import { CloseIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
-import { Legend, RunGraph } from "./RunGraph";
+import { Legend, PANEL_ZOOM, RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
 import { PlanCard } from "./PlanCard";
 import { columnLabel } from "./layout";
@@ -60,8 +60,9 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
 const MIN_GRAPH_H = 320;
 const LEGEND_H = 40;
 
-/** The panel graph box's height: the rest of the side panel under the run's header and plan card, less the pinned
- *  legend, and at least MIN_GRAPH_H. A larger run scrolls inside the box; a shorter one sits near its top. With the run list collapsed everything above the graph counts, so the box ends
+/** The panel graph box's height cap: the rest of the side panel under the run's header and plan card, less the
+ *  pinned legend, and at least MIN_GRAPH_H. The box is as tall as the run up to this; a larger run is fitted or
+ *  scrolls inside it. With the run list collapsed everything above the graph counts, so the box ends
  *  at the panel's bottom with nothing to scroll; with the list open the list scrolls away and only the run's own
  *  header and plan card count. */
 function useRoom(ref: React.RefObject<HTMLElement | null>, ready: boolean, listOpen: boolean): number {
@@ -302,6 +303,8 @@ function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRu
   }, []);
   const run = detail?.run;
   const room = useRoom(ref, !!run, listOpen);
+  // the person's zoom over the fitted scale (1 = Fit)
+  const [zoom, setZoom] = useState(1);
   // a box taller than what the panel shows: bring the run's box into view once, so its focus node is on screen
   useEffect(() => {
     const el = ref.current;
@@ -323,12 +326,12 @@ function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRu
         </button>
       </div>
       {run && <PlanCard run={run} mode="panel" nowS={nowS} names={layerNames(run)} />}
-      <div className="rn-gwrap" ref={ref} style={{ height: room }}>
+      <div className="rn-gwrap" ref={ref} style={{ maxHeight: room }}>
         {!run || !width ? (
           <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>
         ) : (
           <>
-            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={onOverflow} maxH={room - 2} />
+            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={onOverflow} maxH={room - 2} zoom={zoom} />
           </>
         )}
       </div>
@@ -346,6 +349,19 @@ function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRu
                 Open full view <kbd>{fullKey}</kbd>
               </button>
             ) : null
+          }
+          tools={
+            <span className="rn-zoom" role="group" aria-label="Zoom" data-testid="run-zoom">
+              <button type="button" onClick={() => setZoom((z) => Math.max(PANEL_ZOOM.min / 2, z / PANEL_ZOOM.step))} aria-label="Zoom out" title="Zoom out" data-testid="run-zoom-out">
+                −
+              </button>
+              <button type="button" onClick={() => setZoom(1)} className={zoom === 1 ? "on" : ""} title="Fit the run to the panel" data-testid="run-zoom-fit">
+                Fit
+              </button>
+              <button type="button" onClick={() => setZoom((z) => Math.min(PANEL_ZOOM.max * 2, z * PANEL_ZOOM.step))} aria-label="Zoom in" title="Zoom in" data-testid="run-zoom-in">
+                +
+              </button>
+            </span>
           }
         />
       )}

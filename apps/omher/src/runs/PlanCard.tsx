@@ -9,6 +9,7 @@ import type { AgentRun } from "../lib/runs";
 import { isRepaired, span } from "../lib/runs";
 import { getStore } from "../state/store";
 import { runName } from "./format";
+import { layerName } from "./layout";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -55,10 +56,9 @@ export function PlanCard({ run, mode, nowS, names }: { run: AgentRun & { startsA
   const chips = (
     <ol className="rp-layers" aria-label="Layers" ref={chipsRef}>
       {layers.map((l, i) => (
-        <li key={i} className={`rp-chip t-${l.tone}`} data-testid="run-plan-layer">
-          <i aria-hidden />L{i + 1}
-          {mode === "full" && names?.[i] ? ` ${names[i]}` : ""} · {l.n}
-          {mode === "full" ? (l.n === 1 ? " part" : " parts") : ""}
+        <li key={i} className={`rp-chip t-${l.tone}`} data-testid="run-plan-layer" title={mode === "panel" ? `${l.n} ${l.n === 1 ? "part" : "parts"}` : undefined}>
+          <i aria-hidden />
+          {mode === "full" ? `L${i + 1}${names?.[i] ? ` ${names[i]}` : ""} · ${l.n} ${l.n === 1 ? "part" : "parts"}` : names?.[i] ? layerName(i, names[i]) : `L${i + 1} · ${l.n}`}
         </li>
       ))}
     </ol>

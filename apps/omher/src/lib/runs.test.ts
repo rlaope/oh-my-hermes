@@ -180,6 +180,20 @@ describe("delegations", () => {
     expect(run.nodes[0].model).toBe("claude-opus-5-5");
     expect(run.title).toMatch(/ \+1$/);
   });
+  it("a finished task of a fan-out still running ends at its own end, not at the run's clock", () => {
+    const d: Delegation = {
+      id: "deleg_00aa11bb",
+      started: 1000,
+      tasks: [
+        { index: 0, goal: "A", status: "completed", started: 1000, ended: 1120.5 },
+        { index: 1, goal: "B", status: "running", started: 1002 },
+      ],
+    };
+    const run = fromDelegation(d, "kami");
+    expect(run.state).toBe("running");
+    expect([run.nodes[0].ended, run.nodes[0].attempts[0].ended, run.nodes[1].ended]).toEqual([1120.5, 1120.5, undefined]);
+    expect(run.ended).toBeUndefined();
+  });
   it("matches the bridge's attach_delegations / delegation_to_run field for field", () => {
     const names: Record<string, string> = {
       "omh-dap": "omh-dap.json",

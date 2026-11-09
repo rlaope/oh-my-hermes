@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AgentRun } from "../lib/runs";
-import { columnLabel, countCrossings, distinctLabels, layoutRun, linksOf, orderLayers, sizeKind } from "./layout";
+import { columnLabel, countCrossings, distinctLabels, layerName, layoutRun, linksOf, orderLayers, sizeKind } from "./layout";
 import { clampWords } from "./format";
 
 const fx = (name: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../lib/__fixtures__/${name}`, import.meta.url)), "utf-8"));
@@ -114,6 +114,35 @@ describe("layout", () => {
     ];
     expect(countCrossings([["a", "b"], ["c", "d"]], links, layerOf)).toBe(1);
     expect(countCrossings([["a", "b"], ["d", "c"]], links, layerOf)).toBe(0);
+  });
+});
+
+describe("panel ports and layer names", () => {
+  it("with ports, edges into one card meet it at their own points, top to bottom in their sources' order", () => {
+    const l = layoutRun(big.nodes, { ...OPTS, ports: true });
+    const by = new Map<string, typeof l.edges>();
+    for (const e of l.edges) (by.get(e.to) ?? by.set(e.to, []).get(e.to)!).push(e);
+    let checked = 0;
+    for (const [to, es] of by) {
+      if (es.length < 2) continue;
+      const p = l.pos.get(to)!;
+      const h = l.size.get(to)!.h;
+      const ys = es.map((e) => e.y2);
+      expect(new Set(ys).size).toBe(es.length);
+      for (const y of ys) expect(y > p.y && y < p.y + h).toBe(true);
+      const srcY = es.map((e) => l.pos.get(e.from)!.y);
+      const order = [...es.keys()].sort((a, b) => ys[a] - ys[b]);
+      for (let i = 1; i < order.length; i++) expect(srcY[order[i]]).toBeGreaterThanOrEqual(srcY[order[i - 1]]);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(0);
+    // without ports every edge still meets the middle
+    for (const e of layoutRun(big.nodes, OPTS).edges) expect(e.y2).toBe(l.pos.get(e.to)!.y + l.size.get(e.to)!.h / 2);
+  });
+  it("one layer name for chips and columns: 'L4 · Verify'", () => {
+    expect(layerName(3, "Verify · 1")).toBe("L4 · Verify");
+    expect(layerName(0, "Plan + Build · 2")).toBe("L1 · Plan");
+    expect(layerName(1, "Repair + Check")).toBe("L2 · Repair");
   });
 });
 

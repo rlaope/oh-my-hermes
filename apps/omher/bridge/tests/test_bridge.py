@@ -1209,6 +1209,33 @@ class RunsJoin(unittest.TestCase):
             self.assertEqual(by["t5-verify"]["role"], "verify")
             self.assertEqual(_mtimes(dag, Path(d) / "omh" / "routing"), before, "a runs read wrote something")
 
+    def test_a_finished_task_of_a_running_fan_out_ends_at_its_own_final_line(self):
+        # two helpers: one finished after 120.5s, one still working; the manifest has no `completed` yet
+        from datetime import timezone
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "cache" / "delegation" / "live" / "deleg_00aa11bb"
+            folder.mkdir(parents=True)
+            (folder / "manifest.json").write_text(json.dumps({
+                "started": "2026-11-10 06:00:00", "model": "claude-opus-5-5",
+                "tasks": [{"index": 0, "goal": "A", "status": "running"}, {"index": 1, "goal": "B", "status": "running"}]}),
+                encoding="utf-8")
+            head = "=== Hermes subagent live transcript ===\ngoal: {g}\nstarted: 2026-11-10 06:00:0{s}\n"
+            (folder / "task-0.log").write_text(head.format(g="A", s=0) + "06:02:00 final    | status=completed duration=120.5s "
+                                               "summary: Done.\n06:02:00 final    | end status=completed exit_reason=completed\n",
+                                               encoding="utf-8")
+            (folder / "task-1.log").write_text(head.format(g="B", s=2) + "06:01:00 tool     | -> terminal(ls)\n", encoding="utf-8")
+            now = ob._local_ts("2026-11-10 06:05:00", timezone.utc)
+            for f in folder.iterdir():
+                os.utime(f, (now - 60, now - 60))  # the logs moved a minute ago: nothing has stalled
+            delegs = ob.Delegations(tz=timezone.utc).list(Path(d), now=now)
+            run = ob.delegation_to_run(delegs[0], "kami")
+            a, b = run["nodes"]
+            self.assertEqual((a["state"], b["state"], run["state"]), ("done", "running", "running"))
+            self.assertEqual(a["ended"] - a["started"], 120.5)
+            self.assertEqual(a["attempts"][0]["ended"], a["ended"])
+            self.assertNotIn("ended", b)
+            self.assertNotIn("ended", run)
+
     def test_a_failure_its_repairs_fixed_counts_as_repaired(self):
         nodes = [{"id": "a", "state": "failed"}, {"id": "b", "state": "done", "repairOf": "a"},
                  {"id": "c", "state": "failed"}, {"id": "d", "state": "running", "repairOf": "c"}]

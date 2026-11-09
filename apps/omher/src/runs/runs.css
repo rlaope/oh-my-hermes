@@ -189,8 +189,7 @@
   line-height: 1.45;
   color: var(--quiet);
 }
-/* the graph box takes the rest of the panel's height (at least 320px); a shorter run sits near its top (at most 24px
-   down), so it reads from the top like a page */
+/* the graph box is as tall as the run (at most the rest of the panel's height): no empty canvas under a short run */
 .rn-gwrap {
   position: relative;
   display: flex;
@@ -202,17 +201,6 @@
     radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px) 0 0 / 16px 16px,
     var(--bg);
   overflow: hidden;
-}
-.rn-gwrap::before,
-.rn-gwrap::after {
-  content: "";
-  flex: 1 1 0;
-}
-.rn-gwrap::before {
-  max-height: 24px;
-}
-.rn-gwrap::after {
-  flex-grow: 2;
 }
 .rn-gwrap > .rg-panel {
   flex: none;
@@ -1983,4 +1971,120 @@
 .rn-more:hover {
   background: var(--hover);
   color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- panel: compact cards, the clipped-side cue, zoom */
+.rg-panel.compact .rg-card {
+  gap: 3px;
+  padding: 6px 5px 5px;
+  justify-content: space-between;
+}
+.rg-panel.compact .rg-card.s-failed,
+.rg-panel.compact .rg-card.s-blocked,
+.rg-panel.compact .rg-card.s-parked {
+  padding-left: 3px;
+}
+.rg-panel.compact .rg-t,
+.rg-panel.compact .rg-card.k-lead .rg-t,
+.rg-panel.compact .rg-card.k-leaf .rg-t {
+  flex: none;
+  overflow-wrap: normal;
+  word-break: normal;
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 13px;
+  max-height: 78px;
+}
+.rg-panel.compact .rg-meta {
+  gap: 4px;
+  padding-left: 0;
+}
+.rg-panel.compact .rg-mk {
+  width: 12px;
+  height: 12px;
+}
+.rg-panel .rg-col {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-weight: 600;
+  color: var(--body);
+  background: transparent;
+}
+/* an edge whose other end is off screen: quieter, and the mask fades it out at the box's side */
+.rg-panel .rg-edge.off .rg-line {
+  opacity: 0.55;
+}
+.rg-panel .rg-edge.off .rg-flowline {
+  display: none;
+}
+.rg-fade.l .rg-more,
+.rg-fade.r .rg-more {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raise);
+  font-style: normal;
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--body);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rg-fade.l .rg-more {
+  left: 6px;
+}
+.rg-fade.r .rg-more {
+  right: 6px;
+}
+.rn-zoom {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 8px;
+  padding: 1px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.rg-legend.row > .rn-zoom {
+  margin-left: auto;
+}
+.rg-legend.row > .rn-full-hint + .rn-zoom {
+  margin-left: 4px;
+}
+.rn-zoom button {
+  height: 18px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.rn-zoom button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rn-zoom button.on {
+  color: var(--ink);
+}
+/* the panel traces too: hovering a card lights its edges and dims the rest */
+.rg-panel .rg-edges.focus .rg-edge:not(.lit),
+.rg-panel .rg-edges.focus .rg-arrow:not(.lit) {
+  opacity: 0.18;
+}
+.rg-panel .rg-edges.focus .rg-edge.lit .rg-line {
+  stroke-width: 2;
+}
+.rg-panel .rg-card.dim {
+  opacity: 0.55;
+}
+/* a failed gate keeps the failed rail (the gate's thicker border would otherwise replace it) */
+.rg-card.k-gate.s-failed {
+  border-left-width: 3px;
 }
