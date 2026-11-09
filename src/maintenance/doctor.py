@@ -1558,6 +1558,8 @@ def _generation_base_python_check() -> Check:
     except (OSError, ValueError):
         # `staged_update_recovery` reports the unreadable file.
         return Check("generation_base_python", True, "staged-update state unreadable; see staged_update_recovery", observed=False)
+    if not isinstance(state, dict):
+        return Check("generation_base_python", True, "no staged-update state for this command", observed=False)
     active = state.get("active")
     active_path = str(active.get("path") or "") if isinstance(active, dict) else ""
     if not active_path:
@@ -1565,6 +1567,7 @@ def _generation_base_python_check() -> Check:
     is_windows = os.name == "nt"
     bootstrap = managed_command_venv_dir()
     anchors = (str(bootstrap / ("Scripts" if is_windows else "bin") / ("python.exe" if is_windows else "python")),) if bootstrap is not None else ()
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
     finding = pinned_base_finding(
         Path(active_path) / "venv",
         version=(sys.version_info.major, sys.version_info.minor),
@@ -1588,7 +1591,11 @@ def _generation_base_python_check() -> Check:
         message,
         severity="warning",
         remediation="repair the venv in place from the stable interpreter; the next `omh update` stages from it on its own",
-        next_action=f"run `{repair}`" if repair else "re-run the OMH installer with the Python it was installed with",
+        next_action=(
+            f"run `{repair}`; the interpreter it names must run Python {version}"
+            if repair
+            else f"re-run the OMH installer with a Python {version} interpreter"
+        ),
         detail=dict(finding),
     )
 

@@ -6,6 +6,7 @@ from argparse import Namespace
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -307,16 +308,17 @@ class GenerationBasePythonDoctorTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "POSIX symlinks")
     def test_a_pinned_base_with_a_stable_alias_warns_with_the_repair(self) -> None:
         with TemporaryDirectory() as temporary:
-            brew, generation = self._layout(Path(temporary))
+            brew, generation = self._layout(Path(temporary).resolve())
             finding = pinned_base_finding(generation / "venv", version=(3, 15), is_windows=False, anchors=(str(brew.bootstrap_python),))
             assert finding is not None
             self.assertEqual((finding["state"], finding["stable"], finding["home"]), ("pinned", str(brew.stable), str(brew.keg)))
-            self.assertEqual(finding["repair"], f'rm -f "{generation / "venv" / "bin" / "python3.15"}" && "{brew.stable}" -m venv --upgrade "{generation / "venv"}"')
+            quoted = [shlex.quote(str(path)) for path in (generation / "venv" / "bin" / "python3.15", brew.stable, generation / "venv")]
+            self.assertEqual(finding["repair"], f"rm -f {quoted[0]} && {quoted[1]} -m venv --upgrade {quoted[2]}")
             self.assertIsNone(pinned_base_finding(brew.bootstrap, version=(3, 15), is_windows=False), "a venv made from the stable spelling is fine")
 
     def test_a_removed_base_is_reported_gone_with_the_bootstrap_base_to_repair_from(self) -> None:
         with TemporaryDirectory() as temporary:
-            brew = HomebrewLayout(Path(temporary))
+            brew = HomebrewLayout(Path(temporary).resolve())
             generation = brew.bootstrap.parent / "generations" / "g2"
             _venv(generation / "venv", home=brew.keg_bin, creator=generation.parent / "g1" / "venv" / "bin" / "python")
             brew.keg.unlink()
@@ -331,7 +333,7 @@ class GenerationBasePythonDoctorTests(unittest.TestCase):
     def test_doctor_warns_on_the_active_generation(self) -> None:
         version = f"{sys.version_info.major}.{sys.version_info.minor}"
         with TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             stable_bin = root / "opt" / "python" / "bin"
             keg_bin = root / "Cellar" / "python" / "9.9.9" / "bin"
             keg = _file(keg_bin / f"python{version}")
@@ -345,10 +347,64 @@ class GenerationBasePythonDoctorTests(unittest.TestCase):
             self.assertFalse(check.ok)
             self.assertEqual(check.severity, "warning")
             self.assertIn("version-pinned", check.message)
-            self.assertIn(f'"{stable_bin / f"python{version}"}" -m venv --upgrade', check.next_action)
+            self.assertIn(f"{shlex.quote(str(stable_bin / f'python{version}'))} -m venv --upgrade", check.next_action)
+            self.assertIn(f"must run Python {version}", check.next_action)
             healthy = root / "share" / "omh" / "generations" / "g3"
             _venv(healthy / "venv", home=stable_bin, creator=stable_bin / f"python{version}")
             self.assertTrue(self._doctor(root, healthy, bootstrap).ok)
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlinks")
+    def test_a_home_folder_that_is_itself_a_link_is_not_pinned(self) -> None:
+        # uv's minor-version folder (`cpython-3.13-...`) links to the patch
+        # folder and moves on `uv python upgrade`; a venv bound to it survives.
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            patch_bin = root / "uv" / "cpython-3.15.2" / "bin"
+            real = _file(patch_bin / "python3.15")
+            minor = root / "uv" / "cpython-3.15"
+            minor.symlink_to(root / "uv" / "cpython-3.15.2", target_is_directory=True)
+            user_bin = root / "local" / "bin"
+            user_bin.mkdir(parents=True)
+            (user_bin / "python3.15").symlink_to(real)
+            bootstrap = root / "omh" / "venv"
+            bootstrap_python = _venv(bootstrap, home=user_bin, creator=user_bin / "python3.15")
+            generation = root / "omh" / "generations" / "g2" / "venv"
+            _venv(generation, home=minor / "bin", creator=root / "omh" / "generations" / "g1" / "venv" / "bin" / "python")
+            self.assertIsNone(pinned_base_finding(generation, version=(3, 15), is_windows=False, anchors=(str(bootstrap_python),)))
+            pinned = root / "omh" / "generations" / "g3" / "venv"
+            _venv(pinned, home=patch_bin, creator=root / "gone" / "bin" / "python")
+            finding = pinned_base_finding(pinned, version=(3, 15), is_windows=False, anchors=(str(bootstrap_python),))
+            assert finding is not None
+            self.assertEqual((finding["state"], finding["stable"]), ("pinned", str(user_bin / "python3.15")), "a fully resolved patch folder still warns")
+
+    def test_a_gone_base_prefers_a_candidate_named_for_the_same_minor(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            stable_bin = root / "usr" / "local" / "bin"
+            _file(stable_bin / "python3")
+            versioned = _file(stable_bin / "python3.15")
+            bootstrap_python = _venv(root / "omh" / "venv", home=stable_bin, creator=stable_bin / "python3")
+            generation = root / "omh" / "generations" / "g2" / "venv"
+            _venv(generation, home=root / "Cellar" / "3.15.0" / "bin", creator=root / "gone" / "bin" / "python")
+            finding = pinned_base_finding(generation, version=(3, 15), is_windows=False, anchors=(str(bootstrap_python),))
+            assert finding is not None
+            self.assertEqual((finding["state"], finding["stable"]), ("gone", str(versioned)))
+
+    def test_a_state_file_that_vanishes_before_the_read_is_not_a_crash(self) -> None:
+        from omh.maintenance import doctor
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            state = root / "self-update.json"
+            state.write_text("{}", encoding="utf-8")
+            with (
+                patch.object(doctor, "managed_command_self_update_state_path", return_value=state),
+                patch.object(doctor, "read_json_object", return_value=None),
+                patch.object(doctor.sys, "prefix", str(root / "generations" / "g1" / "venv")),
+            ):
+                check = doctor._generation_base_python_check()
+        self.assertTrue(check.ok)
+        self.assertFalse(check.observed)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,9 @@ was given.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import shlex
 
 PYVENV_CFG = "pyvenv.cfg"
 VENV_COMMAND_MARKER = " -m venv "
@@ -160,10 +162,12 @@ def pinned_base_finding(venv: Path, *, version: tuple[int, int], is_windows: boo
     """Why a venv's base interpreter will not survive, with the repair; None when it will.
 
     `gone`: no interpreter is left in its `home` (a `brew cleanup` removed the
-    keg). `pinned`: its `home` interpreter is reachable under another,
-    stable spelling (`samefile`), so it breaks on the next patch upgrade. The
-    stable spelling is the first candidate `base_python_candidates` names.
-    Reads files only; nothing is run.
+    keg). `pinned`: its `home` folder is already fully resolved (no link left
+    in it to move on an upgrade) and its interpreter is reachable under
+    another spelling (`samefile`), so it breaks on the next patch upgrade. A
+    `home` that is itself a link, such as uv's minor-version folder, moves
+    with the upgrade and is not pinned. Reads files only; nothing is run, so
+    the repair names a `pythonX.Y` candidate first and says the minor must match.
     """
     config = read_pyvenv_cfg(venv)
     homes = home_interpreters(config, venv, version=version, abiflags=abiflags, is_windows=is_windows)
@@ -173,21 +177,36 @@ def pinned_base_finding(venv: Path, *, version: tuple[int, int], is_windows: boo
     bound = next((home for home in homes if _is_file(home)), None)
     candidates = [Path(path) for path in base_python_candidates(str(python), version=version, abiflags=abiflags, is_windows=is_windows, anchors=anchors)]
     spelled_homes = {str(home) for home in homes}
+    others = [path for path in candidates if str(path) not in spelled_homes]
     if bound is None:
         state = "gone"
-        stable = next((path for path in candidates if str(path) not in spelled_homes), None)
+        versioned = f"python{version[0]}.{version[1]}"
+        stable = next((path for path in others if path.name.startswith(versioned)), next(iter(others), None))
     else:
         state = "pinned"
-        stable = next((path for path in candidates if str(path) not in spelled_homes and _same_file(path, bound)), None)
+        if not _fully_resolved(homes[0].parent):
+            return None
+        stable = next((path for path in others if _same_file(path, bound)), None)
         if stable is None:
             return None
     finding = {"state": state, "venv": str(venv), "home": str(homes[0]), "stable": str(stable or "")}
     if stable is not None:
-        link = venv / "bin" / f"python{version[0]}.{version[1]}{abiflags}"
-        upgrade = f'"{stable}" -m venv --upgrade "{venv}"'
-        # `venv --upgrade` keeps an existing link, dangling or not, so the link goes first.
-        finding["repair"] = upgrade if is_windows else f'rm -f "{link}" && {upgrade}'
+        if is_windows:
+            finding["repair"] = f'"{stable}" -m venv --upgrade "{venv}"'
+        else:
+            link = venv / "bin" / f"python{version[0]}.{version[1]}{abiflags}"
+            # `venv --upgrade` keeps an existing link, dangling or not, so the link goes first.
+            finding["repair"] = f"rm -f {shlex.quote(str(link))} && {shlex.quote(str(stable))} -m venv --upgrade {shlex.quote(str(venv))}"
     return finding
+
+
+def _fully_resolved(folder: Path) -> bool:
+    """Whether a folder path contains no link: resolving it changes nothing."""
+    try:
+        resolved = os.path.realpath(folder)
+    except OSError:
+        return False
+    return os.path.normcase(resolved) == os.path.normcase(os.path.normpath(folder))
 
 
 def _same_file(left: Path, right: Path) -> bool:

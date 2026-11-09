@@ -5642,7 +5642,8 @@ minor release (3.15 to 3.16) still needs a fresh install.
 A generation staged before this fix may already point at a removed keg, or at
 one the next upgrade removes. `omh doctor` reports both as
 `generation_base_python` and prints the repair command with this machine's
-paths. When the removed keg leaves `omh` unable to start at all, run the
+paths. A `home` folder that is itself a link, such as uv's minor-version
+folder, moves with patch upgrades and is not reported. When the removed keg leaves `omh` unable to start at all, run the
 repair yourself from the stable interpreter, substituting your own minor
 version for `3.15`, then update as usual:
 
