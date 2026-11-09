@@ -5,6 +5,8 @@ import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
 import { BotRow } from "./BotRow";
+import "../sessions/sessions.css";
+import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { HiddenList, NeedsStrip } from "./Needs";
 
 export function Sidebar() {
@@ -22,6 +24,7 @@ export function Sidebar() {
   const asks = selectAsks(s);
   const hiddenCount = s.ui.hidden.filter((n) => s.bots.some((b) => b.name === n)).length;
   const inSettings = s.ui.view === "settings";
+  const inChat = s.ui.view === "chat";
 
   return (
     <aside className="side" data-testid="sidebar">
@@ -49,17 +52,18 @@ export function Sidebar() {
         />
       </label>
       <NeedsStrip asks={asks} />
-      <div className="side-sh">Bots</div>
-      <nav className="bot-list" aria-label="Bots">
-        {bots.map((b) => {
-          const pinned = s.ui.pinned.includes(b.name);
-          return (
+      <section className="side-sec" data-testid="side-bots">
+        <div className="side-sh">Bots</div>
+        <nav className="bot-list" aria-label="Bots">
+          {bots.map((b) => {
+            const pinned = s.ui.pinned.includes(b.name);
+            return (
             <BotRow
               key={b.name}
               bot={b}
               chat={s.chats[b.name]}
               unread={s.unread[b.name] ?? 0}
-              active={!inSettings && s.selectedBot === b.name}
+              active={inChat && s.selectedBot === b.name}
               asks={asks.filter((a) => a.bot === b.name)}
               pinned={pinned}
               onSelect={() => void s.selectBot(b.name)}
@@ -81,6 +85,11 @@ export function Sidebar() {
         )}
         {showHidden && hiddenCount > 0 && <HiddenList onClose={closeHidden} />}
       </nav>
+      </section>
+      <section className="side-sec" data-testid="side-sessions">
+        <SessionsHeader />
+        <SessionList />
+      </section>
       <div className="side-foot">
         <button type="button" className="nav" disabled title="Coming in a later version" data-testid="nav-automations">
           <CalendarIcon />
