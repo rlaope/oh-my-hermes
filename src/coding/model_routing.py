@@ -367,17 +367,13 @@ def category_from_text(message: str) -> str:
 # category. Review deliberately reuses the high-capability categories --
 # reviewer-vs-author separation is advisory handoff text, not a catalog property.
 CATEGORY_ROLE_SOURCES: Final[dict[str, tuple[str, ...]]] = {
-    # `deep` first, not `ultrabrain`: the composer runs on every split, so its
-    # default is the strong tier rather than the deepest one. `ultrabrain` is
-    # reserved for work that DECLARES it needs that depth -- `research:deep`
-    # and scale `large` -- which is what keeps a declared dial meaningful.
-    # `deep` first, not `ultrabrain`: the composer runs on every split, so its
-    # default is the strong tier rather than the deepest one. `ultrabrain` is
-    # reserved for work that DECLARES it needs that depth -- `research:deep`
-    # and scale `large` -- which is what keeps a declared dial meaningful.
+    # `ultrabrain` first (owner decision, 2026-11-09): brain is planning and
+    # decomposition, the work whose mistakes every later unit inherits, so it
+    # heads on the deepest tier. `deep` follows as the next candidate. Scale
+    # `large` and `research:deep` keep their own entries for the other roles.
     # `unspecified-low` closes the chain so the fallback names a DIFFERENT
     # model rather than repeating the head at a weaker effort.
-    "brain": ("deep", "unspecified-low"),
+    "brain": ("ultrabrain", "deep", "unspecified-low"),
     # `unspecified-high` is the runtime config's name for "the default working model", not for
     # "the strongest one" -- that is `ultrabrain`. So standard implementation
     # heads on it, `small` drops to quick/unspecified-low, and `large` escalates

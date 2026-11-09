@@ -1012,7 +1012,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72561
 # re-derived from the producer.
 # Merged with main again: 541116 (main) + 3975 for the `model-compression` row =
 # 545091, re-derived from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545091
+# 545091 -> 545113: ultrawork's handoff policy routes planning, decomposition and hard-debugging lanes to
+# ultrabrain and ideation to deep (+22); no other row moved. Measured per row from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545113
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

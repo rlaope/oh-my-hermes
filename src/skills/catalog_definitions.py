@@ -164,6 +164,15 @@ _PLAN_TASK_SHAPE = (
 # quality_bar, so both planning skills read one acceptance rule. Host-neutral on
 # purpose: the portable projection has no `omh hermes plan-accept` and no Hermes
 # `clarify` tool.
+# Shared by plan's and ralplan's quality_bar: a planner or critic child runs on
+# the deepest tier (owner decision, 2026-11-09). The portable projection has no
+# `omh_delegate_route`, so it keeps the tier and drops the tool. Placed after
+# each bar's first four items, like `_PLAN_AMBITION_BAR`.
+_PLAN_CHILD_ROUTE_RULE = PortableLine(
+    "When a planning stage dispatches a planner or critic child, set `omh_delegate_route` with category `ultrabrain` in the same turn, before that `delegate_task`.",
+    "When a planning stage dispatches a planner or critic child, run it on the host's deepest reasoning tier.",
+)
+
 PLAN_ACCEPTANCE_ANSWER_RULE = (
     "Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance."
 )
@@ -1251,7 +1260,8 @@ _DEFINITIONS = [
             "harness itself: run coding lanes as Hermes-native delegate_task subagents with OMH skills loaded, "
             "each lane given disjoint scope, verification, and review expectations, and each lane routed through "
             "the mixture categories — set the route with the `omh_delegate_route` tool before dispatch "
-            "(research/scan lanes quick or unspecified-low; ideation and hard debugging ultrabrain or deep; "
+            "(research/scan lanes quick or unspecified-low; planning, decomposition and hard debugging "
+            "ultrabrain; ideation deep; "
             "architecture and system-design lanes architect; visual work visual-engineering or artistry; docs "
             "writing) and name the routed category and reasoning effort in the lane's status. When the user names "
             "a model for the run (for example 'use fable' or 'fable로 해줘'), pin it: keep the fitting category "
@@ -7598,6 +7608,7 @@ _DEFINITIONS = [
             "Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.",
             "Keep draft plans unapproved until the user accepts; a wrapper must carry their answer.",
             "Only prepare coding handoff guidance after the plan is accepted.",
+            _PLAN_CHILD_ROUTE_RULE,
             "When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.",
             "When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.",
             PortableLine(
@@ -7705,6 +7716,7 @@ _DEFINITIONS = [
             "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
             "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
             "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `dag-ulw` nodes or `ulw-work` board rows come from the plan without re-planning; planning itself stays a bounded in-session lane.",
+            _PLAN_CHILD_ROUTE_RULE,
             ADAPTATION_QUALITY_READ_RULE,
             *_RALPLAN_IDEAL_STATE_BAR,
             *_PLAN_AMBITION_BAR,
@@ -7786,6 +7798,7 @@ _DEFINITIONS = [
                 "Start from observed repo facts and source/web evidence when freshness or external behavior matters.",
                 "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
                 "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
+                _PLAN_CHILD_ROUTE_RULE.portable,
                 ADAPTATION_QUALITY_READ_RULE.portable,
                 *_RALPLAN_IDEAL_STATE_BAR,
                 *_PLAN_AMBITION_BAR,
@@ -7805,7 +7818,7 @@ _DEFINITIONS = [
             "artifact_expectations": "1b253cc34629c9c2c939fcdcf0607474fae8ce0a6c9538c567b109788e29b75b",
             "safety_rules": "da7d45f616a86bdbcddd220ab3e4768f29770f898d106e144012d60ae5f34fa2",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
-            "quality_bar": "e8eae08fd8e597c708803d1322ad9d0ddf1a4da3e5819fe055c3065089f0f848",
+            "quality_bar": "9b224971df74e19beda9e2edf45ae4d61a1102e1f58814581c5358997f34dea8",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),

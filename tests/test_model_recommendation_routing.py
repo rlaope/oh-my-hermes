@@ -302,13 +302,13 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         overrides = {
             "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
             "categories": {
-                "deep": [
+                "ultrabrain": [
                     {
                         "model_alias": "qwen3-coder",
                         "model_family": "qwen",
                         "preferred_provider_families": ["qwen-oauth"],
                         "reasoning_effort": "high",
-                        "reasoning": "Operator-selected deep coding route.",
+                        "reasoning": "Operator-selected planning route.",
                     }
                 ]
             },

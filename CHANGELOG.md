@@ -22,6 +22,16 @@ All notable changes will be documented here.
   OAuth login with the root store unchanged and the host gateway untouched.
   Known cost, Hermes' own: on a host whose bots have scheduled cron jobs the
   TUI gateway stays up between sessions.
+- **Planning work runs on `ultrabrain`.** The `brain` role chain for Codex,
+  Claude Code and a category-maestro table now heads on `ultrabrain` and
+  keeps `deep` and `unspecified-low` behind it, so `omh coding model-route
+  --role brain` names GPT-6 Astra at `xhigh` on Codex and the Opus 5.5 chain
+  at `xhigh` on Claude Code; a Hermes-owner `brain` unit reads the
+  `ultrabrain` recommendation category. On the Hermes lane, `ulw-work` routes
+  planning, decomposition and hard-debugging lanes to `ultrabrain` and
+  ideation to `deep`, and `ulw-plan` and `omh-plan` set `omh_delegate_route`
+  to `ultrabrain` before dispatching a planner or critic child. Planning
+  itself still runs in the parent session.
 - **`omh update`, `omh doctor` and the menu bar know the TUI's own
   runtime home.** Update rebuilds `<omh_home>/tui-home` when the runtime
   choice is `own` or the home exists (the OMH plugin bundle it links moved
