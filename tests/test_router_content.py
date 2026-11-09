@@ -388,7 +388,10 @@ class RouterContentTests(unittest.TestCase):
         # 13,300 -> 13,600: the same tail gives the persona the reply
         # language, speech level, endings, and progress updates, with the
         # user's language as the fallback; 13,329 measured.
-        self.assertLess(len(router.content.encode("utf-8")), 13_600)
+        # 13,600 -> 13,900: the tail's one reply line takes back the
+        # turn-ending rule (delivered work ends without a question; a choice
+        # the person asked to make ends on one specific question); 13,701 measured.
+        self.assertLess(len(router.content.encode("utf-8")), 13_900)
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
         self.assertIn(router_keyword_summary(), router.content)
@@ -474,7 +477,10 @@ class RouterContentTests(unittest.TestCase):
         # 13,300 -> 13,600: the same tail gives the persona the reply
         # language, speech level, endings, and progress updates, with the
         # user's language as the fallback; 13,329 measured.
-        self.assertLess(len(router.content.encode("utf-8")), 13_600)
+        # 13,600 -> 13,900: the tail's one reply line takes back the
+        # turn-ending rule (delivered work ends without a question; a choice
+        # the person asked to make ends on one specific question); 13,701 measured.
+        self.assertLess(len(router.content.encode("utf-8")), 13_900)
         # 24,500 -> 25,300: workflow-registry.md carries one row per routable
         # workflow, so the `web-research` split and the `codebase-uml` row
         # together took it past the old ceiling; one row per new skill, and
@@ -1242,12 +1248,21 @@ class RouterContentTests(unittest.TestCase):
             # The reply is written in the user's words and the host's voice;
             # the persona owns the reply language, speech level, and endings,
             # progress updates too, the user's language is the fallback. That
-            # core stays in every body as one line; the record-term and
-            # turn-ending clauses live once in the shared rail (pinned below).
+            # core stays in every body as one line; the record-term clause and
+            # the turn-ending detail live once in the shared rail (pinned below).
             "Reply in the user's own words and the host's own voice",
             "owns reply language, tone, speech level, and sentence endings, progress updates included",
             "where it sets no language, use the one the user wrote in",
             "OMH shapes structure and content only",
+            # The turn-ending rule itself stays in the line: a live run loaded
+            # the rail in none of its turns, so a pointer alone did not carry
+            # it, and decision replies stopped ending on one question. The test
+            # is the request itself, with delivery as the default: a clause
+            # keyed on "a decision remains" let open points inside finished
+            # work read as decisions and drew questions onto it.
+            "When the requested output is delivered, put any open points inside the result and end with no question or offer",
+            "only when the person asked to choose or decide and that choice is still theirs, end with one specific question about it",
+            "not a list, a generic offer, or a footer",
             "the shared rail's Reply Language And Host Voice and Turn Ending sections hold the full rule",
         )
         templates = {template.name: template.content for template in builtin_skill_templates()}
@@ -1304,8 +1319,8 @@ class RouterContentTests(unittest.TestCase):
         """Pin delivered guidance, not a context-free ban on negative sentences.
 
         A portable body has no shared rail, so it carries the turn-ending rule
-        itself; a native body names the rail's Turn Ending section, and the
-        rail carries the rule (checked below).
+        itself; a native body carries the short rule and names the rail's
+        Turn Ending section, and the rail carries the detail (checked below).
         """
         from omh.skills.render import agent_skill_templates, SHARED_RAIL_REFERENCE_PATH
 
@@ -1320,6 +1335,8 @@ class RouterContentTests(unittest.TestCase):
         for template in builtin_skill_templates():
             with self.subTest(renderer="builtin_skill_templates", skill=template.name):
                 text = " ".join(template.content.split())
+                self.assertIn("When the requested output is delivered, put any open points inside the result", text)
+                self.assertIn("only when the person asked to choose or decide and that choice is still theirs", text)
                 self.assertIn("Reply Language And Host Voice and Turn Ending sections hold the full rule", text)
                 self.assertNotIn("when a stop condition or a decision the user owns ends the turn", text)
 
