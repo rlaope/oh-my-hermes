@@ -145,6 +145,13 @@
   font-variant-numeric: tabular-nums;
   flex: none;
 }
+/* a busy row's time slot is its elapsed time; an open ask's is "waiting" in amber */
+.bot-t.busy {
+  color: var(--muted);
+}
+.bot-t.wait {
+  color: var(--needs-text);
+}
 .bot-r2 {
   display: flex;
   align-items: center;
@@ -284,11 +291,14 @@
   --needs: #e9a23b;
   --needs-ink: #1b1204;
   --needs-soft: rgba(233, 162, 59, 0.12);
+  --needs-text: #e9a23b;
 }
 [data-theme="light"] .side {
   --needs: #e39a2a;
   --needs-ink: #1b1204;
   --needs-soft: rgba(227, 154, 42, 0.14);
+  /* amber text on the light sidebar: a deeper shade, so 11px stays readable */
+  --needs-text: #a8640a;
 }
 /* per row: a plain dot, never a number (a number reads as unread; the strip above carries the count) */
 .needs-dot {

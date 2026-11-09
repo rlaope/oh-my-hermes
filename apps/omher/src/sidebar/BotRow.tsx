@@ -3,7 +3,8 @@ import type { Bot } from "../lib/protocol";
 import { askText, liveLabel, type Ask, type Chat } from "../state/store";
 import { Avatar, LiveRing, Ticker, TypingDots } from "../ui";
 import { AskLine } from "./Needs";
-import { shortTime } from "../app/time";
+import { busyFor, shortTime } from "../app/time";
+import { useNow } from "../elsewhere/useNow";
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
@@ -147,6 +148,9 @@ export function BotRow({
   const needs = asks.length;
   const text = needs ? askText(asks[asks.length - 1].item) : p.text;
   const live = p.live && !needs;
+  // the time slot: how long a busy bot has been at it ("12s", "1m"), "waiting" while an ask is open, else the time
+  const busySince = running && !needs ? chat?.turn?.startedAt ?? null : null;
+  const now = useNow(busySince !== null, 1_000);
   const onContext = (e: MouseEvent) => {
     if (!menu) return;
     e.preventDefault();
@@ -171,8 +175,21 @@ export function BotRow({
               {bot.display_name}
               {pinned && <span className="bot-pin" data-testid="pinned" aria-label="Pinned" title="Pinned" />}
             </span>
-            {p.ts !== null && !needs && <span className="bot-t">{shortTime(p.ts)}</span>}
-            {needs > 0 && <span className="bot-t">{shortTime(asks[asks.length - 1].ts)}</span>}
+            {needs > 0 ? (
+              <span className="bot-t wait" data-testid="bot-time">
+                waiting
+              </span>
+            ) : busySince !== null ? (
+              <span className="bot-t busy" data-testid="bot-time">
+                {busyFor(now - busySince)}
+              </span>
+            ) : (
+              p.ts !== null && (
+                <span className="bot-t" data-testid="bot-time">
+                  {shortTime(p.ts)}
+                </span>
+              )
+            )}
           </span>
           <span className="bot-r2">
             <span className={`bot-p${live ? " live" : ""}${needs ? " ask" : ""}`} data-testid="bot-sub">

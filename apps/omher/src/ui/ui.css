@@ -89,15 +89,27 @@ button.ui-pill:hover {
 }
 .ui-ring {
   /* arc length and thickness; the tail fades in from transparent over the first 25% of the arc */
-  --ring-arc: 110deg;
-  --ring-w: 2px;
+  --ring-arc: 140deg;
+  --ring-w: 2.5px;
   --ring1: color-mix(in srgb, var(--a1) 70%, #fff);
   --ring2: color-mix(in srgb, var(--a2) 88%, #fff);
   --ring3: color-mix(in srgb, var(--a3) 92%, #fff);
+  /* the head is the brightest point of the arc */
+  --ring-head: color-mix(in srgb, var(--a3) 62%, #fff);
   --ring-track: color-mix(in srgb, var(--ink) 16%, transparent);
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
+  /* dark only: a faint brand-pink glow. It sits on this unmasked box so the band's mask does not clip it;
+     the arc and the head are its two pseudo-elements. */
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--a2) 35%, transparent));
+  animation: ui-ring-turn 1.2s linear infinite;
+}
+.ui-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   background: conic-gradient(
     from 0deg,
     transparent 0deg calc(360deg - var(--ring-arc)),
@@ -109,7 +121,6 @@ button.ui-pill:hover {
   linear-gradient(var(--ring-track), var(--ring-track));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
   mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
-  animation: ui-ring-turn 1.2s linear infinite;
 }
 /* the round head at the arc's leading end (12 o'clock before rotation), a touch wider than the band so the
    still frame shows which way it turns */
@@ -122,14 +133,17 @@ button.ui-pill:hover {
   height: calc(var(--ring-w) + 1px);
   margin-left: calc(var(--ring-w) / -2 - 0.5px);
   border-radius: 50%;
-  background: var(--ring3);
+  background: var(--ring-head);
 }
-/* on light the stops go a shade deeper and the track lighter, so the arc, not the circle, is what you see */
+/* on light the stops go a shade deeper and the track lighter, so the arc, not the circle, is what you see;
+   no glow (a halo on white reads as blur), and the head is the undarkened accent */
 [data-theme="light"] .ui-ring {
   --ring1: color-mix(in srgb, var(--a1) 82%, #000);
   --ring2: color-mix(in srgb, var(--a2) 84%, #000);
   --ring3: color-mix(in srgb, var(--a3) 86%, #000);
+  --ring-head: var(--a3);
   --ring-track: color-mix(in srgb, var(--ink) 7%, transparent);
+  filter: none;
 }
 @keyframes ui-ring-turn {
   to {

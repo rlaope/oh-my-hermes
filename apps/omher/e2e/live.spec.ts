@@ -1,4 +1,5 @@
-// Answer in progress: a thin rotating ring around the bot's face in the sidebar, the live step sliding through
+// Answer in progress: a rotating ring around the bot's face in the sidebar, the row's elapsed time ("waiting" on an
+// open ask), the live step sliding through
 // the row preview with typing dots, the amber needs-you dot taking over while an ask is open, a typing bubble
 // with the ringed face in the chat until the first delta, the same ring on a working away session's mark, and
 // a still ring and still dots under reduced motion.
@@ -74,10 +75,12 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   expect(gapPx).toBeGreaterThanOrEqual(0);
   expect(gapPx).toBeLessThan(12);
 
-  // the ring hugs the 34px face from outside: a 2px, 110 degree arc with a faded tail (a conic gradient from
-  // transparent into the brand stops, masked to a band), a round head, rotating, absolutely placed, no layout shift
+  // the ring hugs the 34px face from outside: a 2.5px, 140 degree arc with a faded tail (a conic gradient from
+  // transparent into the brand stops, masked to a band), a brighter round head, a faint pink glow in dark,
+  // rotating, absolutely placed, no layout shift
   const geo = await ring.evaluate((el) => {
     const cs = getComputedStyle(el);
+    const arc = getComputedStyle(el, "::before");
     const head = getComputedStyle(el, "::after");
     // the rotation turns the box, so measure the unrotated layout box (offset + size), not the client rect
     const h = el as HTMLElement;
@@ -90,9 +93,12 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
       dy: -parseFloat(cs.top),
       arc: cs.getPropertyValue("--ring-arc").trim(),
       band: cs.getPropertyValue("--ring-w").trim(),
-      bg: cs.backgroundImage,
-      mask: cs.maskImage || cs.getPropertyValue("-webkit-mask-image"),
+      bg: arc.backgroundImage,
+      mask: arc.maskImage || arc.getPropertyValue("-webkit-mask-image"),
       head: [head.width, head.borderRadius],
+      headBg: head.backgroundColor,
+      tipBg: cs.getPropertyValue("--ring3").trim(),
+      filter: cs.filter,
     };
   });
   expect(geo.pos).toBe("absolute");
@@ -101,18 +107,29 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   expect(geo.w).toBeCloseTo(41, 0);
   expect(geo.dx).toBeCloseTo(3.5, 0);
   expect(geo.dy).toBeCloseTo(3.5, 0);
-  expect(geo.arc).toBe("110deg");
-  expect(geo.band).toBe("2px");
-  expect(geo.bg).toMatch(/^conic-gradient\(rgba\(0, 0, 0, 0\) 0deg, rgba\(0, 0, 0, 0\) 250deg, /);
+  expect(geo.arc).toBe("140deg");
+  expect(geo.band).toBe("2.5px");
+  expect(geo.bg).toMatch(/^conic-gradient\(rgba\(0, 0, 0, 0\) 0deg, rgba\(0, 0, 0, 0\) 220deg, /);
   expect(geo.mask).toMatch(/radial-gradient/);
-  expect(geo.head).toEqual(["3px", "50%"]);
+  expect(geo.head).toEqual(["3.5px", "50%"]);
+  // the head is lighter than the arc's last stop
+  const lum = (c: string) => page.evaluate((c) => {
+    const d = document.createElement("i");
+    d.style.color = c;
+    document.body.append(d);
+    const [r, g, b] = getComputedStyle(d).color.match(/[\d.]+/g)!.map(Number);
+    d.remove();
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }, c);
+  expect(await lum(geo.headBg)).toBeGreaterThan(await lum(geo.tipBg));
+  expect(geo.filter).toMatch(/^drop-shadow\(.* 0px 0px 4px\)$/);
   // the same shape for every bot: Kami's ring is the same gradient, band and arc as Friren's
   await emit(ev("kami", "turn.start"));
   const kamiRing = page.getByTestId("bot-kami").getByTestId("live-ring");
   await expect(kamiRing).toBeVisible();
   const look = (el: Element) => {
     const cs = getComputedStyle(el);
-    return [cs.backgroundImage, cs.getPropertyValue("--ring-w"), cs.getPropertyValue("--ring-arc"), (el as HTMLElement).offsetWidth];
+    return [getComputedStyle(el, "::before").backgroundImage, cs.getPropertyValue("--ring-w"), cs.getPropertyValue("--ring-arc"), (el as HTMLElement).offsetWidth];
   };
   expect(await kamiRing.evaluate(look)).toEqual(await ring.evaluate(look));
   await emit(ev("kami", "turn.end", { outcome: "done" }));
@@ -139,6 +156,78 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   await expect(row.getByTestId("bot-typing")).toHaveCount(0);
   await expect(sub).not.toHaveText(/Running|Thinking/);
   expect(await row.locator(".bot-m").boundingBox()).toEqual(before);
+});
+
+test("time slot: a busy row counts its elapsed time, an open ask says waiting, an idle row keeps its time", async ({ page }) => {
+  await page.clock.install();
+  await open(page);
+  const row = page.getByTestId("bot-friren");
+  const time = row.getByTestId("bot-time");
+  const idle = await time.textContent();
+  expect(idle).not.toMatch(/^(\d+[smh]|waiting)$/);
+
+  await emit(ev("friren", "turn.start"));
+  await expect(row.getByTestId("live-ring")).toBeVisible();
+  await expect(time).toHaveText(/^\d+s$/);
+  await expect(time).not.toHaveText("now");
+  const [tc, muted] = await Promise.all([
+    time.evaluate((e) => getComputedStyle(e).color),
+    row.evaluate((e) => {
+      const d = document.createElement("i");
+      d.style.color = "var(--muted)";
+      e.append(d);
+      const c = getComputedStyle(d).color;
+      d.remove();
+      return c;
+    }),
+  ]);
+  expect(tc).toBe(muted);
+  // it ticks: 12s, then 1m
+  const s0 = Number((await time.textContent())!.replace("s", ""));
+  await page.clock.runFor(12_000);
+  await expect(time).toHaveText(`${s0 + 12}s`);
+  await page.clock.runFor(60_000);
+  await expect(time).toHaveText("1m");
+
+  // an open ask: "waiting" in amber, no ring
+  await emit(ev("friren", "approval.request", { request_id: "ap-t", title: "Run shell command", command: "ls", choices: ["once", "deny"] }));
+  await expect(time).toHaveText("waiting");
+  await expect(row.getByTestId("live-ring")).toHaveCount(0);
+  const [wc, amber] = await Promise.all([
+    time.evaluate((e) => getComputedStyle(e).color),
+    row.evaluate((e) => {
+      const d = document.createElement("i");
+      d.style.color = "var(--needs-text)";
+      e.append(d);
+      const c = getComputedStyle(d).color;
+      d.remove();
+      return c;
+    }),
+  ]);
+  expect(wc).toBe(amber);
+  expect(wc).toBe("rgb(233, 162, 59)");
+
+  await emit(ev("friren", "prompt.expired", { request_id: "ap-t", reason: "timeout" }));
+  await expect(time).toHaveText(/^\d+m$/);
+  await emit(ev("friren", "turn.end", { outcome: "done" }));
+  await expect(time).not.toHaveText(/^(\d+[smh]|waiting)$/);
+});
+
+test("light: the ring keeps its 2.5px band and deeper stops with no glow; waiting stays a readable amber", async ({ page }) => {
+  await open(page, "light");
+  const row = page.getByTestId("bot-friren");
+  await emit(ev("friren", "turn.start"));
+  const ring = row.getByTestId("live-ring");
+  await expect(ring).toBeVisible();
+  const g = await ring.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { band: cs.getPropertyValue("--ring-w").trim(), arc: cs.getPropertyValue("--ring-arc").trim(), filter: cs.filter };
+  });
+  expect(g).toEqual({ band: "2.5px", arc: "140deg", filter: "none" });
+  await emit(ev("friren", "approval.request", { request_id: "ap-l", title: "Run shell command", command: "ls", choices: ["once", "deny"] }));
+  await expect(row.getByTestId("bot-time")).toHaveText("waiting");
+  await expect(row.getByTestId("bot-time")).toHaveCSS("color", "rgb(168, 100, 10)");
+  await emit(ev("friren", "prompt.expired", { request_id: "ap-l", reason: "timeout" }), ev("friren", "turn.end", { outcome: "done" }));
 });
 
 test("needs you overrides the ring: an open ask shows the amber dot, answering it brings the ring back", async ({ page }) => {
@@ -256,6 +345,9 @@ test("away bubbles: a session still working there rings its source mark instead 
     return r.left < mark.left && r.right > mark.right && r.top < mark.top && r.bottom > mark.bottom && !!el.closest("[data-testid=away-link]");
   });
   expect(wraps).toBe(true);
+  // quieter than the bot's own ring: a 1.5px band at 60% opacity
+  await expect(ring).toHaveCSS("opacity", "0.6");
+  expect(await ring.evaluate((e) => getComputedStyle(e).getPropertyValue("--ring-w").trim())).toBe("1.5px");
   // a finished session has no ring
   await expect(tl.locator("[data-testid=away][data-source=discord]").getByTestId("away-ring")).toHaveCount(0);
 });
@@ -268,7 +360,9 @@ test("reduced motion: the arc and the dots stand still", async ({ page }) => {
   await expect(ring).toBeVisible();
   await expect(ring).toHaveCSS("animation-name", "none");
   // still an arc with its faded tail, not a full circle
-  await expect(ring).toHaveCSS("background-image", /^conic-gradient\(rgba\(0, 0, 0, 0\) 0deg, rgba\(0, 0, 0, 0\) 250deg, /);
+  expect(await ring.evaluate((e) => getComputedStyle(e, "::before").backgroundImage)).toMatch(
+    /^conic-gradient\(rgba\(0, 0, 0, 0\) 0deg, rgba\(0, 0, 0, 0\) 220deg, /,
+  );
   for (const dot of await page.getByTestId("bot-friren").locator(".ui-typing i").all()) await expect(dot).toHaveCSS("animation-name", "none");
   const typing = page.getByTestId("typing");
   await expect(typing.getByTestId("typing-ring")).toHaveCSS("animation-name", "none");
@@ -288,17 +382,21 @@ for (const theme of ["dark", "light"] as const) {
   test(`screenshot T12b-live-${theme}: sidebar rings, needs-you, typing bubble`, async ({ page }) => {
     mkdirSync(SHOTS, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 820 });
+    // a fake clock, so the still shows real elapsed times (Friren a minute in, Kami 12s) rather than two "0s"
+    await page.clock.install();
     await open(page, theme);
-    await emit(
-      ev("kami", "turn.start"),
-      ev("kami", "tool.start", { tool_id: "s1", name: "terminal", detail: "pnpm test" }),
-      ev("friren", "turn.start"),
-      ev("friren", "tool.start", { tool_id: "s2", name: "read_file", detail: "gateway.log" }),
-    );
+    await emit(ev("friren", "turn.start"), ev("friren", "tool.start", { tool_id: "s2", name: "read_file", detail: "gateway.log" }));
+    await page.clock.runFor(53_000);
+    await emit(ev("kami", "turn.start"), ev("kami", "tool.start", { tool_id: "s1", name: "terminal", detail: "pnpm test" }));
+    await page.clock.runFor(12_000);
     await mock("mock.ask", { bot: "default", kind: "approval" });
     await expect(page.getByTestId("bot-default").getByTestId("needs")).toBeVisible();
     await expect(page.getByTestId("bot-kami").getByTestId("tick-text")).toHaveText("Running pnpm test");
     await expect(page.getByTestId("bot-friren").getByTestId("tick-text")).toHaveText("Reading gateway.log");
+    // busy rows count their time, the row waiting on you says so
+    await expect(page.getByTestId("bot-kami").getByTestId("bot-time")).toHaveText(/^1[23]s$/);
+    await expect(page.getByTestId("bot-friren").getByTestId("bot-time")).toHaveText("1m");
+    await expect(page.getByTestId("bot-default").getByTestId("bot-time")).toHaveText("waiting");
     // one live indicator in the chat: the activity line, no typing bubble beside it
     await expect(page.locator("[data-testid=activity][data-state=live]")).toBeVisible();
     await expect(page.getByTestId("typing")).toHaveCount(0);
