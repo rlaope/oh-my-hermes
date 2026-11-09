@@ -175,10 +175,25 @@
   place-items: center;
   flex: none;
 }
+/* SESSIONS owns its live dot: the bot row's dot styles may change (the answer ring replaced them) */
 .ss-row .live-dot {
+  position: absolute;
   left: 26px;
   top: 26px;
-  border-color: var(--side);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--spin);
+  border: 2px solid var(--side);
+  animation: pulse 1.4s infinite;
+}
+.ss-row.active .live-dot {
+  border-color: var(--active-row);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-row .live-dot {
+    animation: none;
+  }
 }
 .ss-x {
   position: absolute;
