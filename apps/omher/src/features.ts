@@ -36,6 +36,8 @@ export interface CardsSlotProps {
 export interface ElsewhereLineSlotProps {
   bot: string;
   item: AwayItem;
+  /** false: a bot bubble is right above, so keep the indent without repeating the face. */
+  face?: boolean;
 }
 /** Timeline: one line for a `routine.ran` row. */
 export interface RoutineLineSlotProps {

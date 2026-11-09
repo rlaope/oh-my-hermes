@@ -168,3 +168,16 @@ test("features not in this version say Soon", async ({ page }) => {
     await expect(b).toContainText("Soon");
   }
 });
+
+test("the bot's face sits beside its bubbles, once per run of bot messages", async ({ page }) => {
+  await page.goto("/");
+  const bot = page.getByTestId("bubble-bot").first();
+  await expect(bot.locator("img.msg-face")).toBeVisible();
+  // a reply right after another bot bubble keeps the indent but hides the face
+  const faces = page.locator('[data-testid="bubble-bot"] img.msg-face:not(.blank)');
+  expect(await faces.count()).toBeGreaterThan(0);
+  // the thread is wider than before (920px cap) so a 1440px window is not a narrow centred column
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const w = await page.locator(".thread > *").first().evaluate((e) => e.getBoundingClientRect().width);
+  expect(w).toBeGreaterThan(760);
+});
