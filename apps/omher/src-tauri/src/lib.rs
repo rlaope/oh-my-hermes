@@ -162,7 +162,7 @@ async fn session_start(
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // The account Settings › Accounts picked for new sessions of this agent's CLI: its home variable, or
-        // nothing ("This computer"). #2710's chat-mode start must pass the same `session_env` to its spawn.
+        // nothing ("This computer"). chat_start passes the same.
         let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
         sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
@@ -210,7 +210,9 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
 async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     let chats = shell.chats.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), move |out| {
+        // The same account as a terminal session of this agent: its home variable, or nothing ("This computer").
+        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, move |out| {
             let _ = on_event.send(match out {
                 ChatOut::Event(e) => e,
                 ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),

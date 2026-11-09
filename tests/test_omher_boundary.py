@@ -53,6 +53,7 @@ RULES = (
     "The process is stopped when its session is closed and when the app exits.",
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
+    "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
 )
 
 
@@ -359,12 +360,14 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertNotIn(".spawn(", body)
 
     def test_a_session_gets_only_the_chosen_account_home(self) -> None:
-        """Rule 11's account sentence: session_start passes `accounts::session_env` and nothing else; that reads
-        only omher's `active.json` and yields at most the CLI's home variable; the PTY adds it as env only."""
-        sig = re.search(r"async fn session_start\((.*?)\) -> ", self.lib, re.S)
-        body = self.lib[sig.end():].split("\n}\n", 1)[0]
-        self.assertIn("accounts::session_env(&h, &agent)", body)
-        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env,", body)
+        """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env` and nothing else;
+        that reads only omher's `active.json` and yields at most the CLI's home variable; the PTY and the chat's
+        pipes add it as env only."""
+        for command in ("session_start", "chat_start"):
+            sig = re.search(rf"async fn {command}\((.*?)\) -> ", self.lib, re.S)
+            body = self.lib[sig.end():].split("\n}\n", 1)[0]
+            self.assertEqual(body.count("accounts::session_env(&h, &agent)"), 1, command)
+            self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env,", body)
         accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
         cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
         self.assertEqual(re.findall(r'"(\w+)" => Some\("(\w+)"\)', cli), [("claude", "claude"), ("codex", "codex"), ("grok", "grok")])
@@ -376,9 +379,14 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIn("account_env(home, cli, &active_account(home, cli))", env)
         for word in ("read", "token", "auth", "Command"):
             self.assertNotIn(word, env)
-        build = self.prod.split("fn command_for(", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("for (k, v) in account_env {\n        cmd.env(k, v);\n    }", build)
-        self.assertNotIn(".arg(", build)
+        for src in (self.prod, self.chat):
+            build = src.split("fn command_for(", 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("for (k, v) in account_env {\n        cmd.env(k, v);\n    }", build)
+            self.assertNotIn(".arg(", build)
+        # the chat's spawn builds its command there and the allow-listed start hands the account through
+        self.assertIn("command_for(&argv, cwd, path_env, account_env)?", self.chat.split("pub(crate) fn spawn<F>", 1)[1])
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)", start)
 
     def test_start_agent_resolves_argv_from_the_allow_list_only(self) -> None:
         start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
