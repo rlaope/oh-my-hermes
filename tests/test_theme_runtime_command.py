@@ -69,7 +69,7 @@ class ThemeRuntimeCommandTests(unittest.TestCase):
             self.assertEqual(code, 0, out)
             self.assertIn("OMH TUI runtime: own", out)
             self.assertIn("own by default", out)
-            self.assertIn(f"profiles/{TUI_PROFILE}", out)
+            self.assertIn(str(Path("profiles") / TUI_PROFILE), out)  # the OS separator, as the text prints the path
             self.assertIn("omh theme runtime shared", out)
             code, out, _ = run_cli([*homes, "theme", "runtime", "shared"], output_json=False)
             self.assertIn("Saved shared", out)

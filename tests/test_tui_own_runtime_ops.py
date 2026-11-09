@@ -131,6 +131,7 @@ class UpdateRefreshTests(unittest.TestCase):
                 self.assertIsNone(setup._refresh_tui_home(_args(paths)))
             self.assertFalse(tui_home_path(paths.hermes_home).exists())
 
+    @unittest.skipIf(os.name == "nt", "on Windows the update leaves the profile alone (the case below)")
     def test_the_default_builds_the_profile_and_a_second_update_finds_it_current(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _homes(Path(tmp))
@@ -155,6 +156,7 @@ class UpdateRefreshTests(unittest.TestCase):
                 self.assertIsNone(setup._refresh_tui_home(_args(paths)))
             self.assertEqual((tui_home_path(paths.hermes_home) / "config.yaml").stat().st_mtime_ns, before)
 
+    @unittest.skipIf(os.name == "nt", "on Windows the update leaves the profile alone (the case below)")
     def test_a_failure_is_noted_and_does_not_raise(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _homes(Path(tmp))
