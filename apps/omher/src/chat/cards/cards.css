@@ -124,3 +124,126 @@
 .card-line-d {
   color: var(--quiet);
 }
+/* A card that has focus (Needs-you strip, ⌘J, or a click) shows a gray ring; its number keys work then only. */
+.card:focus {
+  outline: 0;
+}
+.card:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.card.risky:focus-within {
+  box-shadow: inset 3px 0 0 var(--danger), 0 0 0 2px var(--line);
+}
+.card-keys {
+  margin-left: 4px;
+  font-size: 10.5px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.card:focus-within .card-keys {
+  opacity: 1;
+}
+
+/* Interview: several questions in one card, one Submit. Chips are gray; the selected one is a darker gray. */
+.iv {
+  gap: 9px;
+}
+.iv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.iv-q {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.iv-text {
+  color: var(--body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.iv-n {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border-radius: 4px;
+  background: var(--raise2);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.iv-hint {
+  color: var(--quiet);
+  font-size: 11px;
+}
+.iv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-left: 22px;
+}
+.iv-q > .card-in {
+  flex: none;
+  margin-left: 22px;
+  max-width: 320px;
+}
+.iv-chip {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--body);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.iv-chip:not(:disabled):hover {
+  background: var(--hover);
+}
+.iv-chip.on {
+  background: var(--seg-on);
+  color: var(--ink);
+  font-weight: 600;
+}
+[data-theme="light"] .iv-chip.on {
+  background: var(--raise2);
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.iv-chip:disabled {
+  opacity: 0.55;
+}
+.iv-box {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--quiet);
+  display: inline-grid;
+  place-items: center;
+  font-size: 9px;
+  line-height: 1;
+}
+.iv-more {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.iv-other {
+  flex: 0 1 200px;
+}
+.iv-count {
+  font-size: 11px;
+  color: var(--quiet);
+}
