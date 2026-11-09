@@ -32,7 +32,7 @@ pub struct Agent {
     pub label: &'static str,
 }
 
-/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 10).
+/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
 pub const AGENTS: [Agent; 6] = [
     Agent { id: "claude", program: "claude", label: "Claude Code" },
     Agent { id: "codex", program: "codex", label: "Codex" },

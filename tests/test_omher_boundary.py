@@ -46,9 +46,10 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_ten_numbered_rules(self) -> None:
-        rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 10, len(rules))
+    def test_boundary_is_between_six_and_eleven_numbered_rules_in_order(self) -> None:
+        nums = [int(n) for n in re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)]
+        self.assertTrue(6 <= len(nums) <= 11, len(nums))
+        self.assertEqual(nums, list(range(1, len(nums) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
@@ -138,7 +139,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
-    """Rule 10: the Rust shell's allow-list, the commands that start a program, and the UI's list."""
+    """Rule 11: the Rust shell's allow-list, the commands that start a program, and the UI's list."""
 
     def setUp(self) -> None:
         self.sessions = (SHELL / "sessions.rs").read_text(encoding="utf-8")

@@ -15,7 +15,12 @@ import type {
   PeekMsg,
   Routine,
   BotInfo,
+  TerminalRun,
+  Worktree,
+  WorktreeDiff,
 } from "../lib/protocol";
+
+export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
 
 // ---- view model types -----------------------------------------------------------------------
 
@@ -123,6 +128,7 @@ export interface Look {
 export const PALETTES: Palette[] = ["omh", "graphite", "ocean", "forest", "sunset", "rose"];
 export interface Ui {
   panelOpen: boolean;
+  panelTab: PanelTabId;
   theme: Theme;
   look: Look;
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
@@ -222,7 +228,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     models: {},
-    ui: { panelOpen: false, theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general", session: null },
+    ui: { panelOpen: false, panelTab: "details", theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general", session: null },
   };
 }
 
@@ -332,6 +338,7 @@ export type Action =
   | { type: "models"; bot: string; options: ModelOptions }
   | { type: "model.set"; bot: string; current: ModelCurrent }
   | { type: "ui.panel"; open?: boolean }
+  | { type: "ui.panelTab"; tab: PanelTabId }
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
@@ -554,6 +561,8 @@ export function reduce(state: AppState, a: Action): AppState {
     }
     case "ui.panel":
       return { ...state, ui: { ...state.ui, panelOpen: a.open ?? !state.ui.panelOpen } };
+    case "ui.panelTab":
+      return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: a.tab } };
     case "ui.theme":
       return { ...state, ui: { ...state.ui, theme: a.theme } };
     case "ui.look":
@@ -618,6 +627,8 @@ export interface Actions {
   peek(sessionId: string, limit?: number, bot?: string): Promise<void>;
   setModel(change: { model?: string; provider?: string; reasoning?: string }): Promise<void>;
   togglePanel(open?: boolean): void;
+  /** Open the side panel on one tab (Details, Terminal, Schedule, Worktrees, Diff). */
+  setPanelTab(tab: PanelTabId): void;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -630,6 +641,10 @@ export interface Actions {
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
+  /** Side panel reads (never cached in the store; the panel keeps its own copy). */
+  panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
+  panelWorktrees(bot: string): Promise<{ worktrees: Worktree[] }>;
+  panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -843,6 +858,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       }
     },
     togglePanel: (open) => dispatch({ type: "ui.panel", open }),
+    setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
     setTheme(theme) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem("omher.theme", theme);
@@ -873,6 +889,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
     avatarOf: (bot) => bridge.request("bots.avatar", { bot }),
+    panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
+    panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
+    panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
   };
 
   return {

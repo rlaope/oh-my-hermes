@@ -746,12 +746,13 @@ class ModelRouteResolverTests(unittest.TestCase):
         selected_flags = [entry["selected"] for entry in route["chain"]]
         self.assertEqual(selected_flags, [True])
 
-    def test_brain_role_gets_high_effort_from_chain_entry(self) -> None:
-        # brain's high default moved from _HIGH_EFFORT_ROLES into chain data;
-        # behaviour is preserved and effort_change stays absent because the
+    def test_brain_role_gets_xhigh_effort_from_chain_entry(self) -> None:
+        # brain's effort is chain data: its chain heads on ultrabrain, whose
+        # Codex entry is Astra at xhigh. effort_change stays absent because the
         # user requested nothing (chain efforts never appear in effort_change).
         route = resolve_model_route("codex", role="brain")
-        self.assertEqual(route["selected_reasoning_effort"], "high")
+        self.assertEqual(route["selected_model"], "gpt-6-astra")
+        self.assertEqual(route["selected_reasoning_effort"], "xhigh")
         self.assertNotIn("effort_change", route)
 
     def test_requested_effort_outranks_chain_entry_effort(self) -> None:
@@ -1410,7 +1411,7 @@ class IdentityRoutingTests(unittest.TestCase):
         )
         self.assertEqual(route["status"], "routed")
         self.assertEqual(route["provenance"], "role_chain_head")
-        self.assertEqual(route["selected_model"], "gpt-6.1-sol")
+        self.assertEqual(route["selected_model"], "gpt-6-astra")
         self.assertNotIn("identity_id", route)
         self.assertNotIn("identity_fingerprint", route)
         outcomes = {entry["stage"]: entry["outcome"] for entry in route["attempted"]}
@@ -1420,7 +1421,7 @@ class IdentityRoutingTests(unittest.TestCase):
         route = resolve_model_route("codex", role="brain", requested_identity="script-coding")
         self.assertEqual(route["status"], "routed")
         self.assertEqual(route["provenance"], "role_chain_head")
-        self.assertEqual(route["selected_model"], "gpt-6.1-sol")
+        self.assertEqual(route["selected_model"], "gpt-6-astra")
         outcomes = {entry["stage"]: entry["outcome"] for entry in route["attempted"]}
         self.assertEqual(outcomes["requested_identity"], "unknown")
 
@@ -1494,7 +1495,7 @@ class UnitModelRouteTests(unittest.TestCase):
         units = {unit["unit_id"]: unit for unit in contract["units"]}
         brain_route = units["brain"]["handoff"]["model_route"]
         self.assertEqual(brain_route["schema_version"], CODING_MODEL_ROUTE_SCHEMA_VERSION)
-        self.assertEqual(brain_route["selected_reasoning_effort"], "high")
+        self.assertEqual(brain_route["selected_reasoning_effort"], "xhigh")
         self.assertEqual(brain_route["provenance"], "role_chain_head")
         ui_route = units["ui"]["handoff"]["model_route"]
         self.assertEqual(ui_route["selected_model"], "opus")
@@ -1514,7 +1515,7 @@ class ModelRouteCliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             route = json.loads(stdout)
             self.assertEqual(route["schema_version"], CODING_MODEL_ROUTE_SCHEMA_VERSION)
-            self.assertEqual(route["selected_reasoning_effort"], "high")
+            self.assertEqual(route["selected_reasoning_effort"], "xhigh")
             self.assertEqual(route["provenance"], "role_chain_head")
 
     def test_cli_plain_text_is_default_and_names_provenance(self) -> None:
@@ -1552,7 +1553,7 @@ class ModelRouteCliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             lines = [line for line in stdout.splitlines() if line.startswith("- ")]
             self.assertEqual(len(lines), len(MODEL_ROLES))
-            self.assertIn("gpt-6.1-sol high*", stdout)
+            self.assertIn("gpt-6-astra xhigh* > gpt-6.1-sol high", stdout)
             self.assertNotIn("gpt-5.6", stdout)
             self.assertNotIn("claude-code", stdout)
 

@@ -264,8 +264,9 @@ class DefineTests(unittest.TestCase):
         self.assertEqual(result["topology"]["layers"], [["api", "ui"], ["docs"], ["verify"]])
         self.assertEqual(result["topology"]["critical_path"], ["api", "docs", "verify"])
         self.assertEqual(result["topology"]["bottlenecks"][0], {"node": "api", "blocks": 2})
-        # api and ui write code and no node reviews them: advice, never a refusal.
-        self.assertEqual(result["lint"], ["no_review_node"])
+        # api and ui write code and no node reviews them, and four nodes carry no judgement category: advice, never a
+        # refusal.
+        self.assertEqual(result["lint"], ["no_review_node", "no_judgement_node"])
         self.assertEqual([(c["category"], c["nodes"], c["route"]["action"]) for c in result["calls"]],
                          [("quick", ["api"], "set"), ("unspecified-low", ["ui"], "set")])
         task = result["calls"][0]["tasks"][0]
@@ -344,6 +345,33 @@ class DefineTests(unittest.TestCase):
         with homes():
             miss = call(action="define", run="miss", nodes=[node("a", scope=("a.py",)), node("verify", role="verify")])
         self.assertIn("verification_misses:a", miss["lint"])
+
+    def test_a_wide_graph_with_no_judgement_node_is_linted(self) -> None:
+        """Four nodes all on the ladder name the missing judgement node; three nodes, or one judgement node, do not.
+
+        Mutation: count `deep` or `unspecified-high` as a judgement node, drop the four-node floor, or let two
+        `ultrabrain` nodes raise `no_judgement_node` beside `ultrabrain_more_than_once`.
+        """
+        def ladder(*categories: str) -> list[dict]:
+            return [node(f"n{index}", category=category, scope=(f"n{index}.py",))
+                    for index, category in enumerate(categories)]
+
+        with homes():
+            wide = call(action="define", run="wide", nodes=ladder("quick", "unspecified-low", "unspecified-high", "quick"))
+        self.assertEqual(wide["status"], "ok", wide)
+        self.assertIn("no_judgement_node", wide["lint"])
+        for run, categories in (("three", ("quick", "unspecified-low", "unspecified-high")),
+                                ("architect", ("quick", "unspecified-low", "architect", "quick")),
+                                ("forensics", ("quick", "forensics", "unspecified-high", "quick")),
+                                ("ultrabrain", ("quick", "unspecified-low", "ultrabrain", "quick"))):
+            with self.subTest(run=run), homes():
+                result = call(action="define", run=run, nodes=ladder(*categories))
+            self.assertEqual(result["status"], "ok", result)
+            self.assertNotIn("no_judgement_node", result["lint"])
+        with homes():
+            twice = call(action="define", run="twice", nodes=ladder("quick", "ultrabrain", "ultrabrain", "quick"))
+        self.assertIn("ultrabrain_more_than_once", twice["lint"])
+        self.assertNotIn("no_judgement_node", twice["lint"])
 
     def test_the_same_definition_is_reused_and_a_different_one_refused(self) -> None:
         with homes():
