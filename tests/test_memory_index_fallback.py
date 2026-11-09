@@ -1,4 +1,4 @@
-"""Unmatched live memory is discoverable without injecting unrelated summaries."""
+"""Unmatched live memory is withheld: no summary, no name, no line; tool recall still reads it."""
 from __future__ import annotations
 
 import copy
@@ -20,7 +20,7 @@ from test_memory_prefetch_canonical import SESSION, approve, provider, serve, re
 
 
 class MemoryIndexFallbackTests(unittest.TestCase):
-    def test_unmatched_messages_index_subjects_without_summaries(self) -> None:
+    def test_unmatched_messages_render_nothing_and_name_nothing(self) -> None:
         pairs = [
             reviewed("mem_one", summary="Release policy sentinel", subject="release-policy"),
             reviewed("mem_two", summary="Database backup sentinel", subject="database-backup"),
@@ -32,16 +32,7 @@ class MemoryIndexFallbackTests(unittest.TestCase):
                 section = memory_records.render_selected_memory_records(
                     selected, [record for record, _ in pairs], index_fallback=True,
                 )
-                tree = ElementTree.fromstring(section.text)
-                index = tree.find("record_index")
-                self.assertIsNotNone(index)
-                assert index is not None
-                self.assertEqual(index.attrib, {"count": "2", "reason": "no_query_overlap"})
-                self.assertIn("release-policy", index.text)
-                self.assertIn("database-backup", index.text)
-                self.assertEqual(tree.findall("record"), [])
-                for record, _ in pairs:
-                    self.assertNotIn(record["summary"], section.text)
+                self.assertEqual(section.text, "")
                 self.assertEqual(section.rendered, ())
                 self.assertEqual(section.indexed, tuple(item["record_id"] for item in selected.pack["included_records"]))
                 self.assertEqual(section.omissions["render_budget_exhausted"], 0)
@@ -53,8 +44,10 @@ class MemoryIndexFallbackTests(unittest.TestCase):
             current = approve(root, "Current conversation decision sentinel", source_ref=f"hermes-session:{SESSION}")
             live = provider(root)
             pack = serve(live, "Astronomy telescope")
-            self.assertIn("<record_index", pack)
+            # The one guard against the removed line coming back.
+            self.assertNotIn("<record_index", pack)
             self.assertNotIn(unrelated["summary"], pack)
+            self.assertNotIn(unrelated["record_id"], pack)
             self.assertIn(current["summary"], pack)
             self.assertEqual(rendered_ids(pack), [current["record_id"]])
             receipt = live.latest_prefetch_receipt()
@@ -100,7 +93,7 @@ class MemoryIndexFallbackTests(unittest.TestCase):
             with mock.patch.object(memory_provider.live_session, "compaction_ancestors", side_effect=AssertionError("must not look up")):
                 self.assertEqual(live._conversation_session_ids(), {SESSION})
 
-    def test_console_and_channel_prefetch_index_unmatched_records(self) -> None:
+    def test_console_and_channel_prefetch_withhold_unmatched_records(self) -> None:
         for surface in ("console", "channel"):
             with self.subTest(surface=surface), TemporaryDirectory() as tmp:
                 root = Path(tmp)
@@ -112,15 +105,8 @@ class MemoryIndexFallbackTests(unittest.TestCase):
                     channel_ref = derive_channel_ref(root / ".omh", profile_ref="default", surface_ref="discord", channel_identity="1111111111111111111")
                     record = approve(root, "Channel stored sentinel", scope_kind="channel", scope_ref=channel_ref)
                 pack = serve(live, "Astronomy telescope")
-                self.assertIn("<record_index", pack)
-                self.assertNotIn(record["summary"], pack)
-                self.assertEqual(rendered_ids(pack), [])
-                if surface == "console":
-                    self.assertEqual(live.recall_status().count, 0)
-                else:
-                    # The default `recall_line: console` keeps the line off Discord;
-                    # the index was served all the same.
-                    self.assertIsNone(live.recall_status())
+                self.assertEqual(pack, "")
+                self.assertIsNone(live.recall_status())
                 receipt = live.latest_prefetch_receipt()
                 self.assertEqual(receipt["rendering"]["indexed_records"], [record["record_id"]])
                 self.assertEqual(receipts.validate_prefetch_receipt(receipt), [])
@@ -138,34 +124,16 @@ class MemoryIndexFallbackTests(unittest.TestCase):
                 self.assertEqual(legacy, memory_records.render_selected_memory_records(selected, records, index_fallback=True))
         self.assertEqual(legacy.text, '<memory_records>\n  <record id="mem_one" type="fact" approved="2026-09-01">Release policy sentinel</record>\n</memory_records>')
 
-    def test_index_is_one_bounded_escaped_line_with_eight_labels(self) -> None:
+    def test_withheld_records_cost_no_budget_and_leave_no_text_at_any_bound(self) -> None:
         pairs = [reviewed(f"mem_{index:02d}", summary=f"Stored sentinel {index}", subject=f"topic-{index}") for index in range(10)]
         selected = selection(pairs, query="Astronomy telescope", limit=12)
         records = [record for record, _ in pairs]
-        records[0] = {**records[0], "subject": "topic<&>"}
-        records[1] = {key: value for key, value in records[1].items() if key != "subject"}
-        section = memory_records.render_selected_memory_records(selected, records, index_fallback=True)
-        self.assertEqual(len(section.indexed), 10)
-        tree = ElementTree.fromstring(section.text)
-        indexes = tree.findall("record_index")
-        self.assertEqual(len(indexes), 1)
-        line = next(line for line in section.text.splitlines() if "<record_index" in line)
-        self.assertIn("+2 more", line)
-        self.assertIn("topic&lt;&amp;&gt;", line)
-        self.assertIn("fact mem_01", line)
-        self.assertEqual(indexes[0].attrib["count"], "10")
-        self.assertNotIn("topic-8", line)
-        self.assertNotIn("topic-9", line)
-        exact = memory_records.render_selected_memory_records(selected, records, index_fallback=True, budget_chars=len(section.text))
-        self.assertEqual(exact, replace(section, budget_chars=len(section.text)))
-        too_small = memory_records.render_selected_memory_records(selected, records, index_fallback=True, budget_chars=len(section.text) - 1)
-        self.assertEqual(too_small.indexed, ())
-        self.assertEqual(too_small.rendered, ())
-        self.assertEqual(too_small.omissions["render_budget_exhausted"], 10)
-        self.assertNotIn("record_index", too_small.text)
-        self.assertLessEqual(len(too_small.text), len(section.text) - 1)
-        empty = memory_records.render_selected_memory_records(selected, records, index_fallback=True, budget_chars=1)
-        self.assertEqual((empty.text, empty.indexed), ("", ()))
+        for budget in (memory_records.DEFAULT_RECORD_RENDER_BUDGET_CHARS, 1, 0):
+            with self.subTest(budget=budget):
+                section = memory_records.render_selected_memory_records(selected, records, index_fallback=True, budget_chars=budget)
+                self.assertEqual((section.text, section.rendered), ("", ()))
+                self.assertEqual(len(section.indexed), 10)
+                self.assertEqual(section.omissions["render_budget_exhausted"], 0)
 
     def test_origin_ids_use_exact_source_ref_and_preserve_full_text_selection_order(self) -> None:
         pairs = [reviewed(f"mem_{index}", summary=f"Stored sentinel {index}", source_ref=source) for index, source in enumerate(("hermes-session:current", "hermes-session:foreign", "hermes-session:ancestor", "hermes-session:current-extra"))]
@@ -175,7 +143,9 @@ class MemoryIndexFallbackTests(unittest.TestCase):
         selected = selection(pairs, query="Astronomy telescope")
         section = memory_records.render_selected_memory_records(selected, records, index_fallback=True, full_text_ids=origin)
         self.assertEqual([item["record_id"] for item in section.rendered], [item["record_id"] for item in selected.pack["included_records"] if item["record_id"] in origin])
-        self.assertEqual([node.tag for node in ElementTree.fromstring(section.text)], ["record", "record", "record_index"])
+        self.assertEqual([node.tag for node in ElementTree.fromstring(section.text)], ["record", "record"])
+        self.assertNotIn("mem_1", section.text)
+        self.assertNotIn("mem_3", section.text)
 
     def test_indexed_incident_stage_is_no_overlap_not_render_budget_failure(self) -> None:
         reason, last = recall_delivery_stage(rendered=False, indexed=True, delivery_observed=None, model_use_observed=None)
@@ -183,18 +153,63 @@ class MemoryIndexFallbackTests(unittest.TestCase):
         self.assertEqual(diagnosis(reason, "live_prefetch_receipt")["stage"], "relevance_attention_or_budget_exclusion")
         self.assertEqual(recall_delivery_stage(rendered=False, delivery_observed=None, model_use_observed=None), ("selected_not_rendered", "selected"))
 
-    def test_dropped_index_does_not_break_receipt_prefix(self) -> None:
+    def test_a_full_text_budget_cut_keeps_the_receipt_prefix(self) -> None:
         pairs = [reviewed(f"mem_{index}", summary=f"Stored sentinel {index}") for index in range(2)]
         selected = selection(pairs, query="Astronomy telescope")
         selected_ids = [item["record_id"] for item in selected.pack["included_records"]]
         section = memory_records.render_selected_memory_records(
             selected, [record for record, _ in pairs], index_fallback=True,
-            full_text_ids={selected_ids[1]}, budget_chars=220,
+            full_text_ids={selected_ids[1]}, budget_chars=10,
         )
-        self.assertEqual(section.indexed, ())
+        self.assertEqual((section.text, section.rendered, section.indexed), ("", (), (selected_ids[0],)))
         receipt = receipts.build_prefetch_receipt(memory_records.PreparedPrefetch(selected, section, NOW), session_id=SESSION, home_digests=())
         self.assertEqual(receipts.validate_prefetch_receipt(receipt), [])
-        self.assertEqual(section.omissions["render_budget_exhausted"], 2)
+        self.assertEqual([item["record_id"] for item in receipt["rendering"]["selected_not_rendered"]], [selected_ids[1]])
+        self.assertEqual(section.omissions["render_budget_exhausted"], 1)
+
+    def test_a_stem_only_match_is_shown_only_when_it_names_the_records_topic(self) -> None:
+        # The review's first rule (show every stem-only readmission, score > 1)
+        # also served the ticket record on a commit request, through "Write"
+        # and "50 writes per day": a stemmed word must be one of the record's
+        # declared topic words (subject slug parts or tags) to show it.
+        pairs = [
+            reviewed("mem_ticket", subject="ticket-tool-db-choice", summary=(
+                "Team of 3 is building an internal ticket tool with about 50 writes per day. "
+                "They are deciding between SQLite and Postgres.")),
+            reviewed("mem_deploy", subject="deploy-schedule", summary="Deploys run nightly from the release branch"),
+            reviewed("mem_gate", subject="release-gates", tags=["rollout"], summary="Releases reach five percent of users first and wait a day"),
+        ]
+        records = tuple(record for record, _ in pairs)
+        snapshot = memory_records.RecordStoreSnapshot(records, {review["review_id"]: review for _, review in pairs}, {}, {}, frozenset(), ())
+
+        def prepared(query: str) -> memory_records.PreparedPrefetch:
+            return memory_records.prepare_prefetch_records(snapshot, query, allowed_scopes=[PROJECT], now=NOW, index_fallback=True)
+
+        singular = prepared("what about the ticket database?")
+        self.assertNotIn("query_fallback", singular.selection.pack)
+        self.assertEqual([item["record_id"] for item in singular.section.rendered], ["mem_ticket"])
+        every = {"mem_ticket", "mem_deploy", "mem_gate"}
+        for query, matched, shown in (
+            # A subject part in another form, then a tag in another form: shown.
+            ("what about the tickets database?", "mem_ticket", True),
+            ("how do rollouts go here?", "mem_gate", True),
+            # A stemmed hit only in the summary: withheld.
+            ("Write a commit message for the staged change in this repo.", "mem_ticket", False),
+            ("Which branches do we keep?", "mem_deploy", False),
+        ):
+            with self.subTest(query=query):
+                case = prepared(query)
+                # Only a suffix rule met the store, so the selection falls back,
+                # and the record that met it keeps its own score (> 1).
+                self.assertIn("query_fallback", case.selection.pack)
+                scores = {item["record_id"]: item["score"] for item in case.selection.pack["included_records"]}
+                self.assertGreater(scores[matched], 1)
+                self.assertEqual({record_id for record_id, score in scores.items() if score > 1}, {matched})
+                self.assertEqual([item["record_id"] for item in case.section.rendered], [matched] if shown else [])
+                self.assertEqual(set(case.section.indexed), every - {matched} if shown else every)
+                if not shown:
+                    self.assertEqual(case.section.text, "")
+                self.assertEqual(receipts.validate_prefetch_receipt(receipts.build_prefetch_receipt(case, session_id=SESSION, home_digests=())), [])
 
     def test_preparation_and_receipts_partition_selected_ids_and_validate_filtered_prefix(self) -> None:
         pairs = [reviewed(f"mem_{index}", summary=f"Stored sentinel {index}") for index in range(4)]

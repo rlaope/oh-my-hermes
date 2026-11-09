@@ -187,7 +187,7 @@ class DuplicateSummaryCollapseTests(unittest.TestCase):
 
 
 class HermesOrderFallbackTests(unittest.TestCase):
-    def test_a_greeting_still_serves_the_approved_active_record(self) -> None:
+    def test_a_greeting_selects_the_approved_active_record_and_shows_nothing(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".hermes").mkdir()
@@ -195,12 +195,9 @@ class HermesOrderFallbackTests(unittest.TestCase):
             live = provider(root)
             live.on_turn_start(1, "hello there")
             pack = live.prefetch("hello there")
-            self.assertIn('<record_index count="1" reason="no_query_overlap">', pack)
-            index_line = next(line for line in pack.splitlines() if "<record_index " in line)
-            self.assertIn(f'{record["record_type"]} {record["record_id"]}', index_line)
-            self.assertNotIn(record["summary"], pack)
-            self.assertEqual(rendered_ids(pack), [])
-            self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=0))
+            # The fallback still selects it; the live pack withholds it and names it nowhere.
+            self.assertEqual(pack, "")
+            self.assertIsNone(live.recall_status())
             receipt = live.latest_prefetch_receipt()
             assert isinstance(receipt, dict)
             self.assertEqual(receipt["selection"]["query_fallback"], {**_FALLBACK, "readmitted_count": 1})

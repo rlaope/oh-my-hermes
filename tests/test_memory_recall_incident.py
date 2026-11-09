@@ -269,12 +269,13 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         query = 'astronomy telescope'
         snapshot = memory_records.read_record_store_snapshot([self.paths.omh_home])
         request = api.RecallIncidentRequest(record_id=record_id, session_id=SESSION, query=query)
-        # The same selected record is indexed with room, but omitted when even
-        # its index cannot fit. An older receipt may lack indexed_records.
+        # The same selected record is withheld at any budget: withholding
+        # costs no text. An older receipt may lack indexed_records, and then
+        # the incident can only say it was selected and not rendered.
         for budget, legacy, reason, stage in (
             (memory_records.DEFAULT_RECORD_RENDER_BUDGET_CHARS, False,
              'no_query_overlap', 'relevance_attention_or_budget_exclusion'),
-            (1, False, 'selected_not_rendered', 'selected_not_rendered'),
+            (1, False, 'no_query_overlap', 'relevance_attention_or_budget_exclusion'),
             (1, True, 'selected_not_rendered', 'selected_not_rendered'),
         ):
             with self.subTest(budget=budget, legacy=legacy):
@@ -291,11 +292,8 @@ class MemoryRecallIncidentTests(unittest.TestCase):
                     'mode': 'active_tier', 'reason': 'no_query_overlap', 'readmitted_count': 1})
                 rendering = receipt['rendering']
                 self.assertEqual(rendering['rendered_records'], [])
-                self.assertEqual(rendering['indexed_records'],
-                                 [record_id] if reason == 'no_query_overlap' else [])
-                self.assertEqual(rendering['selected_not_rendered'],
-                                 [] if reason == 'no_query_overlap' else [
-                                     {'record_id': record_id, 'reason': 'render_budget_exhausted'}])
+                self.assertEqual(rendering['indexed_records'], [record_id])
+                self.assertEqual(rendering['selected_not_rendered'], [])
                 if legacy:
                     del rendering['indexed_records']
                 # Marking the genuine builder result returned also signs the

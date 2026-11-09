@@ -2755,14 +2755,13 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             pack = provider.prefetch("cut a release")
             self.assertIn("Release notes", pack)
             self.assertNotIn("menubar helper", pack)
-            # An unqueried live turn lists what it would serve by name; both
+            # An unqueried live turn withholds what it would serve; both
             # records are already in this conversation in full, so neither is
-            # shown or listed again.
+            # shown again.
             provider.queue_prefetch("")
             pack = provider.prefetch("")
             self.assertNotIn("Release notes", pack)
             self.assertNotIn("menubar helper", pack)
-            self.assertNotIn("<record_index", pack)
             self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"served_this_session": 2})
 
     def test_the_project_store_is_read_when_the_session_runs_inside_a_repository(self) -> None:
