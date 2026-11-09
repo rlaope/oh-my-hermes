@@ -26,12 +26,12 @@ All notable changes will be documented here.
   Claude Code and a category-maestro table now heads on `ultrabrain` and
   keeps `deep` and `unspecified-low` behind it, so `omh coding model-route
   --role brain` names GPT-6 Astra at `xhigh` on Codex and the Opus 5.5 chain
-  at `xhigh` on Claude Code. A Hermes-owner unit now walks its role's
-  recommendation categories in order and takes the first with a
-  confirmed-active candidate before the shared last resort, so `brain` reads
-  `ultrabrain`, then `deep`: a set without an `ultrabrain` model keeps `deep`'s
-  effort, and `research` depth `deep` and scale `large` gain the same
-  fall-through. A requested category is never widened. On the Hermes lane,
+  at `xhigh` on Claude Code. A Hermes-owner `brain`, `research` depth
+  `deep` or scale `large` unit reads `ultrabrain` and, when no generative
+  model there is confirmed active, steps to `deep` before the shared last
+  resort, never into a cheaper tier: a set without an `ultrabrain` model keeps
+  `deep`'s effort. No route moves down, every other unit resolves as before,
+  and a requested category is never widened. On the Hermes lane,
   `ulw-work` routes planning, decomposition and hard-debugging lanes to
   `ultrabrain` and ideation to `deep`, and `ulw-plan` and `omh-plan` set
   `omh_delegate_route` to `ultrabrain` before dispatching a planner or critic

@@ -1313,12 +1313,7 @@ def _resolve_hermes_recommendation_route(
     requested_effort = "off" if raw_effort == "none" else raw_effort
     attempted: list[dict[str, str]] = []
     active = tuple(active_models)
-    categories = (
-        (requested_category,)
-        if requested_category
-        else _recommendation_categories(role, requested_depth, requested_scale)
-    )
-    category = categories[0]
+    category = requested_category or _recommendation_category(role, requested_depth, requested_scale)
     selector = {"category": category}
 
     if requested_model:
@@ -1391,35 +1386,36 @@ def _resolve_hermes_recommendation_route(
         return payload
 
     attempted.append({"stage": "requested_model", "outcome": "skipped", "reason": "no model requested"})
-    # The role's categories in order, as the catalog lane concatenates them:
-    # the first with a confirmed-active candidate wins, before the shared
-    # last-resort chain. A requested category is one category, never widened.
-    # With no candidate in any of them, the first category's resolution stands.
-    recommendation: dict[str, object] = {}
-    for index, candidate_category in enumerate(categories):
-        resolution = resolve_model_recommendation(
+    recommendation = resolve_model_recommendation(
+        owner="hermes",
+        active_models=active,
+        overrides=recommendation_overrides,
+        **selector,
+    )
+    # A derived `ultrabrain` (brain, research depth deep, scale large) with no
+    # confirmed-active generative candidate steps down to `deep`, the next
+    # depth tier, before the shared last resort, and never into a cheaper
+    # tier. When `deep` has none either, the `ultrabrain` resolution stands
+    # unchanged. A requested category is never widened.
+    if not requested_category and category == "ultrabrain" and not _has_generative_candidate(recommendation, active):
+        deeper = resolve_model_recommendation(
             owner="hermes",
             active_models=active,
             overrides=recommendation_overrides,
-            category=candidate_category,
+            category="deep",
         )
-        if index == 0:
-            recommendation = resolution
-        if resolution["source"] == "recommendation_chain":
-            recommendation, category = resolution, candidate_category
-            break
-        following = categories[index + 1] if index + 1 < len(categories) else ""
-        if len(categories) > 1:
+        if _has_generative_candidate(deeper, active):
             attempted.append(
                 {
                     "stage": "recommendation_category",
                     "outcome": "no_active_candidate",
                     "reason": (
-                        f"no confirmed-active candidate in recommendation category `{candidate_category}`; "
-                        + (f"trying `{following}`" if following else f"back to `{categories[0]}`'s resolution")
+                        "no confirmed-active generative candidate in recommendation category `ultrabrain`; "
+                        "`deep` selected before the shared last resort"
                     ),
                 }
             )
+            recommendation, category = deeper, "deep"
     chain = (
         _hermes_recommendation_chain(recommendation, active_models=active)
         if recommendation["status"] == "resolved"
@@ -1574,14 +1570,28 @@ def _vendor_spelling_change(requested_effort: str, model_id: str) -> dict[str, s
     )
 
 
-def _recommendation_categories(role: str, depth: str, scale: str) -> tuple[str, ...]:
+def _recommendation_category(role: str, depth: str, scale: str) -> str:
     if role == "research" and depth == "deep":
-        return CATEGORY_ROLE_SOURCES["research:deep"]
+        return "ultrabrain"
     if scale == "large":
-        return CATEGORY_SCALE_SOURCES["large"]
+        return "ultrabrain"
     if scale == "small":
-        return ("unspecified-low",)
-    return CATEGORY_ROLE_SOURCES.get(role, ("unspecified-high",))
+        return "unspecified-low"
+    sources = CATEGORY_ROLE_SOURCES.get(role, ("unspecified-high",))
+    return sources[0]
+
+
+def _has_generative_candidate(
+    resolution: Mapping[str, object],
+    active_models: tuple[str | Mapping[str, object], ...],
+) -> bool:
+    """Whether a category resolved to a confirmed-active model that can write code."""
+    if resolution.get("source") != "recommendation_chain":
+        return False
+    return any(
+        model_class(str(entry.get("model_id", ""))) != NON_GENERATIVE_MODEL_CLASS
+        for entry in _hermes_recommendation_chain(resolution, active_models=active_models)
+    )
 
 
 def _recommendation_binding(resolution: Mapping[str, object]) -> str:
