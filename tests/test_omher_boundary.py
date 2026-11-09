@@ -33,7 +33,12 @@ RULES = (
     " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
+    "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
+    "The command is fixed in the shell; nothing from the page reaches it.",
 )
+SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
+SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
+ONE_LINER = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta"
 
 
 def _flat(text: str) -> str:
@@ -46,9 +51,9 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_ten_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
         rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 10, len(rules))
+        self.assertTrue(6 <= len(rules) <= 12, len(rules))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
@@ -56,6 +61,45 @@ class DocPins(unittest.TestCase):
         self.assertIn("**Elsewhere**:", context)
         self.assertIn("docs/OMHER-BOUNDARY.md", context)
         self.assertIn("(OMHER-BOUNDARY.md)", DOCS_INDEX.read_text(encoding="utf-8"))
+
+
+class TheOneInstaller(unittest.TestCase):
+    """Rule 12: on Install the shell runs one fixed installer; nothing from the page reaches it."""
+
+    def test_the_installer_is_the_omher_beta_one_liner_without_the_app(self) -> None:
+        setup = SETUP_RS.read_text(encoding="utf-8")
+        # The definitions themselves, not the Rust tests that repeat them.
+        unix = setup[setup.index("const UNIX: InstallCommand"):]
+        unix = unix[: unix.index("};")]
+        self.assertEqual(re.findall(r'"([^"]*)"', unix), ["/bin/sh", "-c", ONE_LINER])
+        windows = setup[setup.index("const WINDOWS: InstallCommand"):]
+        windows = windows[: windows.index("};")]
+        self.assertEqual(
+            re.findall(r'"([^"]*)"', windows),
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+             "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta"],
+        )
+        env = setup[setup.index("const ENV: &[(&str, &str)]"):]
+        self.assertEqual(re.findall(r'"([^"]*)"', env[: env.index(";")]), ["OMH_WITH_DESKTOP", "0", "NO_COLOR", "1"])
+        # The doc names the same command.
+        self.assertIn(f"`{ONE_LINER}`", DOC.read_text(encoding="utf-8"))
+
+    def test_only_two_places_in_the_shell_start_a_process(self) -> None:
+        spawns = {}
+        for path in sorted(SHELL_SRC.glob("*.rs")):
+            n = path.read_text(encoding="utf-8").count("Command::new(")
+            if n:
+                spawns[path.name] = n
+        # bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed installer.
+        self.assertEqual(spawns, {"bridge.rs": 1, "setup.rs": 1})
+
+    def test_the_install_command_takes_nothing_from_the_page(self) -> None:
+        lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
+        sig = lib[lib.index("async fn install_engine("):]
+        sig = sig[: sig.index(") ->")]
+        self.assertNotIn("String", sig)
+        self.assertNotIn("&str", sig)
+        self.assertIn("Channel<InstallEvent>", sig)
 
 
 class OmhNeverReachesOmher(unittest.TestCase):
@@ -158,11 +202,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertEqual(tuple(re.findall(r'\{ id: "([^"]+)", program: "\1"', ui)), SESSION_AGENTS)
 
     def test_only_the_bridge_and_the_session_pty_start_processes(self) -> None:
-        """`Command::new` only in bridge.rs (Hermes' Python); `spawn_command` only in sessions.rs."""
+        """`Command::new` only in bridge.rs (Hermes' Python) and setup.rs (the one fixed installer, rule 12);
+        `spawn_command` only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name != "bridge.rs":
+            if path.name not in ("bridge.rs", "setup.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)

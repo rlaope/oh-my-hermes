@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **One command installs Hermes, OMH and the omher desktop app (beta).**
+  `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
+  (and the PowerShell script-block form with the same argument) installs Hermes with its official
+  installer when it is missing, installs or upgrades OMH, runs `omh setup` when OMH or Hermes is new on
+  the machine, then installs omher from the newest `omher-v*` release (dmg on macOS, silent per-user
+  installer on Windows; Linux skips the app with a note). The plain one-liner is unchanged. An omher
+  installed first offers the same install, minus the app, on its first launch when Hermes is missing,
+  and streams the installer's output on that screen. The README shows the one-liner and a screenshot.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

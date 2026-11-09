@@ -38,6 +38,11 @@
 
     Usage:
       irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+
+    The omher desktop app (beta), plus Hermes Agent when it is missing:
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+    `irm | iex` cannot pass an argument, so that form runs the downloaded text
+    as a script block with one. Without the argument nothing below changes.
 #>
 
 # Pinned rather than `Latest`: this file is fetched from main by URL and run on
@@ -107,6 +112,23 @@ $OmhSetupProfiles   = Get-OmhEnv 'OMH_SETUP_PROFILES'
 $OmhDefaultExecutor = Get-OmhEnv 'OMH_DEFAULT_EXECUTOR'
 $OmhScope           = Get-OmhEnv 'OMH_SCOPE'
 $OmhSetupArgs       = Get-OmhEnv 'OMH_SETUP_ARGS'
+# omher@beta only (see the usage note above): OMH_WITH_HERMES=0 skips
+# installing Hermes, OMH_WITH_DESKTOP=0 skips the app, OMH_APP_DIR picks the
+# app's install folder.
+$OmhWithHermes      = Get-OmhEnv 'OMH_WITH_HERMES' '1'
+$OmhWithDesktop     = Get-OmhEnv 'OMH_WITH_DESKTOP' '1'
+$OmhAppDir          = Get-OmhEnv 'OMH_APP_DIR'
+# Taken here, at script scope: inside a function $args is that function's own.
+$OmhScriptArgs      = @($args)
+$OmhHermesInstallUrl  = 'https://hermes-agent.nousresearch.com/install.ps1'
+$OmhOmherReleasesUrl  = 'https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=40'
+$OmhOmherSiteUrl      = 'https://omher.app/'
+$OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
+$script:OmhOmherBeta     = $false
+$script:OmhHadOmh        = $false
+$script:OmhHadHermes     = $false
+$script:OmhInstallHermes = $false
+$script:OmhOmherAppPath  = ''
 
 # %USERPROFILE% is the anchor Python itself uses; see the HOME note in the header.
 $OmhHomeDir      = Get-OmhEnv 'USERPROFILE'
@@ -356,6 +378,12 @@ function Resolve-OmhPython {
     #>
     $explicit = Get-OmhEnv 'OMH_PYTHON'
     if ($explicit) { $candidates = @($explicit) } else { $candidates = @('py', 'python', 'python3') }
+    # omher@beta only: Hermes' own interpreter, last. On a machine that had no
+    # Python 3.11+ until Hermes' installer brought one, it is the only candidate.
+    if (-not $explicit -and $script:OmhOmherBeta) {
+        $hermesPython = Get-OmhHermesPython
+        if ($hermesPython) { $candidates += $hermesPython }
+    }
 
     $script:OmhRejectedPythons = @()
     $found = Select-OmhPython $candidates
@@ -780,15 +808,219 @@ function Resolve-OmhLatestReleaseLocation {
 }
 
 # ---------------------------------------------------------------------------
+# omher@beta: Hermes when missing, then the omher desktop app
+# ---------------------------------------------------------------------------
+
+function Read-OmhInstallerArgs {
+    <#  $true for omher@beta, $false for no argument; anything else stops.  #>
+    param([object[]]$Arguments = @())
+    $beta = $false
+    foreach ($argument in @($Arguments)) {
+        if ([string]$argument -eq 'omher@beta') { $beta = $true; continue }
+        Stop-OmhInstall @(
+            "omh installer: unknown argument '$argument'. The only argument is omher@beta, which adds Hermes (when missing) and the omher desktop app:",
+            "  $OmhOmherBetaOneLiner"
+        )
+    }
+    return $beta
+}
+
+function Get-OmhHermesHome {
+    $hermesHome = Get-OmhEnv 'HERMES_HOME'
+    if ($hermesHome) { return $hermesHome }
+    if ($OmhLocalAppData) { return (Join-Path $OmhLocalAppData 'hermes') }
+    if ($OmhHomeDir) { return (Join-Path $OmhHomeDir 'AppData\Local\hermes') }
+    return ''
+}
+
+function Get-OmhHermesPython {
+    <#  Hermes' own Python, where Hermes' installer puts it; the omher app looks in the same places.  #>
+    $hermesHome = Get-OmhHermesHome
+    if (-not $hermesHome) { return '' }
+    foreach ($venv in @('venv', '.venv')) {
+        $candidate = Join-Path $hermesHome "hermes-agent\$venv\Scripts\python.exe"
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return ''
+}
+
+function Test-OmhHermesPresent {
+    if (Get-Command hermes -ErrorAction SilentlyContinue) { return $true }
+    return [bool](Get-OmhHermesPython)
+}
+
+function Test-OmhOmhPresent {
+    if ($OmhVenvDir -and (Test-Path -LiteralPath (Join-Path $OmhVenvDir 'Scripts\omh.exe') -PathType Leaf)) { return $true }
+    return [bool](Get-OmhCommandOnPath)
+}
+
+function Write-OmhOmherBetaPlan {
+    if ($script:OmhHadOmh -and $script:OmhHadHermes) {
+        Write-OmhNote 'omher@beta: found Hermes and OMH. Upgrading OMH, then adding the omher app.'
+    } elseif ($script:OmhHadHermes) {
+        Write-OmhNote "omher@beta: found Hermes without OMH. Installing OMH, connecting it with 'omh setup', then adding the omher app."
+    } elseif ($script:OmhInstallHermes -and $script:OmhHadOmh) {
+        Write-OmhNote "omher@beta: found OMH without Hermes. Installing Hermes, upgrading OMH, connecting them with 'omh setup', then adding the omher app."
+    } elseif ($script:OmhInstallHermes) {
+        Write-OmhNote "omher@beta: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app."
+    } else {
+        Write-OmhNote "omher@beta: Hermes is not installed and OMH_WITH_HERMES=0 skips it. Install Hermes yourself, then run 'omh setup'."
+    }
+    if ($OmhWithDesktop -eq '0') {
+        Write-OmhNote 'omher@beta: OMH_WITH_DESKTOP=0, so the omher app is not installed.'
+    }
+}
+
+function Get-OmhPowerShellExe {
+    <#  The running host's own executable (powershell.exe 5.1 or pwsh 7).  #>
+    try {
+        $path = (Get-Process -Id $PID).Path
+        if ($path) { return $path }
+    } catch {}
+    return 'powershell.exe'
+}
+
+function New-OmhTempDir {
+    $dir = Join-Path ([System.IO.Path]::GetTempPath()) ('omh-install-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    return $dir
+}
+
+function Install-OmhHermes {
+    Write-OmhStep '[hermes]' 'Install Hermes Agent with its official installer (non-interactive)'
+    $tmp = New-OmhTempDir
+    $script = Join-Path $tmp 'hermes-install.ps1'
+    try {
+        try {
+            Invoke-WebRequest -Uri $OmhHermesInstallUrl -OutFile $script -UseBasicParsing -ErrorAction Stop
+        } catch {
+            Write-OmhFail "Could not download $OmhHermesInstallUrl"
+            throw 'omh installer stopped.'
+        }
+        # A child PowerShell, so Hermes' installer owns its own scope, strict
+        # mode and exit code instead of sharing this one.
+        & (Get-OmhPowerShellExe) -NoProfile -ExecutionPolicy Bypass -File $script -NonInteractive
+        if ($LASTEXITCODE -ne 0) {
+            Write-OmhFail "Hermes' installer failed (exit $LASTEXITCODE; its output is above)."
+            throw 'omh installer stopped.'
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if (-not (Test-OmhHermesPresent)) {
+        Write-OmhFail "Hermes' installer finished, but no Hermes was found under $(Get-OmhHermesHome)."
+        throw 'omh installer stopped.'
+    }
+    Write-OmhOk 'Hermes Agent'
+}
+
+function Select-OmherAssetUrl {
+    <#
+        The download URL of the newest omher release's asset whose name ends in
+        $Suffix. Releases come newest first from the API. Only tags starting
+        with omher-v count: the repository's other releases (vX.Y.Z) are the
+        Python package, and omher releases are published with --latest=false,
+        so /releases/latest never names one.
+    #>
+    param([object[]]$Releases = @(), [string]$Suffix)
+    foreach ($release in @($Releases)) {
+        $tag = [string](Get-OmhPropertyValue $release 'tag_name')
+        if (-not $tag.StartsWith('omher-v')) { continue }
+        foreach ($asset in @(Get-OmhPropertyValue $release 'assets')) {
+            $name = [string](Get-OmhPropertyValue $asset 'name')
+            if ($name -like "omher-*-$Suffix") {
+                return [string](Get-OmhPropertyValue $asset 'browser_download_url')
+            }
+        }
+    }
+    return ''
+}
+
+function Get-OmherInstallerArguments {
+    <#  NSIS silent install; /D= must come last and unquoted.  #>
+    param([string]$Directory = '')
+    $arguments = @('/S')
+    if ($Directory) { $arguments += "/D=$Directory" }
+    return ,$arguments
+}
+
+function Stop-OmherApp {
+    param([string]$Message)
+    Write-OmhFail $Message
+    Write-OmhNote "Hermes and OMH are installed; only the app step failed. Download omher from $OmhOmherSiteUrl"
+    throw 'omh installer stopped.'
+}
+
+function Install-OmherApp {
+    if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
+        Write-OmhStep '[omher]' 'Install the omher desktop app'
+        Write-OmhNote 'install.ps1 installs the Windows build only. On macOS, use install.sh with omher@beta.'
+        return
+    }
+    Write-OmhStep '[omher]' 'Install the omher desktop app (Windows x64)'
+    $releases = @()
+    try {
+        $releases = @(Invoke-RestMethod -Uri $OmhOmherReleasesUrl -Headers @{ Accept = 'application/vnd.github+json' } -UseBasicParsing -ErrorAction Stop)
+    } catch {
+        $releases = @()
+    }
+    # Windows PowerShell 5.1 hands a JSON array back as one object holding it.
+    if ($releases.Count -eq 1 -and $releases[0] -is [System.Array]) { $releases = @($releases[0]) }
+    $url = Select-OmherAssetUrl -Releases $releases -Suffix 'windows-x64-setup.exe'
+    if (-not $url) {
+        Write-OmhNote "No omher release was found (none is published yet, or GitHub's API did not answer)."
+        Write-OmhNote "Hermes and OMH are installed. Get the app from $OmhOmherSiteUrl when it is out."
+        return
+    }
+    $tmp = New-OmhTempDir
+    $setup = Join-Path $tmp 'omher-setup.exe'
+    try {
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -ErrorAction Stop
+        } catch {
+            Stop-OmherApp "Could not download $url"
+        }
+        # The installer is unsigned. Run silently and per user (no admin), which
+        # is how the release is built (nsis installMode currentUser).
+        $process = Start-Process -FilePath $setup -ArgumentList (Get-OmherInstallerArguments $OmhAppDir) -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            Stop-OmherApp "The omher installer exited with $($process.ExitCode)."
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($OmhAppDir) { $script:OmhOmherAppPath = $OmhAppDir }
+    elseif ($OmhLocalAppData) { $script:OmhOmherAppPath = Join-Path $OmhLocalAppData 'omher' }
+    else { $script:OmhOmherAppPath = 'the Start menu' }
+    Write-OmhOk $script:OmhOmherAppPath
+}
+
+# ---------------------------------------------------------------------------
 # Main flow
 # ---------------------------------------------------------------------------
 
 $OmhInstallFailed = $false
 try {
     $script:OmhLang = Get-OmhNormalizedLang $OmhLangRaw
+    $script:OmhOmherBeta = Read-OmhInstallerArgs $OmhScriptArgs
+    if ($script:OmhOmherBeta) {
+        $script:OmhHadOmh = Test-OmhOmhPresent
+        $script:OmhHadHermes = Test-OmhHermesPresent
+        $script:OmhInstallHermes = (-not $script:OmhHadHermes) -and $OmhWithHermes -ne '0'
+        # Connect OMH to Hermes when either side is new here. An existing OMH
+        # on an existing Hermes is only upgraded, as a plain install upgrades it.
+        if ((-not $script:OmhHadOmh -or $script:OmhInstallHermes) -and ($script:OmhHadHermes -or $script:OmhInstallHermes)) {
+            $OmhRunSetup = '1'
+            $OmhTotalSteps = $OmhDoctorStep
+        }
+    }
     # Header, then the interpreter, then any network work: the order
     # install.sh uses, so a failed release lookup never prints above it.
     Write-OmhHeader (Get-OmhMessage 'installer_title') (Get-OmhMessage 'installer_subtitle')
+    if ($script:OmhOmherBeta) {
+        Write-OmhOmherBetaPlan
+        if ($script:OmhInstallHermes) { Install-OmhHermes }
+    }
     $script:OmhRuntimePython = Resolve-OmhPython
     Write-OmhNote "Python: $OmhRuntimePython ($OmhSelectedPythonVersion)"
 
@@ -903,12 +1135,28 @@ try {
             Write-OmhNote 'Skipped doctor check because OMH_RUN_DOCTOR=0.'
         } else {
             Write-OmhStep (Get-OmhStepLabel $OmhDoctorStep) (Get-OmhMessage 'step_doctor')
-            if ($OmhScope) { Invoke-OmhCli @('--scope', $OmhScope, 'doctor') } else { Invoke-OmhCli @('doctor') }
+            try {
+                if ($OmhScope) { Invoke-OmhCli @('--scope', $OmhScope, 'doctor') } else { Invoke-OmhCli @('doctor') }
+            } catch {
+                if (-not $script:OmhOmherBeta) { throw }
+                # A Hermes installed a minute ago has no model chosen yet, and
+                # doctor says so. That is the person's next step, not a reason
+                # to stop before the app.
+                Write-OmhNote 'omh doctor reported problems (above). Fix them after the install; continuing with the omher app.'
+            }
         }
     } elseif ($OmhAutoApply -eq '0' -or $OmhWithPlugin -eq '1' -or $OmhWithMcp -eq '1' -or $OmhScope -or
               $OmhProfilePacks -or $OmhSetupProfiles -or $OmhDefaultExecutor -or $OmhSetupArgs -or $OmhRunDoctor -eq '0') {
         Write-OmhNote 'Setup options were not applied because install.ps1 installs the command only by default.'
         Write-OmhNote "Run 'omh setup' with those choices explicitly, or set OMH_RUN_SETUP=1 for advanced one-shot bootstrap."
+    }
+
+    if ($script:OmhOmherBeta) {
+        if ($OmhWithDesktop -eq '0') {
+            Write-OmhNote 'Skipped the omher app because OMH_WITH_DESKTOP=0.'
+        } else {
+            Install-OmherApp
+        }
     }
 
     Write-OmhLine
@@ -919,6 +1167,14 @@ try {
         Write-OmhLine (Get-OmhMessage 'next_command_path' $OmhCommandPath)
     } else {
         Write-OmhLine "Next: run '$OmhRuntimePython -P -E -m omh.cli setup' to connect OMH to Hermes, then '$OmhRuntimePython -P -E -m omh.cli doctor' to verify."
+    }
+    if ($script:OmhOmherBeta) {
+        if ($script:OmhInstallHermes) {
+            Write-OmhLine "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
+        }
+        if ($script:OmhOmherAppPath) {
+            Write-OmhLine 'omher is installed. Open it from the Start menu.'
+        }
     }
 } catch {
     Write-OmhLine $_.Exception.Message
