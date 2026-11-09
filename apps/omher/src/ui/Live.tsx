@@ -1,10 +1,12 @@
 // "Answer in progress" marks shared by the sidebar, the chat and away bubbles: a thin rotating ring in the
 // accent gradient around a face or a source mark, a three-dot typing indicator, and a one-line text ticker
 // that slides up like the activity line. All three go static under prefers-reduced-motion (ui.css).
-import { useId, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
-/** Wraps `children` (an avatar or a mark, `size` px square) and, while `on`, draws a 1.5px arc around it.
- *  The ring is absolutely positioned `gap` px outside the wrapper, so it never moves the layout. */
+/** Wraps `children` (an avatar or a mark, `size` px square) and, while `on`, draws a spinner around it: a 2px,
+ *  ~110 degree arc whose tail fades in from transparent to the brand gradient, with a round head (ui.css). It is
+ *  one CSS conic gradient masked to a 2px band, so every ring has the same shape at any size. The ring is
+ *  absolutely positioned `gap` px outside the wrapper, so it never moves the layout. */
 export function LiveRing({
   on,
   size,
@@ -24,9 +26,7 @@ export function LiveRing({
   seed?: string;
   children: ReactNode;
 }) {
-  const id = `ring${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const s = size + gap * 2;
-  const c = s / 2;
   let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   // golden-ratio spread of the hash over one turn (1.2s), so a handful of bots land far apart
@@ -35,39 +35,14 @@ export function LiveRing({
     <span className="ui-ring-w" style={{ width: size, height: size }}>
       {children}
       {on && (
-        <svg
+        <span
           className="ui-ring"
           data-testid={testId}
           role={label ? "status" : undefined}
           aria-label={label}
           aria-hidden={label ? undefined : true}
-          width={s}
-          height={s}
-          viewBox={`0 0 ${s} ${s}`}
-          style={{ top: -gap, left: -gap, animationDelay: `${phase}s` }}
-        >
-          <defs>
-            <linearGradient id={id} x1="1" y1="1" x2="0" y2="0">
-              <stop offset="0" className="ui-ring-s1" />
-              <stop offset="0.55" className="ui-ring-s2" />
-              <stop offset="1" className="ui-ring-s3" />
-            </linearGradient>
-          </defs>
-          {/* a faint full track, so a still frame reads as a ring with its arc, not a broken outline */}
-          <circle className="ui-ring-track" cx={c} cy={c} r={c - 0.75} fill="none" strokeWidth={1.5} />
-          <circle
-            className="ui-ring-arc"
-            cx={c}
-            cy={c}
-            r={c - 0.75}
-            fill="none"
-            stroke={`url(#${id})`}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            pathLength={100}
-            strokeDasharray="40 60"
-          />
-        </svg>
+          style={{ width: s, height: s, top: -gap, left: -gap, animationDelay: `${phase}s` }}
+        />
       )}
     </span>
   );
@@ -84,23 +59,25 @@ export function TypingDots({ size = 6, testId }: { size?: number; testId?: strin
   );
 }
 
-/** One line of text; a new text comes in from below while the old one leaves upward (220 ms). */
-export function Ticker({ text }: { text: string }) {
-  const [cur, setCur] = useState({ text, k: 0 });
-  const [prev, setPrev] = useState<{ text: string; k: number } | null>(null);
+/** One line of text; a new text comes in from below while the old one leaves upward (220 ms). `text` keys the
+ *  change; `children`, when given, is how that text renders (e.g. with the command in a code span). */
+export function Ticker({ text, children }: { text: string; children?: ReactNode }) {
+  const node = children ?? text;
+  const [cur, setCur] = useState({ text, node, k: 0 });
+  const [prev, setPrev] = useState<{ node: ReactNode; k: number } | null>(null);
   if (text !== cur.text) {
-    setPrev({ text: cur.text, k: cur.k });
-    setCur({ text, k: cur.k + 1 });
+    setPrev({ node: cur.node, k: cur.k });
+    setCur({ text, node, k: cur.k + 1 });
   }
   return (
     <span className="ui-tick">
       {prev && (
         <span key={`p${prev.k}`} className="ui-tick-t out" aria-hidden onAnimationEnd={() => setPrev(null)}>
-          {prev.text}
+          {prev.node}
         </span>
       )}
       <span key={`c${cur.k}`} className={`ui-tick-t${cur.k > 0 ? " in" : ""}`} data-testid="tick-text">
-        {cur.text}
+        {cur.node}
       </span>
     </span>
   );

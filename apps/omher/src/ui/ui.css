@@ -88,32 +88,48 @@ button.ui-pill:hover {
   line-height: 0;
 }
 .ui-ring {
+  /* arc length and thickness; the tail fades in from transparent over the first 25% of the arc */
+  --ring-arc: 110deg;
+  --ring-w: 2px;
+  --ring1: color-mix(in srgb, var(--a1) 70%, #fff);
+  --ring2: color-mix(in srgb, var(--a2) 88%, #fff);
+  --ring3: color-mix(in srgb, var(--a3) 92%, #fff);
+  --ring-track: color-mix(in srgb, var(--ink) 16%, transparent);
   position: absolute;
+  border-radius: 50%;
   pointer-events: none;
-  overflow: visible;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg calc(360deg - var(--ring-arc)),
+    var(--ring1) calc(360deg - var(--ring-arc) * 0.75),
+    var(--ring2) calc(360deg - var(--ring-arc) * 0.35),
+    var(--ring3) 360deg
+  ),
+  /* a faint full track under the arc, so a still frame reads as a spinner, not a crescent */
+  linear-gradient(var(--ring-track), var(--ring-track));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
   animation: ui-ring-turn 1.2s linear infinite;
 }
-.ui-ring-track {
-  stroke: color-mix(in srgb, var(--ink) 14%, transparent);
+/* the round head at the arc's leading end (12 o'clock before rotation), a touch wider than the band so the
+   still frame shows which way it turns */
+.ui-ring::after {
+  content: "";
+  position: absolute;
+  top: -0.5px;
+  left: 50%;
+  width: calc(var(--ring-w) + 1px);
+  height: calc(var(--ring-w) + 1px);
+  margin-left: calc(var(--ring-w) / -2 - 0.5px);
+  border-radius: 50%;
+  background: var(--ring3);
 }
-/* on dark the accent stops are lifted a little so a 1.5px arc still reads; light keeps them as they are */
-.ui-ring-s1 {
-  stop-color: color-mix(in srgb, var(--a1) 58%, #fff);
-}
-.ui-ring-s2 {
-  stop-color: color-mix(in srgb, var(--a2) 80%, #fff);
-}
-.ui-ring-s3 {
-  stop-color: color-mix(in srgb, var(--a3) 85%, #fff);
-}
-[data-theme="light"] .ui-ring-s1 {
-  stop-color: var(--a1);
-}
-[data-theme="light"] .ui-ring-s2 {
-  stop-color: var(--a2);
-}
-[data-theme="light"] .ui-ring-s3 {
-  stop-color: var(--a3);
+/* on light the stops go a shade deeper and the track lighter, so the arc, not the circle, is what you see */
+[data-theme="light"] .ui-ring {
+  --ring1: color-mix(in srgb, var(--a1) 82%, #000);
+  --ring2: color-mix(in srgb, var(--a2) 84%, #000);
+  --ring3: color-mix(in srgb, var(--a3) 86%, #000);
+  --ring-track: color-mix(in srgb, var(--ink) 7%, transparent);
 }
 @keyframes ui-ring-turn {
   to {
@@ -146,11 +162,11 @@ button.ui-pill:hover {
   60%,
   100% {
     transform: translateY(0);
-    opacity: 0.6;
+    opacity: var(--dot-rest, 0.6);
   }
   30% {
     transform: translateY(calc(var(--dot) * -0.4));
-    opacity: 0.95;
+    opacity: 1;
   }
 }
 .ui-tick {

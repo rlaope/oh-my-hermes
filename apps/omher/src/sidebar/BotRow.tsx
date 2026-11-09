@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { Bot } from "../lib/protocol";
-import { askText, type Ask, type Chat } from "../state/store";
+import { askText, liveLabel, type Ask, type Chat } from "../state/store";
 import { Avatar, LiveRing, Ticker, TypingDots } from "../ui";
 import { AskLine } from "./Needs";
 import { shortTime } from "../app/time";
@@ -21,6 +21,22 @@ export function preview(bot: Bot, chat: Chat | undefined): { text: string; live:
   const last = items[items.length - 1];
   if (bot.running) return { text: liveText(""), live: true, ts: null };
   return { text: bot.description || "", live: false, ts: last ? last.ts : null };
+}
+
+/** The live step as the activity line shows it: the command or path of the latest tool in a code span. */
+function LiveStep({ chat, text }: { chat: Chat | undefined; text: string }) {
+  const l = chat?.turn ? liveLabel(chat.turn) : null;
+  return (
+    <Ticker text={text}>
+      {l?.code ? (
+        <>
+          {l.verb} <code>{l.code}</code>
+        </>
+      ) : (
+        text
+      )}
+    </Ticker>
+  );
 }
 
 /** Markdown-ish text to one plain line. */
@@ -160,9 +176,9 @@ export function BotRow({
           </span>
           <span className="bot-r2">
             <span className={`bot-p${live ? " live" : ""}${needs ? " ask" : ""}`} data-testid="bot-sub">
-              {needs ? <AskLine text={text} /> : live ? <Ticker text={text} /> : text}
+              {needs ? <AskLine text={text} /> : live ? <LiveStep chat={chat} text={text} /> : text}
             </span>
-            {live && <TypingDots size={4} testId="bot-typing" />}
+            {live && <TypingDots size={3} testId="bot-typing" />}
             {needs > 0 ? (
               // a plain amber dot, no number: a count here would read as unread (the strip carries the count)
               <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />

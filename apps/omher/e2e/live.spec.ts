@@ -58,6 +58,13 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   await expect(sub).toHaveText("Thinking…");
   await expect(row.getByTestId("bot-typing")).toBeVisible();
   await expect(row.getByTestId("bot-typing").locator("i")).toHaveCount(3);
+  // readable: 3px dots in the --muted text colour, the same colour as the live preview text
+  const dotLook = await row.getByTestId("bot-typing").locator("i").first().evaluate((e) => {
+    const cs = getComputedStyle(e);
+    return { w: cs.width, bg: cs.backgroundColor, text: getComputedStyle(e.closest(".bot-r2")!.querySelector(".bot-p")!).color };
+  });
+  expect(dotLook.w).toBe("3px");
+  expect(dotLook.bg).toBe(dotLook.text);
   // the dots end the preview text, not the row
   const gapPx = await row.evaluate((el) => {
     const t = el.querySelector("[data-testid=bot-sub]")!.getBoundingClientRect();
@@ -67,22 +74,25 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   expect(gapPx).toBeGreaterThanOrEqual(0);
   expect(gapPx).toBeLessThan(12);
 
-  // the ring hugs the 34px face from outside: 1.5px arc, rotating, absolutely placed, no layout shift
+  // the ring hugs the 34px face from outside: a 2px, 110 degree arc with a faded tail (a conic gradient from
+  // transparent into the brand stops, masked to a band), a round head, rotating, absolutely placed, no layout shift
   const geo = await ring.evaluate((el) => {
     const cs = getComputedStyle(el);
+    const head = getComputedStyle(el, "::after");
     // the rotation turns the box, so measure the unrotated layout box (offset + size), not the client rect
-    const svg = el as unknown as SVGSVGElement;
-    const c = el.querySelector("circle.ui-ring-arc")!;
+    const h = el as HTMLElement;
     return {
       pos: cs.position,
       anim: cs.animationName,
       dur: cs.animationDuration,
-      w: svg.width.baseVal.value,
+      w: h.offsetWidth,
       dx: -parseFloat(cs.left),
       dy: -parseFloat(cs.top),
-      stroke: c.getAttribute("stroke-width"),
-      cap: c.getAttribute("stroke-linecap"),
-      grad: c.getAttribute("stroke"),
+      arc: cs.getPropertyValue("--ring-arc").trim(),
+      band: cs.getPropertyValue("--ring-w").trim(),
+      bg: cs.backgroundImage,
+      mask: cs.maskImage || cs.getPropertyValue("-webkit-mask-image"),
+      head: [head.width, head.borderRadius],
     };
   });
   expect(geo.pos).toBe("absolute");
@@ -91,9 +101,21 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   expect(geo.w).toBeCloseTo(41, 0);
   expect(geo.dx).toBeCloseTo(3.5, 0);
   expect(geo.dy).toBeCloseTo(3.5, 0);
-  expect(geo.stroke).toBe("1.5");
-  expect(geo.cap).toBe("round");
-  expect(geo.grad).toMatch(/^url\(#ring/);
+  expect(geo.arc).toBe("110deg");
+  expect(geo.band).toBe("2px");
+  expect(geo.bg).toMatch(/^conic-gradient\(rgba\(0, 0, 0, 0\) 0deg, rgba\(0, 0, 0, 0\) 250deg, /);
+  expect(geo.mask).toMatch(/radial-gradient/);
+  expect(geo.head).toEqual(["3px", "50%"]);
+  // the same shape for every bot: Kami's ring is the same gradient, band and arc as Friren's
+  await emit(ev("kami", "turn.start"));
+  const kamiRing = page.getByTestId("bot-kami").getByTestId("live-ring");
+  await expect(kamiRing).toBeVisible();
+  const look = (el: Element) => {
+    const cs = getComputedStyle(el);
+    return [cs.backgroundImage, cs.getPropertyValue("--ring-w"), cs.getPropertyValue("--ring-arc"), (el as HTMLElement).offsetWidth];
+  };
+  expect(await kamiRing.evaluate(look)).toEqual(await ring.evaluate(look));
+  await emit(ev("kami", "turn.end", { outcome: "done" }));
   expect(await row.locator(".bot-m").boundingBox()).toEqual(before);
 
   // the live step from the activity line, sliding up like it
@@ -103,6 +125,14 @@ test("sidebar: turn.start rings the face, the live step slides into the preview,
   await emit(ev("friren", "tool.end", { tool_id: "f1", name: "read_file", ok: true }));
   await emit(ev("friren", "tool.start", { tool_id: "f2", name: "terminal", detail: "pnpm test" }));
   await expect(sub.getByTestId("tick-text")).toHaveText("Running pnpm test");
+  // the command in a mono code span, as the activity line shows it
+  const code = sub.getByTestId("tick-text").locator("code");
+  await expect(code).toHaveText("pnpm test");
+  const [fam, mono] = await Promise.all([
+    code.evaluate((e) => getComputedStyle(e).fontFamily),
+    page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--mono").trim()),
+  ]);
+  expect(fam.replace(/\s/g, "")).toBe(mono.replace(/\s/g, ""));
 
   await emit(ev("friren", "turn.end", { outcome: "done" }));
   await expect(ring).toHaveCount(0);
@@ -137,9 +167,11 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   await open(page);
   const tl = page.getByTestId("timeline");
   // the mock starts Kami as busy elsewhere; give it a clean turn of its own
-  await emit(ev("kami", "turn.start"));
+  await emit(ev("kami", "turn.start"), ev("kami", "thinking"));
   const typing = tl.getByTestId("typing");
   await expect(typing).toBeVisible();
+  // one live indicator: before any tool.start there is no live activity line, only the typing bubble
+  await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(0);
   await expect(typing.getByTestId("typing-ring")).toBeVisible();
   await expect(typing.locator(".msg-face")).toHaveCount(1);
   await expect(typing.getByTestId("typing-bubble").locator(".ui-typing i")).toHaveCount(3);
@@ -165,10 +197,14 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   const last = await tl.locator(":scope > .row").last().getAttribute("data-kind");
   expect(last).toBe("typing");
 
-  // tools run, still nothing said: it stays
+  // the first tool.start brings the activity line, which takes over: the typing bubble goes
   await emit(ev("kami", "tool.start", { tool_id: "k1", name: "terminal", detail: "pnpm test" }));
-  await expect(page.getByTestId("activity").last().getByTestId("activity-text")).toContainText("pnpm test");
-  await expect(typing).toBeVisible();
+  await expect(tl.locator("[data-testid=activity][data-state=live]").getByTestId("activity-text")).toContainText("pnpm test");
+  await expect(tl.getByTestId("typing")).toHaveCount(0);
+  // and stays gone while the line is shown, through the tool's end and the next one
+  await emit(ev("kami", "tool.end", { tool_id: "k1", name: "terminal", ok: true }), ev("kami", "thinking"));
+  await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(1);
+  await expect(tl.getByTestId("typing")).toHaveCount(0);
 
   await emit(ev("kami", "delta", { text: "Found it: the" }));
   await expect(tl.getByTestId("bubble-streaming")).toContainText("Found it");
@@ -177,6 +213,20 @@ test("chat: a typing bubble with the ringed face waits for the first delta, whic
   await emit(ev("kami", "message", { id: "k-a1", text: "Found it: the retry cap." }), ev("kami", "turn.end", { outcome: "done" }));
   await expect(tl.getByTestId("bubble-bot").last()).toHaveText("Found it: the retry cap.");
   await expect(tl.getByTestId("typing")).toHaveCount(0);
+});
+
+test("chat: an answer with no tool: the typing bubble alone, then the first token", async ({ page }) => {
+  await open(page);
+  const tl = page.getByTestId("timeline");
+  await emit(ev("kami", "turn.start"), ev("kami", "thinking"));
+  await expect(tl.getByTestId("typing")).toBeVisible();
+  await expect(tl.locator("[data-testid=activity][data-state=live]")).toHaveCount(0);
+  await emit(ev("kami", "delta", { text: "Short answer" }));
+  await expect(tl.getByTestId("bubble-streaming")).toContainText("Short answer");
+  await expect(tl.getByTestId("typing")).toHaveCount(0);
+  await emit(ev("kami", "message", { id: "k-a2", text: "Short answer." }), ev("kami", "turn.end", { outcome: "done" }));
+  // the finished turn still collapses to its summary line
+  await expect(tl.getByTestId("activity").last()).toHaveAttribute("data-state", "done");
 });
 
 test("chat: an approval card replaces the typing bubble while the bot waits on you", async ({ page }) => {
@@ -217,8 +267,8 @@ test("reduced motion: the arc and the dots stand still", async ({ page }) => {
   const ring = page.getByTestId("bot-friren").getByTestId("live-ring");
   await expect(ring).toBeVisible();
   await expect(ring).toHaveCSS("animation-name", "none");
-  // still an arc, not a full circle
-  await expect(ring.locator("circle.ui-ring-arc")).toHaveAttribute("stroke-dasharray", "40 60");
+  // still an arc with its faded tail, not a full circle
+  await expect(ring).toHaveCSS("background-image", /^conic-gradient\(rgba\(0, 0, 0, 0\) 0deg, rgba\(0, 0, 0, 0\) 250deg, /);
   for (const dot of await page.getByTestId("bot-friren").locator(".ui-typing i").all()) await expect(dot).toHaveCSS("animation-name", "none");
   const typing = page.getByTestId("typing");
   await expect(typing.getByTestId("typing-ring")).toHaveCSS("animation-name", "none");
@@ -249,7 +299,9 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByTestId("bot-default").getByTestId("needs")).toBeVisible();
     await expect(page.getByTestId("bot-kami").getByTestId("tick-text")).toHaveText("Running pnpm test");
     await expect(page.getByTestId("bot-friren").getByTestId("tick-text")).toHaveText("Reading gateway.log");
-    await expect(page.getByTestId("typing")).toBeVisible();
+    // one live indicator in the chat: the activity line, no typing bubble beside it
+    await expect(page.locator("[data-testid=activity][data-state=live]")).toBeVisible();
+    await expect(page.getByTestId("typing")).toHaveCount(0);
     await page.mouse.move(700, 400);
     await page.waitForTimeout(400);
     // hold every animation at a mid frame (ring part-way round, dots mid-hop) instead of turning them off
@@ -257,8 +309,9 @@ for (const theme of ["dark", "light"] as const) {
       for (const a of document.getAnimations()) {
         const name = (a as CSSAnimation).animationName ?? "";
         a.pause();
-        // keep each ring's own phase (its negative delay), so the shot shows them at different angles
-        if (name === "ui-ring-turn") a.currentTime = 1600 - Number(a.effect?.getTiming().delay ?? 0);
+        // every ring at the same angle (cancel its own phase delay): the arc on the right, head at ~4:30, so the
+        // still frame shows one spinner shape for every bot
+        if (name === "ui-ring-turn") a.currentTime = 2850 + Number(a.effect?.getTiming().delay ?? 0);
         else if (name === "ui-typing-hop") a.currentTime = 300;
         else if (name === "pulse") a.currentTime = 500;
       }

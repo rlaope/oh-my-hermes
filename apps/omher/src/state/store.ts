@@ -196,6 +196,22 @@ export function activityText(name: string, detail: string): string {
   return d ? `${verb} ${d}` : verb;
 }
 
+/** The live text split for display: when it is the latest tool's text, `code` holds its command or path. */
+export function liveLabel(t: Turn): { verb: string; code?: string } {
+  const status = t.status || "Working…";
+  const last = t.steps[t.steps.length - 1];
+  if (last && last.detail && status === activityText(last.name, last.detail)) {
+    return { verb: activityText(last.name, ""), code: last.detail };
+  }
+  return { verb: status };
+}
+
+/** Whether a running turn has something for its activity line to say: a tool or skill ran, or the bot sent a
+ *  status of its own. Before that (only thinking) the chat shows the typing bubble instead of the line. */
+export function turnHasActivity(t: Turn): boolean {
+  return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== "Thinking…" && t.status !== "Working…");
+}
+
 // ---- state helpers --------------------------------------------------------------------------
 
 const emptyChat = (): Chat => ({

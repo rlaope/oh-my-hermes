@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { Bot } from "../../lib/protocol";
-import { selectTimeline, useStore, type TimelineItem } from "../../state/store";
+import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
@@ -77,6 +77,8 @@ export function Timeline({ bot }: { bot: Bot }) {
       )}
       {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">Say hi to {bot.display_name}</div>}
       {items.map((it, i) => {
+        // the live activity line with nothing to say yet: the typing bubble below stands in for it
+        if (it.kind === "activity" && chat?.turn?.id === it.turn.id && !turnHasActivity(it.turn)) return null;
         const label = divider(items[i - 1], it);
         return (
           <Fragment key={it.id}>

@@ -1,12 +1,13 @@
 import type { Chat } from "../../state/store";
-import { askOpen } from "../../state/store";
+import { askOpen, turnHasActivity } from "../../state/store";
 import { Avatar, LiveRing, TypingDots } from "../../ui";
 
-/** True while the bot works on an answer and nothing of it has arrived: a turn is running, no delta yet, no
+/** True while the bot works on an answer and nothing of it shows yet: a turn is running with no step or status
+ *  for the activity line (one live indicator in the chat: the line takes over at the first tool), no delta, no
  *  answer of this turn landed, and the bot is not waiting on the person (an open card says that instead). */
 export function awaitingFirstToken(chat: Chat | undefined): boolean {
   const t = chat?.turn;
-  if (!t || t.streaming) return false;
+  if (!t || t.streaming || turnHasActivity(t)) return false;
   const since = t.startedAt / 1000;
   for (const i of chat.items) {
     if (i.kind === "assistant" && i.ts >= since) return false;

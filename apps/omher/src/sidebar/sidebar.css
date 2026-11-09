@@ -180,8 +180,16 @@
   /* sit on the x-height middle of the 12px preview, not the line box middle */
   transform: translateY(1.5px);
 }
+/* --muted at near full strength: at 3px a dimmed dot disappears */
 .bot-r2 .ui-typing i {
-  background: var(--quiet);
+  --dot-rest: 0.85;
+  background: var(--muted);
+}
+/* the live step's command or path in mono, as the activity line shows it */
+.bot-p.live code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--body);
 }
 .badge {
   margin-left: 6px;
