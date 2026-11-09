@@ -1,4 +1,6 @@
-// Runs tab: the bot's dag runs as a list and a read-only layered graph, from three real (redacted) runs.
+// Runs tab: the bot's runs as a list, a compact read-only graph in the panel and a large one over the chat
+// column (⌘⇧G / Expand). Real (redacted) dag runs, real delegation logs for the models and routes, and a
+// synthetic 40-node run for the layout.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -7,7 +9,9 @@ import { join } from "node:path";
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = join(homedir(), ".hermes/profiles/kami/cache/scratch/omher-v02");
 const FAN = "dag:20261102_235818_fcfb1bdd/codex-coexist";
+const LIVE = "dag:20261102_235818_fcfb1bdd/codex-coexist-live";
 const CANCELLED = "dag:20261026_134438_3ae70257/omh-dap";
+const BIG = "dag:synthetic/big-run";
 const WRITES = ["chat.send", "chat.interrupt", "approval.respond", "clarify.respond", "chat.set_model", "bots.rename", "bots.set_avatar"];
 
 async function mock(op: string, params: Record<string, unknown> = {}): Promise<any> {
@@ -27,13 +31,24 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<a
   return reply.result;
 }
 
-async function openRuns(page: Page) {
+async function openRuns(page: Page, bot = "kami") {
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-  await page.getByTestId("places").click();
+  if (bot !== "kami") {
+    await page.getByTestId(`bot-${bot}`).click();
+    await page.keyboard.press(`${await mod(page)}+Period`);
+  } else await page.getByTestId("places").click();
   await page.getByTestId("panel-tab-runs").click();
   await expect(page.getByTestId("panel-runs")).toBeVisible();
 }
+/** The keyboard modifier the app uses here (⌘ on macOS, Ctrl elsewhere), read from the page. */
+async function mod(page: Page) {
+  return (await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform))) ? "Meta" : "Control";
+}
+const panel = (page: Page) => page.getByTestId("run-graph-box");
+const full = (page: Page) => page.getByTestId("runs-full");
+type Box = { x: number; y: number; width: number; height: number };
+const meets = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 test.beforeEach(async () => {
   await mock("mock.reset");
@@ -59,7 +74,7 @@ test("Runs is the sixth tab; the header still holds one control; the panel is 46
   expect(await sel.evaluate((e) => getComputedStyle(e).backgroundImage)).toBe("none");
 });
 
-test("the list puts the running run first with a live dot, then the newest; each row says done/total", async ({ page }) => {
+test("the list: running first with a live dot, then newest; dots differ by state; the header badge shows progress", async ({ page }) => {
   await openRuns(page);
   const rows = page.getByTestId("run-row");
   await expect(rows).toHaveCount(4);
@@ -69,34 +84,46 @@ test("the list puts the running run first with a live dot, then the newest; each
   await expect(rows.nth(0).locator(".rn-live")).toHaveCount(1);
   await expect(rows.nth(1).locator(".rn-live")).toHaveCount(0);
   await expect(rows.nth(0).locator(".rn-n")).toHaveText(/^3\/6 · \d+(s|m)$/);
-  await expect(rows.nth(1)).toContainText("Codex coexistence fixes");
   await expect(rows.nth(1).locator(".rn-n")).toHaveText(/^5\/6 · /);
-  // the running run is drawn by default, its running node ringed, not gradient-filled
-  await expect(page.getByTestId("run-graph-box")).toHaveAttribute("data-state", "running");
-  const doing = page.locator('[data-testid="run-node"][data-state="running"]');
+  // done = green-gray, cancelled = gray + the word, all different colours
+  const dot = (i: number) => rows.nth(i).locator("i").first().evaluate((e) => getComputedStyle(e).backgroundColor);
+  const [done, cancelled] = [await dot(1), await dot(2)];
+  expect(done).not.toBe(cancelled);
+  await expect(rows.nth(2)).toContainText("Cancelled");
+  // the header: a status badge with the live dot, a slim bar and 3/6
+  const badge = panel(page).getByTestId("run-state");
+  await expect(badge).toContainText("Running");
+  await expect(badge.locator(".rn-live")).toHaveCount(1);
+  await expect(badge.getByTestId("run-progress")).toHaveText("3/6");
+  const bar = await badge.locator(".rn-bar i").first().evaluate((e) => [e.getBoundingClientRect().width, e.parentElement!.getBoundingClientRect().width]);
+  expect(bar[0] / bar[1]).toBeCloseTo(0.5, 1);
+  // the running node: a live dot, a tinted card, never a gradient fill on the card itself
+  const doing = panel(page).locator('[data-testid="run-node"][data-state="running"]');
   await expect(doing).toHaveCount(1);
-  expect(await doing.evaluate((e) => getComputedStyle(e).boxShadow)).not.toBe("none");
+  await expect(doing.locator(".rg-live")).toHaveCount(1);
   expect(await doing.evaluate((e) => getComputedStyle(e).backgroundImage)).toBe("none");
 });
 
-test("the fan-out draws 6 cards in 3 columns, one edge per dependency, the failed node marked", async ({ page }) => {
+test("the fan-out: 6 cards in 3 columns, every link drawn right-middle to left-middle, the failed node marked", async ({ page }) => {
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
-  const box = page.getByTestId("run-graph-box");
+  const box = panel(page);
   await expect(box).toHaveAttribute("data-run", FAN);
   const detail = await mock("runs.get", { bot: "kami", run: FAN });
-  const deps = detail.run.nodes.reduce((a: number, n: any) => a + n.deps.length, 0);
+  // links as OMH counts them: deps and repair links; verify's dependency on the failed node is drawn from that
+  // node's two repairs instead (a failed node whose repairs are done counts as satisfied)
+  const links = detail.run.nodes.reduce((a: number, n: any) => a + n.deps.length + (n.repairOf ? 1 : 0), 0) + 1;
   const cards = box.getByTestId("run-node");
   await expect(cards).toHaveCount(6);
   await expect(box.getByTestId("run-graph")).toHaveAttribute("data-cols", "3");
-  const layers = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-layer")));
-  expect(new Set(layers)).toEqual(new Set(["0", "1", "2"]));
   // columns are real columns: every card of a layer shares one x
   const xs = await cards.evaluateAll((els) => els.map((e) => [e.getAttribute("data-layer"), Math.round(e.getBoundingClientRect().x)]));
   for (const l of ["0", "1", "2"]) expect(new Set(xs.filter(([k]) => k === l).map(([, x]) => x)).size).toBe(1);
-  expect(deps).toBe(4);
-  await expect(box.getByTestId("run-edge")).toHaveCount(deps);
-  // each edge runs from the right-middle of its dep to the left-middle of its node
+  // 4 dependencies (one replaced by the two repairs) + 2 repair links: every one is drawn
+  expect(links).toBe(7);
+  await expect(box.getByTestId("run-edge")).toHaveCount(links);
+  for (const id of ["t1-hermes", "t4-fence"]) await expect(box.locator(`[data-testid="run-edge"][data-to="${id}"]`)).toHaveCount(1);
+  // each edge starts at its source's right-middle and ends at its target's left-middle
   const geo = await box.evaluate((el) => {
     const cards = Object.fromEntries(
       [...el.querySelectorAll<HTMLElement>('[data-testid="run-node"]')].map((c) => [
@@ -104,27 +131,98 @@ test("the fan-out draws 6 cards in 3 columns, one edge per dependency, the faile
         { l: c.offsetLeft, r: c.offsetLeft + c.offsetWidth, m: c.offsetTop + c.offsetHeight / 2 },
       ]),
     );
-    return { cards, paths: [...el.querySelectorAll("path")].map((p) => p.getAttribute("d")!) };
+    const edges = [...el.querySelectorAll<SVGGElement>('[data-testid="run-edge"]')].map((g) => ({
+      from: g.dataset.from!,
+      to: g.dataset.to!,
+      end: g.dataset.end!.split(",").map(Number),
+      d: g.querySelector(".rg-line")!.getAttribute("d")!,
+    }));
+    return { cards, edges };
   });
-  const ends = geo.paths.map((d) => d.match(/-?\d+(\.\d+)?/g)!.map(Number)).map((n) => [n[0], n[1], n[6], n[7]].join(","));
-  const want = detail.run.nodes.flatMap((n: any) =>
-    n.deps.map((d: string) => [geo.cards[d].r, geo.cards[d].m, geo.cards[n.id].l, geo.cards[n.id].m].join(",")),
-  );
-  expect(ends.sort()).toEqual(want.sort());
+  for (const e of geo.edges) {
+    expect(e.end).toEqual([geo.cards[e.from].r, geo.cards[e.from].m, geo.cards[e.to].l, geo.cards[e.to].m]);
+    // the path itself starts and ends there, and its last segment is horizontal (never enters from below)
+    const n = e.d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+    expect([n[0], n[1]]).toEqual([e.end[0], e.end[1]]);
+    expect(n.slice(-2)).toEqual([e.end[2], e.end[3]]);
+    expect(n[n.length - 3]).toBe(e.end[3]); // the point before the end is on the same y
+  }
   const failed = box.locator('[data-node="t1-discovery"]');
   await expect(failed).toHaveClass(/\bbad\b/);
-  await expect(failed.locator(".rn-g")).toHaveText("✕");
-  await expect(box.locator('[data-node="t2-status-update"] .rn-g')).toHaveText("✓");
-  // the graph never pushes the panel wider than itself
-  const g = await box.getByTestId("run-graph").evaluate((e) => [e.clientWidth, e.getBoundingClientRect().right]);
-  const panel = await page.getByTestId("details").boundingBox();
-  expect(g[1]).toBeLessThanOrEqual(Math.ceil(panel!.x + panel!.width));
+  // its two repairs are done: still the failed node (its class, its rail), marked "repaired" with ↺, amber
+  await expect(failed).toHaveClass(/\brepaired\b/);
+  await expect(failed.locator(".rg-st")).toHaveText("↺");
+  await expect(box.locator('[data-node="t2-status-update"] .rg-st')).toHaveText("✓");
+  // edges out of the failed node are dashed
+  for (const g of await box.locator('[data-testid="run-edge"][data-from="t1-discovery"] .rg-line').all())
+    expect(await g.evaluate((e) => getComputedStyle(e).strokeDasharray)).not.toBe("none");
+  // the graph never pushes the panel wider than itself, and its height follows its content
+  const g = await box.getByTestId("run-graph").boundingBox();
+  const pane = await page.getByTestId("details").boundingBox();
+  expect(g!.x + g!.width).toBeLessThanOrEqual(Math.ceil(pane!.x + pane!.width));
+  const lowest = Math.max(...(await cards.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().bottom))));
+  expect(g!.y + g!.height - lowest).toBeLessThanOrEqual(12);
 });
 
-test("clicking a node opens its drawer with attempts, reason and handoff; no write controls", async ({ page }) => {
+test("card titles wrap at words to three lines; two alike titles stay apart; the meta line is proportional", async ({ page }) => {
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
-  const box = page.getByTestId("run-graph-box");
+  const box = panel(page);
+  await expect(box.getByTestId("run-node")).toHaveCount(6);
+  await expect(box.locator(".rg-card.enter")).toHaveCount(0); // after the entrance
+  const titles = await box.locator(".rg-t").evaluateAll((els) => els.map((e) => (e as HTMLElement).innerText));
+  const labels = (await mock("runs.get", { bot: "kami", run: FAN })).run.nodes.map((n: any) => n.label);
+  const words = new Set(labels.flatMap((l: string) => l.split(/\s+/)).concat(["Hermes:"]));
+  for (const t of titles) {
+    expect(t.split("\n").length).toBeLessThanOrEqual(3);
+    // every word shown is a whole word of the label (no mid-word cut); a cut title ends with "…"
+    for (const w of t.replace(/…$/, "").split(/\s+/)) expect(words.has(w) || words.has(w.replace(/^\(|\)$/g, ""))).toBe(true);
+  }
+  expect(new Set(titles).size).toBe(titles.length);
+  expect(titles.filter((t) => t.startsWith("Hermes:")), JSON.stringify(titles)).toHaveLength(1);
+  // one line high each, inside the card
+  for (const c of await box.getByTestId("run-node").all()) {
+    const [ch, sh] = await c.evaluate((e) => [e.clientHeight, e.scrollHeight]);
+    expect(sh).toBeLessThanOrEqual(ch + 1);
+  }
+  expect(await box.locator(".rg-mt").first().evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
+});
+
+test("states look different: done, running, failed, waiting; selection is a gray ring on top", async ({ page }) => {
+  await openRuns(page);
+  const box = panel(page);
+  await expect(box).toHaveAttribute("data-run", LIVE);
+  await expect(box.locator(".rg-card.enter")).toHaveCount(0); // after the entrance
+  const look = (id: string) =>
+    box.locator(`[data-testid="run-node"][data-node="${id}"]`).evaluate((e) => {
+      const s = getComputedStyle(e);
+      return { border: s.borderLeftStyle + " " + s.borderLeftColor + " " + s.borderLeftWidth, style: s.borderTopStyle, tint: getComputedStyle(e, "::before").backgroundImage, op: s.opacity };
+    });
+  const done = await look("t2-status-update");
+  const failed = await look("t1-discovery");
+  const pending = await look("t5-verify");
+  const running = await look("t3-doctor");
+  expect(done.tint).toMatch(/gradient/);
+  expect(Number(done.op)).toBe(1); // done never looks disabled
+  expect(failed.border).toMatch(/3px$/);
+  expect(["dashed", "dotted"]).toContain(pending.style);
+  expect(running.tint).toMatch(/gradient/);
+  expect(new Set([done.tint, failed.tint, running.tint]).size).toBe(3);
+  // selecting the failed card keeps its rail and adds a gray (not gradient) ring
+  const card = box.getByTestId("run-node").and(box.locator('[data-node="t1-discovery"]'));
+  await card.click();
+  await expect(card).toHaveClass(/\bon\b/);
+  const sel = await card.evaluate((e) => [getComputedStyle(e).outlineStyle, getComputedStyle(e).outlineColor, getComputedStyle(e).borderLeftWidth]);
+  expect(sel[0]).toBe("solid");
+  const [r, g, b] = sel[1].match(/\d+/g)!.map(Number);
+  expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(24); // gray
+  expect(sel[2]).toBe("3px");
+});
+
+test("clicking a node opens its drawer; a failed node offers 'Ask in chat', which only prefills the composer", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  const box = panel(page);
   await box.locator('[data-node="t5-verify"]').click();
   const drawer = page.getByTestId("run-drawer");
   await expect(drawer).toContainText("Independent verify vs base + live probes");
@@ -134,15 +232,27 @@ test("clicking a node opens its drawer with attempts, reason and handoff; no wri
   const before = (await drawer.getByTestId("run-handoff").innerText()).length;
   await drawer.getByTestId("run-handoff-more").click();
   await expect.poll(async () => (await drawer.getByTestId("run-handoff").innerText()).length).toBeGreaterThan(before);
-  // the failed node: red reason, a plain hint, and nothing that writes
+  // the failed node: one rail (no outline around it), a red "failed", the reason, a quiet prefill button
   await box.locator('[data-node="t1-discovery"]').click();
-  await expect(drawer.getByTestId("run-reason")).toHaveClass(/\bbad\b/);
+  await expect(drawer).toHaveClass(/\bbad\b/);
+  const frame = await drawer.evaluate((e) => {
+    const s = getComputedStyle(e);
+    return [s.borderLeftWidth, s.borderTopColor];
+  });
+  expect(frame[0]).toBe("3px");
+  expect(frame[1]).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+  const word = drawer.getByTestId("run-state-word");
+  await expect(word).toHaveText("failed");
+  expect(await word.evaluate((e) => getComputedStyle(e).color)).not.toBe(await drawer.evaluate((e) => getComputedStyle(e).color));
   await expect(drawer).toContainText("No handoff written.");
-  await expect(drawer).toContainText("Ask Kami in chat to retry.");
-  expect(await page.getByTestId("run-graph-box").getByRole("button", { name: /retry|cancel|settle|stop/i }).count()).toBe(0);
+  await expect(drawer).not.toContainText("Ask Kami in chat to retry.");
+  await drawer.getByTestId("run-ask").click();
+  const composer = page.getByTestId("composer");
+  await expect(composer).toHaveValue("Retry `t1-discovery` in run `codex-coexist`");
+  await expect(composer).toBeFocused();
+  // nothing was sent, and nothing in the graph writes
+  expect(await panel(page).getByRole("button", { name: /^(retry|cancel|settle|stop)$/i }).count()).toBe(0);
   expect(await page.getByTestId("details-panel").locator("textarea, input, [contenteditable=true]").count()).toBe(0);
-  await drawer.getByRole("button", { name: "Close node" }).click();
-  await expect(drawer).toHaveCount(0);
   const calls = (await mock("mock.calls")).calls.map((c: any) => c.op);
   expect(calls.filter((op: string) => WRITES.includes(op))).toEqual([]);
   expect(calls).toEqual(expect.arrayContaining(["runs.list", "runs.get"]));
@@ -153,9 +263,9 @@ test("a cancelled run is labelled, its unfinished nodes dimmed", async ({ page }
   const r = page.getByTestId("run-row").filter({ hasText: "omh-dap" });
   await expect(r).toContainText("Cancelled");
   await r.click();
-  const box = page.getByTestId("run-graph-box");
+  const box = panel(page);
   await expect(box).toHaveAttribute("data-run", CANCELLED);
-  await expect(box.getByTestId("run-state")).toHaveText("Cancelled");
+  await expect(box.getByTestId("run-state")).toContainText("Cancelled");
   await expect(box.locator('[data-testid="run-node"][data-state="cancelled"]')).toHaveCount(2);
   expect(Number(await box.locator('[data-node="verify"]').evaluate((e) => getComputedStyle(e).opacity))).toBeLessThan(1);
 });
@@ -166,15 +276,403 @@ test("a bot with no runs says so", async ({ page }) => {
   await expect(page.getByTestId("panel-runs")).toContainText("No runs yet.");
 });
 
+// ---- T4: big runs, full view ----
+
+test("40 nodes: no two cards overlap, the layout takes under 50 ms, crossings are reduced", async ({ page }) => {
+  await openRuns(page, "default");
+  await page.getByTestId("run-row").filter({ hasText: "Big run" }).click();
+  const box = panel(page);
+  await expect(box).toHaveAttribute("data-run", BIG);
+  const cards = box.getByTestId("run-node");
+  await expect(cards).toHaveCount(40);
+  const graph = box.getByTestId("run-graph");
+  expect(Number(await graph.getAttribute("data-layout-ms"))).toBeLessThan(50);
+  await expect(graph).toHaveAttribute("data-cols", "6");
+  const boxes = await cards.evaluateAll((els: HTMLElement[]) => els.map((e) => ({ x: e.offsetLeft, y: e.offsetTop, width: e.offsetWidth, height: e.offsetHeight })));
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(meets(boxes[i], boxes[j]), `${i} vs ${j}`).toBe(false);
+  const links = (await mock("runs.get", { bot: "default", run: BIG })).run.nodes.reduce((a: number, n: any) => a + n.deps.length, 0);
+  await expect(box.getByTestId("run-edge")).toHaveCount(links);
+  // the panel graph never zooms: no transform on it
+  expect(await box.getByTestId("run-canvas").evaluate((e) => getComputedStyle(e).transform)).toBe("none");
+});
+
+test("⌘⇧G and Expand open the full view over the chat; Esc and × close it; the header keeps one control", async ({ page }) => {
+  await openRuns(page);
+  const m = await mod(page);
+  await page.keyboard.press(`${m}+Shift+G`);
+  await expect(full(page)).toBeVisible();
+  // everything right of the sidebar; the side panel steps aside and comes back on close
+  const vw = page.viewportSize()!.width;
+  await expect.poll(async () => Math.round(await full(page).evaluate((e) => e.getBoundingClientRect().right))).toBe(vw);
+  const side = await page.locator(".pane").evaluate((e) => e.getBoundingClientRect().x);
+  expect(Math.round((await full(page).boundingBox())!.x)).toBe(Math.round(side));
+  await expect(page.getByTestId("details")).toBeHidden();
+  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);
+  await expect(full(page).getByTestId("run-node")).toHaveCount(6);
+  await page.keyboard.press("Escape");
+  await expect(full(page)).toHaveCount(0);
+  await expect(page.getByTestId("details")).toBeVisible();
+  await expect(panel(page)).toBeVisible();
+  await page.getByTestId("graph-expand").click();
+  await expect(full(page)).toBeVisible();
+  await full(page).getByRole("button", { name: "Close graph" }).click();
+  await expect(full(page)).toHaveCount(0);
+});
+
+test("full view: whole titles, a model mark on every routed node, route pill on one line", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await page.getByTestId("graph-expand").click();
+  const f = full(page);
+  const t5 = f.locator('[data-node="t5-verify"]');
+  await expect(t5.locator(".rg-t")).toHaveText("Independent verify vs base + live probes");
+  // the model it ran on; a fanout node: the agent CLI that took it (codex -> the OpenAI mark)
+  await expect(t5.getByTestId("node-mark")).toHaveAttribute("data-mark", "claude");
+  await expect(f.locator('[data-node="t1-discovery"]').getByTestId("node-mark")).toHaveAttribute("data-mark", "openai");
+  await expect(f.locator('[data-node="t1-discovery"]').getByTestId("node-mark")).toHaveAttribute("data-source", "executor");
+  await expect(f.locator('[data-mark="category"]')).toHaveCount(0);
+  await expect(f).not.toContainText("model not logged");
+  await expect(t5).toContainText("Opus 5.5");
+  await expect(t5).toContainText("attempt 2 of 2");
+  const pill = t5.getByTestId("route-pill");
+  await expect(pill).toHaveText("route: review");
+  await expect(f.locator('[data-node="t3-doctor"]').getByTestId("route-pill")).toHaveText("route: low");
+  await expect(f.locator('[data-node="t3-doctor"]').getByTestId("route-pill")).toHaveAttribute("title", "route: unspecified-low");
+  const ph = await pill.evaluate((e) => [e.getBoundingClientRect().height, parseFloat(getComputedStyle(e).lineHeight)]);
+  expect(ph[0]).toBeLessThan(ph[1] * 1.6 + 4); // one line
+  // nothing inside a card is clipped
+  for (const c of await f.getByTestId("run-node").all()) {
+    const [ch, sh] = await c.evaluate((e) => [e.clientHeight, e.scrollHeight]);
+    expect(sh).toBeLessThanOrEqual(ch + 1);
+  }
+});
+
+test("full view: nodes appear in layer order; edges draw after their ends; reduced motion turns it off", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("graph-expand").click();
+  const cards = full(page).getByTestId("run-node");
+  await expect(cards).toHaveCount(6);
+  const seen = await cards.evaluateAll((els) =>
+    els.map((e) => ({ layer: Number(e.dataset.layer), i: Number(e.dataset.appear), delay: parseFloat(getComputedStyle(e).animationDelay) })),
+  );
+  const order = [...seen].sort((a, b) => a.i - b.i);
+  for (let k = 1; k < order.length; k++) {
+    expect(order[k].layer).toBeGreaterThanOrEqual(order[k - 1].layer);
+    expect(order[k].delay).toBeGreaterThan(order[k - 1].delay);
+  }
+  expect(order[order.length - 1].delay).toBeLessThan(1.5);
+  const edge = full(page).locator('[data-testid="run-edge"][data-to="t3-doctor"]');
+  const ed = await edge.evaluate((g) => parseFloat(getComputedStyle(g.querySelector(".rg-line")!).animationDelay));
+  const ends = await full(page).locator('[data-node="t2-status-update"], [data-node="t3-doctor"]').evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).animationDelay)));
+  expect(ed).toBeGreaterThan(Math.max(...ends));
+  // the panel finishes in under 1s
+  const pd = await panel(page).getByTestId("run-node").evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).animationDelay) || 0));
+  expect(Math.max(...pd) + 0.26 + 0.28).toBeLessThan(1);
+});
+
+test("reduced motion: no entrance, no shimmer, no pulse", async ({ browser }) => {
+  const ctx = await browser.newContext({ reducedMotion: "reduce" });
+  const page = await ctx.newPage();
+  await mock("mock.reset");
+  await openRuns(page);
+  await page.getByTestId("graph-expand").click();
+  const names = await full(page)
+    .locator(".rg-card, .rg-line, .rg-live")
+    .evaluateAll((els) => els.map((e) => getComputedStyle(e).animationName));
+  expect(names.every((n) => n === "none")).toBe(true);
+  await expect(full(page).locator(".rg-card.enter")).toHaveCount(0);
+  await ctx.close();
+});
+
+test("full view: drag moves a card and its edges; the position is kept; Reset restores; a click opens the drawer", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await page.getByTestId("graph-expand").click();
+  const f = full(page);
+  await page.waitForTimeout(1600); // entrance done
+  const card = f.locator('[data-node="t3-doctor"]');
+  const edge = f.locator('[data-testid="run-edge"][data-to="t3-doctor"]');
+  const before = await card.boundingBox();
+  const endBefore = await edge.getAttribute("data-end");
+  await page.mouse.move(before!.x + 30, before!.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(before!.x + 80, before!.y + 70, { steps: 6 });
+  await page.mouse.up();
+  const after = await card.boundingBox();
+  expect(after!.x - before!.x).toBeGreaterThan(30);
+  expect(after!.y - before!.y).toBeGreaterThan(30);
+  await expect(page.getByTestId("run-drawer")).toHaveCount(0); // a drag is not a click
+  expect(await edge.getAttribute("data-end")).not.toBe(endBefore);
+  // the edge still ends on the card's left-middle
+  const [, , x2, y2] = (await edge.getAttribute("data-end"))!.split(",").map(Number);
+  const local = await card.evaluate((e: HTMLElement) => [e.offsetLeft, e.offsetTop + e.offsetHeight / 2]);
+  expect([x2, y2]).toEqual(local);
+  // kept per run
+  const saved = await page.evaluate((id) => localStorage.getItem(`omher.runs.pos.${id}`), FAN);
+  expect(JSON.parse(saved!)).toHaveProperty("t3-doctor");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("graph-expand").click();
+  await page.waitForTimeout(300);
+  expect(await full(page).locator('[data-node="t3-doctor"]').evaluate((e: HTMLElement) => e.offsetLeft)).toBe(local[0]);
+  // Reset puts it back where the layout put it
+  await full(page).getByTestId("run-reset").click();
+  await expect.poll(() => page.evaluate((id) => localStorage.getItem(`omher.runs.pos.${id}`), FAN)).toBeNull();
+  expect(await full(page).locator('[data-node="t3-doctor"]').evaluate((e: HTMLElement) => e.offsetLeft)).not.toBe(local[0]);
+  // a plain click (no drag) opens the same drawer as the panel
+  await full(page).locator('[data-node="t1-discovery"]').click();
+  await expect(full(page).getByTestId("run-drawer")).toContainText("Codex skill discovery reads .agents/skills");
+  const calls = (await mock("mock.calls")).calls.map((c: any) => c.op);
+  expect(calls.filter((op: string) => WRITES.includes(op))).toEqual([]);
+});
+
+test("full view: Fit, zoom keys and the wheel zoom; empty space pans", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("graph-expand").click();
+  const g = full(page).getByTestId("run-graph");
+  const vw = page.viewportSize()!.width;
+  await expect.poll(async () => Math.round(await full(page).evaluate((e) => e.getBoundingClientRect().right))).toBe(vw);
+  await page.waitForTimeout(100); // the refit after the panel stepped aside
+  const z0 = Number(await g.getAttribute("data-zoom"));
+  const m = await mod(page);
+  await page.keyboard.press(`${m}+Equal`);
+  await expect.poll(async () => Number(await g.getAttribute("data-zoom"))).toBeGreaterThan(z0);
+  await full(page).getByTestId("run-fit").click();
+  await expect.poll(async () => Number(await g.getAttribute("data-zoom"))).toBeCloseTo(z0, 1);
+  const b = await g.boundingBox();
+  const card = full(page).locator('[data-node="t1-discovery"]');
+  const c0 = await card.boundingBox();
+  await page.mouse.move(b!.x + 12, b!.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(b!.x + 72, b!.y + 52, { steps: 5 });
+  await page.mouse.up();
+  const c1 = await card.boundingBox();
+  expect(Math.round(c1!.x - c0!.x)).toBe(60);
+});
+
+
+// ---- the finished look: logos, sizes, plan card, motion (on the LIVE fan-out)
+
+test("live run: every node has a model logo (14px panel, 18px full); none says 'model not logged'", async ({ page }) => {
+  await openRuns(page);
+  const box = panel(page);
+  await expect(box).toHaveAttribute("data-run", LIVE);
+  const marks = box.getByTestId("node-mark");
+  await expect(marks).toHaveCount(6);
+  expect(await marks.evaluateAll((els) => els.map((e) => e.getAttribute("data-mark")))).not.toContain("category");
+  expect(Math.round((await marks.first().locator("svg, img").first().boundingBox())!.width)).toBe(14);
+  await page.getByTestId("graph-expand").click();
+  const f = full(page);
+  await expect(f.getByTestId("node-mark")).toHaveCount(6);
+  expect(await f.getByTestId("node-mark").evaluateAll((els) => els.map((e) => e.getAttribute("data-mark")).sort())).toEqual(["claude", "openai", "openai", "openai", "openai", "openai"]);
+  await expect(f).not.toContainText("model not logged");
+  const w18 = await f.locator('[data-node="t3-doctor"] [data-testid="node-mark"]').evaluate((e) => (e.querySelector("svg, img") as Element).getBoundingClientRect().width);
+  expect(Math.round(w18 / Number(await f.getByTestId("run-graph").getAttribute("data-zoom")))).toBe(18);
+  await expect(f.locator('[data-node="t3-doctor"]')).toContainText("Codex");
+  await expect(f.locator('[data-node="t5-verify"]')).toContainText("Opus 5.5");
+});
+
+test("node size carries meaning: leads taller, the closing verify a wider gate with its mark", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("graph-expand").click();
+  const f = full(page);
+  await expect(f.getByTestId("run-node")).toHaveCount(6);
+  const size = (id: string) => f.locator(`[data-testid="run-node"][data-node="${id}"]`).evaluate((e) => [(e as HTMLElement).dataset.size, (e as HTMLElement).offsetWidth, (e as HTMLElement).offsetHeight] as const);
+  const [lead, normal, gate] = [await size("t2-status-update"), await size("t3-doctor"), await size("t5-verify")];
+  expect(lead[0]).toBe("lead");
+  expect(normal[0]).toBe("normal");
+  expect(gate[0]).toBe("gate");
+  expect(lead[2]).toBeGreaterThan(normal[2]);
+  expect(lead[1]).toBe(normal[1]); // width stays fixed
+  expect(gate[1]).toBeGreaterThan(normal[1]);
+  await expect(f.locator('[data-node="t5-verify"] .rg-gate')).toHaveCount(1);
+  await expect(f.locator('[data-node="t2-status-update"]').getByTestId("node-lead")).toHaveText("unblocks 2");
+});
+
+test("colours and motion: running has the brand ring, a shimmer and a glow; only edges into it flow", async ({ page }) => {
+  await openRuns(page);
+  await page.getByTestId("graph-expand").click();
+  const f = full(page);
+  const run = f.locator('[data-node="t3-doctor"]');
+  await expect(run).toHaveClass(/\bs-running\b/);
+  const look = await run.evaluate((e) => {
+    const after = getComputedStyle(e, "::after");
+    const before = getComputedStyle(e, "::before");
+    return { ring: after.backgroundImage, ringAnim: after.animationName, sweep: before.animationName, glow: getComputedStyle(e).boxShadow };
+  });
+  expect(look.ring).toMatch(/conic-gradient/);
+  expect(look.ringAnim).toBe("rg-turn");
+  expect(look.sweep).toBe("rg-sweep");
+  expect(look.glow).not.toBe("none");
+  const done = await f.locator('[data-node="t2-status-update"]').evaluate((e) => getComputedStyle(e, "::before").backgroundImage);
+  expect(done).toMatch(/gradient/);
+  expect(await f.locator('[data-node="t5-verify"]').evaluate((e) => getComputedStyle(e).borderTopStyle)).toMatch(/dashed|dotted/);
+  // the flow line only on edges into the running node
+  const flows = await f.locator('[data-testid="run-edge"]').evaluateAll((els) => els.filter((g) => g.querySelector(".rg-flowline")).map((g) => (g as SVGGElement).dataset.to));
+  expect(flows.length).toBeGreaterThan(0);
+  expect(new Set(flows)).toEqual(new Set(["t3-doctor"]));
+  // repair links are their own (amber, dashed) kind
+  for (const id of ["t1-hermes", "t4-fence"]) await expect(f.locator(`[data-testid="run-edge"][data-from="t1-discovery"][data-to="${id}"]`)).toHaveClass(/\brepair\b/);
+  // verify waits on the repairs, not on the failed node
+  await expect(f.locator('[data-testid="run-edge"][data-from="t1-discovery"][data-to="t5-verify"]')).toHaveCount(0);
+  await expect(f.getByTestId("run-legend")).toContainText("repair");
+});
+
+test("plan card: title, goal, layers as chips, counts and time, first in the panel and on top of the full view", async ({ page }) => {
+  await openRuns(page);
+  const plan = panel(page).getByTestId("run-plan");
+  await expect(plan).toBeVisible();
+  // it comes before the graph
+  const [py, gy] = [(await plan.boundingBox())!.y, (await panel(page).getByTestId("run-graph").boundingBox())!.y];
+  expect(py).toBeLessThan(gy);
+  await expect(plan).toContainText("3 layers · 6 parts");
+  await expect(plan).toContainText("OMH suggests its own skills");
+  expect(await plan.getByTestId("run-plan-layer").allInnerTexts()).toEqual(["L1 · 2", "L2 · 3", "L3 · 1"]);
+  const counts = plan.getByTestId("run-plan-counts");
+  // the failed node's two repairs are done: it counts as repaired, not as an open failure
+  for (const t of ["3 done", "1 running", "1 waiting", "1 repaired"]) await expect(counts).toContainText(t);
+  await expect(counts).not.toContainText("failed");
+  await expect(panel(page).locator('[data-node="t1-discovery"]')).toHaveClass(/\brepaired\b/);
+  await expect(plan.getByTestId("run-plan-time")).toHaveText(/^\d+(s|m)$/);
+  await page.getByTestId("graph-expand").click();
+  const fp = full(page).getByTestId("run-plan");
+  await expect(fp).toBeVisible();
+  expect(await fp.getByTestId("run-plan-layer").allInnerTexts()).toEqual(["L1 Plan + Build · 2 parts", "L2 Repair + Check · 3 parts", "L3 Verify · 1 part"]);
+});
+
+test("a run that has not started: 'Starts in 0:..' with Start now / Edit, which only prefill the composer", async ({ page }) => {
+  await openRuns(page, "default");
+  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence (next)" }).click();
+  const plan = panel(page).getByTestId("run-plan");
+  await expect(plan.getByTestId("run-plan-time")).toHaveText(/^Starts in 0:(0\d|10)$/);
+  await plan.getByTestId("run-plan-start").click();
+  const composer = page.getByTestId("composer");
+  await expect(composer).toHaveValue("Start run `codex-coexist-next` now");
+  await plan.getByTestId("run-plan-edit").click();
+  await expect(composer).toHaveValue("Edit the plan of run `codex-coexist-next`: ");
+  const calls = (await mock("mock.calls")).calls.map((c: any) => c.op);
+  expect(calls.filter((op: string) => WRITES.includes(op))).toEqual([]);
+});
+
+// ---- T5: helpers' models and routes ----
+
+test("cards show the helper's model and a one-line route pill from the route record", async ({ page }) => {
+  await openRuns(page, "default");
+  await page.getByTestId("run-row").filter({ hasText: "omher v0.2" }).click();
+  const box = panel(page);
+  const card = box.locator('[data-node="t7-t10-usage"]');
+  await expect(card.getByTestId("node-mark")).toHaveAttribute("data-mark", "claude");
+  const pill = card.getByTestId("route-pill");
+  await expect(pill).toHaveText("visual-engineering");
+  const p = await pill.evaluate((e) => [e.getBoundingClientRect().height, e.scrollWidth >= e.clientWidth, getComputedStyle(e).whiteSpace, getComputedStyle(e).fontSize]);
+  expect(p[0]).toBeLessThanOrEqual(16); // one line, never wraps
+  expect(p[2]).toBe("nowrap");
+  expect(p[3]).toBe("9.5px");
+  // a node no helper ran yet: the model its route goes to (OMH's route records), never a hollow glyph
+  const t9 = box.locator('[data-node="t9-verify"]');
+  await expect(t9.getByTestId("node-mark")).toHaveAttribute("data-mark", "claude");
+  await expect(t9.getByTestId("node-mark")).toHaveAttribute("data-source", "route");
+  await expect(t9.getByTestId("route-pill")).toHaveText("review");
+  // the drawer names the model and effort from the delegation log
+  await card.click();
+  await expect(page.getByTestId("run-drawer")).toContainText("Opus 5.5 · high");
+});
+
+test("a delegate fan-out without a dag is its own one-layer run", async ({ page }) => {
+  await openRuns(page, "default");
+  const row = page.locator('[data-testid="run-row"][data-kind="delegate"]').first();
+  await expect(row).toContainText("helpers");
+  await row.click();
+  const box = panel(page);
+  await expect(box).toHaveAttribute("data-run", /^delegate:deleg_/);
+  await expect(box.getByTestId("run-graph")).toHaveAttribute("data-cols", "1");
+  await expect(box.getByTestId("run-edge")).toHaveCount(0);
+});
+
+test("a delegate_task in chat: one plain sentence per dag part, a read-only status, and the run opens", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await mock("mock.emit", {
+    events: [
+      { event: "turn.start", bot: "kami" },
+      { event: "tool.start", bot: "kami", tool_id: "d1", name: "delegate_task", detail: "Doctor check (+1 more)", dag: [{ run: "codex-coexist-live", node: "t3-doctor" }, { run: "codex-coexist-live", node: "t5-verify" }] },
+    ],
+  });
+  const act = page.getByTestId("activity").last();
+  await act.getByTestId("activity-toggle").click();
+  const rows = act.getByTestId("activity-dag");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("Assigned t3-doctor to a helper");
+  await expect(rows.nth(0).getByTestId("activity-dag-status")).toHaveText("working");
+  expect(await act.getByRole("button", { name: /reassign/i }).count()).toBe(0);
+  await rows.nth(0).getByTestId("activity-dag-open").click();
+  await expect(page.getByTestId("panel-tab-runs")).toHaveAttribute("aria-selected", "true");
+  await expect(panel(page)).toHaveAttribute("data-run", LIVE);
+});
+
+// ---- screenshots (T4-graph-*, T4-panel-*, T4-full-*, entrance frames) ----
+
 for (const theme of ["dark", "light"] as const) {
-  test(`screenshot: Runs tab, ${theme}`, async ({ page }) => {
+  test(`screenshots: panel and full view, ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
     await openRuns(page);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await page.getByTestId("run-row").filter({ hasText: "Codex coexistence (live)" }).click();
-    await page.getByTestId("run-graph-box").locator('[data-node="t1-discovery"]').click();
-    await expect(page.getByTestId("run-drawer")).toBeVisible();
     mkdirSync(SHOTS, { recursive: true });
-    await page.screenshot({ path: join(SHOTS, `T3-runs-${theme}.png`) });
+    await expect(panel(page)).toHaveAttribute("data-run", LIVE);
+    await page.waitForTimeout(1100);
+    await page.mouse.move(5, 5);
+    await page.getByTestId("details").screenshot({ path: join(SHOTS, `T4-panel-${theme}.png`) });
+    await page.screenshot({ path: join(SHOTS, `T4-graph-panel-${theme}.png`) });
+    await page.getByTestId("graph-expand").click();
+    await page.waitForTimeout(1700);
+    await page.mouse.move(700, 890);
+    await page.screenshot({ path: join(SHOTS, `T4-full-${theme}.png`) });
+    await full(page).locator('[data-node="t2-status-update"]').hover();
+    await expect(full(page).getByTestId("run-tip")).toBeVisible();
+    // the snippet never covers the card it describes, and hides at most a corner of any other
+    const tip = (await full(page).getByTestId("run-tip").boundingBox())!;
+    expect(meets(tip, (await full(page).locator('[data-testid="run-node"][data-node="t2-status-update"]').boundingBox())!)).toBe(false);
+    for (const c of await full(page).getByTestId("run-node").all()) {
+      const b = (await c.boundingBox())!;
+      const ov = Math.max(0, Math.min(tip.x + tip.width, b.x + b.width) - Math.max(tip.x, b.x)) * Math.max(0, Math.min(tip.y + tip.height, b.y + b.height) - Math.max(tip.y, b.y));
+      expect(ov / (b.width * b.height)).toBeLessThan(0.34);
+    }
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: join(SHOTS, `T4-full-hover-${theme}.png`) });
+    await full(page).locator('[data-node="t1-discovery"]').click();
+    await page.mouse.move(700, 890);
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: join(SHOTS, `T4-graph-full-${theme}.png`) });
   });
 }
+
+test("screenshots: entrance frames at 0 / 300 / 800 ms", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page);
+  await expect(panel(page)).toHaveAttribute("data-run", LIVE);
+  await page.waitForTimeout(1200);
+  await page.getByTestId("graph-expand").click();
+  await full(page).getByTestId("run-node").first().waitFor();
+  // the frames are exact: every animation is paused and set to the same moment of the entrance
+  const at = (ms: number) =>
+    page.evaluate((t) => {
+      for (const a of document.getAnimations()) {
+        a.pause();
+        a.currentTime = t;
+      }
+    }, ms);
+  const shown = () =>
+    full(page)
+      .getByTestId("run-node")
+      .evaluateAll((els) => els.filter((e) => Number(getComputedStyle(e).opacity) > 0.5).map((e) => Number((e as HTMLElement).dataset.layer)));
+  const seen: number[][] = [];
+  for (const ms of [0, 300, 800]) {
+    await at(ms);
+    seen.push(await shown());
+    await page.screenshot({ path: join(SHOTS, `T4-enter-${ms}ms.png`) });
+  }
+  // nothing at 0, the first layer before the last at 300, everything by 800
+  expect(seen[0]).toEqual([]);
+  expect(Math.max(...seen[1])).toBeLessThan(2);
+  expect(seen[2]).toHaveLength(6);
+});

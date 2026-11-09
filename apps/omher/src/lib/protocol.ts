@@ -214,7 +214,14 @@ export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
   | (EventBase & { event: "status"; text: string })
   | (EventBase & { event: "thinking" })
-  | (EventBase & { event: "tool.start"; tool_id: string; name: string; detail: string })
+  | (EventBase & {
+      event: "tool.start";
+      tool_id: string;
+      name: string;
+      detail: string;
+      /** delegate_task only: the `[dag:<run>/<node>]` parts it hands out. */
+      dag?: { run: string; node: string }[];
+    })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
   | (EventBase & { event: "skill"; name: string })
   | (EventBase & { event: "delta"; text: string })

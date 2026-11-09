@@ -133,8 +133,13 @@ const PANEL_DIFF = {
 // Runs tab: what the real bridge's dag_to_run returns for three real (redacted) dag runs plus a live variant
 // (src/lib/__fixtures__/runs-bridge.json). The live one is moved to "now" so its times read like a running run.
 const RUNS_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-bridge.json", import.meta.url), "utf-8"));
+// T4/T5: the same runs with their helpers' models and routes joined (runs-routed.json, real bridge output), the
+// omher-v02 run and two plain delegate fan-outs for "default", and a synthetic 40-node run for the layout.
+const ROUTED = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-routed.json", import.meta.url), "utf-8"));
+const BIG = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/big-run.json", import.meta.url), "utf-8"));
+const HANDOFFS = { ...RUNS_FIXTURE.handoffs, ...ROUTED.handoffs };
 function runsSeed() {
-  const runs = structuredClone(RUNS_FIXTURE.runs);
+  const runs = structuredClone(ROUTED.kami);
   for (const r of runs) {
     if (r.state !== "running") continue;
     const shift = now() - 90 - r.updated;
@@ -147,14 +152,50 @@ function runsSeed() {
       n.attempts.forEach(move);
     }
   }
-  return { kami: runs, friren: [], default: [] };
+  // "default" keeps its runs at their real times, except the live ones, moved to "now" like kami's. It also has
+  // one run nobody has started (the live fan-out's plan with no attempts; `startsAt` is a mock-only field, OMH
+  // records no start timer), for the plan card's "Starts in" / Start now / Edit.
+  const planned = structuredClone(ROUTED.kami.find((r) => r.id.endsWith("/codex-coexist-live")));
+  planned.id = "dag:20261102_235818_fcfb1bdd/codex-coexist-next";
+  planned.title = "Codex coexistence (next)";
+  planned.owner = { type: "bot", id: "default" };
+  planned.state = "running";
+  for (const n of planned.nodes) {
+    n.state = "waiting";
+    n.attempts = [];
+    for (const k of ["started", "ended", "handoff", "model", "summary"]) delete n[k];
+  }
+  planned.started = planned.updated = now() - 5;
+  planned.startsAt = now() + 10;
+  delete planned.ended;
+  const other = structuredClone([...ROUTED.default, BIG, planned]);
+  for (const r of other) {
+    if (r.state !== "running") continue;
+    const shift = now() - 120 - r.updated;
+    const move = (o) => {
+      for (const k of ["started", "ended", "updated"]) if (typeof o[k] === "number") o[k] += shift;
+    };
+    move(r);
+    for (const n of r.nodes) {
+      move(n);
+      n.attempts.forEach(move);
+    }
+  }
+  return { kami: runs, friren: [], default: other };
 }
-const runCounts = (r) => ({
-  nodes: r.nodes.length,
-  done: r.nodes.filter((n) => n.state === "done").length,
-  running: r.nodes.filter((n) => n.state === "running").length,
-  failed: r.nodes.filter((n) => n.state === "failed" || n.state === "blocked").length,
-});
+// the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
+const runCounts = (r) => {
+  const fixed = r.nodes.filter(
+    (n) => (n.state === "failed" || n.state === "blocked") && r.nodes.some((m) => m.repairOf === n.id) && r.nodes.filter((m) => m.repairOf === n.id).every((m) => m.state === "done"),
+  ).length;
+  return {
+    nodes: r.nodes.length,
+    done: r.nodes.filter((n) => n.state === "done").length,
+    running: r.nodes.filter((n) => n.state === "running").length,
+    failed: r.nodes.filter((n) => n.state === "failed" || n.state === "blocked").length - fixed,
+    ...(fixed ? { repaired: fixed } : {}),
+  };
+};
 
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
@@ -469,7 +510,7 @@ const OPS = {
     const id = needStr(p, "run");
     const run = (runs[b.name] ?? []).find((r) => r.id === id);
     if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
-    return { run, handoffs: RUNS_FIXTURE.handoffs[id] ?? {} };
+    return { run, handoffs: HANDOFFS[id] ?? {} };
   },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({
@@ -586,6 +627,7 @@ function startTurn(bot, text) {
   ev(bot, "turn.start");
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
+  if (text.startsWith("/delegate")) return scriptDelegate(bot);
   scriptNormal(bot, text);
 }
 
@@ -608,6 +650,20 @@ function scriptNormal(bot, text) {
     [2300, () => ev(bot, "delta", { text: parts[2] })],
     [2400, () => say(bot, answer)],
     [2500, () => endTurn(bot, "done")],
+  ]);
+}
+
+// A delegate_task that hands out two parts of the codex-coexist dag run (one returns, one keeps working).
+function scriptDelegate(bot) {
+  const dag = [
+    { run: "codex-coexist-live", node: "t3-doctor" },
+    { run: "codex-coexist-live", node: "t5-verify" },
+  ];
+  schedule(bot, [
+    [80, () => ev(bot, "tool.start", { tool_id: "d1", name: "delegate_task", detail: "Doctor check for the Codex pack (+1 more)", dag })],
+    [400, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 320 })],
+    [500, () => say(bot, "Both helpers are on it.")],
+    [600, () => endTurn(bot, "done")],
   ]);
 }
 

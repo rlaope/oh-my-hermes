@@ -56,6 +56,9 @@ describe("shortcutFor", () => {
   it("maps K, period, comma and Esc", () => {
     expect(shortcutFor(k("k", { metaKey: true }), true)).toEqual({ kind: "search" });
     expect(shortcutFor(k("K", { ctrlKey: true }), false)).toEqual({ kind: "search" });
+    expect(shortcutFor(k("g", { metaKey: true, shiftKey: true }), true)).toEqual({ kind: "graph" });
+    expect(shortcutFor(k("G", { ctrlKey: true, shiftKey: true }), false)).toEqual({ kind: "graph" });
+    expect(shortcutFor(k("g", { metaKey: true }), true)).toBeNull();
     expect(shortcutFor(k(".", { metaKey: true }), true)).toEqual({ kind: "details" });
     expect(shortcutFor(k(",", { metaKey: true }), true)).toEqual({ kind: "settings" });
     expect(shortcutFor(k("Escape"), true)).toEqual({ kind: "stop" });

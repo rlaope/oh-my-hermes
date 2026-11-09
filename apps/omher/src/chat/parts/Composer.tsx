@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../../lib/protocol";
 import { ArrowUp, StopIcon } from "../../ui";
+import { useStore } from "../../state/store";
 
 const MAX_H = 200;
 
@@ -33,6 +34,20 @@ export function Composer({
   useLayoutEffect(() => {
     ref.current?.focus();
   }, [bot.name]);
+
+  // "Ask in chat" from the Runs drawer: the text lands here for the person to edit and send.
+  const draft = useStore().ui.draft;
+  useLayoutEffect(() => {
+    if (!draft || draft.bot !== bot.name) return;
+    setText(draft.text);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(draft.text.length, draft.text.length);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.n]);
 
   const send = () => {
     if (!has || offline) return;

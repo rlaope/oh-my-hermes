@@ -12,7 +12,7 @@ import logo from "../assets/omher-mark.png";
 import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
 import { DiffTab, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
 import { useNow } from "./useNow";
-import { RunsTab } from "./RunsTab";
+import { RunsTab } from "../runs/RunsTab";
 import "./elsewhere.css";
 
 export const slot = "detailsPanel";

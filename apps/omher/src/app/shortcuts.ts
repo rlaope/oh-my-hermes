@@ -1,6 +1,7 @@
 // App-wide keyboard shortcuts. ⌘ on macOS, Ctrl elsewhere:
 //   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search
 //   ⌘.     show or hide Details                    ⌘,  Settings
+//   ⌘⇧G   the Runs graph at full size (Esc closes it)
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 import { useEffect } from "react";
 import { getStore } from "../state/store";
@@ -11,8 +12,9 @@ export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/
 export function shortcutFor(
   e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
   mac: boolean,
-): { kind: "bot"; index: number } | { kind: "search" | "details" | "settings" | "stop" } | null {
+): { kind: "bot"; index: number } | { kind: "search" | "details" | "settings" | "stop" | "graph" } | null {
   const mod = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === "g") return { kind: "graph" };
   if (mod && !e.altKey && !e.shiftKey) {
     if (/^[1-9]$/.test(e.key)) return { kind: "bot", index: Number(e.key) - 1 };
     if (e.key.toLowerCase() === "k") return { kind: "search" };
@@ -34,6 +36,11 @@ export function useShortcuts(): void {
       if (hit.kind === "stop") {
         // Esc belongs to whatever is open first (popover, search field, inline rename, a card's input).
         if (e.defaultPrevented) return;
+        if (s.ui.runsFull) {
+          e.preventDefault();
+          a.setRunsFull(false);
+          return;
+        }
         const t = e.target as HTMLElement | null;
         if (t && t.closest("input, [role=dialog], [role=menu], [role=listbox]")) return;
         const bot = s.selectedBot;
@@ -44,7 +51,13 @@ export function useShortcuts(): void {
         return;
       }
       e.preventDefault();
-      if (hit.kind === "bot") {
+      if (hit.kind === "graph") {
+        if (s.ui.runsFull) a.setRunsFull(false);
+        else if (s.selectedBot) {
+          if (s.ui.view !== "chat") a.closeSettings();
+          a.setRunsFull(true);
+        }
+      } else if (hit.kind === "bot") {
         const b = s.bots[hit.index];
         if (b) void a.selectBot(b.name);
       } else if (hit.kind === "search") {

@@ -32,6 +32,8 @@ export interface Step {
   startedAt: number; // ms
   endedAt?: number; // ms
   ok?: boolean;
+  /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
+  dag?: { run: string; node: string }[];
 }
 
 export interface Turn {
@@ -130,8 +132,12 @@ export const PALETTES: Palette[] = ["omh", "graphite", "ocean", "forest", "sunse
 export interface Ui {
   panelOpen: boolean;
   panelTab: PanelTabId;
-  /** The run the Runs tab shows; null = the first in its list. */
+  /** The run the Runs tab shows (a full id, or a dag run name from a chat line); null = the first in its list. */
   runId: string | null;
+  /** The Runs graph fills the chat column (⌘⇧G); the side panel stays. */
+  runsFull: boolean;
+  /** Text put into a bot's composer for the person to edit and send (never sent by omher). */
+  draft: { bot: string; text: string; n: number } | null;
   theme: Theme;
   look: Look;
   view: "chat" | "settings";
@@ -229,7 +235,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     models: {},
-    ui: { panelOpen: false, panelTab: "details", runId: null, theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
+    ui: { panelOpen: false, panelTab: "details", runId: null, runsFull: false, draft: null, theme: readTheme(), look: readLook(), view: "chat", settingsPage: "general" },
   };
 }
 
@@ -341,6 +347,8 @@ export type Action =
   | { type: "ui.panel"; open?: boolean }
   | { type: "ui.panelTab"; tab: PanelTabId }
   | { type: "ui.run"; run: string | null }
+  | { type: "ui.runsFull"; open: boolean }
+  | { type: "ui.draft"; bot: string; text: string }
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
@@ -363,7 +371,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
-          steps: [...t.steps, { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now }],
+          steps: [
+            ...t.steps,
+            { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
+          ],
         })),
       );
     case "tool.end":
@@ -566,6 +577,10 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: a.tab } };
     case "ui.run":
       return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: "runs", runId: a.run } };
+    case "ui.runsFull":
+      return { ...state, ui: { ...state.ui, runsFull: a.open, ...(a.open ? { panelOpen: true, panelTab: "runs" as const } : {}) } };
+    case "ui.draft":
+      return { ...state, ui: { ...state.ui, draft: { bot: a.bot, text: a.text, n: (state.ui.draft?.n ?? 0) + 1 } } };
     case "ui.theme":
       return { ...state, ui: { ...state.ui, theme: a.theme } };
     case "ui.look":
@@ -630,6 +645,10 @@ export interface Actions {
   setPanelTab(tab: PanelTabId): void;
   /** Open the Runs tab on one run (null: the first in the list). */
   openRun(run: string | null): void;
+  /** Show or hide the full-size Runs graph over the chat column. */
+  setRunsFull(open: boolean): void;
+  /** Put text in the selected bot's composer and focus it. Never sends. */
+  prefill(text: string): void;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -862,6 +881,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     togglePanel: (open) => dispatch({ type: "ui.panel", open }),
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
     openRun: (run) => dispatch({ type: "ui.run", run }),
+    setRunsFull: (open) => dispatch({ type: "ui.runsFull", open }),
+    prefill(text) {
+      const bot = state.selectedBot;
+      if (!bot) return;
+      if (state.ui.view !== "chat") dispatch({ type: "ui.closeSettings" });
+      dispatch({ type: "ui.draft", bot, text });
+    },
     setTheme(theme) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem("omher.theme", theme);

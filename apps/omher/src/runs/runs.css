@@ -1,0 +1,1768 @@
+/* Runs: run list, a compact graph in the panel and a large one over the chat column (⌘⇧G).
+   Rules: 4-8px radii, 11-13px text, selection is gray, the brand gradient only on live dots / the running tint.
+   States: done = faint green tint + green check; running = brand tint with a slow shimmer + live dot;
+   failed = faint red + red rail + ✕; pending = flat, dashed border; selected = a gray ring on top of any state. */
+.window.panel-open:has(.pn-wide[data-tab="runs"]) {
+  --panel-w: 460px;
+}
+.rn,
+.rf {
+  --rn-amber: #d39b2a;
+  --rn-green: 127, 214, 164;
+  --rn-red: 240, 138, 138;
+  --rn-pink: 240, 124, 196;
+  --rn-violet: 166, 70, 196;
+  --rn-ring: #8b8490;
+  --rn-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.18);
+  --rn-edge: #857e89;
+  --rn-surface: var(--raise);
+}
+[data-theme="light"] .rn,
+[data-theme="light"] .rf {
+  --rn-amber: #a36d0c;
+  --rn-green: 31, 138, 82;
+  --rn-red: 192, 57, 43;
+  --rn-pink: 196, 54, 127;
+  --rn-violet: 140, 50, 170;
+  --rn-ring: #9a93a0;
+  --rn-shadow: 0 1px 2px rgba(40, 20, 50, 0.08), 0 4px 14px rgba(40, 20, 50, 0.07);
+  --rn-edge: #8e8694;
+  --rn-surface: #ffffff;
+}
+
+/* ---------------------------------------------------------------- list */
+.rn-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 168px;
+  overflow-y: auto;
+}
+.rn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  text-align: left;
+  color: var(--body);
+  font-size: 12px;
+}
+.rn-row:hover {
+  background: var(--hover);
+}
+.rn-row.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.rn-live,
+.rn-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  font-style: normal;
+}
+.rn-live {
+  position: relative;
+  background: var(--g-accent);
+}
+.rn-live::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--rn-pink), 0.55);
+  animation: rn-pulse 1.8s ease-out infinite;
+}
+@keyframes rn-pulse {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+.rn-dot.done {
+  background: rgba(var(--rn-green), 0.55);
+}
+.rn-dot.failed {
+  background: var(--danger);
+}
+.rn-dot.cancelled {
+  background: var(--quiet);
+  opacity: 0.6;
+}
+.rn-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rn-tag {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--quiet);
+}
+.rn-tag.bad {
+  color: var(--danger);
+}
+.rn-n {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- selected run (panel) */
+.rn-run {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+.rn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 8px;
+  min-width: 0;
+}
+.rn-head b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.rn-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--raise2);
+  font-size: 10.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rn-badge.running .rn-badge-t {
+  color: var(--ink);
+}
+.rn-badge.failed .rn-badge-t {
+  color: var(--danger);
+}
+.rn-bar {
+  position: relative;
+  width: 44px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.rn-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: rgba(var(--rn-green), 0.85);
+}
+.rn-badge.running .rn-bar i:not(.bad) {
+  background: rgba(var(--rn-green), 0.85);
+}
+.rn-badge.failed .rn-bar i,
+.rn-bar i.bad {
+  background: var(--danger);
+}
+.rn-bar i.bad {
+  right: auto;
+}
+.rn-goal {
+  margin: 0 4px 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--quiet);
+}
+.rn-gwrap {
+  position: relative;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.rg-expand {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--raise);
+  font-size: 11px;
+  color: var(--muted);
+}
+.rg-expand:hover {
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- graph (both sizes) */
+.rg {
+  position: relative;
+}
+.rg-panel {
+  overflow: hidden;
+}
+.rg-canvas {
+  position: relative;
+  transform-origin: 0 0;
+}
+.rg-col {
+  position: absolute;
+  width: auto !important;
+  max-width: 100%;
+  padding: 0 4px 0 0;
+  background: var(--bg);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rg-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.rg-stop {
+  stop-color: var(--rn-edge);
+}
+.rg-stop.s-done {
+  stop-color: rgba(var(--rn-green), 0.75);
+}
+.rg-stop.s-running {
+  stop-color: rgb(var(--rn-pink));
+}
+.rg-stop.s-failed,
+.rg-stop.s-blocked {
+  stop-color: rgba(var(--rn-red), 0.8);
+}
+.rg-full .rg-line,
+.rg-full .rg-flowline {
+  stroke-width: 2;
+}
+.rg-line {
+  fill: none;
+  stroke: var(--rn-edge);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.rg-arrow {
+  fill: var(--rn-edge);
+}
+.rg-arrow.broken {
+  fill: color-mix(in srgb, rgb(var(--rn-red)) 45%, var(--rn-edge));
+}
+.rg-arrow.flow {
+  fill: rgb(var(--rn-pink));
+}
+.rg-arrow.enter {
+  opacity: 0;
+  animation: rg-fade 0.15s linear var(--d) forwards;
+}
+.rg-edge.broken .rg-line {
+  stroke: color-mix(in srgb, rgb(var(--rn-red)) 45%, var(--rn-edge));
+  stroke-dasharray: 4 3;
+}
+
+.rg-edge.repair:not(.broken) .rg-line {
+  stroke-dasharray: 4 3;
+}
+
+.rg-flowline {
+  fill: none;
+  stroke: rgb(var(--rn-pink));
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 2 10;
+  opacity: 0.7;
+  animation: rg-flow 1.6s linear infinite;
+}
+@keyframes rg-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* cards */
+.rg-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--rn-surface);
+  box-shadow: var(--rn-shadow);
+  text-align: left;
+  color: var(--ink);
+  overflow: hidden;
+  touch-action: none;
+}
+.rg-card::before {
+  /* the state tint, a soft gradient over the surface */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.rg-card > * {
+  position: relative;
+}
+.rg-card:hover {
+  border-color: var(--line-strong);
+}
+.rg-card.on {
+  /* selected: a gray ring, kept apart from the state look (a failed card keeps its rail) */
+  outline: 2px solid var(--rn-ring);
+  outline-offset: -1px;
+}
+.rg-card.s-done {
+  border-color: rgba(var(--rn-green), 0.28);
+}
+.rg-card.s-done::before {
+  background: linear-gradient(120deg, rgba(var(--rn-green), 0.2), rgba(var(--rn-green), 0.04) 75%);
+}
+.rg-card.s-running {
+  border-color: rgba(var(--rn-pink), 0.45);
+}
+.rg-card.s-running::before {
+  background: linear-gradient(110deg, rgba(var(--rn-violet), 0.16), rgba(var(--rn-pink), 0.1) 45%, rgba(var(--rn-pink), 0.02) 75%);
+  background-size: 200% 100%;
+  animation: rg-shimmer 4s ease-in-out infinite alternate;
+}
+@keyframes rg-shimmer {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+.rg-card.s-failed {
+  border-left: 3px solid var(--danger);
+  border-radius: 3px 8px 8px 3px;
+  padding-left: 6px;
+}
+.rg-card.s-blocked,
+.rg-card.s-parked {
+  border-left: 3px solid var(--rn-amber);
+  border-radius: 3px 8px 8px 3px;
+  padding-left: 6px;
+}
+.rg-card.s-failed::before {
+  background: linear-gradient(120deg, rgba(var(--rn-red), 0.1), rgba(var(--rn-red), 0) 55%);
+}
+.rg-card.s-waiting {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+  color: var(--body);
+}
+.rg-card.s-cancelled {
+  opacity: 0.6;
+  box-shadow: none;
+}
+.rg-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+.rg-mk {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 16px;
+  color: var(--ink);
+}
+.rg-mk.cat {
+  color: var(--muted);
+}
+.s-waiting .rg-st {
+  color: var(--quiet);
+  font-weight: 400;
+}
+.rg-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 16px;
+  /* lines come pre-wrapped at word boundaries (clampWords); the browser only follows them */
+  white-space: pre-line;
+  overflow: hidden;
+}
+.rg-panel .rg-t {
+  flex: none;
+  font-size: 11px;
+  line-height: 15px;
+  max-height: 30px;
+}
+.rg-panel .rg-card {
+  gap: 6px;
+  justify-content: space-between;
+  padding: 8px;
+}
+.rg-panel .rg-card.s-failed,
+.rg-panel .rg-card.s-blocked,
+.rg-panel .rg-card.s-parked {
+  padding-left: 6px;
+}
+.rg-panel .rg-meta {
+  padding-left: 0;
+  gap: 4px;
+}
+.rg-panel .rg-st {
+  margin-left: auto;
+}
+.rg-panel .rg-mt {
+  flex: none;
+}
+.rg-full .rg-top + .rg-meta {
+  margin-top: auto;
+}
+.rn-badge.mixed .rn-badge-t {
+  color: var(--rn-amber);
+}
+.rg-panel .rg-st,
+.rg-panel .rg-mk {
+  flex: none;
+}
+.rg-panel .rg-route {
+  flex: 0 4 auto;
+  min-width: 22px;
+  margin-left: 0;
+  border-color: rgba(185, 163, 224, 0.55);
+  color: var(--muted);
+}
+.rg-st {
+  flex: none;
+  width: 12px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+}
+.s-done .rg-st {
+  color: var(--ok);
+}
+.s-failed .rg-st {
+  color: var(--danger);
+}
+.s-blocked .rg-st,
+.s-parked .rg-st {
+  color: var(--rn-amber);
+}
+.s-cancelled .rg-st {
+  color: var(--quiet);
+}
+.rg-live {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--g-accent);
+}
+.rg-live::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--rn-pink), 0.55);
+  animation: rn-pulse 1.8s ease-out infinite;
+}
+.rg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 20px;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rg-mt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rg-route {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  max-width: 62%;
+  height: 15px;
+  line-height: 13px;
+  padding: 0 5px;
+  border: 1px solid #b9a3e0;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: #c9b6ef;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-theme="light"] .rg-route {
+  border-color: #a48ad6;
+  color: #5b3fa3;
+}
+[data-theme="light"] .rg-card.s-done {
+  border-color: rgba(var(--rn-green), 0.45);
+}
+[data-theme="light"] .rg-col,
+[data-theme="light"] .rg-tools .rg-zoom {
+  color: var(--muted);
+}
+[data-theme="light"] .rg-card.s-done::before {
+  background: linear-gradient(120deg, rgba(var(--rn-green), 0.16), rgba(var(--rn-green), 0.05) 75%);
+}
+[data-theme="light"] .rg-card.s-failed::before {
+  background: linear-gradient(120deg, rgba(var(--rn-red), 0.09), rgba(var(--rn-red), 0) 55%);
+}
+[data-theme="light"] .rg-panel .rg-route {
+  border-color: rgba(164, 138, 214, 0.7);
+  color: var(--muted);
+}
+
+/* entrance: cards fade and rise in layer order, then each edge draws in once both ends are in */
+.rg-card.enter {
+  animation: rg-in 0.26s ease-out both;
+}
+.rg-full .rg-card.enter {
+  animation-duration: 0.36s;
+}
+@keyframes rg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rg-edge.enter .rg-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: rg-draw var(--draw) ease-out var(--d) forwards;
+}
+.rg-edge.enter .rg-flowline {
+  opacity: 0;
+  animation: rg-fade 0.15s linear calc(var(--d) + var(--draw)) forwards;
+}
+.rg-edge.enter.broken .rg-line,
+.rg-edge.enter.repair .rg-line {
+  stroke-dasharray: 4 3;
+  stroke-dashoffset: 0;
+  opacity: 0;
+  animation: rg-fade var(--draw) ease-out var(--d) forwards;
+}
+@keyframes rg-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes rg-fade {
+  to {
+    opacity: 1;
+  }
+}
+.rg-edge.enter.flow .rg-flowline {
+  animation:
+    rg-fade 0.15s linear calc(var(--d) + var(--draw)) forwards,
+    rg-flow 1.6s linear infinite;
+}
+.rg.still *,
+.rg.still *::before,
+.rg.still *::after {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rg *,
+  .rg *::before,
+  .rg *::after,
+  .rn-live::after {
+    animation: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------- drawer (shared) */
+.rn-drawer {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.rn-drawer.bad {
+  /* one rail, no extra outline */
+  border-color: transparent;
+  border-left: 3px solid var(--danger);
+  border-radius: 3px 8px 8px 3px;
+  background: var(--raise);
+}
+.rn-dh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rn-dh b {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.rn-df {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rn-df .rg-route {
+  margin-left: 0;
+  max-width: 100%;
+}
+.rn-word {
+  font-weight: 600;
+}
+.rn-word.s-done {
+  color: var(--ok);
+}
+.rn-word.s-running {
+  color: var(--accent);
+}
+.rn-word.s-failed,
+.rn-word.s-blocked {
+  color: var(--danger);
+}
+.rn-reason {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.rn-reason b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.rn-routeline {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--quiet);
+}
+.rn-atts {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.rn-sum {
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--body);
+}
+.rn-md {
+  margin-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+.rn-md h1,
+.rn-md h2,
+.rn-md h3 {
+  font-size: 12.5px;
+  margin: 8px 0 4px;
+}
+.rn-md pre {
+  overflow-x: auto;
+  font-size: 11px;
+}
+.rn-md code {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.rn-none {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.rn-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.rn-askb {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: var(--raise2);
+  font-size: 11.5px;
+  color: var(--body);
+}
+.rn-askb:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- full view (over the chat column) */
+.pane.has-full {
+  position: relative;
+}
+/* the full view is the whole window right of the sidebar: the panel steps aside (it stays mounted) */
+.window.panel-open:has(.pane.has-full) {
+  grid-template-columns: var(--side-w) minmax(0, 1fr) 0px;
+}
+.window:has(.pane.has-full) .details {
+  visibility: hidden;
+}
+.rf {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.rf-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.rf-head b {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink);
+}
+.rf-goal {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.rn-badge-bad {
+  color: var(--danger);
+}
+.rg-att {
+  margin-left: auto;
+  color: var(--muted);
+}
+.rg-full .rg-route {
+  margin-left: 0;
+  max-width: 100%;
+}
+.rg-full .rg-att {
+  white-space: nowrap;
+}
+.rg-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--line);
+}
+.rf-hint {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rf-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.rg-full {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  background-image: radial-gradient(circle, var(--line) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+.rg-full:active {
+  cursor: grabbing;
+}
+.rg-full .rg-card {
+  gap: 6px;
+  padding: 12px 14px;
+  justify-content: flex-start;
+  cursor: grab;
+}
+.rg-full .rg-card.s-failed,
+.rg-full .rg-card.s-blocked,
+.rg-full .rg-card.s-parked {
+  padding-left: 12px;
+}
+.rg-full .rg-mk {
+  width: 18px;
+  height: 18px;
+}
+.rg-full .rg-t {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.rg-full .rg-st {
+  height: 18px;
+  font-size: 11px;
+}
+.rg-full .rg-meta {
+  padding-left: 24px;
+  font-size: 12px;
+  color: var(--body);
+}
+.rg-full .rg-col {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.rg-full .rg-route {
+  font-size: 11px;
+  height: 19px;
+  line-height: 17px;
+}
+.rg-word {
+  font-size: 11px;
+}
+.rg-word.s-done {
+  color: var(--ok);
+}
+.rg-word.s-running {
+  color: var(--accent);
+}
+.rg-word.s-failed,
+.rg-word.s-blocked {
+  color: var(--danger);
+}
+.rg-tip {
+  position: absolute;
+  z-index: 3;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--pop);
+  box-shadow: var(--rn-shadow);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--body);
+  pointer-events: none;
+  overflow: visible;
+}
+.rg-tip.dock::before {
+  display: none;
+}
+.rg-tip.above::before {
+  top: auto;
+  bottom: -5px;
+  transform: rotate(225deg);
+}
+.rg-tip.right::before {
+  top: var(--tip-at, 20px);
+  left: -5px;
+  transform: rotate(-45deg);
+}
+.rg-tip.left::before {
+  top: var(--tip-at, 20px);
+  left: auto;
+  right: -5px;
+  transform: rotate(135deg);
+}
+.rg-tip::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: var(--tip-at, calc(50% - 4px));
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  background: var(--pop);
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+.rg-tip-l {
+  display: block;
+}
+.rg-tip-l {
+  overflow-wrap: break-word;
+}
+.rg-tip-l em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rg-tip b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rg-tip-l + .rg-tip-l {
+  margin-top: 2px;
+}
+.rg-tip b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--quiet);
+}
+.rg-full .rg-card:hover,
+.rg-full .rg-card.hov {
+  /* hover lifts the card and keeps its state border; the gray ring is for selection only */
+  border-color: color-mix(in srgb, var(--ink) 34%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+[data-theme="light"] .rg-full .rg-card:hover,
+[data-theme="light"] .rg-full .rg-card.hov {
+  border-color: rgba(30, 20, 40, 0.32);
+  box-shadow: 0 12px 28px rgba(30, 20, 40, 0.18), 0 0 0 1px rgba(30, 20, 40, 0.1);
+}
+
+.rg-tools {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raise);
+  box-shadow: var(--rn-shadow);
+  cursor: default;
+}
+.rg-tools button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--body);
+}
+.rg-tools button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rg-tools button:disabled {
+  color: var(--quiet);
+  opacity: 0.6;
+}
+.rg-zoom {
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rf-drawer {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: 360px;
+  overflow-y: auto;
+  z-index: 4;
+  pointer-events: none;
+}
+.rf-drawer .rn-drawer {
+  margin: 0;
+  background: var(--raise);
+  box-shadow: var(--rn-shadow);
+  pointer-events: auto;
+}
+
+/* the activity line: a helper handed one dag part */
+.act-dag .act-dag-st {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.act-dag .act-dag-st.working {
+  color: var(--accent);
+}
+.act-dag .act-dag-st.failed {
+  color: var(--danger);
+}
+.act-dag .act-dag-open {
+  flex: none;
+  font-size: 11px;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.act-dag code {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* hovering a card in the full view: its own links stay, the rest step back */
+.rg-full .rg-edges.focus .rg-edge:not(.lit),
+.rg-full .rg-edges.focus .rg-arrow:not(.lit) {
+  opacity: 0.28;
+  transition: opacity 0.15s ease;
+}
+.rg-full .rg-edges.focus .rg-edge.lit .rg-line {
+  stroke-width: 2;
+}
+.rg-full .rg-word.s-done {
+  color: color-mix(in srgb, var(--ok) 80%, var(--ink));
+  font-weight: 550;
+}
+[data-theme="light"] .rg-full .rg-word.s-done {
+  color: #1f7a48;
+}
+/* the route in the full view is a quiet tag, not a control: no box, the state word outranks it */
+.rg-full .rg-route {
+  height: auto;
+  padding: 0;
+  border: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: color-mix(in srgb, #c9b6ef 80%, var(--muted));
+}
+[data-theme="light"] .rg-full .rg-route {
+  color: #6a52a8;
+}
+.rg-full .rg-word {
+  font-size: 12px;
+  font-weight: 600;
+}
+.rg-card.s-failed::before {
+  background: linear-gradient(120deg, rgba(var(--rn-red), 0.16), rgba(var(--rn-red), 0.02) 70%);
+}
+[data-theme="light"] .rg-card.s-failed::before {
+  background: linear-gradient(120deg, rgba(var(--rn-red), 0.13), rgba(var(--rn-red), 0.02) 70%);
+}
+
+.rn-dot.done.mixed {
+  background: var(--rn-amber);
+}
+/* hover focus in the full view: the hovered card and its neighbours stay, the rest step back */
+.rg-full .rg-card.dim {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+.rg-full .rg-edges.focus .rg-edge:not(.lit),
+.rg-full .rg-edges.focus .rg-arrow:not(.lit) {
+  opacity: 0.16;
+}
+/* the handoff snippet is an overlay: raised above the cards, roomier lines, labels that stand out */
+.rg-full .rg-tip {
+  padding: 10px 14px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink);
+  border-color: var(--line-strong);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+[data-theme="light"] .rg-full .rg-tip {
+  box-shadow: 0 16px 40px rgba(30, 20, 40, 0.18), 0 2px 6px rgba(30, 20, 40, 0.08);
+}
+.rg-full .rg-tip-l + .rg-tip-l {
+  margin-top: 6px;
+}
+.rg-full .rg-tip-l em {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* the hovered card leads: a lifted card with a stronger edge; its neighbours stay plain */
+.rg-full .rg-card.hov {
+  border-color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+[data-theme="light"] .rg-full .rg-card.hov {
+  border-color: rgba(30, 20, 40, 0.5);
+}
+/* the panel's route chip keeps its word: it never shrinks below the word itself */
+.rg-panel .rg-route {
+  flex: none;
+}
+.rg-panel .rg-mt {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ================================================================ finished look
+   Colour per state, on the card's own surface:
+   running = a violet→pink border (the brand gradient) that slowly turns, a moving shimmer, a soft glow;
+   done = a green→teal tint with a check; failed = red, its out-edges dashed; waiting = dim, dotted border;
+   retry (waiting for its next try after a failed one) = amber. Selection stays a gray ring. */
+.rn,
+.rf {
+  --rn-teal: 64, 196, 190;
+}
+[data-theme="light"] .rn,
+[data-theme="light"] .rf {
+  --rn-teal: 17, 128, 126;
+}
+.rg-card.s-done {
+  border-color: rgba(var(--rn-green), 0.4);
+}
+.rg-card.s-done::before {
+  background: linear-gradient(125deg, rgba(var(--rn-green), 0.24), rgba(var(--rn-teal), 0.1) 60%, rgba(var(--rn-teal), 0.03));
+}
+[data-theme="light"] .rg-card.s-done::before {
+  background: linear-gradient(125deg, rgba(var(--rn-green), 0.15), rgba(var(--rn-teal), 0.07) 60%, rgba(var(--rn-teal), 0.02));
+}
+.rg-card.s-done .rg-st {
+  color: rgb(var(--rn-green));
+}
+/* running: a 1.5px gradient ring drawn as a masked border, a slow shimmer across the surface and a glow */
+@property --rg-turn {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.rg-card.s-running {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px rgba(var(--rn-pink), 0.12),
+    0 6px 22px rgba(var(--rn-violet), 0.28),
+    0 0 18px rgba(var(--rn-pink), 0.18);
+}
+.rg-card.s-running::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--rg-turn), rgb(var(--rn-violet)), rgb(var(--rn-pink)), rgba(var(--rn-pink), 0.35), rgb(var(--rn-violet)));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: rg-turn 4s linear infinite;
+}
+@keyframes rg-turn {
+  to {
+    --rg-turn: 360deg;
+  }
+}
+.rg-card.s-running::before {
+  background:
+    linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.07) 45%, rgba(255, 255, 255, 0.13) 50%, rgba(255, 255, 255, 0.07) 55%, transparent 70%) 0 0 / 250% 100% no-repeat,
+    linear-gradient(125deg, rgba(var(--rn-violet), 0.24), rgba(var(--rn-pink), 0.14) 55%, rgba(var(--rn-pink), 0.05));
+  animation: rg-sweep 2.8s ease-in-out infinite;
+}
+[data-theme="light"] .rg-card.s-running::before {
+  background:
+    linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.5) 45%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0.5) 55%, transparent 70%) 0 0 / 250% 100% no-repeat,
+    linear-gradient(125deg, rgba(var(--rn-violet), 0.12), rgba(var(--rn-pink), 0.08) 55%, rgba(var(--rn-pink), 0.02));
+}
+@keyframes rg-sweep {
+  from {
+    background-position: 130% 0, 0 0;
+  }
+  to {
+    background-position: -30% 0, 0 0;
+  }
+}
+.rg-card.s-failed {
+  border-color: rgba(var(--rn-red), 0.45);
+  border-left: 3px solid var(--danger);
+}
+.rg-card.s-failed::before {
+  background: linear-gradient(125deg, rgba(var(--rn-red), 0.2), rgba(var(--rn-red), 0.05) 65%);
+}
+[data-theme="light"] .rg-card.s-failed::before {
+  background: linear-gradient(125deg, rgba(var(--rn-red), 0.11), rgba(var(--rn-red), 0.02) 65%);
+}
+.rg-card.s-failed .rg-st {
+  color: var(--danger);
+}
+.rg-card.s-waiting {
+  border: 1.5px dotted color-mix(in srgb, var(--ink) 30%, transparent);
+  background: color-mix(in srgb, var(--rn-surface) 55%, transparent);
+  box-shadow: none;
+}
+.rg-card.s-waiting .rg-t,
+.rg-card.s-waiting .rg-meta {
+  opacity: 0.75;
+}
+.rg-card.s-retry {
+  border-color: color-mix(in srgb, var(--rn-amber) 60%, transparent);
+  border-left: 3px solid var(--rn-amber);
+}
+.rg-card.s-retry::before {
+  background: linear-gradient(125deg, color-mix(in srgb, var(--rn-amber) 22%, transparent), transparent 65%);
+}
+.rg-word.s-retry {
+  color: var(--rn-amber);
+}
+/* edges: out of a failed node dashed red; into a running node a slow dash flow in the brand pink */
+.rg-edge.broken .rg-line {
+  stroke: rgba(var(--rn-red), 0.75);
+  stroke-dasharray: 5 4;
+}
+.rg-arrow.broken {
+  fill: rgba(var(--rn-red), 0.8);
+}
+.rg-flowline {
+  stroke: rgb(var(--rn-pink));
+  stroke-width: 2;
+  stroke-dasharray: 3 9;
+  filter: drop-shadow(0 0 2px rgba(var(--rn-pink), 0.6));
+}
+.rg-full .rg-flowline {
+  stroke-width: 2.5;
+}
+
+/* sizes: a lead carries more weight, a leaf is compact, the gate is wider and marked */
+.rg-card.k-lead .rg-t {
+  font-weight: 650;
+}
+.rg-full .rg-card.k-lead .rg-t {
+  font-size: 14px;
+  line-height: 19px;
+}
+.rg-full .rg-card.k-leaf {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.rg-full .rg-card.k-leaf .rg-t {
+  font-size: 12.5px;
+}
+.rg-card.k-gate {
+  border-width: 1.5px;
+}
+.rg-gate {
+  flex: none;
+  color: var(--muted);
+}
+.rg-card.s-done .rg-gate {
+  color: rgb(var(--rn-teal));
+}
+.rg-card.k-gate.s-waiting {
+  border-style: dashed;
+}
+.rg-panel .rg-top {
+  align-items: flex-start;
+  gap: 4px;
+}
+.rg-panel .rg-gate {
+  margin-top: 1px;
+}
+.rg-mk {
+  border-radius: 4px;
+}
+.rg-mk.src-route,
+.rg-mk.src-bot {
+  /* not run yet: the model it goes to, a little quieter */
+  opacity: 0.8;
+}
+
+/* ---- the plan card */
+.rp {
+  position: relative;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(var(--rn-violet), 0.08), rgba(var(--rn-pink), 0.04) 45%, transparent 75%),
+    var(--rn-surface);
+  box-shadow: var(--rn-shadow);
+  overflow: hidden;
+}
+.rp::before {
+  /* a thin brand line along the top: the plan is the run's own brand point */
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, rgb(var(--rn-violet)), rgb(var(--rn-pink)));
+  opacity: 0.85;
+}
+.rp-panel {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+.rp-full {
+  margin: 12px 16px 0;
+  padding: 12px 16px;
+}
+.rp-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.rp-k {
+  flex: none;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--rn-pink));
+}
+.rp-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rp-full .rp-title {
+  font-size: 13px;
+}
+.rp-time {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.rp-goal {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.rp-full .rp-goal {
+  font-size: 12px;
+}
+.rp-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+.rp-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--body);
+  background: color-mix(in srgb, var(--rn-surface) 70%, transparent);
+  white-space: nowrap;
+}
+.rp-chip i,
+.rp-c i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--quiet);
+}
+.t-done > i {
+  background: rgb(var(--rn-green));
+}
+.t-running > i {
+  background: linear-gradient(135deg, rgb(var(--rn-violet)), rgb(var(--rn-pink)));
+  box-shadow: 0 0 6px rgba(var(--rn-pink), 0.7);
+}
+.t-failed > i {
+  background: var(--danger);
+}
+.t-waiting > i {
+  background: transparent;
+  border: 1px dotted var(--muted);
+}
+.rp-chip.t-running {
+  border-color: rgba(var(--rn-pink), 0.45);
+}
+.rp-chip.t-failed {
+  border-color: rgba(var(--rn-red), 0.45);
+}
+.rp-counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.rp-c {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.rp-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.rp-go {
+  color: var(--ink);
+  border-color: rgba(var(--rn-pink), 0.4);
+}
+.rp-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+.rf .rp + .rf-body {
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rg-card.s-running::after,
+  .rg-card.s-running::before {
+    animation: none !important;
+  }
+}
+
+/* round 2 */
+.rn-bar {
+  width: 52px;
+  height: 4px;
+}
+.rn-bar i.run {
+  right: auto;
+  background: linear-gradient(90deg, rgb(var(--rn-violet)), rgb(var(--rn-pink)));
+}
+/* a repair link: solid amber, it is the way out of a failure, not a broken dependency */
+.rg-edge.repair .rg-line,
+.rg-edge.repair:not(.broken) .rg-line {
+  stroke: var(--rn-amber);
+  stroke-dasharray: none;
+  opacity: 0.85;
+}
+.rg-edge.enter.repair .rg-line {
+  stroke-dasharray: none;
+}
+.rg-arrow.repair {
+  fill: var(--rn-amber);
+}
+.rg-why {
+  position: relative;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-left: 24px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: color-mix(in srgb, var(--danger) 75%, var(--ink));
+}
+.rg-card.s-retry .rg-why {
+  color: color-mix(in srgb, var(--rn-amber) 75%, var(--ink));
+}
+.rg-full .rg-foot {
+  margin-top: auto;
+}
+.rg-full .rg-top + .rg-meta {
+  margin-top: 0;
+}
+/* the panel card: title, then one line (logo, time, route, state), no clipping */
+.rg-panel .rg-card {
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 7px 8px;
+}
+.rg-panel .rg-card .rg-meta {
+  margin-top: auto;
+}
+.rg-panel .rg-mt {
+  flex: none;
+  overflow: visible;
+}
+.rg-panel .rg-route {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* brighter state colours in dark */
+.rg-card.s-done::before {
+  background: linear-gradient(125deg, rgba(var(--rn-green), 0.3), rgba(var(--rn-teal), 0.13) 60%, rgba(var(--rn-teal), 0.05));
+}
+.rg-card.s-failed::before {
+  background: linear-gradient(125deg, rgba(var(--rn-red), 0.28), rgba(var(--rn-red), 0.08) 65%);
+}
+[data-theme="light"] .rg-card.s-done::before {
+  background: linear-gradient(125deg, rgba(var(--rn-green), 0.17), rgba(var(--rn-teal), 0.08) 60%, rgba(var(--rn-teal), 0.02));
+}
+[data-theme="light"] .rg-card.s-failed::before {
+  background: linear-gradient(125deg, rgba(var(--rn-red), 0.12), rgba(var(--rn-red), 0.03) 65%);
+}
+/* logos read as identity, not texture */
+.rg-mk {
+  color: var(--ink);
+}
+.rg-mk.src-route,
+.rg-mk.src-bot {
+  opacity: 0.9;
+}
+
+/* round 3 */
+.rg-edge.repair .rg-line,
+.rg-edge.repair:not(.broken) .rg-line,
+.rg-edge.enter.repair .rg-line {
+  stroke: var(--rn-amber);
+  stroke-dasharray: 5 4;
+  opacity: 0.9;
+}
+.rg-panel .rg-route {
+  flex: none;
+}
+.rg-panel .rg-mt {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rg-panel .rg-card.k-lead .rg-t {
+  max-height: 45px;
+}
+.rg-why.said {
+  color: var(--body);
+}
+
+/* round 4 */
+.rg-why {
+  overflow-wrap: anywhere;
+  padding-bottom: 1px;
+}
+.rg-lead {
+  flex: none;
+  margin-left: auto;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--body);
+}
+.rg-panel .rg-t {
+  max-height: 45px;
+}
+.rg-panel .rg-card.k-leaf .rg-t {
+  max-height: 30px;
+}
+.rg-panel .rg-route {
+  padding: 0 4px;
+}
+/* the gate holds its own even before it starts */
+.rg-card.k-gate.s-waiting {
+  border: 1.5px dashed color-mix(in srgb, var(--ink) 42%, transparent);
+  background: color-mix(in srgb, var(--rn-surface) 80%, transparent);
+}
+.rg-card.k-gate.s-waiting .rg-t,
+.rg-card.k-gate.s-waiting .rg-meta {
+  opacity: 0.9;
+}
+.rg-full .rg-gate {
+  color: var(--body);
+}
+/* legend (full view, bottom right) */
+.rg-legend {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--pop) 92%, transparent);
+  font-size: 11px;
+  color: var(--body);
+  pointer-events: none;
+}
+.rg-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.rg-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--quiet);
+}
+.rg-legend .t-done i {
+  background: linear-gradient(135deg, rgb(var(--rn-green)), rgb(var(--rn-teal)));
+}
+.rg-legend .t-running i {
+  background: linear-gradient(135deg, rgb(var(--rn-violet)), rgb(var(--rn-pink)));
+  box-shadow: 0 0 6px rgba(var(--rn-pink), 0.6);
+}
+.rg-legend .t-failed i {
+  background: var(--danger);
+}
+.rg-legend .t-retry i {
+  background: var(--rn-amber);
+}
+.rg-legend .t-waiting i {
+  background: transparent;
+  border: 1.5px dotted var(--muted);
+}
+.rg-legend b {
+  width: 16px;
+  border-top: 2px dashed var(--rn-amber);
+}
+.rg-legend .l-broken b {
+  border-top-color: rgba(var(--rn-red), 0.8);
+}
+
+/* round 5: the detail line never clips a descender; one line per finished part */
+.rg-why {
+  line-height: 17px;
+  padding-bottom: 2px;
+}
+.rg-why.said {
+  -webkit-line-clamp: 2;
+  color: var(--body);
+}
+/* into a running node: the edge itself carries the brand gradient, the flow dashes ride on it */
+.rg-legend .l-flow b {
+  border-top: 2px solid rgb(var(--rn-pink));
+}
+
+/* round 6: detail lines are one whole line in the full view (title tooltip has the rest) */
+.rg-full .rg-why.said {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rg-legend .l-flow b {
+  border-top: 2px dashed rgb(var(--rn-pink));
+}
+.rg-legend .t-retry i {
+  background: var(--rn-amber);
+  border-radius: 50%;
+}
+
+.rg-wait {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px dotted currentColor;
+}
+.rg-legend.row {
+  position: static;
+  flex-wrap: wrap;
+  height: auto;
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  gap: 6px 12px;
+  border: 0;
+  background: transparent;
+}
+
+/* a failure its repairs have fixed: quieter, amber, it no longer asks for attention */
+.rg-card.s-failed.repaired {
+  border-color: color-mix(in srgb, var(--rn-amber) 45%, transparent);
+  border-left-color: var(--rn-amber);
+}
+.rg-card.s-failed.repaired::before {
+  background: linear-gradient(125deg, color-mix(in srgb, var(--rn-amber) 16%, transparent), transparent 70%);
+}
+.rg-card.s-failed.repaired .rg-st,
+.rg-card.s-failed.repaired .rg-word {
+  color: var(--rn-amber);
+}
+.rg-card.s-failed.repaired .rg-why {
+  color: var(--body);
+}
+.t-repaired > i {
+  background: var(--rn-amber);
+}
+
+/* repaired: amber, everywhere it is counted */
+.rn-bar i.fix {
+  right: auto;
+  background: var(--rn-amber);
+}
+.rn-badge-fix,
+.rn-tag.fix {
+  color: var(--rn-amber);
+}
+/* the run-list and legend colour for a node its repairs fixed */
+.rg-legend .t-repaired i {
+  background: var(--rn-amber);
+}
+
+/* the running card leads in light too: a visible brand fill, not only a halo */
+[data-theme="light"] .rg-card.s-running::before {
+  background:
+    linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.55) 45%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0.55) 55%, transparent 70%) 0 0 / 250% 100% no-repeat,
+    linear-gradient(125deg, rgba(var(--rn-violet), 0.2), rgba(var(--rn-pink), 0.14) 55%, rgba(var(--rn-pink), 0.06));
+}
+.rg-card.s-running .rg-word {
+  font-weight: 650;
+}
