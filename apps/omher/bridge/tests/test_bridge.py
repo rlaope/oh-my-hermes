@@ -366,7 +366,7 @@ class BotsAndChat(BridgeCase):
 
 class EventMapping(BridgeCase):
     def fixture_frames(self):
-        return json.loads(FIXTURE.read_text())
+        return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
     async def test_real_turn_maps_to_protocol_events(self):
         async with Env() as env:
@@ -626,13 +626,13 @@ class ReadOnlyRule(BridgeCase):
             self.assertEqual(len(c.find("prompt.submit")), 1)
 
     def test_source_has_exactly_one_submit_call_site(self):
-        src = (HERE.parent / "omher_bridge.py").read_text()
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"prompt\.submit", src)), 1)
         sites = re.findall(r"self\._submit\(([^)]*)\)", src)
         self.assertEqual(sites, ["conn, main, text, input_id"])
 
     def test_bridge_makes_no_model_or_http_call(self):
-        src = (HERE.parent / "omher_bridge.py").read_text()
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic", "subprocess"):
             self.assertNotIn(needle, src, needle)
 
@@ -679,7 +679,8 @@ class HermesPath(unittest.TestCase):
         import sqlite3
         import omher_bridge
         with tempfile.TemporaryDirectory() as d:
-            folder = Path(d) / "a b#c?d%e@f"
+            # '#', '%' and spaces are legal everywhere; '?' only outside Windows
+            folder = Path(d) / ("a b#c%e@f" if os.name == "nt" else "a b#c?d%e@f")
             folder.mkdir()
             db = folder / "state.db"
             con = sqlite3.connect(db)
@@ -849,7 +850,7 @@ class BotIdentity(BridgeCase):
             r = await s.req("bots.rename", bot="kami", name="  Kami   the Helper ")
             self.assertTrue(r["ok"], r)
             self.assertEqual(r["result"]["display_name"], "Kami the Helper")
-            text = meta.read_text()
+            text = meta.read_text(encoding="utf-8")
             self.assertIn("display_name: Kami the Helper", text)
             self.assertIn("Kami bot", text)  # the description written by Env survives
             await s.until(lambda ev: any(e["event"] == "bots.update" and e["bot"] == "kami" for e in ev))
@@ -859,7 +860,7 @@ class BotIdentity(BridgeCase):
             # empty goes back to the profile's own name
             r = await s.req("bots.rename", bot="kami", name="")
             self.assertEqual(r["result"]["display_name"], "Kami")
-            self.assertNotIn("display_name", meta.read_text())
+            self.assertNotIn("display_name", meta.read_text(encoding="utf-8"))
 
     async def test_rename_refuses_bad_input(self):
         async with Env() as env:
@@ -869,7 +870,7 @@ class BotIdentity(BridgeCase):
                 self.assertEqual(r["error"]["code"], code)
             r = await s.req("bots.rename", bot="ghost", name="x")
             self.assertEqual(r["error"]["code"], "unknown_bot")
-            self.assertFalse((env.home / "profiles" / "kami" / "profile.yaml").read_text().count("display_name"))
+            self.assertFalse((env.home / "profiles" / "kami" / "profile.yaml").read_text(encoding="utf-8").count("display_name"))
 
     async def test_picture_goes_through_hermes_set_asset_when_the_gateway_runs(self):
         async with Env() as env:

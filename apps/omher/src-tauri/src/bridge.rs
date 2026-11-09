@@ -147,8 +147,9 @@ pub fn resolve_script<X: Fn(&Path) -> bool>(
 ) -> Result<PathBuf, String> {
     let mut tried = Vec::new();
     if let Some(r) = resource_dir {
-        for rel in ["bridge/omher_bridge.py", "resources/bridge/omher_bridge.py"] {
-            let p = r.join(rel);
+        for rel in [&["bridge", "omher_bridge.py"][..], &["resources", "bridge", "omher_bridge.py"][..]] {
+            // one component at a time, so the path uses this OS's separator throughout
+            let p = rel.iter().fold(r.to_path_buf(), |p, part| p.join(part));
             if exists(&p) {
                 return Ok(p);
             }
@@ -593,7 +594,8 @@ mod tests {
         );
         assert_eq!(dev, Ok(PathBuf::from("/repo/src-tauri/../bridge/omher_bridge.py")));
         let none = resolve_script(Some(Path::new("/app/Resources")), None, fs_of(&[])).unwrap_err();
-        assert!(none.contains("/app/Resources/bridge/omher_bridge.py"), "{none}");
+        let tried = Path::new("/app/Resources").join("bridge").join("omher_bridge.py");
+        assert!(none.contains(&tried.display().to_string()), "{none}");
     }
 
     #[test]
