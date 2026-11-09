@@ -25,6 +25,7 @@ DOCS_INDEX = ROOT / "docs" / "README.md"
 RULES = (
     "omher never patches Hermes.",
     "omher never writes to Slack, Discord or any other elsewhere session.",
+    "omher may pass a thread reference to the bot; the bot posts with its own tools and approvals.",
     "omher sends, answers and interrupts only in the bot's main chat, the session titled `Bot Chat`,",
     "and in folder chats the bridge created itself for an oh-my-hermes session (`folder.open`);",
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.",
@@ -237,6 +238,34 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
         self.assertEqual(sorted(i for i in imported if i in banned or i.split(".")[0] in banned), [])
+
+    def test_bridge_never_posts_to_a_messenger(self) -> None:
+        """Rule 2: a reply target is text handed to the bot. The bridge imports no sender (Hermes'
+        send_message tool, its platform adapters, a Slack or Discord client), names no messenger API and
+        runs no `hermes send`; the command appears only inside the block the bot reads."""
+        # subprocess is imported for rule 10's git reads only: its one call site runs `git` (checked below).
+        banned_roots = {"slack_sdk", "slack_bolt", "discord", "telegram"}
+        banned_parts = ("send_message", "gateway.platforms", "plugins.platforms", "gateway.delivery")
+        imported = []
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Import):
+                imported += [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                imported.append(node.module or "")
+        offenders = [n for n in imported if n.split(".")[0] in banned_roots or any(p in n for p in banned_parts)]
+        self.assertEqual(offenders, [])
+        runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
+        self.assertEqual([ast.unparse(c.args[0]) for c in runs], ["['git', *pre, *args]"])
+        for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
+            self.assertNotIn(host, self.source)
+        hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
+                       and any(isinstance(c, ast.Constant) and isinstance(c.value, str) and "hermes send" in c.value
+                               for c in ast.walk(fn))]
+        self.assertEqual(hermes_send, ["reply_block"])
+        for call in ast.walk(self.tree):
+            if isinstance(call, ast.Call):
+                self.assertFalse(any(isinstance(a, ast.Constant) and a.value in {"send_message", "send.message"}
+                                     for a in call.args), ast.unparse(call))
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):

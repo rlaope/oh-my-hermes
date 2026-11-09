@@ -532,3 +532,58 @@
   color: var(--accent);
   margin-right: 4px;
 }
+
+/* "Reply there" reference: a chip above the composer text, and a small tag under the sent bubble */
+.reply-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0 0 6px;
+  padding: 3px 4px 3px 8px;
+  border-radius: var(--r);
+  background: var(--raise2);
+  font-size: 11.5px;
+  color: var(--body);
+  animation: pop 0.16s ease both;
+}
+.reply-chip .rc-t {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.reply-chip .rc-k {
+  color: var(--muted);
+}
+.reply-chip .rc-x {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex: none;
+}
+.reply-chip .rc-x:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+.composer-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.composer-col textarea {
+  width: 100%;
+}
+.msg-reply {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--quiet);
+}
