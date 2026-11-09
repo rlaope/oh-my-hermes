@@ -36,8 +36,9 @@ class GatewayClientError(ValueError):
 class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
-    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None):
+    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None):
         self.name = name
+        self.caps = caps if caps is not None else {}  # client.capabilities answer, or an exception to raise
         self.events: asyncio.Queue = asyncio.Queue()
         self.calls: list[tuple[str, dict]] = []
         self.bot_chat = bot_chat
@@ -69,6 +70,12 @@ class FakeClient:
                         {"role": "user", "text": "secret", "display_kind": "hidden", "row_id": 4}],
                     "info": dict(self.model_info), "revision": self.revision, "execution_generation": 3,
                     "prompts": []}
+        if method == "client.capabilities":
+            if isinstance(self.caps, Exception):
+                raise self.caps
+            return dict(self.caps)
+        if method == "clarify.lock":
+            return {"status": "ok", "remaining": []}
         if method == "session.create":
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
@@ -467,6 +474,102 @@ class EventMapping(BridgeCase):
             self.assertEqual((await s.req("chat.send", bot="kami", text="x"))["error"]["code"], "bot_offline")
 
 
+class NeedsYou(BridgeCase):
+    """Asks raised while omher looks elsewhere: an interview (one clarify request with several questions),
+    expiry when the gateway stops waiting, and the clarify_batch flag on submit only when the gateway offers it."""
+
+    QUESTIONS = [{"qid": "q1", "question": "Who reads it?", "choices": ["Users", "Devs"], "multi_select": False},
+                 {"qid": "q2", "question": "Sections?", "choices": ["Fixes", "Thanks"], "multi_select": True},
+                 {"qid": "q3", "question": "Leave anything out?", "choices": None, "multi_select": False}]
+
+    def ask(self, c, rid="srq-abc123", sid=MAIN_RUNTIME, questions=None, **extra):
+        c.events.put_nowait({"jsonrpc": "2.0", "id": rid, "method": "clarify",
+                             "params": {"session_id": sid, "questions": questions or self.QUESTIONS, **extra}})
+
+    async def test_batch_clarify_is_one_interview_answered_by_locking_each_question(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            self.ask(c, rid="srq-foreign", sid="20261108_235229_aaaf70c4")  # another session's ask: not ours
+            self.ask(c)
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            asks = [e for e in s.events if e["event"] == "clarify.request"]
+            self.assertEqual(len(asks), 1)
+            self.assertEqual(asks[0]["request_id"], "srq-abc123")
+            self.assertEqual(asks[0]["question"], "Who reads it?")
+            self.assertEqual([q["qid"] for q in asks[0]["questions"]], ["q1", "q2", "q3"])
+            self.assertTrue(asks[0]["questions"][1]["multi_select"])
+            self.assertNotIn("choices", asks[0]["questions"][2])
+            r = await s.req("clarify.respond", bot="kami", request_id="srq-abc123",
+                            answers={"q1": "Users", "q2": None, "q3": "the beta"})
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(c.find("clarify.lock"), [
+                {"request_id": "srq-abc123", "question_id": "q1", "answer": "Users"},
+                {"request_id": "srq-abc123", "question_id": "q2", "answer": None},
+                {"request_id": "srq-abc123", "question_id": "q3", "answer": "the beta"}])
+            self.assertEqual(c.find("clarify.respond"), [])
+            bad = await s.req("clarify.respond", bot="kami", request_id="x", answers={"q1": 3})
+            self.assertEqual(bad["error"]["code"], "bad_request")
+
+    async def test_a_single_question_batch_keeps_its_choices(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            self.ask(c, questions=self.QUESTIONS[1:2])
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            ask = [e for e in s.events if e["event"] == "clarify.request"][0]
+            self.assertEqual((ask["question"], ask["choices"], ask["multi_select"]), ("Sections?", ["Fixes", "Thanks"], True))
+            self.assertNotIn("questions", ask)
+            self.assertTrue((await s.req("clarify.respond", bot="kami", request_id="srq-abc123", answer='["Fixes"]'))["ok"])
+            self.assertEqual(c.find("clarify.lock"), [{"request_id": "srq-abc123", "question_id": "q2", "answer": '["Fixes"]'}])
+
+    async def test_settled_or_cancelled_asks_expire_with_a_reason(self):
+        async with Env() as env:
+            t = [1000.0]
+            env.bridge.clock = lambda: t[0]
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("approval.request", {"prompt_id": "ap1", "kind": "approval", "execution_generation": 5,
+                                        "command": "rm -rf build/", "choices": ["once", "deny"], "timeout_s": 60})
+            c.push("clarify.request", {"prompt_id": "cl1", "kind": "clarify", "execution_generation": 5,
+                                       "question": "Which?", "choices": ["a"], "timeout_s": 300})
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            ap = [e for e in s.events if e["event"] == "approval.request"][0]
+            self.assertEqual(ap["timeout_s"], 60)
+            t[0] = 1061.0
+            c.push("approval.settled", {"prompt_id": "ap1", "execution_generation": 5})  # past its 60 s: timed out
+            c.push("clarify.settled", {"prompt_id": "cl1", "execution_generation": 5})   # early: answered elsewhere
+            c.push("approval.settled", {"prompt_id": "never-seen", "execution_generation": 5})
+            self.ask(c, rid="srq-iv")
+            await s.until(lambda ev: any(e["event"] == "clarify.request" and e["request_id"] == "srq-iv" for e in ev))
+            c.push("request.cancel", {"id": "srq-iv", "method": "clarify", "reason": "timeout"})
+            c.push("request.cancel", {"id": "srq-unknown", "method": "sudo", "reason": "timeout"})
+            await s.until(lambda ev: sum(e["event"] == "prompt.expired" for e in ev) == 3)
+            await asyncio.sleep(0.05)
+            got = [(e["request_id"], e["reason"]) for e in s.events if e["event"] == "prompt.expired"]
+            self.assertEqual(got, [("ap1", "timeout"), ("cl1", "resolved"), ("srq-iv", "timeout")])
+            # an expired ask cannot be answered through omher any more
+            r = await s.req("clarify.respond", bot="kami", request_id="srq-iv", answers={"q1": "Users"})
+            self.assertTrue(r["ok"])
+            self.assertEqual(c.find("clarify.lock"), [])
+
+    async def test_submit_declares_clarify_batch_only_when_the_gateway_offers_it(self):
+        for caps, want in (({"canonical_clarify_batch": True}, True), ({}, False),
+                           (GatewayRPCError("unknown_method"), False)):
+            async with Env(caps=caps) as env:
+                s = await self.open(env)
+                for text in ("one", "two"):
+                    self.assertTrue((await s.req("chat.send", bot="kami", text=text))["ok"])
+                c = env.clients["kami"]
+                self.assertEqual(c.find("client.capabilities"), [{}])  # asked once, with no flags
+                subs = c.find("prompt.submit")
+                self.assertEqual([p.get("clarify_batch") for p in subs], [True, True] if want else [None, None])
+                self.assertEqual({p["session_id"] for p in subs}, {MAIN_RUNTIME})
+
+
 class Elsewhere(BridgeCase):
     SESSIONS = [
         {"id": "s-slack", "title": "gateway 502", "source": "slack", "started_at": 1000.0, "message_count": 12, "running": True},
@@ -635,8 +738,9 @@ class ReadOnlyRule(BridgeCase):
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        # Whole words: the gateway's own `open_requests` snapshot key is not the `requests` library.
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
-            self.assertNotIn(needle, src, needle)
+            self.assertIsNone(re.search(rf"\b{re.escape(needle)}\b", src), needle)
 
     def test_the_only_program_it_runs_is_read_only_git(self):
         import ast

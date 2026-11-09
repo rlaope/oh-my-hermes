@@ -1,9 +1,10 @@
 import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { Bot } from "../../lib/protocol";
-import { selectTimeline, useStore, type TimelineItem } from "../../state/store";
+import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
+import { TypingRow, awaitingFirstToken } from "./Typing";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
 
 /** A time label goes in when the day changes, or after a quiet gap within the same day. */
@@ -23,6 +24,7 @@ export function Timeline({ bot }: { bot: Bot }) {
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
   const streaming = chat?.turn?.streaming ?? "";
+  const typing = awaitingFirstToken(chat);
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const lastBot = useRef<string | null>(null);
@@ -33,7 +35,7 @@ export function Timeline({ bot }: { bot: Bot }) {
     if (!el) return;
     if (lastBot.current !== bot.name || pinned.current) el.scrollTop = el.scrollHeight;
     lastBot.current = bot.name;
-  }, [bot.name, items, streaming]);
+  }, [bot.name, items, streaming, typing]);
 
   const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {
@@ -80,6 +82,8 @@ export function Timeline({ bot }: { bot: Bot }) {
       )}
       {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">Say hi to {bot.display_name}</div>}
       {items.map((it, i) => {
+        // the live activity line with nothing to say yet: the typing bubble below stands in for it
+        if (it.kind === "activity" && chat?.turn?.id === it.turn.id && !turnHasActivity(it.turn)) return null;
         const label = divider(items[i - 1], it);
         return (
           <Fragment key={it.id}>
@@ -90,6 +94,11 @@ export function Timeline({ bot }: { bot: Bot }) {
           </Fragment>
         );
       })}
+      {typing && (
+        <div className="row row-assistant row-typing" data-kind="typing">
+          <TypingRow bot={bot.name} name={bot.display_name} />
+        </div>
+      )}
       {streaming && (
         <div className="row row-assistant" data-kind="streaming">
           <Bubble item={{ kind: "assistant", text: streaming }} streaming bot={bot.name} face={!botSpoke(items[items.length - 1])} />

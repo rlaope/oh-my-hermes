@@ -77,3 +77,156 @@ button.ui-pill:hover {
 .ui-pop-left {
   left: 0;
 }
+
+/* Answer in progress: the ring around a face or mark, typing dots, the one-line ticker (Live.tsx).
+   The ring is the one brand-gradient "live" point, so it uses the accent set; it sits outside the
+   wrapped element and never takes layout space. */
+.ui-ring-w {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  line-height: 0;
+}
+.ui-ring {
+  /* arc length and thickness; the tail fades in from transparent over the first 25% of the arc */
+  --ring-arc: 140deg;
+  --ring-w: 2.5px;
+  --ring1: color-mix(in srgb, var(--a1) 70%, #fff);
+  --ring2: color-mix(in srgb, var(--a2) 88%, #fff);
+  --ring3: color-mix(in srgb, var(--a3) 92%, #fff);
+  /* the head is the brightest point of the arc */
+  --ring-head: color-mix(in srgb, var(--a3) 62%, #fff);
+  --ring-track: color-mix(in srgb, var(--ink) 16%, transparent);
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  /* dark only: a faint brand-pink glow. It sits on this unmasked box so the band's mask does not clip it;
+     the arc and the head are its two pseudo-elements. */
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--a2) 35%, transparent));
+  animation: ui-ring-turn 1.2s linear infinite;
+}
+.ui-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg calc(360deg - var(--ring-arc)),
+    var(--ring1) calc(360deg - var(--ring-arc) * 0.75),
+    var(--ring2) calc(360deg - var(--ring-arc) * 0.35),
+    var(--ring3) 360deg
+  ),
+  /* a faint full track under the arc, so a still frame reads as a spinner, not a crescent */
+  linear-gradient(var(--ring-track), var(--ring-track));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+}
+/* the round head at the arc's leading end (12 o'clock before rotation), a touch wider than the band so the
+   still frame shows which way it turns */
+.ui-ring::after {
+  content: "";
+  position: absolute;
+  top: -0.5px;
+  left: 50%;
+  width: calc(var(--ring-w) + 1px);
+  height: calc(var(--ring-w) + 1px);
+  margin-left: calc(var(--ring-w) / -2 - 0.5px);
+  border-radius: 50%;
+  background: var(--ring-head);
+}
+/* on light the stops go a shade deeper and the track lighter, so the arc, not the circle, is what you see;
+   no glow (a halo on white reads as blur), and the head is the undarkened accent */
+[data-theme="light"] .ui-ring {
+  --ring1: color-mix(in srgb, var(--a1) 82%, #000);
+  --ring2: color-mix(in srgb, var(--a2) 84%, #000);
+  --ring3: color-mix(in srgb, var(--a3) 86%, #000);
+  --ring-head: var(--a3);
+  --ring-track: color-mix(in srgb, var(--ink) 7%, transparent);
+  filter: none;
+}
+@keyframes ui-ring-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ui-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--dot) * 0.6);
+  height: calc(var(--dot) * 2.4);
+  flex: none;
+}
+.ui-typing i {
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.6;
+  animation: ui-typing-hop 1s ease-in-out infinite;
+}
+.ui-typing i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.ui-typing i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes ui-typing-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: var(--dot-rest, 0.6);
+  }
+  30% {
+    transform: translateY(calc(var(--dot) * -0.4));
+    opacity: 1;
+  }
+}
+.ui-tick {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+}
+.ui-tick-t {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-tick-t.out {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  animation: ui-tick-out 0.22s ease forwards;
+}
+.ui-tick-t.in {
+  animation: ui-tick-in 0.22s ease both;
+}
+@keyframes ui-tick-out {
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+@keyframes ui-tick-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+/* still: a static arc and three resting dots (no rotation, no bounce, no slide) */
+@media (prefers-reduced-motion: reduce) {
+  .ui-ring,
+  .ui-typing i,
+  .ui-tick-t.in {
+    animation: none !important;
+  }
+  .ui-typing i {
+    opacity: 0.8;
+  }
+  .ui-tick-t.out {
+    display: none;
+  }
+}

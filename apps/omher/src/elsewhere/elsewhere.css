@@ -72,6 +72,17 @@
   flex: none;
   transition: transform 0.15s ease;
 }
+/* room for the live ring around the mark, kept whether or not it runs so nothing moves when it stops */
+.ew-link .ui-ring-w,
+.ew-where .ui-ring-w {
+  margin-inline: 4px 3px;
+}
+/* an away session's ring is quieter than the bot's own: thinner and dimmed, so it never competes with the
+   sidebar's live signal */
+.ew-msg .ui-ring {
+  --ring-w: 1.5px;
+  opacity: 0.6;
+}
 .ew-link:hover .src-ic {
   transform: scale(1.12);
 }
