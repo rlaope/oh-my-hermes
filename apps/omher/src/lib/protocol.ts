@@ -31,6 +31,14 @@ export interface Msg {
   role: "user" | "assistant";
   text: string;
   ts: number;
+  /** user rows sent with "Reply there": the thread the person pointed the bot at. */
+  reply_to?: ReplyRef | null;
+}
+
+/** A thread the bot was pointed at (`target` is Hermes' `platform:chat_id[:thread_id]`). */
+export interface ReplyRef {
+  target: string;
+  label: string;
 }
 
 /** A session of the bot that lives somewhere else (Slack, Discord, cron…). Read-only in omher. */
@@ -50,6 +58,8 @@ export interface Away {
   /** The bot's last answer in that thread, as one short plain-text paragraph. */
   last_reply?: string | null;
   last_reply_at?: number | null;
+  /** Hermes' send target for that thread (`slack:C…:1731…`); null when there is no thread to reply in. */
+  reply_target?: string | null;
 }
 
 export interface PeekMsg {
@@ -133,7 +143,9 @@ export interface OpMap {
   hello: { params: Record<string, never>; result: HelloResult };
   "bots.list": { params: Record<string, never>; result: { bots: Bot[] } };
   "chat.open": { params: { bot: string }; result: ChatOpenResult };
-  "chat.send": { params: { bot: string; text: string; session?: string }; result: { input_id: string } };
+  /** `reply_to` = an elsewhere session id: the bridge adds that thread as context for the bot.
+   *  omher posts nothing. */
+  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string }; result: { input_id: string } };
   "chat.interrupt": { params: { bot: string; session?: string }; result: Record<string, never> };
   "approval.respond": {
     params: { bot: string; request_id: string; choice: ApprovalChoice; session?: string };

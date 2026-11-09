@@ -9,6 +9,7 @@ is in `apps/omher/README.md`.
 
 1. omher never patches Hermes. It reads Hermes' source-defined protocol and calls it as a client.
 2. omher never writes to Slack, Discord or any other elsewhere session. It lists them and links to each thread in its own app, and nothing else.
+   omher may pass a thread reference to the bot; the bot posts with its own tools and approvals.
 3. omher sends, answers and interrupts only in the bot's main chat, the session titled `Bot Chat`, and in folder chats the bridge created itself for an oh-my-hermes session (`folder.open`); the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.
 4. omher talks only to the person's own Hermes gateway on this machine, over loopback, through Hermes' own `connect_gateway`.
 5. omher makes no LLM or API call itself. Every model call is Hermes'.
