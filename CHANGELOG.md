@@ -4,66 +4,73 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 4.0.7 - 2026-11-09
+
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
-  your existing login and no extra command.** The TUI's runtime is now a
-  Hermes profile, `<root>/profiles/omh-tui`, whose copied config says
-  `gateway.standalone: true`: the host gateway never serves it, Hermes starts
-  an idle-exiting gateway for it when the TUI attaches, and a profile without
-  an `auth.json` of its own reads the root's store and rotates OAuth tokens
-  back into it (Hermes' profile rule), so nothing is copied and nobody logs
-  in twice. `own` is the default; `omh theme runtime shared` puts the TUI
-  back on the bots' gateway. The builder stages a new profile under a dot
-  name and renames it whole, writes Hermes' `.no-bundled-skills` marker, and
-  removes the home an earlier OMH built under the OMH home (it held a copy of
-  `auth.json`) once its gateway is not running; `omh uninstall` removes the
-  profile; the bot board, skill registration, the curator ledger and the
-  skill union leave `omh-tui` out. Measured on a live host
-  (`tools/qa/tui_own_runtime/RESULTS.md`): a prompt answered on the root's
-  OAuth login with the root store unchanged and the host gateway untouched.
-  Known cost, Hermes' own: on a host whose bots have scheduled cron jobs the
-  TUI gateway stays up between sessions.
-- **`omh update`, `omh doctor` and the menu bar know the TUI's own
-  runtime home.** Update rebuilds `<omh_home>/tui-home` when the runtime
-  choice is `own` or the home exists (the OMH plugin bundle it links moved
-  with the update); doctor's `omh_tui_runtime` row says which runtime bare
-  `omh` opens on and, for the own runtime, what the home was built from,
-  its skill count, links to skills that went, a messaging credential or a
-  connected adapter that should never be there, and whether its gateway
-  runs; the menu bar's settings carry `TUI runtime: own (gateway pid N)` or
-  `shared gateway`. From review: the skill union now links each skill at
-  its own `<category>/<skill>` path (a profile's skills inside a category
-  the root also has were dropped before), the messaging scrub matches by
-  prefix over every Hermes platform and strips the same names from the
-  TUI's process environment, a root `config.yaml` that connects a platform
-  keeps the launch on the shared gateway, `auth.json` is copied only when
-  the root's is newer, `--resume` opens where the session is whichever
-  runtime is chosen, and a credential on the TUI runtime fails the doctor
-  row.
-- **`omh theme runtime own` gives the OMH TUI a Hermes runtime of its own,
-  so the bots' gateway restarts and drains never pause it.** Hermes serves
-  every profile from one gateway per host and refuses its standalone entry
-  beside it, but a home outside `profiles/` gets an auto-started,
-  idle-exiting gateway of its own. With the choice saved, bare `omh` builds
-  `<omh_home>/tui-home` from the root Hermes home at each launch (config and
-  auth copied, `.env` without messaging credentials, `SOUL.md` linked, one
-  link per skill over the root's and every served profile's with the root
-  winning a clash, `plugins/omh` linked) and opens the TUI there; `/gateway
+  your existing login and no extra command, so the bots' gateway restarts and
+  drains never pause it.** The TUI's runtime is a Hermes profile,
+  `<root>/profiles/omh-tui`, whose copied config says `gateway.standalone:
+  true`: the host gateway never serves it, Hermes starts an idle-exiting
+  gateway for it when the TUI attaches, and a profile without an `auth.json`
+  of its own reads the root's store and rotates OAuth tokens back into it
+  (Hermes' profile rule), so nothing is copied and nobody logs in twice. Each
+  launch and each `omh update` refresh it from the root Hermes home: the
+  config, `.env` without messaging credentials, `SOUL.md`, one link per skill
+  at its own `<category>/<skill>` path over the root's and every served
+  profile's (the root winning a clash), and `plugins/omh`. A root
+  `config.yaml` that connects a messaging platform keeps the launch on the
+  bots' gateway, with one line saying why. `omh theme runtime shared` puts the
+  TUI back on the bots' gateway. An explicit `--hermes-home` or `-p` stays on
+  the home it names, and `--resume` opens where the session is, with one line
+  when that differs from the choice. On the TUI's own runtime, `/gateway
   restart` restarts that runtime alone and loads new OMH code without a bot
-  reconnecting. The bot board keeps reading the bots' home, `--hermes-home`
-  and `-p` stay on the home they name, and `--resume` of a session on the
-  shared gateway opens there with one line saying so. The default stays
-  `shared`.
-- **`omh` launched while Hermes' gateway restarts waits for it instead of
-  opening Hermes' own TUI.** A whole-gateway restart while a bot's turn runs
-  drains first, up to Hermes' `restart_after_turn_timeout`, and refuses every
-  new or resumed session as `runtime_draining` meanwhile; the OMH TUI took
-  that refusal as its own failure and fell back to `hermes --tui`, which met
-  the same refusal and showed only `error: runtime_draining`. The launch now
-  waits through the drain and the restart on one shell line naming the work
-  the gateway lets finish and the cap it allows, and opens once it is back.
-  A gateway that is there but not answering past the wait (restarting,
-  silent on the session call) is reported with what to check and exits 1;
-  Hermes' own TUI is opened only for a failure that is the OMH TUI's own.
+  reconnecting. `omh doctor`'s `omh_tui_runtime` row says which runtime bare
+  `omh` opens on, what the profile was built from and whether its gateway
+  runs, and fails on a messaging credential or a connected adapter there; the
+  menu bar's settings carry `TUI runtime: own (gateway pid N)` or `shared
+  gateway`. `omh uninstall` removes the profile, and the bot board, skill
+  registration, the curator ledger and the skill union leave `omh-tui` out.
+  The builder stages a new profile under a dot name and renames it whole, and
+  writes Hermes' `.no-bundled-skills` marker. On the bots' gateway, an `omh`
+  launched while Hermes' gateway restarts now waits through the drain and the
+  restart on one shell line naming the work the gateway lets finish and the
+  cap it allows, and opens once it is back, where it used to fall back to
+  Hermes' own TUI and show only `error: runtime_draining`; a gateway that is
+  there but not answering past the wait is reported with what to check and
+  exits 1. Measured on a live host (`tools/qa/tui_own_runtime/RESULTS.md`): a
+  prompt answered on the root's OAuth login with the root store unchanged and
+  the host gateway untouched. Known cost, Hermes' own: on a host whose bots
+  have scheduled cron jobs the TUI gateway stays up between sessions. (#2667,
+  #2670, #2676, #2691)
+- **omher, a desktop app for your Hermes bots, runs on macOS and Windows.** It
+  ships as open-source installers on GitHub Releases under `omher-v*` tags: an
+  ad-hoc signed `.dmg` for Apple Silicon and Intel Macs and an unsigned
+  per-user setup and `.msi` for Windows, with `SHA256SUMS.txt`; the app's
+  README gives the first-launch steps. Each Hermes profile is a bot in the
+  sidebar with one main chat. A turn shows as one activity line whose steps
+  name what actually ran (the command, the path, the query or a helper's goal)
+  and collapse to "Worked for 2m 41s · 6 steps"; approval and clarify cards, a
+  model and reasoning picker and "Connect a Hermes profile" (nothing copied)
+  sit beside it. The sessions a bot runs in Slack, Discord or cron show
+  read-only, each as a bot bubble with its last answer and a link to the
+  thread (`Discord #cron`) that opens it in its own app. Settings → All bots
+  shows a card per bot with its status, model and sessions per place; a bot's
+  page lists its skills and routines, and there you can rename the bot or
+  change its picture, the only things omher writes to a profile (Hermes'
+  `display_name` and avatar asset, so Hermes' own desktop shows the same).
+  Each thread link carries its app's mark (Slack, Discord, Telegram, or a
+  clock for cron). While omher is in the background it notifies you of a bot's
+  answer, an approval or question waiting, or a failed turn, never for the
+  chat you are looking at, and Settings turns that off. Keyboard shortcuts
+  open a bot, search, Details and Settings, and Esc stops the running answer.
+  An approval for a risky command (`rm -rf`, `sudo`, a force push, `DROP
+  TABLE` and the like) gets a red rail and one plain line saying what it does,
+  with Deny still first. Appearance offers six colour sets, Soft, Solid or
+  Open bubbles and three text sizes, kept on that computer. omher reaches each
+  profile's own gateway over loopback with Hermes' own Python, sends prompts
+  only to a bot's main chat and makes no model or API call;
+  `docs/OMHER-BOUNDARY.md` states the boundary. (#2677, #2685, #2688, #2689,
+  #2693, #2694)
 - **Codex and Claude Code units dispatched by OMH now come back accepted,
   and one dag-ulw run can send different coding nodes to both owners.**
   Untracked executor plugin state under `.omx/` and `.omc/` no longer fails
@@ -74,19 +81,41 @@ All notable changes will be documented here.
   Naming Codex or Claude Code in a dag-ulw request in Hermes chat chooses
   each owner for that request's run; coding nodes can name their `owner`, and
   each owner's batch exports separately while cross-owner dependencies wait.
-- **In Slack and Discord group chats, telling the bot to be quiet now mutes
-  it in that thread, and a message meant for someone else no longer opens a
+- **In Slack and Discord group chats, telling the bot to be quiet now mutes it
+  in that thread, and a message meant for someone else no longer opens a
   turn.** OMH registers Hermes' `pre_gateway_dispatch` hook. A whole-message
   quiet word aimed at the bot (`shut up`, `조용히 해`, `黙って`, `闭嘴`,
   `cállate` and the rest of eleven languages' closed lists) mutes the thread
-  with a 🫡 reaction and no text; a mention of the bot, a reply to it, or a
-  call by its name unmutes it. A message that opens with a real mention of
-  someone else, or calls a configured other name at its start or end without
-  naming the bot or saying "you", is skipped. Only senders Hermes authorizes
-  are gated, and every skip is logged under the owning profile's OMH home;
-  `messenger_gate: off` or
-  `mute_only` turns it down per profile. DMs, slash commands and other
-  platforms are untouched.
+  with a 🫡 reaction and no text; one that ends in a question in any order of
+  marks (`shut up?!`, `shut up!?`, `닥쳐？!`, `‽`, `¿`) does not, and `shut
+  up!` still does. A mention of the bot, a reply to it, or a call by its name
+  unmutes it. A message that opens with a real mention of someone else, or
+  calls a configured other name at its start or end without naming the bot or
+  saying "you", is skipped. In a room where Hermes lets a silence marker stand
+  (the serving profile sets
+  `platforms.<slack|discord>.channel_overrides.<channel id>.allow_silence:
+  true`, Hermes 0.22.6 and later, with streaming off), the model decides
+  instead of a word list: the turn carries a short instruction to answer
+  `[SHUTUP]` when asked to be quiet in any language or wording, `[SILENT]`
+  when the message is clearly meant for someone else. OMH turns `[SHUTUP]`
+  into Hermes' `[SILENT]`, mutes that thread and adds the 🫡 reaction; Hermes
+  drops a `[SILENT]` reply, and a message addressed to the bot is never
+  offered it. A reply made only of `[SILENT]` and `[SHUTUP]` lines counts as
+  that marker, and any `[SHUTUP]` among them mutes. Tokens in a list, a quote,
+  a table or a fence around several lines stay an answer, a token leaves the
+  end of an answer only after sentence-ending punctuation (`The marker -
+  [SILENT]` stays as written), and only one word after a reply's opening fence
+  is read as its label (`text`, `c++`, `완료`), so prose in a fence above a
+  `[SHUTUP]` line is posted as written. In those rooms the quiet-word list and
+  calls by other names are off; a leading mention of someone else, muted
+  threads and the unmute on a mention, reply or name stay. Every other room,
+  an older Hermes, streaming on, or a profile on Codex's app-server runtime
+  keeps the word-list gate and gets no instruction, so Hermes' "returned only
+  a silence marker" notice never appears. Only senders Hermes authorizes are
+  gated, and every skip is logged under the owning profile's OMH home;
+  `messenger_gate: off` or `mute_only` turns it down per profile. DMs, slash
+  commands and other platforms are untouched. (#2602, #2609, #2612, #2621,
+  #2646)
 
 - **Host-readiness skills now say what their commands do and stop
   promising what they cannot.** Turning off a capability family reports what
@@ -103,77 +132,78 @@ All notable changes will be documented here.
 
 - **Several features or stages asked to be built are offered as a dag-ulw
   graph, in Korean as in English.** A request that names three or more
-  features as one build verb's object, with a feature noun after the list
-  or a verb that builds software on its own ("메일 가져오기, 파일 업로드, 검색
-  기능 개발해줘", "장바구니랑 주문이랑 배송조회 기능 구현해", "build the
-  upload, preview and download screens"), a range from one stage to
-  another ("회원가입부터 결제까지 개발해줘", "implement everything from
-  onboarding to checkout") or several counted features ("여러 기능 나눠서
-  다 해줘") got no route hint, or a hint for a rule one item's word matched
-  ("검색" for web-research), so the agent ran the parts one subagent at a
-  time. `names_several_features` reads that shape; the route hint offers
-  dag-ulw first (ask once) and the router asks with dag-ulw as its
-  candidate where it would ask anyway. Nothing starts a run on it. A list
-  that fills one thing ("우유, 계란, 빵 장보기 목록 만들어줘"), three plain
-  nouns and a make verb ("make pancakes, waffles and toast"), a range of
-  numbers, pages or dates, a range from the start to the end of the work at
-  hand, a comparison, a question, one fix and every hard exclude of the
-  many-targets reading stay off it. (Reported and first fixed by @dhddldid
-  in #2610 and #2611.)
+  features as one build verb's object, with a feature noun after the list or a
+  verb that builds software on its own ("메일 가져오기, 파일 업로드, 검색 기능
+  개발해줘", "장바구니랑 주문이랑 배송조회 기능 구현해", "build the upload,
+  preview and download screens"), a count with its list after the verb ("기능
+  네 개 개발해줘: 검색, 필터, 정렬, 페이징", "build these four features:
+  search, filter, sort and export"), a range from one product feature or stage
+  of the work to another ("회원가입부터 결제까지 개발해줘", "implement the
+  flow from cart to order confirmation") or several counted features ("여러
+  기능 나눠서 다 해줘") got no route hint, or a hint for a rule one item's
+  word matched ("검색" for web-research), so the agent ran the parts one
+  subagent at a time. The route hint now offers dag-ulw first (ask once),
+  ahead of web-research where it sits and without pushing out a hint already
+  there, and the router asks with dag-ulw as its candidate where it would ask
+  anyway. Nothing starts a run on it. A list that fills one thing ("우유,
+  계란, 빵 장보기 목록 만들어줘") or names the fields of one screen ("이름,
+  이메일, 전화번호 입력 화면 만들어줘"), three plain nouns and a make verb
+  ("make pancakes, waffles and toast"), non-software objects ("build
+  confidence, momentum and credibility"), build targets ("build dev, staging
+  and prod"), work quoted after a colon or a full stop, a range between any
+  two words ("봄부터 여름까지 만들어줘", "build it from soup to nuts"), of
+  numbers, pages or dates, or from the start to the end of the work at hand, a
+  count that is not the verb's own object of features ("세 페이지 보고서
+  만들어줘"), verbs that change what exists, stated obligations or intent, a
+  comparison, a question, one fix, a message over 1000 characters and every
+  hard exclude of the many-targets reading stay off it. Hint text and routes
+  are otherwise unchanged. (Reported and first fixed by @dhddldid in #2610 and
+  #2611; #2614, #2620.)
 
-- **Ctrl+Enter in the OMH TUI sends now into the running turn, not after
-  it.** Ctrl+Enter, Ctrl+J on an empty composer and the text typed after a
-  denied approval went as Hermes' `session.steer`, which only holds the
-  text until a tool batch ends or the next model call. When the model was
-  already writing its final answer neither came, and Hermes sent the text
-  as the next prompt once the turn had ended. They now go as
-  `session.redirect`, as Hermes' own TUI sends busy input: a model request
-  under way is cut where it was, its reply sealed, and retried with the
-  text as a user message, so the retried reply streams under the steer
-  row; a tool batch running gets the text with its results, and a
-  foreground terminal command moves to the background so the batch can
-  end. The row reads as a sent prompt at once, and stopping the turn
-  afterwards no longer puts it back in the queue. A redirect Hermes queues
-  as its own next prompt (the turn still starting, or compressing) comes
-  back to the queue on a stop, which clears Hermes' queue. An agent
-  without redirect, or a redirect refused between a tool batch and the
-  next model call, gets `session.steer`. `/steer <text>` stays Hermes'
-  steer, read after the next tool call without interrupting.
-- **`omh update` keeps a stable install on stable releases, and
-  `--dry-run` says when a real run would update the command package.** The
+- **Ctrl+Enter in the OMH TUI sends now into the running turn, not after it.**
+  Ctrl+Enter, Ctrl+J on an empty composer and the text typed after a denied
+  approval went as Hermes' `session.steer`, which only holds the text until a
+  tool batch ends or the next model call. When the model was already writing
+  its final answer neither came, and Hermes sent the text as the next prompt
+  once the turn had ended. They now go as `session.redirect`, as Hermes' own
+  TUI sends busy input: a model request under way is cut where it was, its
+  reply sealed, and retried with the text as a user message, so the retried
+  reply streams under the steer row; a tool batch running gets the text with
+  its results, and a foreground terminal command moves to the background so
+  the batch can end. The row reads as a sent prompt at once, and stopping the
+  turn afterwards no longer puts it back in the queue. A redirect Hermes
+  queues as its own next prompt (the turn still starting, or compressing)
+  comes back to the queue on a stop, which clears Hermes' queue. An agent
+  without redirect, or a redirect refused between a tool batch and the next
+  model call, gets `session.steer`. A redirect that cuts reasoning while it
+  streams seals that reasoning, so the retry's reasoning reads as its own
+  block. When a turn ends on its own with a redirect or a steer Hermes passes
+  on as its next prompt, a queued line waits for the turn that runs it; if
+  none starts within a few seconds (the turn's last model call read it), or
+  the turn fails, the queue goes on, and a line sent during that wait stays
+  behind the older ones. `/steer <text>` stays Hermes' steer, read after the
+  next tool call without interrupting. (#2603, #2609, #2621)
+- **`omh update` keeps a stable install on stable releases, and `--dry-run`
+  says when a real run would update the command package.** The
   installer-managed self-update still defaulted to `--channel preview`, so a
-  plain `omh update` after the documented stable install downloaded the
-  `main` archive, while `omh update --dry-run` printed "Command package:
-  unchanged (preview only)". With no `--channel`, `--version`, or
-  `--package-url`, the self-update now reads the installed package's PEP 610
-  record, as `omh setup` has since #2294: a stable install moves to the
-  newest published release and is left alone when it is already on it, when
-  it is newer than npm's `latest` (the GitHub release is created before
-  `npm publish`, so `latest` can trail it for a while), or when the newest
-  release cannot be read; a `main` install, or one that records
-  nothing, keeps tracking `main`. A dry run now plans like a real run and
-  its card reads "Command package: a real run would update it to v4.0.6".
-- **In a Slack or Discord room where Hermes lets a silence marker stand, the
-  model, not a word list, decides when to go quiet and when a message is not
-  for the bot.** Where the serving profile sets
-  `platforms.<slack|discord>.channel_overrides.<channel id>.allow_silence:
-  true` (Hermes 0.22.6 and later) and streaming is off, the turn carries a
-  short instruction: answer `[SHUTUP]` when asked to be quiet in any language
-  or wording, `[SILENT]` when the message is clearly meant for someone else.
-  OMH turns `[SHUTUP]` into Hermes' `[SILENT]`, mutes that thread and adds the
-  🫡 reaction; Hermes drops a `[SILENT]` reply, and a message addressed to the
-  bot is never offered it. In those rooms the
-  quiet-word list and calls by other names are off; a leading mention of
-  someone else, muted threads and the unmute on a mention, reply or name
-  stay. Every other room, an older Hermes, streaming on, or a profile on
-  Codex's app-server runtime keeps the word-list gate and gets no
-  instruction, so Hermes' "returned only a silence marker" notice never
-  appears.
+  plain `omh update` after the documented stable install downloaded the `main`
+  archive, while `omh update --dry-run` printed "Command package: unchanged
+  (preview only)". With no `--channel`, `--version`, or `--package-url`, the
+  self-update now reads the installed package's PEP 610 record, as `omh setup`
+  has since #2294: a stable install moves to the newest published release and
+  is left alone when it is already on it, when it is newer than npm's `latest`
+  (the GitHub release is created before `npm publish`, so `latest` can trail
+  it for a while), or when the newest release cannot be read; a `main`
+  install, or one that records nothing, keeps tracking `main`. A dry run now
+  plans like a real run and its card reads "Command package: a real run would
+  update it to v4.0.7". (Reported and first fixed by @aikaizen in #2606,
+  carried in #2607.)
 - **`omh coding model-routing status` names each discovered model once.**
   Session history yields one observation per session, so the human line
   repeated one model id hundreds of times. It now reads
   `claude-opus-5-5 (x412), claude-sonnet-5-5 (x61)`; `--json` keeps every
-  observation.
+  observation. (Reported and first fixed by @aikaizen in #2606, carried in
+  #2607.)
 
 - **A route can name `commandcode` once its key is in Hermes' `.env`.**
   `omh_delegate_route` refused every route naming the provider. With
@@ -187,83 +217,36 @@ All notable changes will be documented here.
   key for any provider, because Hermes has no credential to use from it.
   (Reported and first fixed by @levinkin in #2636.)
 
-- **A reply that opens with a code block keeps its `⚚ Hermes` header in
-  the OMH TUI's scrollback, and a table after a released one keeps its own
-  box whatever spaces its divider holds.** When a reply's first line was a
-  code fence and it streamed in small pieces, the fence line alone used the
-  reply's first take and drew no row, so the header never reached
-  scrollback; `/history` had it. The header now waits for the reply's first
-  drawn row. Separately, a divider with a carriage return (a CRLF reply), a
-  no-break or ideographic space, or a terminal escape was missed after a
-  tall table, so the next table's header went out as a body row of the one
-  before.
+- **A reply that opens with a code block keeps its `⚚ Hermes` header in the
+  OMH TUI's scrollback.** When a reply's first line was a code fence and it
+  streamed in small pieces, the fence line alone used the reply's first take
+  and drew no row, so the header never reached scrollback; `/history` had it.
+  The header now waits for the reply's first drawn row. (#2598)
 - **The OMH TUI waits out a Hermes gateway restart run elsewhere instead of
   exiting.** `hermes gateway restart` from another terminal, `omh update`,
   launchd or another screen's `/gateway restart` closed this screen's
   connection, and the crash respawn then spent its three tries within a
-  second: a draining gateway answers "not ready" (the attach child's exit
-  69) until its running work is done, so the TUI exited with a resume
-  hint. Now a drop where the gateway's record (`gateway_state.json`) says
-  a restart was asked or a new process is starting, or where the attach
-  child exits 69, keeps the screen open with one status row (`Hermes'
-  gateway is restarting… 0:42 · ctrl+c leaves`) and reattaches the same
-  session, keeping the draft and holding prompts as before. While the old
-  process drains for the restart, a try goes every 5 s (Hermes' after-turn
-  wait lets a client answer a parked question) and the wait lasts as long
-  as the drain, at most Hermes' `restart_after_turn_timeout` plus 150 s;
-  otherwise tries pause 1, 2, 4, then 5 s for up to 150 s. Once back it
-  says `Hermes' gateway is back` and, when the restart loaded a newer OMH,
-  which version runs now. A gateway stopped elsewhere (`hermes gateway
-  stop`: no restart asked) or a new one that failed to start ends the
-  screen at once with the resume hint, so no try starts a stopped service
-  again. A try that fails any other way, or a resume the gateway refuses,
-  still spends one of the crash respawn's three; a gateway that never
-  comes back ends after the budget with the same resume hint.
-  `/gateway restart`'s own reattach shares the pauses, the drain wait and
-  the status row.
-
-- **Follow-ups to the messenger quiet gate, the Ctrl+Enter redirect and
-  `/gateway restart`.** A quiet word that ends in a question in any order of
-  marks (`shut up?!`, `shut up!?`, `닥쳐？!`, `‽`, `¿`) no longer mutes the
-  thread; `shut up!` still does. When a turn ends cleanly with a redirect
-  Hermes queued as its own next prompt, the OMH TUI's queue waits for that
-  turn instead of sending its next line beside it; a turn that fails, or a
-  queued turn that does not start within a few seconds, lets the queue go on.
-  A redirect that cuts reasoning while it streams
-  seals that reasoning, so the retry's reasoning reads as its own block. A
-  stopped gateway is now said plainly, as a state, with
-  `hermes gateway start` to start it again, and the restart wait reads
-  `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does.
-
-- **A recaptured memory now keeps a copy observed of another agent, and its
-  retired copy can no longer be rejected.** The retirement of an earlier held
-  copy also requires the same perspective, so the same summary observed of
-  codex and of claude-code stays two memories. Rejection refuses a copy
-  retired by a recapture as approval already did, a demotion of the same
-  Hermes entry reads that copy as held, and the retirement runs only after
-  an auto-safe approval succeeds.
-
-- **A messenger reply made only of `[SILENT]` and `[SHUTUP]` lines now counts
-  as that marker.** Any `[SHUTUP]` among them mutes the thread with the 🫡
-  reaction, where "be quiet" was lost or a bare marker could get text added
-  to it. Tokens in a list, a quote, a table or a fence around several lines
-  stay an answer. A token leaves the end of an answer only after
-  sentence-ending punctuation, so `The marker - [SILENT]` stays as written.
-
-- **A spend whose cost is unknown is checked against a cap in its own units.**
-  The spend-gate rails page now names the spend-only cap the credits rule
-  points to. When no price gives a call's credits or cost, the person sets
-  that cap in the call's own units (images, characters or seconds), and the
-  call runs only when its planned count fits. Its ledger row keeps that
-  count and leaves the period total unknown, so the next spend asks what was
-  already spent.
-
-- **A queued line in the OMH TUI no longer starts ahead of a steer Hermes
-  passes on as its next prompt.** When a turn ends on its own with a steer
-  unread, the queue waits for the turn that runs it. If none starts, because
-  the turn's last model call read the steer, the queue goes on within a few
-  seconds, and a line sent during that wait stays behind the older ones. A
-  stopped or failed turn is unchanged.
+  second: a draining gateway answers "not ready" (the attach child's exit 69)
+  until its running work is done, so the TUI exited with a resume hint. Now a
+  drop where the gateway's record (`gateway_state.json`) says a restart was
+  asked or a new process is starting, or where the attach child exits 69,
+  keeps the screen open with one status row (`Hermes' gateway is restarting…
+  0:42 · ctrl+c leaves`) and reattaches the same session, keeping the draft
+  and holding prompts as before. While the old process drains for the restart,
+  a try goes every 5 s (Hermes' after-turn wait lets a client answer a parked
+  question) and the wait lasts as long as the drain, at most Hermes'
+  `restart_after_turn_timeout` plus 150 s; otherwise tries pause 1, 2, 4, then
+  5 s for up to 150 s. Once back it says `Hermes' gateway is back` and, when
+  the restart loaded a newer OMH, which version runs now. A gateway stopped
+  elsewhere (`hermes gateway stop`: no restart asked) or a new one that failed
+  to start ends the screen at once with the resume hint, so no try starts a
+  stopped service again; a stopped gateway is said plainly, as a state, with
+  `hermes gateway start` to start it again. The wait reads
+  `HERMES_RESTART_AFTER_TURN_TIMEOUT` before the config key, as Hermes does. A
+  try that fails any other way, or a resume the gateway refuses, still spends
+  one of the crash respawn's three; a gateway that never comes back ends after
+  the budget with the same resume hint. `/gateway restart`'s own reattach
+  shares the pauses, the drain wait and the status row. (#2596, #2609)
 
 - **A tick-box question in the OMH TUI no longer sends on the first press.**
   When Hermes asked a multi-select question (`[ ]` boxes), Enter on a
@@ -280,42 +263,43 @@ All notable changes will be documented here.
   before the last is sent. A single-choice question is unchanged: a digit
   or Enter still picks and sends.
 
-- **A table that follows a released one with no blank line between gets its
-  own box in scrollback, as in `/history`.** The OMH TUI used to draw the
-  second table's header as a body row of the first and drop its divider.
-  While a tall table streams, its last row now waits until the next line
-  shows it is no divider.
 - **The OMH TUI draws Markdown tables as boxes, and a table wider than the
   terminal wraps inside its columns.** Every table is now a box like Claude
   Code's: `┌─┬─┐` borders in the rule colour, the header bold in the look's
-  brand colour, a `├─┼─┤` line under the header and under every body row,
-  and a cell of padding inside each side. This changes the look of tables
-  that fit too: they no longer use the `─` band under the header. A table
-  wider than the terminal used to show its raw source (`| a | b |` rows and
-  the `|---|---|` divider). Now its short columns keep their whole width,
-  and the long columns share the rest of the row. Each cell wraps inside
-  its column, and a word too long for the column breaks across rows (a path
-  or URL after a `/`). Cells show their inline markup (`code`, **bold**,
-  links), and a code span keeps its style when it wraps. The borders are
-  not copied by a drag; NO_COLOR keeps them. Only when a terminal is too
-  narrow for columns of 8 cells is each body row drawn as `header: value`
-  lines instead. A table taller than the live region is now also released
-  by the rows it draws, not only by its source lines. In scrollback, its
-  last released row has no bottom border until the table ends; the live
-  region shows the box closed in the meantime. A
-  row that arrives after the release keeps the columns already drawn at
-  least as wide as they are, and takes the rest of the row's width for the
-  cells that want it. Its border line meets both rows' columns. `/history`
-  lays the whole table out again. Alignment colons (`:---:`) are still not
-  drawn.
+  brand colour, a `├─┼─┤` line under the header and under every body row, and
+  a cell of padding inside each side. This changes the look of tables that fit
+  too: they no longer use the `─` band under the header. A table wider than
+  the terminal used to show its raw source (`| a | b |` rows and the
+  `|---|---|` divider). Now its short columns keep their whole width, and the
+  long columns share the rest of the row. Each cell wraps inside its column,
+  and a word too long for the column breaks across rows (a path or URL after a
+  `/`). Cells show their inline markup (`code`, **bold**, links), and a code
+  span keeps its style when it wraps. The borders are not copied by a drag;
+  NO_COLOR keeps them. Only when a terminal is too narrow for columns of 8
+  cells is each body row drawn as `header: value` lines instead. A table
+  taller than the live region is now also released by the rows it draws, not
+  only by its source lines. In scrollback, its last released row has no bottom
+  border until the table ends; the live region shows the box closed in the
+  meantime. A row that arrives after the release keeps the columns already
+  drawn at least as wide as they are, and takes the rest of the row's width
+  for the cells that want it. Its border line meets both rows' columns.
+  `/history` lays the whole table out again. A table that follows a released
+  one, with no blank line between or with a carriage return (a CRLF reply), a
+  no-break or ideographic space or a terminal escape in its divider, gets its
+  own box in scrollback, as in `/history`: while a tall table streams, its
+  last row waits until the next line shows it is no divider. Alignment colons
+  (`:---:`) are still not drawn. (#2590, #2592, #2598)
 
 - **A memory captured again while an earlier copy waits for review leaves one
   copy, not two.** The earlier held candidate with the same normalized
-  summary, the key the duplicate check already reads, in the same scope, is
-  retired with `retirement_reason: recaptured` and `recaptured_as` naming the
-  new one. Approval refuses the retired copy, the review queue drops it, and
-  the capture result lists it. Approved and rejected candidates are left as
-  they are, and no person is asked.
+  summary, the key the duplicate check already reads, in the same scope and
+  observed of the same agent, is retired with `retirement_reason: recaptured`
+  and `recaptured_as` naming the new one, so the same summary observed of
+  codex and of claude-code stays two memories. Approval and rejection refuse
+  the retired copy, the review queue drops it, a demotion of the same Hermes
+  entry reads it as held, and the capture result lists it. The retirement runs
+  only after an auto-safe approval succeeds. Approved and rejected candidates
+  are left as they are, and no person is asked. (#2652, #2659)
 
 - **A Homebrew Python patch upgrade no longer breaks a self-updated `omh`.**
   `omh update` created each generation's venv from the running venv's
@@ -331,58 +315,33 @@ All notable changes will be documented here.
   (`Scripts\python.exe`) venvs are read the same way. `omh doctor` reports a
   generation whose base is gone or version-pinned as `generation_base_python`
   and prints the repair command; [Installation](docs/INSTALLATION.md) gives
-  the same repair for an `omh` that no longer starts. (#2683)
+  the same repair for an `omh` that no longer starts. (Reported by
+  @junjuny0227 in #2683; #2687.)
 
-- **`/gateway restart` says what each choice stops.** In a named profile the
-  shared gateway serves, "Restart this profile" now says that profile's
-  running turns stop now, since Hermes re-serves it without waiting. The
-  "finishes first, up to N min" line names the whole-gateway restart. A
-  gateway without `--external-supervisor` in its argv is no longer said to be
-  interrupted outright: Hermes' own systemd or launchd service drains it too
-  (SIGUSR1), which the record cannot show, so the slot says the work finishes
-  first if a service runs the gateway, and is otherwise interrupted. `/image`
-  and `/paste` now wait in the composer during the restart, as the other
-  commands that call the gateway do.
-- **show-reel's codex script review and concept candidates go through the
-  spend gate.** Each `codex exec` text run draws on the user's ChatGPT plan
-  like a codex image run, so it now waits for `omh-spend-gate`'s card and the
-  person's typed yes. No price gives its cost, so its spend-only cap is set
-  in calls, a unit the rails page now lists.
-
-- **A finished dag child's briefing names it by its role and a coloured
-  handle.** As Claude Code writes `● Teammate @x finished`, a dag node's child
-  now reads `● build @notify finished` (`verify`, `review`, `baseline`: the
-  role the node was defined with, which the delegation graph now carries), the
-  handle bold in a hue of its own. The hue is picked by the node's place in
-  its run's definition order, from seven hues kept clear of the running, done
-  and failed colours, so the first seven nodes of a run never share one and
-  neighbours never do; an agent keeps its colour on every row, every redraw,
-  in `/history` and when the run is read again. Each hue reads at 4.5:1 on
-  every launch look and scene ground, light and dark. The `●` mark still shows
-  the outcome, and under `NO_COLOR` the handle is plain bold. A child whose
-  node the HUD has not bound yet takes the id its goal's `[dag:<run>/<node>]`
-  marker names, with its short title on the row under it and no role until the
-  graph holds the node; a graph from an OMH that exported no role shows none,
-  never one guessed from the label. Any other agent keeps its bold short
-  title, without a role or `@`, since Hermes' subagent frames carry no name to
-  make a handle of. The agent list and the dag tree under the composer keep
-  their state colours. On a screen too short to hold the running call, the
-  fold row and the spacer between them, the fold row first drops its spacer
-  and is then not drawn at all, so the call stays on screen. Under a streaming
-  reply that fills those rows, the fold row stays without its spacer, and the
-  reply's top rows give way. Sizing the held briefings no longer renders a
-  long streaming reply whole on every delta.
 - **show-reel asks through the spend gate before it spends the user's
-  ElevenLabs or codex credits.** Narration, voice, transcription, sound,
-  music and image runs on the user's own key or login now go through
-  `omh-spend-gate` first, at every step that runs them: a card names the
-  exact lines, voice and model or the job and its length, with the expected
-  credits from the provider's own price for that model (or says the cost is
-  unknown), and the person's typed yes to it is that run's exact-target
-  approval. `omh-spend-gate` now says a call billed to subscription credits
-  or plan usage is a spend, with its own row in the rails table, a receipt
-  of the output and the credits used, and a ledger row kept in credits. The
-  scripts are unchanged: they run only when invoked and exit 2 without a key.
+  ElevenLabs or codex credits.** Narration, voice, transcription, sound, music
+  and image runs on the user's own key or login, and each `codex exec` text
+  run for script review and concept candidates, now go through
+  `omh-spend-gate` first, at every step that runs them: a card names the exact
+  lines, voice and model or the job and its length, with the expected credits
+  from the provider's own price for that model (or says the cost is unknown),
+  and the person's typed yes to it is that run's exact-target approval.
+  `omh-spend-gate` now says a call billed to subscription credits or plan
+  usage is a spend, with its own row in the rails table, a receipt of the
+  output and the credits used, and a ledger row kept in credits. When no price
+  gives a call's credits or cost, the person sets a spend-only cap, which the
+  rails page names, in the call's own units (images, characters, seconds or
+  calls), and the call runs only when its planned count fits; its ledger row
+  keeps that count and leaves the period total unknown, so the next spend asks
+  what was already spent. The scripts are unchanged: they run only when
+  invoked and exit 2 without a key. (#2653, #2662, #2678)
+
+- **show-reel renders faster.** The toolkit's renderer no longer makes
+  headless Chrome wait on a vsync tick for each captured frame, so a light
+  6-second 1080p scene renders in under a fifth of the time it took, and heavy
+  scenes, whose paint cost is real, gain less. Renders with the same settings
+  stay byte-identical run to run, and the quality settings are unchanged.
+  (#2622)
 
 - **The round-end checks also run after edits made through the shell.**
   Hermes calls OMH's round-end hook only after a `patch` or `write_file`, so
@@ -401,37 +360,41 @@ All notable changes will be documented here.
 - **The OMH TUI briefs each subagent as it finishes, in the transcript.** A
   finished subagent only changed its mark in the agent list under the
   composer, so during a long dag-ulw run nobody saw what each child concluded
-  without opening its log. Each `subagent.complete` now writes one block
-  above the composer, as Claude Code does for a teammate: `● <name> finished
-  1m 35s · ↓1.8k`, then the first lines of the child's reply in up to two dim
-  rows, cut with `…`, with the reply's Markdown drawn as the reply is (no
-  `**`, backticks or `#`). A dag node's child is named by the node's id, as
-  Claude Code names a teammate by its handle (`● notify finished`), with the
-  node's label on one dim row under it; any other agent by its short title.
-  Only a completed agent's mark is green: a
-  failure reads `● <name> failed` in red with its error, an interrupted
-  child `▪ <name> interrupted`, a cancelled one `○ <name> cancelled`. A
-  briefing that arrives while a reply streams or a call (`delegate_task`)
-  runs waits under it and is written at the next block boundary, so it never
-  splits a paragraph or a table (`/history` and Ctrl+O show it meanwhile);
-  past three waiting under one running call, or past what the rows above
-  the composer hold beside it, the rest fold into one `● 9 more finished · 1
-  failed` row until the boundary writes them all.
-  Parallel children are briefed in the order they finished, and main never
-  is. Briefings are not part of the session Hermes stores, so a resumed or
-  rewound session is drawn without them. The rows erase on a scene look's ground
-  and keep every mark and word under `NO_COLOR`. The messenger is unchanged.
-- **`omh hermes plan --record` can now record the reviewed plan, and
-  `plan-accept` says when it accepted only a scaffold.** Until now the
-  recorded file held the same generated goals, options and risks whatever the
-  plan was; the reviewed text stayed in chat, and accepting the file
-  accepted the scaffold. `--plan-file <path>` records that text in place of
-  the generated sections (`plan_body: reviewed`). Recording without it still
-  works and now says it recorded the scaffold only; accepting such a file
-  returns `reviewed_body: false` and a line to relay. `--input-bundle`
-  records a consensus bundle as `hermes_plan_input/v1`, planning input that
-  `plan-accept` refuses. `ulw-plan`, `omh-plan` and `omh-adversarial-consensus`
-  now use these.
+  without opening its log. Each `subagent.complete` now writes one block above
+  the composer, as Claude Code does for a teammate: `● <name> finished 1m 35s
+  · ↓1.8k`, then the first lines of the child's reply in up to two dim rows,
+  cut with `…`, with the reply's Markdown drawn as the reply is (no `**`,
+  backticks or `#`). A dag node's child reads `● build @notify finished`: the
+  role the node was defined with (`verify`, `review`, `baseline`), which the
+  delegation graph now carries, then the node's id as a handle, bold in a hue
+  of its own, with the node's label on one dim row under it. The hue is picked
+  by the node's place in its run's definition order, from seven hues kept
+  clear of the running, done and failed colours, so the first seven nodes of a
+  run never share one and neighbours never do; an agent keeps its colour on
+  every row, every redraw, in `/history` and when the run is read again, and
+  each hue reads at 4.5:1 on every launch look and scene ground, light and
+  dark. A child whose node the HUD has not bound yet takes the id its goal's
+  `[dag:<run>/<node>]` marker names, with no role until the graph holds the
+  node; a graph from an OMH that exported no role shows none, never one
+  guessed from the label. Any other agent keeps its bold short title, without
+  a role or `@`, since Hermes' subagent frames carry no name to make a handle
+  of. Only a completed agent's mark is green: a failure reads `● <name>
+  failed` in red with its error, an interrupted child `▪ <name> interrupted`,
+  a cancelled one `○ <name> cancelled`. A briefing that arrives while a reply
+  streams or a call (`delegate_task`) runs waits under it and is written at
+  the next block boundary, so it never splits a paragraph or a table
+  (`/history` and Ctrl+O show it meanwhile); past three waiting under one
+  running call, or past what the rows above the composer hold beside it, the
+  rest fold into one `● 9 more finished · 1 failed` row until the boundary
+  writes them all. On a screen too short to hold the running call, the fold
+  row and the spacer between them, the fold row first drops its spacer and is
+  then not drawn at all, so the call stays on screen. Parallel children are
+  briefed in the order they finished, and main never is. Briefings are not
+  part of the session Hermes stores, so a resumed or rewound session is drawn
+  without them. The rows erase on a scene look's ground and keep every mark
+  and word under `NO_COLOR`, where the handle is plain bold. The agent list
+  and the dag tree under the composer keep their state colours, and the
+  messenger is unchanged. (#2586, #2591)
 - **dag-ulw no longer runs silently with Hermes' `delegation.worktree_isolation`
   on.** With that setting each delegated child works in a git worktree of its
   own, made from the parent's last commit, so a dependent node and the verify
@@ -496,26 +459,34 @@ All notable changes will be documented here.
   exhaustiveness-4 score cannot support and what to do with a SMILES;
   `omh-wiki` hands to `llm-wiki` only when installed (it is optional on
   current Hermes).
-- **The dag-ulw offer for several features reads what it can show, and a
-  count with its list after the verb gets it.** "기능 네 개 개발해줘: 검색,
-  필터, 정렬, 페이징", "다음 기능들 개발해줘: 로그인, 검색, 알림" and "build these
-  four features: search, filter, sort and export" got only web-research or
-  no hint; they now get the offer, ahead of web-research where it sits. A
-  range is read only between product features or stages of the work ("상품
-  탐색부터 주문 완료까지 개발해줘", "implement the flow from cart to order
-  confirmation"), not between any two words ("봄부터 여름까지 만들어줘", "build
-  it from soup to nuts"). A count has to be the verb's own object of
-  features ("세 페이지 보고서 만들어줘" is off it). A list has to show it names
-  features: the fields of one screen ("이름, 이메일, 전화번호 입력 화면
-  만들어줘"), non-software objects ("build confidence, momentum and
-  credibility"), build targets ("build dev, staging and prod") and work
-  quoted after a colon or a full stop stay off it, and so do verbs that
-  change what exists and stated obligations or intent. The offer no longer
-  pushes out a hint already there, and a message over 1000 characters is not
-  read. Hint text and routes are unchanged.
-
-- **A setup-profile default coding owner is no longer taken for one named
-  in the request.** `omh chat interact` and `omh chat session start` used to
+- **A research run answers only from sources on the exact entity the question
+  names.** Before answering from a source, `ulw-research` now confirms it
+  studies the gene, enzyme, strain or product the question names: a different
+  name is a different entity unless a source says they are the same, so a
+  source on a related one is a lead, not an answer. (#2600)
+- **Literature screening for a systematic review has its own skill,
+  `omh-systematic-review`.** It runs the screening step of a systematic,
+  scoping or rapid review with two independent reviewers: freeze the criteria,
+  prepare seeded blind batches, give each to its own `delegate_task` reviewer,
+  merge, adjudicate. `omh research screening freeze`, `prepare` and `merge` do
+  the parts a model cannot vouch for itself: a protocol frozen once and
+  refused when edited, batches that carry nothing from the other reviewer, and
+  a merge that never invents an exclusion. The merge lists agreements,
+  conflicts and pending records with the reason per reviewer, and exits 1
+  until adjudication and missing answers are done. Agreement comes with
+  Cohen's kappa, PABAK and what the figure left out (unsure and pending
+  records), and same-model reviewers are flagged as broken independence.
+  Everyday "review", "screen" and "criteria" requests (pull requests, job
+  applicants, support tickets) stay with their own skills. (#2589)
+- **`omh research eval litqa2` scores the research skills on a frozen LitQA2
+  sample.** `prepare` checks the dataset's digest and writes a seeded sample
+  of task files, with the answer key kept apart; `grade` reads each answer's
+  last `ANSWER:` letter with no model judge and reports accuracy, precision,
+  unsure and unanswered rates and citation-receipt coverage per arm, with and
+  without `ulw-research`. The dataset is never shipped; the docs say how to
+  fetch a pinned revision. (#2578)
+- **A setup-profile default coding owner is no longer taken for one named in
+  the request.** `omh chat interact` and `omh chat session start` used to
   resolve the profile's `default_executor` before the wrapper saw it, so the
   wrapper labelled it `explicit`: it skipped the genre veto that holds a
   non-coding request back from an external coding CLI, and it was recorded as
@@ -526,37 +497,37 @@ All notable changes will be documented here.
   `claude-code`, "fix the login bug with codex" runs Codex through `chat
   interact`, `chat session start` and `coding delegate`, as it already did
   through the plugin `omh_interact` tool (those three ran Claude Code before).
-  With no profile set, `coding delegate` now takes that named owner too,
-  where it fell back to `generic`. `--executor` still wins over both. A CLI
-  counts as named only as the one to do the work ("use codex", "with claude
-  code", "have codex fix", "codex로", "codex한테", "클로드 코드로", "open this in
+  With no profile set, `coding delegate` now takes that named owner too, where
+  it fell back to `generic`. `--executor` still wins over both. A CLI counts
+  as named only as the one to do the work ("use codex", "with claude code",
+  "have codex fix", "codex로", "codex한테", "클로드 코드로", "open this in
   codex"): "fix the codex adapter tests" or "update the claude code docs"
   names what the work is about and chooses no owner, on every entry point and
-  in the route decision, where a bare product name used to pick the owner.
-  A dag-ulw request reads the same cue: "/dag-ulw fix the codex adapter tests"
-  no longer sends a node that names `owner: codex` to Codex.
-  The CLI addressed as the one to act counts too ("codex가 고쳐줘", "codex,
-  fix ...", "get codex to ...", "codex please ...", "can codex fix ...",
-  "codexに…させて"). When a request mentions a coding CLI but not as the one
-  to do the work, and the profile default is a different CLI, nothing runs:
-  the owner is asked for, with the mentioned CLI named first ("fix the login
-  bug in codex", "codex에서 로그인 버그 고쳐줘") A CLI the request excludes ("don't use
-  codex", "codex 말고"), or names only inside a link or a filename, is no such
-  mention, and naming two owners as the doer asks on every entry point. The plugin tool and the turn's route
-  hint now say `owner_set_in_setup_profile` when the profile holds the owner,
-  where they said the owner had to be asked for.
+  in the route decision, where a bare product name used to pick the owner. A
+  dag-ulw request reads the same cue: "/dag-ulw fix the codex adapter tests"
+  no longer sends a node that names `owner: codex` to Codex. The CLI addressed
+  as the one to act counts too ("codex가 고쳐줘", "codex, fix ...", "get codex
+  to ...", "codex please ...", "can codex fix ...", "codexに…させて"). When a
+  request mentions a coding CLI but not as the one to do the work, and the
+  profile default is a different CLI, nothing runs: the owner is asked for,
+  with the mentioned CLI named first ("fix the login bug in codex", "codex에서
+  로그인 버그 고쳐줘"). A CLI the request excludes ("don't use codex", "codex
+  말고"), or names only inside a link or a filename, is no such mention, and
+  naming two owners as the doer asks on every entry point. The plugin tool and
+  the turn's route hint now say `owner_set_in_setup_profile` when the profile
+  holds the owner, where they said the owner had to be asked for.
 
 - **The operations and board skills now name the commands and Hermes
   surfaces they depend on.** `cancel` lists what exists before clearing and
   hands a running scheduled job to `hermes cron pause` and `runs`, and to
-  `hermes cron cancel` where Hermes has it;
-  `running-work-board` names `omh coding status-board`; `run-efficiency` names
-  `omh runtime efficiency-report` and its input; `agent-board` ships a
-  reference with the `prepare` fields, the supported operations and the
-  refusal reasons instead of pointing at repository docs; `gateway-intent-card`
-  states the `platform:chat_id:thread_id` target, the `MEDIA:` attachment line
-  and when `[SILENT]` is dropped in a live chat; `harness-session-inventory`
-  says where a previous coding session lives and what a snapshot file holds;
+  `hermes cron cancel` where Hermes has it; `running-work-board` names `omh
+  coding status-board`; `run-efficiency` names `omh runtime efficiency-report`
+  and its input; `agent-board` ships a reference with the `prepare` fields,
+  the supported operations and the refusal reasons instead of pointing at
+  repository docs; `gateway-intent-card` states the
+  `platform:chat_id:thread_id` target, the `MEDIA:` attachment line and when
+  `[SILENT]` is dropped in a live chat; `harness-session-inventory` says where
+  a previous coding session lives and what a snapshot file holds;
   `achievements` says a snapshot exists only after the dashboard tab ran.
   `context-budget-review`, `achievements`, `ops-review`, `feedback-triage` and
   `gateway-intent-card` write their own completion checklist in place of a
@@ -564,11 +535,11 @@ All notable changes will be documented here.
   `context-budget-review` now carries `item_classes` so the class comparison
   can run, `feedback-triage` ranks by distinct customers and masks personal
   data in quotes, and `spend-gate` stops treating an unknown amount already
-  spent as zero and names the `pay`, `pay-cli` and `hermes-mpp` plugins instead of
-  presenting the removed `mpp-agent` skill as current.
-  `gateway-intent-card` and `automation-blueprint`, `harness-session-inventory`
-  and `workspace-audit`, `agent-board` and `running-work-board` each name the
-  other for the requests that belong to it.
+  spent as zero and names the `pay`, `pay-cli` and `hermes-mpp` plugins
+  instead of presenting the removed `mpp-agent` skill as current.
+  `gateway-intent-card` and `automation-blueprint`,
+  `harness-session-inventory` and `workspace-audit`, `agent-board` and
+  `running-work-board` each name the other for the requests that belong to it.
 - **Memory, learning, agent and Jev skills now give steps that run.** A
   fact with a relative date ("next Friday") is captured again with an absolute
   date in the same turn instead of waiting for a review nobody does, and the
@@ -590,16 +561,18 @@ All notable changes will be documented here.
   Hermes' context-file cap. The full-profile skill-body ceiling is re-derived
   by its written policy.
 
-- **Several too-wide routing words stopped taking turns that were not theirs.**
-  Bare `priorities`, `리스크`, `블로커`, `우선순위`, `risk analysis`, `release gate`,
-  `accessibility` and `접근성` on voice input, and the video words on the connector
-  card no longer pull a turn. Missing or unset words alone no longer
-  open toolbelt readiness unless a connector or tool is named, "주간" no longer reads
-  as a stock price, and "time instead" no longer reads as a time lookup. native-debugging's routed text stops promising a
-  debug adapter Hermes does not have. A few phrases the skill audits named now reach
-  their skill: `account takeover` and `suspected unauthorized access`, `telemetry
-  audit`, `write a handover guide` and `인수인계 문서 써줘`, and in Korean `시장 규모` and
-  `경쟁사 분석` right before a request to size or analyse.
+- **Several too-wide routing words stopped taking turns that were not
+  theirs.** Bare `priorities`, `리스크`, `블로커`, `우선순위`, `risk
+  analysis`, `release gate`, `accessibility` and `접근성` on voice input, and
+  the video words on the connector card no longer pull a turn. Missing or
+  unset words alone no longer open toolbelt readiness unless a connector or
+  tool is named, "주간" no longer reads as a stock price, and "time instead"
+  no longer reads as a time lookup. native-debugging's routed text stops
+  promising a debug adapter Hermes does not have. A few phrases the skill
+  audits named now reach their skill: `account takeover` and `suspected
+  unauthorized access`, `telemetry audit`, `write a handover guide` and
+  `인수인계 문서 써줘`, and in Korean `시장 규모` and `경쟁사 분석` right
+  before a request to size or analyse.
 - **A capability family turned off with `omh capability-policy disable` is no
   longer routed to.** Its skills used to lose their tools but kept being
   dispatched, offered as candidates, hinted and listed on the skill-candidate
@@ -640,17 +613,20 @@ All notable changes will be documented here.
   matches nothing, or an empty one, now lists what is stored (subject, type
   and id, without text), so "what did we decide last time?" reaches the
   decision in two calls.
-- **Every arrow line in the per-turn primer names skills a model can load.**
-  The generic tool map, workflow context cards and common cues named
-  catalog names (`research`, `img-summary`) and shorthand that was no skill
-  (`automation`); only the rendered rail page rewrote one of those lines.
-  The three lines now write `ulw-research`, `omh-image-cards` and the other
-  labels `skill_view` loads. The lane key lines still list catalog names.
-- **The per-turn primer's lane keys name skills a model can load.** Each
-  lane's `Key:` list named catalog names (`research`, `deep-interview`), so
-  one primer showed both `research` and `ulw-research`. The keys now read
-  `ulw-research`, `ulw-interview`, `omh-routing` and the other labels
-  `skill_view` loads.
+- **The per-turn primer names only skills a model can load.** The generic tool
+  map, workflow context cards, common cues and each lane's `Key:` list named
+  catalog names (`research`, `img-summary`, `deep-interview`) and shorthand
+  that was no skill (`automation`), so one primer showed both `research` and
+  `ulw-research`, and only the rendered rail page rewrote one of those lines.
+  They now write `ulw-research`, `omh-image-cards`, `ulw-interview`,
+  `omh-routing` and the other labels `skill_view` loads. (#2647, #2663)
+- **The per-turn hook and `omh` commands start faster.** The hook that runs
+  before every model call no longer reopens every run's unchanged progress
+  files, so its cost stops growing with the runs kept under the OMH home. `omh
+  <subcommand>` loads only that subcommand's code, so the commands agents call
+  during workflows (`omh hud`, `omh runtime record`, `omh memory status` and
+  the rest) no longer spend most of their start-up loading the whole command
+  tree; help, `--version` and abbreviations still load it. (#2644)
 - **`omh coding delegate --from-plan` no longer picks Codex when no owner
   was named.** Leaving out `--executor` used to select Codex with
   `--from-plan` and `generic` without it. Both now resolve the same default:
@@ -689,33 +665,44 @@ All notable changes will be documented here.
   The browser, terminal, files and connector operators confirm the exact
   payload and the paths a bulk change touches, and image cards read
   generated text back.
-- **The build, infrastructure and security skills give safer, more exact steps.**
-  A leaked secret that is compromised (pushed publicly, or used) is revoked
-  before its replacement is deployed, matching the rotation reference, and a
-  planned rotation keeps its overlap window. Model optimization means
+- **The build, infrastructure and security skills give safer, more exact
+  steps.** A leaked secret that is compromised (pushed publicly, or used) is
+  revoked before its replacement is deployed, matching the rotation reference,
+  and a planned rotation keeps its overlap window. Model optimization means
   onboarding a model into OMH's router only; making weights smaller or faster
   is pointed to inference serving and fine-tuning. The backend error table
-  gains rate-limit and payload rows and a correct timeout status. The
-  database skill warns that `EXPLAIN ANALYZE` runs the statement and covers
-  index rebuilds. The LLM app skill drops a retired model id, plans for model
+  gains rate-limit and payload rows and a correct timeout status. The database
+  skill warns that `EXPLAIN ANALYZE` runs the statement and covers index
+  rebuilds. The LLM app skill drops a retired model id, plans for model
   retirement, accounts for run-to-run variance and permission filtering in
   retrieval. The serving runbook gains a startup probe, endpoint
-  authentication and a measured quantization delta. Data pipelines cover
-  late data, exactly-once and topic retention; infrastructure changes treat a
-  saved plan as secret; mobile release adds the Play closed-test and toolchain
-  gates and a rejection path. Deploy, idea-to-deploy, reliability and
+  authentication and a measured quantization delta. Data pipelines cover late
+  data, exactly-once and topic retention; infrastructure changes treat a saved
+  plan as secret; mobile release adds the Play closed-test and toolchain gates
+  and a rejection path. Deploy, idea-to-deploy, reliability and
   production-audit lose their generic fallback text, and the incident,
   security-event, threat-model and safety-review references close their
   contradictions and gaps.
 
-- **A skill now hands work only to a sibling it can load, and skills agree
-  with each other about who does what.** Hand-offs written in plain text, the
-  ones the earlier rewrite missed and each body's `Current lane` sample of names
-  no longer point at a name `skill_view` refuses; the shared rail's generic-tool
-  checkpoint speaks loadable labels too. An accepted plan leaves `omh-cto-loop`
-  for `ulw-work` instead of going back to planning. `omh-decide` keeps Rejected
-  records in the decision log and no longer says `omh-decision-recall` reads
-  them. `dag-ulw` keeps an accepted plan in `omh_todo`. `closing-a-story.md` maps
+- **A skill now hands work only to a sibling it can load, ends with its
+  hand-back line, and agrees with its siblings about who does what.** A
+  hyphenated sibling a rendered skill names in backticks, anywhere in the body
+  or a reference, a hand-off written in plain text and each body's `Current
+  lane` sample of names are written as the label `skill_view` loads; a
+  one-word one (`research`, `plan`) only when its line hands work to it
+  (`use`, `route to`, `hand back to`, `from`, `workflow`), so a config key, a
+  command or a DOM event that shares a skill's name stays as written. Trigger
+  lists, metadata lines, fenced recipes, lines crediting an upstream project
+  and the router's registries keep the catalog names, and the shared rail's
+  generic-tool checkpoint speaks loadable labels too. The workflow-artifact
+  and `omh-jev-*` bodies, which ended on a stray fragment, carry the same lane
+  section as every other skill, and a full contract names
+  `references/procedure.md` only for a skill that ships it. `omh-meta-router`
+  points at the catalog index through `skill_view`, because the file belongs
+  to `omh-routing`. An accepted plan leaves `omh-cto-loop` for `ulw-work`
+  instead of going back to planning. `omh-decide` keeps Rejected records in
+  the decision log and no longer says `omh-decision-recall` reads them.
+  `dag-ulw` keeps an accepted plan in `omh_todo`. `closing-a-story.md` maps
   `ship`, `no_ship` and QA pass or fail onto the PASS, HOLD or BLOCK a record
   accepts, and says what each does to completeness, checked against the store.
   `omh-rules-distill` names the memory skills, `omh-instinct-ledger` the
@@ -723,7 +710,8 @@ All notable changes will be documented here.
   `route-signal` destination. Script paths in `omh-sprite-forge` and
   `omh-show-reel` references resolve from the skill's folder, and portable
   readers are told which steps need Hermes. The payload-density floor is
-  re-derived, because those sample names had been counted as payload.
+  re-derived, because those sample names had been counted as payload. (#2623,
+  #2643)
 
 - **A coding-owner choice now counts only for the request it was made in,
   in dag-ulw as in ulw-maestro.** dag-ulw sends a coding node to Codex or
@@ -734,22 +722,27 @@ All notable changes will be documented here.
   coding CLI, so the one-day window is gone. A coding node that names no owner
   runs on `delegate_task`. ulw-maestro's owner rule says the same: an earlier,
   recorded or learned owner is not a choice, and it asks again.
-- **`omh hermes plan-accept` refuses a plan that is only the generated
-  scaffold.** A plan recorded without `--plan-file` holds generated goals,
-  options and risks, not the reviewed plan, and accepting it used to succeed
-  with only a `say`, so a coding handoff could carry the scaffold as the
-  accepted plan. Accepting such a file now exits 2, leaves it a draft, and
-  names the fix: record the reviewed plan with `--plan-file` and accept that
-  file. `--allow-scaffold` accepts the scaffold on purpose and still returns
-  `reviewed_body: false`, and re-accepting an already accepted file still
-  succeeds. The `hermes plan accept <path>` alias refuses the same way. The
-  stdout of a scaffold record and the recorded file say so too (the file's
-  quality gate and next action match stdout):
+- **`omh hermes plan --record` can record the reviewed plan, and `omh hermes
+  plan-accept` refuses a plan that is only the generated scaffold.** The
+  recorded file held the same generated goals, options and risks whatever the
+  plan was; the reviewed text stayed in chat, and accepting the file accepted
+  the scaffold, so a coding handoff could carry the scaffold as the accepted
+  plan. `--plan-file <path>` records that text in place of the generated
+  sections (`plan_body: reviewed`). Recording without it still works, and
+  stdout and the recorded file both say it recorded the scaffold only:
   `quality_gate.readiness: needs_reviewed_body`, `coding_handoff_ready:
   false`, `next_action: record_reviewed_plan`, and
   `decision_gate.acceptance_requires`, repeated on `coding_delegate`, whose
-  `available` still means available after acceptance. `ulw-plan`, the `omh-routing`
-  wrapper reference and `docs/INSTALLATION.md` describe the refusal.
+  `available` still means available after acceptance. Accepting such a file
+  exits 2, leaves it a draft, and names the fix: record the reviewed plan with
+  `--plan-file` and accept that file. `--allow-scaffold` accepts the scaffold
+  on purpose and returns `reviewed_body: false`, and re-accepting an already
+  accepted file still succeeds. The `hermes plan accept <path>` alias refuses
+  the same way. `--input-bundle` records a consensus bundle as
+  `hermes_plan_input/v1`, planning input that `plan-accept` refuses.
+  `ulw-plan`, `omh-plan`, `omh-adversarial-consensus`, the `omh-routing`
+  wrapper reference and `docs/INSTALLATION.md` use and describe these. (#2638,
+  #2650, #2660)
 - **dag-ulw review nodes route to the `review` category, and baselines stay
   low.** The skill's difficulty-ladder rule now says a `role=review` node
   takes the `review` category where the user's routes serve it, a `baseline`
@@ -765,24 +758,22 @@ All notable changes will be documented here.
   for `review` but does for `unspecified-high`. Verify nodes are not linted,
   and neither are nodes whose label only reads like a review.
 - **With `OMH_TUI_MOUSE=1`, a drag in the OMH TUI copies the transcript
-  without the rail.** The main screen then takes the mouse: a drag over the transcript or the live rows
-  selects the text (shown reversed) and copies it without the thin `┃` rail
-  or a reply's margin, which stay drawn as before; the row above the composer
-  says `copied N chars`, and a double click copies a word, a triple click a
-  row. The wheel up opens the transcript view (Ctrl+O's), one notch up from
-  where the screen was. It works on every terminal that reports the mouse,
-  inside tmux with `mouse` on or off; a row the TUI cannot map for certain
-  (the shell's output above the session) is never guessed at, a drag whose
-  live rows change under it is dropped and copies nothing, Ctrl+C right after
-  a drag only drops the selection, and the
+  without the rail.** The main screen then takes the mouse: a drag over the
+  transcript or the live rows selects the text (shown reversed) and copies it
+  without the thin `┃` rail or a reply's margin, which stay drawn as before;
+  the row above the composer says `copied N chars`, and a double click copies
+  a word, a triple click a row. The wheel up opens the transcript view
+  (Ctrl+O's), one notch up from where the screen was, and scrolling back down
+  to its end closes it, so the composer is back without Esc or `q` (a view
+  opened by Ctrl+O or `/history` still stays open at its end). It works on
+  every terminal that reports the mouse, inside tmux with `mouse` on or off; a
+  row the TUI cannot map for certain (the shell's output above the session) is
+  never guessed at, a drag whose live rows change under it is dropped and
+  copies nothing, Ctrl+C right after a drag only drops the selection, and the
   terminal's own selection is still there with its bypass modifier (Shift,
-  Option in iTerm2, Fn in Terminal.app). It is off by default: without it
-  the terminal keeps its own wheel scrolling and selection on the main
-  screen, and the wheel never opens the transcript view.
-- **With `OMH_TUI_MOUSE=1`, scrolling the wheel back down in the OMH TUI
-  returns to the chat.** The transcript view the wheel opens closes once the wheel brings it back to its
-  end, so the composer is back without Esc or `q`. A view opened by Ctrl+O or
-  `/history` still stays open at its end.
+  Option in iTerm2, Fn in Terminal.app). It is off by default: without it the
+  terminal keeps its own wheel scrolling and selection on the main screen, and
+  the wheel never opens the transcript view. (#2575, #2597, #2601)
 - **The OMH TUI puts two blank rows between two tool calls of a turn.** A
   run of calls now reads apart, as Claude Code's does; a folded row of
   loaded skills counts as a call. Every other pair of blocks keeps one
@@ -790,6 +781,15 @@ All notable changes will be documented here.
   the running calls do not fit, the oldest gaps in the live region give up
   their second row first, only as many as needed, so no call row is lost and
   no blank rows gather over the working row; scrollback has both.
+- **The OMH TUI shows a preview of an image you attach.** An image sent with
+  Ctrl+V, a drop or `/image` is drawn under the prompt that sends it, through
+  Hermes' own `image.render`: real pixels on kitty and Ghostty, truecolor
+  half-blocks on other terminals (Terminal.app, iTerm2, WezTerm, tmux, screen,
+  VS Code), at most 64×16 cells. The `[Image #N]` label becomes a caption with
+  the file's name, size and bytes (`[Image #1] shot.png · 1280×720 · 979 KB`).
+  `NO_COLOR` and Hermes' `display.inline_images: off` turn the preview off,
+  and a Hermes without `image.render` keeps the label row. Images in tool
+  results and in a resumed session's history are not drawn. (#2645)
 - **The router no longer picks a coding owner from earlier choices.** Three
   accepted answers to the coding-owner question used to make that owner a
   visible default for later requests. Now every request asks for an explicit
@@ -824,37 +824,35 @@ All notable changes will be documented here.
   vendor's list price. `deepseek-v4.1-flash-1017`, the version
   `deepseek-flash` has served since 2026-10-17, uses the V4.1 Flash contract,
   price and calibration, and its runs keep the pointer's category.
-- **The model-chain picker steps each model through its own efforts.**
-  `-`/`+` in `omh model-chains` and `/omh-model` now follow the ladder the
-  model's contract documents, so Kimi K3.1 Pro walks `low, high, max` and
-  `none` appears only where thinking can be turned off. A model OMH has no
-  contract for keeps the shared steps `low` to `xhigh`, marked `?` because its
-  ladder is not known, so nobody on a custom model has to write a file to
-  change an effort. An optional `~/.omh/routing/model-efforts.json` replaces a model's
-  list, and an empty list turns its keys off. Pressing Enter on a value the
-  head can't take (`+` to `xhigh`, then a switch to Gemini 4 Argon) keeps the
-  picker open on that row, with every other edit intact, until you fix it or
-  cancel. Stored values nobody touched are left as they are and marked.
-- **Every Hermes skill body carries the reply-voice rule as one line.** The
-  paragraph each body repeated becomes one line that keeps the rule's core:
-  reply in the user's own words and the host's own voice, the SOUL.md persona
-  owns reply language, tone, speech level and sentence endings in progress
-  updates too, the user's language where the persona sets none, and OMH shapes
-  structure and content only. The record-term and turn-ending clauses live once
-  in the shared rail's Reply Language And Host Voice and Turn Ending sections,
+- **The model-chain picker steps each model through its own efforts.** `-`/`+`
+  in `omh model-chains` and `/omh-model` now follow the ladder the model's
+  contract documents, so Kimi K3.1 Pro walks `low, high, max`, Claude Fable
+  5.1 `low` to `max` and Grok 4.7 `low` to `xhigh`, and `none` appears only
+  where thinking can be turned off. A route asking Fable 5.1 or Grok 4.7 for
+  no thinking is raised to `low` on record, since their APIs refuse or ignore
+  it. A model OMH has no contract for (GLM 5.3, GLM 5.3 Flash and Grok Build
+  0.1 among them) keeps the shared steps `low` to `xhigh`, marked `?` because
+  its ladder is not known, so nobody on a custom model has to write a file to
+  change an effort. An optional `~/.omh/routing/model-efforts.json` replaces a
+  model's list, and an empty list turns its keys off. Pressing Enter on a
+  value the head can't take (`+` to `xhigh`, then a switch to Gemini 4 Argon)
+  keeps the picker open on that row, with every other edit intact, until you
+  fix it or cancel. Stored values nobody touched are left as they are and
+  marked. (#2640, #2658)
+- **Every Hermes skill body carries the reply-voice and turn-ending rules as
+  one line.** The paragraph each body repeated becomes one line that keeps the
+  rule's core: reply in the user's own words and the host's own voice, the
+  SOUL.md persona owns reply language, tone, speech level and sentence endings
+  in progress updates too, the user's language where the persona sets none,
+  and OMH shapes structure and content only. The same line keeps the
+  turn-ending rule, keyed on the request: when the requested output is
+  delivered, open points go inside the result and the reply ends with no
+  question or offer; only when the person asked to choose or decide and that
+  choice is still theirs does it end with one specific question about it, not
+  a list, a generic offer, or a footer. The record-term clauses live once in
+  the shared rail's Reply Language And Host Voice and Turn Ending sections,
   which already held them. Portable agent-skills bodies keep the full
-  paragraph, since their hosts have no shared rail.
-- **A Hermes skill's reply ends on one specific question again when the
-  person asked to choose.** The one reply line in every Hermes skill body
-  takes back the turn-ending rule, keyed on the request: when the requested
-  output is delivered, open points go inside the result and the reply ends
-  with no question or offer; only when the person asked to choose or decide
-  and that choice is still theirs does it end with one specific question
-  about it, not a list, a generic offer, or a footer. With only a pointer to
-  the shared rail, models did not load the rail and replies that asked for a
-  choice stopped ending on that question. The persona and language core and
-  the rail pointer stay as they were; portable agent-skills bodies already
-  carried the rule and are unchanged.
+  paragraph, since their hosts have no shared rail. (#2657, #2680)
 - **Vim NORMAL gets Space leader shortcuts in the OMH TUI.** With
   `display.vim_mode` on, Space then `s`, `b`, `p`, `r` or `/`, `m`, `t`, `c`
   or Enter opens sessions or bots, folds the plan, searches history, cycles
@@ -874,18 +872,6 @@ All notable changes will be documented here.
   or any other key cancels it, and on a terminal that reports Shift with the
   key (kitty, modifyOtherKeys) `fX` and `f(` find as they do elsewhere.
   Contributed by @DanRioDev in #2576.
-- **A skill now sends the model to siblings it can load, and ends with its
-  hand-back line.** A hyphenated sibling a rendered skill names in
-  backticks, anywhere in the body or a reference, is written as the label
-  `skill_view` loads; a one-word one (`research`, `plan`) only when its line
-  hands work to it (`use`, `route to`, `hand back to`, `from`, `workflow`),
-  so a config key, a command or a DOM event that shares a skill's name stays
-  as written. Trigger lists, metadata lines, fenced recipes, lines crediting an
-  upstream project and the router's registries keep the catalog names. The workflow-artifact and `omh-jev-*` bodies, which
-  ended on a stray fragment, carry the same lane section as every other skill,
-  and a full contract names `references/procedure.md` only for a skill that
-  ships it. `omh-meta-router` points at the catalog index through
-  `skill_view`, because the file belongs to `omh-routing`.
 - **A dag-ulw verify node names which producer's scope holds each failure,
   and a repair node is told the failed attempt's edits may still be on
   disk.** A producer accepted earlier cannot be repaired, so a failing check
@@ -919,47 +905,45 @@ All notable changes will be documented here.
   `omh-adversarial-consensus`, `dag-ulw`, `ulw-maestro` and the TDD
   reference.
 - **A dag-ulw run that waits shows whole and moves, and says what it waits
-  on.** A run of up to 12 lanes (the transcript's own small-run measure)
-  shows every layer and node. A done layer of one node is one dim row
-  (`✓ layer 2 · <title>  model · accepted · ↓tokens`), consecutive ones stack,
-  and one blank row stands between layer groups. An open layer row no longer
-  repeats the counts its node rows say (`▾ layer 1 · 2 nodes`, `▾ layer 4`).
-  A bigger run folds consecutive done layers into one
-  `✓ layers 1–3 · 11 done` row, which opens to its layers, and opens only the
-  layers with a live node and the next layer still to come, which fitting
-  never shuts. The tree is at most 16 rows and still at most a third of the
-  screen; the owner's 6-node run is 14 rows at 150x42. Rows that do not fit
-  become one `+N more · /dag` row. A parked node was drawn `?` and counted
-  `unknown`, because the graph reader had no entry for the `parked` outcome.
-  It is now a waiting node with the status `parked` and the time since it
-  parked, and the header and its layer row count it as `parked`. One row
-  under it names what its park recorded it waits on, and nothing else: the
-  handle, named by its call (`terminal(uv run …)`) when it is one of the
-  session's background processes, then `until HH:MM` from its `wake_at`, then
-  its reason, and the process's own running time when the handle is one. The
-  parked and running times count on every second. The spinner turns on a
-  running or parked node's row. A waiting row, and a shut layer of waiting
-  nodes, carries a slow, faint dot cycle (`·` `··` `···`, one step a second).
-  Done rows, the done layers' row and a run that is not alive stay still,
-  and a done node's title is muted. This motion runs between turns too while
-  the run waits. While the terminal window is unfocused, the spinner and the
-  dots hold, as the wallpaper does (#2542), while the times keep counting,
-  redrawn once a second. An `unspecified-*` or unknown category no longer
-  draws a cell. Between turns, while something the session waits on still
-  runs, the working row's place above the composer says so, as it says a
+  on.** A run of up to 12 lanes (the transcript's own small-run measure) shows
+  every layer and every node that runs; a layer with work moving shows at most
+  three of its quiet nodes as rows, and more fold into its `▸ N more` row from
+  the start, however tall the terminal is (opening that row still lists them).
+  A done layer of one node is one dim row (`✓ layer 2 · <title> model ·
+  accepted · ↓tokens`), consecutive ones stack, and one blank row stands
+  between layer groups. An open layer row no longer repeats the counts its
+  node rows say (`▾ layer 1 · 2 nodes`, `▾ layer 4`). A bigger run folds
+  consecutive done layers into one `✓ layers 1–3 · 11 done` row, which opens
+  to its layers, and opens only the layers with a live node and the next layer
+  still to come, which fitting never shuts. The tree is at most 16 rows and
+  still at most a third of the screen; a 6-node run is 14 rows at
+  150x42. Rows that do not fit become one `+N more · /dag` row. A parked node
+  was drawn `?` and counted `unknown`, because the graph reader had no entry
+  for the `parked` outcome. It is now a waiting node with the status `parked`
+  and the time since it parked, and the header and its layer row count it as
+  `parked`. One row under it names what its park recorded it waits on, and
+  nothing else: the handle, named by its call (`terminal(uv run …)`) when it
+  is one of the session's background processes, then `until HH:MM` from its
+  `wake_at`, then its reason, and the process's own running time when the
+  handle is one. The parked and running times count on every second. The
+  spinner turns on a running or parked node's row. A waiting row, and a shut
+  layer of waiting nodes, carries a slow, faint dot cycle (`·` `··` `···`, one
+  step a second). Done rows, the done layers' row and a run that is not alive
+  stay still, and a done node's title is muted. This motion runs between turns
+  too while the run waits. While the terminal window is unfocused, the spinner
+  and the dots hold, as the wallpaper does (#2542), while the times keep
+  counting, redrawn once a second. An `unspecified-*` or unknown category no
+  longer draws a cell. Between turns, while something the session waits on
+  still runs, the working row's place above the composer says so, as it says a
   turn runs: `✻ Waiting… (33m 47s · 1 agent · terminal)`. That is a delegated
-  child or dag-ulw node that wakes the parent as it ends (the running lanes
-  of the delegation graph the HUD reads), or a background
-  process Hermes will wake the session for (`notify_on_complete`, or
-  `watch_patterns` on a match). Each count shows only when it is not zero,
-  and the time is the longest wait. It has the working row's own spinner and
-  clock. A turn's working row takes over when a turn starts, and the row
-  goes when nothing is left to wait on. It is read from structure, never
-  from what the model said, and the info line is unchanged.
-- **The OMH TUI's dag tree lists the nodes that run, not every finished one.**
-  A layer with work moving shows at most three of its quiet nodes as rows;
-  more fold into its `▸ N more` row from the start, however tall the
-  terminal is. Opening that row still lists them.
+  child or dag-ulw node that wakes the parent as it ends (the running lanes of
+  the delegation graph the HUD reads), or a background process Hermes will
+  wake the session for (`notify_on_complete`, or `watch_patterns` on a match).
+  Each count shows only when it is not zero, and the time is the longest wait.
+  It has the working row's own spinner and clock. A turn's working row takes
+  over when a turn starts, and the row goes when nothing is left to wait on.
+  It is read from structure, never from what the model said, and the info line
+  is unchanged. (#2561, #2595)
 - **dag-ulw refuses two nodes that write one file under different spellings.**
   `omh_dag` define, repair and extend refused a shared write scope with no
   direct edge only when both nodes wrote the same entry character for
@@ -978,6 +962,18 @@ All notable changes will be documented here.
   an extend, is checked only for pairs with one of its own new nodes, so two
   earlier nodes it cannot change never refuse it. The coding fanout
   contract's boundary check still compares as written.
+- **A model can no longer write OMH's evidence stores, and a dag-ulw child is
+  held to its node's write scope.** A `write_file` or `patch` aimed at a store
+  OMH keeps under `<omh_home>/runtime/` (decision gates and events,
+  delegation, dag, research receipts, runs, todos) is refused, naming the
+  store, since a line written there would read as one OMH observed; the
+  dag-ulw handoff report a model is told to write still passes. A dag-ulw
+  node's child, and any child it spawns, is refused a write outside the node's
+  declared `write_scope`, with the node, run and scope named and the file to
+  report in its handoff so the parent can repair or extend. Parents, ordinary
+  children, nodes with no scope, settled nodes, cancelled runs and writes
+  outside the workspace are unchanged, and a path either guard cannot resolve
+  passes with one warning. (#2585)
 - **The area under the composer is exactly as tall as what it draws.** On the
   screen's bottom rows, when the agent view gives rows up (a dag-ulw layer
   settles or folds, or the run ends and its tree goes), the composer moves
@@ -1002,102 +998,108 @@ All notable changes will be documented here.
   skill's own blockers, and catalog checks keep both in place. The idea comes
   from PortSwigger Burp AT research skills.
 - **A bot profile that fails its refresh no longer rolls `omh update` back,
-  and a pending restore no longer blocks every later update.** On 2026-11-04
-  four bench profiles whose `plugins/omh` links pointed at deleted worktrees
-  made the re-entered update exit 1. The staged update rolled back, the
-  restore failed on the same profiles, and from then on every `omh update`
+  and a pending restore no longer blocks every later update.** In one measured
+  case four bench profiles whose `plugins/omh` links pointed at deleted
+  worktrees made the re-entered update exit 1. The staged update rolled back,
+  the restore failed on the same profiles, and from then on every `omh update`
   only retried that restore and staged nothing, while the report read "the
-  known-good generation remains active". Now an update whose only failures
-  are bot profiles exits `3`: the staged update keeps the activated
-  generation and names the profiles to repair. A run that finishes a pending
-  restore goes on to stage the update it was asked for. A failed restore
-  leads its report with "could not restore the previous generation: recovery
-  is required" and says no update installs until it succeeds. A rollback
-  names the generation it restored, with its commit. `omh doctor` reports an
-  open marker as `staged_update_recovery`. A `plugins/omh` link whose
-  target is gone is now replaced with the released bundle without `--force`,
-  and the update prints a `Repaired …` line naming where it pointed; a link
-  to an existing tree OMH did not write still needs `--force`.
+  known-good generation remains active". Now an update whose only failures are
+  bot profiles exits `3`: the staged update keeps the activated generation and
+  names the profiles to repair. A run that finishes a pending restore goes on
+  to stage the update it was asked for. A failed restore leads its report with
+  "could not restore the previous generation: recovery is required" and says
+  no update installs until it succeeds. A rollback names the generation it
+  restored, with its commit. `omh doctor` reports an open marker as
+  `staged_update_recovery`. A `plugins/omh` link whose target is gone is now
+  replaced with the released bundle without `--force`, and the update prints a
+  `Repaired …` line naming where it pointed; a link to an existing tree OMH
+  did not write still needs `--force`.
 - **`omh update` names the commit it moved between, and `omh --version` names
   the commit it runs.** A generation built from one of this repository's
-  GitHub archives (the installer's `main.zip`, and tag or commit archives)
-  now knows its commit: `src/omh/_archive_commit.txt` is marked
-  `export-subst`, so `git archive` writes the commit into it, and the ref
-  comes from pip's PEP 610 record. `omh --version` prints
-  `omh 4.0.6 (main@1a2b3c4d)`. An installer-managed update ends with
-  `oh-my-hermes 4.0.6 main@1a2b3c4d → main@5e6f7a8b`, or `already at
-  main@5e6f7a8b` when `main` has not moved, even when the release version did
-  not change; release wheels still name versions only. `omh update --json`
-  carries the same facts as `identity_change`. EN, KO, JA and ZH rows. No new
-  network call: the commit is read from the archive pip already downloads.
+  GitHub archives (the installer's `main.zip`, and tag or commit archives) now
+  knows its commit: `src/omh/_archive_commit.txt` is marked `export-subst`, so
+  `git archive` writes the commit into it, and the ref comes from pip's PEP
+  610 record. `omh --version` prints `omh 4.0.7 (main@1a2b3c4d)`. An
+  installer-managed update ends with `oh-my-hermes 4.0.7 main@1a2b3c4d →
+  main@5e6f7a8b`, or `already at main@5e6f7a8b` when `main` has not moved,
+  even when the release version did not change; release wheels still name
+  versions only. `omh update --json` carries the same facts as
+  `identity_change`. EN, KO, JA and ZH rows. No new network call: the commit
+  is read from the archive pip already downloads.
 - **After `omh update`, the open OMH TUI and the running gateway each offer a
-  restart, and nothing restarts on its own.** An OMH TUI started by `omh`
-  from the installer-managed environment reads the `current` generation
-  pointer at most every 5 s, with no network call. Once an update has finished
-  moving it, it shows `restart to update` on the info line and asks once, between turns:
-  `OMH moved to 4.0.6 main@1a2b3c4d. Restart the TUI now to use it?`. Not
-  now comes first. Restart the TUI waits for the running turn, for a turn
-  about to start, for what the session waits on or still has out, and for what
-  you typed (a `/bg` or `/btw` answer still out does not hold it: the question
+  restart, and nothing restarts on its own.** An OMH TUI started by `omh` from
+  the installer-managed environment reads the `current` generation pointer at
+  most every 5 s, with no network call. Once an update has finished moving it,
+  it shows `restart to update` on the info line and asks once, between turns:
+  `OMH moved to 4.0.7 main@1a2b3c4d. Restart the TUI now to use it? This
+  session reopens.`. Not now
+  comes first. Restart the TUI waits for the running turn, for a turn about to
+  start, for what the session waits on or still has out, and for what you
+  typed (a `/bg` or `/btw` answer still out does not hold it: the question
   says that answer will not show), then exits for `omh` to open the new
-  generation's `omh --resume <id>` on the same session. If the shared gateway still runs
-  the old OMH plugin code, that TUI then offers the existing
-  `/gateway restart` once, with Cancel first. At the end of an activated
-  update on a terminal, `omh update` names what each stale running gateway's
-  restart interrupts, then asks `Restart the Hermes gateway now so the new
-  OMH plugin code loads?`, defaulting to no; yes runs Hermes' own
-  `hermes -p <profile> gateway restart --yes --detach`. `--restart-gateway`
-  and `--no-restart-gateway` decide without asking. With `--json`,
+  generation's `omh --resume <id>` on the same session, which sends nothing: a
+  notice names any work left and says to send `continue`. A pointer that moves
+  back closes the open question and says so. If the shared gateway still runs
+  the old OMH plugin code, that TUI then offers the existing `/gateway
+  restart` once, with Cancel first. At the end of an activated update on a
+  terminal, `omh update` names what each stale running gateway's restart
+  interrupts, then asks `Restart the Hermes gateway now so the new OMH plugin
+  code loads?`, defaulting to no; yes runs Hermes' own `hermes -p <profile>
+  gateway restart --yes --detach`. `--restart-gateway` and
+  `--no-restart-gateway` decide without asking. With `--json`,
   `--no-interactive`, `--yes`, off a terminal, and in a re-entered update,
   nothing is asked. A restart that was asked for and failed exits 4. Both
-  start with the update after the one that installs this: the question runs
-  in the `omh update` you started and in the TUI's own generation, and both
-  are the previous version during that first update.
+  start with the update after the one that installs this: the question runs in
+  the `omh update` you started and in the TUI's own generation, and both are
+  the previous version during that first update. (#2616, #2619)
 - **`--channel main` names the channel that tracks `main`.** It is another
-  spelling of `--channel preview`, which a plain installer-managed
-  `omh update` already uses. The re-entry into a restored, older generation
-  spells it `preview`. npm, Bun and Homebrew installs now refuse
+  spelling of `--channel preview`, which a plain installer-managed `omh
+  update` uses on an install from `main`. The re-entry into a restored, older
+  generation spells it `preview`. npm, Bun and Homebrew installs now refuse
   `--channel preview` instead of updating to a release and recording it as a
   `main` build.
-- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.** After
-  the machine sleeps past the session's turn lease, Hermes stops the running
-  turn, and the TUI said "Hermes interrupted this turn; send `continue` to go
-  on." It now says it sends that `continue` in 3 s, with Esc to cancel, and then
-  sends it as a typed `continue` goes. It never does so for the person's own Esc,
-  `/stop` or interrupting prompt, for a turn that ended with an error, or for a
-  turn this TUI did not send (another client's on a shared gateway, whose stop
-  looks the same from here). Anything the person sends in the wait (a prompt,
-  `/stop`, `/help`, `/new`), a turn that starts, or another session opened
-  cancels it; one Esc does too, in vim INSERT as well. A draft, a queued line
-  or an open question holds it, and a notice says to send `continue`. At most 2
-  go between two prompts of the person's own; past that the old notice asks.
+- **A turn Hermes interrupted itself goes on by itself in the OMH TUI.**
+  After the machine sleeps past the session's turn lease, Hermes stops the
+  running turn, and the TUI said "Hermes interrupted this turn; send
+  `continue` to go on." It now says it sends that `continue` in 3 s, with Esc
+  to cancel, and then sends it as a typed `continue` goes. It never does so
+  for the person's own Esc, `/stop` or interrupting prompt, for a turn that
+  ended with an error, or for a turn this TUI did not send (another client's
+  on a shared gateway, whose stop looks the same from here). Anything the
+  person sends in the wait (a prompt, `/stop`, `/help`, `/new`), a turn that
+  starts, or another session opened cancels it; one Esc does too, in vim
+  INSERT as well. A draft, a queued line or an open question holds it, and a
+  notice says to send `continue`. At most 2 go between two prompts of the
+  person's own; past that the old notice asks.
 - **`/gateway restart` restarts Hermes' gateway from inside the OMH TUI and
-  picks the session back up.** After `omh update` the running gateway kept
-  the old OMH code until someone ran `hermes gateway restart` in another
-  terminal and came back. Now the TUI first names what a restart affects
-  (the profiles the gateway serves, its connected messenger bots, its running
-  work, this session's own), runs Hermes' own restart only once you pick
-  Restart, and reattaches to the same session with your draft kept and
-  nothing sent again. A gateway a service runs lets running work finish
-  first, up to Hermes' `restart_after_turn_timeout`, and the TUI waits for
-  it. Once the gateway is back it says so, and that it now runs the newer OMH
-  when its files show it was behind. In a named profile the shared gateway
-  serves you pick that profile alone, which does not load new OMH code, or
-  the whole gateway, which does. A refused or failed restart says why and the
-  command to run instead. Bare `/gateway` is still Hermes' platform status.
-- **A fenced reply that opens with prose no longer mutes a judged Slack or
-  Discord thread, and a prompt queued behind a `!` line in the OMH TUI waits
-  for a turn that started while the command ran.** Only one word after a
-  reply's opening fence is read as its label (`text`, `c++`, `완료`), so
-  ```` ```Done for today ```` above a `[SHUTUP]` line is posted as written
-  rather than read as the marker. The next queued line after a `!` command
+  picks the session back up.** On the bots' gateway: after `omh update` the
+  running gateway kept the old OMH code until someone ran `hermes gateway
+  restart` in another terminal and came back. Now the TUI first names what a
+  restart affects (the profiles the gateway serves, its connected messenger
+  bots, its running work, this session's own), runs Hermes' own restart only
+  once you pick Restart, and reattaches to the same session with your draft
+  kept and nothing sent again. Each choice says what it stops. A gateway a
+  service runs lets running work finish first, up to Hermes'
+  `restart_after_turn_timeout`, and the TUI waits for it; since Hermes' own
+  systemd or launchd service drains a gateway without `--external-supervisor`
+  in its argv too, which the record cannot show, that slot says the work
+  finishes first if a service runs the gateway and is otherwise interrupted.
+  In a named profile the shared gateway serves you pick that profile alone,
+  whose running turns stop now and which does not load new OMH code, or the
+  whole gateway, which does. Once the gateway is back it says so, and that it
+  now runs the newer OMH when its files show it was behind. `/image` and
+  `/paste` wait in the composer during the restart, as the other commands that
+  call the gateway do. A refused or failed restart says why and the command to
+  run instead. Bare `/gateway` is still Hermes' platform status. (#2588,
+  #2591)
+- **A prompt queued behind a `!` line in the OMH TUI waits for a turn that
+  started while the command ran.** The next queued line after a `!` command
   used to go once Hermes answered the command, even into a turn that had
-  started meanwhile; it now goes when that turn ends, or after the turn
-  Hermes runs next when that turn left it one. Esc on a prompt still
-  staging its images holds the lines queued behind it, with the
-  interrupt's notice, instead of leaving them unsent. A rewind still goes
-  ahead of lines already queued: queued behind them, its cut would drop
-  the turns they start.
+  started meanwhile; it now goes when that turn ends, or after the turn Hermes
+  runs next when that turn left it one. Esc on a prompt still staging its
+  images holds the lines queued behind it, with the interrupt's notice,
+  instead of leaving them unsent. A rewind still goes ahead of lines already
+  queued: queued behind them, its cut would drop the turns they start.
 - **A resumed session with work left goes on by itself in the OMH TUI.**
   `omh --resume <id>`, `/resume` and the session picker opened the session
   and waited for the person to write, so an interrupted turn or an open
@@ -1114,14 +1116,6 @@ All notable changes will be documented here.
   a session with a turn running (its own or another client's), a turn
   Hermes resubmits itself after a crash, a run that needs repair, a draft,
   a queued line or an open question.
-
-- **Claude Fable 5.1 and Grok 4.7 step their own efforts in the model-chain
-  picker.** Each has a contract read from its vendor's docs, so `-`/`+`
-  follow Fable's `low` to `max` and Grok 4.7's `low` to `xhigh`, and the `?`
-  mark is gone from the `x-search` head. A route asking either for no
-  thinking is raised to `low` on record, since their APIs refuse or ignore
-  it. GLM 5.3, GLM 5.3 Flash and Grok Build 0.1 keep the shared steps for
-  now.
 
 - **A push no longer ends the reply with "the session has stopped, send a
   message".** After a `git push`, `gh pr create`, `gh pr merge` or
