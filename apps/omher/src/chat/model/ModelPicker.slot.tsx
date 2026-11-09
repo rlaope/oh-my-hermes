@@ -30,6 +30,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
   const [vendor, setVendor] = useState("all");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
   const rows = useMemo(() => modelRows(opts?.providers ?? []), [opts]);
   const vendors = useMemo(() => vendorsPresent(rows), [rows]);
   const shown = useMemo(() => filterRows(rows, query, vendor), [rows, query, vendor]);
@@ -100,6 +101,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
   return (
     <div className="mp-wrap">
       <button
+        ref={pillRef}
         type="button"
         className={`mp${open ? " on" : ""}`}
         onClick={() => setOpen((v) => !v)}
@@ -112,7 +114,9 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
           <ModelIcon model={model} provider={provider} size={14} />
           <span className={`mp-d${offline ? "" : " live"}`} aria-hidden="true" />
         </span>
-        <span data-testid="model-label">{model}</span>
+        <span className="mp-l" title={model} data-testid="model-label">
+          {model}
+        </span>
         {reasoning && (
           <>
             <span className="sep" />
@@ -123,7 +127,17 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
         )}
         <ChevronDown />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} label="Model and reasoning" width={320} className="mp-pop">
+      <Popover
+        open={open}
+        onClose={(why) => {
+          setOpen(false);
+          // Esc hands focus back to the model button instead of dropping it on the page.
+          if (why === "escape") pillRef.current?.focus();
+        }}
+        label="Model and reasoning"
+        width={320}
+        className="mp-pop"
+      >
         <div data-testid="model-pop" aria-busy={busy}>
           <label className="mp-search">
             <SearchIcon />

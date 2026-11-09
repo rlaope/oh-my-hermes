@@ -130,6 +130,114 @@ test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ p
   await expect(again.locator('[data-active="true"]')).toContainText("gpt-5.5-mini");
 });
 
+test("Esc closes the picker and gives focus back to the model button", async ({ page }) => {
+  const pop = await openPicker(page);
+  await expect(pop.getByTestId("model-search")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("model-pop")).toHaveCount(0);
+  await expect(page.getByTestId("model-pill")).toBeFocused();
+  await expect(page.getByTestId("model-pill")).toHaveAttribute("aria-expanded", "false");
+  // Enter on the focused button opens it again, search focused
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("model-search")).toBeFocused();
+});
+
+// The header at the Tauri minimum window (900x700) with Details open: the model button stays inside the
+// header and off the panel, whatever the id length; a long id ellipsizes and keeps the full id in its title.
+test("long model id ellipsizes and stays inside the header at 900x700 with the panel open", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  const check = async (id: string) => {
+    const label = page.getByTestId("model-label");
+    await expect(label).toHaveText(id);
+    await expect(label).toHaveAttribute("title", id);
+    await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0)).toBe(300);
+    const head = (await page.getByTestId("header").boundingBox())!;
+    const pill = (await page.getByTestId("model-pill").boundingBox())!;
+    const panel = (await page.getByTestId("details").boundingBox())!;
+    expect(pill.x + pill.width).toBeLessThanOrEqual(head.x + head.width + 0.5);
+    expect(pill.x + pill.width).toBeLessThanOrEqual(panel.x + 0.5);
+    expect((await label.boundingBox())!.width).toBeLessThanOrEqual(220.5);
+    // the panel's top bar is what sits at its left edge, not the model button
+    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("[data-testid]")?.getAttribute("data-testid"), [
+      panel.x + 4,
+      panel.y + 20,
+    ]);
+    expect(hit).not.toMatch(/^(model-|reasoning-)/);
+  };
+
+  // the longest id the mock offers, picked through the UI
+  await openPicker(page);
+  await page.keyboard.type("anthropic/claude");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("who").click();
+  await check("anthropic/claude-opus-5-5");
+
+  // an id far longer than the button: the text is cut with an ellipsis, not pushed past the header
+  const long = "openrouter-preview/anthropic/claude-opus-5-5-thinking-extended-2026-11-01";
+  await mock("chat.set_model", { bot: "kami", model: long });
+  await page.reload();
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await page.getByTestId("who").click();
+  await check(long);
+  const label = page.getByTestId("model-label");
+  expect(await label.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+  expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+});
+
+// Keyboard focus in the picker shows a 2px ring at ink 40%, 2px off the edge, in dark and light; the small
+// gray labels in the popover meet 4.5:1 on the popover background in dark.
+test("focus ring on search, chips and rows; small labels readable in dark", async ({ page }) => {
+  const ring = (el: Element) => {
+    const cs = getComputedStyle(el);
+    return { style: cs.outlineStyle, width: cs.outlineWidth, offset: cs.outlineOffset, color: cs.outlineColor };
+  };
+  const expectRing = (r: { style: string; width: string; offset: string; color: string }) => {
+    expect(r.style).toBe("solid");
+    expect(r.width).toBe("2px");
+    expect(r.offset).toBe("2px");
+    const alpha = Number(r.color.match(/[\d.]+(?=\))/)?.[0]);
+    expect(alpha).toBeGreaterThan(0.35);
+    expect(alpha).toBeLessThan(0.45);
+  };
+  for (const theme of ["dark", "light"] as const) {
+    await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
+    const pop = await openPicker(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    expectRing(await pop.locator(".mp-search").evaluate(ring));
+    await page.keyboard.press("Tab");
+    await expect(pop.getByTestId("model-chip-all")).toBeFocused();
+    expectRing(await pop.getByTestId("model-chip-all").evaluate(ring));
+    const firstRow = pop.getByTestId("model-opt").first();
+    await firstRow.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(firstRow).toBeFocused();
+    expectRing(await firstRow.evaluate(ring));
+
+    if (theme === "dark") {
+      const contrast = await pop.evaluate((root) => {
+        const rgb = (c: string) => c.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+        const lum = (c: number[]) => {
+          const [r, g, b] = c.map((v) => {
+            v /= 255;
+            return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        const bg = rgb(getComputedStyle(root.closest(".ui-pop")!).backgroundColor);
+        const ratio = (el: Element) => {
+          const a = lum(rgb(getComputedStyle(el).color));
+          const b = lum(bg);
+          return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        };
+        return [".mp-g", ".mp-h", ".mp-f", ".mp-chip:not(.on)"].map((sel) => [sel, ratio(root.querySelector(sel)!)] as const);
+      });
+      for (const [sel, r] of contrast) expect(r, sel).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
 test("empty result says 'No models match'; Enter does nothing", async ({ page }) => {
   const pop = await openPicker(page);
   await pop.getByTestId("model-search").fill("zzz-nothing");
