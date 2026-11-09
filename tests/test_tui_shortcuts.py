@@ -1369,6 +1369,63 @@ class LeaderShortcutTests(unittest.TestCase):
             self.assertEqual(client.named("config.set"), [])
         self.assert_fresh_mode_chord(app, client)
 
+    def test_picker_dismissal_preserves_insert_and_non_vim_drafts(self) -> None:
+        for vim in (False, True):
+            for kind in ("launch_picker", "picker", "search", "rewind_picker", "model_picker"):
+                with self.subTest(vim=vim, kind=kind):
+                    app, client = make_app()
+                    app.composer.set_vim(vim)
+                    type_text(app, " sbpr/mt")
+                    before = (app.composer.text, app.composer.caret, app.composer.normal)
+                    self.picker_fixture(app, kind)
+                    app._on_input(Key(ESCAPE))
+                    self.assertIsNone(getattr(app, kind))
+                    self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
+                    type_text(app, " more")
+                    self.assertEqual(app.composer.text, " sbpr/mt more")
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual(client.calls, [])
+
+    def test_late_list_answer_preserves_higher_priority_picker(self) -> None:
+        from omh.tui.app import LIST_TAKEN_NOTICE
+        from test_tui_modes import notices
+
+        for kind in ("launch_picker", "search"):
+            with self.subTest(kind=kind):
+                app, client = self.normal_app()
+                self.arm(app)
+                app._on_input(Key(CHAR, "s"))
+                request_id = len(client.calls)
+                self.arm(app)
+                owner = self.picker_fixture(app, kind)
+                self.sessions_answer(app, request_id)
+                self.assertIsNone(app.picker)
+                self.assertIs(app._front_picker(), owner)
+                self.assertIn(LIST_TAKEN_NOTICE.format(command="/resume"), notices(app))
+                app._on_input(Key(ESCAPE))
+                self.assertFalse(app.composer.pending)
+                self.assert_fresh_mode_chord(app, client)
+
+    def test_front_picker_priority_delivers_enter_once(self) -> None:
+        kinds = ("launch_picker", "picker", "search", "rewind_picker", "model_picker")
+        handlers = ("_launch_picker_key", "_picker_key", "_search_key", "_rewind_picker_key", "_model_picker_key")
+        for offset, kind in enumerate(kinds):
+            with self.subTest(kind=kind):
+                app, client = self.normal_app()
+                self.arm(app)
+                owners = [self.picker_fixture(app, candidate) for candidate in kinds[offset:]]
+                self.assertIs(app._front_picker(), owners[0])
+                original = getattr(app, handlers[offset])
+
+                def receive(event: Key | Paste) -> None:
+                    self.assertFalse(app.composer.pending)
+                    original(event)
+
+                with patch.object(app, handlers[offset], side_effect=receive) as owned:
+                    app._on_input(Key(ENTER))
+                    owned.assert_called_once_with(Key(ENTER))
+                self.assertEqual(client.named("prompt.submit"), [])
+
     def test_prompt_slot_preempts_leader_shortcuts(self) -> None:
         app, client = self.normal_app()
         self.arm(app)
