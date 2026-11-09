@@ -15,6 +15,7 @@ is in `apps/omher/README.md`.
 6. The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token the app made at launch.
 7. The app starts the bridge as a child process and stops it when the app exits.
 8. The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.
+9. omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture (`assets/avatar.*`, through Hermes' `profiles.set_asset` when the gateway runs); the profile id, folder, config and sessions never change.
 
 ## What this does not claim
 

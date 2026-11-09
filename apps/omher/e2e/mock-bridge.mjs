@@ -92,7 +92,14 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 // ---- mutable state ---------------------------------------------------------------------------
 
 let calls = [];
-let bots, history, models, turns, pending, idSeq, queues;
+let bots, history, models, turns, pending, idSeq, queues, avatars;
+
+// What each bot has done (bots.info): sessions per place, skills, routines.
+const INFO_SEED = {
+  kami: { places: { slack: 78, discord: 48, cron: 15 }, first: 14 * 24 * 3600, skills: 134 },
+  friren: { places: { telegram: 6 }, first: 3 * 24 * 3600, skills: 12 },
+  default: { places: {}, first: null, skills: 41 },
+};
 
 function reset() {
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
@@ -106,6 +113,7 @@ function reset() {
   models = Object.fromEntries(BOT_SEED.map((b) => [b.name, { model: b.model, provider: b.provider, reasoning: b.reasoning }]));
   turns = {};
   queues = {};
+  avatars = {};
   pending = new Map();
   idSeq = 0;
   calls = [];
@@ -113,7 +121,12 @@ function reset() {
 reset();
 
 const nextId = (p) => `${p}-${++idSeq}`;
-const publicBot = ({ reasoning, ...b }) => ({ ...b, model: models[b.name].model, provider: models[b.name].provider });
+const publicBot = ({ reasoning, ...b }) => ({
+  ...b,
+  model: models[b.name].model,
+  provider: models[b.name].provider,
+  avatar_rev: avatars[b.name]?.rev ?? null,
+});
 
 // ---- WebSocket server ------------------------------------------------------------------------
 
@@ -322,6 +335,43 @@ const OPS = {
       ts: now() - ago,
     }));
     return { messages: rows.slice(-limit), total: Math.max(away.message_count, rows.length) };
+  },
+  "bots.rename": (p) => {
+    const b = needBot(p);
+    if (typeof p.name !== "string") throw new OpError("bad_request", "name must be text");
+    const name = p.name.split(/\s+/).filter(Boolean).join(" ");
+    if (name.length > 64) throw new OpError("bad_request", `name is too long (${name.length} characters, max 64)`);
+    const seed = BOT_SEED.find((x) => x.name === b.name);
+    b.display_name = name || (b.name === "default" ? "Hermes" : seed?.name[0].toUpperCase() + seed?.name.slice(1));
+    broadcast({ event: "bots.update", bot: b.name });
+    return { display_name: b.display_name };
+  },
+  "bots.avatar": (p) => {
+    const a = avatars[needBot(p).name];
+    return { rev: a?.rev ?? null, data: a?.data ?? null };
+  },
+  "bots.set_avatar": (p) => {
+    const b = needBot(p);
+    if (p.clear === true) delete avatars[b.name];
+    else {
+      if (typeof p.data !== "string" || !/^data:image\/(png|jpeg|webp);base64,/.test(p.data))
+        throw new OpError("bad_request", "use a PNG, JPEG or WebP picture");
+      if (p.data.length > 2_700_000) throw new OpError("bad_request", "picture is larger than 2 MB");
+      avatars[b.name] = { rev: ++idSeq, data: p.data };
+    }
+    broadcast({ event: "bots.update", bot: b.name });
+    return { avatar_rev: avatars[b.name]?.rev ?? null };
+  },
+  "bots.info": (p) => {
+    const b = needBot(p);
+    const i = INFO_SEED[b.name] ?? { places: {}, first: null, skills: 0 };
+    return {
+      places: { ...i.places },
+      first_active: i.first === null ? null : now() - i.first,
+      last_active: Object.keys(i.places).length ? now() - 20 : null,
+      skills: i.skills,
+      routines: (ROUTINE_SEED[b.name] ?? []).length,
+    };
   },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({

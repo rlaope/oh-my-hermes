@@ -777,3 +777,97 @@ class OriginLinks(unittest.TestCase):
         import omher_bridge
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(omher_bridge.read_origins(Path(d), ["x"]), {})
+
+
+PNG_1PX = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/"
+           "iZk9HQAAAABJRU5ErkJggg==")
+
+
+class BotIdentity(BridgeCase):
+    """Rename and picture: the only profile writes, both presentation-only; facts are read-only."""
+
+    async def test_rename_sets_only_the_display_name_and_keeps_the_rest(self):
+        async with Env() as env:
+            s = await self.open(env)
+            meta = env.home / "profiles" / "kami" / "profile.yaml"
+            r = await s.req("bots.rename", bot="kami", name="  Kami   the Helper ")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"]["display_name"], "Kami the Helper")
+            text = meta.read_text()
+            self.assertIn("display_name: Kami the Helper", text)
+            self.assertIn("Kami bot", text)  # the description written by Env survives
+            await s.until(lambda ev: any(e["event"] == "bots.update" and e["bot"] == "kami" for e in ev))
+            bots = (await s.req("bots.list"))["result"]["bots"]
+            self.assertEqual(next(b for b in bots if b["name"] == "kami")["display_name"], "Kami the Helper")
+            self.assertTrue((env.home / "profiles" / "kami").is_dir())  # the id and folder never move
+            # empty goes back to the profile's own name
+            r = await s.req("bots.rename", bot="kami", name="")
+            self.assertEqual(r["result"]["display_name"], "Kami")
+            self.assertNotIn("display_name", meta.read_text())
+
+    async def test_rename_refuses_bad_input(self):
+        async with Env() as env:
+            s = await self.open(env)
+            for name, code in [("x" * 65, "bad_request"), (12, "bad_request")]:
+                r = await s.req("bots.rename", bot="kami", name=name)
+                self.assertEqual(r["error"]["code"], code)
+            r = await s.req("bots.rename", bot="ghost", name="x")
+            self.assertEqual(r["error"]["code"], "unknown_bot")
+            self.assertFalse((env.home / "profiles" / "kami" / "profile.yaml").read_text().count("display_name"))
+
+    async def test_picture_goes_through_hermes_set_asset_when_the_gateway_runs(self):
+        async with Env() as env:
+            s = await self.open(env)
+            r = await s.req("bots.set_avatar", bot="kami", data=PNG_1PX)
+            self.assertTrue(r["ok"], r)
+            calls = env.clients["kami"].find("profiles.set_asset")
+            self.assertEqual(calls, [{"name": "kami", "asset": "avatar", "data": PNG_1PX}])
+            r = await s.req("bots.set_avatar", bot="kami", clear=True)
+            self.assertEqual(env.clients["kami"].find("profiles.set_asset")[-1], {"name": "kami", "asset": "avatar", "clear": True})
+
+    async def test_picture_is_written_the_same_way_when_the_gateway_is_down(self):
+        async with Env(fail=("kami",)) as env:
+            s = await self.open(env)
+            r = await s.req("bots.set_avatar", bot="kami", data=PNG_1PX)
+            self.assertTrue(r["ok"], r)
+            pic = env.home / "profiles" / "kami" / "assets" / "avatar.png"
+            self.assertTrue(pic.read_bytes().startswith(b"\x89PNG"))
+            self.assertIsInstance(r["result"]["avatar_rev"], int)
+            got = (await s.req("bots.avatar", bot="kami"))["result"]
+            self.assertEqual(got["data"], PNG_1PX)
+            bots = (await s.req("bots.list"))["result"]["bots"]
+            self.assertEqual(next(b for b in bots if b["name"] == "kami")["avatar_rev"], r["result"]["avatar_rev"])
+            # not an image: refused, the old picture stays
+            bad = "data:image/png;base64," + __import__("base64").b64encode(b"GIF89a....").decode()
+            r = await s.req("bots.set_avatar", bot="kami", data=bad)
+            self.assertEqual(r["error"]["code"], "bad_request")
+            self.assertTrue(pic.is_file())
+            r = await s.req("bots.set_avatar", bot="kami", data="https://example.com/x.png")
+            self.assertEqual(r["error"]["code"], "bad_request")
+            await s.req("bots.set_avatar", bot="kami", clear=True)
+            self.assertFalse(pic.exists())
+            self.assertEqual((await s.req("bots.avatar", bot="kami"))["result"], {"rev": None, "data": None})
+
+    async def test_info_counts_sessions_per_place_from_a_read_only_db(self):
+        import sqlite3
+        async with Env() as env:
+            d = env.home / "profiles" / "kami"
+            con = sqlite3.connect(d / "state.db")
+            con.execute("CREATE TABLE sessions (id TEXT, source TEXT, started_at REAL, last_activity_at REAL)")
+            con.executemany("INSERT INTO sessions VALUES (?,?,?,?)", [
+                ("a", "slack", 100.0, 150.0), ("b", "slack", 200.0, None), ("c", "discord", 50.0, 400.0),
+                ("d", "subagent", 10.0, 900.0), ("e", "tui", 5.0, 999.0)])
+            con.commit()
+            con.close()
+            (d / "skills" / "x").mkdir(parents=True)
+            (d / "skills" / "x" / "SKILL.md").write_text("x")
+            before = (d / "state.db").stat().st_mtime_ns
+            s = await self.open(env)
+            r = (await s.req("bots.info", bot="kami"))["result"]
+            self.assertEqual(r["places"], {"slack": 2, "discord": 1})
+            self.assertEqual(list(r["places"]), ["slack", "discord"])  # most first
+            self.assertEqual((r["first_active"], r["last_active"]), (50.0, 400.0))  # subagent/tui ignored
+            self.assertEqual((r["skills"], r["routines"]), (1, 0))
+            self.assertEqual((d / "state.db").stat().st_mtime_ns, before)
+            r = (await s.req("bots.info", bot="default"))["result"]
+            self.assertEqual(r["places"], {})
