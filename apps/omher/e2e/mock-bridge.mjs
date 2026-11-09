@@ -86,6 +86,13 @@ const ROUTINE_SEED = {
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
   { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
+  // several vendors behind one provider, so the picker's search and vendor chips have something to sort
+  {
+    slug: "openrouter",
+    name: "OpenRouter",
+    models: ["anthropic/claude-opus-5-5", "google/gemini-3-pro", "deepseek/deepseek-v4.1", "x-ai/grok-4.7", "qwen/qwen3-coder"],
+  },
+  { slug: "ollama", name: "Ollama", models: ["llama-4-maverick", "my-local-model"] },
 ];
 const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 
