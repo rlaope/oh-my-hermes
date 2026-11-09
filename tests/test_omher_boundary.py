@@ -30,6 +30,8 @@ RULES = (
     "never settles, retries or cancels a run; the Runs tab is read-only.",
     "For the Runs graph omher also reads, never writes, Hermes' delegate_task folders",
     "and uses only the records written by the bot's own sessions.",
+    "the CLI agents' own session files on this machine",
+    "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
 )
 
 
@@ -43,9 +45,10 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_thirteen_numbered_rules(self) -> None:
+        # 13: rule 13 (T6) names the CLI agents' session files the Runs tab reads, a new read surface.
         rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 12, len(rules))
+        self.assertTrue(6 <= len(rules) <= 13, len(rules))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
