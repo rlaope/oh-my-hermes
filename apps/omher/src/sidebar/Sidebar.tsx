@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "./sidebar.css";
-import logo from "../assets/omh-logo.png";
+import logo from "../assets/omher-mark.png";
 import { useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";

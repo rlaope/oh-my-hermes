@@ -139,9 +139,10 @@
   padding: 0;
 }
 .md a {
-  color: var(--ink);
+  color: var(--link);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 .md blockquote {
   border-left: 2px solid var(--line);

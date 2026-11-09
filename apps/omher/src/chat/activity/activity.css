@@ -160,23 +160,26 @@
   min-width: 0;
 }
 .act-step .k {
-  width: 46px;
   flex: none;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--quiet);
+  color: var(--muted);
 }
 .act-step .v {
   flex: 0 1 auto;
-  max-width: 420px;
   min-width: 0;
   font-family: var(--mono);
   font-size: 11px;
+  color: var(--body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.act-step .v.prose {
+  font-family: inherit;
+  font-size: 12px;
+}
 .act-step .s {
+  margin-left: auto;
+  padding-left: 12px;
   flex: none;
   font-size: 11px;
   color: var(--quiet);

@@ -32,6 +32,13 @@ export interface Away {
   last_active: number;
   message_count: number;
   running: boolean;
+  /** Opens the thread in its own app (slack:// or https://discord.com/channels/…), when known. */
+  url?: string | null;
+  /** Short place name, e.g. "#product-opengateway". */
+  place?: string | null;
+  /** The bot's last answer in that thread, as one short plain-text paragraph. */
+  last_reply?: string | null;
+  last_reply_at?: number | null;
 }
 
 export interface PeekMsg {

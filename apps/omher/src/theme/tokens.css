@@ -43,6 +43,7 @@
   --ok: #7fd6a4;
   --danger: #f08a8a;
   --accent: #f07cc4;
+  --link: #b9b0ff;
 
   /* bubbles: filled on both sides, no border */
   --bub-bot: #1d1a20;
@@ -98,6 +99,7 @@
   --ok: #1f8a52;
   --danger: #c0392b;
   --accent: #c4367f;
+  --link: #5b4fd1;
 
   --bub-bot: #f2f0f4;
   --bub-me: #e5dbec;

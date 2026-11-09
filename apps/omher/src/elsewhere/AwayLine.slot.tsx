@@ -1,83 +1,49 @@
-// Timeline: one read-only line per elsewhere session; expands to a peek of its last messages.
-// There is never an input here: those threads are answered in their own apps.
-import { useEffect, useState } from "react";
+// Timeline: what this bot last said in a thread elsewhere (Slack, Discord, cron), as an ordinary bot
+// bubble with one link back to the thread at the end. omher never writes to that thread.
 import type { SlotProps } from "../features";
-import { useStore } from "../state/store";
-import { ChevronRight, Spinner } from "../ui";
-import { awayTime, sourceName } from "./format";
+import { openExternal } from "../lib/openExternal";
+import { Spinner } from "../ui";
+import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
 
 export const slot = "elsewhereLine";
 
-const PEEK_LIMIT = 4;
-
-export default function AwayLine({ bot, item }: SlotProps["elsewhereLine"]) {
-  const s = useStore();
+export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
   const a = item.away;
-  const [open, setOpen] = useState(false);
   const now = useNow(a.running);
-  const peek = s.peeks[a.id];
   const src = sourceName(a.source);
-
-  // Read the peek on expand, and again whenever the session moves on while expanded.
-  useEffect(() => {
-    if (open) void s.peek(a.id, PEEK_LIMIT, bot);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, a.id, a.last_active, a.message_count, bot]);
-
-  const shown = peek?.messages.length ?? 0;
-  const more = Math.max(0, (peek?.total ?? a.message_count) - shown);
-
+  const title = a.label?.trim() || a.title?.trim() || `${src} session`;
+  // cron has no thread to open: name the job instead ("Cron · superagent-observe")
+  const job = a.source === "cron" ? (a.label || a.title || "").split(" · ")[0].trim() : "";
+  const where = a.place ? `${src} ${a.place}` : job ? `${src} · ${job}` : src;
+  const text = a.last_reply?.trim() || title;
+  const link = a.url ? (
+    <a
+      className="ew-link"
+      href={a.url}
+      title={`Open in ${src}`}
+      data-testid="away-link"
+      onClick={(e) => {
+        e.preventDefault();
+        void openExternal(a.url!);
+      }}
+    >
+      {where}
+    </a>
+  ) : (
+    <span className="ew-where">{where}</span>
+  );
   return (
-    <div className={`ew-away${open ? " open" : ""}`} data-testid="away" data-source={a.source} data-session={a.id}>
-      <button
-        type="button"
-        className="ew-away-h"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        title={open ? "Hide messages" : `Show the last messages in ${src}`}
-      >
-        <span className="ew-src">
-          <i className={`src-sq src-${a.source}`} />
-          {src}
-        </span>
-        <span className="ew-ttl">{a.label?.trim() || a.title?.trim() || `${src} session`}</span>
-        {a.running && <Spinner size={11} label={`${src} session working`} />}
-        <span className="ew-tm" data-testid="away-time">
-          {awayTime(a, now)}
-        </span>
-        <span className="ew-chev" aria-hidden="true">
-          <ChevronRight />
-        </span>
-      </button>
-      {open && (
-        <div className="ew-away-b" data-testid="peek">
-          {peek?.error ? (
-            <div className="ew-peek-note">Could not read this thread: {peek.error}</div>
-          ) : !peek || (peek.loading && shown === 0) ? (
-            <div className="ew-peek-note">Loading…</div>
-          ) : shown === 0 ? (
-            <div className="ew-peek-note">No messages yet.</div>
-          ) : (
-            <div className="ew-peek">
-              {peek.messages.map((m, i) => (
-                <div key={`${m.ts}-${i}`} className="ew-peek-m" data-testid="peek-msg">
-                  <b>{m.author || (m.role === "assistant" ? s.bots.find((b) => b.name === bot)?.display_name ?? bot : "User")}</b>
-                  <span>{m.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="ew-peek-f">
-            {/* v0.1 opens nothing: the link only says where the thread lives. */}
-            <span className="ew-open" title={`Opens in ${src}`} aria-disabled="true">
-              Open in {src} ↗
-            </span>
-            <em>{more > 0 ? `+${more} message${more === 1 ? "" : "s"} · read-only here` : "read-only here"}</em>
-          </div>
-        </div>
-      )}
+    <div className="msg a ew-msg" data-testid="away" data-source={a.source} data-session={a.id}>
+      <div className="b">
+        <span data-testid="away-text">{text}</span> {link}
+        {a.running && (
+          <span className="ew-working" data-testid="away-time">
+            <Spinner size={10} label={`${src} session working`} /> working · {workingFor(a.started_at, now)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

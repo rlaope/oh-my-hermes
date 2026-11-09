@@ -101,8 +101,8 @@ test("live line slides through steps with a skill chip, then collapses with deta
   const rows = act.getByTestId("activity-step");
   await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).toContainText("git log --oneline -5");
-  await expect(rows.nth(0).locator(".k")).toHaveText("run");
-  await expect(rows.nth(1).locator(".k")).toHaveText("skill");
+  await expect(rows.nth(0).locator(".k")).toHaveText("Ran");
+  await expect(rows.nth(1).locator(".k")).toHaveText("Used skill");
   await expect(rows.nth(0).locator(".s")).toHaveText(/^\d+(\.\d)?s$/);
   await page.screenshot({ path: `${SHOTS}/activity-done-open.png` });
   await act.getByTestId("activity-toggle").click();

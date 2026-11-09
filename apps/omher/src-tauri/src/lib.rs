@@ -24,6 +24,31 @@ async fn bridge_status(shell: State<'_, Shell>) -> Result<BridgeStatus, String> 
     Ok(shell.bridge.status())
 }
 
+/// Open a thread in its own app. Only Slack / Discord / Telegram links: omher never opens arbitrary URLs.
+#[tauri::command]
+async fn open_external(url: String) -> Result<(), String> {
+    if !allowed_external(&url) {
+        return Err("not a Slack, Discord or Telegram link".into());
+    }
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+pub(crate) fn allowed_external(url: &str) -> bool {
+    const PREFIXES: [&str; 5] = [
+        "slack://channel?",
+        "https://app.slack.com/",
+        "https://discord.com/channels/",
+        "discord://discord.com/channels/",
+        "https://t.me/",
+    ];
+    !url.chars().any(|c| c.is_whitespace() || c.is_control())
+        && PREFIXES.iter().any(|p| url.starts_with(p))
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -33,7 +58,7 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
 
 pub fn run() {
     let app = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry])
+        .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry, open_external])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
@@ -51,4 +76,19 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_external;
+
+    #[test]
+    fn opens_only_thread_links() {
+        assert!(allowed_external("slack://channel?team=T1&id=C1&thread_ts=1.2"));
+        assert!(allowed_external("https://discord.com/channels/1/2"));
+        assert!(!allowed_external("https://evil.example/discord.com/channels/1"));
+        assert!(!allowed_external("file:///etc/passwd"));
+        assert!(!allowed_external("https://discord.com/channels/1 --args"));
+        assert!(!allowed_external("javascript:alert(1)"));
+    }
 }
