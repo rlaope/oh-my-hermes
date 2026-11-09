@@ -12,11 +12,13 @@ Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 (macOS and Windows; Linux gets Hermes and OMH only). Download buttons are on [omher.app](https://omher.app/).
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+curl -fsSL https://omher.app/omher | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+irm https://omher.app/omher.ps1 | iex
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
 ```
 
 The installer copies omher into `/Applications` (or `~/Applications`) on macOS and runs the Windows installer

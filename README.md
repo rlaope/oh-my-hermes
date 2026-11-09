@@ -9,7 +9,7 @@ Your Hermes bots, coding sessions and `dag-ulw` runs, in one window.
 [macOS (Apple silicon)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-arm64.dmg) · [macOS (Intel)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-x64.dmg) · [Windows](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-windows-x64-setup.exe) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+curl -fsSL https://omher.app/omher | sh
 ```
 
 </div>

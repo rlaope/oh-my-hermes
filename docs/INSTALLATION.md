@@ -286,11 +286,13 @@ entirely.
 ### Hermes, OMH and the omher desktop app in one command (beta)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+curl -fsSL https://omher.app/omher | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+irm https://omher.app/omher.ps1 | iex
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
 ```
 
 The `omher@beta` argument adds three things to the plain install, and only with it:
