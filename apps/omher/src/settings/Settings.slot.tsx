@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
-import { useStore } from "../state/store";
+import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
 import { Avatar, GridIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
@@ -204,7 +204,9 @@ function BotPage({ bot }: { bot: Bot }) {
           <Value>Set in Hermes</Value>
         </Row>
         <Row title="Use this computer" hint="Click and type in your apps">
-          <Value>Not in this version</Value>
+          <Value>
+            <span className="st-soon">Soon</span>
+          </Value>
         </Row>
       </div>
     </div>
@@ -290,6 +292,35 @@ function BotCard({ bot }: { bot: Bot }) {
   );
 }
 
+const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
+const SHORTCUTS: [string, string][] = [
+  [`${MOD}1 … ${MOD}9`, "Open bot 1 to 9"],
+  [`${MOD}K`, "Search bots"],
+  [`${MOD}.`, "Show or hide Details"],
+  [`${MOD},`, "Settings"],
+  ["Esc", "Stop the running answer"],
+];
+
+function NotifySeg() {
+  const [on, setOn] = useState(notifyEnabled());
+  return (
+    <Seg
+      small
+      label="Notify me"
+      value={on ? "on" : "off"}
+      options={[
+        { value: "on", label: "On" },
+        { value: "off", label: "Off" },
+      ]}
+      onChange={(v) => {
+        setNotifyEnabled(v === "on");
+        setOn(v === "on");
+      }}
+      testId="notify-seg"
+    />
+  );
+}
+
 function GeneralPage() {
   const s = useStore();
   const h = s.hello;
@@ -297,6 +328,22 @@ function GeneralPage() {
     <div className="st-page">
       <div className="st-gh st-gh0">Appearance</div>
       <Appearance />
+      <div className="st-gh">Notifications</div>
+      <div className="st-grp">
+        <Row title="Notify me" hint="When a bot answers, needs an approval or asks you something while omher is in the background">
+          <NotifySeg />
+        </Row>
+      </div>
+      <div className="st-gh">Keyboard</div>
+      <div className="st-grp" data-testid="shortcuts">
+        {SHORTCUTS.map(([keys, what]) => (
+          <Row key={keys} title={what}>
+            <Value>
+              <kbd className="st-kbd">{keys}</kbd>
+            </Value>
+          </Row>
+        ))}
+      </div>
       <div className="st-gh">Hermes</div>
       <div className="st-grp">
         <Row title="Hermes home">
@@ -353,7 +400,9 @@ function ComputerPage() {
       <div className="st-gh st-gh0">Computer</div>
       <div className="st-grp">
         <Row title="Use this computer" hint="Let a bot click and type in your apps">
-          <Value>Not in this version</Value>
+          <Value>
+            <span className="st-soon">Soon</span>
+          </Value>
         </Row>
       </div>
     </div>
