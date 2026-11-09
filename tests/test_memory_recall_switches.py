@@ -85,6 +85,9 @@ class _Switches(_Messenger):
         channel = self.on("discord", "discord-seed")
         self.turn(channel, 1, "hi", author_id=DISCORD_OWNER)
         discord = str(self.capture("discord-seed", FACT)["record_id"])
+        # The seeding session ends as an attended console ends one, so the next session's digest window
+        # starts after these saves; without it the digest reports them whenever the clock crosses a second.
+        self.console("seed-close").shutdown()
         return {**{platform: owner for platform in (*CONSOLE_PLATFORMS, "slack", "telegram")}, "discord": discord}
 
     def served(self, platform: str, session_id: str) -> tuple[OmhMemoryProvider, str]:

@@ -330,6 +330,151 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         self.assertNotIn("catalog_fingerprint", route)
         self.assertEqual(route["recommendation"]["source"], "recommendation_chain")
 
+    def test_brain_steps_from_ultrabrain_to_deep_before_the_last_resort(self) -> None:
+        # brain heads on ultrabrain; a set without an ultrabrain model steps to
+        # deep, the next depth tier, and keeps deep's effort instead of the
+        # last-resort one. Opus 5.5 is in the ultrabrain chain, so it routes
+        # there at xhigh without a step.
+        astra = _active("gpt-6-astra", "openai-codex", "gpt")
+        sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
+        for active, model, effort, category in (
+            ([_OPUS], "ccapi/claude-opus-5-5", "xhigh", "ultrabrain"),
+            ([sol], "openai-codex/gpt-6.1-sol", "high", "deep"),
+            ([_KIMI], "apitopia/kimi-k3.1-pro", "high", "deep"),
+            ([astra, _OPUS], "openai-codex/gpt-6-astra", "xhigh", "ultrabrain"),
+        ):
+            with self.subTest(active=[entry["model_alias"] for entry in active]):
+                route = resolve_model_route("hermes", role="brain", active_models=active)
+                self.assertEqual(route["status"], "routed")
+                self.assertEqual(route["selected_model"], model)
+                self.assertEqual(route["selected_reasoning_effort"], effort)
+                self.assertEqual(route["category"], category)
+                self.assertEqual(route["recommendation"]["source"], "recommendation_chain")
+                stepped = [entry for entry in route["attempted"] if entry["stage"] == "recommendation_category"]
+                self.assertEqual(len(stepped), 0 if category == "ultrabrain" else 1)
+                for entry in stepped:
+                    self.assertEqual(entry["outcome"], "no_active_candidate")
+                    self.assertIn("`ultrabrain`", entry["reason"])
+                    self.assertIn("`deep` selected", entry["reason"])
+
+    def test_research_deep_and_scale_large_step_to_deep_too(self) -> None:
+        for kwargs in ({"role": "research", "requested_depth": "deep"}, {"role": "review", "requested_scale": "large"}):
+            with self.subTest(**kwargs):
+                route = resolve_model_route("hermes", active_models=[_KIMI], **kwargs)
+                self.assertEqual(route["selected_model"], "apitopia/kimi-k3.1-pro")
+                self.assertEqual(route["selected_reasoning_effort"], "high")
+                self.assertEqual(route["category"], "deep")
+
+    def test_a_non_generative_ultrabrain_candidate_does_not_stop_the_step(self) -> None:
+        overrides = {
+            "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
+            "categories": {
+                "ultrabrain": [
+                    {
+                        "model_alias": "jev-1.13.0",
+                        "model_family": "jev",
+                        "preferred_provider_families": ["typesafe"],
+                        "reasoning_effort": "low",
+                        "reasoning": "Operator-selected head.",
+                    }
+                ]
+            },
+        }
+        jev = _active("jev-1.13.0", "typesafe", "jev")
+        route = resolve_model_route(
+            "hermes", role="brain", active_models=[jev, _OPUS], recommendation_overrides=overrides
+        )
+        self.assertEqual(route["selected_model"], "ccapi/claude-opus-5-5")
+        self.assertEqual(route["selected_reasoning_effort"], "high")
+        self.assertEqual(route["category"], "deep")
+
+    def test_requested_category_is_never_widened(self) -> None:
+        sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
+        route = resolve_model_route(
+            "hermes", role="brain", requested_category="ultrabrain", active_models=[sol]
+        )
+        self.assertEqual(route["category"], "ultrabrain")
+        self.assertEqual(route["selected_reasoning_effort"], "medium")
+        self.assertEqual(route["recommendation"]["source"], "last_resort_chain")
+        self.assertNotIn("recommendation_category", [entry["stage"] for entry in route["attempted"]])
+
+        kimi = resolve_model_route(
+            "hermes", role="brain", requested_category="ultrabrain", active_models=[_KIMI]
+        )
+        self.assertEqual(kimi["status"], "model_unrouted")
+        self.assertEqual(kimi["provenance"], "executor_default")
+
+    def test_without_a_deep_candidate_the_ultrabrain_resolution_stands(self) -> None:
+        dead = [
+            {
+                "model_alias": "qwen3-coder",
+                "model_family": "qwen",
+                "preferred_provider_families": ["qwen-oauth"],
+                "reasoning_effort": "high",
+                "reasoning": "Inactive on purpose.",
+            }
+        ]
+        overrides = {
+            "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
+            "categories": {"ultrabrain": dead, "deep": dead},
+        }
+        route = resolve_model_route(
+            "hermes", role="brain", active_models=[_OPUS], recommendation_overrides=overrides
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["selected_model"], "ccapi/claude-opus-5-5")
+        self.assertEqual(route["selected_reasoning_effort"], "medium")
+        self.assertEqual(route["recommendation"]["source"], "last_resort_chain")
+        self.assertEqual(route["category"], "ultrabrain")
+        self.assertEqual(
+            [entry["stage"] + ":" + entry["outcome"] for entry in route["attempted"]],
+            ["requested_model:skipped", "recommendation_chain:last_resort"],
+        )
+
+    def test_the_step_never_reaches_a_role_that_does_not_head_on_ultrabrain(self) -> None:
+        # Values as origin/main resolves them before the step existed.
+        glm = resolve_model_route("hermes", role="implementation", active_models=[_active("glm-5.3", "zai", "glm")])
+        self.assertEqual(glm["status"], "model_unrouted")
+        self.assertEqual(glm["category"], "unspecified-high")
+        self.assertEqual(
+            [entry["stage"] + ":" + entry["outcome"] for entry in glm["attempted"]],
+            ["requested_model:skipped", "recommendation_chain:owner_default", "executor_default:selected"],
+        )
+        haiku = _active("claude-haiku-5-5", "ccapi", "claude")
+        research = resolve_model_route("hermes", role="research", active_models=[haiku, _OPUS])
+        self.assertEqual(research["selected_model"], "ccapi/claude-opus-5-5")
+        self.assertEqual(research["selected_reasoning_effort"], "medium")
+        self.assertEqual(research["category"], "unspecified-low")
+        self.assertEqual(research["recommendation"]["source"], "last_resort_chain")
+        self.assertEqual(
+            [entry["stage"] + ":" + entry["outcome"] for entry in research["attempted"]],
+            ["requested_model:skipped", "recommendation_chain:last_resort"],
+        )
+
+    def test_a_deep_override_steers_brain_only_without_an_ultrabrain_candidate(self) -> None:
+        overrides = {
+            "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
+            "categories": {
+                "deep": [
+                    {
+                        "model_alias": "qwen3-coder",
+                        "model_family": "qwen",
+                        "preferred_provider_families": ["qwen-oauth"],
+                        "reasoning_effort": "high",
+                        "reasoning": "Operator-selected deep coding route.",
+                    }
+                ]
+            },
+        }
+        qwen = _active("qwen3-coder", "qwen-oauth", "qwen")
+        astra = _active("gpt-6-astra", "openai-codex", "gpt")
+        alone = resolve_model_route("hermes", role="brain", active_models=[qwen], recommendation_overrides=overrides)
+        self.assertEqual(alone["selected_model"], "qwen-oauth/qwen3-coder")
+        beside = resolve_model_route(
+            "hermes", role="brain", active_models=[qwen, astra], recommendation_overrides=overrides
+        )
+        self.assertEqual(beside["selected_model"], "openai-codex/gpt-6-astra")
+
     def test_cli_category_routes_independently_from_role(self) -> None:
         inventory = {
             "model_discovery": {

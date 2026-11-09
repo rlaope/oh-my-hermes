@@ -299,15 +299,25 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         )
 
     def test_a_routed_ultrabrain_child_is_labeled_ultrabrain(self):
+        # Fable 5.1 at xhigh heads ultrabrain since 2026-11-09 (owner
+        # decision); it sat third in architect and labelled that before.
         self.assertEqual(
-            mixture_category_for("gpt-6-astra", "xhigh", parent_model="kimi-k3"),
+            mixture_category_for("claude-fable-5-1", "xhigh", parent_model="kimi-k3"),
             "ultrabrain",
         )
 
+    def test_an_astra_xhigh_child_is_labeled_forensics(self):
+        # Astra at xhigh sits second in ultrabrain and architect and heads
+        # only forensics since 2026-11-09, so the head match labels it there.
+        self.assertEqual(
+            mixture_category_for("gpt-6-astra", "xhigh", parent_model="kimi-k3"),
+            "forensics",
+        )
+
     def test_an_effort_mismatch_with_the_chain_entry_yields_no_category(self):
-        # gpt-6-astra appears only at xhigh (the ultrabrain head and the
-        # architect GPT slot); a medium run on a different parent matches
-        # nothing and must not be dressed up as a routed ultrabrain dispatch.
+        # gpt-6-astra appears only at xhigh (the forensics head and the GPT
+        # slot of ultrabrain and architect); a medium run on a different parent
+        # matches nothing and must not be dressed up as a routed dispatch.
         self.assertEqual(
             mixture_category_for("gpt-6-astra", "medium", parent_model="kimi-k3"), ""
         )
@@ -355,15 +365,16 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # 2026-10-13 -- (claude-opus-5-5, high) heads deep and
         # visual-engineering, (claude-opus-5-5, medium) heads writing and
         # capable -- and chose `max` for deep-work so its label survives.
-        # Two more were accepted with the routing-recipe heads on 2026-10-28:
-        # (gpt-6-astra, xhigh) heads ultrabrain and forensics, and
-        # (claude-opus-5-5, xhigh) heads architect and synthesize, so those
-        # two labels reach a child only through a route-provenance record.
-        # Routing is unaffected; a fifth collision fails here by name.
+        # One more was accepted with the routing-recipe heads on 2026-10-28:
+        # (claude-opus-5-5, xhigh) heads architect and synthesize, so that
+        # label reaches a child only through a route-provenance record. The
+        # (gpt-6-astra, xhigh) collision of ultrabrain and forensics ended on
+        # 2026-11-09, when Fable 5.1 took ultrabrain's head; forensics now
+        # labels its own head. Routing is unaffected; a new collision fails
+        # here by name.
         accepted = {
             "visual-engineering": "deep",
             "capable": "writing",
-            "forensics": "ultrabrain",
             "synthesize": "architect",
         }
         for category, chain in HERMES_MIXTURE_CATEGORY_CHAINS.items():
@@ -727,8 +738,11 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                 self.assertEqual(mixture_category_for(spelling, "xhigh", parent_model="kimi-k3"), "")
 
     def test_a_routed_architect_child_is_labeled_architect(self):
+        # Opus 5.5 at xhigh heads architect (and synthesize, which loses the
+        # label to the earlier category). Fable 5.1 at xhigh labelled
+        # architect until it took ultrabrain's head on 2026-11-09.
         self.assertEqual(
-            mixture_category_for("claude-fable-5-1", "xhigh", parent_model="kimi-k3"),
+            mixture_category_for("claude-opus-5-5", "xhigh", parent_model="kimi-k3"),
             "architect",
         )
 
@@ -754,14 +768,15 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # (claude-opus-5-5, medium) heads writing -- capable shares that head
         # and loses the label to the earlier category (accepted collision).
         contracts = {
-            "gpt-6-astra": ("openai", "xhigh", "ultrabrain", "openai", "anthropic"),
+            # Astra at xhigh heads forensics alone since 2026-11-09.
+            "gpt-6-astra": ("openai", "xhigh", "forensics", "openai", "anthropic"),
             "gpt-6.1-sol": ("openai", "high", "deep", "openai", "anthropic"),
             "deepseek-v4.1-flash": ("deepseek", "low", "swarm", "deepseek", "anthropic"),
             "claude-opus-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-sonnet-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-haiku-5-5": ("anthropic", "low", "simple-work", "anthropic", "openai"),
-            # Fable 5.1 heads no chain; at `xhigh` it sits third in architect.
-            "claude-fable-5-1": ("anthropic", "xhigh", "architect", "anthropic", "openai"),
+            # Fable 5.1 at `xhigh` heads ultrabrain since 2026-11-09.
+            "claude-fable-5-1": ("anthropic", "xhigh", "ultrabrain", "anthropic", "openai"),
         }
         # A contract in no shipped chain, named by no provider-family row,
         # has nothing for its aliases to inherit. Jev is that case by

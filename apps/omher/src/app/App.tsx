@@ -40,7 +40,8 @@ export function App() {
           </Suspense>
         ) : <Chat />}
       </main>
-      <aside className="details" aria-hidden={!panelOpen} data-testid="details">
+      {/* inert while closed: the off-screen panel takes no focus and no clicks */}
+      <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
         {bot &&
           (Details ? (
             <Details bot={bot} open={panelOpen} onClose={close} />

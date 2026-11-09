@@ -34,7 +34,7 @@ RULES = (
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
-    "The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`)",
+    "The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",

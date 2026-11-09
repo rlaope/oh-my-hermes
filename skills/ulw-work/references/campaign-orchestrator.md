@@ -20,7 +20,7 @@ A single-owner task, a small parallel task, or an open-ended loop is not a campa
 ```text
 current chat parent (model unchanged, narrates, may display or cancel)
   -> exactly one campaign orchestrator on the `architect` route (its shipped chain head by default)
-       -> bounded leaves on the `ultrabrain` route (Astra-first by shipped default)
+       -> bounded leaves on the `ultrabrain` route (its shipped chain head by default)
        -> conflict decisions and one integration fan-in
   -> one integrated, verified result back to the chat parent
 ```
