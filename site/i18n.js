@@ -29,6 +29,12 @@ window.OMH_I18N = {
       ja: "インストール",
       zh: "安装"
     },
+    "nav.download": {
+      en: "Download app",
+      ko: "앱 다운로드",
+      ja: "アプリをダウンロード",
+      zh: "下载应用"
+    },
     "nav.docs": {
       en: "Docs",
       ko: "문서",
