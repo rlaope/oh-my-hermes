@@ -112,13 +112,31 @@ def _snake(text: str) -> bool:
 
 # ---------------------------------------------------------------- profile discovery (files only)
 
+_YAML_CACHE: dict[str, tuple[int, int, dict]] = {}
+
+
 def _load_yaml(path: Path) -> dict:
+    """The parsed mapping in *path*, or {}. Parsed once per (path, mtime_ns, size): every op calls
+    discover_bots on the event loop, and a full config.yaml parse costs ~5 ms with the pure-Python loader.
+    The result is shared; callers that change it copy it first."""
+    key = str(path)
+    try:
+        st = path.stat()
+    except OSError:
+        _YAML_CACHE.pop(key, None)
+        return {}
+    hit = _YAML_CACHE.get(key)
+    if hit is not None and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+        return hit[2]
     try:
         import yaml  # Hermes' own dependency; absent only outside its venv
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
+        loader = getattr(yaml, "CSafeLoader", None) or yaml.SafeLoader
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=loader)  # noqa: S506 - a safe loader
+        data = data if isinstance(data, dict) else {}
     except Exception:
-        return {}
+        data = {}
+    _YAML_CACHE[key] = (st.st_mtime_ns, st.st_size, data)
+    return data
 
 
 def discover_bots(home: Path) -> list[dict]:
@@ -226,7 +244,7 @@ def write_display_name(profile_dir: Path, name: str) -> None:
         pass  # Hermes' writer (or its lazy `utils` import) is not reachable: it failed before writing anything
     import yaml
     path = profile_dir / "profile.yaml"
-    data = _load_yaml(path)
+    data = dict(_load_yaml(path))  # a copy: the parsed mapping is cached and shared
     if name:
         data["display_name"] = name
     else:
@@ -569,26 +587,55 @@ def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
 
 _MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _MENTION = re.compile(r"<[@#!][^>]*>")
-_URL = re.compile(r"https?://\S+")
+# ASCII URL characters only (RFC 3986), so a URL stops at the Korean particle glued to it ("…/2695에서").
+_URL = re.compile(r"https?://[A-Za-z0-9\-._~:/?#\[\]@!$&()*+,;=%]+")
+_URL_TAIL = ".,;:!?*_~"
 
 
-def _short_url(m: "re.Match[str]") -> str:
+def _split_url(raw: str) -> tuple[str, str]:
+    """(url, tail): sentence punctuation and markdown marks after a URL are not part of it; a closing
+    bracket is only when the URL leaves it unbalanced (`(see https://x.y/a)` vs `…/wiki/Foo_(bar)`)."""
+    url = raw
+    while url:
+        if url[-1] in _URL_TAIL:
+            url = url[:-1]
+        elif url[-1] == ")" and url.count(")") > url.count("("):
+            url = url[:-1]
+        elif url[-1] == "]" and url.count("]") > url.count("["):
+            url = url[:-1]
+        else:
+            break
+    return url, raw[len(url):]
+
+
+def _short_url(url: str) -> str:
     """A bare URL inside a sentence stays readable instead of leaving a hole ("… 에서 열립니다"):
-    `https://omher.app/docs/skills/` -> `omher.app/docs/skills`; a long path is cut to its host."""
-    u = re.sub(r"^[a-z][a-z0-9+.-]*://", "", m.group(0), flags=re.I).rstrip("/.,)")
+    `https://omher.app/docs/skills/` -> `omher.app/docs/skills`; a long path is cut to its host. The query
+    and fragment are always dropped: they carry tokens (`?token=…`), not words."""
+    u = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url, flags=re.I)
+    u = re.split(r"[?#]", u, maxsplit=1)[0].rstrip("/")
     u = re.sub(r"^www\.", "", u)
     return u if len(u) <= 40 else u.split("/", 1)[0]
 
 
 def reply_gist(text: str, n: int = 220) -> str:
-    """The first paragraph of an answer as plain text: markdown marks, mentions and bare URLs removed,
-    clipped at a sentence end when one is near."""
+    """The first paragraph of an answer as plain text: markdown marks and mentions removed, bare URLs
+    shortened, clipped at a sentence end when one is near."""
     para = next((p for p in re.split(r"\n\s*\n", text or "") if p.strip()), "")
     t = _MD_LINK.sub(r"\1", para)
     t = _MENTION.sub("", t)
-    t = _URL.sub(_short_url, t)
+    urls: list[str] = []
+
+    def hold(m: "re.Match[str]") -> str:
+        # URLs sit behind placeholders while markdown marks are stripped, so `foo_bar` keeps its underscore
+        url, tail = _split_url(m.group(0))
+        urls.append(_short_url(url))
+        return f"\x00{len(urls) - 1}\x00{tail}"
+
+    t = _URL.sub(hold, t)
     t = re.sub(r"^\s*(#+|[-*])\s+", "", t, flags=re.M)
     t = re.sub(r"[*_`~]+", "", t)
+    t = re.sub(r"\x00(\d+)\x00", lambda m: urls[int(m.group(1))], t)
     t = " ".join(t.split())
     if len(t) <= n:
         return t
