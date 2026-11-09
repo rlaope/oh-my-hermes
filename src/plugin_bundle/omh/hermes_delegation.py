@@ -58,6 +58,7 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     #
     # Claude vendor order (owner decision, 2026-10-13): Opus 5.5 before Fable
     # 5.1 inside any chain, reversing the 2026-09-06 Fable -> Opus rule.
+    # `ultrabrain` is the one exception (below).
     # Claude Mythos 5.1 is Fable 5.1 under Project Glasswing access, so no
     # shipped chain names it; it stays recognized, priced, and routable for a
     # user who asks for it by name.
@@ -78,15 +79,30 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # artistry projects to x-search since 2026-10-28 (to deep before), where
     # it sits second; (gpt-6-luna, low) and (claude-haiku-5-5, low) reached
     # through quick project to simple-work.
-    "ultrabrain": (("gpt-6-astra", "xhigh"),),
+    # Fable 5.1 heads ultrabrain ahead of Astra (owner decision, 2026-11-09):
+    # the chain was Astra alone, so a user without OpenAI access fell straight
+    # back to the parent model, against the cross-ecosystem rule (2026-08-19,
+    # below). This is an explicit choice for this category; it does not change
+    # the 2026-10-13 Opus 5.5 -> Fable 5.1 order anywhere else. Claude Mythos
+    # stays out of every shipped chain (above).
+    # (claude-fable-5-1, xhigh) now heads ultrabrain and labels "ultrabrain"
+    # (it projected to architect, where it sits third, before); Astra at
+    # xhigh now heads only forensics and labels "forensics" (see forensics
+    # below). Opus 5.5 at xhigh, third here, keeps the architect label of the
+    # chain it heads. No other shipped pair's label moves.
+    "ultrabrain": (
+        ("claude-fable-5-1", "xhigh"),
+        ("gpt-6-astra", "xhigh"),
+        ("claude-opus-5-5", "xhigh"),
+    ),
     # DeepSeek V4.1 Flash left `deep`: a Flash budget model does not fit the
     # strong tier, and Opus 5.5 and Kimi K3.1 Pro now carry its cross-ecosystem
     # fallback. visual-engineering children are labelled "deep" (above).
     "deep": (("claude-opus-5-5", "high"), ("gpt-6.1-sol", "high"), ("kimi-k3.1-pro", "high")),
     # Architecture/system-design lanes: full-depth effort across three
-    # provider ecosystems. Astra at xhigh stays labeled ultrabrain (its
-    # canonical head), which is the honest projection when the chain falls
-    # through to it.
+    # provider ecosystems. A fall-through child is labelled by the chain its
+    # pair heads: Astra at xhigh projects to forensics and Fable at xhigh to
+    # ultrabrain (both since 2026-11-09).
     "architect": (
         ("claude-opus-5-5", "xhigh"),
         ("gpt-6-astra", "xhigh"),
@@ -182,14 +198,15 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # each tail crosses into another provider ecosystem (owner rule above).
     # They are opt-in: no role or scale names them.
     #
-    # Two heads collide with an earlier category's head. The owner kept
-    # both heads (2026-10-28), so the earlier category keeps the label:
-    #   (gpt-6-astra, xhigh)     heads ultrabrain and forensics  -> "ultrabrain"
+    # One head collides with an earlier category's head. The owner kept it
+    # (2026-10-28), so the earlier category keeps the label:
     #   (claude-opus-5-5, xhigh) heads architect and synthesize  -> "architect"
     # Routing is unaffected, and a lane routed through `omh_delegate_route`
     # keeps its own category through the route-provenance record; only a
-    # child with no matching record is labelled by projection, so forensics
-    # and synthesize are labels only a routed lane carries.
+    # child with no matching record is labelled by projection, so synthesize
+    # is a label only a routed lane carries. (gpt-6-astra, xhigh) collided
+    # with ultrabrain's head the same way until 2026-11-09, when Fable 5.1
+    # took that head; forensics now carries the Astra xhigh label.
     # Six projections move (diffed over every shipped (model, effort) pair):
     # (deepseek-flash, low) unspecified-low -> swarm and (gemini-4-argon,
     # medium) writing -> google-search, because each now heads a chain;
@@ -222,7 +239,9 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
         ("glm-5.3-flash", "low"),
         ("gpt-6-luna", "low"),
     ),
-    # Labelled "ultrabrain" by projection: its head is ultrabrain's.
+    # Since 2026-11-09 its head no longer collides: (gpt-6-astra, xhigh)
+    # labels "forensics", including a child that fell through ultrabrain or
+    # architect to Astra.
     "forensics": (
         ("gpt-6-astra", "xhigh"),
         ("claude-opus-5-5", "xhigh"),

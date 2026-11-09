@@ -1220,6 +1220,15 @@ All notable changes will be documented here.
   `delegation.fallback_providers` when the user sets them (Hermes 2026.9.7
   and later).
 
+- **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
+  Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
+  alone, so a user without OpenAI access fell straight back to the parent
+  model. Fable 5.1 heading this one category does not change the Opus 5.5
+  before Fable 5.1 order anywhere else. A child on Fable 5.1 at `xhigh` is
+  now labelled `ultrabrain` (it was `architect`), and one on GPT-6 Astra at
+  `xhigh` is labelled `forensics` (it was `ultrabrain`) when no route record
+  names its lane. Pricing is unchanged: no model was added.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
