@@ -5,7 +5,7 @@ import { shortTime } from "../app/time";
 
 /** One-line preview: live turn status while running, else the last assistant text. */
 export function preview(bot: Bot, chat: Chat | undefined): { text: string; live: boolean; ts: number | null } {
-  if (bot.status === "offline") return { text: "Offline", live: false, ts: null };
+  if (bot.status === "offline") return { text: "Not connected", live: false, ts: null };
   if (chat?.turn) return { text: chat.turn.status || "Working…", live: true, ts: chat.turn.startedAt / 1000 };
   const items = chat?.items ?? [];
   for (let i = items.length - 1; i >= 0; i -= 1) {

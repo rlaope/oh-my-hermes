@@ -58,6 +58,21 @@
 }
 .details-id > div {
   min-width: 0;
+  flex: 1;
+}
+.details-edit {
+  flex: none;
+  align-self: flex-start;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.details-edit:hover {
+  color: var(--ink);
+  background: var(--raise2);
 }
 .details-id span {
   display: block;

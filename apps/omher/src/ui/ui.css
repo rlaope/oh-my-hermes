@@ -3,6 +3,7 @@
   border-radius: 50%;
   display: block;
   flex: none;
+  object-fit: cover;
 }
 .ui-ib {
   width: 26px;
