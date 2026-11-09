@@ -164,17 +164,20 @@ _PLAN_TASK_SHAPE = (
 # quality_bar, so both planning skills read one acceptance rule. Host-neutral on
 # purpose: the portable projection has no `omh hermes plan-accept` and no Hermes
 # `clarify` tool.
-# Shared by plan's and ralplan's quality_bar: a planner or critic child runs on
-# the deepest tier (owner decision, 2026-11-09). The portable projection has no
-# `omh_delegate_route`, so it keeps the tier and drops the tool. Placed after
-# each bar's first four items, like `_PLAN_AMBITION_BAR`.
-_PLAN_CHILD_ROUTE_RULE = PortableLine(
-    "When a planning stage dispatches a planner or critic child, set `omh_delegate_route` with category `ultrabrain` in the same turn, before that `delegate_task`.",
-    "When a planning stage dispatches a planner or critic child, run it on the host's deepest reasoning tier.",
-)
-
 PLAN_ACCEPTANCE_ANSWER_RULE = (
     "Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance."
+)
+
+# Shared by plan's and ralplan's quality_bar: a planner or critic child runs on
+# the deepest tier (owner decision, 2026-11-09). On a chat platform a route
+# lasts the session, so the Hermes line clears it once those children are
+# dispatched; otherwise later unrouted dispatches would run on ultrabrain too.
+# The portable projection has no `omh_delegate_route`, so it keeps the tier and
+# drops the tool. Placed after each bar's first four items, like
+# `_PLAN_AMBITION_BAR`.
+_PLAN_CHILD_ROUTE_RULE = PortableLine(
+    "When a planning stage dispatches a planner or critic child, set `omh_delegate_route` with category `ultrabrain` in the same turn, before that `delegate_task`, and clear it (`omh_delegate_route` action `clear`) once those children are dispatched.",
+    "When a planning stage dispatches a planner or critic child, run it on the host's deepest reasoning tier.",
 )
 
 # Shared by `verification-gate` and `build-failure-triage`, so a failing check
@@ -7818,7 +7821,7 @@ _DEFINITIONS = [
             "artifact_expectations": "1b253cc34629c9c2c939fcdcf0607474fae8ce0a6c9538c567b109788e29b75b",
             "safety_rules": "da7d45f616a86bdbcddd220ab3e4768f29770f898d106e144012d60ae5f34fa2",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
-            "quality_bar": "9b224971df74e19beda9e2edf45ae4d61a1102e1f58814581c5358997f34dea8",
+            "quality_bar": "dc2b316ae0ec046552b60f5b2e110ca3f06b66e2149a642e8454cafcef670e83",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),

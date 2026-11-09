@@ -302,13 +302,13 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         overrides = {
             "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
             "categories": {
-                "ultrabrain": [
+                "deep": [
                     {
                         "model_alias": "qwen3-coder",
                         "model_family": "qwen",
                         "preferred_provider_families": ["qwen-oauth"],
                         "reasoning_effort": "high",
-                        "reasoning": "Operator-selected planning route.",
+                        "reasoning": "Operator-selected deep coding route.",
                     }
                 ]
             },
@@ -329,6 +329,99 @@ class HermesRecommendationRoutingTests(unittest.TestCase):
         self.assertEqual(route["catalog_kind"], "editorial_recommendations")
         self.assertNotIn("catalog_fingerprint", route)
         self.assertEqual(route["recommendation"]["source"], "recommendation_chain")
+
+    def test_brain_falls_through_its_categories_before_the_last_resort(self) -> None:
+        # brain = (ultrabrain, deep, unspecified-low): the first category with
+        # a confirmed-active candidate wins, so a set without an ultrabrain
+        # model keeps deep's effort instead of the last-resort one.
+        astra = _active("gpt-6-astra", "openai-codex", "gpt")
+        sol = _active("gpt-6.1-sol", "openai-codex", "gpt")
+        for active, model, effort, category in (
+            ([_OPUS], "ccapi/claude-opus-5-5", "high", "deep"),
+            ([sol], "openai-codex/gpt-6.1-sol", "high", "deep"),
+            ([_KIMI], "apitopia/kimi-k3.1-pro", "high", "deep"),
+            ([astra, _OPUS], "openai-codex/gpt-6-astra", "xhigh", "ultrabrain"),
+        ):
+            with self.subTest(active=[entry["model_alias"] for entry in active]):
+                route = resolve_model_route("hermes", role="brain", active_models=active)
+                self.assertEqual(route["status"], "routed")
+                self.assertEqual(route["selected_model"], model)
+                self.assertEqual(route["selected_reasoning_effort"], effort)
+                self.assertEqual(route["category"], category)
+                self.assertEqual(route["recommendation"]["source"], "recommendation_chain")
+                skipped = [entry for entry in route["attempted"] if entry["stage"] == "recommendation_category"]
+                self.assertEqual(len(skipped), 0 if category == "ultrabrain" else 1)
+                for entry in skipped:
+                    self.assertEqual(entry["outcome"], "no_active_candidate")
+                    self.assertIn("`ultrabrain`", entry["reason"])
+                    self.assertIn("trying `deep`", entry["reason"])
+
+    def test_requested_category_is_never_widened(self) -> None:
+        route = resolve_model_route(
+            "hermes", role="brain", requested_category="ultrabrain", active_models=[_OPUS]
+        )
+        self.assertEqual(route["category"], "ultrabrain")
+        self.assertEqual(route["selected_reasoning_effort"], "medium")
+        self.assertEqual(route["recommendation"]["source"], "last_resort_chain")
+        self.assertNotIn("recommendation_category", [entry["stage"] for entry in route["attempted"]])
+
+        kimi = resolve_model_route(
+            "hermes", role="brain", requested_category="ultrabrain", active_models=[_KIMI]
+        )
+        self.assertEqual(kimi["status"], "model_unrouted")
+        self.assertEqual(kimi["provenance"], "executor_default")
+
+    def test_every_dead_brain_category_still_reaches_the_shared_last_resort(self) -> None:
+        dead = [
+            {
+                "model_alias": "qwen3-coder",
+                "model_family": "qwen",
+                "preferred_provider_families": ["qwen-oauth"],
+                "reasoning_effort": "high",
+                "reasoning": "Inactive on purpose.",
+            }
+        ]
+        overrides = {
+            "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
+            "categories": {"ultrabrain": dead, "deep": dead, "unspecified-low": dead},
+        }
+        route = resolve_model_route(
+            "hermes", role="brain", active_models=[_OPUS], recommendation_overrides=overrides
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["selected_model"], "ccapi/claude-opus-5-5")
+        self.assertEqual(route["recommendation"]["source"], "last_resort_chain")
+        # No category had a candidate, so the first one's resolution stands.
+        self.assertEqual(route["category"], "ultrabrain")
+        skipped = [entry for entry in route["attempted"] if entry["stage"] == "recommendation_category"]
+        self.assertEqual(len(skipped), 3)
+        self.assertIn("back to `ultrabrain`", skipped[-1]["reason"])
+        outcomes = {entry["stage"]: entry["outcome"] for entry in route["attempted"]}
+        self.assertEqual(outcomes["recommendation_chain"], "last_resort")
+
+    def test_a_deep_override_steers_brain_only_without_an_ultrabrain_candidate(self) -> None:
+        overrides = {
+            "schema_version": MODEL_RECOMMENDATION_OVERRIDE_SCHEMA_VERSION,
+            "categories": {
+                "deep": [
+                    {
+                        "model_alias": "qwen3-coder",
+                        "model_family": "qwen",
+                        "preferred_provider_families": ["qwen-oauth"],
+                        "reasoning_effort": "high",
+                        "reasoning": "Operator-selected deep coding route.",
+                    }
+                ]
+            },
+        }
+        qwen = _active("qwen3-coder", "qwen-oauth", "qwen")
+        astra = _active("gpt-6-astra", "openai-codex", "gpt")
+        alone = resolve_model_route("hermes", role="brain", active_models=[qwen], recommendation_overrides=overrides)
+        self.assertEqual(alone["selected_model"], "qwen-oauth/qwen3-coder")
+        beside = resolve_model_route(
+            "hermes", role="brain", active_models=[qwen, astra], recommendation_overrides=overrides
+        )
+        self.assertEqual(beside["selected_model"], "openai-codex/gpt-6-astra")
 
     def test_cli_category_routes_independently_from_role(self) -> None:
         inventory = {

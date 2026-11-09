@@ -1313,7 +1313,12 @@ def _resolve_hermes_recommendation_route(
     requested_effort = "off" if raw_effort == "none" else raw_effort
     attempted: list[dict[str, str]] = []
     active = tuple(active_models)
-    category = requested_category or _recommendation_category(role, requested_depth, requested_scale)
+    categories = (
+        (requested_category,)
+        if requested_category
+        else _recommendation_categories(role, requested_depth, requested_scale)
+    )
+    category = categories[0]
     selector = {"category": category}
 
     if requested_model:
@@ -1386,12 +1391,35 @@ def _resolve_hermes_recommendation_route(
         return payload
 
     attempted.append({"stage": "requested_model", "outcome": "skipped", "reason": "no model requested"})
-    recommendation = resolve_model_recommendation(
-        owner="hermes",
-        active_models=active,
-        overrides=recommendation_overrides,
-        **selector,
-    )
+    # The role's categories in order, as the catalog lane concatenates them:
+    # the first with a confirmed-active candidate wins, before the shared
+    # last-resort chain. A requested category is one category, never widened.
+    # With no candidate in any of them, the first category's resolution stands.
+    recommendation: dict[str, object] = {}
+    for index, candidate_category in enumerate(categories):
+        resolution = resolve_model_recommendation(
+            owner="hermes",
+            active_models=active,
+            overrides=recommendation_overrides,
+            category=candidate_category,
+        )
+        if index == 0:
+            recommendation = resolution
+        if resolution["source"] == "recommendation_chain":
+            recommendation, category = resolution, candidate_category
+            break
+        following = categories[index + 1] if index + 1 < len(categories) else ""
+        if len(categories) > 1:
+            attempted.append(
+                {
+                    "stage": "recommendation_category",
+                    "outcome": "no_active_candidate",
+                    "reason": (
+                        f"no confirmed-active candidate in recommendation category `{candidate_category}`; "
+                        + (f"trying `{following}`" if following else f"back to `{categories[0]}`'s resolution")
+                    ),
+                }
+            )
     chain = (
         _hermes_recommendation_chain(recommendation, active_models=active)
         if recommendation["status"] == "resolved"
@@ -1546,15 +1574,14 @@ def _vendor_spelling_change(requested_effort: str, model_id: str) -> dict[str, s
     )
 
 
-def _recommendation_category(role: str, depth: str, scale: str) -> str:
+def _recommendation_categories(role: str, depth: str, scale: str) -> tuple[str, ...]:
     if role == "research" and depth == "deep":
-        return "ultrabrain"
+        return CATEGORY_ROLE_SOURCES["research:deep"]
     if scale == "large":
-        return "ultrabrain"
+        return CATEGORY_SCALE_SOURCES["large"]
     if scale == "small":
-        return "unspecified-low"
-    sources = CATEGORY_ROLE_SOURCES.get(role, ("unspecified-high",))
-    return sources[0]
+        return ("unspecified-low",)
+    return CATEGORY_ROLE_SOURCES.get(role, ("unspecified-high",))
 
 
 def _recommendation_binding(resolution: Mapping[str, object]) -> str:

@@ -454,8 +454,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was ed82a2da...ba22.
         # Planning children then route to ultrabrain: plan and ralplan gain the child-route line and
         # ultrawork's handoff policy sends planning lanes to ultrabrain; only those three move, and the
-        # pin before it was 18512bc6...beff.
-        self.assertEqual(_digest(legacy_hashes), '52bbf25d590b8d7a4c1536596167b6d6356f018a390a6720908f2bba7ca200ff')
+        # pin before it was 18512bc6...beff. Its review then has the child-route line clear the route once
+        # the planning children are dispatched; only plan and ralplan move, and the pin before it was
+        # 52bbf25d...00ff.
+        self.assertEqual(_digest(legacy_hashes), '88ddc8a41631513d09d875a1a5dbe821d350d079975a823f4a0cf4bffa6b71bf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
