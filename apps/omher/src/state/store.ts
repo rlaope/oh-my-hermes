@@ -156,13 +156,15 @@ export interface Ui {
   panelTab: PanelTabId;
   theme: Theme;
   look: Look;
-  view: "chat" | "settings";
+  /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
+  view: "chat" | "settings" | "session";
   settingsPage: string;
   /** Sidebar: bots pinned to the top (in pin order) and bots hidden from the list. Saved on this computer. */
   pinned: string[];
   hidden: string[];
   /** The ask card to scroll to and focus (set by the Needs-you strip and ⌘J); `seq` re-triggers the same one. */
   focusAsk: FocusAsk | null;
+  session: string | null;
 }
 
 export interface FocusAsk {
@@ -309,6 +311,7 @@ export function initialState(): AppState {
       pinned: readList("omher.pinned"),
       hidden: readList("omher.hidden"),
       focusAsk: null,
+      session: null,
     },
   };
 }
@@ -448,7 +451,8 @@ export type Action =
   | { type: "ui.closeSettings" }
   | { type: "ui.pin"; bot: string; on: boolean }
   | { type: "ui.hide"; bot: string; on: boolean }
-  | { type: "ui.focusAsk"; bot: string; id: string };
+  | { type: "ui.focusAsk"; bot: string; id: string }
+  | { type: "ui.session"; id: string | null };
 
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   const bot = ev.bot;
@@ -712,6 +716,10 @@ export function reduce(state: AppState, a: Action): AppState {
     }
     case "ui.focusAsk":
       return { ...state, ui: { ...state.ui, focusAsk: { bot: a.bot, id: a.id, seq: (state.ui.focusAsk?.seq ?? 0) + 1 } } };
+    case "ui.session":
+      return a.id
+        ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
+        : { ...state, ui: { ...state.ui, view: state.ui.view === "session" ? "chat" : state.ui.view, session: null } };
     default:
       return state;
   }
@@ -835,6 +843,8 @@ export interface Actions {
   hideBot(bot: string, on: boolean): void;
   /** Open the bot's chat and scroll to / focus one of its ask cards. */
   jumpToAsk(bot: string, id: string): Promise<void>;
+  /** Show terminal session `id` in the main column; null goes back to the selected bot's chat. */
+  openSession(id: string | null): void;
   /** Re-read bots.list (names, status, picture revisions). */
   reloadBots(): Promise<void>;
   renameBot(bot: string, name: string): Promise<void>;
@@ -1115,6 +1125,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "ui.focusAsk", bot, id });
       if (state.selectedBot !== bot || state.ui.view !== "chat") await selectBot(bot);
     },
+    openSession: (id) => dispatch({ type: "ui.session", id }),
     reloadBots,
     async renameBot(bot, name) {
       const r = await bridge.request("bots.rename", { bot, name });

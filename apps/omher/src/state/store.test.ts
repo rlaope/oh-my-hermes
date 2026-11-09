@@ -395,6 +395,13 @@ describe("store", () => {
     expect(store.getState().ui).toMatchObject({ view: "settings", settingsPage: "providers" });
     store.actions.closeSettings();
     expect(store.getState().ui.view).toBe("chat");
+    store.actions.openSession("s1");
+    expect(store.getState().ui).toMatchObject({ view: "session", session: "s1" });
+    await store.actions.selectBot("kami");
+    expect(store.getState().ui.view).toBe("chat");
+    store.actions.openSession("s1");
+    store.actions.openSession(null);
+    expect(store.getState().ui).toMatchObject({ view: "chat", session: null });
   });
 
   it("Reply there: the chip goes along as reply_to once, then clears; a turn end re-reads the places", async () => {
