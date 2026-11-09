@@ -283,6 +283,31 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
+### Hermes, OMH and the omher desktop app in one command (beta)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+```
+
+The `omher@beta` argument adds three things to the plain install, and only with it:
+
+| Starting point | What runs |
+| --- | --- |
+| OMH and Hermes installed | OMH is upgraded; the omher app is added |
+| Hermes, no OMH | OMH is installed, `omh setup` + `omh doctor` connect it to Hermes; the app is added |
+| Neither | Hermes' official installer runs non-interactively first, then OMH, `omh setup`, and the app |
+
+The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is mounted, `omher.app` is copied
+to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`) and replaces an older copy; on Windows the per-user
+installer runs silently. Linux gets Hermes and OMH only, with a note. `OMH_WITH_HERMES=0` skips installing Hermes
+and `OMH_WITH_DESKTOP=0` skips the app. A Hermes installed this way skipped its setup wizard, so run
+`hermes setup` once to choose a model. `irm ... | iex` cannot pass an argument, which is why the PowerShell form
+runs the downloaded script as a script block.
+
 ### Windows (PowerShell 5.1+)
 
 ```powershell

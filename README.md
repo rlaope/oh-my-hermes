@@ -38,6 +38,17 @@ omh setup
 
 [Windows and other options →](docs/INSTALLATION.md)
 
+**omher desktop app (beta).** One command installs Hermes and OMH if they are missing, then the omher app
+(macOS and Windows). Download buttons are on [omher.app](https://omher.app/).
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+```
+
+<p align="center">
+  <img src="assets/omher-in-use-dark.webp" alt="The omher desktop app in dark mode: a bot list on the left, and a chat with the bot Kami that reports a nightly digest from Discord, picks up a Slack thread about 502 errors, runs four steps and answers with the fix" width="900">
+</p>
+
 <br>
 
 ## What you get

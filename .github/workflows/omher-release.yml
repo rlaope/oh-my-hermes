@@ -118,7 +118,7 @@ jobs:
         run: |
           v="${TAG#omher-v}"
           cat > notes.md <<EOF
-          omher $v, the desktop app for your Hermes bots. Needs Hermes Agent installed on the same machine.
+          omher $v, the desktop app for your Hermes bots. If Hermes Agent is not installed yet, omher offers to install it (with oh-my-hermes) on first launch.
 
           - **macOS (Apple Silicon):** \`omher-$v-macos-arm64.dmg\`
           - **macOS (Intel):** \`omher-$v-macos-x64.dmg\`
