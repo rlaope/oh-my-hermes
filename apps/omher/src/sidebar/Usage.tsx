@@ -11,7 +11,8 @@ const REFRESH_MS = 60_000;
 const R = 11.5;
 const C = 2 * Math.PI * R;
 
-function Ring({ p }: { p: UsageProvider }) {
+/** The usage ring (also used per account in Settings › Accounts). */
+export function Ring({ p }: { p: UsageProvider }) {
   const pct = topPercent(p);
   const fill = pct === null ? 0 : Math.max(0, Math.min(100, pct));
   return (

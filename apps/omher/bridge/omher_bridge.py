@@ -505,8 +505,8 @@ def _finish(provider: dict, now: float) -> dict:
     return provider
 
 
-def _codex_usage(user_home: Path, now: float) -> dict | None:
-    root = user_home / ".codex" / "sessions"
+def _codex_usage(user_home: Path, now: float, root: Path | None = None) -> dict | None:
+    root = root or user_home / ".codex" / "sessions"
     if not root.is_dir():
         return None
     best = None  # (event ts, mtime, rate_limits)
@@ -560,8 +560,8 @@ def _find_key(obj, key: str, depth: int = 0):
     return None
 
 
-def _claude_usage(user_home: Path, now: float) -> dict | None:
-    root = user_home / ".claude" / "projects"
+def _claude_usage(user_home: Path, now: float, root: Path | None = None) -> dict | None:
+    root = root or user_home / ".claude" / "projects"
     if not root.is_dir():
         return None
     best = None  # (event ts, mtime, rate_limit_info)
@@ -635,6 +635,268 @@ def _to_ts(value) -> float:
         return datetime.fromisoformat(str(value)).timestamp()
     except (TypeError, ValueError):
         return time.time()
+
+
+# ---------------------------------------------------------------- accounts (CLIProxyAPI listing, omher stacks)
+#
+# Two backends per CLI. When CLIProxyAPI (CPA) runs on this machine and holds auth files for a CLI, its accounts
+# are listed from those files with five fields only (tokens are dropped right after json parsing and never
+# leave this function); CPA does its own switching, and changes go through its management API from the app
+# (Rust), never from here. Otherwise omher keeps one folder per account under ~/.omher/accounts/<cli>/<id>/,
+# which a new session uses as the CLI's home (CLAUDE_CONFIG_DIR, CODEX_HOME…); logging in is the CLI's own.
+
+ACCOUNT_CLIS = ("claude", "codex", "grok", "gemini")
+CPA_FIELDS = ("email", "disabled", "expired", "last_refresh", "type")
+CPA_TYPES = {"claude": "claude", "codex": "codex", "grok": "xai", "gemini": "gemini"}
+_ACCOUNT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
+_CPA_FILE = re.compile(r"^[A-Za-z0-9@._+-]{1,120}\.json$")
+# Files in an account folder whose presence (stat only, never opened) means the CLI logged in there.
+_LOGIN_MARK = {"claude": (".claude.json",), "codex": ("auth.json",), "grok": ("auth.json", "user-settings.json"),
+               "gemini": (".gemini/oauth_creds.json", ".gemini/google_accounts.json")}
+
+
+def omher_accounts_root(user_home: Path | None = None) -> Path:
+    return (Path(user_home) if user_home else Path.home()) / ".omher" / "accounts"
+
+
+def _cpa_config(user_home: Path) -> dict | None:
+    path = user_home / ".cli-proxy-api" / "config.yaml"
+    if not path.is_file():
+        return None
+    cfg = _load_yaml(path)
+
+    def sub(key: str) -> dict:
+        v = cfg.get(key)
+        return v if isinstance(v, dict) else {}
+
+    port = sub("server").get("port", cfg.get("port", 8317))
+    auth_dir = str(sub("oauth").get("auth-dir") or cfg.get("auth-dir") or "~/.cli-proxy-api")
+    auth = Path(auth_dir.replace("~", str(user_home), 1) if auth_dir.startswith("~") else auth_dir)
+    # Only whether a management key is set, never the key: CPA turns /v0/management off when it is empty.
+    managed = bool(str(sub("management").get("secret-key") or sub("remote-management").get("secret-key") or "").strip())
+    out = {"port": int(port) if isinstance(port, int) and 0 < port < 65536 else 8317, "management": managed,
+           "strategy": str(sub("routing").get("strategy") or "round-robin"), "auth_dir": auth}
+    cfg.clear()
+    return out
+
+
+def _port_answers(port: int, timeout: float = 0.3) -> bool:
+    """A bare TCP connect to 127.0.0.1 (nothing is sent): is CPA running?"""
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def read_cpa_file(path: Path) -> dict | None:
+    """One CPA auth file -> only `CPA_FIELDS` plus the file name. Every other field (tokens included) is
+    dropped here, right after parsing."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    kept = {k: raw.get(k) for k in CPA_FIELDS}
+    raw.clear()
+    del raw
+    out = {"file": path.name, "email": kept["email"] if isinstance(kept["email"], str) else "",
+           "disabled": kept["disabled"] is True, "type": str(kept["type"] or "")}
+    for k in ("expired", "last_refresh"):
+        out[k] = kept[k] if isinstance(kept[k], str) else None
+    return out
+
+
+def _cpa_rows(cpa: dict, cli: str, now: float) -> list[dict]:
+    auth: Path = cpa["auth_dir"]
+    kind = CPA_TYPES[cli]
+    rows = []
+    for path in sorted(auth.glob(f"{kind}-*.json")) if auth.is_dir() else []:
+        f = read_cpa_file(path)
+        if f is None or (f["type"] and f["type"] != kind):
+            continue
+        expired = f["expired"] is not None and _to_ts(f["expired"]) < now
+        state = "disabled" if f["disabled"] else "expired" if expired else "ready"
+        rows.append({"id": f["file"], "email": f["email"], "label": "", "state": state,
+                     "expires_at": f["expired"], "last_refresh": f["last_refresh"]})
+    return rows
+
+
+def _read_active(root: Path) -> dict:
+    try:
+        data = json.loads((root / "active.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in data.items() if k in ACCOUNT_CLIS and isinstance(v, str)} if isinstance(data, dict) else {}
+
+
+def _claude_email(home_dir: Path) -> str:
+    """The signed-in email from Claude Code's own `.claude.json` (`oauthAccount.emailAddress`; no token lives there)."""
+    try:
+        data = json.loads((home_dir / ".claude.json").read_text(encoding="utf-8"))
+        acct = data.get("oauthAccount") if isinstance(data, dict) else None
+        email = acct.get("emailAddress") if isinstance(acct, dict) else None
+        return email if isinstance(email, str) else ""
+    except (OSError, ValueError):
+        return ""
+
+
+def _account_usage(cli: str, folder: Path, user_home: Path, now: float) -> dict | None:
+    if cli == "claude":
+        return _claude_usage(user_home, now, root=folder / "projects")
+    if cli == "codex":
+        return _codex_usage(user_home, now, root=folder / "sessions")
+    return None
+
+
+def _omher_rows(cli: str, user_home: Path, now: float, default_usage: dict | None) -> list[dict]:
+    """The CLI's own default login first (its usual home), then each omher account folder in name order."""
+    root = omher_accounts_root(user_home) / cli
+    rows = [{"id": "default", "label": "Default", "email": _claude_email(user_home) if cli == "claude" else "",
+             "state": "ready", "dir": None, "usage": default_usage}]
+    for folder in sorted(root.iterdir()) if root.is_dir() else []:
+        if not folder.is_dir() or folder.is_symlink() or not _ACCOUNT_ID.match(folder.name):
+            continue
+        try:
+            meta = json.loads((folder / "account.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            meta = {}
+        logged_in = any((folder / m).exists() for m in _LOGIN_MARK[cli])
+        rows.append({"id": folder.name, "label": str(meta.get("label") or folder.name)[:40],
+                     "email": _claude_email(folder) if cli == "claude" else "",
+                     "state": "ready" if logged_in else "login", "dir": str(folder),
+                     "usage": _account_usage(cli, folder, user_home, now)})
+    for r in rows:
+        u = r["usage"]
+        if r["state"] == "ready" and u and u.get("state") == "limited":
+            r["state"] = "limited"
+            r["resets_at"] = max((w["resets_at"] for w in u["windows"] if "resets_at" in w), default=None)
+    return rows
+
+
+def read_accounts(user_home: Path | None = None, *, now: float | None = None, which=None, probe=None) -> dict:
+    """Accounts per coding CLI, grouped. A CLI is listed when it is on PATH or has accounts here. Never a token:
+    CPA rows carry `CPA_FIELDS` only, omher rows a label, the CLI's signed-in email and its usage record."""
+    import shutil
+    user_home = Path(user_home) if user_home else Path.home()
+    now = time.time() if now is None else now
+    which = which or shutil.which
+    probe = probe or _port_answers
+    cpa = _cpa_config(user_home)
+    cpa_on = cpa is not None and probe(cpa["port"])
+    usage = {p["id"]: p for p in read_usage(user_home, now=now, which=lambda _: None)["providers"]}
+    active = _read_active(omher_accounts_root(user_home))
+    groups = []
+    for cli in ACCOUNT_CLIS:
+        rows = _cpa_rows(cpa, cli, now) if cpa is not None and cpa_on else []
+        if rows and cpa is not None:
+            groups.append({"cli": cli, "backend": "cpa", "installed": bool(which(cli)), "active": None,
+                           "cpa": {"port": cpa["port"], "management": cpa["management"], "strategy": cpa["strategy"]},
+                           "accounts": rows})
+            continue
+        rows = _omher_rows(cli, user_home, now, usage.get(cli))
+        if not which(cli) and len(rows) == 1 and cli not in usage:
+            continue
+        ids = [r["id"] for r in rows]
+        current = active.get(cli) if active.get(cli) in ids else "default"
+        for r in rows:
+            if r["id"] == current and r["state"] == "ready":
+                r["state"] = "active"
+        groups.append({"cli": cli, "backend": "omher", "installed": bool(which(cli)), "active": current,
+                       "accounts": rows})
+    return {"groups": groups}
+
+
+def _account_folder(cli, account_id, user_home: Path | None = None) -> Path:
+    """`~/.omher/accounts/<cli>/<id>`, refusing anything that is not exactly one plain folder name there."""
+    if cli not in ACCOUNT_CLIS:
+        raise BridgeError("bad_request", "unknown cli")
+    if not isinstance(account_id, str) or not _ACCOUNT_ID.match(account_id) or account_id == "default":
+        raise BridgeError("bad_request", "bad account id")
+    base = omher_accounts_root(user_home) / cli
+    folder = base / account_id
+    if folder.parent != base or os.path.realpath(folder.parent) != os.path.realpath(base):
+        raise BridgeError("bad_request", "bad account id")
+    return folder
+
+
+def add_account(cli, label, user_home: Path | None = None) -> dict:
+    text = re.sub(r"\s+", " ", str(label or "")).strip()[:40]
+    slug = re.sub(r"[^a-z0-9._-]+", "-", text.lower()).strip("-.")[:40]
+    base = omher_accounts_root(user_home) / str(cli)
+    if not slug or slug == "default":
+        n = 2
+        while (base / f"account-{n}").exists():
+            n += 1
+        slug = f"account-{n}"
+    elif (base / slug).exists():
+        raise BridgeError("exists", f"an account named {slug} already exists")
+    folder = _account_folder(cli, slug, user_home)
+    folder.mkdir(parents=True, mode=0o700)
+    (folder / "account.json").write_text(json.dumps({"label": text or slug, "created_at": time.time()}),
+                                         encoding="utf-8")
+    return {"id": slug, "dir": str(folder)}
+
+
+def remove_account(cli, account_id, user_home: Path | None = None) -> None:
+    import shutil
+    folder = _account_folder(cli, account_id, user_home)
+    if folder.is_symlink() or not folder.is_dir():
+        raise BridgeError("not_found", "no such account")
+    shutil.rmtree(folder)
+    root = omher_accounts_root(user_home)
+    active = _read_active(root)
+    if active.get(cli) == account_id:
+        active.pop(cli)
+        _write_active(root, active)
+
+
+def _write_active(root: Path, active: dict) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    tmp = root / "active.json.tmp"
+    tmp.write_text(json.dumps(active, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, root / "active.json")
+
+
+def set_active_account(cli, account_id, user_home: Path | None = None) -> None:
+    """The account new sessions of `cli` start with. Running sessions are never touched."""
+    if account_id != "default":
+        if not _account_folder(cli, account_id, user_home).is_dir():
+            raise BridgeError("not_found", "no such account")
+    elif cli not in ACCOUNT_CLIS:
+        raise BridgeError("bad_request", "unknown cli")
+    root = omher_accounts_root(user_home)
+    active = _read_active(root)
+    active[cli] = account_id
+    _write_active(root, active)
+
+
+CPA_ACTIONS = ("disable", "enable", "remove")
+
+
+def cpa_request(action, name, user_home: Path | None = None, *, probe=None) -> dict:
+    """The one management request for a CPA account change, for the app to send (the bridge makes no HTTP
+    call; the app adds the key from the OS keychain). Refused while CPA management is off."""
+    user_home = Path(user_home) if user_home else Path.home()
+    if action not in CPA_ACTIONS:
+        raise BridgeError("bad_request", "action must be disable, enable or remove")
+    if not isinstance(name, str) or not _CPA_FILE.match(name) or name.startswith("."):
+        raise BridgeError("bad_request", "bad auth file name")
+    cpa = _cpa_config(user_home)
+    if not cpa or not (probe or _port_answers)(cpa["port"]):
+        raise BridgeError("cpa_offline", "CLIProxyAPI is not running")
+    if not cpa["management"]:
+        raise BridgeError("cpa_management_off", "CPA management is off")
+    if not (cpa["auth_dir"] / name).is_file():
+        raise BridgeError("not_found", "no such account")
+    if action == "remove":
+        req = {"method": "DELETE", "path": f"/v0/management/auth-files?name={name}"}
+    else:
+        req = {"method": "PATCH", "path": "/v0/management/auth-files/status",
+               "body": {"name": name, "disabled": action == "disable"}}
+    return {"port": cpa["port"], **req}
 
 
 # ---------------------------------------------------------------- transcript helpers
@@ -859,6 +1121,9 @@ class Bridge:
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "usage.read": self.op_usage_read,
+            "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
+            "accounts.remove": self.op_accounts_remove, "accounts.set_active": self.op_accounts_set_active,
+            "accounts.cpa_action": self.op_accounts_cpa_action,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -1411,6 +1676,24 @@ class Bridge:
 
     async def op_usage_read(self, p) -> dict:
         return await asyncio.to_thread(read_usage)
+
+    async def op_accounts_list(self, p) -> dict:
+        return await asyncio.to_thread(read_accounts)
+
+    async def op_accounts_add(self, p) -> Reply:
+        out = await asyncio.to_thread(add_account, p.get("cli"), p.get("label"))
+        return Reply(out, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_remove(self, p) -> Reply:
+        await asyncio.to_thread(remove_account, p.get("cli"), p.get("account"))
+        return Reply({}, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_set_active(self, p) -> Reply:
+        await asyncio.to_thread(set_active_account, p.get("cli"), p.get("account"))
+        return Reply({}, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_cpa_action(self, p) -> dict:
+        return {"request": await asyncio.to_thread(cpa_request, p.get("action"), p.get("account"))}
 
     async def op_panel_diff(self, p) -> dict:
         bot = self._bot(p.get("bot"))

@@ -19,6 +19,9 @@ import type {
   Worktree,
   UsageProvider,
   WorktreeDiff,
+  AccountCli,
+  AccountGroup,
+  CpaRequest,
 } from "../lib/protocol";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
@@ -86,7 +89,9 @@ export type RoutineItem = {
   name: string;
   status: string;
 };
-export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem;
+/** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
+export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
+export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem | SystemItem;
 export type TimelineItem = ChatItem | AwayItem;
 
 export interface Chat {
@@ -341,7 +346,8 @@ export type Action =
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
-  | { type: "ui.closeSettings" };
+  | { type: "ui.closeSettings" }
+  | { type: "system.note"; bot: string; text: string; now: number };
 
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   const bot = ev.bot;
@@ -438,6 +444,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       };
     case "elsewhere.update":
     case "bots.update":
+    case "accounts.update":
       return state; // the store refetches; nothing to change here
     case "routine.ran": {
       const next = touchChat(state, bot, (c) =>
@@ -569,6 +576,10 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
       return { ...state, ui: { ...state.ui, view: "chat" } };
+    case "system.note":
+      return touchChat(state, a.bot, (c) =>
+        withItems(c, [...c.items, { kind: "system", id: `system-${a.now}-${c.items.length}`, ts: a.now / 1000, text: a.text }]),
+      );
     default:
       return state;
   }
@@ -639,6 +650,17 @@ export interface Actions {
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
   /** Subscription usage meters (sidebar); the meter keeps its own copy. */
   usage(): Promise<{ providers: UsageProvider[] }>;
+  /** Settings › Accounts (the page keeps its own copy). */
+  accounts(): Promise<{ groups: AccountGroup[] }>;
+  addAccount(cli: AccountCli, label: string): Promise<{ id: string; dir: string }>;
+  setActiveAccount(cli: AccountCli, id: string): Promise<void>;
+  removeAccount(cli: AccountCli, id: string): Promise<void>;
+  /** CPA rows: the management request for the desktop app to send. */
+  cpaAction(action: "disable" | "enable" | "remove", id: string): Promise<CpaRequest>;
+  /** A quiet omher line in a bot's main chat (the selected bot when none is given). */
+  systemNote(text: string, bot?: string): void;
+  /** Every bridge event, for views that keep their own copy (Accounts listens for `accounts.update`). */
+  onBridgeEvent(fn: (ev: BridgeEvent) => void): () => void;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -668,6 +690,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   let localSeq = 0;
   let snapshot: (AppState & Actions) | null = null;
   let started = false;
+  const eventFns = new Set<(ev: BridgeEvent) => void>();
 
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
@@ -765,6 +788,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       bridge.onAny((ev) => {
         dispatch({ type: "event", ev, now: now() });
         opts.onEvent?.(ev, state);
+        for (const fn of [...eventFns]) fn(ev);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "bots.update") void reloadBots();
@@ -886,6 +910,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
     usage: () => bridge.request("usage.read", {}),
+    accounts: () => bridge.request("accounts.list", {}),
+    addAccount: (cli, label) => bridge.request("accounts.add", { cli, label }),
+    async setActiveAccount(cli, id) {
+      await bridge.request("accounts.set_active", { cli, account: id });
+    },
+    async removeAccount(cli, id) {
+      await bridge.request("accounts.remove", { cli, account: id });
+    },
+    cpaAction: async (action, id) => (await bridge.request("accounts.cpa_action", { action, account: id })).request,
+    systemNote(text, bot) {
+      const b = bot ?? state.selectedBot ?? state.bots[0]?.name;
+      if (b) dispatch({ type: "system.note", bot: b, text, now: now() });
+    },
+    onBridgeEvent(fn) {
+      eventFns.add(fn);
+      return () => eventFns.delete(fn);
+    },
   };
 
   return {

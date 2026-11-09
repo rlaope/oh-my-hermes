@@ -54,6 +54,12 @@ export function Timeline({ bot }: { bot: Bot }) {
         const C = slots.routineLine ?? RoutineFallback;
         return <C bot={bot.name} item={it} />;
       }
+      case "system":
+        return (
+          <div className="line sys" data-testid="system-line">
+            <span className="line-t">{it.text}</span>
+          </div>
+        );
     }
   };
 

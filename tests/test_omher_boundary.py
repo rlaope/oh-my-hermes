@@ -28,6 +28,11 @@ RULES = (
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
     "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",
     "it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.",
+    "Accounts (Settings › Accounts) are the one exception to rules 4, 5 and 11.",
+    "omher keeps only `email`, `disabled`, `expired`, `last_refresh` and `type`, and drops every other field, tokens included,",
+    "deletes only `~/.omher/accounts/<cli>/<id>/`.",
+    "with a management key kept in the OS keychain and never in a file.",
+    "omher never reads, copies or shows a token, and an account switch never stops a running session.",
 )
 
 
@@ -42,7 +47,8 @@ class DocPins(unittest.TestCase):
             self.assertIn(_flat(sentence), text)
 
     def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
-        # 11 (CLI usage records) widened the cap from 10; a new surface still needs its own numbered rule.
+        # 11 (CLI usage records) widened the cap from 10; 12 (accounts) fills it. A new surface still needs its
+        # own numbered rule, and one more means revisiting this cap on purpose.
         rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
         self.assertTrue(6 <= len(rules) <= 12, len(rules))
 
@@ -131,6 +137,51 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
         self.assertEqual(sorted(i for i in imported if i in banned or i.split(".")[0] in banned), [])
+
+
+class AccountsNeverCarryAToken(unittest.TestCase):
+    """Rule 12: fake CLIProxyAPI auth files and omher account folders full of token-like keys; no accounts
+    payload the bridge returns may name one."""
+
+    TOKEN_KEYS = ("access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY")
+
+    def test_fuzzed_auth_files_never_reach_an_accounts_payload(self) -> None:
+        import importlib.util
+        import json
+        import random
+        import sys
+        import tempfile
+
+        spec = importlib.util.spec_from_file_location("omher_bridge_boundary", BRIDGE)
+        ob = importlib.util.module_from_spec(spec)
+        sys.modules["omher_bridge_boundary"] = ob
+        spec.loader.exec_module(ob)
+        rnd = random.Random(12)
+        secret = "sk-SECRET-boundary"
+        for round_ in range(25):
+            with tempfile.TemporaryDirectory() as d:
+                home = Path(d)
+                cpa = home / ".cli-proxy-api"
+                cpa.mkdir()
+                (cpa / "config.yaml").write_text('server:\n  port: 8317\nmanagement:\n  secret-key: "k"\n', encoding="utf-8")
+                for i in range(rnd.randint(1, 5)):
+                    body = {"type": rnd.choice(["claude", "codex", 7, None]), "email": rnd.choice([f"a{i}@example.com", {"access_token": secret}]),
+                            "disabled": rnd.choice([True, False, "x"]), "expired": rnd.choice(["2099-01-01T00:00:00Z", None, {"id_token": secret}])}
+                    body.update({k: secret for k in rnd.sample(self.TOKEN_KEYS, rnd.randint(1, len(self.TOKEN_KEYS)))})
+                    (cpa / f"{rnd.choice(['claude', 'codex'])}-a{i}@example.com.json").write_text(json.dumps(body), encoding="utf-8")
+                for cli in ("claude", "codex"):
+                    folder = home / ".omher" / "accounts" / cli / f"acct-{round_}"
+                    folder.mkdir(parents=True)
+                    (folder / "auth.json").write_text(json.dumps({k: secret for k in self.TOKEN_KEYS}), encoding="utf-8")
+                    (folder / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "w@example.com"},
+                                                                     "primaryApiKey": secret}), encoding="utf-8")
+                for up in (True, False):
+                    text = json.dumps(ob.read_accounts(home, now=1.0, which=lambda c: f"/bin/{c}", probe=lambda _p, up=up: up))
+                    for needle in self.TOKEN_KEYS + (secret, "primaryApiKey"):
+                        self.assertNotIn(needle, text)
+                req = json.dumps(ob.cpa_request("disable", next(cpa.glob("*.json")).name, home, probe=lambda _p: True))
+                self.assertNotIn(secret, req)
+                self.assertNotIn('"k"', req)
 
 
 if __name__ == "__main__":

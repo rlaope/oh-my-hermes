@@ -249,10 +249,19 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px var(--side-x) 2px;
-  margin-top: 6px;
+  width: 100%;
+  padding: 6px var(--side-x);
+  margin-top: 4px;
+  border-radius: var(--r);
   color: var(--ink);
   font-size: 12.5px;
+  text-align: left;
+}
+.me:hover {
+  background: var(--hover);
+}
+.me.on {
+  background: var(--raise2);
 }
 .me-i {
   width: 20px;

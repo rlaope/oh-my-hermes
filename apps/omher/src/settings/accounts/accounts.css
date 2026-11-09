@@ -1,0 +1,254 @@
+/* Settings › Accounts. Quiet rows like the rest of Settings; selection and chips stay gray. */
+.acc {
+  --usage-amber: #e3a54a;
+  --usage-red: #f08a8a;
+}
+[data-theme="light"] .acc {
+  --usage-amber: #94600f;
+  --usage-red: #d64545;
+}
+.acc-g {
+  margin-top: 18px;
+}
+.acc-gh {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  padding-left: 2px;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.acc-gh b {
+  font-weight: 600;
+}
+.acc-src {
+  font-size: 10.5px;
+  color: var(--quiet);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0 5px;
+  line-height: 16px;
+}
+.acc-gh-r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.acc-auto {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.acc-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0 0 8px 2px;
+  line-height: 1.45;
+}
+.acc-hint.err {
+  color: var(--danger);
+}
+.acc-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto auto 26px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px 7px 12px;
+  min-height: 42px;
+}
+.acc-row + .acc-row {
+  border-top: 1px solid var(--line);
+}
+.acc-ring {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+}
+.acc-row[data-state="disabled"] .acc-who,
+.acc-row[data-state="expired"] .acc-who {
+  opacity: 0.55;
+}
+.acc-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.acc-n {
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acc-sub {
+  font-size: 11px;
+  color: var(--quiet);
+}
+.acc-plan {
+  font-size: 11px;
+  color: var(--muted);
+}
+.acc-row:not(:has(.acc-plan)) .acc-chip {
+  grid-column: 3 / 5;
+  justify-self: end;
+}
+.acc-chip {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  background: var(--raise2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.acc-chip.st-active {
+  color: var(--ink);
+  background: var(--seg-on);
+}
+.acc-chip.st-active::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.acc-chip.st-limited {
+  color: var(--usage-amber);
+}
+.acc-chip.st-expired,
+.acc-chip.st-disabled,
+.acc-chip.st-login {
+  color: var(--quiet);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.acc-menu {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.acc-dots {
+  width: 24px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+.acc-dots:hover,
+.acc-dots[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--ink);
+}
+.acc-pop {
+  padding: 4px;
+}
+.acc-mi {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--body);
+}
+.acc-mi:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.acc-mi:disabled {
+  color: var(--quiet);
+}
+.acc-mi.danger {
+  color: var(--danger);
+}
+.acc-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.acc-add,
+.acc-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.acc-add input,
+.acc-key input {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12px;
+  width: 200px;
+}
+.acc-cmd,
+.acc-login {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.acc-login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--grp-bg);
+}
+.acc-cmd code,
+.acc-login code,
+.acc-confirm code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+.acc-login code {
+  flex: 1;
+  min-width: 0;
+}
+.acc-x {
+  color: var(--quiet);
+  font-size: 14px;
+  width: 20px;
+}
+.acc-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--body);
+}
+.acc-confirm > span {
+  flex: 1;
+  min-width: 0;
+}
+.st-btn.danger {
+  color: var(--danger);
+}
+.acc-toast {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border-radius: var(--r);
+  background: var(--raise2);
+  color: var(--body);
+  font-size: 12px;
+}
+.acc-dots-ph {
+  width: 24px;
+}

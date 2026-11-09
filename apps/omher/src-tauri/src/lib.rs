@@ -1,3 +1,4 @@
+mod accounts;
 mod bridge;
 
 use std::path::PathBuf;
@@ -47,6 +48,47 @@ pub(crate) fn allowed_external(url: &str) -> bool {
         && PREFIXES.iter().any(|p| url.starts_with(p))
 }
 
+fn user_home() -> Result<PathBuf, String> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "no home folder".to_string())
+}
+
+/// The env a new session of `cli` starts with to use omher account `id` (`default` = the CLI's own home).
+#[tauri::command]
+async fn account_env(cli: String, id: String) -> Result<Vec<(String, String)>, String> {
+    accounts::account_env(&user_home()?, &cli, &id)
+}
+
+/// Save the CLIProxyAPI management key in the OS keychain. It is never written to a file or returned.
+#[tauri::command]
+async fn cpa_key_set(key: String) -> Result<(), String> {
+    accounts::key_set(&key)
+}
+
+/// Whether a management key is saved (never the key itself).
+#[tauri::command]
+async fn cpa_key_present() -> Result<bool, String> {
+    Ok(accounts::key_present())
+}
+
+#[tauri::command]
+async fn cpa_key_clear() -> Result<(), String> {
+    accounts::key_clear()
+}
+
+/// Send one CPA management request (the bridge's `accounts.cpa_action` result) to 127.0.0.1 with the saved key.
+#[tauri::command]
+async fn cpa_send(request: accounts::CpaRequest) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = accounts::key_get()?;
+        accounts::send_local(&request, &key)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -58,7 +100,17 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry, open_external])
+        .invoke_handler(tauri::generate_handler![
+            bridge_url,
+            bridge_status,
+            bridge_retry,
+            open_external,
+            account_env,
+            cpa_key_set,
+            cpa_key_present,
+            cpa_key_clear,
+            cpa_send
+        ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();

@@ -220,6 +220,19 @@
 .line-t.strong {
   color: var(--body);
 }
+/* one quiet line from omher itself (account / model auto-switch) */
+.line.sys {
+  justify-content: center;
+  font-size: 11.5px;
+  color: var(--quiet);
+}
+.line.sys::before,
+.line.sys::after {
+  content: "";
+  flex: 0 1 48px;
+  height: 1px;
+  background: var(--line-strong);
+}
 .line-src {
   flex: none;
 }

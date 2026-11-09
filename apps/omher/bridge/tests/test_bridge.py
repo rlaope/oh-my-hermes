@@ -1131,3 +1131,160 @@ class Usage(unittest.TestCase):
             self.assertNotIn(bad, body, bad)
         bridge = ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir()))
         self.assertIn("usage.read", bridge.ops)
+
+
+TOKEN_KEYS = ("access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY")
+SECRET = "sk-ant-oat01-SECRET-never-shown"
+
+
+class Accounts(unittest.TestCase):
+    """accounts.*: CPA auth files give five fields and never a token; omher stacks live only under
+    ~/.omher/accounts/<cli>/<id>/, and remove refuses every other path."""
+
+    def home(self) -> Path:
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        return Path(d.name)
+
+    def cpa(self, h: Path, *, secret: str = "", n: int = 5, extra: dict | None = None) -> None:
+        root = h / ".cli-proxy-api"
+        root.mkdir(parents=True)
+        (root / "config.yaml").write_text(
+            f'server:\n  port: 8317\nmanagement:\n  secret-key: "{secret}"\nrouting:\n  strategy: "fill-first"\n'
+            f'oauth:\n  auth-dir: "~/.cli-proxy-api"\n', encoding="utf-8")
+        for i in range(n):
+            body = {"type": "claude", "email": f"a{i}@example.com", "disabled": i == 3,
+                    "expired": "2020-01-01T00:00:00+09:00" if i == 4 else "2099-01-01T00:00:00+09:00",
+                    "last_refresh": "2026-11-09T21:06:39+09:00", "account_uuid": "u", "organization_name": "org",
+                    **{k: f"{SECRET}-{k}" for k in TOKEN_KEYS}, **(extra or {})}
+            (root / f"claude-a{i}@example.com.json").write_text(json.dumps(body), encoding="utf-8")
+
+    def assert_no_token(self, payload) -> None:
+        text = json.dumps(payload)
+        for k in TOKEN_KEYS + (SECRET, "account_uuid", "organization_name", "secret-key"):
+            self.assertNotIn(k, text, k)
+
+    def test_cpa_lists_five_fields_per_file_and_never_a_token(self):
+        h = self.home()
+        self.cpa(h)
+        r = ob.read_accounts(h, now=1794300000.0, which=lambda c: "/bin/claude" if c == "claude" else None,
+                             probe=lambda port: port == 8317)
+        self.assert_no_token(r)
+        [g] = r["groups"]
+        self.assertEqual((g["cli"], g["backend"], g["cpa"]), ("claude", "cpa", {"port": 8317, "management": False,
+                                                                                 "strategy": "fill-first"}))
+        self.assertEqual([a["email"] for a in g["accounts"]], [f"a{i}@example.com" for i in range(5)])
+        self.assertEqual([a["state"] for a in g["accounts"]], ["ready", "ready", "ready", "disabled", "expired"])
+        self.assertEqual(set(g["accounts"][0]), {"id", "email", "label", "state", "expires_at", "last_refresh"})
+
+    def test_reader_keeps_only_the_named_fields(self):
+        h = self.home()
+        self.cpa(h, n=1, extra={"nested": {"refresh_token": SECRET}, "OPENAI_API_KEY": SECRET})
+        f = ob.read_cpa_file(next((h / ".cli-proxy-api").glob("claude-*.json")))
+        self.assertEqual(set(f), {"file", "email", "disabled", "type", "expired", "last_refresh"})
+        self.assert_no_token(f)
+
+    def test_fuzzed_token_keys_never_reach_any_payload(self):
+        import random
+        rnd = random.Random(7)
+        for _ in range(20):
+            h = self.home()
+            junk = {rnd.choice(TOKEN_KEYS): SECRET for _ in range(3)}
+            junk[rnd.choice(("email", "type", "last_refresh"))] = {"access_token": SECRET}  # wrong types too
+            self.cpa(h, n=2, extra=junk)
+            for cli in ("codex", "claude"):
+                folder = h / ".omher/accounts" / cli / "work"
+                folder.mkdir(parents=True)
+                (folder / "auth.json").write_text(json.dumps({k: SECRET for k in TOKEN_KEYS}), encoding="utf-8")
+                (folder / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "w@example.com"},
+                                                                 "primaryApiKey": SECRET}), encoding="utf-8")
+            for probe in (lambda _: True, lambda _: False):
+                self.assert_no_token(ob.read_accounts(h, now=1.0, which=lambda c: f"/bin/{c}", probe=probe))
+
+    def test_management_off_refuses_cpa_writes_and_on_builds_the_request(self):
+        h = self.home()
+        self.cpa(h)
+        with self.assertRaises(ob.BridgeError) as e:
+            ob.cpa_request("disable", "claude-a0@example.com.json", h, probe=lambda _: True)
+        self.assertEqual(e.exception.code, "cpa_management_off")
+        h2 = self.home()
+        self.cpa(h2, secret="k")
+        req = ob.cpa_request("disable", "claude-a0@example.com.json", h2, probe=lambda _: True)
+        self.assertEqual(req, {"port": 8317, "method": "PATCH", "path": "/v0/management/auth-files/status",
+                               "body": {"name": "claude-a0@example.com.json", "disabled": True}})
+        self.assertNotIn("k", json.dumps(req["body"]).replace("name", ""))  # never the key
+        for bad in ("../config.yaml", "claude-x.json/../../a.json", ".hidden.json", "missing.json"):
+            with self.assertRaises(ob.BridgeError, msg=bad):
+                ob.cpa_request("remove", bad, h2, probe=lambda _: True)
+        with self.assertRaises(ob.BridgeError):
+            ob.cpa_request("rm -rf", "claude-a0@example.com.json", h2, probe=lambda _: True)
+
+    def test_omher_stack_add_activate_remove(self):
+        h = self.home()
+        which = lambda c: "/bin/codex" if c == "codex" else None  # noqa: E731
+        first = ob.read_accounts(h, now=1.0, which=which, probe=lambda _: False)["groups"]
+        self.assertEqual([(g["cli"], g["active"], [a["id"] for a in g["accounts"]]) for g in first],
+                         [("codex", "default", ["default"])])
+        a = ob.add_account("codex", "Work", h)
+        self.assertEqual(a, {"id": "work", "dir": str(h / ".omher/accounts/codex/work")})
+        b = ob.add_account("codex", "", h)
+        self.assertEqual(b["id"], "account-2")
+        with self.assertRaises(ob.BridgeError):
+            ob.add_account("codex", "Work", h)
+        [g] = ob.read_accounts(h, now=1.0, which=which, probe=lambda _: False)["groups"]
+        self.assertEqual([(x["id"], x["state"]) for x in g["accounts"]],
+                         [("default", "active"), ("account-2", "login"), ("work", "login")])
+        (h / ".omher/accounts/codex/work/auth.json").write_text("{}", encoding="utf-8")
+        ob.set_active_account("codex", "work", h)
+        self.assertEqual(json.loads((h / ".omher/accounts/active.json").read_text()), {"codex": "work"})
+        [g] = ob.read_accounts(h, now=1.0, which=which, probe=lambda _: False)["groups"]
+        self.assertEqual(g["active"], "work")
+        self.assertEqual([(x["id"], x["state"]) for x in g["accounts"]],
+                         [("default", "ready"), ("account-2", "login"), ("work", "active")])
+        ob.remove_account("codex", "work", h)
+        self.assertFalse((h / ".omher/accounts/codex/work").exists())
+        self.assertEqual(json.loads((h / ".omher/accounts/active.json").read_text()), {})
+
+    def test_remove_refuses_any_other_path(self):
+        h = self.home()
+        keep = h / "keep"
+        keep.mkdir()
+        (h / ".omher/accounts/claude").mkdir(parents=True)
+        (h / ".omher/accounts/claude/link").symlink_to(keep)
+        for cli, aid in (("claude", "../../keep"), ("claude", ".."), ("claude", "/tmp"), ("claude", "default"),
+                         ("claude", "a/b"), ("claude", ""), ("bash", "x"), ("claude", None), ("claude", "link")):
+            with self.assertRaises(ob.BridgeError, msg=(cli, aid)):
+                ob.remove_account(cli, aid, h)
+        self.assertTrue(keep.is_dir())
+        with self.assertRaises(ob.BridgeError):
+            ob.set_active_account("claude", "nope", h)
+
+    def test_claude_account_email_and_limited_state_from_its_own_folder(self):
+        h = self.home()
+        ob.add_account("claude", "Two", h)
+        folder = h / ".omher/accounts/claude/two"
+        (folder / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "two@example.com"}}))
+        (folder / "projects/-w").mkdir(parents=True)
+        (folder / "projects/-w/s.jsonl").write_text(CLAUDE_LINE + "\n", encoding="utf-8")
+        [g] = ob.read_accounts(h, now=1794200000.0, which=lambda c: "/bin/claude" if c == "claude" else None,
+                               probe=lambda _: False)["groups"]
+        two = g["accounts"][1]
+        self.assertEqual((two["email"], two["state"]), ("two@example.com", "limited"))
+        self.assertIsNotNone(two["resets_at"])
+
+    def test_cpa_not_running_falls_back_to_omher_stacks(self):
+        h = self.home()
+        self.cpa(h)
+        [g] = ob.read_accounts(h, now=1.0, which=lambda c: "/bin/claude" if c == "claude" else None,
+                               probe=lambda _: False)["groups"]
+        self.assertEqual(g["backend"], "omher")
+
+    def test_ops_are_registered_and_accounts_code_runs_no_program_or_http(self):
+        bridge = ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir()))
+        for op in ("accounts.list", "accounts.add", "accounts.remove", "accounts.set_active", "accounts.cpa_action"):
+            self.assertIn(op, bridge.ops)
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        body = src[src.index("# ---------------------------------------------------------------- accounts"):
+                   src.index("# ---------------------------------------------------------------- transcript helpers")]
+        for bad in ("subprocess", "urllib", "http.client", ".send(", "sendall", "keyring", "os.environ["):
+            self.assertNotIn(bad, body, bad)

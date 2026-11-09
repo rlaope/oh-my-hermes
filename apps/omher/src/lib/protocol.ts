@@ -106,7 +106,8 @@ export interface ChatOpenResult {
   reasoning: string;
 }
 
-/** op name -> { params, result }. `bot` is always the profile name. */
+/** op name -> { params, result }. `bot` is always the profile name. `id` is the frame's own request id, so no
+ *  op takes a param named `id` (accounts use `account`). */
 export interface OpMap {
   hello: { params: Record<string, never>; result: HelloResult };
   "bots.list": { params: Record<string, never>; result: { bots: Bot[] } };
@@ -146,6 +147,57 @@ export interface OpMap {
   "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
   /** Subscription usage of the CLIs on this machine, from their own session files (read-only). */
   "usage.read": { params: Record<string, never>; result: { providers: UsageProvider[] } };
+  /** Accounts per coding CLI: CLIProxyAPI's auth files (five fields, never a token) or omher's own stacks. */
+  "accounts.list": { params: Record<string, never>; result: { groups: AccountGroup[] } };
+  /** omher stacks only: a new folder ~/.omher/accounts/<cli>/<id>/ (logging in is the CLI's own). */
+  "accounts.add": { params: { cli: AccountCli; label: string }; result: { id: string; dir: string } };
+  /** omher stacks only: the account new sessions of the CLI start with (running sessions are untouched). */
+  "accounts.set_active": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
+  /** omher stacks only: deletes ~/.omher/accounts/<cli>/<id>/ and nothing else. */
+  "accounts.remove": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
+  /** CPA rows: the one management request to send (the desktop app adds the key from the keychain). */
+  "accounts.cpa_action": {
+    params: { action: "disable" | "enable" | "remove"; account: string };
+    result: { request: CpaRequest };
+  };
+}
+
+export type AccountCli = "claude" | "codex" | "grok" | "gemini";
+/** login = folder made, nobody logged in there yet. */
+export type AccountState = "active" | "ready" | "limited" | "expired" | "disabled" | "login";
+
+export interface Account {
+  /** omher: the folder name ("default" = the CLI's own home). CPA: the auth file name. Never a token. */
+  id: string;
+  label: string;
+  email: string;
+  state: AccountState;
+  /** Limited accounts: when the limit resets (seconds). */
+  resets_at?: number | null;
+  /** CPA rows: when CPA's current login expires / was refreshed (ISO text). */
+  expires_at?: string | null;
+  last_refresh?: string | null;
+  /** omher rows: the folder new sessions use. */
+  dir?: string | null;
+  /** omher rows: the usage record found in that account's own folder. */
+  usage?: UsageProvider | null;
+}
+
+export interface AccountGroup {
+  cli: AccountCli;
+  backend: "cpa" | "omher";
+  installed: boolean;
+  /** omher backend: the active account id. CPA picks accounts itself (null). */
+  active: string | null;
+  cpa?: { port: number; management: boolean; strategy: string };
+  accounts: Account[];
+}
+
+export interface CpaRequest {
+  port: number;
+  method: "PATCH" | "DELETE";
+  path: string;
+  body?: { name: string; disabled: boolean };
 }
 
 export type UsageState = "ok" | "near" | "limited" | "stale" | "connected";
@@ -250,6 +302,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  /** omher accounts changed (added, removed, made active); the Accounts views re-read accounts.list. */
+  | (EventBase & { event: "accounts.update" })
   | (EventBase & {
       event: "routine.ran";
       routine_id: string;

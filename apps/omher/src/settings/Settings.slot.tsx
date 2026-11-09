@@ -1,4 +1,4 @@
-// Settings view (main column while `ui.view === "settings"`). Left list: Bots (one page per bot: Profile,
+// Settings view (main column while `ui.view === "settings"`). Left list: You (Accounts), Bots (one page per bot: Profile,
 // Model, Work) and App (General, Providers, Computer). Pages are `bot:<name>` and the App page names; the
 // page lives in the store (`ui.settingsPage`) so the model popover can deep-link to a bot.
 import { useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
 import { Appearance } from "./Appearance";
+import { AccountsPage } from "./accounts/AccountsPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
 export const slot = "settings";
@@ -28,14 +29,18 @@ export default function Settings({ page }: SlotProps["settings"]) {
   const bot = botName ? s.bots.find((b) => b.name === botName) : undefined;
   const current = bot
     ? `bot:${bot.name}`
-    : page === "bots" || APP_PAGES.some((p) => p.id === page)
+    : page === "bots" || page === "accounts" || APP_PAGES.some((p) => p.id === page)
       ? page
       : "general";
 
   return (
     <div className="st" data-testid="settings-view">
       <nav className="st-nav" aria-label="Settings sections">
-        <div className="st-sh">Bots</div>
+        <div className="st-sh">You</div>
+        <NavItem id="accounts" current={current} onPick={s.openSettings}>
+          Accounts
+        </NavItem>
+        <div className="st-sh st-sh2">Bots</div>
         <NavItem id="bots" current={current} onPick={s.openSettings}>
           <span className="st-nav-i" aria-hidden="true">
             <GridIcon />
@@ -58,6 +63,8 @@ export default function Settings({ page }: SlotProps["settings"]) {
       <div className="st-body" data-testid={`settings-page-${current.replace(":", "-")}`}>
         {bot ? (
           <BotPage bot={bot} />
+        ) : current === "accounts" ? (
+          <AccountsPage />
         ) : current === "bots" ? (
           <BotsPage />
         ) : current === "providers" ? (
