@@ -1123,6 +1123,20 @@ All notable changes will be documented here.
   waiting `continue` as it does over any other command. Contributed by
   @DanRioDev (#2668).
 
+- **A finished dag-ulw run says what it used.** Once a run is done, stopped
+  or cancelled, `omh_dag` adds `usage` (its children's uncached input, cache
+  read, cache write and output tokens, and the cost Hermes recorded) and a
+  `usage_line` such as `DAG feat · 2 children · 13.2k tokens · cache 80.0% ·
+  $0.0500 (2/2 priced)`. Every child the run bound counts, an earlier retry's
+  too, each with its compaction segments and auxiliary calls. The cost is
+  only what Hermes priced: a child it did not price makes the figure a floor
+  (`≥`), an estimate keeps its `~`, and no token is converted into a price or
+  compared with a model the run did not use. `omh_run_summary` prints the
+  same figures as a `DAG usage` line before the goal check, and the Desktop
+  pane keeps the run's Tokens / Cache hit / Cost / Node time figures under
+  the summary line once the cards collapse, where before they vanished at
+  the moment the run ended. Asked for in #2684.
+
 ## 4.0.6 - 2026-11-04
 
 - **In a console session a choice goes through Hermes' `clarify` picker, and
