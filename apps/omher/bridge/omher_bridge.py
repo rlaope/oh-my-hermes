@@ -11,8 +11,8 @@ differs. Makes no model or network call of its own.
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
-* The only session this bridge ever resumes, creates, submits to, interrupts or answers is the
-  bot's main chat (the session titled ``Bot Chat``). Every other session is only listed or read
+* The only session this bridge ever resumes, creates, attaches files to, submits to, interrupts or
+  answers is the bot's main chat (the session titled ``Bot Chat``). Every other session is only listed or read
   (list / history), never attached.
 """
 from __future__ import annotations
@@ -48,6 +48,11 @@ PEEK_CHARS = 400
 THINKING_MIN_GAP = 1.0
 CONNECT_TIMEOUT = 60.0
 OFFLINE_COOLDOWN = 10.0
+# chat.attach: one 100 MB file arrives base64'd in one frame; Hermes' own attach calls cap images (25 MB) and
+# PDFs (50 MB) lower and say so. pdf.attach renders pages, so it gets more than the default RPC deadline.
+ATTACH_B64_MAX = (100 * 1024 * 1024 + 2) // 3 * 4
+UI_FRAME_MAX = ATTACH_B64_MAX + 64 * 1024
+ATTACH_TIMEOUT = 180.0
 def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
     (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
@@ -801,6 +806,7 @@ class Bridge:
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
+            "chat.attach": self.op_chat_attach,
         }
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
 
@@ -809,7 +815,7 @@ class Bridge:
     async def start(self, host: str = "127.0.0.1", port: int = 0, *, watch: bool = True) -> int:
         from websockets.asyncio.server import serve
         self.server = await serve(self._handler, host, port, process_request=self._process_request,
-                                  max_size=4 * 1024 * 1024)
+                                  max_size=UI_FRAME_MAX)
         self.port = self.server.sockets[0].getsockname()[1]
         if watch:
             self._spawn(self._watch())
@@ -1180,6 +1186,30 @@ class Bridge:
         input_id = str(uuid.uuid4())
         await self._submit(conn, main, text, input_id)
         return {"input_id": input_id}
+
+    async def op_chat_attach(self, p) -> dict:
+        """Stage one file the person picked for the next ``chat.send``, in the main chat only, through Hermes'
+        own attach calls. The bytes come from the app; the bridge never opens a file for this."""
+        kind, name, data = p.get("kind"), p.get("name"), p.get("data_base64")
+        if kind not in ("image", "pdf", "file") or not isinstance(name, str) or not name.strip():
+            raise BridgeError("bad_request", "need kind image|pdf|file and a name")
+        if not isinstance(data, str) or not data:
+            raise BridgeError("bad_request", "missing data_base64")
+        if len(data) > ATTACH_B64_MAX:
+            raise BridgeError("too_big", "files over 100 MB are not sent")
+        conn = await self._conn(p.get("bot"))
+        main = await self._main(conn)
+        if kind == "image":
+            method, source = "image.attach_bytes", {"content_base64": data, "filename": name}
+        elif kind == "pdf":
+            method, source = "pdf.attach", {"content_base64": data, "filename": name}
+        else:
+            method, source = "file.attach", {"data_url": f"data:application/octet-stream;base64,{data}", "name": name}
+        res = await self._call(conn, method, session_id=main, _timeout=ATTACH_TIMEOUT, **source)
+        res = res if isinstance(res, dict) else {}
+        if res.get("attached") is False:
+            raise BridgeError("attach_failed", str(res.get("message") or f"could not attach {name}"))
+        return {"kind": kind, "name": name, "text": str(res.get("text") or ""), "ref_text": str(res.get("ref_text") or "")}
 
     async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
         # The single place a turn is sent. It takes the main chat id and nothing else.

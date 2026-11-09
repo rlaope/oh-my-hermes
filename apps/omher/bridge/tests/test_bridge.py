@@ -85,6 +85,14 @@ class FakeClient:
                     "model": "claude-opus-5-5", "provider": "claude-proxy"}
         if method == "session.mutate":
             return {"session_id": params["session_id"], "operation": params["operation"]}
+        if method == "image.attach_bytes":
+            if params["content_base64"] == "bad":
+                return {"attached": False, "message": "unsupported image"}
+            return {"attached": True, "path": "/h/images/upload_1.png", "text": "[User attached image: upload_1.png]"}
+        if method == "pdf.attach":
+            return {"attached": True, "text": f"[User attached PDF: {params['filename']} (2 page(s))]"}
+        if method == "file.attach":
+            return {"attached": True, "name": params["name"], "ref_text": f"@file:attachments/{params['name']}"}
         return {}
 
     def push(self, typ: str, payload: dict | None = None, sid: str = MAIN_RUNTIME, **extra) -> None:
@@ -596,7 +604,8 @@ class ReadOnlyRule(BridgeCase):
     """No Hermes call that attaches to or writes a session may carry any id but the bot's main chat."""
 
     GUARDED = ("prompt.submit", "session.resume", "session.interrupt", "approval.respond", "clarify.respond",
-               "session.mutate", "session.title", "session.steer", "session.redirect", "session.activate")
+               "session.mutate", "session.title", "session.steer", "session.redirect", "session.activate",
+               "image.attach_bytes", "pdf.attach", "file.attach")
 
     async def test_no_guarded_call_carries_a_foreign_session_id(self):
         foreign = "20261108_235229_aaaf70c4"
@@ -610,6 +619,7 @@ class ReadOnlyRule(BridgeCase):
                            ("approval.respond", {"request_id": "ap-x", "choice": "deny", "session_id": foreign}),
                            ("clarify.respond", {"request_id": "cl-x", "answer": "x", "session_id": foreign}),
                            ("chat.set_model", {"reasoning": "low", "session_id": foreign}),
+                           ("chat.attach", {"kind": "image", "name": "a.png", "data_base64": "iVBO", "session_id": foreign}),
                            ("models.options", {}), ("routines.list", {})]:
                 await s.req(op, bot="kami", **kw)
             c = env.clients["kami"]
@@ -622,7 +632,7 @@ class ReadOnlyRule(BridgeCase):
                 for k, v in params.items():  # and the foreign id appears nowhere but a history read
                     if v == foreign:
                         self.assertEqual(method, "session.history", f"{method}.{k}")
-            self.assertGreaterEqual(seen, 6)
+            self.assertGreaterEqual(seen, 7)
             self.assertEqual(len(c.find("prompt.submit")), 1)
 
     def test_source_has_exactly_one_submit_call_site(self):
@@ -655,6 +665,44 @@ class ReadOnlyRule(BridgeCase):
                     ["apply"], ["clean", "-fd"], ["config", "user.name", "x"]):
             with self.assertRaises(ValueError, msg=bad):
                 ob._git(bad, ".")
+
+
+class Attach(BridgeCase):
+    """chat.attach: Hermes' own attach calls, in the main chat only, with the bytes the app sent."""
+
+    async def test_each_kind_takes_its_hermes_call_with_the_main_id(self):
+        async with Env() as env:
+            s = await self.open(env)
+            img = await s.req("chat.attach", bot="kami", kind="image", name="a.png", data_base64="iVBO")
+            pdf = await s.req("chat.attach", bot="kami", kind="pdf", name="r.pdf", data_base64="JVBERi0=")
+            fil = await s.req("chat.attach", bot="kami", kind="file", name="clip.mp4", data_base64="AAAA",
+                              session_id="20261108_235229_aaaf70c4", path="/etc/hosts")
+            self.assertEqual(img["result"], {"kind": "image", "name": "a.png", "text": "[User attached image: upload_1.png]",
+                                             "ref_text": ""})
+            self.assertEqual(pdf["result"]["text"], "[User attached PDF: r.pdf (2 page(s))]")
+            self.assertEqual(fil["result"]["ref_text"], "@file:attachments/clip.mp4")
+            c = env.clients["kami"]
+            self.assertEqual(c.find("image.attach_bytes"), [{"session_id": MAIN_RUNTIME, "content_base64": "iVBO", "filename": "a.png"}])
+            self.assertEqual(c.find("pdf.attach"), [{"session_id": MAIN_RUNTIME, "content_base64": "JVBERi0=", "filename": "r.pdf"}])
+            # the client's session_id and path are never forwarded: bytes only, main chat only
+            self.assertEqual(c.find("file.attach"), [{"session_id": MAIN_RUNTIME, "name": "clip.mp4",
+                                                      "data_url": "data:application/octet-stream;base64,AAAA"}])
+            self.assertEqual(c.find("prompt.submit"), [])  # attaching never sends
+
+    async def test_refusals(self):
+        async with Env() as env:
+            s = await self.open(env)
+            bad = await s.req("chat.attach", bot="kami", kind="image", name="a.png", data_base64="bad")
+            self.assertEqual(bad["error"]["code"], "attach_failed")
+            self.assertIn("unsupported image", bad["error"]["message"])
+            for kw in ({"kind": "exe", "name": "a", "data_base64": "AA"}, {"kind": "file", "name": "", "data_base64": "AA"},
+                       {"kind": "file", "name": "a"}):
+                r = await s.req("chat.attach", bot="kami", **kw)
+                self.assertEqual(r["error"]["code"], "bad_request", kw)
+            big = await s.req("chat.attach", bot="kami", kind="file", name="big.bin", data_base64="A" * (ob.ATTACH_B64_MAX + 4))
+            self.assertEqual(big["error"]["code"], "too_big")
+            # only the well-formed one reached Hermes
+            self.assertEqual([m for m, _ in env.clients["kami"].calls if "attach" in m], ["image.attach_bytes"])
 
 
 class Discovery(unittest.TestCase):

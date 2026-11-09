@@ -54,6 +54,9 @@ Rules the code keeps:
 
 - **Read-only elsewhere.** `chat.send` reaches only the bot's main chat (the session titled `Bot Chat`). Other
   sessions are listed and their history read, never resumed, answered, interrupted or written to.
+- **Files go the same way.** The composer's + (or a drop, or a paste) stages each file with `chat.attach`, which
+  calls Hermes' own `image.attach_bytes`, `pdf.attach` or `file.attach` in the main chat, then `chat.send` sends the
+  text. 20 files, 100 MB each; if one attach fails, nothing is sent.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
 

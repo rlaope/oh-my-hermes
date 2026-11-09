@@ -67,7 +67,7 @@ function MediaItem({ bot, path }: { bot: string; path: string }) {
   return <FileCard file={file} />;
 }
 
-function ImageTile({ url, name }: { url: string; name: string }) {
+export function ImageTile({ url, name }: { url: string; name: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>

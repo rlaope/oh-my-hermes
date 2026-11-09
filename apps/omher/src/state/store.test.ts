@@ -316,6 +316,31 @@ describe("store", () => {
     expect(store.getState().chats.kami.messages.at(-1)).toMatchObject({ role: "user", text: "hello" });
   });
 
+  it("sendWithFiles attaches each file in order, then sends once; a failed attach sends nothing", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const file = (name: string, attach: "image" | "pdf" | "file", read = async () => "QUJD") =>
+      ({ name, size: 3, kind: "file" as const, url: null, attach, read });
+    await store.actions.sendWithFiles(" look ", [file("a.png", "image"), file("r.pdf", "pdf")]);
+    const ops = f.calls.map((c) => c.op).filter((o) => o === "chat.attach" || o === "chat.send");
+    expect(ops).toEqual(["chat.attach", "chat.attach", "chat.send"]);
+    expect(f.calls.filter((c) => c.op === "chat.attach").map((c) => c.params)).toEqual([
+      { bot: "kami", kind: "image", name: "a.png", data_base64: "QUJD" },
+      { bot: "kami", kind: "pdf", name: "r.pdf", data_base64: "QUJD" },
+    ]);
+    const row = store.getState().chats.kami.items.at(-1)!;
+    expect(row).toMatchObject({ kind: "user", text: "look", files: [{ name: "a.png" }, { name: "r.pdf" }] });
+
+    const before = f.calls.length;
+    const bad = file("b.png", "image", async () => {
+      throw new Error("unreadable");
+    });
+    await expect(store.actions.sendWithFiles("x", [file("ok.png", "image"), bad])).rejects.toThrow("Couldn't attach b.png");
+    expect(f.calls.slice(before).map((c) => c.op)).toEqual(["chat.attach"]); // no chat.send
+    expect(store.getState().chats.kami.items.at(-1)).toBe(row); // no new bubble
+  });
+
   it("reconnect keeps state and re-reads the chat without duplicating it", async () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });

@@ -146,6 +146,20 @@ export interface OpMap {
   "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
   /** A file the bot named in a `MEDIA:` line of its own answers (read-only). `info` skips the bytes. */
   "media.read": { params: { bot: string; path: string; info?: boolean }; result: MediaFile };
+  /** Stage one file the person picked for the next `chat.send`, in the bot's main chat only. */
+  "chat.attach": { params: { bot: string; kind: AttachKind; name: string; data_base64: string }; result: AttachResult };
+}
+
+/** Which Hermes attach call a file takes: `image.attach_bytes`, `pdf.attach` or `file.attach`. */
+export type AttachKind = "image" | "pdf" | "file";
+
+export interface AttachResult {
+  kind: AttachKind;
+  name: string;
+  /** Hermes' own line for it, e.g. `[User attached image: upload_1.png]`. */
+  text: string;
+  /** `@file:…` for a staged file; the prompt must carry it. Empty for images and PDFs. */
+  ref_text: string;
 }
 
 export interface MediaFile {

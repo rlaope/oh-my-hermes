@@ -464,6 +464,20 @@ const OPS = {
     if (p.info === true) return out;
     return { ...out, data_base64: readFileSync(file).toString("base64") };
   },
+  // Stages a file for the next chat.send, like Hermes' image.attach_bytes / pdf.attach / file.attach.
+  // A name starting with "fail" is refused, so the e2e can check that nothing is sent after a failed attach.
+  "chat.attach": (p) => {
+    needBot(p);
+    const kind = needStr(p, "kind");
+    const name = needStr(p, "name");
+    const data = needStr(p, "data_base64");
+    if (!["image", "pdf", "file"].includes(kind)) throw new OpError("bad_request", "need kind image|pdf|file");
+    if (name.startsWith("fail")) throw new OpError("attach_failed", `unsupported ${kind}`);
+    const bytes = Buffer.from(data, "base64").length;
+    if (kind === "image") return { kind, name, text: `[User attached image: ${name}]`, ref_text: "", bytes };
+    if (kind === "pdf") return { kind, name, text: `[User attached PDF: ${name} (1 page(s))]`, ref_text: "", bytes };
+    return { kind, name, text: "", ref_text: `@file:.hermes/attachments/${name}`, bytes };
+  },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({
       id: r.id,

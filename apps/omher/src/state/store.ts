@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { promptText } from "../chat/parts/attachFiles";
 import type {
   Away,
   ApprovalChoice,
@@ -19,6 +20,8 @@ import type {
   Worktree,
   WorktreeDiff,
   MediaFile,
+  AttachKind,
+  AttachResult,
 } from "../lib/protocol";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
@@ -56,7 +59,25 @@ export type MessageItem = {
   text: string;
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
+  /** user rows only: files sent with it, shown from the local copies (never read back). */
+  files?: SentFile[];
+  /** user rows only: the prompt text actually sent when it differs from `text` (files add `@file:` refs). */
+  sent?: string;
 };
+
+/** A file the person sent, as their own bubble shows it. `url` is a blob URL for pictures and video. */
+export interface SentFile {
+  name: string;
+  size: number;
+  kind: "image" | "video" | "file";
+  url: string | null;
+}
+
+/** One file to send: the Hermes attach call it takes, its bytes, and how the bubble shows it. */
+export interface OutFile extends SentFile {
+  attach: AttachKind;
+  read: () => Promise<string>;
+}
 export type ActivityItem = { kind: "activity"; id: string; ts: number; turn: Turn };
 export type ApprovalItem = {
   kind: "approval";
@@ -294,7 +315,10 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     if (i.kind !== "user" && i.kind !== "assistant") return true;
     if (ids.has(i.id)) return false;
     if (i.id.startsWith("local-")) {
-      return !server.some((s) => s.kind === "user" && s.text === i.text && s.ts >= i.ts - 120);
+      const sent = i.sent ?? i.text;
+      const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
+      if (twin && i.files) Object.assign(twin, { text: i.text, files: i.files, sent }); // keep the local pictures
+      return !twin;
     }
     return i.ts >= lastServerTs;
   });
@@ -324,7 +348,7 @@ export type Action =
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number }
-  | { type: "local.user"; bot: string; id: string; text: string; now: number }
+  | { type: "local.user"; bot: string; id: string; text: string; now: number; files?: SentFile[]; sent?: string }
   | { type: "send.failed"; bot: string; id: string; error: string }
   | { type: "event"; ev: BridgeEvent; now: number }
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
@@ -486,7 +510,17 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c) =>
-        withItems(c, [...c.items, { kind: "user", id: a.id, ts: a.now / 1000, text: a.text }]),
+        withItems(c, [
+          ...c.items,
+          {
+            kind: "user",
+            id: a.id,
+            ts: a.now / 1000,
+            text: a.text,
+            ...(a.files?.length ? { files: a.files } : {}),
+            ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
+          },
+        ]),
       );
     case "send.failed":
       return touchChat(state, a.bot, (c) =>
@@ -612,6 +646,8 @@ export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
   send(text: string): Promise<void>;
+  /** Attach each file in order (`chat.attach`), then send. Rejects, sending nothing, if any attach fails. */
+  sendWithFiles(text: string, files: OutFile[]): Promise<void>;
   interrupt(): Promise<void>;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
   respondClarify(requestId: string, answer: string, bot?: string): Promise<void>;
@@ -793,6 +829,28 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "local.user", bot, id, text: t, now: now() });
       try {
         await bridge.request("chat.send", { bot, text: t });
+      } catch (e) {
+        dispatch({ type: "send.failed", bot, id, error: errText(e) });
+      }
+    },
+    async sendWithFiles(text, files) {
+      const bot = state.selectedBot;
+      if (!bot) return;
+      if (!files.length) return actions.send(text);
+      const results: AttachResult[] = [];
+      for (const f of files) {
+        try {
+          results.push(await bridge.request("chat.attach", { bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
+        } catch (e) {
+          throw new Error(`Couldn't attach ${f.name} · ${errText(e)}`);
+        }
+      }
+      const sent = promptText(text, results);
+      const id = `local-${++localSeq}`;
+      const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
+      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent });
+      try {
+        await bridge.request("chat.send", { bot, text: sent });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }

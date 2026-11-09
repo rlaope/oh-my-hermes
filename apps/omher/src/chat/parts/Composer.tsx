@@ -1,26 +1,38 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../../lib/protocol";
+import type { OutFile } from "../../state/store";
 import { ArrowUp, StopIcon } from "../../ui";
+import { AttachButton, Chips, chipsFor, useDropZone, type Chip } from "./Attach";
+import "./attach.css";
 
 const MAX_H = 200;
 
-/** Autosizing textarea. Enter sends, Shift+Enter breaks the line, `/` shows a skill hint, Stop interrupts. */
+/** Autosizing textarea with a + at its left edge for files (menu, drop on the chat, paste). Enter sends,
+ * Shift+Enter breaks the line, `/` shows a skill hint, Stop interrupts. Files go first (`chat.attach`), then
+ * the text; if one fails nothing is sent and the chips stay. */
 export function Composer({
   bot,
   running,
   offline,
   onSend,
+  onSendFiles,
   onStop,
 }: {
   bot: Bot;
   running: boolean;
   offline: boolean;
   onSend: (text: string) => void;
+  onSendFiles: (text: string, files: OutFile[]) => Promise<void>;
   onStop: () => void;
 }) {
   const [text, setText] = useState("");
+  const [chips, setChips] = useState<Chip[]>([]);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const has = text.trim().length > 0;
+  const wrap = useRef<HTMLDivElement>(null);
+  const good = chips.filter((c) => !c.reason);
+  const has = text.trim().length > 0 || good.length > 0;
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -34,57 +46,107 @@ export function Composer({
     ref.current?.focus();
   }, [bot.name]);
 
-  const send = () => {
-    if (!has || offline) return;
-    onSend(text);
-    setText("");
+  const add = useCallback((files: File[]) => {
+    setErr(null);
+    setChips((cur) => [...cur, ...chipsFor(files, cur.filter((c) => !c.reason).length)]);
+    ref.current?.focus();
+  }, []);
+
+  const remove = (id: string) =>
+    setChips((cur) => {
+      const gone = cur.find((c) => c.id === id);
+      if (gone?.url) URL.revokeObjectURL(gone.url);
+      return cur.filter((c) => c.id !== id);
+    });
+
+  // Unsent chips let go of their local copies when the composer goes; sent ones live on in the bubble.
+  const latest = useRef(chips);
+  latest.current = chips;
+  useEffect(() => () => latest.current.forEach((c) => c.url && URL.revokeObjectURL(c.url)), []);
+
+  const overlay = useDropZone(wrap, !offline, add);
+
+  const send = async () => {
+    if (!has || offline || sending) return;
+    if (!good.length) {
+      onSend(text);
+      setText("");
+      return;
+    }
+    setSending(true);
+    setErr(null);
+    try {
+      await onSendFiles(text, good);
+      setText("");
+      setChips((cur) => cur.filter((c) => c.reason)); // red chips stay: they were never sent
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
   };
 
   const slash = /^\/[\w-]*$/.test(text);
   const showStop = running && !has;
 
   return (
-    <div className="cw">
+    <div className="cw" ref={wrap}>
+      {overlay}
       {slash && (
         <div className="hint" role="note" data-testid="skill-hint">
           <span className="hint-k">/skill</span> Type a skill name, e.g. <code>/plan</code> — {bot.display_name} loads it
           for this message
         </div>
       )}
-      <div className={`composer${has ? " has" : ""}`}>
-        <textarea
-          ref={ref}
-          rows={1}
-          value={text}
-          disabled={offline}
-          placeholder={offline ? `${bot.display_name} is offline` : `Message ${bot.display_name}`}
-          aria-label={`Message ${bot.display_name}`}
-          data-testid="composer"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-              e.preventDefault();
-              send();
-            }
-          }}
-        />
-        {showStop ? (
-          <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={onStop} data-testid="stop">
-            <StopIcon />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="send"
-            aria-label="Send"
-            title="Send"
-            disabled={!has || offline}
-            onClick={send}
-            data-testid="send"
-          >
-            <ArrowUp />
-          </button>
+      <div className={`composer${has ? " has" : ""}`} data-testid="composer-box">
+        <Chips chips={chips} onRemove={remove} />
+        {err && (
+          <div className="att-err" role="alert" data-testid="attach-error">
+            {err}
+          </div>
         )}
+        <div className="composer-row">
+          <AttachButton disabled={offline || sending} onFiles={add} onError={setErr} />
+          <textarea
+            ref={ref}
+            rows={1}
+            value={text}
+            disabled={offline}
+            placeholder={offline ? `${bot.display_name} is offline` : `Message ${bot.display_name}`}
+            aria-label={`Message ${bot.display_name}`}
+            data-testid="composer"
+            onChange={(e) => setText(e.target.value)}
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files];
+              if (!files.length) return;
+              e.preventDefault();
+              add(files);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+          />
+          {showStop ? (
+            <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={onStop} data-testid="stop">
+              <StopIcon />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="send"
+              aria-label="Send"
+              title="Send"
+              disabled={!has || offline || sending}
+              onClick={() => void send()}
+              data-testid="send"
+            >
+              <ArrowUp />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
