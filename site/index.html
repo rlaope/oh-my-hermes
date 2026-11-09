@@ -475,7 +475,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher::after{content:"";position:absolute;left:50%;bottom:0;width:min(880px,80%);height:1px;transform:translateX(-50%);pointer-events:none;opacity:.55;
   background:linear-gradient(90deg,transparent,#a46cf5 22%,#f27bb6 42%,#ff9a5a 58%,#c6f36b 74%,transparent);box-shadow:0 0 18px 1px rgba(242,123,182,.28)}
 .omher__shot{position:relative;z-index:2;order:0;width:min(1240px,100%,calc((100svh - 372px) * 2.091));min-width:min(640px,100%);margin:0 auto;
-  --reveal:1;--lit:0;--bx:80%;--rx:0deg;--ry:0deg;--gx:50%;--gy:50%;--glare:0;--hit:0;
+  --reveal:1;--lit:0;--bx:80%;--rx:0deg;--ry:0deg;--gx:600px;--gy:300px;--glare:0;--hit:0;
   transform-origin:50% 40%}
 .omher__shot.is-tilt{transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry))}
 .omher__shot img{display:block;width:100%;height:auto;filter:drop-shadow(0 34px 60px rgba(0,0,0,.55));
@@ -484,23 +484,23 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher__glow{position:absolute;inset:0;border-radius:1%/1.6%;overflow:hidden;pointer-events:none;
   -webkit-mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%));mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%))}
 /* light pooling under the impact, and the top border lit in the spectrum */
-.omher__glow::after{content:"";position:absolute;left:var(--bx);top:0;width:min(620px,58%);height:min(320px,40%);transform:translate(-50%,-42%);opacity:calc(var(--lit) * .9 + var(--hit) * .5);
-  background:radial-gradient(closest-side,rgba(250,248,255,.11),rgba(196,178,250,.04) 45%,transparent);mix-blend-mode:screen}
-.omher__glow::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:calc(var(--lit) + var(--hit) * .6);
-  background:radial-gradient(closest-side,#fff,rgba(255,255,255,0)) var(--bx) 0/220px 2px no-repeat,linear-gradient(90deg,#6be3f3,#a46cf5,#f27bb6,#ffc6e0,#a46cf5,#6be3f3) 0 0/200% 100%;
-  -webkit-mask-image:radial-gradient(260px 400% at var(--bx) 0,#000,transparent);mask-image:radial-gradient(260px 400% at var(--bx) 0,#000,transparent);
-  box-shadow:0 0 14px rgba(255,214,240,.5);animation:omher-edge 6s linear infinite}
-@keyframes omher-edge{to{background-position:var(--bx) 0,-200% 0}}
+.omher__glow::after{content:"";position:absolute;left:var(--bx);top:0;width:min(560px,52%);height:min(240px,30%);transform:translate(-50%,-50%);opacity:calc(var(--lit) + var(--hit) * .5);
+  background:radial-gradient(closest-side,rgba(255,252,248,.06),transparent 60%),linear-gradient(90deg,rgba(138,92,255,.15),rgba(47,208,255,.15) 30%,rgba(127,224,138,.13) 50%,rgba(242,210,74,.13) 66%,rgba(255,74,88,.14));
+  -webkit-mask-image:radial-gradient(closest-side,#000,transparent);mask-image:radial-gradient(closest-side,#000,transparent);mix-blend-mode:screen}
+.omher__glow::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:calc(var(--lit) * .82 + var(--hit) * .5);
+  background:radial-gradient(closest-side,#fff,rgba(255,255,255,0)) var(--bx) 0/110px 2px no-repeat,linear-gradient(90deg,#8a5cff,#5a7cff,#2fd0ff,#7fe08a,#f2d24a,#ff8f3c,#ff4a58) calc(var(--bx) - 240px) 0/480px 100% no-repeat;
+  -webkit-mask-image:radial-gradient(240px 400% at var(--bx) 0,#000 30%,transparent);mask-image:radial-gradient(240px 400% at var(--bx) 0,#000 30%,transparent);
+  box-shadow:0 0 10px rgba(255,255,255,.2)}
 /* glass: a faint spectrum sheen that sweeps across now and then, and a glare that follows the cursor */
 .omher__sheen{position:absolute;inset:0;border-radius:1%/1.6%;overflow:hidden;pointer-events:none;mix-blend-mode:screen;opacity:max(var(--glare),calc(var(--lit) * .9))}
 .omher__sheen::before{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:38%;transform:skewX(-18deg) translateX(0);
-  background:linear-gradient(90deg,transparent,rgba(107,227,243,.04) 30%,rgba(164,108,245,.06) 45%,rgba(242,123,182,.06) 58%,rgba(255,200,170,.04) 70%,transparent);
+  background:linear-gradient(90deg,transparent,rgba(255,61,74,.045) 18%,rgba(255,143,44,.055) 30%,rgba(255,217,62,.06) 42%,rgba(91,234,106,.055) 54%,rgba(47,208,255,.06) 66%,rgba(74,114,255,.055) 76%,rgba(154,76,255,.045) 86%,transparent);
   animation:omher-sheen 9s cubic-bezier(.45,.05,.3,1) 2.6s infinite}
 @keyframes omher-sheen{0%{transform:skewX(-18deg) translateX(0)}38%,100%{transform:skewX(-18deg) translateX(560%)}}
 .omher__sheen::after{content:"";position:absolute;inset:0;opacity:var(--glare);
-  background:radial-gradient(240px 190px at var(--gx) var(--gy),rgba(255,255,255,.13),rgba(242,123,182,.08) 40%,transparent 72%),
-    conic-gradient(from 200deg at var(--gx) var(--gy),rgba(164,108,245,.24),rgba(242,123,182,.22),rgba(255,170,130,.18),rgba(107,227,243,.22),rgba(164,108,245,.24));
-  -webkit-mask-image:radial-gradient(420px 320px at var(--gx) var(--gy),#000,transparent);mask-image:radial-gradient(420px 320px at var(--gx) var(--gy),#000,transparent)}
+  background:radial-gradient(30px 26px at var(--gx) var(--gy),rgba(255,255,255,.3),rgba(255,255,255,.06) 60%,transparent 85%),
+    linear-gradient(118deg,transparent 10%,rgba(255,74,88,.4) 23%,rgba(255,150,60,.4) 33%,rgba(250,224,80,.34) 43%,rgba(100,234,140,.36) 53%,rgba(50,210,255,.42) 63%,rgba(90,124,255,.44) 73%,rgba(164,96,255,.4) 83%,transparent 94%) calc(var(--gx) - 130px) calc(var(--gy) - 100px)/260px 200px no-repeat;
+  -webkit-mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent);mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent)}
 .omher__meta{position:relative;z-index:2;order:1;margin:26px auto 0;display:flex;flex-direction:column;align-items:center;gap:6px}
 .omher__t{margin:0 0 4px;min-height:0;font:500 11.5px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
 .omher__t b{color:var(--ink-2);font-weight:600}
@@ -516,7 +516,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher__cmd > div::-webkit-scrollbar{display:none}
 .omher__cmd .p{color:var(--pink);margin-right:10px;user-select:none}
 @media (max-width:900px){.omher__cmd > div{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 64px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 64px),transparent)}}
-@media (prefers-reduced-motion:reduce){.omher__shot{transform:none}.omher__sheen::before,.omher__glow::before{animation:none}.omher__sheen::before{display:none}}
+@media (prefers-reduced-motion:reduce){.omher__shot{transform:none}.omher__sheen::before{animation:none;display:none}}
 /* the 01-08 rail belongs to the OMH sections; it stays hidden beside the omher block */
 .rail{transition:opacity var(--base) var(--ease)}
 body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}

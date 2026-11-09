@@ -24,8 +24,8 @@
     const vx = bx - ax, vy = by - ay, l2 = vx * vx + vy * vy || 1, t = clamp(((px - ax) * vx + (py - ay) * vy) / l2, 0, 1);
     return Math.hypot(px - ax - vx * t, py - ay - vy * t);
   };
-  // brand spectrum, cyclic: violet, pink, orange, lime, cyan, blue
-  const PAL = [[164, 108, 245], [242, 123, 182], [255, 154, 90], [198, 243, 107], [107, 227, 243], [115, 148, 250]];
+  // the full spectrum, red to violet, for the 2D fallback
+  const PAL = [[255, 64, 72], [255, 140, 40], [255, 220, 60], [90, 240, 100], [40, 210, 255], [70, 110, 255], [150, 70, 255]];
 
   const RES = 0.75;          // render scale against CSS pixels
   const FLOW = 1100;         // ripple speed down the beam, px/s
@@ -53,16 +53,15 @@ float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); 
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++){ s += a * vn(p); p = p * 2.03 + vec2(1.7, 9.2); a *= .5; } return s; }
-vec3 pal(float h){
-  h = fract(h) * 6.; int i = int(h); float f = smoothstep(0., 1., fract(h));
-  vec3 c[6] = vec3[6](vec3(.643,.424,.961), vec3(.949,.482,.714), vec3(1.,.604,.353), vec3(.86,.98,.66), vec3(.42,.89,.953), vec3(.451,.58,.98));
-  return mix(c[i], c[(i + 1) % 6], f);
+// the full spectrum, cyclic: red, orange, yellow, green, cyan, blue, violet, magenta (back to red)
+vec3 spec(float h){
+  h = fract(h) * 8.; int i = int(h); float f = fract(h);
+  vec3 c[8] = vec3[8](vec3(1.,.2,.26), vec3(1.,.5,.12), vec3(.98,.84,.18), vec3(.3,.98,.36), vec3(.16,.88,1.), vec3(.32,.5,1.), vec3(.66,.38,1.), vec3(.96,.3,.8));
+  return mix(c[i], c[(i + 1) % 8], f);
 }
-vec3 prism(float x){
-  x = clamp(x, -1., 1.);
-  vec3 c0 = vec3(.42,.89,.953), c1 = vec3(.643,.424,.961), c2 = vec3(1.,.97,1.), c3 = vec3(.949,.482,.714), c4 = vec3(1.,.72,.66);
-  return x < -.5 ? mix(c0, c1, (x + 1.) * 2.) : x < 0. ? mix(c1, c2, (x + .5) * 2.) : x < .5 ? mix(c2, c3, x * 2.) : mix(c3, c4, (x - .5) * 2.);
-}
+// a prism fan: x in -1..1 maps red..violet, h shifts the whole fan along the spectrum
+vec3 prism(float x, float h){ x = clamp(x, -1., 1.); x = sign(x) * pow(abs(x), 1.15); vec3 c = spec(clamp((x * .5 + .5) * .8 + h, 0., .8)); float w = smoothstep(.45, .1, (x * .5 + .5) * .8 + h); return c * pow(.58 / max(dot(c, vec3(.3, .55, .15)), .2), .55) * (1. + .3 * w); }
+vec3 sat(vec3 c, float k){ return max(mix(vec3(dot(c, vec3(.3, .55, .15))), c, k), 0.); }
 void main(){
   vec2 p = vec2(gl_FragCoord.x, uView.y * uScale - gl_FragCoord.y) / uScale;
   float T = uTime;
@@ -70,70 +69,72 @@ void main(){
   vec2 ap = p - uA; float along = dot(ap, dir), d = dot(ap, nrm);
   float t = clamp(along / L, 0., 1.);
   float reach = uPour * L;
-  float env = smoothstep(reach + 2., reach - 36., along) * smoothstep(-6., 4., along);
+  float env = smoothstep(reach + 2., reach - 36., along) * smoothstep(-4., 3., along);
   float above = smoothstep(uShot.z + 1.5, uShot.z - 2., p.y);
-  float fadeIn = mix(smoothstep(uShot.z + 1., uShot.z - 22., p.y), 1., exp(-d * d / 30.));
-  float wc = mix(2., 4.2, t) * uWide, wi = mix(13., 30., t) * uWide, wo = mix(30., 64., t) * uWide;
-  float u = d / wi;
-  float flow = fbm(vec2(u * 1.6, (along - T * 230.) / 72.));
-  float streak = fbm(vec2(u * 5.2 + 3., (along - T * 410.) / 24.));
-  float core = exp(-d * d / (wc * wc)), inner = exp(-d * d / (wi * wi)), outer = exp(-d * d / (wo * wo)) * .55;
+  float fadeIn = mix(smoothstep(uShot.z + 1., uShot.z - 5., p.y), 1., exp(-d * d / 60.));
+  // widths: the spectrum fans out toward the window (about 1.6x the old beam at the bottom), with a thicker white core
+  float wc = mix(5.2, 5.8, t) * uWide, wb = mix(16., 70., t) * uWide, wo = mix(34., 108., t) * uWide;
+  float u = d / wb * 1.15;
+  float flow = fbm(vec2(u * .55, (along - T * 230.) / 72.));
+  float streak = fbm(vec2(u * 1.8 + 3., (along - T * 410.) / 26.));
   float pul = 0.;
   for (int k = 0; k < 4; k++){
     float s = uPulse[k]; if (s < 0.) continue;
     float pos = (T - s) * ${FLOW}.;
     pul += exp(-pow((along - pos) / 46., 2.)) * smoothstep(L + 90., L - 30., pos) * step(0., pos);
   }
-  // dispersion across the width (white centre, violet/pink then cyan/orange fringes), hue drifting slowly along
-  float drift = sin(T * .35 + t * 2.2) * .12 + (flow - .5) * .14;
-  vec3 disp = prism(clamp(d / (wi * .95) + drift, -1., 1.) * .8);
-  vec3 spec = disp;
-  float body = inner * (.48 + .5 * flow + .5 * streak * streak) + outer * (.55 + .4 * flow);
-  body *= 1. + 1.8 * pul;
-  vec3 tint = spec * inner * (.48 + .5 * flow + .5 * streak * streak) * (1. + 1.8 * pul) + vec3(.78, .7, 1.) * outer * (.5 + .4 * flow) * .7;
-  tint = max(mix(vec3(dot(tint, vec3(.3, .55, .15))), tint, 1.6), 0.);
-  vec3 col = tint * .9 + vec3(1., .975, 1.) * core * (.62 + .22 * streak + 1.2 * pul);
-  // sparkles drifting down inside the column
-  vec2 g = vec2(d / 11., (along - T * 90.) / 24.); vec2 gi = floor(g), gf = fract(g);
+  // dispersion across the width, red on one side and violet on the other; the hue drifts slowly down the beam
+  float drift = .045 * sin((along - T * 140.) / 200.) + .025 * sin(T * .31) + (flow - .5) * .03;
+  vec3 sc = prism(u, drift);
+  float band = smoothstep(1.25, .6, abs(u));
+  float energy = (.86 + .2 * flow + .1 * streak * streak) * (1. + 1.6 * pul);
+  float core = exp(-d * d / (wc * wc)), sheath = exp(-d * d / (wc * wc * 5.)), halo = exp(-d * d / (wo * wo));
+  vec3 col = sat(sc, 1.1) * band * energy * mix(.95, 1.05, smoothstep(0., .6, t))
+    + vec3(.9, .9, .96) * halo * .05 * (.7 + .3 * flow)
+    + vec3(1., .99, .98) * (core * .8 + sheath * .06) * (.9 + .1 * streak + 1.2 * pul) * mix(1.9, 1., smoothstep(0., .35, t)) * mix(1., .7, smoothstep(.7, 1., t));
+  // sparkles drifting down inside the column, each in one spectral hue
+  vec2 g = vec2(d / 12., (along - T * 90.) / 24.); vec2 gi = floor(g), gf = fract(g);
   float r = h21(gi + 17.);
   vec2 sp = vec2(.2 + .6 * h21(gi + 7.1), .2 + .6 * h21(gi + 3.3));
-  float spk = step(.83, r) * smoothstep(1.7, .2, length((gf - sp) * vec2(11., 24.)));
-  spk *= (.45 + .55 * sin(T * (2.5 + r * 5.) + r * 40.)) * exp(-abs(d) / (wi * 1.4)) * smoothstep(.04, .2, t);
-  col += mix(pal(r * 3. + T * .05), vec3(1.), .55) * spk * .9;
-  col *= env * above * fadeIn * (1. + .5 * (uBright - 1.));
+  float spk = step(.9, r) * smoothstep(1.7, .2, length((gf - sp) * vec2(11., 24.)));
+  spk *= (.45 + .55 * sin(T * (2.5 + r * 5.) + r * 40.)) * exp(-abs(d) / (wb * 1.2)) * smoothstep(.04, .2, t);
+  col += mix(prism(u, drift), vec3(1.), .4) * spk * .55;
+  col *= env * above * fadeIn * (1. + .45 * (uBright - 1.));
   // bloom on the pill
-  vec2 q0 = (p - uA) * vec2(.7, 1.8); float bl = 1.3 * exp(-length(q0) / 16.) * (.55 + .45 * uHov * (.75 + .25 * sin(T * 6.)));
-  col += mix(vec3(1.), pal(T * .05 + .1), .35) * bl * .8;
-  // impact on the shot's top edge: a soft prism fan that pools on the edge and runs along it
+  vec2 q0 = (p - uA) * vec2(.55, 2.2); float bl = 1.6 * exp(-length(q0) / 17.) * (.55 + .45 * uHov * (.75 + .25 * sin(T * 6.)));
+  col += vec3(1., .99, .98) * bl * .7;
+  // impact on the shot's top edge: a rainbow fan that pools on the edge, and a spectral rim running along it
   float dx = p.x - uB.x, dy = uShot.z - p.y;
   float inX = smoothstep(uShot.x - 2., uShot.x + 70., p.x) * smoothstep(uShot.y + 2., uShot.y - 70., p.x);
-  float lift = smoothstep(-1.5, .5, dy) + (1. - smoothstep(-1.5, .5, dy)) * exp(dy / 7.) * .55;
-  float fan = exp(-pow(dx / (105. * uWide), 2.) - pow(max(dy, 0.) / 20., 2.)) * lift * inX;
+  float lift = smoothstep(-1.5, .5, dy) + (1. - smoothstep(-1.5, .5, dy)) * exp(dy / 7.) * .5;
+  float fw = 150. * uWide;
+  float fan = exp(-pow(dx / fw, 2.) - pow(max(dy, 0.) / 7., 2.)) * lift * inX;
+  float pool = exp(-pow(dx / (fw * 1.7), 2.) - pow(max(dy, 0.) / 18., 2.)) * lift * inX;
   float cz = fbm(vec2(dx / 70. - T * .3, dy / 22. + T * .6));
-  float edge = exp(-pow((dy - .5) / 1.3, 2.)) * inX;
-  float spread = exp(-pow(dx / 230., 2.)) * (.85 + .15 * sin(abs(dx) * .02 - T * 2.4));
-  float sw = .05 * sin(T * .5);
-  vec3 fanCol = prism(-dx / 150. + sw);
-  vec3 imp = max(mix(vec3(dot(fanCol, vec3(.3, .55, .15))), fanCol, 1.5), 0.) * fan * (.5 + .3 * cz) + prism(-dx / 190. + sw) * edge * spread * 1.15
-    + vec3(1., .97, 1.) * exp(-pow(dx / 34., 2.) - pow(max(dy, 0.) / 8., 2.)) * lift * .75;
+  float edge = exp(-pow((dy - .5) / 1.4, 2.)) * inX;
+  float spread = exp(-pow(dx / 280., 2.)) * (.82 + .18 * sin(abs(dx) * .02 - T * 2.4));
+  float sw = .05 * sin(T * .45);
+  vec3 imp = sat(prism(-dx / fw, sw), 1.1) * fan * (.48 + .22 * cz) + prism(-dx / (fw * 1.7), sw) * pool * (.4 + .12 * cz) + sat(prism(-dx / 260., sw + .03 * sin(T * .7)), 1.15) * edge * spread * 1.15
+    + vec3(1., .98, .97) * exp(-pow(dx / 22., 2.) - pow(max(dy, 0.) / 5., 2.)) * lift * .55;
   float arrive = 0.;
   for (int k = 0; k < 4; k++){ float s = uPulse[k]; if (s < 0.) continue; float a = T - s - L / ${FLOW}.; arrive += step(0., a) * exp(-a * 5.); }
-  col += imp * uLand * (1. + 1.4 * arrive) * (1. + .5 * (uBright - 1.));
-  // click burst: a ring and sparks thrown up from the impact
+  col += imp * uLand * (1. + 1.4 * arrive) * (1. + .45 * (uBright - 1.));
+  // click burst: a spectral ring and sparks thrown up from the impact
   float age = T - uBurst;
   if (age > 0. && age < 1.3){
     float fade = 1. - age / 1.3;
     float ring = exp(-pow((length(vec2(dx, dy * 2.6)) - age * 380.) / 9., 2.)) * lift * inX;
-    col += prism(-dx / 260.) * ring * fade * .8;
+    col += sat(prism(-dx / 260., 0.), 1.3) * ring * fade * .85;
     for (int k = 0; k < 18; k++){
       float fk = float(k), a = -3.1416 * (.08 + .84 * h21(vec2(fk, 3.7))), v = 120. + 220. * h21(vec2(fk, 9.1));
       vec2 pos = uB + vec2(cos(a), sin(a)) * v * age + vec2(0., 260. * age * age);
       float s = exp(-length(p - pos) / 1.5) * fade;
-      col += mix(pal(fk / 18.), vec3(1.), .35) * s * 1.6;
+      col += mix(spec(fk / 18. * .86), vec3(1.), .25) * s * 1.6;
     }
   }
   col *= uI;
-  col = 1. - exp(-col * 1.15);
+  // tone map, then cap: the light never reaches full opacity, so nothing under it is washed out
+  col = (1. - exp(-col * 1.1)) * .9;
   o = vec4(col, max(col.r, max(col.g, col.b)));
 }`;
 
@@ -171,7 +172,7 @@ void main(){
   function drawGL(f) {
     gl.viewport(0, 0, cv.width, cv.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
     if (S.I <= .002) return;
-    const l = clamp(Math.min(f.x0 - 160, f.x1 - 420, f.sr.left), 0, W), r = clamp(Math.max(f.x0 + 160, f.x1 + 420, f.sr.right), 0, W);
+    const l = clamp(Math.min(f.x0 - 200, f.x1 - 620, f.sr.left), 0, W), r = clamp(Math.max(f.x0 + 200, f.x1 + 620, f.sr.right), 0, W);
     const t = clamp(Math.min(f.y0 - 60, f.y1 - 200), 0, H), b = clamp(f.y1 + 30, 0, H);
     if (r - l < 2 || b - t < 2) return;
     gl.uniform4f(U.uBox, l, t, r, b); gl.uniform2f(U.uView, W, H); gl.uniform1f(U.uScale, cv.width / W);
@@ -187,17 +188,17 @@ void main(){
   const SW = 320, SH = 1024; let sprite = null;
   function build2d() {
     const c = document.createElement('canvas'); c.width = SW; c.height = SH; const g = c.getContext('2d'), m = SW / 2;
-    const rgba = (i, a) => `rgba(${PAL[i % 6].join(',')},${a})`;
+    const rgba = (i, a) => `rgba(${PAL[i % 7].join(',')},${a})`;
     const cone = (t, b, stops) => { const gr = g.createLinearGradient(m - b, 0, m + b, 0); for (const [o, col] of stops) gr.addColorStop(o, col); g.fillStyle = gr; g.beginPath(); g.moveTo(m - t, 0); g.lineTo(m + t, 0); g.lineTo(m + b, SH); g.lineTo(m - b, SH); g.closePath(); g.fill(); };
-    cone(14, 120, [[0, rgba(4, 0)], [.2, rgba(4, .1)], [.36, rgba(0, .16)], [.5, 'rgba(255,240,250,.16)'], [.64, rgba(1, .16)], [.8, rgba(2, .09)], [1, rgba(2, 0)]]);
-    cone(6, 42, [[0, rgba(4, 0)], [.25, rgba(0, .26)], [.5, 'rgba(255,255,255,.4)'], [.75, rgba(1, .26)], [1, rgba(2, 0)]]);
-    cone(4, 14, [[0, 'rgba(255,255,255,0)'], [.5, 'rgba(255,255,255,.4)'], [1, 'rgba(255,255,255,0)']]);
+    cone(14, 190, [[0, rgba(0, 0)], [.1, rgba(0, .2)], [.24, rgba(1, .22)], [.36, rgba(2, .22)], [.5, 'rgba(255,250,245,.2)'], [.6, rgba(3, .22)], [.72, rgba(4, .22)], [.84, rgba(5, .2)], [.92, rgba(6, .16)], [1, rgba(6, 0)]]);
+    cone(8, 70, [[0, rgba(0, 0)], [.2, rgba(1, .22)], [.38, rgba(2, .22)], [.5, 'rgba(255,255,255,.45)'], [.62, rgba(4, .22)], [.8, rgba(5, .22)], [1, rgba(6, 0)]]);
+    cone(5, 22, [[0, 'rgba(255,255,255,0)'], [.5, 'rgba(255,255,255,.55)'], [1, 'rgba(255,255,255,0)']]);
     g.globalCompositeOperation = 'destination-in';
     const v = g.createLinearGradient(0, 0, 0, SH); v.addColorStop(0, 'rgba(0,0,0,.7)'); v.addColorStop(.85, 'rgba(0,0,0,.9)'); v.addColorStop(1, '#000');
     g.fillStyle = v; g.fillRect(0, 0, SW, SH);
     sprite = c;
   }
-  const dust = Array.from({length: 40}, (_, i) => ({u: Math.random() * 2 - 1, f: Math.random(), v: .035 + Math.random() * .07, a: .25 + Math.random() * .5, s: Math.random() < .2 ? 2 : 1.2, ph: Math.random() * 6.3, c: i % 6}));
+  const dust = Array.from({length: 40}, (_, i) => ({u: Math.random() * 2 - 1, f: Math.random(), v: .035 + Math.random() * .07, a: .25 + Math.random() * .5, s: Math.random() < .2 ? 2 : 1.2, ph: Math.random() * 6.3, c: i % 7}));
   function draw2d(f, dt) {
     const k0 = cv.width / W;
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, cv.width, cv.height);
@@ -223,7 +224,7 @@ void main(){
     const land = f.land * amp;
     if (land > 0) {
       cx.save(); cx.beginPath(); cx.rect(f.sr.left, 0, f.sr.width, f.y1); cx.clip(); cx.translate(f.x1, f.y1); cx.scale(1, .3);
-      g = cx.createRadialGradient(0, 0, 0, 0, 0, 230 * k); g.addColorStop(0, 'rgba(255,244,250,.3)'); g.addColorStop(.35, 'rgba(242,123,182,.12)'); g.addColorStop(.7, 'rgba(164,108,245,.06)'); g.addColorStop(1, 'rgba(107,227,243,0)');
+      g = cx.createRadialGradient(0, 0, 0, 0, 0, 230 * k); g.addColorStop(0, 'rgba(255,250,245,.3)'); g.addColorStop(.25, 'rgba(255,220,60,.12)'); g.addColorStop(.45, 'rgba(90,240,100,.08)'); g.addColorStop(.65, 'rgba(40,210,255,.07)'); g.addColorStop(.85, 'rgba(150,70,255,.05)'); g.addColorStop(1, 'rgba(150,70,255,0)');
       cx.globalAlpha = Math.min(1, land * flick); cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, 230 * k, 0, 6.2832); cx.fill();
       cx.restore();
     }
@@ -235,7 +236,7 @@ void main(){
   function frame(now, dt) {
     const t = RM ? 4 : (now - S.t0) / 1000;
     const p = pill.getBoundingClientRect(), sr = shot.getBoundingClientRect();
-    const x0 = p.left + p.width / 2, y0 = p.bottom - 3, y1 = sr.top + 1;
+    const x0 = p.left + p.width / 2, y0 = p.bottom - 7, y1 = sr.top + 1;
     const gap = y1 - p.bottom, want = sr.bottom > H * .2 && p.bottom > 0 && p.width > 0 && gap > 10;
     const vis = want ? smooth(10, 44, gap) : 0;
     if (RM) S.I = vis; else S.I = clamp(S.I + clamp(vis - S.I, -dt / 260, dt / 420), 0, 1);
@@ -254,12 +255,15 @@ void main(){
     // shot tilt and glare follow a mouse over the shot
     const over = !RM && S.mouse && S.mx >= sr.left && S.mx <= sr.right && S.my >= sr.top && S.my <= sr.bottom;
     const nx = over ? (S.mx - sr.left) / sr.width : .5, ny = over ? (S.my - sr.top) / sr.height : .5;
-    S.ry += ((over ? (nx - .5) * 8 : 0) - S.ry) * kf(160);   // max 4deg
-    S.rx += ((over ? (.5 - ny) * 7 : 0) - S.rx) * kf(160);   // max 3.5deg
+    // tilt only while the pointer moves; at rest the shot eases back to a flat, crisply rastered layer
+    const moving = over && now - (S.moved || 0) < 420;
+    S.ry += ((moving ? (nx - .5) * 6 : 0) - S.ry) * kf(moving ? 160 : 170);   // max 3deg
+    S.rx += ((moving ? (.5 - ny) * 5 : 0) - S.rx) * kf(moving ? 160 : 170);   // max 2.5deg
+    if (!moving && Math.abs(S.rx) + Math.abs(S.ry) < .35) S.rx = S.ry = 0;    // snap flat: no resampled raster at rest
     S.gl += ((over ? 1 : 0) - S.gl) * kf(200);
-    if (over) { setVar('--gx', (nx * 100).toFixed(1) + '%'); setVar('--gy', (ny * 100).toFixed(1) + '%'); }
+    if (over) { setVar('--gx', (nx * shot.offsetWidth).toFixed(0) + 'px'); setVar('--gy', (ny * shot.offsetHeight).toFixed(0) + 'px'); }
     // the 3D transform only while tilted: an untilted shot stays a plain, crisply rastered layer
-    const tilted = Math.abs(S.rx) + Math.abs(S.ry) > .02;
+    const tilted = Math.abs(S.rx) + Math.abs(S.ry) > 0;
     if (tilted !== S.tilted) { S.tilted = tilted; shot.classList.toggle('is-tilt', tilted); }
     setVar('--ry', S.ry.toFixed(2) + 'deg'); setVar('--rx', S.rx.toFixed(2) + 'deg'); setVar('--glare', S.gl.toFixed(3));
     const land = ease((S.pour - .7) / .3);
@@ -297,7 +301,7 @@ void main(){
     S.pulses[S.pi] = t; S.pi = (S.pi + 1) % 4;
     S.burst = t + S.geo.len / FLOW;
   }
-  addEventListener('pointermove', e => { S.mx = e.clientX; S.my = e.clientY; S.mouse = e.pointerType === 'mouse'; }, {passive: true});
+  addEventListener('pointermove', e => { S.mx = e.clientX; S.my = e.clientY; S.mouse = e.pointerType === 'mouse'; S.moved = performance.now(); }, {passive: true});
   document.documentElement.addEventListener('pointerleave', () => { S.mx = S.my = -1; });
   sec.addEventListener('click', e => {
     if (e.target.closest('a,button,code,.omher__cmd')) return;
