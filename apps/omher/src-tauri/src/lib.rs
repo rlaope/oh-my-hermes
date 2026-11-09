@@ -32,7 +32,39 @@ async fn open_external(url: String) -> Result<(), String> {
     if !allowed_external(&url) {
         return Err("not a Slack, Discord or Telegram link".into());
     }
+    // A Discord web link opens the Discord app when it is installed, the browser otherwise.
+    if let Some(app_url) = discord_app_url(&url) {
+        if discord_app_installed() && tauri_plugin_opener::open_url(&app_url, None::<&str>).is_ok() {
+            return Ok(());
+        }
+    }
     tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// `https://discord.com/channels/G/C` -> `discord://discord.com/channels/G/C` (the form the Discord app
+/// routes to that exact channel or thread).
+pub(crate) fn discord_app_url(url: &str) -> Option<String> {
+    url.strip_prefix("https://discord.com/channels/")
+        .map(|rest| format!("discord://discord.com/channels/{rest}"))
+}
+
+/// Whether the Discord desktop app is there to take `discord://`. macOS and Linux report a missing handler as
+/// an open error (so the browser fallback runs); Windows would show an "find an app" dialog instead, so there
+/// we look for the app first.
+fn discord_app_installed() -> bool {
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|d| {
+                let d = PathBuf::from(d);
+                ["Discord", "DiscordPTB", "DiscordCanary"].iter().any(|n| d.join(n).join("Update.exe").is_file())
+            })
+            .unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
 }
 
 pub(crate) fn allowed_external(url: &str) -> bool {
@@ -90,5 +122,17 @@ mod tests {
         assert!(!allowed_external("file:///etc/passwd"));
         assert!(!allowed_external("https://discord.com/channels/1 --args"));
         assert!(!allowed_external("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn discord_links_go_to_the_app_first() {
+        use super::discord_app_url;
+        assert_eq!(
+            discord_app_url("https://discord.com/channels/1544/1568").as_deref(),
+            Some("discord://discord.com/channels/1544/1568")
+        );
+        assert!(allowed_external(&discord_app_url("https://discord.com/channels/1/2").unwrap()));
+        assert_eq!(discord_app_url("slack://channel?team=T1&id=C1"), None);
+        assert_eq!(discord_app_url("https://t.me/x"), None);
     }
 }
