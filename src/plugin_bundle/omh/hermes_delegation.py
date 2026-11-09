@@ -85,11 +85,15 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # below). This is an explicit choice for this category; it does not change
     # the 2026-10-13 Opus 5.5 -> Fable 5.1 order anywhere else. Claude Mythos
     # stays out of every shipped chain (above).
-    # (claude-fable-5-1, xhigh) now heads ultrabrain and labels "ultrabrain"
-    # (it projected to architect, where it sits third, before); Astra at
-    # xhigh now heads only forensics and labels "forensics" (see forensics
-    # below). Opus 5.5 at xhigh, third here, keeps the architect label of the
-    # chain it heads. No other shipped pair's label moves.
+    # Over the shipped chains, (claude-fable-5-1, xhigh) now heads ultrabrain
+    # and labels "ultrabrain" (it projected to architect, where it sits
+    # third, before); Astra at xhigh now heads only forensics and labels
+    # "forensics" (see forensics below). Opus 5.5 at xhigh, third here, keeps
+    # the architect label of the chain it heads. No other shipped pair's
+    # label moves. The reader labels against the effective chains, which
+    # entitlement shaping reorders: where the recorded providers serve OpenAI
+    # but not Anthropic, shaped ultrabrain leads with Astra, so Astra at
+    # xhigh still labels "ultrabrain" there.
     "ultrabrain": (
         ("claude-fable-5-1", "xhigh"),
         ("gpt-6-astra", "xhigh"),
@@ -239,9 +243,10 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
         ("glm-5.3-flash", "low"),
         ("gpt-6-luna", "low"),
     ),
-    # Since 2026-11-09 its head no longer collides: (gpt-6-astra, xhigh)
-    # labels "forensics", including a child that fell through ultrabrain or
-    # architect to Astra.
+    # Since 2026-11-09 its head no longer collides in the shipped chains:
+    # (gpt-6-astra, xhigh) labels "forensics", including a child that fell
+    # through ultrabrain or architect to Astra, unless the machine's recorded
+    # providers shape ultrabrain so that Astra leads it (see ultrabrain).
     "forensics": (
         ("gpt-6-astra", "xhigh"),
         ("claude-opus-5-5", "xhigh"),

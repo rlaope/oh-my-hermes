@@ -1227,7 +1227,9 @@ All notable changes will be documented here.
   before Fable 5.1 order anywhere else. A child on Fable 5.1 at `xhigh` is
   now labelled `ultrabrain` (it was `architect`), and one on GPT-6 Astra at
   `xhigh` is labelled `forensics` (it was `ultrabrain`) when no route record
-  names its lane. Pricing is unchanged: no model was added.
+  names its lane, unless the machine's recorded providers put GPT-6 Astra
+  first in `ultrabrain`: the label follows the chains as shaped by those
+  providers. Pricing is unchanged: no model was added.
 
 ## 4.0.6 - 2026-11-04
 

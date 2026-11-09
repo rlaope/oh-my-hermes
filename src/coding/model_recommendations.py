@@ -98,9 +98,9 @@ _OPUS_55 = _candidate(
 # The Claude vendor order inside every chain is Opus 5.5 -> Fable 5.1 (owner
 # decision, 2026-10-13), reversing the 2026-09-06 Fable -> Opus rule, with one
 # explicit exception: Fable 5.1 heads `ultrabrain` (owner decision,
-# 2026-11-09; see that chain). Opus 5.5
-# had taken Opus 5's slots on 2026-09-23, and Opus 5 left the shipped chains
-# under the superseded-generation rule below. Claude Mythos 5.1 is the same model as Fable 5.1
+# 2026-11-09; see that chain). Opus 5.5 had taken Opus 5's slots on
+# 2026-09-23, and Opus 5 left the shipped chains under the
+# superseded-generation rule below. Claude Mythos 5.1 is the same model as Fable 5.1
 # served only to Project Glasswing-approved organizations, so a shipped chain
 # naming it would read as a second model most accounts cannot reach; a user
 # who explicitly names it is still recognized and routed. Fable 5 left the
