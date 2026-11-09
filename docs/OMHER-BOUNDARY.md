@@ -16,6 +16,7 @@ is in `apps/omher/README.md`.
 7. The app starts the bridge as a child process and stops it when the app exits.
 8. The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.
 9. omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture (`assets/avatar.*`, through Hermes' `profiles.set_asset` when the gateway runs); the profile id, folder, config and sessions never change.
+10. omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing: OMH's own one-line installer with `omher@beta` and `OMH_WITH_DESKTOP=0` (`curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta` on macOS, the `install.ps1` equivalent on Windows), which installs Hermes with its official installer and then oh-my-hermes. The command is fixed in the shell; nothing from the page reaches it.
 
 ## What this does not claim
 

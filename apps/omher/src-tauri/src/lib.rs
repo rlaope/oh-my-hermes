@@ -1,15 +1,20 @@
 mod bridge;
+mod setup;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{Bridge, BridgeStatus};
+use bridge::{Bridge, BridgeStatus, Os};
+use setup::InstallEvent;
+use tauri::ipc::Channel;
 use tauri::{Manager, RunEvent, State};
 
 struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
+    installing: Arc<AtomicBool>,
 }
 
 /// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
@@ -47,6 +52,36 @@ pub(crate) fn allowed_external(url: &str) -> bool {
         && PREFIXES.iter().any(|p| url.starts_with(p))
 }
 
+/// The line the first-run screen shows as what Install will run.
+#[tauri::command]
+async fn install_engine_command() -> Result<String, String> {
+    Ok(setup::display_line(Os::current()).to_string())
+}
+
+/// Install Hermes and oh-my-hermes with OMH's fixed one-line installer (the first-run screen's Install
+/// button), streaming its output to the screen, then start the bridge again. Takes nothing from the
+/// page but the output channel; one run at a time.
+#[tauri::command]
+async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
+    if shell.installing.swap(true, Ordering::SeqCst) {
+        return Err("the installer is already running".into());
+    }
+    let installing = Arc::clone(&shell.installing);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        setup::run_install(setup::install_command(Os::current()), |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string());
+    installing.store(false, Ordering::SeqCst);
+    let code = result??;
+    if code == Some(0) {
+        shell.bridge.start(shell.resource_dir.clone());
+    }
+    Ok(code)
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -58,12 +93,19 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry, open_external])
+        .invoke_handler(tauri::generate_handler![
+            bridge_url,
+            bridge_status,
+            bridge_retry,
+            open_external,
+            install_engine,
+            install_engine_command
+        ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir });
+            app.manage(Shell { bridge, resource_dir, installing: Arc::new(AtomicBool::new(false)) });
             Ok(())
         })
         .build(tauri::generate_context!())

@@ -45,3 +45,125 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* First run without Hermes: what Install will run, its live output, two actions. */
+.gate-setup {
+  width: min(580px, calc(100vw - 48px));
+  max-width: none;
+  gap: 14px;
+}
+.gate-mark {
+  display: block;
+  margin-bottom: 2px;
+}
+.gate-head {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink, #f3eff4);
+}
+.gate-text {
+  margin: 0;
+  max-width: 440px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #9a929d);
+}
+.gate-cmd {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: var(--r-sm, 4px);
+  background: var(--raise, #1b181e);
+  color: var(--body, #dcd6de);
+  border: 1px solid var(--line, #29252c);
+  font: 11px/1.5 var(--mono, ui-monospace, monospace);
+  text-align: left;
+  /* break at the spaces around the pipe, never inside the URL */
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  user-select: all;
+}
+.gate-log {
+  width: 100%;
+  box-sizing: border-box;
+  height: 200px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line, #29252c);
+  border-radius: var(--r-sm, 4px);
+  background: var(--page, #050406);
+  color: var(--body, #dcd6de);
+  font: 11px/1.5 var(--mono, ui-monospace, monospace);
+  text-align: left;
+  white-space: normal;
+}
+.gate-line {
+  display: block;
+  /* a wrapped line hangs under its first character, so it never reads as a new line */
+  padding-left: 2ch;
+  text-indent: -2ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.gate-tok {
+  white-space: pre;
+}
+.gate-error--bad {
+  color: var(--danger, #f08a8a);
+}
+.gate-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+/* neutral, not the accent gradient: the logo colours stay on brand surfaces */
+.gate-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 18px;
+  background: var(--ink, #f3eff4);
+  color: var(--bg, #0b090d);
+  font-weight: 600;
+}
+.gate-primary:hover:not(:disabled) {
+  background: var(--body, #dcd6de);
+}
+.gate-primary:disabled {
+  opacity: 0.7;
+}
+.gate-quiet {
+  height: 28px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong, #3d3640);
+  color: var(--body, #dcd6de);
+}
+.gate-quiet:hover:not(:disabled) {
+  background: var(--hover, rgba(255, 255, 255, 0.03));
+}
+.gate-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #9a929d);
+}
+.gate-note code {
+  font: 11px var(--mono, ui-monospace, monospace);
+  color: var(--body, #dcd6de);
+}
+.gate-spin {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: gate-spin 0.8s linear infinite;
+}
+@keyframes gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

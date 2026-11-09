@@ -26,7 +26,12 @@ RULES = (
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
+    "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
+    "The command is fixed in the shell; nothing from the page reaches it.",
 )
+SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
+SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
+ONE_LINER = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta"
 
 
 def _flat(text: str) -> str:
@@ -49,6 +54,45 @@ class DocPins(unittest.TestCase):
         self.assertIn("**Elsewhere**:", context)
         self.assertIn("docs/OMHER-BOUNDARY.md", context)
         self.assertIn("(OMHER-BOUNDARY.md)", DOCS_INDEX.read_text(encoding="utf-8"))
+
+
+class TheOneInstaller(unittest.TestCase):
+    """Rule 10: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
+
+    def test_the_installer_is_the_omher_beta_one_liner_without_the_app(self) -> None:
+        setup = SETUP_RS.read_text(encoding="utf-8")
+        # The definitions themselves, not the Rust tests that repeat them.
+        unix = setup[setup.index("const UNIX: InstallCommand"):]
+        unix = unix[: unix.index("};")]
+        self.assertEqual(re.findall(r'"([^"]*)"', unix), ["/bin/sh", "-c", ONE_LINER])
+        windows = setup[setup.index("const WINDOWS: InstallCommand"):]
+        windows = windows[: windows.index("};")]
+        self.assertEqual(
+            re.findall(r'"([^"]*)"', windows),
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+             "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta"],
+        )
+        env = setup[setup.index("const ENV: &[(&str, &str)]"):]
+        self.assertEqual(re.findall(r'"([^"]*)"', env[: env.index(";")]), ["OMH_WITH_DESKTOP", "0", "NO_COLOR", "1"])
+        # The doc names the same command.
+        self.assertIn(f"`{ONE_LINER}`", DOC.read_text(encoding="utf-8"))
+
+    def test_only_two_places_in_the_shell_start_a_process(self) -> None:
+        spawns = {}
+        for path in sorted(SHELL_SRC.glob("*.rs")):
+            n = path.read_text(encoding="utf-8").count("Command::new(")
+            if n:
+                spawns[path.name] = n
+        # bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed installer.
+        self.assertEqual(spawns, {"bridge.rs": 1, "setup.rs": 1})
+
+    def test_the_install_command_takes_nothing_from_the_page(self) -> None:
+        lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
+        sig = lib[lib.index("async fn install_engine("):]
+        sig = sig[: sig.index(") ->")]
+        self.assertNotIn("String", sig)
+        self.assertNotIn("&str", sig)
+        self.assertIn("Channel<InstallEvent>", sig)
 
 
 class OmhNeverReachesOmher(unittest.TestCase):
