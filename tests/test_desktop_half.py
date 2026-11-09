@@ -773,6 +773,10 @@ PARTIAL_COST_GRAPH = _dag_graph(
 )
 for _name, _data in {
     "dag_settled": {**ESTABLISHED_PAYLOAD, "delegation_graph": SETTLED_DAG_GRAPH},
+    # A settled run whose lanes counted nothing: no figure to keep, so the one line alone.
+    "dag_settled_uncounted": {**ESTABLISHED_PAYLOAD, "delegation_graph": {
+        **SETTLED_DAG_GRAPH, "nodes": [{key: value for key, value in item.items() if key != "usage"}
+                                       for item in SETTLED_DAG_GRAPH["nodes"]]}},
     "dag_partial_cost": {**ESTABLISHED_PAYLOAD, "delegation_graph": PARTIAL_COST_GRAPH},
     "dag_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": DAG_GRAPH},
     "fanout_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": FANOUT_GRAPH},
@@ -1965,12 +1969,26 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: take the card view for a run whose every lane has settled (the TUI clears its block at run end)."""
         render = self._drive()["renders"]["dag_settled"]
         structure = render["structure"]
-        self.assertFalse([node for node in structure if {"omh-pane-dv-kpis", "omh-pane-dv-canvas", "omh-pane-dv-card"}
-                          & set(node["className"].split()) and "omh-pane-ub-kpis" not in node["className"]])
+        self.assertFalse([node for node in structure if {"omh-pane-dv-canvas", "omh-pane-dv-card", "omh-pane-dv-stats"}
+                          & set(node["className"].split())])
         runs = [node["text"] for node in structure if node["className"] == "omh-pane-run"]
         self.assertEqual(len(runs), 1)
         self.assertTrue(runs[0].startswith("DAG · Write and sum · "), runs[0])
         self.assertNotIn("DAG", [node["text"] for node in structure if node["className"] == "omh-pane-section-label"])
+
+    def test_a_settled_dag_ulw_run_keeps_its_figures_under_the_line(self) -> None:
+        """#2684. Mutation: drop the figures when the run settles, or keep them for a run that counted nothing."""
+        render = self._drive()["renders"]["dag_settled"]
+        run_kpis = [node for node in render["structure"]
+                    if "omh-pane-dv-kpis" in node["className"].split() and "omh-pane-ub-kpis" not in node["className"]]
+        self.assertEqual(len(run_kpis), 1)
+        labels = [node["text"] for node in render["structure"] if "omh-pane-dv-kpi-label" in node["className"].split()]
+        values = [node["text"] for node in render["structure"] if "omh-pane-dv-kpi-value" in node["className"].split()]
+        figures = dict(zip(labels[-4:], values[-4:]))
+        self.assertEqual(figures, {"Tokens": "7.7k", "Cache hit": "80.5%", "Cost": "$0.0123", "Node time": "59s"})
+        uncounted = self._drive()["renders"]["dag_settled_uncounted"]["structure"]
+        self.assertFalse([node for node in uncounted
+                          if "omh-pane-dv-kpis" in node["className"].split() and "omh-pane-ub-kpis" not in node["className"]])
 
     def test_a_partly_priced_run_marks_its_cost_as_a_floor(self) -> None:
         """Mutation: show the priced lanes' sum as the run's cost, in the figures or in the by-model row."""

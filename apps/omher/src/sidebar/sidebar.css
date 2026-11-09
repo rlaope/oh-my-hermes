@@ -35,15 +35,20 @@
   flex: none;
 }
 .brand img {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
 }
+/* The wordmark carries the OMH wordmark gradient (brand point, like the logo). */
 .brand b {
+  font-family: var(--mono);
   font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  background: var(--g-word);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .search {
   height: 28px;

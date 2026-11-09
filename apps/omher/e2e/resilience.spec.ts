@@ -39,7 +39,7 @@ test("an away session with a blank label still gets a title", async ({ page }) =
     server.onMessage((raw) => {
       const msg = JSON.parse(String(raw));
       if (ops.get(msg.id) === "elsewhere.list" && msg.ok) {
-        for (const s of msg.result.sessions) if (s.source === "slack") { s.label = ""; s.title = ""; }
+        for (const s of msg.result.sessions) if (s.source === "slack") { s.label = ""; s.title = ""; s.last_reply = null; }
         ws.send(JSON.stringify(msg));
         return;
       }
@@ -47,7 +47,7 @@ test("an away session with a blank label still gets a title", async ({ page }) =
     });
   });
   await open(page);
-  const titles = await page.locator(".ew-ttl").allTextContents();
+  const titles = await page.getByTestId("away-text").allTextContents();
   expect(titles.length).toBeGreaterThan(0);
   for (const t of titles) expect(t.trim()).not.toBe("");
   expect(titles).toContain("Slack session");

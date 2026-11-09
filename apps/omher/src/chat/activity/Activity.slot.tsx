@@ -10,20 +10,23 @@ import "./activity.css";
 
 export const slot = "activity";
 
-/** Short verbs for the detail rows (the live line keeps the store's longer "Reading …" text). */
-const KEYS: Record<string, string> = {
-  terminal: "run",
-  read_file: "read",
-  search_files: "search",
-  web_search: "web",
-  web_extract: "fetch",
-  write_file: "edit",
-  patch: "edit",
-  delegate_task: "agent",
-  skill_view: "skill",
-  skill_use: "skill",
+/** Plain verbs for the detail rows. Unknown tools read as their own name, with underscores spaced. */
+const VERBS: Record<string, string> = {
+  terminal: "Ran",
+  read_file: "Read",
+  search_files: "Searched",
+  web_search: "Searched the web",
+  web_extract: "Read",
+  write_file: "Edited",
+  patch: "Edited",
+  delegate_task: "Asked a helper",
+  skill_view: "Used skill",
+  skill_use: "Used skill",
+  browser_navigate: "Opened",
 };
-const stepKey = (name: string) => KEYS[name] ?? name;
+const stepVerb = (name: string) => VERBS[name] ?? name.replace(/_/g, " ");
+/** Code-like details (commands, paths, URLs) render in mono; prose (a helper's goal) stays text. */
+const isCode = (name: string) => !["delegate_task", "web_search"].includes(name);
 
 /** Step duration: "0.4s" under a second, else "38s" / "2m 41s". */
 function stepTime(ms: number): string {
@@ -93,10 +96,17 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
       data-testid="activity-step"
       data-ok={failed ? "false" : running ? "running" : "true"}
     >
-      <span className="k">{stepKey(step.name)}</span>
-      <span className="v" title={step.detail}>
-        {step.detail || step.name}
-      </span>
+      <span className="k">{stepVerb(step.name)}</span>
+      {step.detail &&
+        (isCode(step.name) ? (
+          <code className="v" title={step.detail}>
+            {step.detail}
+          </code>
+        ) : (
+          <span className="v prose" title={step.detail}>
+            {step.detail}
+          </span>
+        ))}
       <span className="s">{running && live ? "…" : `${failed ? "failed · " : ""}${stepTime(ms)}`}</span>
     </div>
   );

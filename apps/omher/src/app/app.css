@@ -56,9 +56,20 @@
   color: var(--ink);
   font-size: 14px;
 }
+.details-id > div {
+  min-width: 0;
+}
 .details-id span {
+  display: block;
   font-size: 11.5px;
   color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.details-id span.mono {
+  font-family: var(--mono);
+  font-size: 10.5px;
 }
 
 /* header (shared by chat and settings) */

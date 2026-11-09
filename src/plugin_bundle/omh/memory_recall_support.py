@@ -1392,6 +1392,18 @@ def _memory_index_terms(value: str) -> list[str]:
     """`_memory_token_list` with each token stemmed: what relevance compares."""
     return [_stem_memory_token(token) for token in _memory_token_list(value)]
 
+def query_names_record_topic(record: Mapping[str, object], query: str) -> bool:
+    """A stemmed query term is one of the record's declared topic words.
+
+    The topic words are the parts of its subject slug and its tags: the words
+    the saver chose to name it by, not every word its summary happens to use.
+    """
+    terms = {_stem_memory_token(token) for token in _memory_query_split(query)[0]}
+    if not terms:
+        return False
+    topic = " ".join([record_subject(record).replace("-", " "), *_normalize_tags(record.get("tags", []))])
+    return bool(terms & set(_memory_index_terms(topic)))
+
 def _record_staleness(
     record: dict[str, Any],
     *,

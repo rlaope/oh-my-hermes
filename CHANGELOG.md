@@ -593,6 +593,19 @@ All notable changes will be documented here.
   says it was not copied, and so does `/copy`. A tmux, screen or zellij
   started inside the pane, or another terminal opened from it, keeps its own
   rule. Reported by @foxion37 in #2672.
+- **A turn whose message matches no stored memory gets no memory block.**
+  The live pack used to list such records by name in one English
+  `<record_index>` line, which Hermes wraps as context that "should inform
+  all responses". With a persona that sets no reply language, that line
+  alone moved a Korean-writing user's replies to English. Those records are
+  now withheld and named nowhere; with nothing else to serve, the provider
+  returns nothing. Records from this conversation and pinned records still
+  show in full, and so does a record whose subject or tag the message names
+  in another form ("tickets" for `ticket-tool-db-choice`). `omh_remember`
+  recall finds a withheld record by subject or words, and a recall that
+  matches nothing, or an empty one, now lists what is stored (subject, type
+  and id, without text), so "what did we decide last time?" reaches the
+  decision in two calls.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill
@@ -1141,6 +1154,20 @@ All notable changes will be documented here.
   leaves over any half-typed command, and Esc over a pending find holds a
   waiting `continue` as it does over any other command. Contributed by
   @DanRioDev (#2668).
+
+- **A finished dag-ulw run says what it used.** Once a run is done, stopped
+  or cancelled, `omh_dag` adds `usage` (its children's uncached input, cache
+  read, cache write and output tokens, and the cost Hermes recorded) and a
+  `usage_line` such as `DAG feat · 2 children · 13.2k tokens · cache 80.0% ·
+  $0.0500 (2/2 priced)`. Every child the run bound counts, an earlier retry's
+  too, each with its compaction segments and auxiliary calls. The cost is
+  only what Hermes priced: a child it did not price makes the figure a floor
+  (`≥`), an estimate keeps its `~`, and no token is converted into a price or
+  compared with a model the run did not use. `omh_run_summary` prints the
+  same figures as a `DAG usage` line before the goal check, and the Desktop
+  pane keeps the run's Tokens / Cache hit / Cost / Node time figures under
+  the summary line once the cards collapse, where before they vanished at
+  the moment the run ended. Asked for in #2684.
 
 ## 4.0.6 - 2026-11-04
 

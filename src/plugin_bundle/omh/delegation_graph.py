@@ -71,6 +71,7 @@ from .dag_run import (
     ADDED_ORIGIN_KINDS,
     FINISHED_STATES,
     HANDOFF_NOT_CHECKED,
+    bound_children,
     derive,
     goal_verdict,
     handoff_unchecked,
@@ -412,6 +413,113 @@ def session_usage(hermes_home: Path, session_id: str) -> dict[str, Any] | None:
         return None
     model = (facts["sessions"].get(session_id) or rows[0])["model"]
     return {"session_id": session_id, "model": model, **usage, "output": output}
+
+
+# How many child sessions one run's usage reads: `state_facts` takes 160 ids a call, and a child's compaction
+# segments count among them, so a run past this many children is read in part and says so (`children_unread`).
+RUN_USAGE_CHILD_LIMIT: Final = 64
+
+
+def run_usage(hermes_home: Path, child_sessions: Sequence[str]) -> dict[str, Any] | None:
+    """What Hermes recorded for a run's children, added up: the closing figures of a dag-ulw run.
+
+    ``child_sessions`` are the sessions of every child the run bound, each attempt's included, so a retried or
+    repaired node's earlier child counts too. Each child is read as `session_usage` reads a chat (its compaction
+    segments and auxiliary calls with it). ``children`` counts the children Hermes counted anything for,
+    ``children_unrecorded`` those it counted nothing for; ``priced`` the counted ones it put a cost on. The cost is
+    Hermes' recorded one only, ``cost_partial`` where a counted child has none, so the figure is a floor; no token
+    is turned into a price, and nothing is compared with a model the run did not use. ``None`` where no child
+    counted anything or the database cannot be read.
+    """
+    wanted = [item for item in dict.fromkeys(child_sessions) if item]
+    unread = max(0, len(wanted) - RUN_USAGE_CHILD_LIMIT)
+    wanted = wanted[:RUN_USAGE_CHILD_LIMIT]
+    if not wanted:
+        return None
+    try:
+        connection = _connect(hermes_home)
+    except OSError:  # Python 3.11's `Path.is_file` raises where the home cannot be searched
+        return None
+    if connection is None:
+        return None
+    try:
+        segments = {child: _segments(connection, child) for child in wanted}
+        ids = [item for listed in segments.values() for item in listed]
+        facts: dict[str, Any] = {"sessions": {}}
+        for at in range(0, len(ids), 160):
+            facts["sessions"].update(state_facts(hermes_home, ids[at:at + 160], [], connection=connection)["sessions"])
+    finally:
+        connection.close()
+    per_child: list[dict[str, Any]] = []
+    for child in wanted:
+        rows = [facts["sessions"][item] for item in segments[child] if item in facts["sessions"]]
+        usage = _sum_usage([row["usage"] for row in rows])
+        output = sum(row["usage"]["output"] if row["usage"] else row["output_tokens"] or 0 for row in rows)
+        if usage:
+            per_child.append({**usage, "output": output})
+        elif output:
+            per_child.append({"input": 0, "cache_read": 0, "cache_write": 0, "output": output})
+    total = _sum_usage(per_child)
+    if total is None:
+        return None
+    result: dict[str, Any] = {
+        **total,
+        "children": len(per_child),
+        "children_unrecorded": len(wanted) - len(per_child),
+        "priced": sum(1 for usage in per_child if "cost_usd" in usage),
+    }
+    if unread:
+        # Children past the cap were not read: their spend is missing, so a cost is a floor.
+        result["children_unread"] = unread
+        if "cost_usd" in result:
+            result["cost_partial"] = True
+    return result
+
+
+def _token_text(count: int) -> str:
+    """`410`, `12.6k`, `1.2m`: the pane's and the TUI's token figure (`tokenCountText`, `panels._token_count_text`)."""
+    if count < 1000:
+        return str(count)
+    amount, unit = (count / 1000, "k") if count < 999_950 else (count / 1_000_000, "m")
+    return f"{amount:.1f}{unit}"
+
+
+def run_usage_text(usage: Mapping[str, Any]) -> str:
+    """`4 children · 182.4k tokens · cache 71.3% · $0.4210 (3/4 priced)`: `run_usage` as one line of figures.
+
+    Tokens are every count (uncached input, cache read, cache write, output); the cache share is cache read over
+    the prompt side, as the pane's figure is. The cost is Hermes' recorded one: ``≥`` where a counted child has
+    none, ``~`` where a part is Hermes' estimate, and ``cost not recorded`` where nothing was priced.
+    """
+    prompt = usage["input"] + usage["cache_read"] + usage["cache_write"]
+    said = [f"{usage['children']} child{'' if usage['children'] == 1 else 'ren'}",
+            f"{_token_text(prompt + usage['output'])} tokens"]
+    if prompt:
+        said.append(f"cache {usage['cache_read'] / prompt * 100:.1f}%")
+    if "cost_usd" in usage:
+        mark = "≥" if usage.get("cost_partial") else "~" if usage.get("cost_estimated") else ""
+        said.append(f"{mark}${usage['cost_usd']:.4f} ({usage['priced']}/{usage['children']} priced)")
+    else:
+        said.append("cost not recorded")
+    if usage["children_unrecorded"]:
+        said.append(f"{usage['children_unrecorded']} with no record")
+    if usage.get("children_unread"):
+        said.append(f"{usage['children_unread']} not read")
+    return " · ".join(said)
+
+
+def closing_usage(hermes_home: Path, record: Mapping[str, Any],
+                  children: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """What every child this dag run bound used, as Hermes recorded it (`run_usage`), or None.
+
+    Every child bound to the run counts, a retried or repaired attempt's earlier child too, since its spend is
+    spent. A node the parent did itself (``lane: parent``) or a fanout owner ran has no child here and is in
+    neither the counts nor the cost: those sit in the parent's own row and the fanout receipt.
+    """
+    bound = bound_children(children, str(record["run"]))
+    sessions = [str(child["child_session_id"]) for listed in bound.values() for child in listed
+                if child.get("child_session_id")]
+    return run_usage(hermes_home, sessions)
 
 
 def _effort(config: Mapping[str, Any]) -> str:

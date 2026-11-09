@@ -525,7 +525,7 @@ def _parity_divergences(canonical: dict[str, object], live: dict[str, object]) -
     ]
     # The renderer may stop early on its section budget, never reorder or
     # skip: what it rendered must be a prefix of the canonical order, once the
-    # records it listed in the no-match index line are set aside.
+    # records an unanswered pack withheld are set aside.
     rendered = _strings(live.get("rendered_order"))
     indexed = set(_strings(live.get("indexed_order")))
     included = [value for value in _strings(canonical.get("included_order")) if value not in indexed]

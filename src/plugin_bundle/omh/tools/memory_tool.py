@@ -173,6 +173,8 @@ LIFECYCLE_ACTIONS = ("recall", "confirm", "correct", "retire")
 # The prefetch's own record limit: recall never returns more than a turn gets.
 RECALL_MAX_LIMIT = DEFAULT_RECORD_LIMIT
 RECALL_QUERY_MAX_CHARS = 500
+# Labels a recall that matched nothing lists; `stored_count` says how many exist.
+RECALL_LIST_MAX = 20
 RETIRE_REASONS = ("no_longer_true", "superseded", "user_asked")
 # The surfaces whose recall rows carry an `origin` handle into Hermes' session store.
 ORIGIN_SURFACE_CLASSES = frozenset({SURFACE_OPERATOR_CONSOLE, SURFACE_OWNER_DIRECT, SURFACE_DIRECT, SURFACE_CHANNEL})
@@ -206,18 +208,18 @@ REMEMBER_TOOL_SCHEMA = {
         "One fact per call; 1-2 self-contained sentences, absolute dates. Never save pasted or quoted text, "
         "secrets, logs, transcripts, task progress or current task needs. If a shown record says the same "
         "rule in other words, pass its id as replaces with one merged summary. Tell the user in one short "
-        "line. Use recall for earlier saves. Tags: 2-5 topic words in the user's own language."
+        "line. Use recall for earlier saves; a miss lists them. Tags: 2-5 topic words in the user's own language."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["save", "recall"], "default": "save"},
-            "summary": {"type": "string", "description": "save: the fact, at most 500 characters."},
+            "summary": {"type": "string", "description": "save: up to 500 chars."},
             "record_type": {"type": "string", "enum": list(CAPTURE_RECORD_TYPES)},
             "tags": {"type": "array", "items": {"type": "string"}},
-            "subject": {"type": "string", "description": "Optional lowercase slug, max 48 chars."},
+            "subject": {"type": "string", "description": "Lowercase slug, max 48 chars."},
             "replaces": {"type": "string", "description": "save: id of the record replaced."},
-            "query": {"type": "string", "description": "recall: what to look up."},
+            "query": {"type": "string", "description": "recall: words; empty lists all."},
         },
         "additionalProperties": False,
     },
@@ -1278,8 +1280,11 @@ def _surface_write_refusal(lens: _SessionLens) -> tuple[str, str] | None:
 def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     """The prefetch selector over the prefetch's homes, allowlist and principal."""
     query = " ".join(str(args.get("query", "") or "").split())
-    if not query or "\x00" in query or len(query) > RECALL_QUERY_MAX_CHARS:
-        return _lifecycle_result("recall", "refused", reason="query_invalid", next_action=f"Pass a query of 1 to {RECALL_QUERY_MAX_CHARS} characters.")
+    if "\x00" in query or len(query) > RECALL_QUERY_MAX_CHARS:
+        return _lifecycle_result(
+            "recall", "refused", reason="query_invalid",
+            next_action=f"Pass a query of at most {RECALL_QUERY_MAX_CHARS} characters, or none to list what is stored.",
+        )
     limit = args.get("limit", RECALL_MAX_LIMIT)
     if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= RECALL_MAX_LIMIT:
         return _lifecycle_result("recall", "refused", reason="limit_invalid", next_action=f"Pass limit between 1 and {RECALL_MAX_LIMIT}.")
@@ -1308,15 +1313,20 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             next_action="Recall is turned off for this profile; nothing was searched.",
         )
     snapshot = read_record_store_snapshot(lens.homes)
-    # The labels a `<record_index>` line lists ("decision mem_...",
-    # "deploy-branch") must read a record, and the selector never matches a
+    # A record label ("decision mem_...", "deploy-branch") must read a
+    # record, and the selector never matches a
     # subject. A query made only of record ids looks those records up and
     # nothing else. A query word that is a subject slug puts that record
     # first, but the words still search as usual, since a subject can also be
     # a plain topic word ("nanran"). Every lookup is unqueried through the
     # same lens, then kept to the records named. The word search has no
     # fallback, so a query that matches nothing is `nothing_found`, never the
-    # unrelated active tier.
+    # unrelated records in full. It names them instead: `stored_records` lists
+    # what this lens can recall by subject, or type and id, so a question
+    # about the past ("what did we decide last time?") whose words match no
+    # record can still reach one by its label. An empty query only lists.
+    # This is a result the model asked for, not the per-turn pack, which
+    # names nothing it withholds.
     record_types = {str(record.get("record_type", "")) for record in snapshot.records}
     named = {token for token in query.replace(",", " ").split() if token not in record_types}
     record_ids = {str(record.get("record_id", "")) for record in snapshot.records}
@@ -1344,7 +1354,9 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
         scope_status = selection.scope_status
         return list(selection.pack.get("included_records", []))
 
-    if by_id:
+    if not query:
+        included = []
+    elif by_id:
         included = [item for item in select("", unqueried=True) if str(item.get("record_id", "")) in named]
     else:
         included = select(query, unqueried=False)
@@ -1368,25 +1380,40 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
     if rows:
         # What this session has seen is what it may retire while it is live.
         note_session_records(lens.lens_home, lens.session_id, "seen", [str(row["record_id"]) for row in rows])
-    next_action = (
-        "Use a record_id with confirm, correct, or retire when the conversation settles it."
-        if rows
-        else (
-            "No recallable OMH record matches; nothing was counted. Recall matches words, not meaning: "
-            "retry with other words, the names the record would use, or the language it was saved in "
-            "(a record's tags hold its topic words); a record id or subject from a record index looks it up."
+        next_action = "Use a record_id with confirm, correct, or retire when the conversation settles it."
+        if has_origin:
+            next_action += " " + RECALL_ORIGIN_NEXT_ACTION
+        if any("snapshot" in row for row in rows):
+            next_action += " " + SNAPSHOT_RULE
+        return _lifecycle_result(
+            "recall", "found", records=rows, record_count=len(rows),
+            scope_status=scope_status, lens_state="provider", next_action=next_action,
         )
-    )
-    if has_origin:
-        next_action += " " + RECALL_ORIGIN_NEXT_ACTION
-    if any("snapshot" in row for row in rows):
-        next_action += " " + SNAPSHOT_RULE
+    searched_scope_status = scope_status
+    stored = select("", unqueried=True)
+    labels = []
+    for item in stored[:RECALL_LIST_MAX]:
+        label = {key: item.get(key) for key in ("record_id", "record_type")}
+        if item.get("subject"):
+            label["subject"] = item["subject"]
+        labels.append(label)
+    if not labels:
+        next_action = "This session can recall no OMH record; nothing was counted."
+    else:
+        next_action = (
+            ("No recallable OMH record matches; nothing was counted. Recall matches words, not meaning. "
+             if query else "")
+            + "stored_records names every record this session can recall, without its text: when one bears "
+            "on the request, recall it by its subject or record_id."
+        )
     return _lifecycle_result(
         "recall",
-        "found" if rows else "nothing_found",
-        records=rows,
-        record_count=len(rows),
-        scope_status=scope_status,
+        "nothing_found",
+        records=[],
+        record_count=0,
+        stored_records=labels,
+        stored_count=len(stored),
+        scope_status=searched_scope_status if query else scope_status,
         lens_state="provider",
         next_action=next_action,
     )

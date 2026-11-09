@@ -285,7 +285,7 @@ class RememberStoreTests(unittest.TestCase):
 
     def test_recall_uses_the_full_tools_query_and_limit_validation(self) -> None:
         for args, reason in (
-            ({"query": ""}, "query_invalid"),
+            ({"query": "nul\x00byte"}, "query_invalid"),
             ({"query": "x" * 501}, "query_invalid"),
             *(({"query": "compiler", "limit": limit}, "limit_invalid") for limit in (0, 7, True, "2")),
         ):

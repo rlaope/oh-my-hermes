@@ -52,6 +52,7 @@ import time
 from typing import Any
 
 from .. import dag_run, runtime_paths
+from ..delegation_graph import closing_usage, run_usage_text
 from ..delegation_ledger import oneshot_children_spawned, read_ledger, with_unjoined_stop
 from ..delegation_snapshot import dag_added_clause, shown_lanes
 from ..delegation_backend_mode import (
@@ -243,7 +244,7 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                 say = WORKTREE_ISOLATION_HELD if _isolation_holds(record, offered, coding, hermes_home) else ""
                 say = " ".join(part for part in (say, _export_say(exports), owner_say) if part)
                 return _result(action, record, derived, shown, say=say, extra=_export_fields(exports),
-                               now=now, limits=limits, ignored=ignored)
+                               now=now, limits=limits, ignored=ignored, spent=(hermes_home, children))
             if action == "cancel":
                 # Derive reports a cancelled run's running nodes as `cancelled`, so the live children are
                 # read with the mark lifted: a repeated cancel names the same children the first one did.
@@ -266,7 +267,7 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                     say = ("The run is cancelled. No child is still running.")
                 return _result(action, record, derived, shown, say=say,
                                extra={"still_running": live} if live else None,
-                               now=now, limits=limits, ignored=ignored)
+                               now=now, limits=limits, ignored=ignored, spent=(hermes_home, children))
             if action == "ready":
                 return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
                               budget=budget, limits=limits, ignored=ignored)
@@ -434,7 +435,8 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
         children = _children(omh_home, segments, hermes_home)
         derived = dag_run.derive(existing, children, now)
         return _result("define", existing, derived, shown, say="This run was already defined; nothing changed.",
-                       extra={"reused": True}, now=now, limits=limits, ignored=ignored)
+                       extra={"reused": True}, now=now, limits=limits, ignored=ignored,
+                       spent=(hermes_home, children))
     dag_run.require_named_roles(args["nodes"])  # a new definition names the role of a node that reads like a check
     if not dag_run.make_room(omh_home, durable, _children(omh_home, segments, hermes_home), now):
         raise dag_run.DagRefusal(
@@ -828,7 +830,8 @@ def _ready(
     elif isolated:
         say = " ".join(part for part in (say, WORKTREE_ISOLATION_HELD) if part)
     say = " ".join(part for part in (say, note) if part)
-    return _result(action, record, derived, shown, say=say, extra=extra, now=now, limits=limits, ignored=ignored)
+    return _result(action, record, derived, shown, say=say, extra=extra, now=now, limits=limits, ignored=ignored,
+                   spent=(hermes_home, children))
 
 
 def _isolation_holds(record: Mapping[str, Any], offered: list[str], coding: list[str], hermes_home: Path) -> bool:
@@ -931,7 +934,9 @@ def dag_limits(hermes_home: Path) -> tuple[dag_run.Limits, tuple[str, ...]]:
 def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
             shown: set[str] | None, *, say: str = "", extra: Mapping[str, Any] | None = None,
             now: float | None = None, limits: dag_run.Limits = dag_run.DEFAULT_LIMITS,
-            ignored: tuple[str, ...] = ()) -> str:
+            ignored: tuple[str, ...] = (), spent: tuple[Path, list[dict[str, Any]]] | None = None) -> str:
+    """``spent`` is the Hermes home and the ledger children: with it, a finished run carries what its children
+    used (`closing_usage`)."""
     now = time.time() if now is None else now
     state = dag_run.run_state(record, derived)
     payload: dict[str, Any] = {
@@ -962,6 +967,11 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         verdict, reasons = dag_run.goal_verdict(record, derived)
         payload["verdict"] = verdict
         payload["verdict_reasons"] = reasons
+        if spent is not None:
+            usage = closing_usage(spent[0], record, spent[1])
+            if usage is not None:
+                payload["usage"] = usage
+                payload["usage_line"] = usage_line(record, usage)
     if state == "done":
         left = dag_run.extend_rounds_left(record)
         payload["extend_rounds_left"] = left
@@ -1013,6 +1023,11 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     if say:
         payload["say"] = say
     return json.dumps(payload, sort_keys=True)
+
+
+def usage_line(record: Mapping[str, Any], usage: Mapping[str, Any]) -> str:
+    """`DAG feat · 4 children · 182.4k tokens · cache 71.3% · $0.4210 (3/4 priced)`: the run's closing figures."""
+    return f"DAG {record['run']} · {run_usage_text(usage)}"
 
 
 def owner_choices(record: Mapping[str, Any]) -> tuple[str, ...]:
