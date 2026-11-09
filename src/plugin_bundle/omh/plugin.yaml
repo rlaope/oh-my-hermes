@@ -1,6 +1,6 @@
 name: omh
 kind: standalone
-version: "4.0.6"
+version: "4.0.7"
 requires_hermes: ">=0.21.1"
 description: "Oh My Hermes native bridge for metadata-only runtime status, HUD, role context, bounded evidence probes, evidence-boundary context, a deterministic file-backed memory provider, and one opt-in tool (omh_jev_ask) that sends typed questions to Jev with the user's own key only when the user asks for Jev."
 author: oh-my-hermes maintainers

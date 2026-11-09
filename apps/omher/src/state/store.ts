@@ -2,6 +2,7 @@
 // its actions; they never edit this file.
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
+import { noteFor, showNote, windowWatched } from "../lib/notify";
 import type {
   Away,
   ApprovalChoice,
@@ -636,7 +637,13 @@ export interface Store {
 const errText = (e: unknown) =>
   typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
 
-export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {}): Store {
+export interface StoreOptions {
+  now?: () => number;
+  /** Called for every bridge event after it is applied; the app uses it for system notifications. */
+  onEvent?: (ev: BridgeEvent, state: AppState) => void;
+}
+
+export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store {
   const now = opts.now ?? Date.now;
   let state = initialState();
   const listeners = new Set<() => void>();
@@ -739,6 +746,7 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
       });
       bridge.onAny((ev) => {
         dispatch({ type: "event", ev, now: now() });
+        opts.onEvent?.(ev, state);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "bots.update") void reloadBots();
@@ -871,9 +879,34 @@ export function createStore(bridge: BridgeLike, opts: { now?: () => number } = {
 
 // ---- app singleton + hook -------------------------------------------------------------------
 
+/** "Notify me" (Settings > General). On unless turned off; saved on this computer. */
+export function notifyEnabled(): boolean {
+  try {
+    return typeof localStorage === "undefined" || localStorage.getItem("omher.notify") !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setNotifyEnabled(on: boolean): void {
+  try {
+    localStorage.setItem("omher.notify", on ? "on" : "off");
+  } catch {
+    /* no storage */
+  }
+}
+
 let singleton: Store | null = null;
 export function getStore(): Store {
-  return (singleton ??= createStore(new BridgeClient()));
+  return (singleton ??= createStore(new BridgeClient(), {
+    onEvent(ev, state) {
+      if (!notifyEnabled()) return;
+      const watching = (bot: string) => windowWatched() && state.ui.view === "chat" && state.selectedBot === bot;
+      const name = (bot: string) => state.bots.find((b) => b.name === bot)?.display_name ?? bot;
+      const note = noteFor(ev, { name, watching });
+      if (note) void showNote(note, () => void singleton?.actions.selectBot(note.bot));
+    },
+  }));
 }
 
 /** The whole view model plus actions. Re-renders on any state change. */

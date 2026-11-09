@@ -632,3 +632,33 @@
 .ap-swb.on .ap-swc {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--muted);
 }
+
+/* "Soon" tag for features that are not in this version yet, and keyboard keys */
+.st-soon {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--quiet);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.st-kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--raise2);
+  box-shadow: inset 0 -1px 0 var(--line-strong);
+  color: var(--ink);
+}
+
+.st-kt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.bc-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}

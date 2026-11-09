@@ -1328,11 +1328,11 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 lines += [f"        - name: {name}", f"          model: {model}", f"          reasoning_effort: {effort}"]
             return "\n".join(lines) + "\n"
 
-        # Astra at xhigh is the `ultrabrain` chain; Opus at xhigh is on `architect` and `forensics` only, and at
-        # medium it serves only the ladder.
+        # Astra at xhigh is on the `ultrabrain` chain; Kimi K3.1 Pro at xhigh is on `architect` and `forensics`
+        # only, and Opus at medium serves only the ladder.
         unserved = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus", "claude-opus-5-5", "medium"),
                            ("flash", "glm-5.3-flash", "low"))
-        architect_only = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus-x", "claude-opus-5-5", "xhigh"),
+        architect_only = options(("sol", "openai/gpt-6.1-sol", "medium"), ("kimi-x", "kimi-k3.1-pro", "xhigh"),
                                  ("flash", "glm-5.3-flash", "low"))
         served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("astra", "openai/gpt-6-astra", "xhigh"),
                          ("flash", "glm-5.3-flash", "low"))

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import "./model.css";
 import type { SlotProps } from "../../features";
 import { getStore, useStore } from "../../state/store";
-import { ChevronDown, Popover } from "../../ui";
+import { ChevronDown, ModelIcon, Popover } from "../../ui";
 import { Seg } from "./Seg";
 import { CheckIcon } from "./CheckIcon";
 import { levelOptions, reasoningLabel } from "./levels";
@@ -61,7 +61,10 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
         title="Model and reasoning"
         data-testid="model-pill"
       >
-        <span className={`mp-d${offline ? "" : " live"}`} aria-hidden="true" />
+        <span className="mp-mk" title={offline ? "Not connected" : "Connected"}>
+          <ModelIcon model={model} provider={provider} size={14} />
+          <span className={`mp-d${offline ? "" : " live"}`} aria-hidden="true" />
+        </span>
         <span data-testid="model-label">{model}</span>
         {reasoning && (
           <>
@@ -97,6 +100,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
                           onClick={() => !on && void apply({ model: m, provider: p.slug })}
                           data-testid="model-opt"
                         >
+                          <ModelIcon model={m} provider={`${p.slug} ${p.name}`} size={13} />
                           <span className="mp-n">{m}</span>
                           <span className="mp-ck">
                             <CheckIcon />
