@@ -100,7 +100,18 @@ export function SessionList() {
   const s = useStore();
   const ss = useSessions();
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [refocus, setRefocus] = useState<string | null>(null);
   const current = s.ui.view === "session" ? s.ui.session : null;
+  useEffect(() => {
+    if (!refocus) return;
+    // the row itself (its × shows only on hover, so it cannot hold focus)
+    document.querySelector<HTMLElement>(`[data-testid="session-${refocus}"] .ss-open`)?.focus();
+    setRefocus(null);
+  }, [refocus]);
+  const cancel = (id: string) => {
+    setConfirm(null);
+    setRefocus(id);
+  };
   const ask = (rec: SessionRec) => {
     if (rec.status === "running" || rec.status === "starting") setConfirm(rec.id);
     else getSessions().close(rec.id);
@@ -116,9 +127,21 @@ export function SessionList() {
     <nav className="bot-list ss-list" aria-label="Sessions" data-testid="session-list">
       {ss.list.map((rec) =>
         confirm === rec.id ? (
-          <div key={rec.id} className="ss-row ss-confirm" data-testid={`session-confirm-${rec.id}`}>
+          <div
+            key={rec.id}
+            className="ss-row ss-confirm"
+            role="group"
+            aria-label={`Stop ${agentDef(rec.agent).label}?`}
+            data-testid={`session-confirm-${rec.id}`}
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              e.stopPropagation();
+              cancel(rec.id);
+            }}
+          >
             <span className="ss-q">Stop {agentDef(rec.agent).label}?</span>
-            <button type="button" className="ss-btn" onClick={() => setConfirm(null)} autoFocus>
+            <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
               Cancel
             </button>
             <button

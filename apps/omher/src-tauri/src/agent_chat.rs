@@ -16,10 +16,11 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::path::Path;
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -27,7 +28,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::sessions::{agent, chat_args, launch_for, resume_args, signal_group, Mode};
+use crate::sessions::{agent, chat_args, coalesce, launch_for, resume_args, signal_group, Mode, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -859,8 +860,12 @@ pub enum ChatOut {
 
 type ChatSink = Arc<Mutex<Box<dyn FnMut(ChatOut) + Send>>>;
 
+/// Input for a chat's writer thread, which owns the program's stdin. `None` once the session is stopping:
+/// dropping the last sender ends the writer thread, which closes stdin (the agents' orderly shutdown).
+type ChatInputQueue = Arc<Mutex<Option<SyncSender<Vec<u8>>>>>;
+
 struct ChatLive {
-    stdin: Arc<Mutex<Option<ChildStdin>>>,
+    stdin: ChatInputQueue,
     adapter: Arc<Mutex<Box<dyn Adapter>>>,
     sink: ChatSink,
     child: Arc<Mutex<Child>>,
@@ -875,16 +880,40 @@ pub struct ChatSessions {
     next: AtomicU32,
 }
 
-fn write_lines(stdin: &Arc<Mutex<Option<ChildStdin>>>, lines: &[String]) -> Result<(), String> {
+/// Queue `lines` for the chat's writer thread. Never blocks (a pipe takes only so much before a write
+/// would): an agent that stops reading its input makes this fail once the queue is full.
+fn write_lines(stdin: &ChatInputQueue, lines: &[String]) -> Result<(), String> {
     if lines.is_empty() {
         return Ok(());
     }
-    let mut g = stdin.lock().unwrap();
-    let w = g.as_mut().ok_or("the session has ended")?;
+    let mut chunk = Vec::new();
     for l in lines {
-        w.write_all(l.as_bytes()).and_then(|_| w.write_all(b"\n")).map_err(|e| e.to_string())?;
+        chunk.extend_from_slice(l.as_bytes());
+        chunk.push(b'\n');
     }
-    w.flush().map_err(|e| e.to_string())
+    let tx = stdin.lock().unwrap().clone().ok_or("the session has ended")?;
+    match tx.try_send(chunk) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(_)) => Err("the agent is not reading its input".into()),
+        Err(TrySendError::Disconnected(_)) => Err("the session has ended".into()),
+    }
+}
+
+/// Adjacent `delta` events of one read window become one, so a fast token stream is a few UI messages.
+fn merge_deltas(events: Vec<Event>) -> Vec<Event> {
+    let is_delta = |e: &Event| e.as_object().is_some_and(|m| m.len() == 2 && s(e, "event") == "delta" && m.get("text").is_some_and(Value::is_string));
+    let mut out: Vec<Event> = Vec::with_capacity(events.len());
+    for e in events {
+        if let Some(last) = out.last_mut() {
+            if is_delta(last) && is_delta(&e) {
+                let joined = s(last, "text") + &s(&e, "text");
+                last["text"] = Value::String(joined);
+                continue;
+            }
+        }
+        out.push(e);
+    }
+    out
 }
 
 fn deliver(sink: &ChatSink, events: Vec<Event>) {
@@ -953,9 +982,19 @@ impl ChatSessions {
             cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
         let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", Path::new(prog).display()))?;
-        let stdout = child.stdout.take().ok_or("no stdout")?;
+        let mut stdout = child.stdout.take().ok_or("no stdout")?;
         let stderr = child.stderr.take().ok_or("no stderr")?;
-        let stdin = Arc::new(Mutex::new(child.stdin.take()));
+        let mut pipe = child.stdin.take().ok_or("no stdin")?;
+        // The writer thread owns stdin, so a write to an agent that is not reading never holds a lock.
+        let (tx, queued) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
+        thread::spawn(move || {
+            for chunk in queued {
+                if pipe.write_all(&chunk).and_then(|_| pipe.flush()).is_err() {
+                    break;
+                }
+            }
+        });
+        let stdin: ChatInputQueue = Arc::new(Mutex::new(Some(tx)));
         let pid = child.id();
         let sink: ChatSink = Arc::new(Mutex::new(Box::new(sink)));
         let first = adapter.start();
@@ -969,26 +1008,52 @@ impl ChatSessions {
 
         let reader_done = Arc::new(AtomicBool::new(false));
         {
-            // stdout: split on LF only (JSON strings may hold U+2028), one adapter step per line
+            // stdout: one thread reads, another merges what arrives within COALESCE_WINDOW (as PTY output is),
+            // splits it on LF only (JSON strings may hold U+2028) and runs one adapter step per line.
+            let (chunks, rx) = mpsc::channel::<Vec<u8>>();
+            thread::spawn(move || {
+                let mut buf = [0u8; 16 * 1024];
+                loop {
+                    match stdout.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if chunks.send(buf[..n].to_vec()).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
             let (adapter, stdin, sink, done) = (adapter.clone(), stdin.clone(), sink.clone(), reader_done.clone());
             thread::spawn(move || {
-                let mut r = BufReader::new(stdout);
-                let mut buf = Vec::new();
-                loop {
-                    buf.clear();
-                    match r.read_until(b'\n', &mut buf) {
-                        Ok(0) | Err(_) => break,
-                        Ok(_) => {
-                            let line = String::from_utf8_lossy(&buf);
+                let mut pending: Vec<u8> = Vec::new();
+                let run = |lines: &mut dyn Iterator<Item = &[u8]>| {
+                    let mut out = Step::default();
+                    {
+                        let mut a = adapter.lock().unwrap();
+                        for raw in lines {
+                            let line = String::from_utf8_lossy(raw);
                             let line = line.trim_end_matches(['\n', '\r']);
                             if line.trim().is_empty() {
                                 continue;
                             }
-                            let step = adapter.lock().unwrap().on_line(line);
-                            let _ = write_lines(&stdin, &step.write);
-                            deliver(&sink, step.events);
+                            let step = a.on_line(line);
+                            out.write.extend(step.write);
+                            out.events.extend(step.events);
                         }
                     }
+                    let _ = write_lines(&stdin, &out.write);
+                    deliver(&sink, merge_deltas(out.events));
+                };
+                coalesce(rx, COALESCE_BYTES, COALESCE_WINDOW, |b| {
+                    pending.extend_from_slice(&b);
+                    let Some(end) = pending.iter().rposition(|c| *c == b'\n') else { return };
+                    let rest = pending.split_off(end + 1);
+                    let whole = std::mem::replace(&mut pending, rest);
+                    run(&mut whole.split(|c| *c == b'\n'));
+                });
+                if !pending.is_empty() {
+                    run(&mut std::iter::once(&pending[..]));
                 }
                 done.store(true, Ordering::SeqCst);
             });
@@ -1079,7 +1144,8 @@ impl ChatSessions {
 }
 
 fn stop(s: ChatLive, grace: Duration) {
-    // closing stdin is pi's and Codex's orderly shutdown; Claude Code's -p ends on EOF too
+    // closing stdin is pi's and Codex's orderly shutdown; Claude Code's -p ends on EOF too. The writer
+    // thread closes it once it has nothing left to write (a stuck write ends when the program does).
     drop(s.stdin.lock().unwrap().take());
     let deadline = Instant::now() + Duration::from_millis(300).min(grace);
     while !s.exited.load(Ordering::SeqCst) && Instant::now() < deadline {
@@ -1462,6 +1528,63 @@ mod tests {
         c.close_all();
         assert_eq!(c.count(), 0);
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+    }
+
+    #[test]
+    fn adjacent_deltas_merge_and_nothing_else_does() {
+        let d = |t: &str| ev("delta", json!({"text": t}));
+        let got = merge_deltas(vec![d("a"), d("b"), ev("thinking", json!({})), d("c"), d("d"), ev("message", json!({"id": "m", "text": "abcd"}))]);
+        assert_eq!(names(&got), ["delta", "thinking", "delta", "message"]);
+        assert_eq!(text_of(&got, "delta"), ["ab", "cd"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_big_send_to_an_agent_that_never_reads_blocks_nothing() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (stuck_out, stuck_sink) = collect();
+        let stuck = c.spawn(vec!["/bin/sh".into(), "-c".into(), "sleep 60".into()], &tmp, None, Box::new(Pi::default()), stuck_sink).unwrap();
+        let (_, other_sink) = collect();
+        let mark = tmp.join(format!("omher-chat-other-{}", std::process::id()));
+        let script = format!("while read l; do printf '%s\\n' \"$l\" >> '{}'; done", mark.display());
+        let other = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, Box::new(Pi::default()), other_sink).unwrap();
+        // 1 MB of prompts: the pipe takes about 64 KB, the rest must not hold anything up
+        let started = Instant::now();
+        for _ in 0..16 {
+            c.input(stuck, Input::Send { text: "x".repeat(64 * 1024) }).unwrap();
+        }
+        assert!(started.elapsed() < Duration::from_millis(500), "input blocked: {:?}", started.elapsed());
+        // other chats keep working while that one is stuck
+        c.input(other, Input::Send { text: "pong".into() }).unwrap();
+        assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| t.contains("pong")), 10), "other chat stalled");
+        let t = Instant::now();
+        c.close_all();
+        assert!(t.elapsed() < Duration::from_secs(3), "close_all took {:?}", t.elapsed());
+        assert_eq!(c.count(), 0);
+        assert!(wait_for(|| stuck_out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10), "the stuck agent survived close_all");
+        let _ = std::fs::remove_file(mark);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fast_token_stream_arrives_in_few_messages_and_split_lines_survive() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let line = r#"{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"x"}}"#;
+        // 2000 one-token lines, then one line written in two halves 100 ms apart, then a last line with no LF
+        let script = format!(
+            "i=0; while [ $i -lt 2000 ]; do printf '%s\\n' '{line}'; i=$((i+1)); done; printf '%s' '{{\"type\":\"message_update\",'; sleep 0.1; printf '%s\\n' '\"assistantMessageEvent\":{{\"type\":\"text_delta\",\"delta\":\"ab\"}}}}'; printf '%s' '{{\"type\":\"message_update\",\"assistantMessageEvent\":{{\"type\":\"text_delta\",\"delta\":\"z\"}}}}'"
+        );
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, Box::new(Pi::default()), sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 20));
+        let got = out.lock().unwrap();
+        let deltas: Vec<String> = got.iter().filter_map(|o| match o { ChatOut::Event(e) if s(e, "event") == "delta" => Some(s(e, "text")), _ => None }).collect();
+        let text = deltas.concat();
+        assert_eq!(text, format!("{}abz", "x".repeat(2000)));
+        // one event per line would be 2002
+        assert!(deltas.len() < 200, "{} delta events", deltas.len());
     }
 
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the

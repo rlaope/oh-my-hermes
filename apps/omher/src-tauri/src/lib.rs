@@ -109,7 +109,8 @@ async fn session_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// Stop every session (the UI calls this when it loads, so a reloaded window leaves nothing behind).
+/// Stop every session. `main.tsx` calls this once per page load, before any UI renders, so a reloaded
+/// window leaves nothing running unseen.
 #[tauri::command]
 async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
     let sessions = shell.sessions.clone();

@@ -206,6 +206,8 @@
 }
 .ss-confirm {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
   padding: 8px var(--side-x);
@@ -213,14 +215,13 @@
   background: var(--active-row);
   flex: none;
 }
+/* the question gets its own line, so a long agent name is never cut off */
 .ss-q {
-  flex: 1;
+  flex: 1 0 100%;
   min-width: 0;
   font-size: 12px;
   color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .ss-btn {
   height: 24px;

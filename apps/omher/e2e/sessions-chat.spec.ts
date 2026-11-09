@@ -137,6 +137,23 @@ test("Esc and Stop send the agent's own interrupt; the model button switches the
   expect(await page.locator("[data-testid=head-right] > *").count()).toBe(2);
 });
 
+test("a chat session resets first and loads xterm only when its Terminal view opens", async ({ page }) => {
+  const scripts: string[] = [];
+  page.on("request", (r) => {
+    if (r.resourceType() === "script") scripts.push(r.url());
+  });
+  await open(page);
+  await start(page, "claude");
+  const ops = (await calls(page)).map((c) => c.op);
+  expect(ops.filter((o) => o === "reset")).toHaveLength(1);
+  expect(ops.indexOf("reset")).toBeLessThan(ops.indexOf("chat.start"));
+  await page.waitForLoadState("networkidle");
+  expect(scripts.filter((u) => u.includes("xterm"))).toEqual([]);
+  await page.getByTestId("session-terminal-toggle").click();
+  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
+  expect(scripts.some((u) => u.includes("xterm"))).toBe(true);
+});
+
 test("Terminal toggle: Claude Code's terminal resumes the same conversation, and back to the chat continues it", async ({ page }) => {
   await open(page);
   await start(page, "claude");
@@ -171,6 +188,8 @@ test("Codex's terminal view starts its TUI fresh and the chat keeps running", as
   await expect(toggle).toHaveAttribute("title", /starts Codex fresh/);
   await toggle.click();
   await expect(page.getByTestId("terminal")).toBeVisible();
+  // xterm loads on this first terminal view, and the terminal starts after it
+  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
   const c = await calls(page);
   expect(c.find((x) => x.op === "start")).toMatchObject({ agent: "codex" });
   expect(c.find((x) => x.op === "start")?.resume).toBeUndefined();

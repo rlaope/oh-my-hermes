@@ -2,7 +2,6 @@
 // button) above either the chat (the bot chat's own Timeline and Composer, fed by the agent's structured
 // mode) or the agent's terminal.
 import { useEffect, useRef, useState } from "react";
-import "@xterm/xterm/css/xterm.css";
 import type { ITheme } from "@xterm/xterm";
 import { useStore } from "../state/store";
 import { resolveTheme } from "../app/theme";

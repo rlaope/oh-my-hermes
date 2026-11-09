@@ -109,7 +109,7 @@ export class TauriHost implements SessionHost {
 // ---- mock (browser, e2e) --------------------------------------------------------------------
 
 export interface MockCall {
-  op: "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close";
+  op: "reset" | "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close";
   id?: number;
   agent?: string;
   cwd?: string;
@@ -143,7 +143,10 @@ export class MockHost implements SessionHost {
     (this.g.__omherSessionCalls ??= []).push(c);
   }
   async reset() {
+    this.log({ op: "reset" });
     this.live.clear();
+    for (const c of this.chats.values()) c.stop();
+    this.chats.clear();
   }
   async agents(): Promise<AgentInfo[]> {
     const installed = this.g.__omherMockAgents ?? ["claude", "codex", "omh"];

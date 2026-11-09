@@ -171,6 +171,49 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
   await expect(page.locator(".xterm-rows")).toContainText("Grok ended");
 });
 
+test("loading the page stops sessions an earlier load left running, before anything starts", async ({ page }) => {
+  await open(page);
+  await expect.poll(async () => (await calls(page)).map((c) => c.op)).toEqual(["reset"]);
+  await startSession(page, "grok");
+  const ops = (await calls(page)).map((c) => c.op);
+  expect(ops.filter((o) => o === "reset")).toHaveLength(1);
+  expect(ops.indexOf("reset")).toBeLessThan(ops.indexOf("start"));
+  // a reload is a new page load: it resets again
+  await page.reload();
+  await expect.poll(async () => (await calls(page)).map((c) => c.op)).toEqual(["reset"]);
+});
+
+test("xterm loads only when a session opens", async ({ page }) => {
+  const scripts: string[] = [];
+  page.on("request", (r) => {
+    if (r.resourceType() === "script") scripts.push(r.url());
+  });
+  await open(page);
+  await page.waitForLoadState("networkidle");
+  expect(scripts.filter((u) => u.includes("xterm"))).toEqual([]);
+  await startSession(page, "grok");
+  expect(scripts.some((u) => u.includes("xterm"))).toBe(true);
+});
+
+test("the stop question is shown whole, and Esc cancels it", async ({ page }) => {
+  await open(page);
+  await startSession(page, "grok");
+  const row = page.locator("[data-testid=session-list] .ss-row").first();
+  const id = (await row.getAttribute("data-testid"))!.replace("session-", "");
+  await row.hover();
+  await row.getByTestId("session-close").click();
+  const confirm = page.getByTestId(`session-confirm-${id}`);
+  const q = confirm.locator(".ss-q");
+  await expect(q).toHaveText("Stop Grok?");
+  expect(await q.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(confirm).toHaveCount(0);
+  await expect(row.locator(".ss-open")).toBeFocused();
+  expect((await calls(page)).some((c) => c.op === "close")).toBe(false);
+  await expect(page.getByTestId("session-status")).toHaveText("Running");
+});
+
 test("closing a running session asks first and stops the program", async ({ page }) => {
   await open(page);
   await startSession(page, "grok");
