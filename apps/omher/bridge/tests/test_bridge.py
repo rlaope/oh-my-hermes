@@ -1034,5 +1034,3 @@ class SidePanel(unittest.TestCase):
             with self.assertRaises(ob.BridgeError) as e:
                 ob.read_diff(prof, str(Path(d)))
             self.assertEqual(e.exception.code, "not_found")
-
-
