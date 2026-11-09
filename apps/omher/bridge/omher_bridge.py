@@ -11,9 +11,10 @@ differs. Makes no model or network call of its own.
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
-* The only session this bridge ever resumes, creates, submits to, interrupts or answers is the
-  bot's main chat (the session titled ``Bot Chat``). Every other session is only listed or read
-  (list / history), never attached.
+* The only sessions this bridge ever resumes, creates, submits to, interrupts or answers are the
+  bot's main chat (the session titled ``Bot Chat``) and the folder chats it created itself for an
+  oh-my-hermes SESSIONS entry (``folder.open``; closed with ``folder.close``). Every other session is
+  only listed or read (list / history), never attached.
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from datetime import datetime
 from http import HTTPStatus
@@ -39,6 +41,8 @@ from urllib.parse import parse_qs, urlsplit
 
 VERSION = "0.1.0"
 BOT_CHAT_TITLE = "Bot Chat"
+FOLDER_CHAT_PREFIX = "omher · "
+MAX_FOLDER_CHATS = 16
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
 REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"]
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
@@ -238,11 +242,21 @@ def ro_uri(db: Path) -> str:
 
 PANEL_RUNS = 40          # terminal runs shown in the Terminal tab
 PANEL_WINDOW = 8000      # newest message rows scanned (keeps the read fast on a large state.db)
-PANEL_OUT = 1200         # chars of output kept per run
+PANEL_OUT = 600          # chars of output kept per run (head and tail), clipped before the reply is encoded
 DIFF_MAX = 60_000        # chars of patch sent to the UI
+UNTRACKED_MAX = 200      # untracked entries listed in the Diff tab
 GIT_TIMEOUT = 4.0
+WORKTREES_TTL = 10.0     # seconds a scan of the bot's worktrees is reused by panel.diff
+GIT_POOL = 4             # git status calls run at once during a scan
 # The only git commands omher runs. All are reads; `--no-optional-locks` keeps `status` from writing the index.
-GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",)}
+# `version` and the one fixed `config --list` query (_FILTER_QUERY) only feed the hardening in _git.
+GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",), ("version",), ("config",)}
+# A repository's own config and attributes can name programs git runs during a read (core.fsmonitor, a
+# filter's clean/process command, a diff textconv or external driver, gpg.program for signed commits,
+# git inside a submodule). _git turns each of those off; see _hardened.
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+_FILTER_QUERY = ["config", "--list", "--null", "--name-only"]
+_ATTR_SOURCE: list[bool] = []  # cached: does this git know --attr-source (git >= 2.40)?
 
 
 def _json_obj(raw):
@@ -299,31 +313,87 @@ def read_terminal_runs(profile_dir: Path, limit: int = PANEL_RUNS) -> list[dict]
             continue
         res = _json_obj(content) or {}
         out = res.get("output") if isinstance(res.get("output"), str) else (content if isinstance(content, str) else "")
-        out = out.rstrip()
+        out = _head_tail(out.rstrip(), PANEL_OUT)
         cwd = res.get("cwd") or args.get("workdir") or ""
-        runs.append({"id": str(call_id), "command": command.strip(), "ts": float(ts or 0.0),
-                     "output": out if len(out) <= PANEL_OUT else out[: PANEL_OUT - 1] + "…",
+        runs.append({"id": str(call_id), "command": command.strip(), "ts": float(ts or 0.0), "output": out,
                      "exit_code": res.get("exit_code") if isinstance(res.get("exit_code"), int) else None,
                      "cwd": str(cwd) if isinstance(cwd, str) else "", "source": str(source or ""),
                      "session_id": str(sid or "")})
     return runs
 
 
-def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT) -> str | None:
-    """Run one read-only git command; None on any failure. Only GIT_READS commands are allowed."""
+def _head_tail(text: str, limit: int) -> str:
+    """At most `limit` chars: the head and the tail (where a failure usually says why), joined by an ellipsis."""
+    if len(text) <= limit:
+        return text
+    head = limit * 3 // 5
+    return text[:head] + "\n…\n" + text[-(limit - head - 3):]
+
+
+def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT, hardened: list[str] | None = None) -> str | None:
+    """Run one read-only git command; None on any failure. Only GIT_READS commands are allowed, and every
+    call carries the flags that keep the repository's config from running programs (see _hardened; a
+    caller making several reads of one folder in a row may pass its result once)."""
     head = tuple(args[:2]) if args[:1] == ["worktree"] else (args[0],)
-    if head not in GIT_READS:
+    if head not in GIT_READS or (head == ("config",) and args != _FILTER_QUERY):
         raise ValueError(f"not a read-only git command: {args[:2]}")
+    pre = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.quotepath=off",
+           "-c", "core.attributesFile=/dev/null"]  # Git for Windows maps /dev/null to NUL
+    if head in (("status",), ("diff",), ("log",)):
+        extra = _hardened(cwd, timeout) if hardened is None else hardened
+        if extra is None:
+            return None
+        pre += extra
+    if head in (("diff",), ("log",)):  # no diff driver, textconv or signature program, whatever the caller passed
+        safe = ["--no-ext-diff", "--no-textconv"] + (["--no-show-signature"] if head == ("log",) else [])
+        args = [args[0], *safe, *args[1:]]
     kw = {}
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
     try:
-        r = subprocess.run(["git", "--no-optional-locks", *args], cwd=str(cwd), capture_output=True, text=True,
+        r = subprocess.run(["git", *pre, *args], cwd=str(cwd), capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
-                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}, **kw)
+                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
+                                "GIT_ATTR_NOSYSTEM": "1"}, **kw)
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout if r.returncode == 0 else None
+
+
+def _hardened(cwd: str | Path, timeout: float) -> list[str] | None:
+    """Extra global flags for a read that looks at file contents (status, diff, log): the in-tree
+    .gitattributes ignored (--attr-source=<empty tree>, git >= 2.40), and every filter driver the
+    repository's config defines emptied, which also covers drivers named from .git/info/attributes (which
+    --attr-source leaves on) and from .gitattributes on an older git. None refuses the read: the drivers
+    could not be listed, or one has a name `-c` cannot carry."""
+    if not _ATTR_SOURCE:
+        m = re.search(r"(\d+)\.(\d+)", _git(["version"], cwd, timeout) or "")
+        _ATTR_SOURCE.append(bool(m) and (int(m.group(1)), int(m.group(2))) >= (2, 40))
+    out = ["--attr-source=" + _EMPTY_TREE] if _ATTR_SOURCE[0] else []
+    names = _git(_FILTER_QUERY, cwd, timeout)
+    if names is None:
+        return None
+    drivers = {k[len("filter."):].rpartition(".")[0] for k in names.split("\0") if k.startswith("filter.")}
+    for d in sorted(drivers):
+        if not d or "=" in d or "\n" in d:
+            return None
+        out += ["-c", f"filter.{d}.clean=", "-c", f"filter.{d}.smudge=", "-c", f"filter.{d}.process=",
+                "-c", f"filter.{d}.required=false"]
+    return out
+
+
+def _status_entries(status: str) -> list[tuple[str, str]]:
+    """(XY, path) pairs from `git status --porcelain -z` (a rename's or copy's source entry skipped)."""
+    out, parts, i = [], status.split("\0"), 0
+    while i < len(parts):
+        e = parts[i]
+        i += 1
+        if len(e) < 4:
+            continue
+        out.append((e[:2], e[3:]))
+        if e[0] in "RC":
+            i += 1
+    return out
 
 
 def _norm(path: str | Path) -> str:
@@ -332,18 +402,61 @@ def _norm(path: str | Path) -> str:
     return os.path.normcase(os.path.realpath(str(path)))
 
 
+_WORKTREES: dict[str, tuple[float, list[dict]]] = {}  # profile dir -> (monotonic time, last scan)
+_WORKTREES_LOCK = threading.Lock()
+
+
+def cached_worktrees(profile_dir: Path, max_age: float = WORKTREES_TTL) -> list[dict]:
+    """The bot's last worktree scan when it is under `max_age` seconds old, else a fresh scan."""
+    with _WORKTREES_LOCK:
+        hit = _WORKTREES.get(str(profile_dir))
+    if hit and time.monotonic() - hit[0] < max_age:
+        return hit[1]
+    return read_worktrees(profile_dir)
+
+
 def read_worktrees(profile_dir: Path, runs: list[dict] | None = None, max_repos: int = 6) -> list[dict]:
     """Git worktrees of the repositories the bot worked in, found from the folders its terminal runs used.
-    Each: path, branch, head, dirty (changed files), last (newest run there), repo. Newest first."""
+    Each: path, branch, head, dirty (changed files), last (newest run there), repo. Newest first.
+    A scan from the bot's own runs is kept for cached_worktrees()."""
+    scan = runs is None
     runs = read_terminal_runs(profile_dir, limit=400) if runs is None else runs
     seen_at: dict[str, float] = {}
     for r in runs:
         cwd = r.get("cwd") or ""
-        if cwd and os.path.isdir(cwd):
+        if cwd:
             seen_at[cwd] = max(seen_at.get(cwd, 0.0), float(r.get("ts") or 0.0))
+    seen_at = {c: t for c, t in seen_at.items() if os.path.isdir(c)}
+    norm: dict[str, str] = {}
+
+    def nm(path: str) -> str:
+        if path not in norm:
+            norm[path] = _norm(path)
+        return norm[path]
+
+    def under(cwd: str, wt: str) -> bool:
+        """cwd is the worktree or a folder in it that is not inside a nested repository."""
+        c, root = nm(cwd), nm(wt).rstrip(os.sep)
+        if c == root:
+            return True
+        if not c.startswith(root + os.sep):
+            return False
+        d = c
+        while d != root:
+            if os.path.lexists(os.path.join(d, ".git")):
+                return False
+            d = os.path.dirname(d)
+        return True
+
     repos: dict[str, dict] = {}
     for cwd, ts in sorted(seen_at.items(), key=lambda kv: -kv[1]):
-        if len(repos) >= max_repos and not any(_norm(cwd).startswith(_norm(w["path"])) for rp in repos.values() for w in rp["worktrees"]):
+        known = [w for rp in repos.values() for w in rp["worktrees"] if under(cwd, w["path"])]
+        if known:
+            # already inside a listed worktree: no rev-parse needed (the deepest one owns the folder)
+            w = max(known, key=lambda w: len(nm(w["path"])))
+            w["last"] = max(w["last"], ts)
+            continue
+        if len(repos) >= max_repos:
             continue
         common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd)
         if not common:
@@ -367,35 +480,73 @@ def read_worktrees(profile_dir: Path, runs: list[dict] | None = None, max_repos:
                     cur["branch"] = ""
             main = Path(common.strip()).parent
             repos[key] = {"repo": main.name, "worktrees": [w for w in wts if os.path.isdir(w["path"])]}
-        for w in repos[key]["worktrees"]:
-            if _norm(cwd) == _norm(w["path"]) or _norm(cwd).startswith(_norm(w["path"]) + os.sep):
-                w["last"] = max(w["last"], ts)
-    out = []
-    for rp in repos.values():
-        for w in rp["worktrees"]:
-            if w["last"] <= 0:
-                continue  # only worktrees the bot actually worked in
-            status = _git(["status", "--porcelain"], w["path"])
-            w["dirty"] = None if status is None else len([l for l in status.splitlines() if l.strip()])
-            out.append({**w, "repo": rp["repo"]})
+        owners = [w for w in repos[key]["worktrees"] if under(cwd, w["path"])]
+        if owners:
+            w = max(owners, key=lambda w: len(nm(w["path"])))
+            w["last"] = max(w["last"], ts)
+    out = [{**w, "repo": rp["repo"]} for rp in repos.values() for w in rp["worktrees"] if w["last"] > 0]
     out.sort(key=lambda w: -w["last"])
-    return out[:30]
+    out = out[:30]
+
+    def dirty(w: dict) -> int | None:
+        status = _git(["status", "--porcelain", "-z", "--ignore-submodules=all"], w["path"])
+        return None if status is None else len(_status_entries(status))
+
+    if out:
+        with ThreadPoolExecutor(max_workers=min(GIT_POOL, len(out))) as pool:
+            for w, n in zip(out, pool.map(dirty, out)):
+                w["dirty"] = n
+    if scan:
+        with _WORKTREES_LOCK:
+            _WORKTREES[str(profile_dir)] = (time.monotonic(), out)
+    return out
 
 
-_DIFF_FILE = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+_DIFF_FILE = re.compile(r'^diff --git (?:"a/.*"|a/.+?) (?:"b/(?P<q>.*)"|b/(?P<p>.+))$')
+_DIFF_FLAGS = ["--no-color", "--ignore-submodules=all"]
+_C_ESC = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v", '"': '"', "\\": "\\"}
+
+
+def _unquote(s: str) -> str:
+    """Undo git's C-style quoting of a path (with core.quotepath=off only controls, quotes and backslashes)."""
+    raw, i = bytearray(), 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            n = s[i + 1]
+            if n in "0123" and re.fullmatch(r"[0-7]{3}", s[i + 1:i + 4]):
+                raw.append(int(s[i + 1:i + 4], 8))
+                i += 4
+                continue
+            raw += _C_ESC.get(n, n).encode()
+            i += 2
+            continue
+        raw += c.encode()
+        i += 1
+    return raw.decode("utf-8", "replace")
 
 
 def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> dict:
     """Uncommitted changes (vs HEAD) of one worktree the bot worked in, or its last commit when clean.
-    `path` must be one of read_worktrees(); anything else is refused."""
-    known = {_norm(w["path"]): w for w in read_worktrees(profile_dir, runs)}
-    w = known.get(_norm(path or ""))
+    Untracked files are listed by name (`untracked: true`, no content). `path` must be one of the bot's
+    worktrees (the scan cached_worktrees() keeps, or one over `runs`); anything else is refused."""
+    trees = cached_worktrees(profile_dir) if runs is None else read_worktrees(profile_dir, runs)
+    w = next((t for t in trees if _norm(t["path"]) == _norm(path or "")), None)
+    if not w and runs is None:  # a worktree newer than the kept scan
+        w = next((t for t in read_worktrees(profile_dir) if _norm(t["path"]) == _norm(path or "")), None)
     if not w:
         raise BridgeError("not_found", "not a worktree this bot worked in")
-    patch = _git(["diff", "HEAD", "--no-color", "--no-ext-diff"], w["path"], timeout=8.0)
+    hard = _hardened(w["path"], GIT_TIMEOUT)
+    if hard is None:
+        raise BridgeError("unavailable", "git could not read this worktree")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        patch_f = pool.submit(_git, ["diff", "HEAD", *_DIFF_FLAGS], w["path"], 8.0, hard)
+        status = _git(["status", "--porcelain", "-z", "--ignore-submodules=all"], w["path"], GIT_TIMEOUT, hard) or ""
+        patch = patch_f.result()
+    untracked = [p for xy, p in _status_entries(status) if xy == "??"]
     scope = "uncommitted"
-    if patch is not None and not patch.strip():
-        patch = _git(["log", "-1", "--no-color", "--patch", "--format=%h %s"], w["path"], timeout=8.0)
+    if patch is not None and not patch.strip() and not untracked:
+        patch = _git(["log", "-1", "--format=%h %s", "--patch", *_DIFF_FLAGS], w["path"], 8.0, hard)
         scope = "last commit"
     if patch is None:
         raise BridgeError("unavailable", "git could not read this worktree")
@@ -403,13 +554,15 @@ def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> d
     for line in patch.splitlines():
         m = _DIFF_FILE.match(line)
         if m:
-            cur = {"path": m.group(2), "add": 0, "del": 0}
+            cur = {"path": _unquote(m.group("q")) if m.group("q") is not None else m.group("p"), "add": 0, "del": 0}
             files.append(cur)
         elif cur is not None and line.startswith("+") and not line.startswith("+++"):
             cur["add"] += 1
         elif cur is not None and line.startswith("-") and not line.startswith("---"):
             cur["del"] += 1
-    truncated = len(patch) > DIFF_MAX
+    if scope == "uncommitted":
+        files += [{"path": u, "add": 0, "del": 0, "untracked": True} for u in untracked[:UNTRACKED_MAX]]
+    truncated = len(patch) > DIFF_MAX or len(untracked) > UNTRACKED_MAX
     return {"path": w["path"], "branch": w["branch"], "repo": w["repo"], "scope": scope, "files": files,
             "patch": patch[:DIFF_MAX], "truncated": truncated}
 
@@ -644,7 +797,7 @@ def _to_ts(value) -> float:
 # that a new session uses as the CLI's home (CLAUDE_CONFIG_DIR, CODEX_HOME, PI_CODING_AGENT_DIR…). Logging in
 # is always the CLI's own; the app runs it (Rust) and asks the CLI for its status. From here: Claude Code's
 # signed-in email (`.claude.json` `oauthAccount.emailAddress`, no token lives there), whether a login file
-# exists (a stat, never opened), and the usage records of rule 11. A local CLIProxyAPI is only counted.
+# exists (a stat, never opened), and the usage records of rule 12. A local CLIProxyAPI is only counted.
 
 ACCOUNT_CLIS = ("claude", "codex", "pi", "omp", "grok", "gemini")
 _ACCOUNT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
@@ -1027,6 +1180,26 @@ def chat_messages(rows) -> list[dict]:
 
 # ---------------------------------------------------------------- one Hermes gateway connection
 
+class FolderChat:
+    """A Hermes chat this bridge created in a folder the person picked (SESSIONS `+` > oh-my-hermes)."""
+
+    def __init__(self, fid: str, cwd: str, runtime_id: str, stored_id: str):
+        self.id = fid
+        self.cwd = cwd
+        self.runtime_id = runtime_id
+        self.stored_id = stored_id
+        self.generation = None
+        self.in_turn = False
+        self.last_thinking = -1e9
+        self.prompts: dict[str, int | None] = {}
+        self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
+        self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
+
+    @property
+    def ids(self) -> set[str]:
+        return {i for i in (self.runtime_id, self.stored_id) if i}
+
+
 class Conn:
     """State for one bot (= one profile = one gateway connection)."""
 
@@ -1048,6 +1221,10 @@ class Conn:
         self.last_elsewhere_emit = -1e9
         self.elsewhere_sig = None
         self.prompts: dict[str, int | None] = {}  # open prompt_id -> execution_generation
+        self.folders: dict[str, FolderChat] = {}  # folder chats this bridge created, by our own id
+        self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
+        self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
+        self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
 
     @property
     def connected(self) -> bool:
@@ -1089,6 +1266,7 @@ class Bridge:
             "chat.set_model": self.op_set_model,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
+            "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "usage.read": self.op_usage_read,
             "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
@@ -1262,6 +1440,11 @@ class Bridge:
         conn.in_turn = False
         conn.main_id = conn.main_stored = conn.generation = None
         conn.prompts.clear()
+        folders = list(conn.folders.values())
+        conn.folders.clear()
+        conn.asked.clear()
+        conn.batches.clear()
+        conn.clarify_batch = None
         if pump is not None and pump is not asyncio.current_task():
             pump.cancel()
             with contextlib.suppress(BaseException):
@@ -1270,6 +1453,10 @@ class Bridge:
             with contextlib.suppress(BaseException):
                 await stack.aclose()
         if emit:
+            for f in folders:
+                if f.in_turn:
+                    await self.emit("turn.end", conn.name, session=f.id, outcome="error", error=reason or "gateway disconnected")
+                await self.emit("folder.closed", conn.name, session=f.id, reason=reason or "gateway disconnected")
             if was_turn:
                 await self.emit("turn.end", conn.name, outcome="error", error=reason or "gateway disconnected")
             conn.failed_at, conn.failed_msg = self.clock(), reason or f"{conn.name} is offline"
@@ -1305,6 +1492,8 @@ class Bridge:
             raise
 
     async def _on_frame(self, conn: Conn, frame) -> None:
+        if isinstance(frame, dict) and frame.get("method") == "clarify" and isinstance(frame.get("id"), str):
+            return await self._batch_clarify(conn, frame)
         if not isinstance(frame, dict) or frame.get("method") != "event":
             return
         params = frame.get("params")
@@ -1316,6 +1505,9 @@ class Bridge:
             return await self._elsewhere_changed(conn)
         if sid and sid in conn.main_ids:
             return await self._main_event(conn, typ, params, payload)
+        for f in list(conn.folders.values()):
+            if sid and sid in f.ids:
+                return await self._main_event(conn, typ, params, payload, f)
         if typ in ("message.start", "message.complete"):  # someone else's session moved
             await self._elsewhere_changed(conn)
 
@@ -1325,96 +1517,174 @@ class Bridge:
             conn.last_elsewhere_emit = now
             await self.emit("elsewhere.update", conn.name)
 
-    async def _begin_turn(self, conn: Conn) -> None:
-        if not conn.in_turn:
-            conn.in_turn = True
-            await self.emit("turn.start", conn.name)
-            await self.emit("bot.status", conn.name, status="online", running=True)
+    async def _chat_emit(self, conn: Conn, chat: FolderChat | None, event: str, **fields) -> None:
+        """An event of the main chat (``chat`` None) or of a folder chat (tagged with ``session``)."""
+        if chat is not None:
+            fields["session"] = chat.id
+        await self.emit(event, conn.name, **fields)
 
-    async def _end_turn(self, conn: Conn, outcome: str, error: str | None = None) -> None:
-        conn.in_turn = False
-        conn.prompts.clear()
+    async def _begin_turn(self, conn: Conn, chat: FolderChat | None = None) -> None:
+        t = chat or conn
+        if not t.in_turn:
+            t.in_turn = True
+            await self._chat_emit(conn, chat, "turn.start")
+            if chat is None:
+                await self.emit("bot.status", conn.name, status="online", running=True)
+
+    async def _end_turn(self, conn: Conn, outcome: str, error: str | None = None, chat: FolderChat | None = None) -> None:
+        t = chat or conn
+        t.in_turn = False
+        t.prompts.clear()
+        t.asked.clear()
+        t.batches.clear()
         fields = {"outcome": outcome}
         if error:
             fields["error"] = error
-        await self.emit("turn.end", conn.name, **fields)
-        await self.emit("bot.status", conn.name, status="online", running=False)
+        await self._chat_emit(conn, chat, "turn.end", **fields)
+        if chat is None:
+            await self.emit("bot.status", conn.name, status="online", running=False)
 
-    async def _main_event(self, conn: Conn, typ: str, params: dict, p: dict) -> None:
-        name = conn.name
+    async def _main_event(self, conn: Conn, typ: str, params: dict, p: dict, chat: FolderChat | None = None) -> None:
+        t = chat or conn
+
+        async def out(event, **fields):
+            await self._chat_emit(conn, chat, event, **fields)
         if params.get("execution_generation") is not None:
-            conn.generation = params["execution_generation"]
+            t.generation = params["execution_generation"]
         if typ == "message.start":
-            await self._begin_turn(conn)
+            await self._begin_turn(conn, chat)
         elif typ == "status.update":
             text = p.get("text")
             if isinstance(text, str) and text.strip():
-                await self.emit("status", name, text=text.strip())
+                await out("status", text=text.strip())
         elif typ in ("thinking.delta", "reasoning.delta"):
             now = self.clock()
-            if now - conn.last_thinking >= THINKING_MIN_GAP:
-                conn.last_thinking = now
-                await self.emit("thinking", name)
+            if now - t.last_thinking >= THINKING_MIN_GAP:
+                t.last_thinking = now
+                await out("thinking")
         elif typ == "tool.start":
-            await self._begin_turn(conn)
+            await self._begin_turn(conn, chat)
             tool_id = str(p.get("tool_id") or p.get("tool_call_id") or "")
             tool = str(p.get("name") or p.get("tool_name") or "tool")
             context = p.get("context") if isinstance(p.get("context"), str) else ""
             args = p.get("args") if isinstance(p.get("args"), dict) else {}
-            await self.emit("tool.start", name, tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
+            await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
                 skill = str(args.get("name") or context).strip()
                 if skill:
-                    await self.emit("skill", name, name=skill)
+                    await out("skill", name=skill)
         elif typ == "tool.complete":
             dur = p.get("duration_s")
-            await self.emit("tool.end", name, tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
-                            name=str(p.get("name") or p.get("tool_name") or "tool"),
-                            ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
+            await out("tool.end", tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
+                      name=str(p.get("name") or p.get("tool_name") or "tool"),
+                      ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
         elif typ == "message.delta":
             text = p.get("text")
             if isinstance(text, str) and text:
-                await self._begin_turn(conn)
-                await self.emit("delta", name, text=text)
+                await self._begin_turn(conn, chat)
+                await out("delta", text=text)
         elif typ == "message.complete":
             text = p.get("text") if isinstance(p.get("text"), str) else ""
             turn = p.get("persisted_turn") if isinstance(p.get("persisted_turn"), dict) else {}
             mid = turn.get("final_assistant_row_id") or p.get("admission_id") or uuid.uuid4().hex
             status = p.get("status")
             if text.strip():
-                await self.emit("message", name, id=str(mid), text=text)
+                await out("message", id=str(mid), text=text)
             if status == "interrupted":
-                await self._end_turn(conn, "interrupted")
+                await self._end_turn(conn, "interrupted", chat=chat)
             elif status == "error":
-                await self._end_turn(conn, "error", str(p.get("error") or p.get("failure_reason") or "turn failed"))
+                await self._end_turn(conn, "error", str(p.get("error") or p.get("failure_reason") or "turn failed"), chat=chat)
             else:
-                await self._end_turn(conn, "done")
+                await self._end_turn(conn, "done", chat=chat)
         elif typ == "error":
-            if conn.in_turn:
-                await self._end_turn(conn, "error", str(p.get("message") or "error"))
+            if t.in_turn:
+                await self._end_turn(conn, "error", str(p.get("message") or "error"), chat=chat)
         elif typ == "approval.request":
             pid = str(p.get("prompt_id") or p.get("request_id") or "")
             if pid:
-                conn.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
-                await self._emit_approval(conn, pid, p)
+                t.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
+                await self._emit_approval(conn, pid, p, chat)
         elif typ == "clarify.request":
             pid = str(p.get("prompt_id") or p.get("request_id") or "")
             if pid:
-                conn.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
-                await self._emit_clarify(conn, pid, p)
+                t.prompts[pid] = p.get("execution_generation", params.get("execution_generation"))
+                await self._emit_clarify(conn, pid, p, chat)
+        elif typ in ("approval.settled", "clarify.settled"):
+            # The wait ended without omher's answer: the gateway timed it out, or it was answered elsewhere.
+            pid = str(p.get("prompt_id") or "")
+            if pid in t.prompts:
+                t.prompts.pop(pid, None)
+                await self._emit_expired(conn, pid, None, chat)
+        elif typ == "request.cancel":
+            rid = str(p.get("id") or "")
+            if rid in t.batches:
+                t.batches.pop(rid, None)
+                reason = str(p.get("reason") or "")
+                await self._emit_expired(conn, rid, {"timeout": "timeout", "resolved": "resolved"}.get(reason, "cancelled"), chat)
 
-    async def _emit_approval(self, conn: Conn, pid: str, p: dict) -> None:
+    def _timeout(self, conn: Conn, pid: str, p: dict, chat: FolderChat | None = None) -> dict:
+        t = p.get("timeout_s")
+        t = float(t) if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0 else None
+        (chat or conn).asked.setdefault(pid, (self.clock(), t))
+        return {"timeout_s": t} if t is not None else {}
+
+    async def _emit_approval(self, conn: Conn, pid: str, p: dict, chat: FolderChat | None = None) -> None:
         choices = [c for c in (p.get("choices") or ["once", "deny"]) if c in ("once", "session", "always", "deny")]
-        await self.emit("approval.request", conn.name, request_id=pid,
-                        title=str(p.get("description") or "Allow this command?"),
-                        command=str(p.get("command") or ""), choices=choices or ["once", "deny"])
+        await self._chat_emit(conn, chat, "approval.request", request_id=pid,
+                              title=str(p.get("description") or "Allow this command?"),
+                              command=str(p.get("command") or ""), choices=choices or ["once", "deny"],
+                              **self._timeout(conn, pid, p, chat))
 
-    async def _emit_clarify(self, conn: Conn, pid: str, p: dict) -> None:
+    async def _emit_clarify(self, conn: Conn, pid: str, p: dict, chat: FolderChat | None = None) -> None:
         fields = {"request_id": pid, "question": str(p.get("question") or "")}
         if p.get("choices"):
             fields["choices"] = [str(c) for c in p["choices"]]
-        await self.emit("clarify.request", conn.name, **fields)
+            if p.get("multi_select") is True:
+                fields["multi_select"] = True
+        await self._chat_emit(conn, chat, "clarify.request", **fields, **self._timeout(conn, pid, p, chat))
+
+    async def _batch_clarify(self, conn: Conn, frame: dict) -> None:
+        """Hermes' clarify tool asking several questions at once (a server->client ``clarify`` request with
+        ``questions``): one interview card. Only the main chat's and this bridge's folder chats' asks are
+        shown; omher answers them per question with ``clarify.lock`` (op_clarify_respond)."""
+        params = frame.get("params") if isinstance(frame.get("params"), dict) else {}
+        sid = params.get("session_id")
+        chat = None
+        if sid not in conn.main_ids:
+            chat = next((f for f in conn.folders.values() if sid and sid in f.ids), None)
+            if chat is None:
+                return
+        rid = frame["id"]
+        questions = []
+        for q in params.get("questions") or []:
+            if not isinstance(q, dict) or not isinstance(q.get("qid"), str) or not str(q.get("question") or "").strip():
+                continue
+            item = {"qid": q["qid"], "question": str(q["question"])}
+            if q.get("choices"):
+                item["choices"] = [str(c) for c in q["choices"]]
+                if q.get("multi_select") is True:
+                    item["multi_select"] = True
+            questions.append(item)
+        if not questions:
+            return
+        (chat or conn).batches[rid] = [q["qid"] for q in questions]
+        first = questions[0]
+        fields = {"request_id": rid, "question": first["question"]}
+        if len(questions) == 1:
+            fields.update({k: first[k] for k in ("choices", "multi_select") if k in first})
+        else:
+            fields["questions"] = questions
+        await self._chat_emit(conn, chat, "clarify.request", **fields, **self._timeout(conn, rid, params, chat))
+
+    async def _emit_expired(self, conn: Conn, pid: str, reason: str | None, chat: FolderChat | None = None) -> None:
+        asked_at, timeout = (chat or conn).asked.pop(pid, (None, None))
+        if reason is None:  # a settled prompt says no more: past its known deadline it timed out
+            if asked_at is None or timeout is None:
+                reason = "cancelled"
+            else:
+                reason = "timeout" if self.clock() - asked_at >= timeout - 1.0 else "resolved"
+        await self._chat_emit(conn, chat, "prompt.expired", request_id=pid, reason=reason)
 
     # ------------------------------------------------------------ main chat
 
@@ -1456,37 +1726,73 @@ class Bridge:
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
 
+        asks = [x for x in (snap.get("open_requests") or [])
+                if isinstance(x, dict) and x.get("method") == "clarify" and isinstance(x.get("id"), str)]
+
         async def replay():  # prompts still waiting on the person
             for x in prompts:
                 pid = str(x["prompt_id"])
                 conn.prompts[pid] = x.get("execution_generation")
                 await (self._emit_clarify if x.get("kind") == "clarify" else self._emit_approval)(conn, pid, x)
-        return Reply(result, replay if prompts else None)
+            for x in asks:
+                await self._batch_clarify(conn, x)
+        return Reply(result, replay if prompts or asks else None)
+
+    async def _target(self, conn: Conn, p: dict) -> tuple[str, FolderChat | None]:
+        """The chat an op acts on: the main chat, or with ``session`` a folder chat this bridge created. Any
+        other id (a client-supplied ``session_id``, another session's id) is never used."""
+        fid = p.get("session")
+        if fid is None:
+            return await self._main(conn), None
+        chat = conn.folders.get(fid) if isinstance(fid, str) else None
+        if chat is None:
+            raise BridgeError("not_found", "no such folder chat")
+        return chat.runtime_id, chat
 
     async def op_chat_send(self, p) -> dict:
         text = p.get("text")
         if not isinstance(text, str) or not text.strip():
             raise BridgeError("bad_request", "missing text")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
+        main, _chat = await self._target(conn, p)
         input_id = str(uuid.uuid4())
+        await self._probe_clarify_batch(conn)
         await self._submit(conn, main, text, input_id)
         return {"input_id": input_id}
 
-    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
-        # The single place a turn is sent. It takes the main chat id and nothing else.
-        return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id)
+    async def _probe_clarify_batch(self, conn: Conn) -> None:
+        """Ask once per connection whether the gateway can send a turn's several clarify questions as one
+        request (``canonical_clarify_batch``). Sent with no flags, so it changes nothing on the gateway; an
+        older gateway that does not know the method leaves it off (one card per question, as before)."""
+        if conn.clarify_batch is not None:
+            return
+        try:
+            caps = await self._call(conn, "client.capabilities")
+        except BridgeError:
+            raise
+        except Exception as e:
+            if not _named(e, "GatewayRPCError"):
+                raise
+            caps = {}
+        conn.clarify_batch = isinstance(caps, dict) and caps.get("canonical_clarify_batch") is True
 
-    async def _generation(self, conn: Conn, main: str):
-        if conn.generation is None:
+    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str):
+        # The single place a turn is sent. It takes the main chat's id or a folder chat's that this bridge
+        # created (both from _target), and nothing else.
+        batch = {"clarify_batch": True} if conn.clarify_batch else {}
+        return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id, **batch)
+
+    async def _generation(self, conn: Conn, main: str, chat: FolderChat | None = None):
+        t = chat or conn
+        if t.generation is None:
             snap = await self._call(conn, "session.resume", session_id=main)
-            conn.generation = snap.get("execution_generation")
-        return conn.generation if conn.generation is not None else 0
+            t.generation = snap.get("execution_generation")
+        return t.generation if t.generation is not None else 0
 
     async def op_chat_interrupt(self, p) -> dict:
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
-        await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main))
+        main, chat = await self._target(conn, p)
+        await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
         return {}
 
     async def op_approval_respond(self, p) -> dict:
@@ -1494,21 +1800,74 @@ class Bridge:
         if choice not in ("once", "session", "always", "deny") or not isinstance(rid, str) or not rid:
             raise BridgeError("bad_request", "need request_id and choice once|session|always|deny")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
-        gen = conn.prompts.pop(rid, None)
+        main, chat = await self._target(conn, p)
+        t = chat or conn
+        gen = t.prompts.pop(rid, None)
+        t.asked.pop(rid, None)
         await self._call(conn, "approval.respond", session_id=main, prompt_id=rid, choice=choice,
-                         execution_generation=gen if gen is not None else await self._generation(conn, main))
+                         execution_generation=gen if gen is not None else await self._generation(conn, main, chat))
         return {}
 
     async def op_clarify_respond(self, p) -> dict:
-        answer, rid = p.get("answer"), p.get("request_id")
-        if not isinstance(answer, str) or not isinstance(rid, str) or not rid:
+        answer, answers, rid = p.get("answer"), p.get("answers"), p.get("request_id")
+        if answers is not None:
+            if not isinstance(answers, dict) or not all(
+                    isinstance(k, str) and (v is None or isinstance(v, str)) for k, v in answers.items()):
+                raise BridgeError("bad_request", "answers must map question ids to text or null")
+        if (not isinstance(answer, str) and answers is None) or not isinstance(rid, str) or not rid:
             raise BridgeError("bad_request", "need request_id and answer")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
-        gen = conn.prompts.pop(rid, None)
+        main, chat = await self._target(conn, p)
+        t = chat or conn
+        qids = t.batches.get(rid)
+        if qids is not None:
+            # An interview: lock every question (null = skipped); the last lock hands Hermes the whole set.
+            got = answers if answers is not None else {qids[0]: answer}
+            for qid in qids:
+                await self._call(conn, "clarify.lock", request_id=rid, question_id=qid, answer=got.get(qid))
+            t.batches.pop(rid, None)
+            t.asked.pop(rid, None)
+            return {}
+        if answer is None:  # one gateway card per question: only the first answer applies
+            answer = next((v for v in answers.values() if v is not None), "")
+        gen = t.prompts.pop(rid, None)
+        t.asked.pop(rid, None)
         await self._call(conn, "clarify.respond", session_id=main, prompt_id=rid, answer=answer,
-                         execution_generation=gen if gen is not None else await self._generation(conn, main))
+                         execution_generation=gen if gen is not None else await self._generation(conn, main, chat))
+        return {}
+
+    # ------------------------------------------------------------ folder chats (SESSIONS > oh-my-hermes)
+
+    async def op_folder_open(self, p) -> dict:
+        """Create a new Hermes chat for the bot in folder ``cwd`` (an existing absolute folder)."""
+        cwd = p.get("cwd")
+        if not isinstance(cwd, str) or not cwd.strip() or not os.path.isabs(cwd) or not os.path.isdir(cwd):
+            raise BridgeError("bad_request", "cwd must be an existing folder")
+        conn = await self._conn(p.get("bot"))
+        if len(conn.folders) >= MAX_FOLDER_CHATS:
+            raise BridgeError("bad_request", f"at most {MAX_FOLDER_CHATS} folder chats per bot")
+        leaf = Path(cwd).name or cwd
+        snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd, cwd_explicit=True,
+                                follow_profile_config=True)
+        fid = "f" + uuid.uuid4().hex[:10]
+        chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]))
+        if snap.get("execution_generation") is not None:
+            chat.generation = snap["execution_generation"]
+        conn.folders[fid] = chat
+        info = snap.get("info") if isinstance(snap.get("info"), dict) else {}
+        return {"session": fid, "cwd": str(info.get("cwd") or cwd),
+                "model": str(info.get("model") or conn.bot["model"]),
+                "provider": str(info.get("provider") or conn.bot["provider"]),
+                "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
+
+    async def op_folder_close(self, p) -> dict:
+        """Close a folder chat this bridge created: Hermes stops its agent; the conversation stays saved."""
+        conn = await self._conn(p.get("bot"))
+        fid = p.get("session")
+        chat = conn.folders.pop(fid, None) if isinstance(fid, str) else None
+        if chat is None:
+            raise BridgeError("not_found", "no such folder chat")
+        await self._call(conn, "session.close", session_id=chat.runtime_id)
         return {}
 
     # ------------------------------------------------------------ models
@@ -1543,7 +1902,7 @@ class Bridge:
         if reasoning is not None and reasoning not in REASONING_LEVELS:
             raise BridgeError("bad_request", f"unknown reasoning level {reasoning}")
         conn = await self._conn(p.get("bot"))
-        main = await self._main(conn)
+        main, _chat = await self._target(conn, p)
 
         async def mutate(operation: str, payload: dict):
             snap = await self._call(conn, "session.resume", session_id=main)  # fresh revision + generation

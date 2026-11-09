@@ -3,6 +3,7 @@ export { Avatar, avatarFor } from "./Avatar";
 export { IconButton } from "./IconButton";
 export { Pill } from "./Pill";
 export { Spinner } from "./Spinner";
+export { LiveRing, Ticker, TypingDots } from "./Live";
 export { Popover } from "./Popover";
 export * from "./icons";
 export { SourceIcon, MARKED } from "./SourceIcon";

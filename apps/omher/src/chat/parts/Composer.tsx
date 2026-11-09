@@ -8,15 +8,21 @@ const MAX_H = 200;
 export function Composer({
   bot,
   running,
+  asking = false,
   offline,
   onSend,
   onStop,
+  offlineText,
 }: {
   bot: Bot;
   running: boolean;
+  /** An approval or question card of this bot is waiting above: the placeholder points at it. */
+  asking?: boolean;
   offline: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
+  /** Placeholder while `offline` (default: "<bot> is offline"). */
+  offlineText?: string;
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -57,7 +63,13 @@ export function Composer({
           rows={1}
           value={text}
           disabled={offline}
-          placeholder={offline ? `${bot.display_name} is offline` : `Message ${bot.display_name}`}
+          placeholder={
+            offline
+              ? (offlineText ?? `${bot.display_name} is offline`)
+              : asking
+                ? "Answer above, or type to reply"
+                : `Message ${bot.display_name}`
+          }
           aria-label={`Message ${bot.display_name}`}
           data-testid="composer"
           onChange={(e) => setText(e.target.value)}

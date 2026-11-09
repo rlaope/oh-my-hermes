@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -35,8 +36,9 @@ class GatewayClientError(ValueError):
 class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
-    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None):
+    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None):
         self.name = name
+        self.caps = caps if caps is not None else {}  # client.capabilities answer, or an exception to raise
         self.events: asyncio.Queue = asyncio.Queue()
         self.calls: list[tuple[str, dict]] = []
         self.bot_chat = bot_chat
@@ -68,7 +70,17 @@ class FakeClient:
                         {"role": "user", "text": "secret", "display_kind": "hidden", "row_id": 4}],
                     "info": dict(self.model_info), "revision": self.revision, "execution_generation": 3,
                     "prompts": []}
+        if method == "client.capabilities":
+            if isinstance(self.caps, Exception):
+                raise self.caps
+            return dict(self.caps)
+        if method == "clarify.lock":
+            return {"status": "ok", "remaining": []}
         if method == "session.create":
+            if params.get("cwd"):  # a folder chat (SESSIONS > oh-my-hermes)
+                n = len(self.find("session.create")) - 1
+                return {"session_id": f"rt-folder-{n}", "stored_session_id": f"stored-folder-{n}", "messages": [],
+                        "info": {**self.model_info, "cwd": params["cwd"]}, "revision": 0, "execution_generation": 0}
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
         if method == "session.title":
@@ -466,6 +478,102 @@ class EventMapping(BridgeCase):
             self.assertEqual((await s.req("chat.send", bot="kami", text="x"))["error"]["code"], "bot_offline")
 
 
+class NeedsYou(BridgeCase):
+    """Asks raised while omher looks elsewhere: an interview (one clarify request with several questions),
+    expiry when the gateway stops waiting, and the clarify_batch flag on submit only when the gateway offers it."""
+
+    QUESTIONS = [{"qid": "q1", "question": "Who reads it?", "choices": ["Users", "Devs"], "multi_select": False},
+                 {"qid": "q2", "question": "Sections?", "choices": ["Fixes", "Thanks"], "multi_select": True},
+                 {"qid": "q3", "question": "Leave anything out?", "choices": None, "multi_select": False}]
+
+    def ask(self, c, rid="srq-abc123", sid=MAIN_RUNTIME, questions=None, **extra):
+        c.events.put_nowait({"jsonrpc": "2.0", "id": rid, "method": "clarify",
+                             "params": {"session_id": sid, "questions": questions or self.QUESTIONS, **extra}})
+
+    async def test_batch_clarify_is_one_interview_answered_by_locking_each_question(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            self.ask(c, rid="srq-foreign", sid="20261108_235229_aaaf70c4")  # another session's ask: not ours
+            self.ask(c)
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            asks = [e for e in s.events if e["event"] == "clarify.request"]
+            self.assertEqual(len(asks), 1)
+            self.assertEqual(asks[0]["request_id"], "srq-abc123")
+            self.assertEqual(asks[0]["question"], "Who reads it?")
+            self.assertEqual([q["qid"] for q in asks[0]["questions"]], ["q1", "q2", "q3"])
+            self.assertTrue(asks[0]["questions"][1]["multi_select"])
+            self.assertNotIn("choices", asks[0]["questions"][2])
+            r = await s.req("clarify.respond", bot="kami", request_id="srq-abc123",
+                            answers={"q1": "Users", "q2": None, "q3": "the beta"})
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(c.find("clarify.lock"), [
+                {"request_id": "srq-abc123", "question_id": "q1", "answer": "Users"},
+                {"request_id": "srq-abc123", "question_id": "q2", "answer": None},
+                {"request_id": "srq-abc123", "question_id": "q3", "answer": "the beta"}])
+            self.assertEqual(c.find("clarify.respond"), [])
+            bad = await s.req("clarify.respond", bot="kami", request_id="x", answers={"q1": 3})
+            self.assertEqual(bad["error"]["code"], "bad_request")
+
+    async def test_a_single_question_batch_keeps_its_choices(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            self.ask(c, questions=self.QUESTIONS[1:2])
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            ask = [e for e in s.events if e["event"] == "clarify.request"][0]
+            self.assertEqual((ask["question"], ask["choices"], ask["multi_select"]), ("Sections?", ["Fixes", "Thanks"], True))
+            self.assertNotIn("questions", ask)
+            self.assertTrue((await s.req("clarify.respond", bot="kami", request_id="srq-abc123", answer='["Fixes"]'))["ok"])
+            self.assertEqual(c.find("clarify.lock"), [{"request_id": "srq-abc123", "question_id": "q2", "answer": '["Fixes"]'}])
+
+    async def test_settled_or_cancelled_asks_expire_with_a_reason(self):
+        async with Env() as env:
+            t = [1000.0]
+            env.bridge.clock = lambda: t[0]
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("approval.request", {"prompt_id": "ap1", "kind": "approval", "execution_generation": 5,
+                                        "command": "rm -rf build/", "choices": ["once", "deny"], "timeout_s": 60})
+            c.push("clarify.request", {"prompt_id": "cl1", "kind": "clarify", "execution_generation": 5,
+                                       "question": "Which?", "choices": ["a"], "timeout_s": 300})
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            ap = [e for e in s.events if e["event"] == "approval.request"][0]
+            self.assertEqual(ap["timeout_s"], 60)
+            t[0] = 1061.0
+            c.push("approval.settled", {"prompt_id": "ap1", "execution_generation": 5})  # past its 60 s: timed out
+            c.push("clarify.settled", {"prompt_id": "cl1", "execution_generation": 5})   # early: answered elsewhere
+            c.push("approval.settled", {"prompt_id": "never-seen", "execution_generation": 5})
+            self.ask(c, rid="srq-iv")
+            await s.until(lambda ev: any(e["event"] == "clarify.request" and e["request_id"] == "srq-iv" for e in ev))
+            c.push("request.cancel", {"id": "srq-iv", "method": "clarify", "reason": "timeout"})
+            c.push("request.cancel", {"id": "srq-unknown", "method": "sudo", "reason": "timeout"})
+            await s.until(lambda ev: sum(e["event"] == "prompt.expired" for e in ev) == 3)
+            await asyncio.sleep(0.05)
+            got = [(e["request_id"], e["reason"]) for e in s.events if e["event"] == "prompt.expired"]
+            self.assertEqual(got, [("ap1", "timeout"), ("cl1", "resolved"), ("srq-iv", "timeout")])
+            # an expired ask cannot be answered through omher any more
+            r = await s.req("clarify.respond", bot="kami", request_id="srq-iv", answers={"q1": "Users"})
+            self.assertTrue(r["ok"])
+            self.assertEqual(c.find("clarify.lock"), [])
+
+    async def test_submit_declares_clarify_batch_only_when_the_gateway_offers_it(self):
+        for caps, want in (({"canonical_clarify_batch": True}, True), ({}, False),
+                           (GatewayRPCError("unknown_method"), False)):
+            async with Env(caps=caps) as env:
+                s = await self.open(env)
+                for text in ("one", "two"):
+                    self.assertTrue((await s.req("chat.send", bot="kami", text=text))["ok"])
+                c = env.clients["kami"]
+                self.assertEqual(c.find("client.capabilities"), [{}])  # asked once, with no flags
+                subs = c.find("prompt.submit")
+                self.assertEqual([p.get("clarify_batch") for p in subs], [True, True] if want else [None, None])
+                self.assertEqual({p["session_id"] for p in subs}, {MAIN_RUNTIME})
+
+
 class Elsewhere(BridgeCase):
     SESSIONS = [
         {"id": "s-slack", "title": "gateway 502", "source": "slack", "started_at": 1000.0, "message_count": 12, "running": True},
@@ -634,8 +742,9 @@ class ReadOnlyRule(BridgeCase):
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        # Whole words: the gateway's own `open_requests` snapshot key is not the `requests` library.
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
-            self.assertNotIn(needle, src, needle)
+            self.assertIsNone(re.search(rf"\b{re.escape(needle)}\b", src), needle)
 
     def test_the_only_program_it_runs_is_read_only_git(self):
         import ast
@@ -651,11 +760,133 @@ class ReadOnlyRule(BridgeCase):
         self.assertEqual(uses, ["_git"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
-        self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",)})
+        self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),
+                                        ("version",), ("config",)})
         for bad in (["push"], ["commit", "-m", "x"], ["checkout", "main"], ["worktree", "add", "x"], ["reset", "--hard"],
-                    ["apply"], ["clean", "-fd"], ["config", "user.name", "x"]):
+                    ["apply"], ["clean", "-fd"], ["config", "user.name", "x"], ["config", "--list"],
+                    ["config", "--get-regexp", "x"]):
             with self.assertRaises(ValueError, msg=bad):
                 ob._git(bad, ".")
+
+
+class FolderChats(BridgeCase):
+    """SESSIONS > oh-my-hermes: a Hermes chat in a picked folder, through the same event path as the bot chat."""
+
+    async def test_open_send_events_answer_and_close(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                r = await s.req("folder.open", bot="kami", cwd=folder)
+                self.assertTrue(r["ok"], r)
+                fid = r["result"]["session"]
+                self.assertEqual(r["result"]["cwd"], folder)
+                c = env.clients["kami"]
+                create = c.find("session.create")
+                self.assertEqual(len(create), 1)
+                self.assertEqual(create[0]["cwd"], folder)
+                self.assertTrue(create[0]["cwd_explicit"])
+                self.assertEqual(create[0]["title"], "omher · " + Path(folder).name)
+                self.assertEqual(c.find("session.list"), [])  # never looks for or touches the Bot Chat
+
+                await s.req("chat.send", bot="kami", session=fid, text="list the files")
+                sub = c.find("prompt.submit")
+                self.assertEqual([x["session_id"] for x in sub], ["rt-folder-0"])
+                # the folder chat's events carry its id; the main chat's do not
+                c.push("message.start", {}, sid="rt-folder-0")
+                c.push("tool.start", {"tool_id": "t1", "name": "terminal", "args": {"command": "ls"}}, sid="rt-folder-0")
+                c.push("approval.request", {"prompt_id": "ap9", "command": "rm x", "description": "Delete", "choices": ["once", "deny"]},
+                       sid="rt-folder-0", execution_generation=2)
+                await s.until(lambda ev: any(e["event"] == "approval.request" for e in ev))
+                folder_ev = [e for e in s.events if e["event"] in ("turn.start", "tool.start", "approval.request")]
+                self.assertTrue(all(e.get("session") == fid for e in folder_ev), folder_ev)
+                self.assertNotIn("bot.status", [e["event"] for e in s.events if e.get("session")])
+                r = await s.req("approval.respond", bot="kami", session=fid, request_id="ap9", choice="once")
+                self.assertTrue(r["ok"], r)
+                self.assertEqual(c.find("approval.respond")[-1], {"session_id": "rt-folder-0", "prompt_id": "ap9", "choice": "once",
+                                                                  "execution_generation": 2})
+                await s.req("chat.interrupt", bot="kami", session=fid)
+                self.assertEqual(c.find("session.interrupt")[-1]["session_id"], "rt-folder-0")
+                c.push("message.complete", {"text": "two files", "status": "complete"}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+                msg = [e for e in s.events if e["event"] == "message"][0]
+                self.assertEqual((msg["session"], msg["text"]), (fid, "two files"))
+
+                self.assertTrue((await s.req("folder.close", bot="kami", session=fid))["ok"])
+                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+                r = await s.req("chat.send", bot="kami", session=fid, text="again")
+                self.assertEqual(r["error"]["code"], "not_found")
+                self.assertEqual(len(c.find("prompt.submit")), 1)
+
+    async def test_refuses_bad_folders_and_foreign_ids(self):
+        async with Env() as env:
+            s = await self.open(env)
+            for cwd in (None, "", "relative/dir", "/no/such/folder/x9", 5):
+                r = await s.req("folder.open", bot="kami", cwd=cwd)
+                self.assertEqual(r["error"]["code"], "bad_request", cwd)
+            for op, kw in (("chat.send", {"text": "x"}), ("chat.interrupt", {}), ("folder.close", {}),
+                           ("approval.respond", {"request_id": "a", "choice": "deny"})):
+                for sid in ("20261108_235229_aaaf70c4", MAIN_RUNTIME, "rt-folder-0", 3):
+                    r = await s.req(op, bot="kami", session=sid, **kw)
+                    self.assertEqual(r["error"]["code"], "not_found", (op, sid))
+            c = env.clients["kami"]
+            self.assertEqual(c.find("prompt.submit"), [])
+            self.assertEqual(c.find("session.close"), [])
+            self.assertEqual(c.find("session.create"), [])
+
+    async def test_folder_chat_asks_share_the_needs_you_path(self):
+        """A folder chat's asks take the main chat's path: clarify_batch on submit, an interview answered by
+        clarify.lock per question, timeouts and expiry, all tagged with the folder chat and kept apart from
+        the main chat's."""
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env(caps={"canonical_clarify_batch": True}) as env:
+                t = [1000.0]
+                env.bridge.clock = lambda: t[0]
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                self.assertTrue((await s.req("chat.send", bot="kami", session=fid, text="plan it"))["ok"])
+                self.assertEqual([(p["session_id"], p.get("clarify_batch")) for p in c.find("prompt.submit")],
+                                 [("rt-folder-0", True)])
+                c.events.put_nowait({"jsonrpc": "2.0", "id": "srq-f", "method": "clarify",
+                                     "params": {"session_id": "rt-folder-0", "timeout_s": 120,
+                                                "questions": NeedsYou.QUESTIONS[:2]}})
+                c.push("approval.request", {"prompt_id": "apf", "command": "rm x", "choices": ["once", "deny"],
+                                            "timeout_s": 30}, sid="rt-folder-0", execution_generation=3)
+                await s.until(lambda ev: any(e["event"] == "approval.request" for e in ev))
+                await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+                iv = [e for e in s.events if e["event"] == "clarify.request"][0]
+                self.assertEqual((iv["session"], iv["request_id"], iv["timeout_s"]), (fid, "srq-f", 120))
+                self.assertEqual([q["qid"] for q in iv["questions"]], ["q1", "q2"])
+                # answered without `session`, the id is the main chat's business: no lock, nothing reaches the folder chat
+                await s.req("clarify.respond", bot="kami", request_id="srq-f", answers={"q1": "x"})
+                self.assertEqual(c.find("clarify.lock"), [])
+                self.assertEqual({p["session_id"] for p in c.find("clarify.respond")}, {MAIN_RUNTIME})
+                r = await s.req("clarify.respond", bot="kami", session=fid, request_id="srq-f",
+                                answers={"q1": "Users", "q2": None})
+                self.assertTrue(r["ok"], r)
+                self.assertEqual(c.find("clarify.lock"), [
+                    {"request_id": "srq-f", "question_id": "q1", "answer": "Users"},
+                    {"request_id": "srq-f", "question_id": "q2", "answer": None}])
+                self.assertNotIn("rt-folder-0", {p["session_id"] for p in c.find("clarify.respond")})
+                # the approval goes unanswered past its 30 s: settled -> expired as a timeout, tagged
+                t[0] = 1031.0
+                c.push("approval.settled", {"prompt_id": "apf"}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "prompt.expired" for e in ev))
+                exp = [e for e in s.events if e["event"] == "prompt.expired"]
+                self.assertEqual([(e["request_id"], e["reason"], e.get("session")) for e in exp], [("apf", "timeout", fid)])
+
+    async def test_gateway_loss_closes_folder_chats(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                c.push("message.start", {}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "turn.start" for e in ev))
+                c.events.put_nowait(GatewayClientError("gateway went away"))
+                await s.until(lambda ev: any(e["event"] == "folder.closed" for e in ev))
+                end = [e for e in s.events if e["event"] == "turn.end" and e.get("session") == fid]
+                self.assertEqual(end[0]["outcome"], "error")
 
 
 class Discovery(unittest.TestCase):
@@ -1001,7 +1232,7 @@ class SidePanel(unittest.TestCase):
         self.assertEqual(runs[1]["source"], "slack")
         self.assertEqual(runs[1]["output"], "clean")
         self.assertLessEqual(len(runs[0]["output"]), ob.PANEL_OUT)
-        self.assertTrue(runs[0]["output"].endswith("…"))
+        self.assertIn("\n…\n", runs[0]["output"])  # head and tail kept, clipped before the reply is encoded
 
     def test_no_state_db_means_no_runs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1035,6 +1266,160 @@ class SidePanel(unittest.TestCase):
             with self.assertRaises(ob.BridgeError) as e:
                 ob.read_diff(prof, str(Path(d)))
             self.assertEqual(e.exception.code, "not_found")
+
+    def test_reads_run_no_program_the_repository_names(self):
+        """core.fsmonitor, a diff textconv and filter clean/process drivers (named from .gitattributes and from
+        .git/info/attributes) all run programs during a plain `git status`/`git diff`; the panel's reads must not."""
+        import shutil
+        import subprocess
+        if not shutil.which("git") or os.name == "nt":
+            self.skipTest("needs git and a POSIX shell hook")
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                   "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+            marks = d / "marks"
+            marks.mkdir()
+
+            def repo(name: str, setup) -> Path:
+                r = d / name
+                r.mkdir()
+                git = lambda *a: subprocess.run(["git", *a], cwd=r, check=True, env=env, capture_output=True)
+                git("init", "-q", "-b", "main")
+                (r / "a.txt").write_text("one\n", encoding="utf-8")
+                git("add", "a.txt")
+                git("commit", "-q", "-m", "a")
+                hook = d / f"hook-{name}"
+                hook.write_text(f"#!/bin/sh\ntouch '{marks}/{name}'\ncat\n", encoding="utf-8")
+                hook.chmod(0o755)
+                setup(r, git, str(hook))
+                (r / "a.txt").write_text("two\n", encoding="utf-8")  # same size: git must look at the content
+                return r
+
+            def attrs(path: Path, line: str):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(line + "\n", encoding="utf-8")
+
+            repos = [
+                repo("fsmonitor", lambda r, git, h: git("config", "core.fsmonitor", h)),
+                repo("textconv", lambda r, git, h: (attrs(r / ".gitattributes", "*.txt diff=x"),
+                                                    git("config", "diff.x.textconv", h))),
+                repo("clean", lambda r, git, h: (attrs(r / ".gitattributes", "*.txt filter=y"),
+                                                 git("config", "filter.y.clean", h))),
+                repo("info-process", lambda r, git, h: (attrs(r / ".git" / "info" / "attributes", "*.txt filter=z diff=x"),
+                                                        git("config", "filter.z.process", h),
+                                                        git("config", "filter.z.required", "true"),
+                                                        git("config", "diff.x.textconv", h))),
+                repo("ext-diff", lambda r, git, h: git("config", "diff.external", h)),
+            ]
+            # every hook really runs under a plain git read (the threat is real on this git)
+            for r in repos:
+                for a in (["status", "--porcelain"], ["diff", "HEAD"]):
+                    subprocess.run(["git", *a], cwd=r, env=env, capture_output=True, stdin=subprocess.DEVNULL)
+            self.assertEqual(sorted(p.name for p in marks.iterdir()),
+                             ["clean", "ext-diff", "fsmonitor", "info-process", "textconv"])
+            for m in marks.iterdir():
+                m.unlink()
+            prof = d / "prof"
+            prof.mkdir()
+            self._db_many(prof, [str(r) for r in repos])
+            trees = ob.read_worktrees(prof)
+            self.assertEqual(len(trees), len(repos))
+            self.assertTrue(all(w["dirty"] for w in trees), trees)
+            for w in trees:
+                diff = ob.read_diff(prof, w["path"])
+                self.assertEqual(diff["scope"], "uncommitted")
+                self.assertEqual([f["path"] for f in diff["files"] if not f.get("untracked")], ["a.txt"])
+                self.assertIn("+two", diff["patch"])  # the raw content, no textconv
+                self.assertIsNotNone(ob._git(["status", "--porcelain"], w["path"]))
+                self.assertIsNotNone(ob._git(["log", "-1", "--patch"], w["path"]))
+            self.assertEqual([p.name for p in marks.iterdir()], [], "a repository-configured program ran")
+
+    def _db_many(self, prof: Path, cwds: list[str]) -> None:
+        import sqlite3
+        con = sqlite3.connect(prof / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT,"
+                    " tool_call_id TEXT, tool_calls TEXT, tool_name TEXT, timestamp REAL)")
+        con.execute("INSERT INTO sessions VALUES ('s1', 'tui')")
+        for i, cwd in enumerate(cwds):
+            call = json.dumps([{"id": f"t{i}", "function": {"name": "terminal", "arguments": json.dumps({"command": "ls"})}}])
+            con.execute("INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, timestamp)"
+                        " VALUES ('s1', 'assistant', '', NULL, ?, NULL, ?)", (call, float(2 * i)))
+            con.execute("INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, timestamp)"
+                        " VALUES ('s1', 'tool', ?, ?, NULL, 'terminal', ?)",
+                        (json.dumps({"output": "", "exit_code": 0, "cwd": cwd}), f"t{i}", float(2 * i + 1)))
+        con.commit()
+        con.close()
+
+    def test_diff_lists_non_ascii_names_and_untracked_files(self):
+        import shutil
+        import subprocess
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                   "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+            (repo / "새파일.txt").write_text("가\n", encoding="utf-8")
+            subprocess.run(["git", "add", "새파일.txt"], cwd=repo, check=True, env=env)
+            subprocess.run(["git", "commit", "-q", "-m", "ko"], cwd=repo, check=True, env=env)
+            (repo / "새파일.txt").write_text("가\n나\n", encoding="utf-8")
+            (repo / "new.txt").write_text("fresh\n", encoding="utf-8")
+            (repo / "새 폴더").mkdir()
+            (repo / "새 폴더" / "메모.md").write_text("x\n", encoding="utf-8")
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db(prof, str(repo))
+            trees = ob.read_worktrees(prof)
+            self.assertEqual(trees[0]["dirty"], 4)  # a.txt, 새파일.txt, new.txt, 새 폴더/
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual(diff["files"], [
+                {"path": "a.txt", "add": 1, "del": 0},
+                {"path": "새파일.txt", "add": 1, "del": 0},
+                {"path": "new.txt", "add": 0, "del": 0, "untracked": True},
+                {"path": "새 폴더/", "add": 0, "del": 0, "untracked": True},
+            ])
+            # only new files: still "uncommitted", not the last commit
+            subprocess.run(["git", "checkout", "-q", "--", "."], cwd=repo, check=True, env=env)
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual([f["path"] for f in diff["files"]], ["new.txt", "새 폴더/"])
+
+    def test_quoted_diff_paths_are_unquoted(self):
+        self.assertEqual(ob._unquote(r"\355\225\234.txt"), "한.txt")
+        self.assertEqual(ob._unquote(r"tab\there \"q\" back\\slash"), 'tab\there "q" back\\slash')
+        m = ob._DIFF_FILE.match('diff --git "a/x\\ty" "b/x\\ty"')
+        self.assertEqual(ob._unquote(m.group("q")), "x\ty")
+
+    def test_diff_reuses_the_worktree_scan_and_skips_known_folders(self):
+        import shutil
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            (repo / "sub").mkdir()
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db_many(prof, [str(repo), str(repo / "sub"), str(repo)])
+            calls = []
+            real = ob._git
+
+            def spy(args, cwd, timeout=ob.GIT_TIMEOUT, hardened=None):
+                calls.append(args[0])
+                return real(args, cwd, timeout, hardened)
+            with mock.patch.object(ob, "_git", spy):
+                trees = ob.read_worktrees(prof)
+                self.assertEqual(calls.count("rev-parse"), 1, calls)  # repo/sub is inside a known worktree
+                calls.clear()
+                ob.read_diff(prof, trees[0]["path"])
+                self.assertNotIn("rev-parse", calls)  # the kept scan, not a rescan
+                self.assertNotIn("worktree", calls)
+                calls.clear()
+                with mock.patch.object(ob.time, "monotonic", return_value=time.monotonic() + ob.WORKTREES_TTL + 1):
+                    ob.read_diff(prof, trees[0]["path"])
+                self.assertIn("rev-parse", calls)  # stale: scanned again
 
 
 # Lines copied from real session files on the author's Mac, redacted (ids, request ids, cwd, branch removed).

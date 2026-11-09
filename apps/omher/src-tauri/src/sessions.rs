@@ -1,10 +1,10 @@
-//! Terminal sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omh`, `pi`,
-//! `omp`) in a pseudo-terminal, in a folder the person picked, and stops it when the session is closed or
+//! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omh`, `pi`,
+//! `omp`, `grok`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
 //! the app quits.
 //!
 //! The UI only ever names an agent id. The program, its path and its arguments are decided here: an id that
 //! is not in [`AGENTS`] is refused, and there is no way to pass a command line or extra arguments from the
-//! UI. Agent discovery looks on `PATH` plus the usual install folders, because an app started from the Dock
+//! UI beyond a Claude Code session id ([`resume_args`]). Agent discovery looks on `PATH` plus the usual install folders, because an app started from the Dock
 //! or the Start menu gets a much shorter `PATH` than a terminal does.
 
 use std::collections::HashMap;
@@ -30,17 +30,81 @@ pub struct Agent {
     /// The program looked up on `PATH` and in the install folders.
     pub program: &'static str,
     pub label: &'static str,
+    /// How a new session opens: a chat driven through the agent's structured mode, the omher chat on
+    /// Hermes (omh, through the bridge), or the agent's own terminal UI.
+    pub mode: Mode,
 }
 
-/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 13).
+/// How a session of an agent opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// The agent's structured mode (see [`chat_args`]), shown as an omher chat.
+    Chat,
+    /// oh-my-hermes: a Hermes chat through the bridge, no new program.
+    Hermes,
+    /// The agent's own terminal UI in a pseudo-terminal.
+    Terminal,
+}
+
+/// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
 pub const AGENTS: [Agent; 6] = [
-    Agent { id: "claude", program: "claude", label: "Claude Code" },
-    Agent { id: "codex", program: "codex", label: "Codex" },
-    Agent { id: "omh", program: "omh", label: "oh-my-hermes" },
-    Agent { id: "pi", program: "pi", label: "pi" },
-    Agent { id: "omp", program: "omp", label: "oh-my-pi" },
-    Agent { id: "grok", program: "grok", label: "Grok" },
+    Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
+    Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },
+    Agent { id: "omh", program: "omh", label: "oh-my-hermes", mode: Mode::Hermes },
+    Agent { id: "pi", program: "pi", label: "pi", mode: Mode::Chat },
+    Agent { id: "omp", program: "omp", label: "oh-my-pi", mode: Mode::Chat },
+    // Grok's headless stream is read-only (approvals need ACP, `grok agent stdio`), and grok is not on this
+    // machine to verify against, so it keeps the terminal view.
+    Agent { id: "grok", program: "grok", label: "Grok", mode: Mode::Terminal },
 ];
+
+/// Claude Code's structured mode: one long-lived `-p` process reading and writing stream-json, with tool
+/// approvals sent to us over the same stream (`--permission-prompt-tool stdio`) instead of a TUI prompt.
+pub const CLAUDE_CHAT_ARGS: [&str; 9] = [
+    "-p",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--permission-prompt-tool",
+    "stdio",
+];
+
+/// The fixed arguments that start agent `id` in its structured mode, or `None` when it has none here. These
+/// are the only arguments omher ever adds besides a Claude Code session id ([`resume_args`]).
+pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
+    match agent(id)?.mode {
+        Mode::Chat => Some(match id {
+            "claude" => &CLAUDE_CHAT_ARGS[..],
+            "codex" => &["app-server"][..],
+            "pi" | "omp" => &["--mode", "rpc"][..],
+            _ => return None,
+        }),
+        _ => None,
+    }
+}
+
+/// `--resume <id>` for Claude Code, so its terminal view and its chat continue one conversation. Only a
+/// UUID that Claude Code itself reported is accepted; every other agent and any other text is refused.
+pub fn resume_args(id: &str, session: &str) -> Result<Vec<OsString>, String> {
+    if id != "claude" {
+        return Err(format!("{id} sessions cannot be resumed"));
+    }
+    if !is_uuid(session) {
+        return Err("not a Claude Code session id".into());
+    }
+    Ok(vec!["--resume".into(), session.into()])
+}
+
+/// `8-4-4-4-12` hex digits, nothing else.
+pub fn is_uuid(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    parts.len() == 5
+        && parts.iter().zip([8, 4, 4, 4, 12]).all(|(p, n)| p.len() == n && p.chars().all(|c| c.is_ascii_hexdigit()))
+}
 
 /// The allow-list entry for `id`, or `None` for anything else (paths, command lines, other programs).
 pub fn agent(id: &str) -> Option<&'static Agent> {
@@ -192,6 +256,7 @@ fn host_dirs() -> Vec<PathBuf> {
 pub struct AgentInfo {
     pub id: &'static str,
     pub label: &'static str,
+    pub mode: Mode,
     /// Where the program was found, or `None` when it is not installed.
     pub path: Option<String>,
 }
@@ -204,6 +269,7 @@ pub fn agents_on_this_machine() -> Vec<AgentInfo> {
         .map(|a| AgentInfo {
             id: a.id,
             label: a.label,
+            mode: a.mode,
             path: resolve(a.program, &dirs, is_program_file, Os::current()).map(|p| p.to_string_lossy().into_owned()),
         })
         .collect()
@@ -250,12 +316,12 @@ struct Live {
 
 /// Pending writes per session (keystrokes or whole pastes). A program that stops reading fills it, and
 /// further writes fail at once instead of piling up.
-const INPUT_QUEUE: usize = 256;
+pub(crate) const INPUT_QUEUE: usize = 256;
 
 /// Reads from the PTY are merged into one message of up to this many bytes...
-const COALESCE_BYTES: usize = 64 * 1024;
+pub(crate) const COALESCE_BYTES: usize = 64 * 1024;
 /// ...collected for at most this long after the first byte arrives (keeps typing echo prompt).
-const COALESCE_WINDOW: Duration = Duration::from_millis(4);
+pub(crate) const COALESCE_WINDOW: Duration = Duration::from_millis(4);
 
 /// Every running session of this app. Dropped sessions are stopped; [`Sessions::close_all`] runs on exit.
 #[derive(Default)]
@@ -339,12 +405,24 @@ impl Sessions {
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
-    /// or nothing.
-    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, account_env: &[(String, String)], cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    /// or nothing. `resume` (Claude Code only) continues that conversation in the agent's own terminal UI.
+    pub fn start_agent<F>(
+        &self,
+        agent_id: &str,
+        cwd: &Path,
+        resume: Option<&str>,
+        account_env: &[(String, String)],
+        cols: u16,
+        rows: u16,
+        sink: F,
+    ) -> Result<u32, String>
     where
         F: FnMut(Output) + Send + 'static,
     {
-        let (argv, path_env) = launch_for(agent_id)?;
+        let (mut argv, path_env) = launch_for(agent_id)?;
+        if let Some(r) = resume {
+            argv.extend(resume_args(agent_id, r)?);
+        }
         self.spawn(argv, cwd, Some(path_env), account_env, cols, rows, sink)
     }
 
@@ -439,7 +517,7 @@ fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink) {
 
 /// Wait for a chunk, then keep taking chunks until `max` bytes or `window` after that first chunk, and
 /// emit them as one buffer. Returns when the sender is gone and everything was emitted.
-fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut emit: impl FnMut(Vec<u8>)) {
+pub(crate) fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut emit: impl FnMut(Vec<u8>)) {
     while let Ok(mut buf) = rx.recv() {
         let deadline = Instant::now() + window;
         let mut open = true;
@@ -490,7 +568,7 @@ fn stop(mut s: Live, grace: Duration) {
 /// PTY made it one), so its group id is its pid and helpers it started go too. Windows: the ConPTY close
 /// and `TerminateProcess` from the killer end it.
 #[cfg(unix)]
-fn signal_group(pid: Option<u32>, hard: bool) {
+pub(crate) fn signal_group(pid: Option<u32>, hard: bool) {
     if let Some(pid) = pid.filter(|p| *p > 1) {
         let sig = if hard { libc::SIGKILL } else { libc::SIGHUP };
         unsafe {
@@ -503,7 +581,7 @@ fn signal_group(pid: Option<u32>, hard: bool) {
 }
 
 #[cfg(not(unix))]
-fn signal_group(_pid: Option<u32>, _hard: bool) {}
+pub(crate) fn signal_group(_pid: Option<u32>, _hard: bool) {}
 
 // ---------------------------------------------------------------------------------------------
 // Tests
@@ -534,6 +612,42 @@ mod tests {
     }
 
     #[test]
+    fn modes_and_the_fixed_chat_arguments() {
+        let modes: Vec<(&str, Mode)> = AGENTS.iter().map(|a| (a.id, a.mode)).collect();
+        assert_eq!(
+            modes,
+            [("claude", Mode::Chat), ("codex", Mode::Chat), ("omh", Mode::Hermes), ("pi", Mode::Chat), ("omp", Mode::Chat), ("grok", Mode::Terminal)]
+        );
+        assert_eq!(
+            chat_args("claude").unwrap(),
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"]
+        );
+        assert_eq!(chat_args("codex").unwrap(), ["app-server"]);
+        assert_eq!(chat_args("pi").unwrap(), ["--mode", "rpc"]);
+        assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
+        for none in ["omh", "grok", "sh", "", "claude -p"] {
+            assert!(chat_args(none).is_none(), "{none}");
+        }
+        // no allow-listed argument can run a shell, skip permissions or load extra config
+        for a in AGENTS.iter().filter_map(|a| chat_args(a.id)).flatten() {
+            assert!(!a.contains("dangerously") && !a.contains("bypass") && !a.contains("config") && !a.contains("mcp"), "{a}");
+        }
+    }
+
+    #[test]
+    fn resume_takes_only_a_claude_uuid() {
+        let id = "eee5079a-c52e-4526-b633-f3d8cb7d6394";
+        assert_eq!(resume_args("claude", id).unwrap(), [OsString::from("--resume"), OsString::from(id)]);
+        for bad in ["", "x", "--dangerously-skip-permissions", "eee5079a-c52e-4526-b633-f3d8cb7d639", "eee5079a-c52e-4526-b633-f3d8cb7d6394 --x", "../eee5079a-c52e-4526-b633-f3d8cb7d6394", "eee5079a_c52e_4526_b633_f3d8cb7d6394"] {
+            assert!(resume_args("claude", bad).is_err(), "{bad:?}");
+        }
+        assert!(resume_args("codex", id).is_err());
+        let s = Sessions::default();
+        assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert_eq!(s.count(), 0);
+    }
+
+    #[test]
     fn refuses_anything_not_on_the_allow_list() {
         assert!(agent("claude").is_some());
         for bad in ["", "sh", "bash", "/bin/sh", "claude --dangerously-skip-permissions", "claude;rm -rf ~", "CLAUDE", " claude", "../claude", "codex.cmd"] {
@@ -546,7 +660,7 @@ mod tests {
     fn start_agent_refuses_an_unknown_id_before_any_process() {
         let s = Sessions::default();
         let tmp = std::env::temp_dir();
-        let err = s.start_agent("/bin/sh", &tmp, &[], 80, 24, |_| {}).unwrap_err();
+        let err = s.start_agent("/bin/sh", &tmp, None, &[], 80, 24, |_| {}).unwrap_err();
         assert!(err.contains("unknown agent"), "{err}");
         assert_eq!(s.count(), 0);
     }

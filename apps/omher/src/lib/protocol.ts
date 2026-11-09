@@ -71,6 +71,18 @@ export interface Routine {
 
 export type ApprovalChoice = "once" | "session" | "always" | "deny";
 
+/** One question of a clarify ask. Hermes' clarify tool asks 1-5 at once ("interview"); `qid` is its id. */
+export interface ClarifyQuestion {
+  qid: string;
+  question: string;
+  choices?: string[];
+  /** More than one choice may be picked; the answer is then a JSON array of labels. */
+  multi_select?: boolean;
+}
+
+/** Per-question answers of an interview: the text (or JSON array for multi-select), null = skipped. */
+export type ClarifyAnswers = Record<string, string | null>;
+
 export interface ModelProvider {
   slug: string;
   name: string;
@@ -106,22 +118,35 @@ export interface ChatOpenResult {
   reasoning: string;
 }
 
-/** op name -> { params, result }. `bot` is always the profile name. `id` is the frame's own request id, so no
- *  op takes a param named `id` (accounts use `account`). */
+/** A Hermes chat the bridge created in a picked folder (SESSIONS > oh-my-hermes). */
+export interface FolderOpenResult {
+  session: string;
+  cwd: string;
+  model: string;
+  provider: string;
+  reasoning: string;
+}
+
+/** op name -> { params, result }. `bot` is always the profile name. `session` (optional) names a folder chat
+ *  the bridge created with `folder.open`; without it an op acts on the bot's main chat. `id` is the frame's
+ *  own request id, so no op takes a param named `id` (accounts use `account`). */
 export interface OpMap {
   hello: { params: Record<string, never>; result: HelloResult };
   "bots.list": { params: Record<string, never>; result: { bots: Bot[] } };
   "chat.open": { params: { bot: string }; result: ChatOpenResult };
-  "chat.send": { params: { bot: string; text: string }; result: { input_id: string } };
-  "chat.interrupt": { params: { bot: string }; result: Record<string, never> };
+  "chat.send": { params: { bot: string; text: string; session?: string }; result: { input_id: string } };
+  "chat.interrupt": { params: { bot: string; session?: string }; result: Record<string, never> };
   "approval.respond": {
-    params: { bot: string; request_id: string; choice: ApprovalChoice };
+    params: { bot: string; request_id: string; choice: ApprovalChoice; session?: string };
     result: Record<string, never>;
   };
+  /** One answer (`answer`) for a single question, or every answer of an interview at once (`answers`). */
   "clarify.respond": {
-    params: { bot: string; request_id: string; answer: string };
+    params: { bot: string; request_id: string; answer?: string; answers?: ClarifyAnswers; session?: string };
     result: Record<string, never>;
   };
+  "folder.open": { params: { bot: string; cwd: string }; result: FolderOpenResult };
+  "folder.close": { params: { bot: string; session: string }; result: Record<string, never> };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
   "elsewhere.peek": {
     params: { bot: string; session_id: string; limit?: number };
@@ -130,7 +155,7 @@ export interface OpMap {
   "routines.list": { params: { bot: string }; result: { routines: Routine[] } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   "chat.set_model": {
-    params: { bot: string; model?: string; provider?: string; reasoning?: string };
+    params: { bot: string; model?: string; provider?: string; reasoning?: string; session?: string };
     result: ModelCurrent;
   };
   /** Display name only; "" goes back to the profile's own name. The profile id never changes. */
@@ -242,7 +267,8 @@ export interface WorktreeDiff {
   repo: string;
   /** "uncommitted" (vs HEAD) or "last commit" when the tree is clean. */
   scope: string;
-  files: { path: string; add: number; del: number }[];
+  /** Changed files; `untracked` ones are new files git does not track yet (listed without content). */
+  files: { path: string; add: number; del: number; untracked?: boolean }[];
   patch: string;
   truncated: boolean;
 }
@@ -270,6 +296,8 @@ export type ReplyFrame =
 
 interface EventBase {
   bot: string;
+  /** Set on events of a folder chat (`folder.open`); absent for the bot's main chat. */
+  session?: string;
 }
 
 export type BridgeEvent =
@@ -287,14 +315,28 @@ export type BridgeEvent =
       title: string;
       command: string;
       choices: ApprovalChoice[];
+      /** Seconds the gateway waits before giving up on it, when it says. */
+      timeout_s?: number;
     })
-  | (EventBase & { event: "clarify.request"; request_id: string; question: string; choices?: string[] })
+  | (EventBase & {
+      event: "clarify.request";
+      request_id: string;
+      question: string;
+      choices?: string[];
+      multi_select?: boolean;
+      /** Set when the bot asks several questions at once (an interview); `question` is then the first. */
+      questions?: ClarifyQuestion[];
+      timeout_s?: number;
+    })
+  /** An approval or question is no longer waiting (timed out, withdrawn, or answered somewhere else). */
+  | (EventBase & { event: "prompt.expired"; request_id: string; reason: "timeout" | "cancelled" | "resolved" })
   | (EventBase & { event: "turn.end"; outcome: "done" | "interrupted" | "error"; error?: string })
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
   /** omher accounts changed (added, removed, made active); the Accounts views re-read accounts.list. */
   | (EventBase & { event: "accounts.update" })
+  | (EventBase & { event: "folder.closed"; reason?: string })
   | (EventBase & {
       event: "routine.ran";
       routine_id: string;

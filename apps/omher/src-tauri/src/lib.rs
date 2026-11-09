@@ -1,4 +1,5 @@
 mod accounts;
+mod agent_chat;
 mod bridge;
 mod sessions;
 
@@ -6,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use agent_chat::{ChatOut, ChatSessions};
 use bridge::{Bridge, BridgeStatus};
 use sessions::{AgentInfo, Output, Sessions};
 use tauri::ipc::{Channel, InvokeResponseBody};
@@ -16,6 +18,7 @@ struct Shell {
     resource_dir: Option<PathBuf>,
     logins: Arc<accounts::Logins>,
     sessions: Arc<Sessions>,
+    chats: Arc<ChatSessions>,
 }
 
 /// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
@@ -38,7 +41,39 @@ async fn open_external(url: String) -> Result<(), String> {
     if !allowed_external(&url) {
         return Err("not a Slack, Discord or Telegram link".into());
     }
+    // A Discord web link opens the Discord app when it is installed, the browser otherwise.
+    if let Some(app_url) = discord_app_url(&url) {
+        if discord_app_installed() && tauri_plugin_opener::open_url(&app_url, None::<&str>).is_ok() {
+            return Ok(());
+        }
+    }
     tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// `https://discord.com/channels/G/C` -> `discord://discord.com/channels/G/C` (the form the Discord app
+/// routes to that exact channel or thread).
+pub(crate) fn discord_app_url(url: &str) -> Option<String> {
+    url.strip_prefix("https://discord.com/channels/")
+        .map(|rest| format!("discord://discord.com/channels/{rest}"))
+}
+
+/// Whether the Discord desktop app is there to take `discord://`. macOS and Linux report a missing handler as
+/// an open error (so the browser fallback runs); Windows would show an "find an app" dialog instead, so there
+/// we look for the app first.
+fn discord_app_installed() -> bool {
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|d| {
+                let d = PathBuf::from(d);
+                ["Discord", "DiscordPTB", "DiscordCanary"].iter().any(|n| d.join(n).join("Update.exe").is_file())
+            })
+            .unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
 }
 
 pub(crate) fn allowed_external(url: &str) -> bool {
@@ -102,20 +137,23 @@ async fn account_login_cancel(shell: State<'_, Shell>, login: u32) -> Result<(),
     Ok(())
 }
 
-/// The allow-listed agent programs (claude, codex, omh, pi, omp) and where each was found, if anywhere.
+/// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
+/// was found, if anywhere.
 #[tauri::command]
 async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
     Ok(tauri::async_runtime::spawn_blocking(sessions::agents_on_this_machine).await.map_err(|e| e.to_string())?)
 }
 
-/// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal. Only an agent id crosses
-/// from the UI: no program path, command line or argument. Terminal output goes to `on_data` as raw bytes,
-/// the exit code (null after a signal) once to `on_exit`.
+/// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
+/// agent id crosses from the UI: no program path, command line or argument; `resume` is a Claude Code
+/// session id that the shell checks is one (so the terminal view continues a chat). Terminal output goes
+/// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
 async fn session_start(
     shell: State<'_, Shell>,
     agent: String,
     cwd: String,
+    resume: Option<String>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -126,7 +164,7 @@ async fn session_start(
         // The account Settings › Accounts picked for new sessions of this agent's CLI: its home variable, or
         // nothing ("This computer"). #2710's chat-mode start must pass the same `session_env` to its spawn.
         let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), &account_env, cols, rows, move |ev| match ev {
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -165,6 +203,46 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || sessions.close_all()).await.map_err(|e| e.to_string())
 }
 
+/// Start allow-listed agent `agent` in folder `cwd` as a chat: its structured mode (the fixed arguments in
+/// the allow-list), with events for the chat view on `on_event` and, once, `{event:"exit", code, error}`.
+/// Only an agent id, a folder and optionally a Claude Code session id cross from the UI.
+#[tauri::command]
+async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), move |out| {
+            let _ = on_event.send(match out {
+                ChatOut::Event(e) => e,
+                ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),
+            });
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// What the person did in chat `id`: `{kind:"send", text}`, `{kind:"interrupt"}`,
+/// `{kind:"approve", request_id, choice}`, `{kind:"clarify", request_id, answer}`, `{kind:"model", model}`.
+#[tauri::command]
+async fn chat_input(shell: State<'_, Shell>, id: u32, input: agent_chat::Input) -> Result<(), String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || chats.input(id, input)).await.map_err(|e| e.to_string())?
+}
+
+/// Stop the chat's program and forget the session.
+#[tauri::command]
+async fn chat_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
+    shell.chats.close(id);
+    Ok(())
+}
+
+/// Stop every chat (the UI calls this when it loads, like `session_close_all`).
+#[tauri::command]
+async fn chat_close_all(shell: State<'_, Shell>) -> Result<(), String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || chats.close_all()).await.map_err(|e| e.to_string())
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -192,13 +270,17 @@ pub fn run() {
             session_write,
             session_resize,
             session_close,
-            session_close_all
+            session_close_all,
+            chat_start,
+            chat_input,
+            chat_close,
+            chat_close_all
         ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir, logins: accounts::Logins::new(), sessions: Sessions::new() });
+            app.manage(Shell { bridge, resource_dir, logins: accounts::Logins::new(), sessions: Sessions::new(), chats: ChatSessions::new() });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -208,6 +290,7 @@ pub fn run() {
         if let RunEvent::Exit = event {
             if let Some(shell) = handle.try_state::<Shell>() {
                 shell.sessions.close_all();
+                shell.chats.close_all();
                 shell.logins.cancel_all();
                 shell.bridge.stop();
             }
@@ -227,5 +310,17 @@ mod tests {
         assert!(!allowed_external("file:///etc/passwd"));
         assert!(!allowed_external("https://discord.com/channels/1 --args"));
         assert!(!allowed_external("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn discord_links_go_to_the_app_first() {
+        use super::discord_app_url;
+        assert_eq!(
+            discord_app_url("https://discord.com/channels/1544/1568").as_deref(),
+            Some("discord://discord.com/channels/1544/1568")
+        );
+        assert!(allowed_external(&discord_app_url("https://discord.com/channels/1/2").unwrap()));
+        assert_eq!(discord_app_url("slack://channel?team=T1&id=C1"), None);
+        assert_eq!(discord_app_url("https://t.me/x"), None);
     }
 }

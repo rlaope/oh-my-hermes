@@ -183,6 +183,22 @@
   padding: 3px 8px;
   text-align: left;
 }
+/* waiting for the first token: the face with the live ring, then a bubble of three typing dots */
+.msg.a.typing {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+/* one line tall, like the bubble that replaces it */
+.msg.a.typing .b {
+  display: flex;
+  align-items: center;
+  height: calc(var(--fs-msg) * var(--lh-msg) + 18px);
+  padding: 0 14px;
+}
+[data-bubbles="open"] .msg.a.typing .b {
+  padding: 0 2px;
+}
 .msg.streaming .b::after {
   content: "";
   display: inline-block;

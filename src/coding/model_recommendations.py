@@ -96,9 +96,11 @@ _OPUS_55 = _candidate(
     reasoning="Editorial strong-tier Claude recommendation; not a benchmark claim.",
 )
 # The Claude vendor order inside every chain is Opus 5.5 -> Fable 5.1 (owner
-# decision, 2026-10-13), reversing the 2026-09-06 Fable -> Opus rule. Opus 5.5
-# had taken Opus 5's slots on 2026-09-23, and Opus 5 left the shipped chains
-# under the superseded-generation rule below. Claude Mythos 5.1 is the same model as Fable 5.1
+# decision, 2026-10-13), reversing the 2026-09-06 Fable -> Opus rule, with one
+# explicit exception: Fable 5.1 heads `ultrabrain` (owner decision,
+# 2026-11-09; see that chain). Opus 5.5 had taken Opus 5's slots on
+# 2026-09-23, and Opus 5 left the shipped chains under the
+# superseded-generation rule below. Claude Mythos 5.1 is the same model as Fable 5.1
 # served only to Project Glasswing-approved organizations, so a shipped chain
 # naming it would read as a second model most accounts cannot reach; a user
 # who explicitly names it is still recognized and routed. Fable 5 left the
@@ -283,7 +285,19 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
     # it sits second; (gpt-6-luna, low) and (claude-haiku-5-5, low) reached
     # through quick project to simple-work.
     "categories": {
-        "ultrabrain": [deepcopy(_ASTRA)],
+        # Fable 5.1 heads ultrabrain ahead of Astra (owner decision,
+        # 2026-11-09). The chain was Astra alone, so a user without OpenAI
+        # access fell straight back to the parent model, against the
+        # 2026-08-19 cross-ecosystem rule. An explicit choice for this
+        # category: it does not change the 2026-10-13 Opus 5.5 -> Fable 5.1
+        # order anywhere else. Claude Mythos stays out of every shipped chain.
+        # Projection: (claude-fable-5-1, xhigh) labels "ultrabrain" (it
+        # labelled architect before), and Astra at xhigh labels "forensics".
+        "ultrabrain": [
+            _with_effort(_FABLE_51, "xhigh"),
+            _with_effort(_ASTRA, "xhigh"),
+            _with_effort(_OPUS_55, "xhigh"),
+        ],
         # The strong tier across three provider ecosystems. DeepSeek V4.1
         # Flash left it: a Flash budget model does not fit the strong tier,
         # and Opus 5.5 and Kimi K3.1 Pro now carry the cross-ecosystem fallback.
@@ -395,15 +409,16 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # the 2026-08-19 owner rule holds. Editorial and unmeasured. They are
         # opt-in: no role or scale names them.
         #
-        # Two of the six heads repeat an earlier category's head, and since a
+        # One of the six heads repeats an earlier category's head, and since a
         # head match resolves in canonical order the earlier one keeps the
-        # projection label (accepted collisions, 2026-10-28):
-        #   (gpt-6-astra, xhigh)     heads ultrabrain and forensics  -> "ultrabrain"
+        # projection label (accepted collision, 2026-10-28):
         #   (claude-opus-5-5, xhigh) heads architect and synthesize  -> "architect"
-        # A forensics or synthesize lane routed through `omh_delegate_route`
-        # keeps its own label through its route-provenance record; only an
-        # unrecorded child is labelled by projection. Six other projections
-        # move with these chains; hermes_delegation.py lists them.
+        # A synthesize lane routed through `omh_delegate_route` keeps its own
+        # label through its route-provenance record; only an unrecorded child
+        # is labelled by projection. Six other projections moved with these
+        # chains; hermes_delegation.py lists them. (gpt-6-astra, xhigh) also
+        # collided with ultrabrain's head until Fable 5.1 took it on
+        # 2026-11-09; it now labels "forensics".
         #
         # google-search: research grounded in Google Search.
         "google-search": [
@@ -433,8 +448,8 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
             _with_effort(_GLM_53_FLASH, "low"),
             _with_effort(_LUNA, "low"),
         ],
-        # forensics: root-causing a live symptom or a captured trace.
-        # Labelled "ultrabrain" by projection (collision above).
+        # forensics: root-causing a live symptom or a captured trace. Its
+        # head labels "forensics" since 2026-11-09 (no collision).
         "forensics": [
             _with_effort(_ASTRA, "xhigh"),
             _with_effort(_OPUS_55, "xhigh"),

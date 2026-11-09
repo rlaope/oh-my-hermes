@@ -55,10 +55,9 @@ test("model pill: one control, popover lists providers and models with the curre
   await pill.click();
   const pop = page.getByTestId("model-pop");
   await expect(pop).toBeVisible();
-  await expect(pop.getByText("Claude (proxy)")).toBeVisible();
-  await expect(pop.getByText("OpenAI")).toBeVisible();
+  await expect(pop.locator(".mp-g")).toHaveText(["Claude (proxy)", "OpenAI", "OpenRouter", "Ollama"]);
   const opts = pop.getByTestId("model-opt");
-  await expect(opts).toHaveCount(5);
+  await expect(opts).toHaveCount(12);
   const on = pop.locator(".mp-opt.on");
   await expect(on).toHaveCount(1);
   await expect(on).toContainText("Opus 5.5");

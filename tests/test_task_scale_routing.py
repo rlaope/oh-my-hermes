@@ -70,10 +70,10 @@ class TaskScaleVocabularyTests(unittest.TestCase):
 
     def test_every_scale_chain_model_exists_in_that_profiles_category_table(self) -> None:
         # A scale chain merges categories from the profile's own table, so it
-        # can never name a model the table does not. It CAN name one the
-        # default role chains reserve: `ultrabrain` is reachable only by
-        # declaring it (scale `large`, `research:deep`), and GPT-6 Astra
-        # heads it on codex without heading any default role chain.
+        # can never name a model the table does not. It CAN name a model a
+        # lighter role chain never reaches: `ultrabrain` heads the `brain`
+        # role and scale `large`, so GPT-6 Astra heads both on codex and no
+        # other default role chain.
         for profile, scales in TASK_SCALE_CHAINS.items():
             known = {
                 entry["model_id"]
