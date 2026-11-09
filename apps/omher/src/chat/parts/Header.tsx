@@ -33,7 +33,9 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
           <Picker bot={bot} chat={chat} />
         ) : (
           <Pill as="span" className="model-pill">
-            <span data-testid="model-label">{model}</span>
+            <span data-testid="model-label" title={model}>
+              {model}
+            </span>
             {reasoning && (
               <>
                 <span className="sep" />

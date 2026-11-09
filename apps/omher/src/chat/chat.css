@@ -6,6 +6,8 @@
   color: var(--quiet);
   font-size: 12px;
 }
+/* The name keeps its natural width and ellipsizes only below ~120px of button: `width` sets that floor
+   through the flex item's automatic minimum (min(width, content)), `flex-basis` keeps short names short. */
 .who-btn {
   display: flex;
   align-items: center;
@@ -13,7 +15,32 @@
   padding: 3px 6px 3px 3px;
   margin-left: -3px;
   border-radius: var(--r);
+  flex: 0 1 max-content;
+  width: 120px;
+}
+.who-btn > .ui-av {
+  flex: none;
+}
+.who-btn > .head-title {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* a long model id gives way before the header overflows; the full id is in the label's title */
+.head-right,
+.head-right > * {
+  min-width: 0;
+}
+.head-right .mp {
+  max-width: 100%;
+}
+[data-testid="model-label"] {
+  min-width: 0;
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .who-btn:hover {
   background: var(--raise);
@@ -58,6 +85,14 @@
 .row-assistant + .row-away,
 .row-activity + .row-assistant {
   margin-top: -12px;
+}
+
+/* the activity line and approval/question cards start at the bot bubbles' text column, not at the
+   face column: face 28px + gap 10px */
+.thread > .row-activity,
+.thread > .row-approval,
+.thread > .row-clarify {
+  padding-left: calc(28px + 10px);
 }
 
 /* bubbles: filled both sides, no border, 10px radius */

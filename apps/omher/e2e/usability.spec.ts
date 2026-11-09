@@ -181,3 +181,66 @@ test("the bot's face sits beside its bubbles, once per run of bot messages", asy
   const w = await page.locator(".thread > *").first().evaluate((e) => e.getBoundingClientRect().width);
   expect(w).toBeGreaterThan(760);
 });
+
+
+test("the activity line and the approval card start at the bot bubbles' text column", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  await send(page, "/approve clean the build");
+  await expect(page.getByTestId("card-approval")).toBeVisible();
+  const left = (sel: string) => page.locator(sel).last().evaluate((e) => Math.round(e.getBoundingClientRect().left));
+  const text = await left('[data-testid="bubble-bot"] .b');
+  const face = await left('[data-testid="bubble-bot"] img.msg-face');
+  expect(text - face).toBe(38); // face 28px + gap 10px
+  expect(await left('[data-testid="card-approval"]')).toBe(text);
+  expect(await left('[data-testid="activity"]')).toBe(text);
+});
+
+test("at 900px the header fits: the name ellipsizes, the model gives way, the panel overlays the chat", async ({ page }) => {
+  // a long model id and a long name, set before the page opens the chat
+  await mock("chat.set_model", { bot: "kami", model: "anthropic/claude-opus-5-5-extended-thinking-preview" });
+  await page.setViewportSize({ width: 900, height: 700 });
+  await open(page);
+  await mock("bots.rename", { bot: "kami", name: "Kami the very long bot name that never ends" });
+  await expect(page.getByTestId("who")).toContainText("very long bot name");
+  const timelineBefore = await page.getByTestId("timeline").evaluate((e) => e.getBoundingClientRect().width);
+  await page.getByTestId("who").click();
+  await expect(page.getByTestId("details")).toHaveAttribute("aria-hidden", "false");
+  await page.waitForTimeout(400); // the panel slides in
+  const m = await page.evaluate(() => {
+    const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+    const head = r('[data-testid="header"]');
+    const kids = [...document.querySelectorAll('[data-testid="header"] *')].map((e) => e.getBoundingClientRect());
+    const details = r('[data-testid="details"]');
+    const label = document.querySelector('[data-testid="model-label"]') as HTMLElement;
+    return {
+      headRight: head.right,
+      maxRight: Math.max(...kids.filter((k) => k.width > 0).map((k) => k.right)),
+      who: r('[data-testid="who"]').width,
+      timeline: r('[data-testid="timeline"]').width,
+      detailsLeft: details.left,
+      detailsPos: getComputedStyle(document.querySelector('[data-testid="details"]')!).position,
+      labelTitle: label.title,
+    };
+  });
+  expect(m.maxRight).toBeLessThanOrEqual(m.headRight + 0.5);
+  expect(m.who).toBeGreaterThanOrEqual(119);
+  expect(m.detailsPos).toBe("absolute");
+  expect(m.timeline).toBe(timelineBefore); // the chat keeps its width under the panel
+  expect(m.detailsLeft).toBeLessThan(900);
+  expect(m.labelTitle).toBe("anthropic/claude-opus-5-5-extended-thinking-preview");
+  const title = page.locator('[data-testid="who"] .head-title');
+  expect(await title.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true); // ellipsized, not clipped to 9px
+  // the panel's tabs are reachable: nothing from the header lies over them
+  const tab = page.getByRole("tab").first();
+  if (await tab.count()) await tab.click({ trial: true });
+});
+
+test("a short bot name keeps its natural width; at 1280 the panel still sits beside the chat", async ({ page }) => {
+  await open(page);
+  const who = await page.getByTestId("who").evaluate((e) => e.getBoundingClientRect().width);
+  expect(who).toBeLessThan(120);
+  await page.getByTestId("who").click();
+  await expect(page.getByTestId("details")).toHaveAttribute("aria-hidden", "false");
+  expect(await page.getByTestId("details").evaluate((e) => getComputedStyle(e).position)).not.toBe("absolute");
+});

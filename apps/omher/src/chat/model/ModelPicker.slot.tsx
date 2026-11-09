@@ -65,7 +65,9 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
           <ModelIcon model={model} provider={provider} size={14} />
           <span className={`mp-d${offline ? "" : " live"}`} aria-hidden="true" />
         </span>
-        <span data-testid="model-label">{model}</span>
+        <span data-testid="model-label" title={model}>
+          {model}
+        </span>
         {reasoning && (
           <>
             <span className="sep" />
