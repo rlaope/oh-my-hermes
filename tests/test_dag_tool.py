@@ -347,7 +347,11 @@ class DefineTests(unittest.TestCase):
         self.assertIn("verification_misses:a", miss["lint"])
 
     def test_a_wide_graph_with_no_judgement_node_is_linted(self) -> None:
-        """Four nodes all on the ladder name the missing judgement node; three nodes, or one judgement node, do not."""
+        """Four nodes all on the ladder name the missing judgement node; three nodes, or one judgement node, do not.
+
+        Mutation: count `deep` or `unspecified-high` as a judgement node, drop the four-node floor, or let two
+        `ultrabrain` nodes raise `no_judgement_node` beside `ultrabrain_more_than_once`.
+        """
         def ladder(*categories: str) -> list[dict]:
             return [node(f"n{index}", category=category, scope=(f"n{index}.py",))
                     for index, category in enumerate(categories)]

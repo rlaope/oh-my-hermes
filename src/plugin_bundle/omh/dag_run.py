@@ -549,8 +549,12 @@ def _mentions_full_suite(prompt: str) -> bool:
     return False
 
 
-def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
-    """Advisory findings: they never reject a run, and the run records them."""
+def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[str]:
+    """Advisory findings: they never reject a run, and the run records them.
+
+    `no_judgement_node` is define-time only (``defining``): a repair or extend
+    round cannot change the category of a node already settled.
+    """
     findings: list[str] = []
     for node in nodes:
         missing = [marker for marker in PROMPT_MARKERS if not _MARKER_PATTERNS[marker].search(str(node["prompt"]))]
@@ -583,7 +587,7 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
         findings.append("all_nodes_deep")
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
-    if len(nodes) >= JUDGEMENT_GRAPH_NODES and not any(node["category"] in JUDGEMENT_CATEGORIES for node in nodes):
+    if defining and len(nodes) >= JUDGEMENT_GRAPH_NODES and not any(node["category"] in JUDGEMENT_CATEGORIES for node in nodes):
         findings.append("no_judgement_node")
     # Only a declared review: a guessed one (a role-less or stored node) is not asked to move. Verify nodes are left
     # alone: they judge the run goal, which can need a high category.
@@ -1564,7 +1568,7 @@ def repair(
     record["nodes"].extend(added)
     groups.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"])
+    record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 
@@ -1635,7 +1639,7 @@ def extend(
     record["nodes"].extend(added)
     rounds.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"])
+    record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 

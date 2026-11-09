@@ -657,6 +657,35 @@ class ReVerificationTests(unittest.TestCase):
         self.assertIn("missing_markers:api-fix:DELIVERABLE,SCOPE,VERIFY,STOP_WHEN", repaired["lint"])
         self.assertIn("topology", repaired)
 
+    def test_repair_and_extend_past_four_nodes_do_not_raise_no_judgement_node(self) -> None:
+        """Mutation: compute `no_judgement_node` on every lint, so a round over settled nodes raises it."""
+        three = [node("api", scope=("a.py",)), node("ui", category="unspecified-low", scope=("u.py",)),
+                 node("verify", role="verify", depends_on=("api", "ui"), label="Verify")]
+        with homes() as home:
+            slots_table(home)
+            defined = call(action="define", run="feat", nodes=three)
+            call(action="settle", run="feat", node="api", outcome="failed")
+            repaired = call(action="repair", run="feat", node="api", nodes=[node("api-fix", scope=("a.py",))])
+            repaired_record = record_of(home)
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=three)
+            for node_id in ("api", "ui", "verify"):
+                handoff(home, "feat", node_id)
+                call(action="settle", run="feat", node=node_id, outcome="accepted")
+            extended = call(action="extend", run="feat", nodes=[
+                node("craft", depends_on=("verify",), scope=("craft.py",)),
+                node("verify-output", role="verify", depends_on=("craft",), label="Verify output")])
+            extended_record = record_of(home)
+        self.assertNotIn("no_judgement_node", defined["lint"])
+        for name, result, record, size in (("repair", repaired, repaired_record, 4),
+                                           ("extend", extended, extended_record, 5)):
+            with self.subTest(round=name):
+                self.assertEqual(result["status"], "ok", result)
+                self.assertEqual(len(record["nodes"]), size)
+                self.assertNotIn("no_judgement_node", result["lint"])
+                self.assertNotIn("no_judgement_node", record["lint"])
+
 
 class BlockedNodeTests(unittest.TestCase):
     def test_a_blocked_node_is_never_counted_done_and_holds_everything_below_it(self) -> None:
@@ -1285,6 +1314,34 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 self.assertEqual(result["status"], "ok", result)
                 self.assertEqual("review_not_review_category:diff" in result["lint"], shown, result["lint"])
                 self.assertIn("review_not_review_category:diff", record_of(home)["lint"])
+
+    def test_a_model_map_backend_with_no_judgement_option_drops_no_judgement_node_from_the_reply(self) -> None:
+        """Mutation: keep the finding when no option serves a judgement category, or drop it when one does."""
+        def options(*rows: tuple[str, str, str]) -> str:
+            lines = ["delegation:", "  backend: model_map", "  backends:", "    model_map:",
+                     f"      default: {rows[-1][0]}", "      options:"]
+            for name, model, effort in rows:
+                lines += [f"        - name: {name}", f"          model: {model}", f"          reasoning_effort: {effort}"]
+            return "\n".join(lines) + "\n"
+
+        # Opus at xhigh is on the `architect` and `forensics` chains; at medium it serves only the ladder.
+        unserved = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus", "claude-opus-5-5", "medium"),
+                           ("flash", "glm-5.3-flash", "low"))
+        served = options(("sol", "openai/gpt-6.1-sol", "medium"), ("opus-x", "claude-opus-5-5", "xhigh"),
+                         ("flash", "glm-5.3-flash", "low"))
+        definitions = [node("api", scope=("src/api.py",)), node("ui", category="unspecified-low", scope=("src/ui.py",)),
+                       node("diff", category="review", depends_on=("api", "ui"), role="review"),
+                       node("check", category="unspecified-high", depends_on=("api", "ui", "diff"), role="verify")]
+        for name, config, shown in (("judgement unserved", unserved, False), ("judgement served", served, True),
+                                    ("default backend", "", True)):
+            with self.subTest(case=name), homes() as home:
+                slots_table(home)
+                if config:
+                    (home.hermes / "config.yaml").write_text(config, encoding="utf-8")
+                result = call(action="define", run="feat", nodes=definitions)
+                self.assertEqual(result["status"], "ok", result)
+                self.assertEqual("no_judgement_node" in result["lint"], shown, result["lint"])
+                self.assertIn("no_judgement_node", record_of(home)["lint"])
 
     def test_a_run_with_no_review_node_keeps_only_no_review_node(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [

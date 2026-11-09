@@ -26,10 +26,10 @@
    the role; until then it runs as a native build node), a build node whose `write_scope` holds anything
    but docs with no `review` node in the run (`no_review_node`: add a `role=review` node when the change
    warrants a separate review, otherwise go on), every node `deep`, more than one
-   `ultrabrain`, a graph of 4+ nodes with no `ultrabrain`, `architect` or `forensics` node
-   (`no_judgement_node`: give the node whose judgement decides the run `ultrabrain`), and a graph of
-   5+ nodes whose critical path is at least 80% of it (`serial_graph`: split it into parallel lanes
-   where the work allows).
+   `ultrabrain`, a graph defined with 4+ nodes and no `ultrabrain`, `architect` or `forensics` node
+   (`no_judgement_node`: when one node's judgement decides the run, give it `ultrabrain`; otherwise go
+   on), and a graph of 5+ nodes whose critical path is at least 80% of it (`serial_graph`: split it
+   into parallel lanes where the work allows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
    `delegate_task` with its `tasks` unchanged. The goal ends with `[dag:<run>/<node>]`; that marker is how

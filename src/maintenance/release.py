@@ -1012,10 +1012,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72561
 # re-derived from the producer.
 # Merged with main again: 541116 (main) + 3975 for the `model-compression` row =
 # 545091, re-derived from the producer.
-# 545091 -> 545191: dag-ulw's ladder quality bar names the one node whose judgement decides the run (a design
-# decision, a root cause, a contested trade-off) as the `ultrabrain` node, at most one (+100). Measured per row
-# from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545191
+# 545091 -> 545209: dag-ulw's ladder quality bar gives `ultrabrain` to the one build node whose judgement decides
+# the run (a design decision, a root cause, a contested trade-off), at most one, and says the verify node is not
+# that node (+118); no other row moved. Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545209
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
