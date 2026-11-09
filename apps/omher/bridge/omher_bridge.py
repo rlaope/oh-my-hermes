@@ -55,12 +55,21 @@ def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     platform = sys.platform if platform is None else platform
     explicit = (environ.get("HERMES_HOME") or "").strip()
     if explicit:
-        return Path(os.path.expanduser(explicit))
+        return hermes_root_of(Path(os.path.expanduser(explicit)))
     if platform == "win32":
         local = (environ.get("LOCALAPPDATA") or "").strip()
         base = Path(local) if local else Path.home() / "AppData" / "Local"
         return base / "hermes"
     return Path.home() / ".hermes"
+
+
+def hermes_root_of(home: Path) -> Path:
+    """Hermes runs a profile with `HERMES_HOME=<root>/profiles/<name>`. omher shows every bot, so a home that is
+    a profile dir (its parent is `profiles` and the root above holds its own config) resolves to that root."""
+    parent = home.parent
+    if parent.name == "profiles" and (parent.parent / "config.yaml").is_file():
+        return parent.parent
+    return home
 
 
 def _default_hermes_root() -> Path:
@@ -563,13 +572,21 @@ _MENTION = re.compile(r"<[@#!][^>]*>")
 _URL = re.compile(r"https?://\S+")
 
 
+def _short_url(m: "re.Match[str]") -> str:
+    """A bare URL inside a sentence stays readable instead of leaving a hole ("… 에서 열립니다"):
+    `https://omher.app/docs/skills/` -> `omher.app/docs/skills`; a long path is cut to its host."""
+    u = re.sub(r"^[a-z][a-z0-9+.-]*://", "", m.group(0), flags=re.I).rstrip("/.,)")
+    u = re.sub(r"^www\.", "", u)
+    return u if len(u) <= 40 else u.split("/", 1)[0]
+
+
 def reply_gist(text: str, n: int = 220) -> str:
     """The first paragraph of an answer as plain text: markdown marks, mentions and bare URLs removed,
     clipped at a sentence end when one is near."""
     para = next((p for p in re.split(r"\n\s*\n", text or "") if p.strip()), "")
     t = _MD_LINK.sub(r"\1", para)
     t = _MENTION.sub("", t)
-    t = _URL.sub("", t)
+    t = _URL.sub(_short_url, t)
     t = re.sub(r"^\s*(#+|[-*])\s+", "", t, flags=re.M)
     t = re.sub(r"[*_`~]+", "", t)
     t = " ".join(t.split())

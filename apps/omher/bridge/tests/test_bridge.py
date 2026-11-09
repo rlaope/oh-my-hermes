@@ -730,6 +730,32 @@ class HermesPath(unittest.TestCase):
         self.assertEqual(home({"HERMES_HOME": "/srv/h", "LOCALAPPDATA": "C:/L"}, "win32"), Path("/srv/h"))
         self.assertEqual(home({"HERMES_HOME": "  "}, "darwin"), Path.home() / ".hermes")
 
+    def test_a_url_in_the_last_reply_stays_readable(self):
+        import omher_bridge
+        g = omher_bridge.reply_gist
+        self.assertEqual(g("배포가 끝나면 https://omher.app/docs/skills/ 에서 열립니다."),
+                         "배포가 끝나면 omher.app/docs/skills 에서 열립니다.")
+        long = "See https://github.com/rlaope/oh-my-hermes/pull/2705/files?diff=split&w=1 for the diff."
+        self.assertEqual(g(long), "See github.com for the diff.")
+        self.assertEqual(g("Link: [the PR](https://x.y/1) is up."), "Link: the PR is up.")
+
+    def test_a_profile_home_shows_every_bot(self):
+        # omher started from a profile-scoped shell (HERMES_HOME=<root>/profiles/kami) must still list the root
+        # Hermes and every profile, not only that one profile as "Hermes".
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / ".hermes"
+            (root / "profiles" / "kami").mkdir(parents=True)
+            (root / "config.yaml").write_text("model: a\n", encoding="utf-8")
+            (root / "profiles" / "kami" / "config.yaml").write_text("model: b\n", encoding="utf-8")
+            home = omher_bridge.default_hermes_home({"HERMES_HOME": str(root / "profiles" / "kami")}, "darwin")
+            self.assertEqual(home, root)
+            self.assertEqual([b["name"] for b in omher_bridge.discover_bots(home)], ["default", "kami"])
+            # a custom home that only looks like a profile (no root config) is kept as given
+            lone = Path(d) / "x" / "profiles" / "p"
+            lone.mkdir(parents=True)
+            self.assertEqual(omher_bridge.default_hermes_home({"HERMES_HOME": str(lone)}, "darwin"), lone)
+
     def test_signal_setup_survives_a_loop_without_signal_handlers(self):
         import omher_bridge
 
