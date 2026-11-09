@@ -56,7 +56,6 @@ class HermesHookOrderTests(unittest.TestCase):
             current = approve(root, "This conversation chose a short answer", source_ref="hermes-session:session-a")
             live = provider(root)
             pack = hermes_turn(live, 1, "Astronomy telescope")
-            self.assertNotIn("<record_index", pack)
             self.assertNotIn(old["record_id"], pack)
             self.assertNotIn(old["summary"], pack)
             self.assertEqual(rendered_ids(pack), [current["record_id"]])

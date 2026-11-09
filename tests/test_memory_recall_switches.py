@@ -526,24 +526,37 @@ class IndexOnlyPackTests(_Switches):
                     self.assertEqual(pack, "", "an unmatched turn gets no memory block at all")
                     self.assertIsNone(live.recall_status())
 
-    def test_recall_mode_on_demand_and_off_list_no_index(self) -> None:
+    def asked(self, platform: str, session_id: str) -> tuple[OmhMemoryProvider, str]:
+        live = self.on(platform, session_id)
+        return live, self.turn(live, 1, QUESTION, author_id=self.author(platform))
+
+    def test_recall_mode_on_demand_and_off_serve_no_record_to_a_matching_turn(self) -> None:
         self.seed()
-        for mode in ("on_demand", "off"):
+        for mode in ("auto", "on_demand", "off"):
             self.settings(recall_mode=mode)
             for platform in ("tui", "discord"):
                 with self.subTest(recall_mode=mode, platform=platform):
-                    live, pack = self.indexed(platform, f"{platform}-index-{mode}")
-                    self.assertNotIn("<record_index", pack)
+                    live, pack = self.asked(platform, f"{platform}-asked-{mode}")
+                    if mode == "auto":
+                        # The control: the same turn is served the record.
+                        self.assertIn(FACT, pack)
+                        if platform == "tui":
+                            self.assertIsNotNone(live.recall_status())
+                        continue
                     self.assertNotIn("<memory_records", pack)
+                    self.assertNotIn(FACT, pack)
                     self.assertIsNone(live.recall_status())
 
-    def test_memory_mode_off_lists_no_index(self) -> None:
+    def test_memory_mode_off_serves_no_record_to_a_matching_turn(self) -> None:
         self.seed()
+        for platform in ("tui", "discord"):
+            with self.subTest(platform=platform, memory_mode="default"):
+                self.assertIn(FACT, self.asked(platform, f"{platform}-asked-mode-default")[1])
         self.memory_policy({"memory_policy": {"mode": "off", "mode_source": "explicit"}})
         for platform in ("tui", "discord"):
-            with self.subTest(platform=platform):
-                live, pack = self.indexed(platform, f"{platform}-index-mode-off")
-                self.assertNotIn("<record_index", pack)
+            with self.subTest(platform=platform, memory_mode="off"):
+                live, pack = self.asked(platform, f"{platform}-asked-mode-off")
+                self.assertNotIn(FACT, pack)
                 self.assertIsNone(live.recall_status())
 
 

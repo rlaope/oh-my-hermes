@@ -409,7 +409,30 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         missing = self.recall(_NO_MATCH)
         self.assertEqual((missing["status"], missing["records"]), ("nothing_found", []))
         self.assertIn("matches words, not meaning", missing["next_action"])
-        self.assertIn("tags hold its topic words", missing["next_action"])
+        # Named, never shown: a miss lists labels without the summary.
+        self.assertEqual(missing["stored_records"], [{"record_id": saved["record_id"], "record_type": "decision"}])
+        self.assertEqual(missing["stored_count"], 1)
+        self.assertNotIn(_DEPLOY, json.dumps(missing))
+
+    def test_what_did_we_decide_last_time_reaches_the_decision_through_recall(self) -> None:
+        saved = json.loads(self.live.handle_tool_call(
+            "omh_remember", {"summary": "Deploys run nightly from the release branch", "record_type": "decision", "subject": "deploy-schedule"}))
+        self.assertEqual(saved["status"], "remembered", saved)
+        self.live = provider(self.root, session_id="session-later")
+        question = "What did we decide last time?"
+        self.assertEqual(hermes_turn(self.live, 1, question), "", "the turn's words match no record")
+        label = {"record_id": saved["record_id"], "record_type": "decision", "subject": "deploy-schedule"}
+        # Every generic query the model would try now names what exists.
+        for query in ("decide last time", "decision", "", question):
+            with self.subTest(query=query):
+                listed = self.recall(query)
+                self.assertEqual((listed["status"], listed["records"], listed["stored_records"]), ("nothing_found", [], [label]))
+                self.assertIn("recall it by its subject or record_id", listed["next_action"])
+                self.assertNotIn("Deploys run nightly", json.dumps(listed))
+        # And the label it names reads the record in full.
+        found = self.recall(label["subject"])
+        self.assertEqual((found["status"], [row["summary"] for row in found["records"]]), ("found", ["Deploys run nightly from the release branch"]))
+        self.assertNotIn("stored_records", found)
 
     def test_a_subject_that_is_also_a_topic_word_still_searches_the_words(self) -> None:
         subject = json.loads(self.live.handle_tool_call(

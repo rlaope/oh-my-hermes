@@ -869,7 +869,7 @@ them writes anything.
 
 | Action | Arguments | What it does | `status` values |
 | --- | --- | --- | --- |
-| `recall` | `query`, optional `limit` (1-6) | Runs the prefetch selector over the lens's homes, allowlist, and principal, so the order is the order a prefetch for that query serves. Returns record ids, summaries, types, tags, approval dates, and the subject when a record declares one. Counts no use; the returned ids join the session's seen list. | `found`, `nothing_found`, `refused`, `error` |
+| `recall` | `query`, optional `limit` (1-6) | Runs the prefetch selector over the lens's homes, allowlist, and principal, so the order is the order a prefetch for that query serves. Returns record ids, summaries, types, tags, approval dates, and the subject when a record declares one. A query that matches nothing, or an empty one, returns `stored_records` labels (id, type, subject) instead. Counts no use; the returned ids join the session's seen list. | `found`, `nothing_found`, `refused`, `error` |
 | `confirm` | `record_id` | `omh memory confirm`'s rewrite: the review deadline moves to the record's stored cadence (else the policy default, else 90 days), an open record is answered `resolved`, and `revalidation.confirmed_by` is `hermes_model`. Then one `used` count, at most once per record per session. A record with no review deadline (a durable capture) is not refused; only the use is counted. Expired, superseded, and source-changed records are refused like the operator verb. | `confirmed`, `refused`, `error` |
 | `correct` | `record_id`, `summary`, optional `tags`, optional `subject` | Admits the corrected fact through the model capture gates (instruction-shaped refusal, safety, relative-time review). The new record keeps the old record's type, scope, retention, perspective, cited source, review cadence day count, TTL day count, subject, and tags unless new tags or a new subject are given. The candidate carries `derived_from: [<old id>]`, `correction_of: <old id>`, and `correction_of_revision`, the revision the model read. Whichever approval admits it supersedes the old record inside its store lock: auto-safe at once, or an operator's `omh memory approve` later. If the old record was rewritten to another revision in between, nothing is superseded and the approval reports `revision_moved`. The old revision moves to `history/<record-id>.r<revision>.json` with `superseded_by`, leaves `records/`, and its source candidate becomes `superseded`, which approval refuses. Until then the old record stays active. When the corrected summary is already held as another record in the old record's scope and principal, which is what happens after a capture hint, that record is the replacement, if it can stand in: it must recall under the session's lens now (eligible, not archived, not itself replaced by a newer subject value), keep the fact at least as long (retention class and expiry), and not declare a different subject than the correction carries. Then the old revision moves to history with `superseded_by` naming it, under the store lock and pinned to the revision read; the correction's subject is written onto the held record when it has none; the result says `replacement: already_held`; and nothing new is captured. Otherwise nothing changes, and the result is `already_remembered` with `supersede_skipped` naming why (`held_not_recallable`, `held_retention_shorter`, `held_expires_sooner`, `subject_conflict`, `record_absent`, or a supersession skip such as `revision_moved`). | `corrected`, `pending_review`, `already_remembered`, `refused`, `error` |
 | `retire` | `record_id`, `reason` (`no_longer_true`, `superseded`, `user_asked`) | `omh memory retire --apply`'s move for one record: `records/` to `archive/<record-id>.<stamp>.json`, a `retirements.jsonl` line carrying the reason, `retired_by: hermes_model`, and the `session_id`, and the source candidate flipped to `retired`. Never a delete; `omh memory restore` finds the archived revision and brings it back through review. Unlike the operator verb it may retire a record that has not expired, but only one this session was served or recalled; an unseen live record is refused as `record_not_seen_this_session`. That rule is not a defence against a model told to retire something, since a recall adds the id. What it guarantees is narrower: no blind retire of an id the conversation never saw, attribution to the session in the journal, and an archive that can always be restored. If a step after the archive move fails, the result says the record was archived. | `retired`, `refused`, `error` |
@@ -1434,9 +1434,9 @@ the unrelated one. The collapse reads two structured fields and never the
 summaries. A record with no subject never joins a group, different scopes
 never merge, and a pin does not hold an older value in place.
 
-A query that matches nothing does not empty the pack. (Tool recall,
+A query that matches nothing does not empty the selection. (Tool recall,
 `omh_remember`/`omh_memory` `action="recall"`, passes `query_fallback=False`
-and does not fall back; the live prefetch lists the fallback by name, below.)
+and does not fall back; the live prefetch withholds the fallback, below.)
 When a query has
 indexable tokens and no eligible record overlaps it, not even on a
 store-common term, and no pin applies, every `active`-tier record that was held
@@ -1945,9 +1945,8 @@ and 84% repeated a record the session already held):
   receipt names what the pack withheld.
 - A turn that was only host framing or a host notice (a background-process
   or delegation-completion notice, a bare skill invocation; the sanitizer's
-  `host_only`) considers no record at all: no records, no pins, no index,
-  and so no recall line. This is the one exception to #2001's rule, on
-  purpose: a notice is not a message from the person, Hermes runs the
+  `host_only`) considers no record at all: no records and no pins, and so
+  no recall line. A notice is not a message from the person, Hermes runs the
   prefetch for it anyway, and on a messenger the line it posted was noise
   nobody asked for (2026-11-03 audit: 55 of 126 messenger recall lines). The
   person's next message gets the pack as usual.
@@ -1961,12 +1960,12 @@ and 84% repeated a record the session already held):
   `recall_revision` of each record it served (the stored `revision` plus the
   summary, type and open/settled state it renders) and the selector skips a
   record still at that revision as `served_this_session`. A revised record is
-  served again. A record the conversation was only shown by name is held as
-  listed: it leaves later indexes (`listed_this_session`), so a repeated
-  index costs nothing and posts no line, but a query that matches it still
-  gets it in full. For a matched query the skip runs before the budget cut,
-  so the slot goes to the next match; for an unmatched or term-less one after
-  it, so the index never grows into further records turn by turn. Every session switch Hermes reports
+  served again. A record an unanswered turn withheld is held as `listed:`:
+  later unanswered turns skip it (`listed_this_session`) at no cost, but a
+  query that matches it still gets it in full. For a matched query the skip
+  runs before the budget cut, so the slot goes to the next match; for an
+  unmatched or term-less one after it, so a withheld record never pulls a
+  further one in turn by turn. Every session switch Hermes reports
   clears the list: a compaction, rotated or in place, summarises away the
   blocks that carried the records, so each may be served once more. A new
   provider starts empty as well. When Hermes reports `/new` only after the
@@ -1978,24 +1977,32 @@ and 84% repeated a record the session already held):
   recall line only when their rendered text changed since the last serve.
 
 `omh_remember` and `omh_memory` recall pass `query_fallback=False`: a query
-that matches nothing is `nothing_found`, with a next action saying recall
-matches words (try other words, the record's names or language; a record's
-tags hold its topic words). A query made only of record ids looks those
-records up, and nothing else, through the same lens and eligibility. A query
-word that is a subject slug puts that record first while the words still
-search as usual, since a subject can also be a plain topic word. That is how
-an index entry is read. The live prefetch, coding handoffs, `omh memory
-recall` and the retrieval suite keep the selector's default configuration.
+that matches nothing is `nothing_found`, never the unrelated records in
+full. It names them instead: `stored_records` lists every record the lens can
+recall (`record_id`, `record_type`, and `subject` when it has one; at most
+20, with `stored_count` saying how many exist), without their text, and the
+next action says to recall one by its subject or record id when it bears on
+the request. An empty query does only that. So a question about the past
+("what did we decide last time?") whose words match no record still reaches
+the record in two calls. The list is a tool result the model asked for, not
+the per-turn pack under Hermes' `<memory-context>` fence, which names nothing
+it withholds. A query made only of record ids looks those records up, and
+nothing else, through the same lens and eligibility. A query word that is a
+subject slug puts that record first while the words still search as usual,
+since a subject can also be a plain topic word. The live prefetch, coding
+handoffs, `omh memory recall` and the retrieval suite keep the selector's
+default configuration.
 
-When a pin is in scope, a message that matches nothing gets the pin and no
-index of the rest: a pin counts as a match, so the fallback that feeds the
-index does not fire (unchanged from before the index existed). The index
-lists only records the selection chose, and the selection is the one the
-coding handoff makes: the recall suite's live-parity arms and incident
-replay hold the live receipt's selection and configuration identity equal
-to the canonical selector's. Listing the rest would take a live-only
-selection rule, which either changes that identity or hides a rule from it,
-so it is left as is.
+A message that met the store only through a suffix rule ("tickets" for a
+record about the "ticket" tool) falls back like one that matched nothing,
+and the readmitted record keeps its own score. The live pack shows such a
+record in full when the stemmed word is one of its declared topic words (the
+parts of its subject slug, or its tags), as the singular would have shown
+it; a stemmed hit only in its summary ("Write a commit message" on "50
+writes per day") stays withheld.
+
+When a pin is in scope, a message that matches nothing gets the pin and
+nothing else: a pin counts as a match, so the fallback does not fire.
 
 ### The recall query
 

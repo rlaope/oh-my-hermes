@@ -44,6 +44,7 @@ class MemoryIndexFallbackTests(unittest.TestCase):
             current = approve(root, "Current conversation decision sentinel", source_ref=f"hermes-session:{SESSION}")
             live = provider(root)
             pack = serve(live, "Astronomy telescope")
+            # The one guard against the removed line coming back.
             self.assertNotIn("<record_index", pack)
             self.assertNotIn(unrelated["summary"], pack)
             self.assertNotIn(unrelated["record_id"], pack)
@@ -165,6 +166,39 @@ class MemoryIndexFallbackTests(unittest.TestCase):
         self.assertEqual(receipts.validate_prefetch_receipt(receipt), [])
         self.assertEqual([item["record_id"] for item in receipt["rendering"]["selected_not_rendered"]], [selected_ids[1]])
         self.assertEqual(section.omissions["render_budget_exhausted"], 1)
+
+    def test_a_plural_of_the_records_topic_word_is_shown_as_the_singular_is(self) -> None:
+        pairs = [
+            reviewed("mem_ticket", subject="ticket-tool-db-choice", summary=(
+                "Team of 3 is building an internal ticket tool with about 50 writes per day. "
+                "They are deciding between SQLite and Postgres.")),
+            reviewed("mem_deploy", subject="deploy-schedule", summary="Deploys run nightly from the release branch"),
+        ]
+        records = tuple(record for record, _ in pairs)
+        snapshot = memory_records.RecordStoreSnapshot(records, {review["review_id"]: review for _, review in pairs}, {}, {}, frozenset(), ())
+
+        def prepared(query: str) -> memory_records.PreparedPrefetch:
+            return memory_records.prepare_prefetch_records(snapshot, query, allowed_scopes=[PROJECT], now=NOW, index_fallback=True)
+
+        singular = prepared("what about the ticket database?")
+        self.assertNotIn("query_fallback", singular.selection.pack)
+        plural = prepared("what about the tickets database?")
+        # Only a suffix rule met the store, so the selection falls back; the
+        # record whose subject the plural names is shown, the other withheld.
+        self.assertIn("query_fallback", plural.selection.pack)
+        for case in (singular, plural):
+            self.assertEqual([item["record_id"] for item in case.section.rendered], ["mem_ticket"])
+            self.assertIn("internal ticket tool", case.section.text)
+            self.assertNotIn("mem_deploy", case.section.text)
+        self.assertEqual(plural.section.indexed, ("mem_deploy",))
+        self.assertEqual(receipts.validate_prefetch_receipt(receipts.build_prefetch_receipt(plural, session_id=SESSION, home_digests=())), [])
+        # A stemmed hit only in the summary ("Write" on "50 writes per day")
+        # is not the record's topic: it stays withheld.
+        commit = prepared("Write a commit message for the staged change")
+        self.assertIn("query_fallback", commit.selection.pack)
+        self.assertGreater(next(item["score"] for item in commit.selection.pack["included_records"] if item["record_id"] == "mem_ticket"), 1)
+        self.assertEqual((commit.section.text, commit.section.rendered), ("", ()))
+        self.assertEqual(sorted(commit.section.indexed), ["mem_deploy", "mem_ticket"])
 
     def test_preparation_and_receipts_partition_selected_ids_and_validate_filtered_prefix(self) -> None:
         pairs = [reviewed(f"mem_{index}", summary=f"Stored sentinel {index}") for index in range(4)]

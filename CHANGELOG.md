@@ -568,8 +568,12 @@ All notable changes will be documented here.
   alone moved a Korean-writing user's replies to English. Those records are
   now withheld and named nowhere; with nothing else to serve, the provider
   returns nothing. Records from this conversation and pinned records still
-  show in full, a matching message still gets the record, and
-  `omh_remember` recall still finds a withheld record by subject or words.
+  show in full, and so does a record whose subject or tag the message names
+  in another form ("tickets" for `ticket-tool-db-choice`). `omh_remember`
+  recall finds a withheld record by subject or words, and a recall that
+  matches nothing, or an empty one, now lists what is stored (subject, type
+  and id, without text), so "what did we decide last time?" reaches the
+  decision in two calls.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill

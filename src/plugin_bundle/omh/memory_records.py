@@ -39,7 +39,7 @@ from typing import Any
 from .awareness_delivery import _awareness_delivery_lock
 from .hermes_memory import RECORDS_DIRECTORY_LABEL, REVIEWS_DIRECTORY_LABEL, _read_reviews, _reviewed_records, read_reviewed_records
 from .memory_recall_selector import MemoryRecallSelection, select_memory_recall
-from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION, point_in_time_cue
+from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION, point_in_time_cue, query_names_record_topic
 from .memory_store_io import atomic_write_json, guard_store_write
 
 DEFAULT_RECORD_RENDER_BUDGET_CHARS = 2400
@@ -323,8 +323,25 @@ def prepare_prefetch_records(
         query_fallback=query_fallback,
         session_served=session_served,
     )
+    shown = frozenset(full_text_ids)
+    if index_fallback and "query_fallback" in selection.pack:
+        # The fallback readmits a record that met the query only through a
+        # suffix rule with its own score (every other readmitted record
+        # scores 1). When that stemmed word is one of the record's own topic
+        # words ("tickets" for subject `ticket-tool-db-choice`), the message
+        # names its subject in another form and it is shown as the singular
+        # would be; a hit only in the summary ("Write a commit message" on
+        # "50 writes per day") stays withheld.
+        by_id = {str(record.get("record_id", "")): record for record in snapshot.records}
+        shown |= {
+            str(item.get("record_id", ""))
+            for item in selection.pack.get("included_records", [])
+            if isinstance(item, dict)
+            and isinstance(item.get("score"), int) and not isinstance(item.get("score"), bool) and item["score"] > 1
+            and query_names_record_topic(by_id.get(str(item.get("record_id", "")), {}), query)
+        }
     return PreparedPrefetch(selection, render_selected_memory_records(
-        selection, snapshot.records, budget_chars=budget_chars, index_fallback=index_fallback, full_text_ids=full_text_ids,
+        selection, snapshot.records, budget_chars=budget_chars, index_fallback=index_fallback, full_text_ids=shown,
         index_unqueried=index_unqueried,
     ), clock)
 

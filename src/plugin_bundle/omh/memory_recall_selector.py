@@ -646,7 +646,7 @@ def select_memory_recall(
 
     # No query, or one with no indexable terms ("야", an empty turn), scores
     # every record 1 above, so it serves the whole active and reference set
-    # unranked: tool recall cuts it to pins, the live turn lists it by name.
+    # unranked: tool recall cuts it to pins, the live turn withholds it.
     unqueried = not _memory_query_split(query)[0]
 
     for kind, value in steps:
