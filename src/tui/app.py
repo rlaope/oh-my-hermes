@@ -841,8 +841,8 @@ GATEWAY_RESTART_SECONDS = 180.0
 GATEWAY_REATTACH_SECONDS = 60.0
 GATEWAY_RESTART_QUESTION = "Restart Hermes' gateway?"
 GATEWAY_RESTART_CHOICE = "Restart"
-# The TUI's own runtime (`omh theme runtime own`, `tui/own_runtime.py`): a gateway with no bot on it, which the
-# restart stops; Hermes starts a fresh one, on the OMH generation installed now, when the TUI reattaches.
+# The TUI's own runtime (the default; `tui/own_runtime.py`): a gateway with no bot on it, which the restart stops;
+# Hermes starts a fresh one, on the OMH generation installed now, when the TUI reattaches.
 GATEWAY_OWN_RUNTIME_LEAD = "This TUI runs on its own Hermes runtime; the bots' gateway is not touched."
 GATEWAY_OWN_RUNTIME_CHOICE = "Restart this TUI's runtime — loads new OMH code; no bot reconnects"
 # A named profile the shared gateway serves: Hermes' restart of that profile alone, or of the whole gateway.

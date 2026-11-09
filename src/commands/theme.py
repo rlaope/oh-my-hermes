@@ -34,6 +34,7 @@ from ..installer import OmhError
 from ..install.config_adapter import display_skin_selection, read_config
 from ..skin_pack import (
     RUNTIME_CHOICES,
+    RUNTIME_DEFAULT,
     RUNTIME_OWN,
     RUNTIME_SHARED,
     SHORT_NAME_WIDTH,
@@ -215,12 +216,12 @@ def cmd_theme_update_check(args: argparse.Namespace) -> int:
 def cmd_theme_runtime(args: argparse.Namespace) -> int:
     """`omh theme runtime own|shared` saves where bare `omh` opens its sessions; alone, reports it.
 
-    `shared` (the default) is the Hermes gateway that also serves the bots.
-    `own` is a TUI-only Hermes home under the OMH home with a gateway of its
-    own (`tui/own_runtime.py`): the bots' restarts and drains never reach it,
-    and a restart of it loads new OMH code without a bot reconnecting. Model,
-    providers, memory (OMH's), skills and the OMH plugin are the root home's;
-    sessions and Hermes' own state are the TUI home's.
+    `own` (the default) is a TUI-only Hermes profile, `<root>/profiles/omh-tui`,
+    with a gateway of its own (`tui/own_runtime.py`): the bots' restarts and
+    drains never reach it, and a restart of it loads new OMH code without a
+    bot reconnecting. Model, providers, login, memory (OMH's), skills and the
+    OMH plugin are the root home's; sessions and Hermes' own state are the
+    profile's. `shared` is the Hermes gateway that also serves the bots.
     """
     from ..tui.own_runtime import tui_home_path
 
@@ -231,14 +232,14 @@ def cmd_theme_runtime(args: argparse.Namespace) -> int:
         return 2
     paths = _paths(args)
     saved = read_runtime_choice(paths.omh_home)
-    current = saved or RUNTIME_SHARED
+    current = saved or RUNTIME_DEFAULT
     payload: dict[str, object] = {
         "schema_version": THEME_RUNTIME_SCHEMA_VERSION,
         "runtime": current,
         "source": "default" if saved is None else "saved",
         "changed": False,
         "store_path": str(theme_store_path(paths.omh_home)),
-        "tui_home": str(tui_home_path(paths.omh_home)),
+        "tui_home": str(tui_home_path(Path(paths.hermes_home))),
     }
     if requested:
         payload.update({"previous": current, "runtime": requested, "source": "saved"})
@@ -255,20 +256,21 @@ def cmd_theme_runtime(args: argparse.Namespace) -> int:
     use_color = _use_color()
     print(_color(f"OMH TUI runtime: {payload['runtime']}", "1;36", use_color))
     if not requested:
-        print(f"  {'Saved' if saved is not None else 'Nothing saved; shared by default'} in {payload['store_path']}.")
+        print(f"  {'Saved' if saved is not None else f'Nothing saved; {RUNTIME_DEFAULT} by default'} in {payload['store_path']}.")
     elif payload["changed"]:
         print(f"  Saved {requested} in {payload['store_path']}.")
     else:
         print(f"  No change: {requested} is already saved.")
     print(_color("Next", "1;32", use_color))
     if payload["runtime"] == RUNTIME_OWN:
-        print(f"  Bare `omh` opens the TUI on {payload['tui_home']}, a Hermes home of the TUI's own, built from the "
-              "root home at each launch: the bots' gateway restarts and drains never pause it. `omh --resume <id>` "
-              "of a session on the shared gateway still opens there. `omh theme runtime shared` goes back.")
+        print(f"  Bare `omh` opens the TUI on {payload['tui_home']}, a Hermes profile of the TUI's own, built from the "
+              "root home at each launch with the root's login: the bots' gateway restarts and drains never pause it. "
+              "`omh --resume <id>` of a session on the shared gateway still opens there. `omh theme runtime shared` "
+              "puts the TUI back on the bots' gateway.")
     else:
         print("  Bare `omh` opens the TUI on the Hermes gateway that also serves the bots; a whole-gateway restart "
-              "with a bot turn running pauses it until Hermes is back. `omh theme runtime own` gives the TUI a "
-              "runtime of its own.")
+              "with a bot turn running pauses it until Hermes is back. `omh theme runtime own` (the default) gives "
+              "the TUI a runtime of its own.")
     return 0
 
 

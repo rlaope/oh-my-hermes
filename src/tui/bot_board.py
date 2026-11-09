@@ -109,7 +109,7 @@ import time
 from typing import Any, ClassVar
 
 from ..plugin_bundle.omh import runtime_paths
-from ..skin_pack import hex_to_rgb
+from ..skin_pack import TUI_PROFILE, hex_to_rgb
 from ..plugin_bundle.omh.hud_text import compact_count
 from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 from ..plugin_bundle.omh.sqlite_readonly import connect_readonly
@@ -363,8 +363,8 @@ def board_homes(environ: Mapping[str, str]) -> tuple[Path | None, list[tuple[str
         if len(homes) > PROFILE_CAP:
             break
         try:
-            if entry.name.startswith(".") or not entry.is_dir():
-                continue
+            if entry.name.startswith(".") or entry.name == TUI_PROFILE or not entry.is_dir():
+                continue  # the TUI's own runtime profile is no bot
             if (entry.parent / DELETED_PROFILES / entry.name).exists():
                 continue
             if not any((entry / marker).is_file() for marker in PROFILE_MARKERS):

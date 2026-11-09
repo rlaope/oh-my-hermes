@@ -441,14 +441,15 @@ def _settings(
 def tui_runtime_setting(paths: OmhPaths) -> dict[str, str]:
     """Where bare `omh` opens its sessions (`omh theme runtime`), and whether the TUI's own gateway runs now.
 
-    `shared`: the Hermes gateway the bots use. `own`: a TUI-only Hermes home
-    under the OMH home (`tui/own_runtime.py`), its gateway's pid when it is
-    live. Read-only, from the saved choice, the home's marker and its record.
+    `shared`: the Hermes gateway the bots use. `own` (the default): a TUI-only
+    Hermes profile under the root (`tui/own_runtime.py`), its gateway's pid
+    when it is live. Read-only, from the saved choice, the profile's marker and
+    its record.
     """
     from ..skin_pack import RUNTIME_OWN, read_runtime_choice
     from ..tui.own_runtime import tui_home_status
 
-    status = tui_home_status(paths.omh_home, read_runtime_choice(paths.omh_home))
+    status = tui_home_status(Path(paths.hermes_home), read_runtime_choice(paths.omh_home))
     if status.runtime != RUNTIME_OWN:
         return _setting(value="shared", label="TUI runtime: shared gateway", raw="tui_runtime:shared")
     if status.gateway_live:

@@ -1,0 +1,190 @@
+{
+ "root_before": {
+  "pid": 72122,
+  "gateway_state": "running",
+  "served_profiles": [
+   "default",
+   "kami"
+  ]
+ },
+ "root_after_place": {
+  "pid": 72122,
+  "gateway_state": "running",
+  "served_profiles": [
+   "default",
+   "kami"
+  ]
+ },
+ "own_record": {
+  "pid": 68447,
+  "gateway_state": "running",
+  "served_profiles": [],
+  "hermes_home": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui"
+ },
+ "own_platforms": {},
+ "session_create": {
+  "profile_name": "omh-tui",
+  "model": "claude-opus-5-5",
+  "skills": 273
+ },
+ "prompt": {
+  "message_complete": true,
+  "event_types": [
+   "agent.print",
+   "agent.step",
+   "message.complete",
+   "message.delta",
+   "message.start",
+   "platforms.changed",
+   "session.info",
+   "session.usage",
+   "sessions.changed",
+   "status.update",
+   "thinking.delta"
+  ],
+  "text_sample": [
+   "ok"
+  ]
+ },
+ "root_during": {
+  "pid": 72122,
+  "gateway_state": "running",
+  "served_profiles": [
+   "default",
+   "kami"
+  ]
+ },
+ "attach_child_exit": 0,
+ "idle_exit": {
+  "exited": false,
+  "final_state": "running"
+ },
+ "profile_auth_after": {
+  "exists": false
+ },
+ "root_after": {
+  "pid": 72122,
+  "gateway_state": "running",
+  "served_profiles": [
+   "default",
+   "kami"
+  ]
+ },
+ "ambiguous_skill_warnings": [],
+ "steps": [
+  {
+   "step": "root recorded",
+   "pid": 72122,
+   "gateway_state": "running",
+   "served_profiles": [
+    "default",
+    "kami"
+   ],
+   "t": 0.0
+  },
+  {
+   "step": "built",
+   "skills": 120,
+   "clashes": 89,
+   "scrubbed": [],
+   "has_auth": false,
+   "t": 0.08
+  },
+  {
+   "step": "profile placed",
+   "home": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui",
+   "t": 0.08
+  },
+  {
+   "step": "root after place",
+   "pid": 72122,
+   "gateway_state": "running",
+   "served_profiles": [
+    "default",
+    "kami"
+   ],
+   "t": 3.08
+  },
+  {
+   "step": "gateway.ready",
+   "payload_keys": [
+    "change_events",
+    "heartbeat",
+    "replay_epoch",
+    "session_authority",
+    "skin"
+   ],
+   "t": 7.61
+  },
+  {
+   "step": "own record",
+   "pid": 68447,
+   "same_as_root": false,
+   "platforms": [],
+   "t": 7.61
+  },
+  {
+   "step": "session.create",
+   "profile_name": "omh-tui",
+   "model": "claude-opus-5-5",
+   "skills": 273,
+   "t": 8.39
+  },
+  {
+   "step": "prompt",
+   "complete": true,
+   "events": [
+    "agent.print",
+    "agent.step",
+    "message.complete",
+    "message.delta",
+    "message.start",
+    "platforms.changed",
+    "session.info",
+    "session.usage",
+    "sessions.changed",
+    "status.update",
+    "thinking.delta"
+   ],
+   "t": 11.06
+  },
+  {
+   "step": "root during",
+   "pid": 72122,
+   "gateway_state": "running",
+   "served_profiles": [
+    "default",
+    "kami"
+   ],
+   "t": 11.06
+  },
+  {
+   "step": "client closed",
+   "exit": 0,
+   "t": 11.13
+  },
+  {
+   "step": "idle exit",
+   "exited": false,
+   "final_state": "running",
+   "t": 101.27
+  },
+  {
+   "step": "profile removed",
+   "t": 122.89
+  }
+ ],
+ "root_auth_unchanged": true,
+ "root_writes_outside_tui_profile_and_root_gateway_housekeeping": [
+  "/Users/khope@sionic.ai/.hermes/cron/.tick.lock",
+  "/Users/khope@sionic.ai/.hermes/cron/ticker_heartbeat",
+  "/Users/khope@sionic.ai/.hermes/cron/ticker_last_success"
+ ],
+ "root_writes_total": 113,
+ "own_gateway_log_tail": [
+  "2026-11-09 14:56:14,371 WARNING gateway.run: No messaging platforms enabled.",
+  "2026-11-09 14:56:14,898 INFO gateway.run: kanban dispatcher: another gateway already holds the dispatcher lock (/Users/khope@sionic.ai/.hermes/kanban/.dispatcher.lock); this gateway will NOT dispatch.",
+  "2026-11-09 14:56:14,900 INFO gateway.run: Cron scheduler will tick 3 profile(s): ['default', 'kami', 'omh-tui']",
+  "2026-11-09 14:56:14,902 INFO gateway.run: Auto-started gateway: exits after 30s with no clients, adapters, cron/kanban work or admissions (gateway.unmanaged_idle_exit_seconds)"
+ ]
+}

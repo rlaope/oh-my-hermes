@@ -1705,44 +1705,67 @@ liveness probe, and it calls nothing in Hermes' gateway.
 
 #### The TUI on a Hermes runtime of its own
 
-By default bare `omh` opens its session on the Hermes gateway that also serves
-your bots: Hermes runs one gateway per host for every profile under
-`profiles/`, and refuses its standalone entry beside it. So a whole-gateway
-restart with a bot turn running drains first, up to Hermes'
-`agent.restart_after_turn_timeout` (30 minutes by default), and `omh` waits
-with it. `omh theme runtime own` moves the TUI's sessions to a Hermes home of
-the TUI's own, `<omh_home>/tui-home`, which Hermes gives a gateway of its own
-(auto-started, exits once idle). Nothing that happens to the bots' gateway
-reaches it, and `/gateway restart` there restarts only that runtime, which
-loads new OMH code without a bot reconnecting.
+Bare `omh` opens its session on a Hermes runtime of the TUI's own, not on the
+gateway that serves your bots. Hermes runs one gateway per host for every
+profile under `profiles/`, and refuses its standalone entry beside it, so a
+session on that gateway shares the bots' fate: a whole-gateway restart with a
+bot turn running drains first, up to Hermes' `agent.restart_after_turn_timeout`
+(30 minutes by default), and refuses every session meanwhile. The TUI's
+runtime is a Hermes profile, `<root>/profiles/omh-tui`, whose config says
+`gateway.standalone: true`: the host gateway never serves it, Hermes starts a
+gateway for it when the TUI attaches (auto-started, exits once idle), and
+nothing that happens to the bots' gateway reaches it. `/gateway restart` there
+restarts only that runtime, which loads new OMH code without a bot
+reconnecting. Your login is the TUI's too: a profile without an `auth.json` of
+its own reads the root's store for every provider (Hermes' profile rule) and
+rotates an OAuth provider's tokens back into it, so there is no copy of the
+store, no second login, and nothing the bots lose. `hermes profile list` and
+Hermes Desktop show the profile; it holds no bot.
 
-`omh` builds the home from the root Hermes home at every launch and refreshes
-only what changed: `config.yaml` copied (model, providers and their keys,
-OMH's memory provider, OMH's skills through `skills.external_dirs`, the
-plugins; a copy you changed in the TUI home is replaced, with a line saying
-so), `auth.json` copied only when the root's is newer (Hermes rotates OAuth
-refresh tokens into the store it read, so a TUI-home copy that moved later is
-kept), `.env` copied without any messaging credential, and the same names
-stripped from the environment the TUI is started with (no adapter of the
-TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link per
+`omh` builds the profile from the root Hermes home at every launch and
+refreshes only what changed: `config.yaml` copied with `standalone: true` set
+in its `gateway:` block (the rest byte for byte: model, providers and their
+keys, OMH's memory provider, OMH's skills through `skills.external_dirs`, the
+plugins; a copy you changed in the profile is replaced, with a line saying
+so), `.env` copied without any messaging credential, and the same names
+stripped from the environment the TUI is started with (no adapter of the TUI
+runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link per
 skill at its own `<category>/<skill>` path over the root's and every served
 profile's (a skill is any directory holding `SKILL.md`; the root wins a name
-clash; a skill or link you put there yourself is left alone and stands for
-its name), and `plugins/omh` linked to the same OMH bundle the bots run. A
-root `config.yaml` that connects a messaging platform under `platforms:`
-keeps bare `omh` on the shared gateway, with a line naming the entry.
-Sessions, Hermes' own memory, cron and kanban are the TUI home's. The bot
-board keeps reading the bots' home. `omh --hermes-home` and `omh -p <profile>`
+clash; a skill or link you put there yourself is left alone and stands for its
+name), `plugins/omh` linked to the same OMH bundle the bots run, and Hermes'
+`.no-bundled-skills` marker so `hermes update` seeds only its essential skills
+there. A new profile is built whole under a dot name and renamed into place,
+so the host gateway never sees it half-built. A root `config.yaml` that
+connects a messaging platform under `platforms:` keeps bare `omh` on the
+shared gateway, with a line naming the entry. Sessions, Hermes' own memory,
+cron and kanban are the profile's. The bot board keeps reading the bots' home
+and never lists the TUI profile. `omh --hermes-home` and `omh -p <profile>`
 stay on the home they name; `omh --resume <id>` opens where that session is,
 whichever runtime is chosen, and says so when that differs (the id as the exit
-card printed it; a title is not looked up); `omh theme runtime shared` goes
-back. `omh-tui-home.json` in
-the home records what was built from what. `omh update` rebuilds the home
-too (the plugin bundle it links moved with the update), `omh doctor` has an
-`omh_tui_runtime` row (which runtime, what the home was built from, how many
-skills, a messaging credential or adapter that should not be there, whether
-its gateway runs), and the menu bar's settings name the runtime and the TUI
-gateway's pid while it is live.
+card printed it; a title is not looked up). `omh-tui-home.json` in the profile
+records what was built from what.
+
+`omh theme runtime shared` puts bare `omh` back on the bots' gateway (`omh
+theme runtime own` is the default). The TUI home an OMH before this one built
+under the OMH home (`<omh_home>/tui-home`, with a copy of `auth.json`) is
+removed by the first build once its gateway is not running. `omh update`
+rebuilds the profile too (the plugin bundle it links moved with the update),
+`omh uninstall` removes it, `omh doctor` has an `omh_tui_runtime` row (which
+runtime, what the profile was built from, how many skills, a messaging
+credential or adapter that should not be there, whether its gateway runs), and
+the menu bar's settings name the runtime and the TUI gateway's pid while it is
+live.
+
+One cost, Hermes' own for every per-profile gateway: a gateway under the root
+ticks every root profile's cron store, standing down each tick for a profile
+another gateway owns, and its idle exit counts their scheduled jobs as work.
+On a host whose bots have scheduled cron jobs the TUI gateway therefore stays
+up between sessions (`/gateway restart` stops it; the next `omh` starts a
+fresh one). Hermes calls `gateway.standalone` a temporary compatibility shim;
+should a later Hermes drop it, the host gateway serves the profile and `omh`
+behaves as on the shared gateway (it waits out a drain), with the login
+unchanged.
 
 When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason
@@ -3505,7 +3528,7 @@ omh theme use crimson --dry-run
 omh theme status             # the active theme, which source decided it, and where it is saved
 omh theme wallpaper off      # the living wallpaper off in every later OMH TUI session (on, or alone to show it)
 omh theme update-check off   # no once-a-day ask of npm for a newer release (on, or alone to show it)
-omh theme runtime own        # open sessions on a Hermes runtime of the TUI's own (shared, or alone to show it)
+omh theme runtime shared     # open sessions on the bots' gateway instead of the TUI's own runtime (own, the default; alone to show it)
 ```
 
 Bare `omh theme` opens a picker: up/down arrows (or `j`/`k`) move the cursor,
