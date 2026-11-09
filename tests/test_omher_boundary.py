@@ -44,7 +44,28 @@ RULES = (
     "the only other argument is `--resume` with a Claude Code session id the shell checks is a UUID.",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
+    "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
+    "The command is fixed in the shell; nothing from the page reaches it.",
 )
+SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
+SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
+# The shell's fixed run: the documented one-liner, downloaded to a temp file first so a failed download
+# is a failed install (`curl … | sh` exits 0 when curl fails), and on Windows ending with the
+# installer's exit status (a script block never reaches install.ps1's own `exit`).
+UNIX_RUN = (
+    "f=$(mktemp) && trap 'rm -f \"$f\"' EXIT && curl -fsSL -o \"$f\" "
+    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh && sh \"$f\" omher@beta"
+)
+WINDOWS_RUN = (
+    "$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create((irm "
+    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta } "
+    "catch { $_.Exception.Message; exit 1 }; exit $LASTEXITCODE"
+)
+
+
+def _rust_strings(source: str) -> list[str]:
+    """The string literals in a piece of Rust source, with `\\"` unescaped."""
+    return [m.replace('\\"', '"') for m in re.findall(r'"((?:[^"\\]|\\.)*)"', source)]
 
 
 def _flat(text: str) -> str:
@@ -57,10 +78,14 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_eleven_numbered_rules_in_order(self) -> None:
-        nums = [int(n) for n in re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)]
-        self.assertTrue(6 <= len(nums) <= 11, len(nums))
-        self.assertEqual(nums, list(range(1, len(nums) + 1)))
+    def test_boundary_is_between_six_and_twelve_numbered_rules(self) -> None:
+        # 12: rule 10 (the bridge's read-only git), rule 11 (SESSIONS' allow-listed agents) and rule 12
+        # (the one installer) each widened the boundary on purpose; the rules stay numbered 1..n with no gap
+        # or repeat.
+        text = DOC.read_text(encoding="utf-8")
+        rules = re.findall(r"^(\d+)\. ", text, re.M)
+        self.assertTrue(6 <= len(rules) <= 12, len(rules))
+        self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
@@ -68,6 +93,49 @@ class DocPins(unittest.TestCase):
         self.assertIn("**Elsewhere**:", context)
         self.assertIn("docs/OMHER-BOUNDARY.md", context)
         self.assertIn("(OMHER-BOUNDARY.md)", DOCS_INDEX.read_text(encoding="utf-8"))
+
+
+class TheOneInstaller(unittest.TestCase):
+    """Rule 12: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
+
+    def test_the_installer_is_the_omher_beta_one_liner_without_the_app(self) -> None:
+        setup = SETUP_RS.read_text(encoding="utf-8")
+        # The definitions themselves, not the Rust tests that repeat them.
+        unix = setup[setup.index("const UNIX: InstallCommand"):]
+        unix = unix[: unix.index("\n};")]
+        self.assertEqual(_rust_strings(unix), ["/bin/sh", "-c", UNIX_RUN])
+        self.assertNotIn("|", UNIX_RUN)
+        windows = setup[setup.index("const WINDOWS: InstallCommand"):]
+        windows = windows[: windows.index("\n};")]
+        self.assertEqual(
+            _rust_strings(windows),
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", WINDOWS_RUN],
+        )
+        env = setup[setup.index("const ENV: &[(&str, &str)]"):]
+        self.assertEqual(re.findall(r'"([^"]*)"', env[: env.index(";")]), ["OMH_WITH_DESKTOP", "0", "NO_COLOR", "1"])
+        # The doc names the same commands.
+        doc = DOC.read_text(encoding="utf-8")
+        self.assertIn(f"`{UNIX_RUN}`", doc)
+        self.assertIn(f"`{WINDOWS_RUN}`", doc)
+
+    def test_only_three_places_in_the_shell_start_a_process(self) -> None:
+        spawns = {}
+        for path in sorted(SHELL_SRC.glob("*.rs")):
+            n = path.read_text(encoding="utf-8").count("Command::new(")
+            if n:
+                spawns[path.name] = n
+        # bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed installer; agent_chat.rs
+        # starts a chat session's allow-listed agent (rule 11). Terminal sessions start theirs through the
+        # PTY's `spawn_command`, not `Command::new`.
+        self.assertEqual(spawns, {"agent_chat.rs": 1, "bridge.rs": 1, "setup.rs": 1})
+
+    def test_the_install_command_takes_nothing_from_the_page(self) -> None:
+        lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
+        sig = lib[lib.index("async fn install_engine("):]
+        sig = sig[: sig.index(") ->")]
+        self.assertNotIn("String", sig)
+        self.assertNotIn("&str", sig)
+        self.assertIn("Channel<InstallEvent>", sig)
 
 
 class OmhNeverReachesOmher(unittest.TestCase):
@@ -227,12 +295,13 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model"])
 
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
-        """`Command::new` only in bridge.rs (Hermes' Python) and once in agent_chat.rs (the chat spawner);
+        """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
+        rule 12) and once in agent_chat.rs (the chat spawner);
         `spawn_command` only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "agent_chat.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)

@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **One command installs Hermes, OMH and the omher desktop app (beta).**
+  `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
+  (and the PowerShell script-block form with the same argument) installs Hermes with its official
+  installer when it is missing, installs or upgrades OMH, runs `omh setup` when OMH or Hermes is new on
+  the machine, then installs omher from the newest `omher-v*` release (dmg on macOS, silent per-user
+  installer on Windows; Linux skips the app with a note). The plain one-liner is unchanged. An omher
+  installed first offers the same install, minus the app, on its first launch when Hermes is missing,
+  and streams the installer's output on that screen. The README shows the one-liner and a screenshot.
+  A failed download or install is reported as a failure, on the app's setup screen too (it used to
+  read as success); the app image is checked against the release's `SHA256SUMS.txt` and swapped in
+  only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
+  one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
+
 - **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
   Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
   alone, so a user without OpenAI access fell straight back to the parent

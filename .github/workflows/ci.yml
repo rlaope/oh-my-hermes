@@ -384,6 +384,22 @@ jobs:
         if: matrix.shard == 0
         shell: powershell
         run: ./tests/powershell/Test-OmhLatestRelease.ps1 -InjectRegression
+      - name: Windows installer omher@beta helpers (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhOmherBeta.ps1
+      - name: Windows installer omher@beta mutation (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhOmherBeta.ps1 -InjectRegression
+      - name: Windows installer omher@beta helpers (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhOmherBeta.ps1
+      - name: Windows installer omher@beta mutation (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhOmherBeta.ps1 -InjectRegression
       - name: Windows installer end-to-end
         if: matrix.shard == 0
         shell: pwsh

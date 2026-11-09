@@ -82,6 +82,13 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
           {bot.display_name} is not reachable ({chat.openError}). Start Hermes for this profile, then pick it again.
         </div>
       )}
+      {/* A Hermes installed from the setup screen has no model yet: the first chat screen says where to pick one,
+          never a terminal command. */}
+      {chat?.loaded && !chat.openError && !(chat.model || bot.model) && (
+        <div className="day" data-testid="chat-no-model">
+          {bot.display_name} has no model yet. Pick one from the model menu at the top right to start.
+        </div>
+      )}
       {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">Say hi to {bot.display_name}</div>}
       {items.map((it, i) => {
         // the live activity line with nothing to say yet: the typing bubble below stands in for it

@@ -1,5 +1,23 @@
 <div align="center">
 
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami plans a checkout redesign in 3 layers, 7 parts, shows the new cart step and runs pnpm test while a Slack #design thread answers in the chat; the Runs panel shows the plan card and the live dag-ulw graph with Claude, Codex and Grok marks on its nodes" width="900">
+
+### omher, the desktop app
+
+Your Hermes bots, coding sessions and `dag-ulw` runs, in one window.
+
+[macOS (Apple silicon)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-arm64.dmg) · [macOS (Intel)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-x64.dmg) · [Windows](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-windows-x64-setup.exe) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
+
+```sh
+curl -fsSL https://omher.app/omher | sh
+```
+
+</div>
+
+<br>
+
+<div align="center">
+
 <br>
 
 <img src="assets/oh-my-hermes-wordmark.png?v=spectrum" alt="OH-MY-HERMES" width="70%">
@@ -12,7 +30,7 @@
 <br>
 <br>
 
-**All-in-one package for Hermes Agent. Install once, then just type `dag-ulw`.**
+**The ultrawork agent with AI coworkers wired into you. Just type `dag-ulw`.**
 
 [![GitHub Release](https://img.shields.io/github/v/release/rlaope/oh-my-hermes?color=58a6ff&labelColor=black&logo=github&style=flat-square)](https://github.com/rlaope/oh-my-hermes/releases)
 [![npm downloads](https://img.shields.io/npm/dt/oh-my-hermes?color=3fb950&labelColor=black&logo=npm&label=downloads&style=flat-square)](https://www.npmjs.com/package/oh-my-hermes)
@@ -24,7 +42,7 @@
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Русский](README.ru.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md) | [Italiano](README.it.md)
 
 **oh-my-hermes** is an operating layer for [Hermes Agent](https://github.com/NousResearch/hermes-agent).<br>
-You keep talking to Hermes. OMH picks the skill and a model for each lane, and runs the work in parallel.<br>
+You keep talking to Hermes. OMH puts a coworker with its own skill and model on each lane, in parallel.<br>
 It never patches or replaces Hermes, and it never reports planned work as done.
 
 </div>

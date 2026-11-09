@@ -1,20 +1,24 @@
 mod agent_chat;
 mod bridge;
 mod sessions;
+mod setup;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use agent_chat::{ChatOut, ChatSessions};
-use bridge::{Bridge, BridgeStatus};
+use bridge::{Bridge, BridgeStatus, Os};
 use sessions::{AgentInfo, Output, Sessions};
+use setup::InstallEvent;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{Manager, RunEvent, State};
 
 struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
+    installing: Arc<AtomicBool>,
     sessions: Arc<Sessions>,
     chats: Arc<ChatSessions>,
 }
@@ -84,6 +88,40 @@ pub(crate) fn allowed_external(url: &str) -> bool {
     ];
     !url.chars().any(|c| c.is_whitespace() || c.is_control())
         && PREFIXES.iter().any(|p| url.starts_with(p))
+}
+
+/// The line the first-run screen shows as what Install will run.
+#[tauri::command]
+async fn install_engine_command() -> Result<String, String> {
+    Ok(setup::display_line(Os::current()).to_string())
+}
+
+/// Install Hermes and oh-my-hermes with OMH's fixed one-line installer (the first-run screen's Install
+/// button), streaming its output to the screen, then start the bridge again. Takes nothing from the
+/// page but the output channel; one run at a time.
+#[tauri::command]
+async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
+    if shell.installing.swap(true, Ordering::SeqCst) {
+        return Err("the installer is already running".into());
+    }
+    let installing = Arc::clone(&shell.installing);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        setup::run_install(setup::install_command(Os::current()), |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string());
+    installing.store(false, Ordering::SeqCst);
+    let code = result??;
+    // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
+    // setup screen again as if nothing had run.
+    let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
+    let code = setup::check_installed(code, found)?;
+    if code == Some(0) {
+        shell.bridge.start(shell.resource_dir.clone());
+    }
+    Ok(code)
 }
 
 /// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
@@ -206,6 +244,8 @@ pub fn run() {
             bridge_status,
             bridge_retry,
             open_external,
+            install_engine,
+            install_engine_command,
             sessions_agents,
             session_start,
             session_write,
@@ -221,7 +261,13 @@ pub fn run() {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir, sessions: Sessions::new(), chats: ChatSessions::new() });
+            app.manage(Shell {
+                bridge,
+                resource_dir,
+                installing: Arc::new(AtomicBool::new(false)),
+                sessions: Sessions::new(),
+                chats: ChatSessions::new(),
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
