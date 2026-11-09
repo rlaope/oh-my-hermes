@@ -791,7 +791,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
                 </tr>
               </thead>
               <tbody>
-                <tr><th scope="row"><span>ultrabrain</span></th><td data-i18n="chain.ultrabrain">Deepest reasoning</td><td class="chain-order"><code>GPT-6 Astra</code></td><td class="chain-effort"><span class="chain-badge">xhigh</span></td></tr>
+                <tr><th scope="row"><span>ultrabrain</span></th><td data-i18n="chain.ultrabrain">Deepest reasoning</td><td class="chain-order"><code>Claude Fable 5.1</code><span class="chain-arrow" aria-hidden="true">→</span><code>GPT-6 Astra</code><span class="chain-arrow" aria-hidden="true">→</span><code>Claude Opus 5.5</code></td><td class="chain-effort"><span class="chain-badge">xhigh</span></td></tr>
                 <tr><th scope="row"><span>deep</span></th><td data-i18n="chain.deep">Strong default tier</td><td class="chain-order"><code>Claude Opus 5.5</code><span class="chain-arrow" aria-hidden="true">→</span><code>GPT-6.1 Sol</code><span class="chain-arrow" aria-hidden="true">→</span><code>Kimi K3.1 Pro</code></td><td class="chain-effort"><span class="chain-badge">high</span></td></tr>
                 <tr><th scope="row"><span>architect</span></th><td data-i18n="chain.architect">Architecture and system design</td><td class="chain-order"><code>Claude Opus 5.5</code><span class="chain-arrow" aria-hidden="true">→</span><code>GPT-6 Astra</code><span class="chain-arrow" aria-hidden="true">→</span><code>Claude Fable 5.1</code><span class="chain-arrow" aria-hidden="true">→</span><code>Kimi K3.1 Pro</code></td><td class="chain-effort"><span class="chain-badge">xhigh</span></td></tr>
                 <tr><th scope="row"><span>unspecified-high</span></th><td data-i18n="chain.unspecified-high">Default working model</td><td class="chain-order"><code>GPT-6.1 Sol</code><span class="chain-arrow" aria-hidden="true">→</span><code>Claude Opus 5.5</code><span class="chain-arrow" aria-hidden="true">→</span><code>Kimi K3.1 Pro</code></td><td class="chain-effort"><span class="chain-badge">medium</span></td></tr>
@@ -1409,7 +1409,7 @@ for (let i=0;i<6;i++) tick();
 if (!RM) setInterval(tick, 1400);
 
 /* ModelSwapLine: erase, retype the head model per category, glow while typing */
-const CH = [['deep','Claude Opus 5.5','high'],['ultrabrain','GPT-6 Astra','xhigh'],['quick','GLM 5.3 Flash','low'],['visual-engineering','Claude Opus 5.5','high'],['x-search','Grok 4.7','high'],['swarm','DeepSeek V4.1 Flash','low'],['review','GPT-6.1 Sol','xhigh']];
+const CH = [['deep','Claude Opus 5.5','high'],['ultrabrain','Claude Fable 5.1','xhigh'],['quick','GLM 5.3 Flash','low'],['visual-engineering','Claude Opus 5.5','high'],['x-search','Grok 4.7','high'],['swarm','DeepSeek V4.1 Flash','low'],['review','GPT-6.1 Sol','xhigh']];
 const swEl = $('[data-swap]'), swCat = $('[data-swcat]'), swEff = $('[data-sweff]'); let ci = 0;
 async function swapLoop(){
   const wait = ms => new Promise(r => setTimeout(r, ms));

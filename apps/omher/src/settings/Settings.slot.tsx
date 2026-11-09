@@ -314,6 +314,8 @@ const SHORTCUTS: [string, string][] = [
   [`${MOD}K`, "Search bots"],
   [`${MOD}.`, "Show or hide Details"],
   [`${MOD},`, "Settings"],
+  [`${MOD}J`, "Next approval or question"],
+  ["1 · 2 · 3", "Deny · Allow once · Allow for session (focused card)"],
   ["Esc", "Stop the running answer"],
 ];
 

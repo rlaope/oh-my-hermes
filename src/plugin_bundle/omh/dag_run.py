@@ -112,6 +112,10 @@ MAX_LOST_REOFFERS_LIMIT: Final = 10
 BIND_SLACK_SECONDS: Final = 2.0
 CATEGORIES: Final = tuple(HERMES_MIXTURE_CATEGORY_CHAINS)
 DEEP_CATEGORIES: Final = frozenset({"deep", "deep-work"})
+# The categories that carry the one judgement deciding a run (a design decision, a root cause, a contested
+# trade-off); a graph this wide with none of them is told to give that node `ultrabrain` (`no_judgement_node`).
+JUDGEMENT_CATEGORIES: Final = frozenset({"ultrabrain", "architect", "forensics"})
+JUDGEMENT_GRAPH_NODES: Final = 4
 OUTCOMES: Final = ("accepted", "failed", "blocked", "parked")
 # The ``origin`` kinds of a node added after define: ``repair:<root>`` and ``extend:<round>``.
 ADDED_ORIGIN_KINDS: Final = ("repair", "extend")
@@ -545,8 +549,12 @@ def _mentions_full_suite(prompt: str) -> bool:
     return False
 
 
-def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
-    """Advisory findings: they never reject a run, and the run records them."""
+def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[str]:
+    """Advisory findings: they never reject a run, and the run records them.
+
+    `no_judgement_node` is define-time only (``defining``): a repair or extend
+    round cannot change the category of a node already settled.
+    """
     findings: list[str] = []
     for node in nodes:
         missing = [marker for marker in PROMPT_MARKERS if not _MARKER_PATTERNS[marker].search(str(node["prompt"]))]
@@ -579,6 +587,8 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
         findings.append("all_nodes_deep")
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
+    if defining and len(nodes) >= JUDGEMENT_GRAPH_NODES and not any(node["category"] in JUDGEMENT_CATEGORIES for node in nodes):
+        findings.append("no_judgement_node")
     # Only a declared review: a guessed one (a role-less or stored node) is not asked to move. Verify nodes are left
     # alone: they judge the run goal, which can need a high category.
     findings += [f"review_not_review_category:{node['id']}" for node in nodes
@@ -1558,7 +1568,7 @@ def repair(
     record["nodes"].extend(added)
     groups.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"])
+    record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 
@@ -1629,7 +1639,7 @@ def extend(
     record["nodes"].extend(added)
     rounds.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"])
+    record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 

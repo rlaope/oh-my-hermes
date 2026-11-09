@@ -283,6 +283,40 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
+### Hermes, OMH and the omher desktop app in one command (beta)
+
+```sh
+curl -fsSL https://omher.app/omher | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+```
+
+```powershell
+irm https://omher.app/omher.ps1 | iex
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+```
+
+The `omher@beta` argument adds three things to the plain install, and only with it:
+
+| Starting point | What runs |
+| --- | --- |
+| OMH and Hermes installed | OMH is upgraded; the omher app is added |
+| Hermes, no OMH | OMH is installed, `omh setup` + `omh doctor` connect it to Hermes; the app is added |
+| Neither | Hermes' official installer runs non-interactively first, then OMH, `omh setup`, and the app |
+
+The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is checked against the release's
+`SHA256SUMS.txt`, mounted, and `omher.app` is copied to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`)
+under a temporary name, then swapped for an older copy only once the copy is whole; on Windows the per-user
+installer is checked the same way and runs silently. Linux gets Hermes and OMH only, with a note.
+`OMH_WITH_HERMES=0` skips installing Hermes and `OMH_WITH_DESKTOP=0` skips the app. Run from a Hermes profile
+shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes under `<root>`, as omher does.
+
+The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
+GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
+model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
+leaves its exit code in `$LASTEXITCODE`.
+
 ### Windows (PowerShell 5.1+)
 
 ```powershell
@@ -2435,7 +2469,7 @@ The shipped catalog is editorial policy, not benchmark output:
 | Surface | What it is for | Shipped editable order |
 | --- | --- | --- |
 | Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.1, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
-| `ultrabrain` | Deepest reasoning | GPT-6 Astra (`xhigh`) |
+| `ultrabrain` | Deepest reasoning | Claude Fable 5.1 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
 | `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.1 Sol (`high`), Kimi K3.1 Pro (`high`) |
 | `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.1 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
 | `unspecified-high` | Default working model | GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |

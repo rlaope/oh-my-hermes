@@ -1,15 +1,26 @@
+mod agent_chat;
 mod bridge;
+mod sessions;
+mod setup;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bridge::{Bridge, BridgeStatus};
+use agent_chat::{ChatOut, ChatSessions};
+use bridge::{Bridge, BridgeStatus, Os};
+use sessions::{AgentInfo, Output, Sessions};
+use setup::InstallEvent;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{Manager, RunEvent, State};
 
 struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
+    installing: Arc<AtomicBool>,
+    sessions: Arc<Sessions>,
+    chats: Arc<ChatSessions>,
 }
 
 /// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready.
@@ -79,6 +90,143 @@ pub(crate) fn allowed_external(url: &str) -> bool {
         && PREFIXES.iter().any(|p| url.starts_with(p))
 }
 
+/// The line the first-run screen shows as what Install will run.
+#[tauri::command]
+async fn install_engine_command() -> Result<String, String> {
+    Ok(setup::display_line(Os::current()).to_string())
+}
+
+/// Install Hermes and oh-my-hermes with OMH's fixed one-line installer (the first-run screen's Install
+/// button), streaming its output to the screen, then start the bridge again. Takes nothing from the
+/// page but the output channel; one run at a time.
+#[tauri::command]
+async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
+    if shell.installing.swap(true, Ordering::SeqCst) {
+        return Err("the installer is already running".into());
+    }
+    let installing = Arc::clone(&shell.installing);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        setup::run_install(setup::install_command(Os::current()), |e| {
+            let _ = on_event.send(e);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string());
+    installing.store(false, Ordering::SeqCst);
+    let code = result??;
+    // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
+    // setup screen again as if nothing had run.
+    let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
+    let code = setup::check_installed(code, found)?;
+    if code == Some(0) {
+        shell.bridge.start(shell.resource_dir.clone());
+    }
+    Ok(code)
+}
+
+/// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
+/// was found, if anywhere.
+#[tauri::command]
+async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
+    Ok(tauri::async_runtime::spawn_blocking(sessions::agents_on_this_machine).await.map_err(|e| e.to_string())?)
+}
+
+/// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
+/// agent id crosses from the UI: no program path, command line or argument; `resume` is a Claude Code
+/// session id that the shell checks is one (so the terminal view continues a chat). Terminal output goes
+/// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
+#[tauri::command]
+async fn session_start(
+    shell: State<'_, Shell>,
+    agent: String,
+    cwd: String,
+    resume: Option<String>,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<InvokeResponseBody>,
+    on_exit: Channel<Option<u32>>,
+) -> Result<u32, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), cols, rows, move |ev| match ev {
+            Output::Data(b) => {
+                let _ = on_data.send(InvokeResponseBody::Raw(b));
+            }
+            Output::Exit(code) => {
+                let _ = on_exit.send(code);
+            }
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Keystrokes (and pastes) from the terminal view into session `id`.
+#[tauri::command]
+async fn session_write(shell: State<'_, Shell>, id: u32, data: String) -> Result<(), String> {
+    shell.sessions.write(id, data.as_bytes())
+}
+
+#[tauri::command]
+async fn session_resize(shell: State<'_, Shell>, id: u32, cols: u16, rows: u16) -> Result<(), String> {
+    shell.sessions.resize(id, cols, rows)
+}
+
+/// Stop the session's program and forget the session.
+#[tauri::command]
+async fn session_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
+    shell.sessions.close(id);
+    Ok(())
+}
+
+/// Stop every session. `main.tsx` calls this once per page load, before any UI renders, so a reloaded
+/// window leaves nothing running unseen.
+#[tauri::command]
+async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || sessions.close_all()).await.map_err(|e| e.to_string())
+}
+
+/// Start allow-listed agent `agent` in folder `cwd` as a chat: its structured mode (the fixed arguments in
+/// the allow-list), with events for the chat view on `on_event` and, once, `{event:"exit", code, error}`.
+/// Only an agent id, a folder and optionally a Claude Code session id cross from the UI.
+#[tauri::command]
+async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), move |out| {
+            let _ = on_event.send(match out {
+                ChatOut::Event(e) => e,
+                ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),
+            });
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// What the person did in chat `id`: `{kind:"send", text}`, `{kind:"interrupt"}`,
+/// `{kind:"approve", request_id, choice}`, `{kind:"clarify", request_id, answer}`, `{kind:"model", model}`.
+#[tauri::command]
+async fn chat_input(shell: State<'_, Shell>, id: u32, input: agent_chat::Input) -> Result<(), String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || chats.input(id, input)).await.map_err(|e| e.to_string())?
+}
+
+/// Stop the chat's program and forget the session.
+#[tauri::command]
+async fn chat_close(shell: State<'_, Shell>, id: u32) -> Result<(), String> {
+    shell.chats.close(id);
+    Ok(())
+}
+
+/// Stop every chat (the UI calls this when it loads, like `session_close_all`).
+#[tauri::command]
+async fn chat_close_all(shell: State<'_, Shell>) -> Result<(), String> {
+    let chats = shell.chats.clone();
+    tauri::async_runtime::spawn_blocking(move || chats.close_all()).await.map_err(|e| e.to_string())
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -90,12 +238,36 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry, open_external])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            bridge_url,
+            bridge_status,
+            bridge_retry,
+            open_external,
+            install_engine,
+            install_engine_command,
+            sessions_agents,
+            session_start,
+            session_write,
+            session_resize,
+            session_close,
+            session_close_all,
+            chat_start,
+            chat_input,
+            chat_close,
+            chat_close_all
+        ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
-            app.manage(Shell { bridge, resource_dir });
+            app.manage(Shell {
+                bridge,
+                resource_dir,
+                installing: Arc::new(AtomicBool::new(false)),
+                sessions: Sessions::new(),
+                chats: ChatSessions::new(),
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -104,6 +276,8 @@ pub fn run() {
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
             if let Some(shell) = handle.try_state::<Shell>() {
+                shell.sessions.close_all();
+                shell.chats.close_all();
                 shell.bridge.stop();
             }
         }

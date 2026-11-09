@@ -72,6 +72,17 @@
   flex: none;
   transition: transform 0.15s ease;
 }
+/* room for the live ring around the mark, kept whether or not it runs so nothing moves when it stops */
+.ew-link .ui-ring-w,
+.ew-where .ui-ring-w {
+  margin-inline: 4px 3px;
+}
+/* an away session's ring is quieter than the bot's own: thinner and dimmed, so it never competes with the
+   sidebar's live signal */
+.ew-msg .ui-ring {
+  --ring-w: 1.5px;
+  opacity: 0.6;
+}
 .ew-link:hover .src-ic {
   transform: scale(1.12);
 }
@@ -225,4 +236,78 @@ div.ew-ss {
   padding: 4px 16px;
   font-size: 11.5px;
   color: var(--quiet);
+}
+
+/* "Reply there": hover actions beside an away bubble. They only fill the composer; nothing is sent. */
+.ew-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+.ew-row > .b {
+  min-width: 0;
+}
+.ew-acts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ew-msg:hover .ew-acts,
+.ew-acts:focus-within,
+.ew-acts.on {
+  opacity: 1;
+}
+.ew-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ew-act-ic {
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+}
+.ew-act:hover,
+.ew-act[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ew-menu-w {
+  position: relative;
+  display: inline-flex;
+}
+.ew-menu {
+  padding: 4px;
+}
+.ew-mi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--body);
+  text-align: left;
+  white-space: nowrap;
+}
+.ew-mi:hover {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ew-mi svg {
+  flex: none;
+  color: var(--muted);
 }
