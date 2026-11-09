@@ -16,7 +16,11 @@ function divider(prev: TimelineItem | undefined, cur: TimelineItem): string | nu
   return null;
 }
 
-/** `face` stands in for the bot's picture beside the typing bubble (a SESSIONS chat: its agent's mark). */
+/** A bot bubble right above: the next bot bubble keeps the indent but not the face (one face per run). */
+const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" || it?.kind === "away";
+
+/** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
+ *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
 export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
@@ -35,11 +39,13 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
     lastBot.current = bot.name;
   }, [bot.name, items, streaming, typing]);
 
-  const render = (it: TimelineItem): ReactNode => {
+  const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {
       case "user":
-      case "assistant":
         return <Bubble item={it} />;
+      case "assistant":
+        // the face shows on the first bot bubble after something else (the user, a day line, a card)
+        return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} />;
       case "activity": {
         const C = slots.activity ?? ActivityFallback;
         return <C bot={bot.name} item={it} live={chat?.turn?.id === it.turn.id} />;
@@ -51,7 +57,7 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
       }
       case "away": {
         const C = slots.elsewhereLine ?? ElsewhereFallback;
-        return <C bot={bot.name} item={it} />;
+        return <C bot={bot.name} item={it} face={!botSpoke(prev)} />;
       }
       case "routine": {
         const C = slots.routineLine ?? RoutineFallback;
@@ -85,7 +91,7 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
           <Fragment key={it.id}>
             {label && <div className="day">{label}</div>}
             <div className={`row row-${it.kind}`} data-kind={it.kind}>
-              {render(it)}
+              {render(it, label ? undefined : items[i - 1])}
             </div>
           </Fragment>
         );
@@ -97,7 +103,13 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
       )}
       {streaming && (
         <div className="row row-assistant" data-kind="streaming">
-          <Bubble item={{ kind: "assistant", text: streaming }} streaming />
+          <Bubble
+            item={{ kind: "assistant", text: streaming }}
+            streaming
+            bot={bot.name}
+            face={!botSpoke(items[items.length - 1])}
+            faceEl={face}
+          />
         </div>
       )}
     </div>

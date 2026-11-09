@@ -903,6 +903,20 @@ class Discovery(unittest.TestCase):
             self.assertEqual((bots["default"]["display_name"], bots["default"]["model"]), ("Hermes", "plain-model"))
             self.assertEqual((bots["a"]["display_name"], bots["a"]["description"], bots["a"]["provider"]), ("Alpha", "first", "p"))
 
+    def test_parsed_yaml_is_cached_until_the_file_changes(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "config.yaml"
+            path.write_text("model: one\n", encoding="utf-8")
+            first = ob._load_yaml(path)
+            self.assertEqual(first, {"model": "one"})
+            self.assertIs(ob._load_yaml(path), first)  # unchanged file: no second parse
+            st = path.stat()
+            path.write_text("model: two\n", encoding="utf-8")  # same size: only the mtime tells them apart
+            os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+            self.assertEqual(ob._load_yaml(path), {"model": "two"})
+            path.unlink()
+            self.assertEqual(ob._load_yaml(path), {})
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -961,6 +975,62 @@ class HermesPath(unittest.TestCase):
         self.assertEqual(home({}, "win32"), Path.home() / "AppData" / "Local" / "hermes")
         self.assertEqual(home({"HERMES_HOME": "/srv/h", "LOCALAPPDATA": "C:/L"}, "win32"), Path("/srv/h"))
         self.assertEqual(home({"HERMES_HOME": "  "}, "darwin"), Path.home() / ".hermes")
+
+    def test_a_url_in_the_last_reply_stays_readable(self):
+        import omher_bridge
+        g = omher_bridge.reply_gist
+        self.assertEqual(g("배포가 끝나면 https://omher.app/docs/skills/ 에서 열립니다."),
+                         "배포가 끝나면 omher.app/docs/skills 에서 열립니다.")
+        long = "See https://github.com/rlaope/oh-my-hermes/pull/2705/files?diff=split&w=1 for the diff."
+        self.assertEqual(g(long), "See github.com for the diff.")
+        self.assertEqual(g("Link: [the PR](https://x.y/1) is up."), "Link: the PR is up.")
+
+    def test_a_url_stops_at_the_korean_particle_glued_to_it(self):
+        g = ob.reply_gist
+        self.assertEqual(g("자세한 건 https://github.com/rlaope/oh-my-hermes/pull/2695에서 확인하세요."),
+                         "자세한 건 github.com/rlaope/oh-my-hermes/pull/2695에서 확인하세요.")
+        # a path over 40 chars is cut to its host, and the particle still stays
+        self.assertEqual(g("자세한 건 https://github.com/rlaope/oh-my-hermes/pull/2695/files에서 확인하세요."),
+                         "자세한 건 github.com에서 확인하세요.")
+        self.assertEqual(g("https://omher.app/docs를 보세요"), "omher.app/docs를 보세요")
+
+    def test_markdown_strip_leaves_underscores_inside_urls(self):
+        g = ob.reply_gist
+        self.assertEqual(g("Repo: https://github.com/foo_bar/baz_qux is __new__."),
+                         "Repo: github.com/foo_bar/baz_qux is new.")
+        self.assertEqual(g("**https://x.y/a_b**"), "x.y/a_b")
+
+    def test_query_and_fragment_are_never_shown(self):
+        g = ob.reply_gist
+        self.assertEqual(g("Open https://example.com/p?token=abc123 now"), "Open example.com/p now")
+        self.assertEqual(g("Open https://example.com?token=abc123"), "Open example.com")
+        self.assertEqual(g("See https://x.y/doc#secret-part."), "See x.y/doc.")
+        self.assertNotIn("abc123", g("https://a.b/c?x=1&token=abc123#f"))
+
+    def test_trailing_punctuation_and_brackets_stay_outside_the_url(self):
+        g = ob.reply_gist
+        self.assertEqual(g("(see https://x.y/a)"), "(see x.y/a)")
+        self.assertEqual(g("Done: https://x.y/a."), "Done: x.y/a.")
+        self.assertEqual(g("Read https://en.wikipedia.org/wiki/Foo_(bar), then go."),
+                         "Read en.wikipedia.org/wiki/Foo_(bar), then go.")
+        self.assertEqual(g("끝 (https://x.y/a)."), "끝 (x.y/a).")
+
+    def test_a_profile_home_shows_every_bot(self):
+        # omher started from a profile-scoped shell (HERMES_HOME=<root>/profiles/kami) must still list the root
+        # Hermes and every profile, not only that one profile as "Hermes".
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / ".hermes"
+            (root / "profiles" / "kami").mkdir(parents=True)
+            (root / "config.yaml").write_text("model: a\n", encoding="utf-8")
+            (root / "profiles" / "kami" / "config.yaml").write_text("model: b\n", encoding="utf-8")
+            home = omher_bridge.default_hermes_home({"HERMES_HOME": str(root / "profiles" / "kami")}, "darwin")
+            self.assertEqual(home, root)
+            self.assertEqual([b["name"] for b in omher_bridge.discover_bots(home)], ["default", "kami"])
+            # a custom home that only looks like a profile (no root config) is kept as given
+            lone = Path(d) / "x" / "profiles" / "p"
+            lone.mkdir(parents=True)
+            self.assertEqual(omher_bridge.default_hermes_home({"HERMES_HOME": str(lone)}, "darwin"), lone)
 
     def test_signal_setup_survives_a_loop_without_signal_handlers(self):
         import omher_bridge

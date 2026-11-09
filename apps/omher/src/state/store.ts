@@ -148,12 +148,12 @@ export interface Ui {
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
   view: "chat" | "settings" | "session";
   settingsPage: string;
-  session: string | null;
   /** Sidebar: bots pinned to the top (in pin order) and bots hidden from the list. Saved on this computer. */
   pinned: string[];
   hidden: string[];
   /** The ask card to scroll to and focus (set by the Needs-you strip and ⌘J); `seq` re-triggers the same one. */
   focusAsk: FocusAsk | null;
+  session: string | null;
 }
 
 export interface FocusAsk {

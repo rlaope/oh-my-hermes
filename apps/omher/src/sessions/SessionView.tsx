@@ -1,7 +1,7 @@
 // Main column for a SESSIONS entry: a header (agent mark, folder, status, the Terminal toggle and the model
 // button) above either the chat (the bot chat's own Timeline and Composer, fed by the agent's structured
 // mode) or the agent's terminal.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ITheme } from "@xterm/xterm";
 import { selectAsks, useStore } from "../state/store";
 import { resolveTheme } from "../app/theme";
@@ -109,9 +109,11 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const offlineText =
     rec.status === "failed" ? `${label} could not start` : rec.status === "starting" ? `Starting ${label}…` : `${label} has ended`;
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
+  // one element per chat: the bubbles are memoized on it
+  const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
-      <Timeline bot={bot} face={<SessionFace chatKey={chatKey} size={28} />} />
+      <Timeline bot={bot} face={face} />
       {ended && (
         <div className="ss-ended" role="status" data-testid="session-ended">
           {rec.status === "failed" ? "Could not start" : "Ended"}

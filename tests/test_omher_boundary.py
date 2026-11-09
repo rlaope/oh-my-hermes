@@ -57,12 +57,10 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_eleven_numbered_rules(self) -> None:
-        # 11: rule 10 (the bridge's read-only git, side panel) and rule 11 (SESSIONS' allow-listed agents)
-        # each widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
-        rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 11, len(rules))
-        self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
+    def test_boundary_is_between_six_and_eleven_numbered_rules_in_order(self) -> None:
+        nums = [int(n) for n in re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)]
+        self.assertTrue(6 <= len(nums) <= 11, len(nums))
+        self.assertEqual(nums, list(range(1, len(nums) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
