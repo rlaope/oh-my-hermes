@@ -1,6 +1,6 @@
 // Right panel tabs next to Details: Terminal, Schedule, Worktrees, Diff. Everything here is read-only:
 // the bot runs things, omher shows what it ran and what it changed.
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import type { Bot, Routine, TerminalRun, Worktree, WorktreeDiff } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { shortTime } from "../app/time";
@@ -73,6 +73,18 @@ function useLoad<T>(key: string, load: () => Promise<T>): { data: T | null; erro
 }
 
 const act = () => getStore().actions;
+
+/** One worktree list per bot, shared by the Worktrees and Diff tabs; Refresh (or 10 s) reads it again. */
+const TREES_TTL = 10_000;
+const trees = new Map<string, { at: number; p: Promise<{ worktrees: Worktree[] }> }>();
+function loadTrees(bot: string, fresh = false): Promise<{ worktrees: Worktree[] }> {
+  const hit = trees.get(bot);
+  if (hit && !fresh && Date.now() - hit.at < TREES_TTL) return hit.p;
+  const p = act().panelWorktrees(bot);
+  trees.set(bot, { at: Date.now(), p });
+  p.catch(() => trees.get(bot)?.p === p && trees.delete(bot));
+  return p;
+}
 function Loading({ error, empty }: { error: string | null; empty?: string }) {
   if (error) return <div className="pn-empty bad">{error}</div>;
   if (empty) return <div className="pn-empty">{empty}</div>;
@@ -105,13 +117,16 @@ const CMD_LINES = 4;
 const leaf = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 
 export function TerminalTab({ bot }: { bot: Bot }) {
-  const running = useStore().chats[bot.name]?.turn;
+  const running = !!useStore().chats[bot.name]?.turn;
   const { data, error, reload } = useLoad(`t:${bot.name}`, () => act().panelTerminal(bot.name));
-  // a finished turn may have run commands: re-read when the running turn ends
+  // a finished turn may have run commands: re-read when the running turn ends (not on first mount,
+  // where useLoad already reads)
+  const was = useRef(running);
   useEffect(() => {
-    if (!running) reload();
+    if (was.current && !running) reload();
+    was.current = running;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!running]);
+  }, [running]);
   const [open, setOpen] = useState<string | null>(null);
   if (!data) return <Loading error={error} />;
   const runs: TerminalRun[] = data.runs;
@@ -207,17 +222,27 @@ function toSec(v: number | string): number {
 }
 
 export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path: string) => void }) {
-  const { data, error, reload } = useLoad(`w:${bot.name}`, () => act().panelWorktrees(bot.name));
+  const fresh = useRef(false); // Refresh reads again; opening the tab reuses the shared list
+  const { data, error, reload } = useLoad(`w:${bot.name}`, () => {
+    const f = fresh.current;
+    fresh.current = false;
+    return loadTrees(bot.name, f);
+  });
   if (!data) return <Loading error={error} />;
-  const trees: Worktree[] = data.worktrees;
+  const list: Worktree[] = data.worktrees;
   return (
     <div className="pn-body" data-testid="panel-worktrees">
       <div className="pn-sec">
-        Where {bot.display_name} worked<span>{trees.length}</span>
-        <Refresh onClick={reload} />
+        Where {bot.display_name} worked<span>{list.length}</span>
+        <Refresh
+          onClick={() => {
+            fresh.current = true;
+            reload();
+          }}
+        />
       </div>
-      {trees.length === 0 && <div className="pn-empty">No git worktrees in {bot.display_name}'s recent commands.</div>}
-      {trees.map((w) => (
+      {list.length === 0 && <div className="pn-empty">No git worktrees in {bot.display_name}'s recent commands.</div>}
+      {list.map((w) => (
         <button key={w.path} type="button" className="pn-row link" onClick={() => onOpenDiff(w.path)} data-testid="panel-tree" title={w.path}>
           <b className="mono">{w.branch || (w.head ? `detached @ ${w.head.slice(0, 7)}` : "detached")}</b>
           <span className="pn-r">{shortTime(w.last)}</span>
@@ -234,12 +259,13 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
 }
 
 export function DiffTab({ bot, path, onPick }: { bot: Bot; path: string | null; onPick: (p: string) => void }) {
-  const trees = useLoad(`w:${bot.name}`, () => act().panelWorktrees(bot.name));
+  const trees = useLoad(`w:${bot.name}`, () => loadTrees(bot.name));
   const target = path ?? trees.data?.worktrees[0]?.path ?? null;
   const diff = useLoad(`d:${bot.name}:${target ?? ""}`, () =>
     target ? act().panelDiff(bot.name, target) : Promise.resolve(null as WorktreeDiff | null),
   );
   const lines = useMemo(() => (diff.data?.patch ?? "").split("\n"), [diff.data]);
+  const fresh = useMemo(() => (diff.data?.files ?? []).filter((f) => f.untracked), [diff.data]);
   if (!trees.data) return <Loading error={trees.error} />;
   if (!target) return <div className="pn-empty">No git worktrees in {bot.display_name}'s recent commands.</div>;
   const d = diff.data;
@@ -267,14 +293,27 @@ export function DiffTab({ bot, path, onPick }: { bot: Bot; path: string | null; 
             </span>
           </div>
           {d.files.length === 0 && <div className="pn-empty">Nothing changed.</div>}
+          {fresh.length > 0 && (
+            <div className="pn-new" data-testid="panel-diff-untracked">
+              <div className="df-f">
+                New files, not tracked yet<span>{fresh.length}</span>
+              </div>
+              {fresh.map((f) => (
+                <div key={f.path} className="df-l a mono" title={f.path}>
+                  {f.path}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="pn-diff" data-testid="panel-diff-patch">
             {lines.map((l, i) => {
-              const file = /^diff --git a\/.+ b\/(.+)$/.exec(l);
+              const file = /^diff --git (?:"a\/.*"|a\/.+?) (?:"b\/(.*)"|b\/(.+))$/.exec(l);
               if (file) {
-                const f = d.files.find((x) => x.path === file[1]);
+                const name = file[1] ?? file[2];
+                const f = d.files.find((x) => x.path === name);
                 return (
                   <div key={i} className="df-f">
-                    {file[1]}
+                    {name}
                     {f && (
                       <span>
                         <i className="n-add">+{f.add}</i> <i className="n-del">−{f.del}</i>

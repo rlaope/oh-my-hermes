@@ -175,7 +175,8 @@ export interface WorktreeDiff {
   repo: string;
   /** "uncommitted" (vs HEAD) or "last commit" when the tree is clean. */
   scope: string;
-  files: { path: string; add: number; del: number }[];
+  /** Changed files; `untracked` ones are new files git does not track yet (listed without content). */
+  files: { path: string; add: number; del: number; untracked?: boolean }[];
   patch: string;
   truncated: boolean;
 }

@@ -107,6 +107,7 @@ const PANEL_DIFF = {
     files: [
       { path: "gateway/upstream.py", add: 1, del: 1 },
       { path: "tests/test_upstream.py", add: 3, del: 0 },
+      { path: "notes/재시도.md", add: 0, del: 0, untracked: true },
     ],
     patch: [
       "diff --git a/gateway/upstream.py b/gateway/upstream.py",
