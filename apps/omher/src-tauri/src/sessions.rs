@@ -12,6 +12,7 @@ use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -121,13 +122,37 @@ pub fn resolve<X: Fn(&Path) -> bool>(program: &str, dirs: &[PathBuf], is_program
 
 /// argv for a resolved program. A Windows `.cmd`/`.bat` shim runs through `cmd.exe /c`, because
 /// CreateProcess does not start batch files on its own. No other argument is ever added.
-pub fn argv_for(path: &Path, os: Os) -> Vec<OsString> {
+pub fn argv_for(path: &Path, os: Os) -> Result<Vec<OsString>, String> {
     let ext = path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
     if os == Os::Windows && matches!(ext.as_deref(), Some("cmd") | Some("bat")) {
-        vec!["cmd.exe".into(), "/c".into(), path.as_os_str().to_owned()]
+        Ok(vec!["cmd.exe".into(), "/c".into(), cmd_path_arg(&path.to_string_lossy())?.into()])
     } else {
-        vec![path.as_os_str().to_owned()]
+        Ok(vec![path.as_os_str().to_owned()])
     }
+}
+
+/// The shim path as `cmd.exe /c` must see it. cmd parses that line itself, so `&`, `|`, `<`, `>`, `^`,
+/// `(`, `)` and `@` in a folder name would split or change the command. Without whitespace, the path
+/// reaches cmd unquoted (portable-pty quotes only on whitespace), so each of those gets a `^` escape.
+/// With whitespace it arrives in quotes, and cmd keeps quotes only when no such character is inside, so
+/// that case is refused, as is `%` (variable expansion, which no escape stops on a `/c` line).
+pub fn cmd_path_arg(path: &str) -> Result<String, String> {
+    const META: &[char] = &['&', '|', '<', '>', '^', '(', ')', '@'];
+    let refuse = || Err(format!("cannot start {path} through cmd.exe: its folder name has characters cmd treats as commands"));
+    if path.contains('%') || path.contains('"') {
+        return refuse();
+    }
+    if path.chars().any(char::is_whitespace) {
+        return if path.contains(META) { refuse() } else { Ok(path.to_string()) };
+    }
+    let mut out = String::with_capacity(path.len() + 4);
+    for c in path.chars() {
+        if META.contains(&c) {
+            out.push('^');
+        }
+        out.push(c);
+    }
+    Ok(out)
 }
 
 fn host_env(k: &str) -> Option<String> {
@@ -195,7 +220,7 @@ pub fn launch_for(id: &str) -> Result<(Vec<OsString>, OsString), String> {
     let mut child_dirs: Vec<PathBuf> = path.parent().map(|p| vec![p.to_path_buf()]).unwrap_or_default();
     child_dirs.extend(dirs);
     let joined = std::env::join_paths(child_dirs.iter().filter(|d| d.is_dir())).map_err(|e| e.to_string())?;
-    Ok((argv_for(&path, Os::current()), joined))
+    Ok((argv_for(&path, Os::current())?, joined))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -213,11 +238,24 @@ type Sink = Arc<Mutex<Box<dyn FnMut(Output) + Send>>>;
 
 struct Live {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    /// Input for the session's writer thread. The PTY takes only about 1 KB before a write blocks, so the
+    /// write happens there, never under the sessions lock.
+    input: SyncSender<Vec<u8>>,
+    /// Set by the writer thread when it ends.
+    writer_done: Arc<AtomicBool>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
     exited: Arc<AtomicBool>,
 }
+
+/// Pending writes per session (keystrokes or whole pastes). A program that stops reading fills it, and
+/// further writes fail at once instead of piling up.
+const INPUT_QUEUE: usize = 256;
+
+/// Reads from the PTY are merged into one message of up to this many bytes...
+const COALESCE_BYTES: usize = 64 * 1024;
+/// ...collected for at most this long after the first byte arrives (keeps typing echo prompt).
+const COALESCE_WINDOW: Duration = Duration::from_millis(4);
 
 /// Every running session of this app. Dropped sessions are stopped; [`Sessions::close_all`] runs on exit.
 #[derive(Default)]
@@ -261,7 +299,7 @@ impl Sessions {
         let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave); // only the child holds the terminal side, so its exit ends our reads
         let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-        let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+        let mut writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         let killer = child.clone_killer();
         let pid = child.process_id();
         let exited = Arc::new(AtomicBool::new(false));
@@ -269,6 +307,20 @@ impl Sessions {
 
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
         spawn_reader(reader, sink.clone());
+        let (input, queued) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
+        let writer_done = Arc::new(AtomicBool::new(false));
+        {
+            let done = writer_done.clone();
+            thread::spawn(move || {
+                for chunk in queued {
+                    if writer.write_all(&chunk).and_then(|_| writer.flush()).is_err() {
+                        break;
+                    }
+                }
+                drop(writer);
+                done.store(true, Ordering::SeqCst);
+            });
+        }
         {
             let exited = exited.clone();
             thread::spawn(move || {
@@ -284,7 +336,7 @@ impl Sessions {
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, writer, killer, pid, exited });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited });
         Ok(id)
     }
 
@@ -298,10 +350,15 @@ impl Sessions {
         self.spawn(argv, cwd, Some(path_env), cols, rows, sink)
     }
 
+    /// Queue `data` for session `id`'s writer thread. Never blocks: a program that is not reading its
+    /// input makes this fail once the queue is full.
     pub fn write(&self, id: u32, data: &[u8]) -> Result<(), String> {
-        let mut g = self.live.lock().unwrap();
-        let s = g.get_mut(&id).ok_or("no such session")?;
-        s.writer.write_all(data).and_then(|_| s.writer.flush()).map_err(|e| e.to_string())
+        let input = self.live.lock().unwrap().get(&id).ok_or("no such session")?.input.clone();
+        match input.try_send(data.to_vec()) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(_)) => Err("the program is not reading its input".into()),
+            Err(TrySendError::Disconnected(_)) => Err("the session's input is closed".into()),
+        }
     }
 
     pub fn resize(&self, id: u32, cols: u16, rows: u16) -> Result<(), String> {
@@ -333,40 +390,80 @@ impl Sessions {
     }
 }
 
+/// One thread reads the PTY (macOS hands out at most 1 KB per read); another merges what arrives into
+/// one message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`], so a big dump is a few dozen Channel sends
+/// instead of one per KB.
 fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink) {
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
     thread::spawn(move || {
         let mut buf = [0u8; 16 * 1024];
         loop {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    if let Ok(mut f) = sink.lock() {
-                        f(Output::Data(buf[..n].to_vec()));
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
                     }
                 }
             }
         }
     });
+    thread::spawn(move || {
+        coalesce(rx, COALESCE_BYTES, COALESCE_WINDOW, |b| {
+            if let Ok(mut f) = sink.lock() {
+                f(Output::Data(b));
+            }
+        })
+    });
+}
+
+/// Wait for a chunk, then keep taking chunks until `max` bytes or `window` after that first chunk, and
+/// emit them as one buffer. Returns when the sender is gone and everything was emitted.
+fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut emit: impl FnMut(Vec<u8>)) {
+    while let Ok(mut buf) = rx.recv() {
+        let deadline = Instant::now() + window;
+        let mut open = true;
+        while buf.len() < max {
+            let left = deadline.saturating_duration_since(Instant::now());
+            match rx.recv_timeout(left) {
+                Ok(more) => buf.extend_from_slice(&more),
+                Err(RecvTimeoutError::Timeout) => break,
+                Err(RecvTimeoutError::Disconnected) => {
+                    open = false;
+                    break;
+                }
+            }
+        }
+        emit(buf);
+        if !open {
+            return;
+        }
+    }
 }
 
 /// Hang up the program's process group, wait up to `grace`, then kill it hard. Dropping the master side
-/// closes the terminal, which hangs up anything still attached to it.
+/// closes the terminal, which hangs up anything still attached to it. A writer thread stuck on a full PTY
+/// is waited for only briefly: it ends once the terminal is gone, and nothing here waits on it for long.
 fn stop(mut s: Live, grace: Duration) {
     // A program that already ended is not signalled: its pid may belong to someone else by now.
     if !s.exited.load(Ordering::SeqCst) {
         signal_group(s.pid, false);
         let _ = s.killer.kill();
     }
-    let Live { master, writer, exited, pid, .. } = s;
-    drop(writer);
-    let deadline = Instant::now() + grace;
-    while !exited.load(Ordering::SeqCst) && Instant::now() < deadline {
-        thread::sleep(Duration::from_millis(25));
-    }
-    if !exited.load(Ordering::SeqCst) {
+    let Live { master, input, writer_done, exited, pid, .. } = s;
+    drop(input); // the writer thread ends after the write it is in, if any
+    let wait = |flag: &AtomicBool, limit: Duration| {
+        let deadline = Instant::now() + limit;
+        while !flag.load(Ordering::SeqCst) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(25));
+        }
+        flag.load(Ordering::SeqCst)
+    };
+    if !wait(&exited, grace) {
         signal_group(pid, true);
     }
     drop(master);
+    wait(&writer_done, Duration::from_millis(200));
 }
 
 /// SIGHUP (or SIGKILL when `hard`) to the session's process group. The child is a session leader (the
@@ -455,7 +552,7 @@ mod tests {
         assert_eq!(resolve("claude", &dirs, &fs, Os::Unix), Some(claude.clone()));
         assert_eq!(resolve("codex", &dirs, &fs, Os::Unix), Some(codex));
         assert_eq!(resolve("pi", &dirs, &fs, Os::Unix), None);
-        assert_eq!(argv_for(&claude, Os::Unix), vec![OsString::from(claude.as_os_str())]);
+        assert_eq!(argv_for(&claude, Os::Unix).unwrap(), vec![OsString::from(claude.as_os_str())]);
     }
 
     #[test]
@@ -474,9 +571,56 @@ mod tests {
         // never the extension-less shell script npm also writes
         assert_eq!(resolve("codex", &dirs, &fs, Os::Windows), Some(shim.clone()));
         assert_eq!(resolve("claude", &dirs, &fs, Os::Windows), Some(exe.clone()));
-        assert_eq!(argv_for(&shim, Os::Windows), vec![OsString::from("cmd.exe"), OsString::from("/c"), shim.into_os_string()]);
-        assert_eq!(argv_for(&exe, Os::Windows), vec![exe.into_os_string()]);
+        assert_eq!(argv_for(&shim, Os::Windows).unwrap(), vec![OsString::from("cmd.exe"), OsString::from("/c"), shim.into_os_string()]);
+        assert_eq!(argv_for(&exe, Os::Windows).unwrap(), vec![exe.into_os_string()]);
         assert_eq!(file_names("omp", Os::Windows), ["omp.exe", "omp.cmd", "omp.bat"]);
+    }
+
+    #[test]
+    fn windows_shim_paths_are_escaped_for_cmd() {
+        // no whitespace: reaches cmd unquoted, so cmd's operators get a ^
+        assert_eq!(cmd_path_arg(r"C:\Users\A&B\npm\codex.cmd").unwrap(), r"C:\Users\A^&B\npm\codex.cmd");
+        assert_eq!(cmd_path_arg(r"C:\x^y\a|b\(1)\<c>@\codex.cmd").unwrap(), r"C:\x^^y\a^|b\^(1^)\^<c^>^@\codex.cmd");
+        assert_eq!(cmd_path_arg(r"C:\Users\k\AppData\Roaming\npm\codex.cmd").unwrap(), r"C:\Users\k\AppData\Roaming\npm\codex.cmd");
+        // whitespace only: quoted by the PTY layer, and cmd keeps those quotes
+        assert_eq!(cmd_path_arg(r"C:\Users\Kim Lee\npm\codex.cmd").unwrap(), r"C:\Users\Kim Lee\npm\codex.cmd");
+        // whitespace plus an operator, or %: cmd would split it, so refuse
+        for bad in [r"C:\Users\A & B\npm\codex.cmd", r"C:\Program Files (x86)\npm\codex.cmd", r"C:\%PATH%\codex.cmd", r"C:\a\b%c\codex.cmd"] {
+            assert!(cmd_path_arg(bad).is_err(), "{bad}");
+        }
+        let shim = PathBuf::from(r"C:\Users\A&B\npm\codex.cmd");
+        assert_eq!(argv_for(&shim, Os::Windows).unwrap()[2], OsString::from(r"C:\Users\A^&B\npm\codex.cmd"));
+        assert!(argv_for(Path::new(r"C:\A & B\codex.bat"), Os::Windows).is_err());
+        // an .exe never goes through cmd, so its path is left alone
+        let exe = PathBuf::from(r"C:\A & B\claude.exe");
+        assert_eq!(argv_for(&exe, Os::Windows).unwrap(), vec![exe.into_os_string()]);
+    }
+
+    #[test]
+    fn coalesce_merges_reads_up_to_the_size_cap() {
+        let (tx, rx) = mpsc::channel();
+        for _ in 0..200 {
+            tx.send(vec![b'a'; 1024]).unwrap();
+        }
+        drop(tx);
+        let mut out = Vec::new();
+        coalesce(rx, 64 * 1024, Duration::from_secs(5), |b| out.push(b.len()));
+        assert_eq!(out.iter().sum::<usize>(), 200 * 1024);
+        assert_eq!(out, [64 * 1024, 64 * 1024, 64 * 1024, 8 * 1024]);
+    }
+
+    #[test]
+    fn coalesce_sends_a_lone_keystroke_after_the_window() {
+        let (tx, rx) = mpsc::channel();
+        let (got_tx, got) = mpsc::channel();
+        let t = thread::spawn(move || coalesce(rx, 64 * 1024, Duration::from_millis(4), |b| got_tx.send((b, Instant::now())).unwrap()));
+        let sent = Instant::now();
+        tx.send(b"k".to_vec()).unwrap();
+        let (b, at) = got.recv_timeout(Duration::from_secs(2)).expect("a lone chunk must not wait for more");
+        assert_eq!(b, b"k");
+        assert!(at - sent < Duration::from_millis(100), "{:?}", at - sent);
+        drop(tx);
+        t.join().unwrap();
     }
 
     #[test]
@@ -546,6 +690,57 @@ mod tests {
         assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("ready")));
         s.close_all();
         assert!(wait_for(|| exit.lock().unwrap().is_some()), "SIGHUP-ignoring program survived close_all");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_big_write_to_a_program_that_never_reads_blocks_nothing() {
+        let s = Sessions::default();
+        let (id, out, exit) = collect(&s, &["/bin/sh", "-c", "stty raw -echo; echo ready; sleep 60"], 80, 24);
+        let (other, other_out, _) = collect(&s, &["/bin/cat"], 80, 24);
+        assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("ready")));
+        // 1 MB in 64 KB pastes: the PTY takes about 1 KB, the rest must not hold anything up
+        let started = Instant::now();
+        for _ in 0..16 {
+            s.write(id, &vec![b'x'; 64 * 1024]).unwrap();
+        }
+        assert!(started.elapsed() < Duration::from_millis(500), "write blocked: {:?}", started.elapsed());
+        // other sessions keep working while that one is stuck
+        s.write(other, b"pong\r").unwrap();
+        s.resize(other, 100, 30).unwrap();
+        assert!(wait_for(|| String::from_utf8_lossy(&other_out.lock().unwrap()).contains("pong")), "other session stalled");
+        let t = Instant::now();
+        s.close_all();
+        assert!(t.elapsed() < Duration::from_secs(2), "close_all took {:?}", t.elapsed());
+        assert_eq!(s.count(), 0);
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "the stuck program survived close_all");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_large_dump_arrives_in_few_messages() {
+        let s = Sessions::default();
+        let events = Arc::new(Mutex::new(Vec::<usize>::new()));
+        let exit = Arc::new(Mutex::new(None));
+        let (e, x) = (events.clone(), exit.clone());
+        s.spawn(
+            ["/bin/sh", "-c", "head -c 524288 /dev/zero | tr '\\0' a"].iter().map(OsString::from).collect(),
+            &std::env::temp_dir().canonicalize().unwrap(),
+            None,
+            80,
+            24,
+            move |ev| match ev {
+                Output::Data(b) => e.lock().unwrap().push(b.len()),
+                Output::Exit(c) => *x.lock().unwrap() = Some(c),
+            },
+        )
+        .unwrap();
+        assert!(wait_for(|| exit.lock().unwrap().is_some()));
+        let ev = events.lock().unwrap();
+        let total: usize = ev.iter().sum();
+        assert!(total >= 524288, "{total}");
+        // 1 KB per read would be over 500 messages
+        assert!(ev.len() < 64, "{} messages for {total} bytes", ev.len());
     }
 
     #[test]
