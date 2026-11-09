@@ -151,6 +151,15 @@ test("long model id ellipsizes and stays inside the header at 900x700 with the p
     await expect(label).toHaveText(id);
     await expect(label).toHaveAttribute("title", id);
     await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0)).toBe(300);
+    // the panel slides in; wait until it has stopped moving before measuring (slow CI runners catch it mid-slide)
+    await expect
+      .poll(async () => {
+        const a = (await page.getByTestId("details").boundingBox())?.x ?? -1;
+        await page.waitForTimeout(80);
+        const b = (await page.getByTestId("details").boundingBox())?.x ?? -2;
+        return Math.abs(a - b) < 0.5;
+      })
+      .toBe(true);
     const head = (await page.getByTestId("header").boundingBox())!;
     const pill = (await page.getByTestId("model-pill").boundingBox())!;
     const panel = (await page.getByTestId("details").boundingBox())!;
