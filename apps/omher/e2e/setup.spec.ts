@@ -63,9 +63,18 @@ test("Hermes missing: the setup screen shows what Install runs, streams it, and 
   await page.goto("/");
   const screen = page.getByTestId("setup-screen");
   await expect(screen).toBeVisible();
-  await expect(screen).toContainText("omher needs Hermes and oh-my-hermes");
+  await expect(screen).toContainText("Install Hermes to start");
   await expect(page.getByTestId("setup-command")).toHaveText(CMD);
   await expect(page.getByTestId("bridge-retry")).toBeVisible();
+  // the command is copyable as the exact ASCII string the shell runs, and the pipe starts its own line
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const shown = await page.getByTestId("setup-command").innerText();
+  await page.getByTestId("setup-copy").click();
+  await expect(page.getByTestId("setup-copy")).toHaveText("Copied");
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toMatch(/^[\x20-\x7e]+$/);
+  expect(copied).toContain("| ");
+  expect(shown.split("\n").some((l) => l.trimStart().startsWith("|"))).toBe(true);
 
   await page.getByTestId("setup-install").click();
   await expect(page.getByTestId("setup-install")).toBeDisabled();

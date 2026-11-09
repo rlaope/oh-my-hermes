@@ -63,21 +63,41 @@
 }
 .gate-text {
   margin: 0;
-  max-width: 440px;
+  max-width: 100%;
+  color: var(--body, #c9c2cc);
   font-size: 13px;
   line-height: 1.5;
-  color: var(--muted, #9a929d);
+}
+.gate-cmdbox {
+  position: relative;
+  width: 100%;
+}
+.gate-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line, #29252c);
+  border-radius: var(--r-sm, 4px);
+  background: var(--raise2, #232026);
+  color: var(--body, #dcd6de);
+  font: 500 11px/1 var(--font, system-ui);
+  cursor: pointer;
+}
+.gate-copy:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.06));
 }
 .gate-cmd {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 8px 64px 8px 10px;
   border-radius: var(--r-sm, 4px);
   background: var(--raise, #1b181e);
   color: var(--body, #dcd6de);
   border: 1px solid var(--line, #29252c);
-  font: 11px/1.5 var(--mono, ui-monospace, monospace);
+  font: 12px/1.55 var(--mono, ui-monospace, monospace);
   text-align: left;
   /* break at the spaces around the pipe, never inside the URL */
   white-space: pre-wrap;
@@ -148,7 +168,8 @@
 .gate-note {
   margin: 0;
   font-size: 12px;
-  color: var(--muted, #9a929d);
+  color: var(--body, #c9c2cc);
+  opacity: 0.85;
 }
 .gate-note code {
   font: 11px var(--mono, ui-monospace, monospace);

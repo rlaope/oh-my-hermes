@@ -56,6 +56,12 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   const [command, setCommand] = useState("");
   const [install, setInstall] = useState<"idle" | "running" | "failed">("idle");
   const [lines, setLines] = useState<string[]>([]);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const shellRef = useRef<GateShell | null>(null);
   const logRef = useRef<HTMLPreElement | null>(null);
@@ -141,21 +147,43 @@ export function BridgeGate({ children }: { children: ReactNode }) {
       <div className="gate" data-testid="bridge-gate" data-state="setup">
         <div className="gate-box gate-setup" data-testid="setup-screen">
           <img className="gate-mark" src={mark} alt="" width={44} height={44} />
-          <div className="gate-head">omher needs Hermes and oh-my-hermes</div>
+          <div className="gate-head">Install Hermes to start</div>
           <p className="gate-text">
-            omher runs your bots through Hermes Agent on this computer, and Hermes isn’t installed yet. Install sets
-            up Hermes and oh-my-hermes with their official installer, then opens your bots.
+            Your bots run on Hermes Agent, which isn’t on this computer yet. Install runs the command below: Hermes,
+            then oh-my-hermes.
           </p>
           {command && (
-            <code className="gate-cmd" data-testid="setup-command">
-              {/* one unbreakable token per word: the URL never wraps at its own hyphens */}
-              {command.split(" ").map((word, i) => (
-                <Fragment key={i}>
-                  {i > 0 && " "}
-                  <span className="gate-tok">{word}</span>
-                </Fragment>
-              ))}
-            </code>
+            <div className="gate-cmdbox">
+              <code className="gate-cmd" data-testid="setup-command">
+                {/* one unbreakable token per word, and a line break before the pipe: the URL never wraps
+                    at its own hyphens and the pipe never dangles at a line end */}
+                {command.split(" ").map((word, i) => (
+                  <Fragment key={i}>
+                    {i > 0 &&
+                      (word === "|" ? (
+                        <>
+                          {" "}
+                          <br />
+                        </>
+                      ) : (
+                        " "
+                      ))}
+                    <span className="gate-tok">{word}</span>
+                  </Fragment>
+                ))}
+              </code>
+              <button
+                type="button"
+                className="gate-copy"
+                data-testid="setup-copy"
+                aria-label="Copy command"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(command).then(() => setCopied(true), () => {});
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
           )}
           {lines.length > 0 && (
             <pre className="gate-log" data-testid="setup-log" ref={logRef} aria-live="polite">
@@ -191,11 +219,11 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               disabled={running || retrying}
               onClick={retry}
             >
-              I installed it, retry
+              Check again
             </button>
           </div>
           <p className="gate-note">
-            Takes a few minutes. Afterwards, run <code>hermes setup</code> once to choose a model.
+            Takes a few minutes. Then pick a model once with <code>hermes setup</code>.
           </p>
         </div>
       </div>
