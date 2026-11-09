@@ -9,7 +9,7 @@ const SHOTS = process.env.OMHER_SHOTS || "";
 
 test.use({ colorScheme: "dark" });
 
-async function mock(op: string): Promise<void> {
+async function mock(op: string, params: Record<string, unknown> = {}): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
   await new Promise<void>((res, rej) => {
     ws.onopen = () => res();
@@ -17,7 +17,7 @@ async function mock(op: string): Promise<void> {
   });
   await new Promise<void>((res) => {
     ws.onmessage = () => res();
-    ws.send(JSON.stringify({ id: "x1", op }));
+    ws.send(JSON.stringify({ id: "x1", op, ...params }));
   });
   ws.close();
 }
@@ -90,6 +90,53 @@ test("+ lists the agent CLIs with their marks; missing ones are disabled", async
   }
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
+});
+
+test("the menu says which account a new session uses; This computer says nothing", async ({ page }) => {
+  // Claude: a second account signed in as work@example.com, chosen for new sessions. Codex: its "Work" account.
+  await mock("accounts.add", { cli: "claude", label: "" });
+  await mock("mock.accounts", { cli: "claude", signed_in: { id: "account-2", email: "work@example.com" } });
+  await mock("accounts.set_active", { cli: "claude", account: "account-2" });
+  await mock("accounts.set_active", { cli: "codex", account: "work" });
+  await open(page);
+  await page.getByTestId("session-new").click();
+  const menu = page.getByTestId("session-menu");
+  // the masked email when the account has no name, else its name
+  await expect(menu.getByTestId("session-account-claude")).toHaveText("as work@…");
+  await expect(menu.getByTestId("session-agent-claude")).toContainText(/Claude Code\s*as work@…/);
+  await expect(menu.getByTestId("session-account-claude")).not.toContainText("example.com");
+  await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
+  // the suffix is shown whole inside its row, never cut off
+  for (const a of ["claude", "codex"]) {
+    const fits = await menu.getByTestId(`session-agent-${a}`).evaluate((row) => {
+      const as = row.querySelector(".ss-as")!;
+      const r = as.getBoundingClientRect();
+      const box = row.querySelector(".ss-n")!.getBoundingClientRect();
+      const label = row.querySelector(".ss-l")!;
+      const cmd = row.querySelector(".ss-cmd")!.getBoundingClientRect();
+      return {
+        whole: as.scrollWidth <= Math.ceil(r.width) && r.right <= box.right + 0.5 && r.width > 0,
+        label: label.scrollWidth <= label.clientWidth,
+        gap: Math.round(cmd.left - r.right),
+      };
+    });
+    expect(fits.whole, a).toBe(true);
+    expect(fits.label, `${a} label cut off`).toBe(true);
+    expect(fits.gap, `${a} gap to the command`).toBeGreaterThanOrEqual(8);
+  }
+  // omh has no login; pi has one but its sessions do not take an account yet
+  for (const a of ["omh", "pi", "omp", "grok"]) await expect(menu.getByTestId(`session-account-${a}`)).toHaveCount(0);
+  if (SHOTS) {
+    mkdirSync(SHOTS, { recursive: true });
+    await page.mouse.move(900, 780);
+    await page.waitForTimeout(350);
+    await menu.screenshot({ path: join(SHOTS, "session-menu-account.png"), animations: "disabled" });
+  }
+  // back to This computer: the suffix goes (read-only: the menu itself never switches)
+  await mock("accounts.set_active", { cli: "claude", account: "default" });
+  await expect(menu.getByTestId("session-account-claude")).toHaveCount(0);
+  await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
+  await page.keyboard.press("Escape");
 });
 
 test("start a mock session, type, see the echo, then switch to a bot chat and back", async ({ page }) => {

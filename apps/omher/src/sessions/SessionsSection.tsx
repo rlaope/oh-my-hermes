@@ -7,6 +7,25 @@ import { shortTime } from "../app/time";
 import { AgentMark } from "./AgentMark";
 import { agentDef, folderName, parentPath, rowModel, tildePath, type AgentId, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
+import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
+import { useAccounts } from "../settings/accounts/useAccounts";
+import { accountForNewSessions } from "../settings/accounts/rules";
+
+/** The Accounts CLI a new session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
+const SESSION_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
+
+/** `work@example.com` -> `work@…`. */
+const maskEmail = (email: string) => (email.includes("@") ? `${email.slice(0, email.indexOf("@"))}@…` : email);
+
+/** The quiet "as …" next to an agent in the menu: the account Settings › Accounts picked for new sessions, by
+ *  its name, else its masked email. Nothing for "This computer" or an agent without accounts. */
+export function sessionAccountSuffix(groups: AccountGroup[] | null, agent: AgentId): string {
+  const cli = SESSION_CLI[agent];
+  const a: Account | null = cli ? accountForNewSessions(groups, cli) : null;
+  if (!a || a.id === "default") return "";
+  const name = a.label || maskEmail(a.email) || a.id;
+  return `as ${name}`;
+}
 
 export function SessionsHeader() {
   const [open, setOpen] = useState(false);
@@ -33,6 +52,7 @@ export function SessionsHeader() {
 
 function NewSessionMenu({ onClose }: { onClose: () => void }) {
   const ss = useSessions();
+  const accounts = useAccounts();
   useEffect(() => {
     void getSessions().loadAgents();
   }, []);
@@ -42,12 +62,13 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
   };
   const installed = new Set((ss.agents ?? []).filter((a) => a.path).map((a) => a.id));
   return (
-    <Popover open onClose={onClose} align="left" width={232} label="New session" className="ss-pop">
+    <Popover open onClose={onClose} align="left" width={240} label="New session" className="ss-pop">
       <div data-testid="session-menu">
         <div className="ss-h">New session</div>
         {ss.agents === null && <div className="ss-empty">Looking for agents…</div>}
         {(ss.agents ?? []).map((a) => {
           const def = agentDef(a.id);
+          const account = sessionAccountSuffix(accounts.groups, a.id);
           return (
             <button
               key={a.id}
@@ -61,7 +82,14 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
               <span className="ss-ic">
                 <AgentMark agent={a.id} />
               </span>
-              <span className="ss-n">{def.label}</span>
+              <span className="ss-n ss-n-as">
+                <span className="ss-l">{def.label}</span>
+                {account && (
+                  <span className="ss-as" data-testid={`session-account-${a.id}`}>
+                    {account}
+                  </span>
+                )}
+              </span>
               {a.path ? <code className="ss-cmd">{def.program}</code> : <span className="ss-missing">Not installed</span>}
             </button>
           );

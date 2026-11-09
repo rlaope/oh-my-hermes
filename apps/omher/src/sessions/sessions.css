@@ -95,6 +95,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* an agent row: the label gives way (ellipsis) before the account suffix does */
+.ss-n-as {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.ss-l {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-as {
+  /* which account the session will use: quiet, read-only */
+  flex: none;
+  font-size: 11px;
+  color: var(--quiet);
+}
 .ss-cmd {
   font-size: 10.5px;
   color: var(--quiet);

@@ -40,6 +40,8 @@ RULES = (
     " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
+    "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
+    "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
 )
 
 
@@ -284,6 +286,28 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("start_agent(&agent", body)
         self.assertNotIn(".spawn(", body)
+
+    def test_a_session_gets_only_the_chosen_account_home(self) -> None:
+        """Rule 13's account sentence: session_start passes `accounts::session_env` and nothing else; that reads
+        only omher's `active.json` and yields at most the CLI's home variable; the PTY adds it as env only."""
+        sig = re.search(r"async fn session_start\((.*?)\) -> ", self.lib, re.S)
+        body = self.lib[sig.end():].split("\n}\n", 1)[0]
+        self.assertIn("accounts::session_env(&h, &agent)", body)
+        self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), &account_env,", body)
+        accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"(\w+)" => Some\("(\w+)"\)', cli), [("claude", "claude"), ("codex", "codex"), ("grok", "grok")])
+        self.assertIn("_ => None", cli)
+        active = accounts.split("pub fn active_account", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'join\("([^"]+)"\)', active), [".omher", "accounts", "active.json"])
+        self.assertEqual(active.count("read_to_string("), 1)
+        env = accounts.split("pub fn session_env", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("account_env(home, cli, &active_account(home, cli))", env)
+        for word in ("read", "token", "auth", "Command"):
+            self.assertNotIn(word, env)
+        build = self.prod.split("fn command_for(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("for (k, v) in account_env {\n        cmd.env(k, v);\n    }", build)
+        self.assertNotIn(".arg(", build)
 
     def test_start_agent_resolves_argv_from_the_allow_list_only(self) -> None:
         start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]

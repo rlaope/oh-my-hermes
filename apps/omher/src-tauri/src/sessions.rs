@@ -275,7 +275,16 @@ impl Sessions {
 
     /// Start `argv` in a new pseudo-terminal in `cwd`. Crate-internal: the app reaches it only through
     /// [`Sessions::start_agent`], so argv always comes from the allow-list (tests use it directly).
-    pub(crate) fn spawn<F>(&self, argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    pub(crate) fn spawn<F>(
+        &self,
+        argv: Vec<OsString>,
+        cwd: &Path,
+        path_env: Option<OsString>,
+        account_env: &[(String, String)],
+        cols: u16,
+        rows: u16,
+        sink: F,
+    ) -> Result<u32, String>
     where
         F: FnMut(Output) + Send + 'static,
     {
@@ -283,19 +292,7 @@ impl Sessions {
             return Err(format!("not a folder: {}", cwd.display()));
         }
         let pair = native_pty_system().openpty(clamp_size(cols, rows)).map_err(|e| e.to_string())?;
-        let mut cmd = CommandBuilder::from_argv(argv);
-        cmd.cwd(cwd);
-        cmd.env("TERM", "xterm-256color");
-        cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERM_PROGRAM", "omher");
-        if let Some(p) = path_env {
-            cmd.env("PATH", p);
-        }
-        #[cfg(unix)]
-        if std::env::var_os("LANG").is_none() {
-            // A Dock-started app has no locale; the agents' TUIs need UTF-8.
-            cmd.env("LANG", "en_US.UTF-8");
-        }
+        let cmd = command_for(argv, cwd, path_env, account_env);
         let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave); // only the child holds the terminal side, so its exit ends our reads
         let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -341,13 +338,14 @@ impl Sessions {
     }
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
-    /// exists.
-    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
+    /// or nothing.
+    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, account_env: &[(String, String)], cols: u16, rows: u16, sink: F) -> Result<u32, String>
     where
         F: FnMut(Output) + Send + 'static,
     {
         let (argv, path_env) = launch_for(agent_id)?;
-        self.spawn(argv, cwd, Some(path_env), cols, rows, sink)
+        self.spawn(argv, cwd, Some(path_env), account_env, cols, rows, sink)
     }
 
     /// Queue `data` for session `id`'s writer thread. Never blocks: a program that is not reading its
@@ -388,6 +386,28 @@ impl Sessions {
     pub fn count(&self) -> usize {
         self.live.lock().unwrap().len()
     }
+}
+
+/// The command a session runs: `argv` in `cwd`, with the terminal variables, the child `PATH`, and the chosen
+/// account's home variable (`account_env`, empty for the CLI's own login). Nothing else is added.
+fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, account_env: &[(String, String)]) -> CommandBuilder {
+    let mut cmd = CommandBuilder::from_argv(argv);
+    cmd.cwd(cwd);
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM_PROGRAM", "omher");
+    if let Some(p) = path_env {
+        cmd.env("PATH", p);
+    }
+    #[cfg(unix)]
+    if std::env::var_os("LANG").is_none() {
+        // A Dock-started app has no locale; the agents' TUIs need UTF-8.
+        cmd.env("LANG", "en_US.UTF-8");
+    }
+    for (k, v) in account_env {
+        cmd.env(k, v);
+    }
+    cmd
 }
 
 /// One thread reads the PTY (macOS hands out at most 1 KB per read); another merges what arrives into
@@ -526,7 +546,7 @@ mod tests {
     fn start_agent_refuses_an_unknown_id_before_any_process() {
         let s = Sessions::default();
         let tmp = std::env::temp_dir();
-        let err = s.start_agent("/bin/sh", &tmp, 80, 24, |_| {}).unwrap_err();
+        let err = s.start_agent("/bin/sh", &tmp, &[], 80, 24, |_| {}).unwrap_err();
         assert!(err.contains("unknown agent"), "{err}");
         assert_eq!(s.count(), 0);
     }
@@ -636,7 +656,7 @@ mod tests {
         let exit = Arc::new(Mutex::new(None));
         let (o, x) = (out.clone(), exit.clone());
         let id = s
-            .spawn(argv.iter().map(OsString::from).collect(), &std::env::temp_dir().canonicalize().unwrap(), None, cols, rows, move |ev| match ev {
+            .spawn(argv.iter().map(OsString::from).collect(), &std::env::temp_dir().canonicalize().unwrap(), None, &[], cols, rows, move |ev| match ev {
                 Output::Data(b) => o.lock().unwrap().extend(b),
                 Output::Exit(c) => *x.lock().unwrap() = Some(c),
             })
@@ -727,6 +747,7 @@ mod tests {
             ["/bin/sh", "-c", "head -c 524288 /dev/zero | tr '\\0' a"].iter().map(OsString::from).collect(),
             &std::env::temp_dir().canonicalize().unwrap(),
             None,
+            &[],
             80,
             24,
             move |ev| match ev {
@@ -746,8 +767,66 @@ mod tests {
     #[test]
     fn refuses_a_cwd_that_is_not_a_folder() {
         let s = Sessions::default();
-        assert!(s.spawn(vec!["x".into()], Path::new("relative/dir"), None, 80, 24, |_| {}).is_err());
-        assert!(s.spawn(vec!["x".into()], &std::env::temp_dir().join("omher-no-such-dir-x9"), None, 80, 24, |_| {}).is_err());
+        assert!(s.spawn(vec!["x".into()], Path::new("relative/dir"), None, &[], 80, 24, |_| {}).is_err());
+        assert!(s.spawn(vec!["x".into()], &std::env::temp_dir().join("omher-no-such-dir-x9"), None, &[], 80, 24, |_| {}).is_err());
+    }
+
+    /// A temp home whose `active.json` picks `active` for claude, with that account's folder made.
+    fn home_with_claude(name: &str, active: &str) -> PathBuf {
+        let home = std::env::temp_dir().join(format!("omher-sess-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let root = home.join(".omher").join("accounts");
+        std::fs::create_dir_all(root.join("claude").join("work")).unwrap();
+        std::fs::write(root.join("active.json"), format!(r#"{{"claude":"{active}"}}"#)).unwrap();
+        home
+    }
+
+    #[test]
+    fn a_claude_session_carries_the_stacked_account_home_and_this_computer_carries_none() {
+        let cwd = std::env::temp_dir();
+        let argv = || vec![OsString::from("/x/claude")];
+        let extra = |cmd: &CommandBuilder| -> Vec<(String, String)> {
+            cmd.iter_extra_env_as_str().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        };
+        let base = extra(&command_for(argv(), &cwd, None, &[]));
+
+        let home = home_with_claude("stacked", "work");
+        let env = crate::accounts::session_env(&home, "claude");
+        let cmd = command_for(argv(), &cwd, None, &env);
+        let work = home.join(".omher").join("accounts").join("claude").join("work");
+        assert_eq!(cmd.get_env("CLAUDE_CONFIG_DIR"), Some(work.as_os_str()));
+        assert_eq!(cmd.get_argv(), &argv(), "the account changes no argument");
+        // the chosen account's home is the only thing added
+        let mut added: Vec<_> = extra(&cmd).into_iter().filter(|p| !base.contains(p)).collect();
+        added.sort();
+        assert_eq!(added, vec![("CLAUDE_CONFIG_DIR".to_string(), work.to_string_lossy().into_owned())]);
+
+        let mine = home_with_claude("this-computer", "default");
+        let cmd = command_for(argv(), &cwd, None, &crate::accounts::session_env(&mine, "claude"));
+        assert_eq!(extra(&cmd), base);
+        assert!(!extra(&cmd).iter().any(|(k, _)| k == "CLAUDE_CONFIG_DIR"));
+        let _ = (std::fs::remove_dir_all(home), std::fs::remove_dir_all(mine));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_account_home_reaches_the_program() {
+        let home = home_with_claude("pty", "work");
+        let s = Sessions::default();
+        let out = Arc::new(Mutex::new(Vec::new()));
+        let exit = Arc::new(Mutex::new(None));
+        let (o, x) = (out.clone(), exit.clone());
+        let argv = ["/bin/sh", "-c", "echo \"cfg=${CLAUDE_CONFIG_DIR-unset}\""].iter().map(OsString::from).collect();
+        s.spawn(argv, &std::env::temp_dir().canonicalize().unwrap(), None, &crate::accounts::session_env(&home, "claude"), 80, 24, move |ev| match ev {
+            Output::Data(b) => o.lock().unwrap().extend(b),
+            Output::Exit(c) => *x.lock().unwrap() = Some(c),
+        })
+        .unwrap();
+        assert!(wait_for(|| exit.lock().unwrap().is_some()));
+        let text = String::from_utf8_lossy(&out.lock().unwrap()).to_string();
+        let work = home.join(".omher").join("accounts").join("claude").join("work");
+        assert!(text.contains(&format!("cfg={}", work.display())), "{text:?}");
+        let _ = std::fs::remove_dir_all(home);
     }
 
     /// The real check on a developer machine: `claude --version` / `codex --version` through the same
@@ -769,7 +848,7 @@ mod tests {
             let exit = Arc::new(Mutex::new(None));
             let (o, x) = (out.clone(), exit.clone());
             let home = PathBuf::from(host_env("HOME").or_else(|| host_env("USERPROFILE")).unwrap());
-            s.spawn(argv, &home, Some(path_env), 80, 24, move |ev| match ev {
+            s.spawn(argv, &home, Some(path_env), &[], 80, 24, move |ev| match ev {
                 Output::Data(b) => o.lock().unwrap().extend(b),
                 Output::Exit(c) => *x.lock().unwrap() = Some(c),
             })

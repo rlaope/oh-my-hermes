@@ -72,6 +72,42 @@ pub fn account_env(home: &Path, cli: &str, id: &str) -> Result<Vec<(String, Stri
     Ok(vec![(var.to_string(), dir.to_string_lossy().into_owned())])
 }
 
+/// The Accounts CLI a SESSIONS agent signs in as: claude, codex and grok map 1:1. omh has no login of its own,
+/// and pi / omp sessions do not take an account yet, so those start with the CLI's own home.
+pub fn session_cli(agent: &str) -> Option<&'static str> {
+    match agent {
+        "claude" => Some("claude"),
+        "codex" => Some("codex"),
+        "grok" => Some("grok"),
+        _ => None,
+    }
+}
+
+/// The account new sessions of `cli` use: `active.json`'s `{cli: id}` (written by the bridge's
+/// `accounts.set_active`), when that id is a valid name whose folder still exists; otherwise `default`.
+/// Reads omher's own `active.json` only, never a CLI's login file.
+pub fn active_account(home: &Path, cli: &str) -> String {
+    let file = home.join(".omher").join("accounts").join("active.json");
+    let id = std::fs::read_to_string(file)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get(cli).and_then(|x| x.as_str()).map(str::to_string));
+    match id {
+        Some(id) if account_dir(home, cli, &id).map(|d| d.is_dir() && !d.is_symlink()).unwrap_or(false) => id,
+        _ => "default".to_string(),
+    }
+}
+
+/// The extra env a new session of SESSIONS agent `agent` starts with: the chosen account's home variable
+/// (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) pointing at its folder, or nothing for "This computer",
+/// no choice, or an agent without accounts.
+pub fn session_env(home: &Path, agent: &str) -> Vec<(String, String)> {
+    let Some(cli) = session_cli(agent) else {
+        return Vec::new();
+    };
+    account_env(home, cli, &active_account(home, cli)).unwrap_or_default()
+}
+
 // ---------------------------------------------------------------------------------------------
 // The fixed commands
 // ---------------------------------------------------------------------------------------------
@@ -528,6 +564,36 @@ mod tests {
         assert_eq!(account_env(home, "grok", "work").unwrap()[0].0, "GROK_HOME");
         assert_eq!(account_env(home, "gemini", "work").unwrap()[0].0, "GEMINI_CLI_HOME");
         assert_eq!(account_env(home, "claude", "default").unwrap(), vec![]);
+    }
+
+    /// `<tmp>/<name>` with `.omher/accounts/active.json` = `active` and one folder per `(cli, id)` in `folders`.
+    fn session_home(name: &str, active: &str, folders: &[(&str, &str)]) -> PathBuf {
+        let home = std::env::temp_dir().join(format!("omher-acct-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        for (cli, id) in folders {
+            std::fs::create_dir_all(home.join(".omher").join("accounts").join(cli).join(id)).unwrap();
+        }
+        std::fs::create_dir_all(home.join(".omher").join("accounts")).unwrap();
+        std::fs::write(home.join(".omher").join("accounts").join("active.json"), active).unwrap();
+        home
+    }
+
+    #[test]
+    fn session_env_follows_the_account_chosen_for_new_sessions() {
+        let home = session_home("sess", r#"{"claude":"work","codex":"default","grok":"gone","pi":"p"}"#, &[("claude", "work"), ("pi", "p")]);
+        let work = home.join(".omher").join("accounts").join("claude").join("work").to_string_lossy().into_owned();
+        assert_eq!(session_env(&home, "claude"), vec![("CLAUDE_CONFIG_DIR".to_string(), work)]);
+        // "This computer", a folder that is gone, an agent without accounts (pi / omp for now, omh never)
+        for agent in ["codex", "grok", "pi", "omp", "omh", "bash"] {
+            assert_eq!(session_env(&home, agent), vec![], "{agent}");
+        }
+        // nothing chosen, or an active.json that is not ours to trust
+        for active in ["", "{}", "[]", r#"{"claude":"../../x"}"#, r#"{"claude":{"id":"work"}}"#, r#"{"claude":"Work"}"#] {
+            let h = session_home("sess-bad", active, &[("claude", "work")]);
+            assert_eq!(session_env(&h, "claude"), vec![], "{active}");
+            let _ = std::fs::remove_dir_all(h);
+        }
+        let _ = std::fs::remove_dir_all(home);
     }
 
     #[test]

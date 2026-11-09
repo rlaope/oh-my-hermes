@@ -123,7 +123,10 @@ async fn session_start(
 ) -> Result<u32, String> {
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), cols, rows, move |ev| match ev {
+        // The account Settings › Accounts picked for new sessions of this agent's CLI: its home variable, or
+        // nothing ("This computer"). #2710's chat-mode start must pass the same `session_env` to its spawn.
+        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
