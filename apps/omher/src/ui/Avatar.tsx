@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import kami from "../assets/avatars/bot-kami.svg";
-import friren from "../assets/avatars/bot-friren.svg";
-import hermes from "../assets/avatars/bot-hermes.svg";
-import fresh from "../assets/avatars/bot-new.svg";
+import blob from "../assets/avatars/face-blob.svg";
+import ghost from "../assets/avatars/face-ghost.svg";
+import mochi from "../assets/avatars/face-mochi.svg";
+import star from "../assets/avatars/face-star.svg";
 import { getStore, useStore } from "../state/store";
 
-/** The four circle-with-eyes faces. Known bots get their own; others get one picked by name. */
-const KNOWN: Record<string, string> = { kami, friren, default: hermes, hermes };
-const POOL = [kami, friren, hermes, fresh];
+/** The four built-in faces (blob, ghost, mochi, star). Known bots keep a fixed one; others get one by name. */
+const KNOWN: Record<string, string> = { kami: blob, friren: ghost, default: mochi, hermes: mochi };
+const POOL = [blob, ghost, mochi, star];
 
 export function avatarFor(bot: string): string {
   const k = KNOWN[bot.toLowerCase()];

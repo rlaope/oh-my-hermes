@@ -2,13 +2,15 @@
 // and its routines from cron. Nothing here writes to another session.
 import { useEffect, useState } from "react";
 import type { SlotProps } from "../features";
-import type { Away, Routine } from "../lib/protocol";
+import type { ReactNode as JSXChild } from "react";
+import type { Away, Bot, Routine } from "../lib/protocol";
 import { useStore } from "../state/store";
 import { openExternal } from "../lib/openExternal";
 import { shortTime } from "../app/time";
 import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
 import logo from "../assets/omher-mark.png";
 import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
+import { DiffTab, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
 
@@ -17,6 +19,53 @@ export const slot = "detailsPanel";
 const SHOW = 6;
 
 export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsPanel"]) {
+  const s = useStore();
+  const tab = s.ui.panelTab;
+  const [diffPath, setDiffPath] = useState<string | null>(null);
+  useEffect(() => setDiffPath(null), [bot.name]);
+  const head = (
+    <div className="details-h pn-tabs" role="tablist" aria-label="Panel">
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={tab === t.id}
+          title={t.label}
+          className={`pn-tab${tab === t.id ? " on" : ""}`}
+          onClick={() => s.setPanelTab(t.id)}
+          data-testid={`panel-tab-${t.id}`}
+        >
+          {TAB_ICON[t.id]}
+          {tab === t.id && <span>{t.label}</span>}
+        </button>
+      ))}
+      <IconButton label="Close details" onClick={onClose}>
+        <CloseIcon />
+      </IconButton>
+    </div>
+  );
+  if (tab !== "details") {
+    const openDiff = (p: string) => {
+      setDiffPath(p);
+      s.setPanelTab("diff");
+    };
+    return (
+      <div className="details-in ew-panel pn-wide" data-testid="details-panel" data-tab={tab}>
+        {head}
+        <div className="pn-scroll">
+          {open && tab === "terminal" && <TerminalTab bot={bot} />}
+          {open && tab === "schedule" && <ScheduleTab bot={bot} />}
+          {open && tab === "worktrees" && <WorktreesTab bot={bot} onOpenDiff={openDiff} />}
+          {open && tab === "diff" && <DiffTab bot={bot} path={diffPath} onPick={setDiffPath} />}
+        </div>
+      </div>
+    );
+  }
+  return <DetailsTab bot={bot} open={open} head={head} />;
+}
+
+function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChild }) {
   const s = useStore();
   const away: Away[] = s.elsewhere[bot.name] ?? [];
   const routines: Routine[] = s.routines[bot.name] ?? [];
@@ -42,13 +91,8 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
   const sources = sourceList(away.map((a) => a.source));
 
   return (
-    <div className="details-in ew-panel" data-testid="details-panel">
-      <div className="details-h">
-        Details
-        <IconButton label="Close details" onClick={onClose}>
-          <CloseIcon />
-        </IconButton>
-      </div>
+    <div className="details-in ew-panel" data-testid="details-panel" data-tab="details">
+      {head}
       <div className="details-id">
         <Avatar bot={bot.name} size={40} />
         <div>
