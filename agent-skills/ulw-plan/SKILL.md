@@ -86,6 +86,7 @@ Quality bar:
 - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
 - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
 - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
+- When a planning stage dispatches a planner or critic child, run it on the host's deepest reasoning tier.
 - When adapting an existing capability, read `../omh-verification-gate/references/adaptation-quality.md` before accepting a plan, dispatching work, or claiming completion; carry its criteria and comparisons into tasks and evidence.
 - Before comparing options, write the target state: name each consumer of the result (a person, a maintainer, or a program reading its output), their current workflow on this surface, the state in which that workflow keeps working with no new friction or loss, and every difference between current and target, each with why it matters.
 - Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per target-state difference naming its owning task and the scenario that shows the difference closed; these rows are the acceptance criteria above, extended to the target state.

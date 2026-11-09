@@ -7,7 +7,9 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -650,9 +652,11 @@ class ReadOnlyRule(BridgeCase):
         self.assertEqual(uses, ["_git"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
-        self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",)})
+        self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),
+                                        ("version",), ("config",)})
         for bad in (["push"], ["commit", "-m", "x"], ["checkout", "main"], ["worktree", "add", "x"], ["reset", "--hard"],
-                    ["apply"], ["clean", "-fd"], ["config", "user.name", "x"]):
+                    ["apply"], ["clean", "-fd"], ["config", "user.name", "x"], ["config", "--list"],
+                    ["config", "--get-regexp", "x"]):
             with self.assertRaises(ValueError, msg=bad):
                 ob._git(bad, ".")
 
@@ -1070,7 +1074,7 @@ class SidePanel(unittest.TestCase):
         self.assertEqual(runs[1]["source"], "slack")
         self.assertEqual(runs[1]["output"], "clean")
         self.assertLessEqual(len(runs[0]["output"]), ob.PANEL_OUT)
-        self.assertTrue(runs[0]["output"].endswith("…"))
+        self.assertIn("\n…\n", runs[0]["output"])  # head and tail kept, clipped before the reply is encoded
 
     def test_no_state_db_means_no_runs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1104,3 +1108,157 @@ class SidePanel(unittest.TestCase):
             with self.assertRaises(ob.BridgeError) as e:
                 ob.read_diff(prof, str(Path(d)))
             self.assertEqual(e.exception.code, "not_found")
+
+    def test_reads_run_no_program_the_repository_names(self):
+        """core.fsmonitor, a diff textconv and filter clean/process drivers (named from .gitattributes and from
+        .git/info/attributes) all run programs during a plain `git status`/`git diff`; the panel's reads must not."""
+        import shutil
+        import subprocess
+        if not shutil.which("git") or os.name == "nt":
+            self.skipTest("needs git and a POSIX shell hook")
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                   "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+            marks = d / "marks"
+            marks.mkdir()
+
+            def repo(name: str, setup) -> Path:
+                r = d / name
+                r.mkdir()
+                git = lambda *a: subprocess.run(["git", *a], cwd=r, check=True, env=env, capture_output=True)
+                git("init", "-q", "-b", "main")
+                (r / "a.txt").write_text("one\n", encoding="utf-8")
+                git("add", "a.txt")
+                git("commit", "-q", "-m", "a")
+                hook = d / f"hook-{name}"
+                hook.write_text(f"#!/bin/sh\ntouch '{marks}/{name}'\ncat\n", encoding="utf-8")
+                hook.chmod(0o755)
+                setup(r, git, str(hook))
+                (r / "a.txt").write_text("two\n", encoding="utf-8")  # same size: git must look at the content
+                return r
+
+            def attrs(path: Path, line: str):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(line + "\n", encoding="utf-8")
+
+            repos = [
+                repo("fsmonitor", lambda r, git, h: git("config", "core.fsmonitor", h)),
+                repo("textconv", lambda r, git, h: (attrs(r / ".gitattributes", "*.txt diff=x"),
+                                                    git("config", "diff.x.textconv", h))),
+                repo("clean", lambda r, git, h: (attrs(r / ".gitattributes", "*.txt filter=y"),
+                                                 git("config", "filter.y.clean", h))),
+                repo("info-process", lambda r, git, h: (attrs(r / ".git" / "info" / "attributes", "*.txt filter=z diff=x"),
+                                                        git("config", "filter.z.process", h),
+                                                        git("config", "filter.z.required", "true"),
+                                                        git("config", "diff.x.textconv", h))),
+                repo("ext-diff", lambda r, git, h: git("config", "diff.external", h)),
+            ]
+            # every hook really runs under a plain git read (the threat is real on this git)
+            for r in repos:
+                for a in (["status", "--porcelain"], ["diff", "HEAD"]):
+                    subprocess.run(["git", *a], cwd=r, env=env, capture_output=True, stdin=subprocess.DEVNULL)
+            self.assertEqual(sorted(p.name for p in marks.iterdir()),
+                             ["clean", "ext-diff", "fsmonitor", "info-process", "textconv"])
+            for m in marks.iterdir():
+                m.unlink()
+            prof = d / "prof"
+            prof.mkdir()
+            self._db_many(prof, [str(r) for r in repos])
+            trees = ob.read_worktrees(prof)
+            self.assertEqual(len(trees), len(repos))
+            self.assertTrue(all(w["dirty"] for w in trees), trees)
+            for w in trees:
+                diff = ob.read_diff(prof, w["path"])
+                self.assertEqual(diff["scope"], "uncommitted")
+                self.assertEqual([f["path"] for f in diff["files"] if not f.get("untracked")], ["a.txt"])
+                self.assertIn("+two", diff["patch"])  # the raw content, no textconv
+                self.assertIsNotNone(ob._git(["status", "--porcelain"], w["path"]))
+                self.assertIsNotNone(ob._git(["log", "-1", "--patch"], w["path"]))
+            self.assertEqual([p.name for p in marks.iterdir()], [], "a repository-configured program ran")
+
+    def _db_many(self, prof: Path, cwds: list[str]) -> None:
+        import sqlite3
+        con = sqlite3.connect(prof / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT,"
+                    " tool_call_id TEXT, tool_calls TEXT, tool_name TEXT, timestamp REAL)")
+        con.execute("INSERT INTO sessions VALUES ('s1', 'tui')")
+        for i, cwd in enumerate(cwds):
+            call = json.dumps([{"id": f"t{i}", "function": {"name": "terminal", "arguments": json.dumps({"command": "ls"})}}])
+            con.execute("INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, timestamp)"
+                        " VALUES ('s1', 'assistant', '', NULL, ?, NULL, ?)", (call, float(2 * i)))
+            con.execute("INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, timestamp)"
+                        " VALUES ('s1', 'tool', ?, ?, NULL, 'terminal', ?)",
+                        (json.dumps({"output": "", "exit_code": 0, "cwd": cwd}), f"t{i}", float(2 * i + 1)))
+        con.commit()
+        con.close()
+
+    def test_diff_lists_non_ascii_names_and_untracked_files(self):
+        import shutil
+        import subprocess
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                   "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+            (repo / "새파일.txt").write_text("가\n", encoding="utf-8")
+            subprocess.run(["git", "add", "새파일.txt"], cwd=repo, check=True, env=env)
+            subprocess.run(["git", "commit", "-q", "-m", "ko"], cwd=repo, check=True, env=env)
+            (repo / "새파일.txt").write_text("가\n나\n", encoding="utf-8")
+            (repo / "new.txt").write_text("fresh\n", encoding="utf-8")
+            (repo / "새 폴더").mkdir()
+            (repo / "새 폴더" / "메모.md").write_text("x\n", encoding="utf-8")
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db(prof, str(repo))
+            trees = ob.read_worktrees(prof)
+            self.assertEqual(trees[0]["dirty"], 4)  # a.txt, 새파일.txt, new.txt, 새 폴더/
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual(diff["files"], [
+                {"path": "a.txt", "add": 1, "del": 0},
+                {"path": "새파일.txt", "add": 1, "del": 0},
+                {"path": "new.txt", "add": 0, "del": 0, "untracked": True},
+                {"path": "새 폴더/", "add": 0, "del": 0, "untracked": True},
+            ])
+            # only new files: still "uncommitted", not the last commit
+            subprocess.run(["git", "checkout", "-q", "--", "."], cwd=repo, check=True, env=env)
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual([f["path"] for f in diff["files"]], ["new.txt", "새 폴더/"])
+
+    def test_quoted_diff_paths_are_unquoted(self):
+        self.assertEqual(ob._unquote(r"\355\225\234.txt"), "한.txt")
+        self.assertEqual(ob._unquote(r"tab\there \"q\" back\\slash"), 'tab\there "q" back\\slash')
+        m = ob._DIFF_FILE.match('diff --git "a/x\\ty" "b/x\\ty"')
+        self.assertEqual(ob._unquote(m.group("q")), "x\ty")
+
+    def test_diff_reuses_the_worktree_scan_and_skips_known_folders(self):
+        import shutil
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            (repo / "sub").mkdir()
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db_many(prof, [str(repo), str(repo / "sub"), str(repo)])
+            calls = []
+            real = ob._git
+
+            def spy(args, cwd, timeout=ob.GIT_TIMEOUT, hardened=None):
+                calls.append(args[0])
+                return real(args, cwd, timeout, hardened)
+            with mock.patch.object(ob, "_git", spy):
+                trees = ob.read_worktrees(prof)
+                self.assertEqual(calls.count("rev-parse"), 1, calls)  # repo/sub is inside a known worktree
+                calls.clear()
+                ob.read_diff(prof, trees[0]["path"])
+                self.assertNotIn("rev-parse", calls)  # the kept scan, not a rescan
+                self.assertNotIn("worktree", calls)
+                calls.clear()
+                with mock.patch.object(ob.time, "monotonic", return_value=time.monotonic() + ob.WORKTREES_TTL + 1):
+                    ob.read_diff(prof, trees[0]["path"])
+                self.assertIn("rev-parse", calls)  # stale: scanned again

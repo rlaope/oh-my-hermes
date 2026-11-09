@@ -260,10 +260,12 @@ class CategoryMaestroResolverTests(unittest.TestCase):
         self.assertIn("category_config", stages)
 
     def test_role_chain_derives_from_the_merged_table(self) -> None:
-        # brain = (deep, unspecified-low); deep is overridden, the tail is not.
+        # brain = (ultrabrain, deep, unspecified-low); ultrabrain and deep are
+        # overridden to one model, so ultrabrain's entry wins and deep's is
+        # dropped as a repeat; the tail is not overridden.
         route = resolve_model_route("codex", role="brain", category_config=_CONFIG)
         self.assertEqual(route["selected_model"], "gpt-5.6-sol")
-        self.assertEqual(route["selected_reasoning_effort"], "high")
+        self.assertEqual(route["selected_reasoning_effort"], "xhigh")
         self.assertEqual(route["provenance"], "role_chain_head")
         chain_models = [entry["model_id"] for entry in route["chain"]]
         # The overridden head, then the built-in unspecified-low tail.

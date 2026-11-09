@@ -16,7 +16,7 @@ is in `apps/omher/README.md`.
 7. The app starts the bridge as a child process and stops it when the app exits.
 8. The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.
 9. omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture (`assets/avatar.*`, through Hermes' `profiles.set_asset` when the gateway runs); the profile id, folder, config and sessions never change.
-10. The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`) with optional locks off, in folders the bot's own terminal runs used; omher never commits, checks out, pushes or edits a repository.
+10. The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`, plus `version` and one fixed `config --list`) with optional locks off, in folders the bot's own terminal runs used; omher never commits, checks out, pushes or edits a repository. Each read also turns off the programs a repository's own config can name (`core.fsmonitor`, filter drivers, diff textconv and external drivers, the in-tree `.gitattributes`), so git runs nothing else.
 
 ## What this does not claim
 
