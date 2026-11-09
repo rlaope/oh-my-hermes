@@ -31,7 +31,8 @@ export function App() {
     <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window">
       <Sidebar />
       <main className="main">{s.ui.view === "settings" ? <SettingsView /> : <Chat />}</main>
-      <aside className="details" aria-hidden={!panelOpen} data-testid="details">
+      {/* inert while closed: the off-screen panel takes no focus and no clicks */}
+      <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
         {bot &&
           (Details ? (
             <Details bot={bot} open={panelOpen} onClose={close} />

@@ -253,7 +253,8 @@
   color: var(--ink);
   font-size: 12px;
 }
-.pn-diff {
+.pn-diff,
+.pn-new {
   border: 1px solid var(--line-soft);
   border-radius: var(--r);
   background: var(--bg);
@@ -313,6 +314,9 @@
 .df-l.d {
   background: color-mix(in srgb, var(--danger) 15%, transparent);
   color: var(--ink);
+}
+.pn-new {
+  margin-bottom: 8px;
 }
 .pn-foot {
   margin-top: 10px;

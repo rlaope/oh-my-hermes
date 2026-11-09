@@ -21,7 +21,7 @@ The normal Hermes chat parent retains its model and narrates progress. One
 campaign orchestrator uses the existing configurable `architect` chain
 (its shipped head by default). It owns planning, dependency changes, dispatch,
 results, conflicts, the broad verification queue, and go/no-go. Workers use
-the independently configurable `ultrabrain` chain (Astra-first by default).
+the independently configurable `ultrabrain` chain (its shipped head by default).
 Owner and worker model/provider/effort overrides take precedence independently.
 Routes describe resolved preparation, not which model actually executed.
 

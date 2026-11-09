@@ -108,6 +108,7 @@ const PANEL_DIFF = {
     files: [
       { path: "gateway/upstream.py", add: 1, del: 1 },
       { path: "tests/test_upstream.py", add: 3, del: 0 },
+      { path: "notes/재시도.md", add: 0, del: 0, untracked: true },
     ],
     patch: [
       "diff --git a/gateway/upstream.py b/gateway/upstream.py",
@@ -133,6 +134,13 @@ const PANEL_DIFF = {
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
   { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
+  // several vendors behind one provider, so the picker's search and vendor chips have something to sort
+  {
+    slug: "openrouter",
+    name: "OpenRouter",
+    models: ["anthropic/claude-opus-5-5", "google/gemini-3-pro", "deepseek/deepseek-v4.1", "x-ai/grok-4.7", "qwen/qwen3-coder"],
+  },
+  { slug: "ollama", name: "Ollama", models: ["llama-4-maverick", "my-local-model"] },
 ];
 const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 

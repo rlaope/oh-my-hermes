@@ -631,13 +631,13 @@ class PickerNavigationTests(unittest.TestCase):
         payload = _payload(self.root)
         lines = render_frame(payload, _chains(payload), 0, use_color=False, width=200)
         ultrabrain = next(line for line in lines if " ultrabrain " in line)
-        self.assertEqual(payload["categories"][0]["chain"][0]["model"], "gpt-6-astra")
-        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['gpt-6-astra']} ! ▸", ultrabrain)
+        self.assertEqual(payload["categories"][0]["chain"][0]["model"], "claude-fable-5-1")
+        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['claude-fable-5-1']} ! ▸", ultrabrain)
         self.assertEqual(sum("is not served by this machine's providers" in line for line in lines), 1)
         # Off the cursor the mark stays on the row and the explanation goes
         # (row 4, unspecified-low, heads with GLM, which zai does serve).
         lines = render_frame(payload, _chains(payload), 4, use_color=False, width=200)
-        self.assertIn(f"  {MODEL_DISPLAY_LABELS['gpt-6-astra']} !", next(line for line in lines if " ultrabrain " in line))
+        self.assertIn(f"  {MODEL_DISPLAY_LABELS['claude-fable-5-1']} !", next(line for line in lines if " ultrabrain " in line))
         self.assertEqual(sum("is not served by" in line for line in lines), 0)
 
 
@@ -958,14 +958,21 @@ class EnterStaysOpenTests(unittest.TestCase):
         result, frames = _drive(payload, keys + [KEY_MINUS, KEY_ENTER])
         self.assertNotIn("is not on gemini-4-argon's list; −/+", frames[-1])
         self.assertEqual(result["deep"][0], ("gemini-4-argon", "high"))
-        self.assertEqual(result["ultrabrain"], (("gpt-6-astra", "max"),))
+        # Only the head's effort moves; the rest of the shipped chain stays.
+        self.assertEqual(
+            result["ultrabrain"],
+            (("claude-fable-5-1", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")),
+        )
         self.assertEqual(result.effort_edits, frozenset({"deep", "ultrabrain"}))
 
     def test_d_clears_the_refused_row_and_the_other_rows_edit_survives(self) -> None:
         payload = _payload(self.root)
         keys = self._carry_xhigh_onto_argon(payload) + ["up", KEY_PLUS, KEY_ENTER, KEY_DEFAULT, KEY_ENTER]
         result, _ = _drive(payload, keys)
-        self.assertEqual(result, {"ultrabrain": (("gpt-6-astra", "max"),)})
+        self.assertEqual(
+            result,
+            {"ultrabrain": (("claude-fable-5-1", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh"))},
+        )
 
     def test_switching_the_head_onto_a_list_holding_the_value_also_saves(self) -> None:
         payload = _payload(self.root)

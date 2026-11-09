@@ -6,6 +6,8 @@
   color: var(--quiet);
   font-size: 12px;
 }
+/* The name keeps its natural width and ellipsizes only below ~120px of button: `width` sets that floor
+   through the flex item's automatic minimum (min(width, content)), `flex-basis` keeps short names short. */
 .who-btn {
   display: flex;
   align-items: center;
@@ -13,7 +15,32 @@
   padding: 3px 6px 3px 3px;
   margin-left: -3px;
   border-radius: var(--r);
+  flex: 0 1 max-content;
+  width: 120px;
+}
+.who-btn > .ui-av {
+  flex: none;
+}
+.who-btn > .head-title {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* a long model id gives way before the header overflows; the full id is in the label's title */
+.head-right,
+.head-right > * {
+  min-width: 0;
+}
+.head-right .mp {
+  max-width: 100%;
+}
+[data-testid="model-label"] {
+  min-width: 0;
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .who-btn:hover {
   background: var(--raise);
@@ -39,7 +66,7 @@
   mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
 }
 .thread > * {
-  width: min(var(--thread-w), calc(100% - 56px));
+  width: min(var(--thread-w), calc(100% - 48px));
   margin: 0 auto;
   flex: none;
 }
@@ -60,6 +87,14 @@
   margin-top: -12px;
 }
 
+/* the activity line and approval/question cards start at the bot bubbles' text column, not at the
+   face column: face 28px + gap 10px */
+.thread > .row-activity,
+.thread > .row-approval,
+.thread > .row-clarify {
+  padding-left: calc(28px + 10px);
+}
+
 /* bubbles: filled both sides, no border, 10px radius */
 .msg {
   display: flex;
@@ -70,6 +105,24 @@
 }
 .msg.a {
   align-items: flex-start;
+}
+/* the bot's face beside its bubbles: on the first of a run, the rest keep the indent */
+.msg.a.face {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+.msg.a.face > .msg-face {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+}
+.msg.a.face > .msg-face.blank {
+  visibility: hidden;
+}
+.msg.a.face > .b {
+  max-width: min(80%, 760px);
 }
 .msg .b {
   border-radius: var(--r-bubble);
@@ -87,7 +140,7 @@
 .msg.u .b {
   background: var(--bub-me);
   color: var(--ink);
-  max-width: 70%;
+  max-width: min(70%, 640px);
   white-space: pre-wrap;
 }
 .msg.a .b {
@@ -117,71 +170,196 @@
   font-size: 11px;
   color: var(--danger);
 }
-.md p + p,
-.md p + ul,
-.md p + ol,
-.md ul + p,
-.md ol + p,
-.md pre + p,
-.md p + pre {
-  margin-top: 5px;
+/* Markdown in bubbles. One rhythm (8px between blocks), headings by size, code blocks as their own surface,
+   tables that keep numbers on one line, GFM task lists without a second marker. */
+.md > * + * {
+  margin-top: 8px;
+}
+.md li > p + p,
+.md li > ul,
+.md li > ol {
+  margin-top: 2px;
 }
 .md ul,
 .md ol {
-  padding-left: 16px;
-  margin-top: 3px;
+  padding-left: 18px;
   display: grid;
-  gap: 1px;
+  gap: 2px;
 }
 .md li::marker {
-  color: var(--quiet);
+  color: var(--muted);
 }
 .md strong,
 .md b {
   color: var(--ink);
   font-weight: 600;
 }
+/* Hangul has no italic; a synthetic slant reads as broken, so emphasis is weight + ink there */
+.md em {
+  font-style: italic;
+}
+.md em.hangul {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
 .md h1,
 .md h2,
 .md h3,
 .md h4 {
-  font-size: var(--fs-msg);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ink);
-  margin: 6px 0 2px;
+  line-height: 1.35;
 }
+.md h1 {
+  font-size: calc(var(--fs-msg) + 6px);
+}
+.md h2 {
+  font-size: calc(var(--fs-msg) + 4px);
+}
+.md h3 {
+  font-size: calc(var(--fs-msg) + 1px);
+}
+.md h4 {
+  font-size: var(--fs-msg);
+}
+.md > h1:not(:first-child),
+.md > h2:not(:first-child),
+.md > h3:not(:first-child),
+.md > h4:not(:first-child) {
+  margin-top: 16px;
+}
+.md > h1 + *,
+.md > h2 + *,
+.md > h3 + *,
+.md > h4 + * {
+  margin-top: 4px;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 12px 0;
+}
+/* code block: its own surface; beats `.msg .b code` so the inline-code tint never paints each line */
 .md pre {
-  background: var(--raise);
-  border-radius: var(--r);
-  padding: 8px 10px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--page));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 11px;
   overflow-x: auto;
-  margin: 4px 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  scrollbar-width: thin;
 }
+.msg .b.md pre code,
+.msg .b .md pre code,
 .md pre code {
   background: none;
   padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  /* chat code wraps instead of hiding the end of a long line behind an invisible scrollbar */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: block;
 }
 .md a {
   color: var(--link);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+  overflow-wrap: anywhere;
 }
-.md blockquote {
-  border-left: 2px solid var(--line);
-  padding-left: 10px;
+.md del {
   color: var(--muted);
 }
+.md blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  padding: 2px 0 2px 10px;
+  color: var(--body);
+}
+/* tables: scroll inside the bubble when wide; numbers and short cells stay on one line */
 .md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   font-size: 12px;
-  margin: 4px 0;
+  scrollbar-width: thin;
 }
 .md th,
 .md td {
-  border: 1px solid var(--line);
-  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  padding: 4px 9px;
   text-align: left;
+  vertical-align: top;
+}
+.md th {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.md td[align="right"],
+.md th[align="right"],
+.md td[style*="right"],
+.md th[style*="right"] {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.md td[align="center"],
+.md th[align="center"],
+.md td[style*="center"],
+.md th[style*="center"] {
+  text-align: center;
+  white-space: nowrap;
+}
+.md td {
+  min-width: 48px;
+}
+.md td code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.md td:has(code) {
+  max-width: 260px;
+  white-space: normal;
+}
+
+/* GFM task lists: the checkbox is the marker */
+.md .contains-task-list {
+  list-style: none;
+  padding-left: 2px;
+}
+.md .task-list-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.md .task-list-item input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  border-radius: 3px;
+  display: grid;
+  place-content: center;
+}
+.md .task-list-item input[type="checkbox"]:checked {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.md .task-list-item input[type="checkbox"]:checked::after {
+  content: "";
+  width: 6px;
+  height: 3px;
+  border: solid var(--page);
+  border-width: 0 0 1.5px 1.5px;
+  transform: translateY(-1px) rotate(-45deg);
 }
 /* waiting for the first token: the face with the live ring, then a bubble of three typing dots */
 .msg.a.typing {
