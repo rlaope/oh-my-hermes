@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { Bot } from "../lib/protocol";
 import { askText, type Ask, type Chat } from "../state/store";
 import { Avatar } from "../ui";
+import { AskLine } from "./Needs";
 import { shortTime } from "../app/time";
 
 /** One-line preview: live turn status while running, else the last assistant text. */
@@ -152,12 +153,11 @@ export function BotRow({
           </span>
           <span className="bot-r2">
             <span className={`bot-p${p.live && !needs ? " live" : ""}${needs ? " ask" : ""}`} data-testid="bot-sub">
-              {text}
+              {needs ? <AskLine text={text} /> : text}
             </span>
             {needs > 0 ? (
-              <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer">
-                {needs}
-              </span>
+              // a plain amber dot, no number: a count here would read as unread (the strip carries the count)
+              <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />
             ) : (
               unread > 0 && (
                 <span className="badge" data-testid="unread">

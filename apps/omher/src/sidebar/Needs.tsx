@@ -1,10 +1,19 @@
 // "Needs you": approvals and questions waiting on the person in any bot, pinned above the BOTS list. One line
-// ("2 need you"); clicking it lists each ask (bot face, the ask in one line, its age), and an item opens that
-// bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask.
+// ("2 need you"); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
+// view): each ask with the bot's face, a type tag (Approve / Question), the ask on up to two lines, and its age. An
+// item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
+// or a click outside closes the list.
 import { useEffect, useRef, useState } from "react";
 import { useNow } from "../elsewhere/useNow";
 import { askText, useStore, type Ask } from "../state/store";
-import { Avatar } from "../ui";
+import { Avatar, ChevronDown } from "../ui";
+
+/** An ask as one plain line, with `code` spans set in mono instead of showing raw backticks. */
+export function AskLine({ text }: { text: string }) {
+  const parts = text.split("`");
+  if (parts.length < 3 || parts.length % 2 === 0) return <>{text}</>;
+  return <>{parts.map((p, i) => (i % 2 ? <code key={i}>{p}</code> : p))}</>;
+}
 
 /** "now", "40s", "3m", "2h". */
 export function age(ts: number, nowMs: number): string {
@@ -35,7 +44,16 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
   const name = (bot: string) => s.bots.find((b) => b.name === bot)?.display_name ?? bot;
   const n = asks.length;
   return (
-    <div className="needs-w" ref={ref}>
+    <div
+      className={`needs-w${open ? " open" : ""}`}
+      ref={ref}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape" || !open) return;
+        e.preventDefault();
+        setOpen(false);
+        ref.current?.querySelector<HTMLButtonElement>(".needs-strip")?.focus();
+      }}
+    >
       <button
         type="button"
         className="needs-strip"
@@ -49,6 +67,9 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
         <span className="needs-k" aria-hidden="true">
           {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘J" : "Ctrl+J"}
         </span>
+        <span className="needs-chev" aria-hidden="true">
+          <ChevronDown size={10} />
+        </span>
       </button>
       {open && (
         <div
@@ -56,9 +77,6 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
           role="list"
           aria-label="Waiting for your answer"
           data-testid="needs-list"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setOpen(false);
-          }}
         >
           {asks.map((a) => (
             <button
@@ -74,10 +92,17 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
             >
               <Avatar bot={a.bot} size={20} />
               <span className="needs-m">
-                <span className="needs-b">{name(a.bot)}</span>
-                <span className="needs-q">{askText(a.item)}</span>
+                <span className="needs-r1">
+                  <span className="needs-b">{name(a.bot)}</span>
+                  <span className="needs-tag" data-testid="needs-tag">
+                    {a.item.kind === "approval" ? "Approve" : "Question"}
+                  </span>
+                  <span className="needs-age">{age(a.ts, now)}</span>
+                </span>
+                <span className="needs-q" title={askText(a.item)}>
+                  <AskLine text={askText(a.item)} />
+                </span>
               </span>
-              <span className="needs-age">{age(a.ts, now)}</span>
             </button>
           ))}
         </div>

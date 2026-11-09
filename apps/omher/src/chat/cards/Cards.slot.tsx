@@ -147,7 +147,9 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
 }
 
 
-/** One question's choices as chips (gray when selected) plus a free-text "Other", or just the text field. */
+/** One question's choices as chips (gray when selected) plus a free-text "Other", or just the text field. The
+ *  "Other…" chip looks like its siblings and, once clicked, opens a text field as wide as the chip row (the same
+ *  for single and multi select); emptied and left, it folds back into the chip. */
 function QuestionInput({
   q,
   pick,
@@ -172,7 +174,7 @@ function QuestionInput({
   if (!choices.length) {
     return (
       <input
-        className="card-in"
+        className="card-in iv-in"
         value={pick.other}
         disabled={disabled}
         placeholder="Your answer (optional)"
@@ -184,6 +186,7 @@ function QuestionInput({
   const showOther = otherOpen || !!pick.other;
   return (
     <div className="iv-chips" role={multi ? "group" : "radiogroup"} aria-label={q.question}>
+      {/* the Other chip stays in the row (pressed while its field is open); the field takes the next line */}
       {choices.map((c) => {
         const on = pick.chosen.includes(c);
         return (
@@ -201,20 +204,35 @@ function QuestionInput({
           </button>
         );
       })}
-      {showOther ? (
+      <button
+        type="button"
+        className={`iv-chip iv-more${showOther ? " open" : ""}${pick.other.trim() ? " on" : ""}`}
+        aria-expanded={showOther}
+        disabled={disabled}
+        onClick={() => setOtherOpen(true)}
+      >
+        {multi && <span className="iv-box" aria-hidden="true">{pick.other.trim() ? "✓" : ""}</span>}
+        Other…
+      </button>
+      {showOther && (
         <input
-          className="card-in iv-other"
+          className="card-in iv-in iv-other"
           value={pick.other}
           disabled={disabled}
           autoFocus={otherOpen && !pick.other}
-          placeholder="Other"
+          placeholder={multi ? "Something else (added to your picks)" : "Something else"}
           aria-label={`Other answer ${index + 1}`}
           onChange={(e) => onChange({ chosen: multi ? pick.chosen : [], other: e.target.value })}
+          onBlur={() => {
+            if (!pick.other.trim()) setOtherOpen(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && !pick.other) {
+              e.stopPropagation();
+              setOtherOpen(false);
+            }
+          }}
         />
-      ) : (
-        <button type="button" className="iv-chip iv-more" disabled={disabled} onClick={() => setOtherOpen(true)}>
-          Other…
-        </button>
       )}
     </div>
   );
@@ -262,7 +280,7 @@ function Interview({ bot, item, cardRef }: { bot: string; item: ClarifyItem; car
             <div className="iv-text">
               <span className="iv-n">{i + 1}</span>
               {q.question}
-              {q.multi_select && q.choices?.length ? <span className="iv-hint"> · pick any</span> : null}
+              {q.choices?.length ? <span className="iv-hint"> · {q.multi_select ? "pick any" : "pick one"}</span> : null}
             </div>
             <QuestionInput
               q={q}
@@ -275,11 +293,11 @@ function Interview({ bot, item, cardRef }: { bot: string; item: ClarifyItem; car
         ))}
       </ol>
       <div className="card-acts">
-        <button type="submit" className="card-btn soft" disabled={busy}>
+        <button type="submit" className="card-btn primary" disabled={busy}>
           Submit
         </button>
         <span className="iv-count" data-testid="iv-count">
-          {given} of {qs.length} answered{given < qs.length ? " · the rest are skipped" : ""}
+          {given} of {qs.length} answered{given < qs.length ? ` · ${qs.length - given} will be skipped` : ""}
         </span>
         {err && <span className="card-err">Not sent · {err}</span>}
       </div>
