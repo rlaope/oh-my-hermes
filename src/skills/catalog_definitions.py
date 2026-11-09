@@ -5826,9 +5826,9 @@ _DEFINITIONS = [
             f"Every cluster carries an origin, and no FIX_READY handoff covers a `{_PRE_EXISTING}` or `{_UNKNOWN_ORIGIN}` one.",
             "The rerun ladder names targeted, broad local, CI, and DCO checks without claiming they already passed.",
             "The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE in the record; "
-            "the reply says it in plain words in the person's language (ready to fix, more of the log is needed, blocked by the "
-            "environment, needs a fresh observed rerun), and record names such as handoff, cluster matrix, or evidence boundary "
-            "are never reply headings.",
+            "the reply says it in plain words (ready to fix, more of the log is needed, blocked by the environment, needs a "
+            "fresh observed rerun or the failures were already there before this change), and record names such as handoff, "
+            "cluster matrix, or evidence boundary are never reply headings.",
         ),
         recovery_notes=(
             "If the log is missing or stale, fetch it when `gh` is authenticated (`gh run view <id> --log-failed`); otherwise ask for the smallest fresh command output or CI job URL.",
@@ -8027,9 +8027,10 @@ _DEFINITIONS = [
             "The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.",
             "The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.",
             "Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.",
-            "The reply uses plain words in the person's language: the verdict as ready or not ready to merge, the spec axis as "
-            "whether the change does what was asked, gaps as what could not be checked and why; `no_ship`, `not_assessed`, "
-            "`spec_axis`, `verification_gaps`, and `could_not_assess` stay in the structured return, never in the reply.",
+            "A reply to the person uses plain words: the verdict as whether anything found blocks the change (blocking issues "
+            "found / nothing blocking found), the spec axis as whether the change does what was asked, gaps as what could not "
+            "be checked and why; `ship`, `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` "
+            "stay out of it. A dispatched reviewer's structured return keeps those schema fields.",
         ),
         recovery_notes=(
             "If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.",

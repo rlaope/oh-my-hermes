@@ -175,8 +175,9 @@ All notable changes will be documented here.
   verdicts, code-review's `no_ship`, `not_assessed`, `spec_axis` and
   `verification_gaps`, and "run record" inside commit text. The
   build-failure-triage, code-review and commit-pr-authoring checklists now
-  give each verdict a plain reading in the person's language and keep the
-  tokens in the record or structured return; release-cut says "every file
+  give each verdict a plain reading (the review verdict makes no merge
+  claim) and keep the tokens in the record or structured return, which a
+  dispatched reviewer still returns in full; release-cut says "every file
   that carries the version". No schema, tool contract or record field
   changes, and routing is unchanged.
 - **`omh coding model-routing status` names each discovered model once.**

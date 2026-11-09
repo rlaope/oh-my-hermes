@@ -452,7 +452,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # before it was ed82a2da...ba22.
         # Skill verdicts and labels then read in plain words in the reply (build-failure-triage, code-review,
         # commit-pr-authoring, release-cut); only those bodies move, and the pin before it was 18512bc6...beff.
-        self.assertEqual(_digest(legacy_hashes), '2a2ae18e58ab4c90fec42d90ffc264729a1e1cf1606fe31921e2e5a414a2ca42')
+        # Its review then drops the reply-language words, reads the code-review verdict without a merge claim and
+        # scopes it to replies to the person, and gives ROUTE_TO_VERIFICATION_GATE its second trigger; only
+        # build-failure-triage and code-review move, and the pin before it was 2a2ae18e...a2ca42.
+        self.assertEqual(_digest(legacy_hashes), 'a8919f8849182e3ece1bc5bd8a6b4cf146b6404de407d001800ec8b9a3cb258d')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
