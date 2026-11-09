@@ -480,6 +480,38 @@ All notable changes will be documented here.
   pushes out a hint already there, and a message over 1000 characters is not
   read. Hint text and routes are unchanged.
 
+- **A setup-profile default coding owner is no longer taken for one named
+  in the request.** `omh chat interact` and `omh chat session start` used to
+  resolve the profile's `default_executor` before the wrapper saw it, so the
+  wrapper labelled it `explicit`: it skipped the genre veto that holds a
+  non-coding request back from an external coding CLI, and it was recorded as
+  an explicit choice the person never made. The wrapper now reads the profile
+  itself and labels it `setup_profile`, the route decision is the
+  recorded-owner one, and nothing is recorded. An owner named in the message
+  now beats the profile default on every entry point: with the profile on
+  `claude-code`, "fix the login bug with codex" runs Codex through `chat
+  interact`, `chat session start` and `coding delegate`, as it already did
+  through the plugin `omh_interact` tool (those three ran Claude Code before).
+  With no profile set, `coding delegate` now takes that named owner too,
+  where it fell back to `generic`. `--executor` still wins over both. A CLI
+  counts as named only as the one to do the work ("use codex", "with claude
+  code", "have codex fix", "codex로", "codex한테", "클로드 코드로", "open this in
+  codex"): "fix the codex adapter tests" or "update the claude code docs"
+  names what the work is about and chooses no owner, on every entry point and
+  in the route decision, where a bare product name used to pick the owner.
+  A dag-ulw request reads the same cue: "/dag-ulw fix the codex adapter tests"
+  no longer sends a node that names `owner: codex` to Codex.
+  The CLI addressed as the one to act counts too ("codex가 고쳐줘", "codex,
+  fix ...", "get codex to ...", "codex please ...", "can codex fix ...",
+  "codexに…させて"). When a request mentions a coding CLI but not as the one
+  to do the work, and the profile default is a different CLI, nothing runs:
+  the owner is asked for, with the mentioned CLI named first ("fix the login
+  bug in codex", "codex에서 로그인 버그 고쳐줘") A CLI the request excludes ("don't use
+  codex", "codex 말고"), or names only inside a link or a filename, is no such
+  mention, and naming two owners as the doer asks on every entry point. The plugin tool and the turn's route
+  hint now say `owner_set_in_setup_profile` when the profile holds the owner,
+  where they said the owner had to be asked for.
+
 - **The operations and board skills now name the commands and Hermes
   surfaces they depend on.** `cancel` lists what exists before clearing and
   hands a running scheduled job to `hermes cron pause` and `runs`, and to

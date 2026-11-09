@@ -7,7 +7,8 @@ from typing import Any, Mapping
 from .executor_cues import (
     NAMED_CODING_AGENT_PHRASES,
     PI_FAMILY_CODING_AGENT_PHRASES,
-    contains_boundary_phrase,
+    owner_mentioned,
+    owner_named_as_doer,
 )
 from .localization import normalized_phrase
 from .owner_preference import owner_preference_decision
@@ -67,16 +68,9 @@ NAMED_EXECUTOR_OWNER_PHRASES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pi-family-runtime", PI_FAMILY_CODING_AGENT_PHRASES),
 )
 
-# Owner groups whose phrases hide inside ordinary words as raw substrings
-# (a word ending in the runtime's short name contains its runtime phrase, and
-# "api한테" contains "pi한테") or as
-# ordinary hyphenated words and filenames ("claudecode-notes", "claude-code.md",
-# "codex-utils.py" each contain a bare owner name that never named the
-# executor). These groups are matched with `contains_boundary_phrase`; every
-# other group keeps plain containment. `hermes`'s two-word phrases are
-# distinctive enough in practice that this fix is not extended to that group
-# here; extend it the same way if a similar hole is ever measured there.
-_BOUNDARY_MATCHED_OWNERS: frozenset[str] = frozenset({"codex", "claude-code", "pi-family-runtime"})
+# Every owner group is matched at a word boundary and only with an owner cue (`owner_named_as_doer`): a name
+# inside an ordinary word or filename ("api한테", "claude-code.md", "codex-utils.py") or a bare product word that
+# names what the work is about ("fix the codex adapter tests") is no owner choice.
 
 # Request-led compatible routes. These cues name the *shape* of the coding owner the
 # request needs, never a vendor, so Hermes can pick a compatible route family without
@@ -133,6 +127,8 @@ UNSAFE_AUTOMATIC_SELECTION_PHRASES: tuple[str, ...] = (
 )
 
 RECORDED_OWNER_UNSET_VALUES: frozenset[str] = frozenset({"", "choose"})
+# Owners that start no external coding CLI; a mention of another CLI cannot make them run the wrong one.
+NON_CLI_OWNERS: frozenset[str] = frozenset({"hermes", "generic"})
 
 CODING_ROUTE_DECISION_CLAIM_BOUNDARY = (
     "A coding route decision selects a prepared handoff shape only. It is not executor dispatch, "
@@ -159,6 +155,8 @@ class CodingRouteDecision:
     owner_preference_override_available: bool = False
     owner_preference_reset_available: bool = False
     owner_preference_reset_reason: str = ""
+    # A coding CLI the request mentions but not as the one to do the work, offered first when the owner is asked.
+    offered_owner: str = ""
 
 
 def resolve_coding_route_decision(
@@ -191,6 +189,7 @@ def resolve_coding_route_decision(
             or str(requested_owner or "").strip().casefold() not in RECORDED_OWNER_UNSET_VALUES
         ),
         multiple_owners=len(owners) > 1,
+        profile_owner=str(recorded_owner or "").strip().casefold() not in RECORDED_OWNER_UNSET_VALUES,
         authority_blocked=bool(unsafe),
         owner_ready=owner_ready,
         capability_fit=capability_fit,
@@ -244,6 +243,27 @@ def resolve_coding_route_decision(
         )
 
     normalized_recorded_owner = str(recorded_owner or "").strip().casefold()
+    mentioned = [owner for owner in mentioned_executor_owners(normalized_query) if owner != normalized_recorded_owner]
+    if (
+        normalized_recorded_owner and normalized_recorded_owner not in RECORDED_OWNER_UNSET_VALUES
+        and normalized_recorded_owner not in NON_CLI_OWNERS and not owners and mentioned
+    ):
+        # Safety net: the request mentions another CLI in a way the cue list does not read as the doer ("fix the
+        # login bug in codex"). Running the profile default would silently pick the other CLI, so the user picks,
+        # with the mentioned one offered first.
+        return CodingRouteDecision(
+            next_action=USER_CHOICE_NEXT_ACTION,
+            source="user_choice_required",
+            reason=(
+                f"The request mentions `{mentioned[0]}` but not as the one to do the work, and the setup profile "
+                f"names `{normalized_recorded_owner}`, so the user picks."
+            ),
+            confidence="low",
+            choice_required=True,
+            matched_cues=(f"mentioned_owner:{mentioned[0]}",),
+            offered_owner=mentioned[0],
+            **preference_fields,
+        )
     if normalized_recorded_owner and normalized_recorded_owner not in RECORDED_OWNER_UNSET_VALUES:
         return CodingRouteDecision(
             next_action=RECORDED_OWNER_NEXT_ACTION,
@@ -280,15 +300,26 @@ def resolve_coding_route_decision(
     )
 
 
+def mentioned_executor_owners(normalized_query: str) -> tuple[str, ...]:
+    """The executor profile ids the request mentions as a whole word, as the doer or not.
+
+    A negated mention ("don't use codex") or one inside a link or path does not count (`owner_mentioned`).
+    """
+    return tuple(
+        owner for owner, phrases in NAMED_EXECUTOR_OWNER_PHRASES
+        if any(owner_mentioned(normalized_query, phrase) for phrase in _normalized_options(phrases))
+    )
+
+
 def named_executor_owners(normalized_query: str) -> tuple[str, ...]:
-    """Return the distinct executor profile ids named in an already-normalized request."""
+    """Return the distinct executor profile ids an already-normalized request names as the one to do the work.
+
+    A name counts only with an owner cue (`owner_named_as_doer`): "use codex", "with claude code", "codex로".
+    "fix the codex adapter tests" names what the work is about, not who does it, and names no owner.
+    """
     owners: list[str] = []
     for owner, phrases in NAMED_EXECUTOR_OWNER_PHRASES:
-        if owner in _BOUNDARY_MATCHED_OWNERS:
-            matched = contains_boundary_phrase(normalized_query, _normalized_options(phrases))
-        else:
-            matched = bool(_matched_phrases(normalized_query, phrases))
-        if matched:
+        if any(owner_named_as_doer(normalized_query, phrase) for phrase in _normalized_options(phrases)):
             owners.append(owner)
     return tuple(owners)
 
@@ -312,6 +343,7 @@ def coding_route_decision_payload(decision: CodingRouteDecision) -> dict[str, ob
         "owner_preference_override_available": decision.owner_preference_override_available,
         "owner_preference_reset_available": decision.owner_preference_reset_available,
         "owner_preference_reset_reason": decision.owner_preference_reset_reason,
+        "offered_owner": decision.offered_owner,
         "lane_next_action": CODING_ROUTE_LANE_NEXT_ACTION,
         "user_choice_next_action": USER_CHOICE_NEXT_ACTION,
         "claim_boundary": CODING_ROUTE_DECISION_CLAIM_BOUNDARY,
