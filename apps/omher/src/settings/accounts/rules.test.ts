@@ -33,6 +33,8 @@ describe("row names", () => {
     expect(rowTitle(acc("work", "ready", { label: "Work" }), 1)).toBe("Work");
     expect(rowTitle(acc("default", "ready"), 0)).toBe("This computer");
     expect(rowTitle(acc("x", "login"), 2)).toBe("Account 3");
+    // the CLI's own login with a name but no email is still "This computer"; the name goes under it
+    expect(rowTitle(acc("default", "ready", { label: "Personal" }), 0)).toBe("This computer");
   });
   it("says where the login lives under it", () => {
     expect(rowSub(acc("default", "active", { email: "a@b.c", label: "Personal" }))).toBe("Personal · This computer");
@@ -40,6 +42,12 @@ describe("row names", () => {
     expect(rowSub(acc("work", "ready", { label: "Work" }))).toBe("Added in omher");
     expect(rowSub({ ...acc("default", "active"), method: "chatgpt" })).toBe("ChatGPT login");
     expect(rowSub({ ...acc("default", "active", { email: "a@b.c" }), method: "claude.ai" })).toBe("This computer");
+  });
+  it("reads source · plan, the same for every CLI", () => {
+    expect(rowSub({ ...acc("default", "active", { email: "a@b.c" }), plan: "Max 20x" })).toBe("This computer · Max 20x");
+    expect(rowSub({ ...acc("work", "ready", { email: "w@b.c" }), plan: "Pro" })).toBe("Added in omher · Pro");
+    expect(rowSub({ ...acc("default", "active"), method: "chatgpt", plan: "Plus" })).toBe("ChatGPT login · Plus");
+    expect(rowSub({ ...acc("default", "active", { label: "Personal" }), plan: "" })).toBe("Personal");
   });
   it("outside the page: label, then email, then #n", () => {
     expect(accountName(acc("w", "ready", { label: "Work", email: "a@b.c" }), 0)).toBe("Work");
@@ -85,6 +93,11 @@ describe("mergeRow + pill", () => {
     expect(pill(mergeRow(acc("a", "ready"), null), false, NOW)).toBe("");
     expect(pill(mergeRow(acc("a", "limited", { resets_at: AT_14 }), null), true, NOW)).toBe("Limited until 14:00");
     expect(pill(mergeRow(acc("a", "login"), null), false, NOW)).toBe("Not signed in");
+  });
+  it("In use only when the CLI has two or more logins to pick from", () => {
+    expect(pill(mergeRow(acc("a", "active"), null), true, NOW, 1)).toBe("");
+    expect(pill(mergeRow(acc("a", "active"), null), true, NOW, 2)).toBe("In use");
+    expect(pill(mergeRow(acc("a", "login"), null), false, NOW, 1)).toBe("Not signed in");
   });
 });
 

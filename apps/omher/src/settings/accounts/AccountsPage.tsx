@@ -1,7 +1,7 @@
 // Settings › Accounts: the coding-CLI subscriptions on this computer that SESSIONS start with. One group per CLI
 // found here: the CLI's own login first ("This computer"), then the ones added in omher. "+ Add account" runs the
 // CLI's own sign-in with a new home folder; the browser part happens in the CLI, and omher never asks for or sees
-// a token or key. Bots are not here: they use their own Hermes settings.
+// a token or key. Bots are not here: they are set up under Bots.
 import { useEffect, useRef, useState } from "react";
 import "./accounts.css";
 import type { AccountGroup } from "../../lib/protocol";
@@ -46,7 +46,12 @@ export function AccountsPage() {
     <div className="st-page acc" data-testid="accounts-page">
       <div className="st-gh st-gh0">Accounts</div>
       <p className="acc-lead" data-testid="accounts-lead">
-        {HEADER_LINE}
+        {/* the last word opens Settings › Bots */}
+        {HEADER_LINE.replace(/Bots\.$/, "")}
+        <button type="button" className="acc-link" onClick={() => getStore().actions.openSettings("bots")} data-testid="accounts-to-bots">
+          Bots
+        </button>
+        .
       </p>
       {error && <p className="st-note">Could not read accounts: {error}</p>}
       {groups === null && !error && <p className="st-note">Loading…</p>}
@@ -56,10 +61,33 @@ export function AccountsPage() {
       ))}
       {split && split.missing.length > 0 && (
         <p className="acc-missing" data-testid="accounts-missing">
-          Not on this computer: {split.missing.join(", ")}
+          Not on this computer: {split.missing.join(", ")}.
         </p>
       )}
     </div>
+  );
+}
+
+/** "This computer · Max 20x · 5-hour limit: 62% used": source, plan (its own test id), then the first usage line. */
+function SubLine({ src, plan, usage }: { src: string; plan: string; usage?: string }) {
+  return (
+    <span className="acc-sub">
+      {src}
+      {plan && (
+        <>
+          {src && " · "}
+          <span className="acc-plan" data-testid="account-plan">
+            {plan}
+          </span>
+        </>
+      )}
+      {usage && (
+        <>
+          {(src || plan) && " · "}
+          {usage}
+        </>
+      )}
+    </span>
   );
 }
 
@@ -182,7 +210,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
         {rows.map((r, i) => {
           const inUse = r.id === g.active && r.signedIn;
           const lines = usageLines(r.usage, now);
-          const p = pill(r, inUse, now);
+          const p = pill(r, inUse, now, rows.length);
           return (
             <div className="acc-row" key={r.id} data-testid="account-row" data-id={r.id} data-state={r.state} data-in-use={inUse}>
               <span className="acc-ring" title={lines.join("\n") || undefined} data-testid="account-usage">
@@ -200,12 +228,9 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
               ) : (
                 <span className="acc-who" data-testid="account-name">
                   <span className="acc-n">{rowTitle(r, i)}</span>
-                  <span className="acc-sub">{[rowSub(r), lines[0]].filter(Boolean).join(" · ")}</span>
+                  <SubLine src={rowSub({ ...r, plan: "" })} plan={r.plan} usage={lines[0]} />
                 </span>
               )}
-              <span className="acc-plan" data-testid="account-plan">
-                {r.plan}
-              </span>
               {p ? (
                 <span className={`acc-pill${inUse && r.state !== "limited" ? " use" : ""}${r.signedIn ? "" : " out"}${r.state === "limited" ? " lim" : ""}`} data-testid="account-pill">
                   {p}

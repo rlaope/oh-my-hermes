@@ -82,21 +82,26 @@ test("the user row opens Accounts: one plain header line, CLIs on this computer 
   await expect(page.getByTestId("settings-nav-accounts")).toHaveAttribute("aria-current", "page");
   await expect(page.locator(".st-nav button").first()).toHaveText("Accounts");
   await expect(page.getByTestId("me")).toHaveClass(/\bon\b/);
-  await expect(page.getByTestId("accounts-lead")).toHaveText("Subscriptions your coding sessions use. Bots use their own Hermes settings.");
+  await expect(page.getByTestId("accounts-lead")).toHaveText("Logins omher uses when it runs Claude Code, Codex or pi for you. Bots are set up under Bots.");
   await expect(page.locator(".acc-g")).toHaveCount(3);
   await expect(page.locator(".acc-g .acc-gh b")).toHaveText(["Claude Code", "Codex", "pi"]);
-  await expect(page.getByTestId("accounts-missing")).toHaveText("Not on this computer: oh-my-pi, Grok, Gemini CLI");
+  await expect(page.getByTestId("accounts-missing")).toHaveText("Not on this computer: oh-my-pi, Grok, Gemini CLI.");
+  // "Bots" in the header line opens Settings › Bots
+  await page.getByTestId("accounts-to-bots").click();
+  await expect(page.getByTestId("settings-nav-bots")).toHaveAttribute("aria-current", "page");
+  await page.getByTestId("settings-nav-accounts").click();
   const text = await page.getByTestId("accounts-page").innerText();
   for (const gone of ["Stack your logins", "fill-first", "config.yaml", "secret-key", "CPA ", "management"]) expect(text).not.toContain(gone);
 });
 
-test("This computer: Claude's own login from its status, in full, with plan and In use; CPA is one quiet line", async ({ page }) => {
+test("This computer: Claude's own login from its status: email, then source · plan; no In use with one login; CPA is one quiet line", async ({ page }) => {
   await openAccounts(page);
   const me = row(page, "claude", "default");
-  await expect(me.getByTestId("account-name")).toContainText("owner@example.com");
-  await expect(me.getByTestId("account-name")).toContainText("This computer");
+  await expect(me.locator(".acc-n")).toHaveText("owner@example.com");
+  await expect(me.locator(".acc-sub")).toHaveText("This computer · Max 20x");
   await expect(me.getByTestId("account-plan")).toHaveText("Max 20x");
-  await expect(me.getByTestId("account-pill")).toHaveText("In use");
+  // the only Claude login: nothing to choose between, so no "In use"
+  await expect(me.getByTestId("account-pill")).toHaveCount(0);
   await expect(me).toHaveAttribute("data-in-use", "true");
   await expect(page.getByTestId("accounts-claude").getByTestId("accounts-also")).toHaveText(
     "Also found: CLIProxyAPI with 5 accounts (managed there).",
@@ -105,7 +110,9 @@ test("This computer: Claude's own login from its status, in full, with plan and 
   // Codex: usage ring with a plain tooltip; only one In use per CLI
   const codex = row(page, "codex", "default");
   await expect(codex.getByTestId("account-usage")).toHaveAttribute("title", /^5-hour limit: 73% used · resets [^\n]+\nWeekly limit: 60% used · resets /);
-  await expect(codex.getByTestId("account-name")).toContainText("ChatGPT login · 5-hour limit: 73% used · resets");
+  // no email known: "This computer" is the title, and the subtitle is source · plan like every other CLI
+  await expect(codex.locator(".acc-n")).toHaveText("This computer");
+  await expect(codex.locator(".acc-sub")).toContainText("ChatGPT login · Pro · 5-hour limit: 73% used · resets");
   await expect(page.getByTestId("accounts-codex").getByTestId("account-pill")).toHaveText(["In use"]);
   // one switch per CLI with more than one login, with its sentence
   await expect(page.getByTestId("autoswitch-codex")).toHaveAttribute("role", "switch");
@@ -118,6 +125,21 @@ test("This computer: Claude's own login from its status, in full, with plan and 
   await expect(page.getByTestId("add-account-pi")).toContainText("Soon");
   const html = await page.content();
   for (const k of ["access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY"]) expect(html).not.toContain(k);
+});
+
+test("the lines under each group and the page's last line keep one 8px rhythm", async ({ page }) => {
+  await openAccounts(page);
+  const gaps = await page.getByTestId("accounts-page").evaluate((p) => {
+    const out: [string, number][] = [];
+    for (const el of p.querySelectorAll(".acc-auto, .acc-also, .acc-msg, .acc-foot, .acc-missing")) {
+      const prev = el.previousElementSibling as HTMLElement | null;
+      if (!prev) continue;
+      out.push([el.className, Math.round(el.getBoundingClientRect().top - prev.getBoundingClientRect().bottom)]);
+    }
+    return out;
+  });
+  expect(gaps.length).toBeGreaterThanOrEqual(4);
+  for (const [cls, gap] of gaps) expect(gap, cls).toBe(8);
 });
 
 test("+ Add account runs the CLI's own sign-in; when it ends signed in, the row shows the email and plan", async ({ page }) => {

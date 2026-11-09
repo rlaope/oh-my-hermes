@@ -24,7 +24,7 @@ export const SIGN_IN: Record<AccountCli, "run" | "session" | null> = {
   gemini: null,
 };
 
-export const HEADER_LINE = "Subscriptions your coding sessions use. Bots use their own Hermes settings.";
+export const HEADER_LINE = "Logins omher uses when it runs Claude Code, Codex or pi for you. Bots are set up under Bots.";
 export const AUTO_SWITCH_LINE = "When this account hits its limit, new turns use the next one.";
 
 /** "max_20x" -> "Max 20x", "pro" -> "Pro", "chatgpt" -> "" (a login method is not a plan). */
@@ -39,26 +39,29 @@ export function planName(plan?: string | null): string {
     .join(" ");
 }
 
-/** What the row says it is: the full email (this is the owner's own computer), else its label, else
- *  "This computer" for the CLI's own login, else "Account n". */
+/** The row's title is who the login is: the full email (this is the owner's own computer). Without a known email:
+ *  the CLI's own login is "This computer", an added one its label, else "Account n". */
 export function rowTitle(a: Account, index: number): string {
   if (a.email) return a.email;
-  if (a.label) return a.label;
-  return a.id === "default" ? "This computer" : `Account ${index + 1}`;
+  if (a.id === "default") return "This computer";
+  return a.label || `Account ${index + 1}`;
 }
 
 const METHOD: Record<string, string> = { chatgpt: "ChatGPT login", api_key: "API key", "claude.ai": "Claude login" };
 
-/** The small line under the title: the label (when the title is the email), where the login lives, and how it
- *  signs in when there is no email to tell rows apart. */
-export function rowSub(a: Account & { method?: string | null }): string {
-  const parts: string[] = [];
-  if (a.email && a.label) parts.push(a.label);
-  if (a.id === "default" && (a.email || a.label)) parts.push("This computer");
-  if (a.id !== "default") parts.push("Added in omher");
-  const how = !a.email && a.method ? METHOD[a.method] : undefined;
-  if (how) parts.push(how);
-  return parts.join(" · ");
+/** Where the login lives, the same words for every CLI: "This computer" (the CLI's own) or "Added in omher". When
+ *  the title already says "This computer", the login method stands in ("ChatGPT login"). */
+export function rowSource(a: Account & { method?: string | null }): string {
+  if (a.id !== "default") return "Added in omher";
+  if (a.email) return "This computer";
+  return (a.method && METHOD[a.method]) || "";
+}
+
+/** The line under the title: the person's own name for the login (when the title is the email or "This computer"),
+ *  then source · plan. */
+export function rowSub(a: Account & { method?: string | null; plan?: string }): string {
+  const named = a.label && (a.email || a.id === "default") ? a.label : "";
+  return [named, rowSource(a), a.plan ?? ""].filter(Boolean).join(" · ");
 }
 
 /** The name used outside this page (chat line, session menu): label, else the email, else "#n". */
@@ -104,11 +107,12 @@ export function mergeRow(a: Account, st: LoginStatus | null | undefined): Row {
   };
 }
 
-/** The pill on a row: "In use", "Limited until 14:00", "Not signed in", or nothing. */
-export function pill(r: Row, inUse: boolean, now: number): string {
+/** The pill on a row: "In use" (only when the CLI has two or more logins to choose from), "Limited until 14:00",
+ *  "Not signed in", or nothing. */
+export function pill(r: Row, inUse: boolean, now: number, logins = 2): string {
   if (!r.signedIn) return "Not signed in";
   if (r.state === "limited") return typeof r.resets_at === "number" && r.resets_at > now ? `Limited until ${clock(r.resets_at, now)}` : "Limited";
-  return inUse ? "In use" : "";
+  return inUse && logins > 1 ? "In use" : "";
 }
 
 /** The account a new session of `cli` starts with, for the SESSIONS agent menu (null: the CLI's own login). */
