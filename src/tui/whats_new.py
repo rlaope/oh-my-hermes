@@ -39,7 +39,7 @@ WHATS_NEW: dict[str, tuple[str, ...]] = {
         "/gateway restart loads new OMH code and picks the session back up",
         "Tables are boxes, and a table wider than the screen wraps in its cells",
         "Attached images show a preview under the prompt that sends them",
-        "Each finished subagent is briefed in the transcript, named by its role",
+        "Each finished subagent is briefed in the transcript as it ends",
     ),
     "4.0.6": (
         "The working glow around the screen's edge is gone",
