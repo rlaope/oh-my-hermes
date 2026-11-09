@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { Bot } from "../../lib/protocol";
 import { selectTimeline, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
@@ -32,11 +32,22 @@ export function Timeline({ bot }: { bot: Bot }) {
     lastBot.current = bot.name;
   }, [bot.name, items, streaming]);
 
+  // Files the bot sent load after the row is drawn and make it taller: stay at the bottom if pinned.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (pinned.current) el.scrollTop = el.scrollHeight;
+    });
+    for (const row of el.querySelectorAll(".row-assistant")) ro.observe(row);
+    return () => ro.disconnect();
+  }, [bot.name, items]);
+
   const render = (it: TimelineItem): ReactNode => {
     switch (it.kind) {
       case "user":
       case "assistant":
-        return <Bubble item={it} />;
+        return <Bubble item={it} bot={bot.name} />;
       case "activity": {
         const C = slots.activity ?? ActivityFallback;
         return <C bot={bot.name} item={it} live={chat?.turn?.id === it.turn.id} />;

@@ -1034,3 +1034,104 @@ class SidePanel(unittest.TestCase):
             with self.assertRaises(ob.BridgeError) as e:
                 ob.read_diff(prof, str(Path(d)))
             self.assertEqual(e.exception.code, "not_found")
+
+
+class Media(BridgeCase):
+    """media.read: only files the bot named in a MEDIA: line of its main chat or an elsewhere session."""
+
+    def _db(self, prof: Path, rows: list[tuple[str, str, str]]):
+        import sqlite3
+        con = sqlite3.connect(prof / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, title TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?, ?)",
+                        [("main", "tui", ob.BOT_CHAT_TITLE), ("sl", "slack", None), ("cli", "cli", "scratch"),
+                         ("sub", "subagent", None)])
+        con.executemany("INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)", rows)
+        con.commit()
+        con.close()
+
+    def _files(self, d: Path) -> dict[str, Path]:
+        out = d / "out"
+        out.mkdir()
+        f = {"png": out / "a.png", "slack": out / "s.mp4", "user": out / "u.png", "cli": out / "c.png",
+             "sub": out / "sub.png", "prose": out / "p.png", "secret": d / "secret.txt"}
+        for p in f.values():
+            p.write_bytes(b"\x89PNG-ish")
+        (out / "link.png").symlink_to(f["secret"])
+        (out / "inner.png").symlink_to(f["png"])
+        (out / "dir.png").mkdir()
+        return f
+
+    async def test_serves_only_named_files(self):
+        async with Env() as env:
+            prof = env.home / "profiles" / "kami"
+            f = self._files(prof)
+            out = f["png"].parent
+            self._db(prof, [
+                ("main", "assistant", f"Here.\n\nMEDIA:{f['png']}\nMEDIA:{out / 'link.png'}\nMEDIA:{out / 'inner.png'}"
+                                      f"\nMEDIA:{out / 'dir.png'}"),
+                ("sl", "assistant", f"MEDIA:{f['slack']}"),
+                ("main", "user", f"MEDIA:{f['user']}"),
+                ("cli", "assistant", f"MEDIA:{f['cli']}"),
+                ("sub", "assistant", f"MEDIA:{f['sub']}"),
+                ("main", "assistant", f"see MEDIA:{f['prose']} and\n```\nMEDIA:{f['secret']}\n```"),
+            ])
+            s = await self.open(env)
+            r = await s.req("media.read", bot="kami", path=str(f["png"]))
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"]["mime"], "image/png")
+            self.assertEqual(r["result"]["size"], 8)
+            self.assertEqual(r["result"]["name"], "a.png")
+            import base64
+            self.assertEqual(base64.b64decode(r["result"]["data_base64"]), b"\x89PNG-ish")
+            info = await s.req("media.read", bot="kami", path=str(f["png"]), info=True)
+            self.assertNotIn("data_base64", info["result"])
+            self.assertEqual(info["result"]["size"], 8)
+            self.assertTrue((await s.req("media.read", bot="kami", path=str(f["slack"])))["ok"], "elsewhere session")
+            self.assertTrue((await s.req("media.read", bot="kami", path=str(out / "inner.png")))["ok"],
+                            "a symlink inside its own folder")
+            for path, why in [(f["user"], "a user message"), (f["cli"], "a cli session"), (f["sub"], "a subagent"),
+                              (f["prose"], "not a whole line"), (f["secret"], "fenced code"),
+                              (out / "link.png", "symlink escape"), (out / "dir.png", "a directory"),
+                              (out / "never.png", "never named"), (Path("/etc/hosts"), "never named")]:
+                r = await s.req("media.read", bot="kami", path=str(path))
+                self.assertFalse(r["ok"], why)
+                self.assertEqual(r["error"]["code"], "not_found", why)
+            r = await s.req("media.read", bot="kami", path="")
+            self.assertEqual(r["error"]["code"], "bad_request")
+
+    def test_too_big_is_never_read(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            big = prof / "big.mp4"
+            with open(big, "wb") as fh:  # sparse: 25 MB + 1 without writing it
+                fh.truncate(ob.MEDIA_MAX + 1)
+            self._db(prof, [("main", "assistant", f"MEDIA:{big}")])
+            real_open = open
+            opened = []
+
+            def spy(path, *a, **kw):
+                opened.append(str(path))
+                return real_open(path, *a, **kw)
+
+            with mock.patch("builtins.open", spy):
+                r = ob.read_media(prof, str(big))
+            self.assertEqual(r["too_big"], True)
+            self.assertEqual(r["size"], ob.MEDIA_MAX + 1)
+            self.assertNotIn("data_base64", r)
+            self.assertNotIn(os.path.realpath(big), [os.path.realpath(p) for p in opened])
+
+    def test_state_db_is_opened_read_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            (prof / "a.png").write_bytes(b"x")
+            self._db(prof, [("main", "assistant", f"MEDIA:{prof / 'a.png'}")])
+            before = (prof / "state.db").stat().st_mtime_ns
+            self.assertEqual(ob.read_media(prof, str(prof / "a.png"))["size"], 1)
+            self.assertEqual((prof / "state.db").stat().st_mtime_ns, before)
+
+    def test_media_lines_match_the_ui_parser(self):
+        text = "Done.\nMEDIA:/w/a.png\n  MEDIA: `/w/b c.mp4`\nsee MEDIA:/w/x.png\nMEDIA:rel.png\n```\nMEDIA:/w/f.png\n```"
+        self.assertEqual(ob.media_paths(text), ["/w/a.png", "/w/b c.mp4"])

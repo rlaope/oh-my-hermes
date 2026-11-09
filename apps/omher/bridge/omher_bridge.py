@@ -414,6 +414,113 @@ def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> d
             "patch": patch[:DIFF_MAX], "truncated": truncated}
 
 
+# ---------------------------------------------------------------- media the bot sent (read-only)
+
+MEDIA_MAX = 25 * 1024 * 1024   # larger files come back as `too_big` and are never read
+MEDIA_SCAN = 50                # newest assistant rows naming the path that are checked line by line
+MEDIA_READY_PREFIX = "OMHER_MEDIA_SERVED "  # stdout line the app reads: the only paths it may open
+_MEDIA_LINE = re.compile(r"^[ \t]*MEDIA:[ \t]*(.+?)[ \t]*$")
+_MEDIA_PATH = re.compile(r"^(?:/|~/|[A-Za-z]:[\\/])")
+_MEDIA_FENCE = re.compile(r"^[ \t]*(```|~~~)")
+MEDIA_TYPES = {
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
+    "heic": "image/heic", "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm", "m4v": "video/x-m4v",
+    "mp3": "audio/mpeg", "m4a": "audio/mp4", "wav": "audio/wav", "ogg": "audio/ogg", "pdf": "application/pdf",
+    "zip": "application/zip",
+}
+# The main chat by title, and every elsewhere place (what `elsewhere.list` shows); never subagent rows.
+_MEDIA_SESSIONS = ("(s.title = ? OR s.source NOT IN ("
+                   + ",".join("?" * (len(LOCAL_SOURCES) + 2)) + "))")
+
+
+def media_paths(text: str) -> list[str]:
+    """Paths named by whole `MEDIA:<path>` lines, in order (fenced code is skipped). The UI parses the same
+    way (src/chat/parts/mediaLines.ts), so a path the UI shows is a path this bridge will serve."""
+    out, fence = [], False
+    for line in (text or "").splitlines():
+        if _MEDIA_FENCE.match(line):
+            fence = not fence
+            continue
+        m = None if fence else _MEDIA_LINE.match(line)
+        if not m:
+            continue
+        p = m.group(1)
+        if len(p) >= 2 and p[0] == p[-1] and p[0] in "`\"'":
+            p = p[1:-1].strip()
+        if _MEDIA_PATH.match(p):
+            out.append(p)
+    return out
+
+
+def media_named(profile_dir: Path, path: str) -> bool:
+    """True when an assistant message of the bot's main chat or one of its elsewhere sessions has a
+    `MEDIA:` line naming exactly *path*. state.db is opened read-only."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not path or not db.is_file():
+        return False
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            rows = con.execute(
+                "SELECT m.content FROM messages m JOIN sessions s ON s.id = m.session_id"
+                f" WHERE m.role = 'assistant' AND instr(m.content, ?) > 0 AND {_MEDIA_SESSIONS}"
+                " ORDER BY m.id DESC LIMIT ?",
+                (path, BOT_CHAT_TITLE, *sorted(LOCAL_SOURCES), "subagent", "oneshot", MEDIA_SCAN)).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    return any(isinstance(c, str) and path in media_paths(c) for (c,) in rows)
+
+
+def media_file(path: str) -> str | None:
+    """The real file behind *path*, or None: not absolute, missing, a directory, or a symlink that leads
+    out of its own folder."""
+    p = Path(os.path.expanduser(path))
+    if not p.is_absolute():
+        return None
+    try:
+        os.lstat(p)
+    except OSError:
+        return None
+    real = os.path.realpath(p)
+    if os.path.islink(p):
+        base = os.path.realpath(p.parent)
+        try:
+            if os.path.commonpath([base, real]) != base:
+                return None
+        except ValueError:  # another drive on Windows
+            return None
+    return real if os.path.isfile(real) else None
+
+
+def read_media(profile_dir: Path, path: str, info: bool = False) -> dict:
+    """`media.read`: one file the bot itself named, base64, up to MEDIA_MAX (`info`: name, type and size
+    only, for a file card). Anything else is `not_found`."""
+    import base64
+    real = media_file(path) if media_named(profile_dir, path) else None
+    if real is None:
+        raise BridgeError("not_found", "not a file this bot sent")
+    ext = real.rsplit(".", 1)[-1].lower() if "." in os.path.basename(real) else ""
+    import mimetypes
+    mime = MEDIA_TYPES.get(ext) or mimetypes.guess_type(real)[0] or "application/octet-stream"
+    size = os.path.getsize(real)
+    out = {"path": real, "name": os.path.basename(real), "mime": mime, "size": size}
+    if size > MEDIA_MAX:
+        return {**out, "too_big": True}
+    if info:
+        return out
+    try:
+        with open(real, "rb") as f:
+            data = f.read(MEDIA_MAX + 1)
+    except OSError:
+        raise BridgeError("not_found", "could not read the file")
+    if len(data) > MEDIA_MAX:  # grew since stat
+        return {**out, "size": len(data), "too_big": True}
+    return {**out, "size": len(data), "data_base64": base64.b64encode(data).decode("ascii")}
+
+
 def read_bot_facts(profile_dir: Path) -> dict:
     """What the bot has done, for the bot page: sessions per place, first and last activity, skills
     and routines. Read from the profile's own files; ``state.db`` is opened read-only."""
@@ -693,8 +800,9 @@ class Bridge:
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
-            "panel.diff": self.op_panel_diff,
+            "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
         }
+        self.announce_media = False  # amain: tell the app (stdout) which files it may open
 
     # ------------------------------------------------------------ lifecycle
 
@@ -1251,6 +1359,16 @@ class Bridge:
             raise BridgeError("bad_request", "missing path")
         return await asyncio.to_thread(read_diff, bot["path"], path)
 
+    async def op_media_read(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        path = p.get("path")
+        if not isinstance(path, str) or not path or len(path) > 4096 or "\n" in path or "\0" in path:
+            raise BridgeError("bad_request", "missing path")
+        out = await asyncio.to_thread(read_media, bot["path"], path, p.get("info") is True)
+        if self.announce_media:
+            print(MEDIA_READY_PREFIX + json.dumps({"path": out["path"]}), flush=True)
+        return out
+
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}
 
@@ -1411,6 +1529,7 @@ def _stop_on_signals(loop, stop: asyncio.Event) -> None:
 
 async def amain(args) -> int:
     bridge = Bridge(token=args.token, hermes_home=Path(args.hermes_home) if args.hermes_home else None, eager=args.eager)
+    bridge.announce_media = True
     port = await bridge.start("127.0.0.1", args.port)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

@@ -26,6 +26,8 @@ RULES = (
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
+    "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
+    "the desktop app opens only a file the bridge just served this way.",
 )
 
 
@@ -39,9 +41,9 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_ten_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_eleven_numbered_rules(self) -> None:
         rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 10, len(rules))
+        self.assertTrue(6 <= len(rules) <= 11, len(rules))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
@@ -118,6 +120,16 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         writes = {n.value for n in ast.walk(self.tree)
                   if isinstance(n, ast.Constant) and n.value in {"profiles.configure", "profiles.create", "profile.yaml"}}
         self.assertEqual(writes, {"profile.yaml"})  # named only by the display-name writer
+
+    def test_media_read_checks_the_bots_own_messages_read_only(self) -> None:
+        """`media.read` serves a path only after looking it up in state.db (opened with ``ro_uri``)."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, ast.FunctionDef)}
+        named = ast.unparse(fns["media_named"])
+        self.assertIn("ro_uri(db)", named)
+        self.assertIn("role = 'assistant'", named)
+        self.assertIn("media_named(profile_dir, path)", ast.unparse(fns["read_media"]))
+        lib = (ROOT / "apps" / "omher" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn("media_target(&path, |p| shell.bridge.served_media(p))", lib)
 
     def test_bridge_has_no_http_or_llm_client(self) -> None:
         banned = {"requests", "httpx", "aiohttp", "urllib3", "openai", "anthropic", "urllib.request", "http.client"}

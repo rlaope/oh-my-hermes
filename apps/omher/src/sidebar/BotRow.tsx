@@ -2,6 +2,7 @@ import type { Bot } from "../lib/protocol";
 import type { Chat } from "../state/store";
 import { Avatar } from "../ui";
 import { shortTime } from "../app/time";
+import { fileName, splitMedia } from "../chat/parts/mediaLines";
 
 /** One-line preview: live turn status while running, else the last assistant text. */
 export function preview(bot: Bot, chat: Chat | undefined): { text: string; live: boolean; ts: number | null } {
@@ -17,8 +18,12 @@ export function preview(bot: Bot, chat: Chat | undefined): { text: string; live:
   return { text: bot.description || "", live: false, ts: last ? last.ts : null };
 }
 
-/** Markdown-ish text to one plain line. */
-const plain = (t: string) =>
+/** Markdown-ish text to one plain line; a file the bot sent shows as its name. */
+const plain = (raw: string) => {
+  const { text, paths } = splitMedia(raw);
+  return text ? flat(text) : paths.map(fileName).join(", ");
+};
+const flat = (t: string) =>
   t
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[`*_>#]/g, "")

@@ -18,6 +18,7 @@ import type {
   TerminalRun,
   Worktree,
   WorktreeDiff,
+  MediaFile,
 } from "../lib/protocol";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
@@ -636,6 +637,8 @@ export interface Actions {
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
   panelWorktrees(bot: string): Promise<{ worktrees: Worktree[] }>;
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
+  /** A file the bot sent (`MEDIA:` line); never cached in the store. */
+  readMedia(bot: string, path: string, info?: boolean): Promise<MediaFile>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -882,6 +885,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
+    readMedia: (bot, path, info) => bridge.request("media.read", info ? { bot, path, info } : { bot, path }),
   };
 
   return {

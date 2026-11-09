@@ -17,6 +17,7 @@ is in `apps/omher/README.md`.
 8. The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.
 9. omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture (`assets/avatar.*`, through Hermes' `profiles.set_asset` when the gateway runs); the profile id, folder, config and sessions never change.
 10. The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`) with optional locks off, in folders the bot's own terminal runs used; omher never commits, checks out, pushes or edits a repository.
+11. omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer, in its main chat or an elsewhere session (`media.read`, read-only, files over 25 MB are not read); the desktop app opens only a file the bridge just served this way.
 
 ## What this does not claim
 

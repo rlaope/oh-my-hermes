@@ -144,6 +144,19 @@ export interface OpMap {
   "panel.terminal": { params: { bot: string }; result: { runs: TerminalRun[] } };
   "panel.worktrees": { params: { bot: string }; result: { worktrees: Worktree[] } };
   "panel.diff": { params: { bot: string; path: string }; result: WorktreeDiff };
+  /** A file the bot named in a `MEDIA:` line of its own answers (read-only). `info` skips the bytes. */
+  "media.read": { params: { bot: string; path: string; info?: boolean }; result: MediaFile };
+}
+
+export interface MediaFile {
+  /** The real file (symlinks resolved). */
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+  /** The bytes; absent when `info` was asked or the file is over 25 MB (`too_big`). */
+  data_base64?: string;
+  too_big?: boolean;
 }
 
 export interface TerminalRun {
