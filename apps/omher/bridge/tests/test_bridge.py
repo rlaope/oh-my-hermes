@@ -833,6 +833,48 @@ class FolderChats(BridgeCase):
             self.assertEqual(c.find("session.close"), [])
             self.assertEqual(c.find("session.create"), [])
 
+    async def test_folder_chat_asks_share_the_needs_you_path(self):
+        """A folder chat's asks take the main chat's path: clarify_batch on submit, an interview answered by
+        clarify.lock per question, timeouts and expiry, all tagged with the folder chat and kept apart from
+        the main chat's."""
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env(caps={"canonical_clarify_batch": True}) as env:
+                t = [1000.0]
+                env.bridge.clock = lambda: t[0]
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                self.assertTrue((await s.req("chat.send", bot="kami", session=fid, text="plan it"))["ok"])
+                self.assertEqual([(p["session_id"], p.get("clarify_batch")) for p in c.find("prompt.submit")],
+                                 [("rt-folder-0", True)])
+                c.events.put_nowait({"jsonrpc": "2.0", "id": "srq-f", "method": "clarify",
+                                     "params": {"session_id": "rt-folder-0", "timeout_s": 120,
+                                                "questions": NeedsYou.QUESTIONS[:2]}})
+                c.push("approval.request", {"prompt_id": "apf", "command": "rm x", "choices": ["once", "deny"],
+                                            "timeout_s": 30}, sid="rt-folder-0", execution_generation=3)
+                await s.until(lambda ev: any(e["event"] == "approval.request" for e in ev))
+                await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+                iv = [e for e in s.events if e["event"] == "clarify.request"][0]
+                self.assertEqual((iv["session"], iv["request_id"], iv["timeout_s"]), (fid, "srq-f", 120))
+                self.assertEqual([q["qid"] for q in iv["questions"]], ["q1", "q2"])
+                # answered without `session`, the id is the main chat's business: no lock, nothing reaches the folder chat
+                await s.req("clarify.respond", bot="kami", request_id="srq-f", answers={"q1": "x"})
+                self.assertEqual(c.find("clarify.lock"), [])
+                self.assertEqual({p["session_id"] for p in c.find("clarify.respond")}, {MAIN_RUNTIME})
+                r = await s.req("clarify.respond", bot="kami", session=fid, request_id="srq-f",
+                                answers={"q1": "Users", "q2": None})
+                self.assertTrue(r["ok"], r)
+                self.assertEqual(c.find("clarify.lock"), [
+                    {"request_id": "srq-f", "question_id": "q1", "answer": "Users"},
+                    {"request_id": "srq-f", "question_id": "q2", "answer": None}])
+                self.assertNotIn("rt-folder-0", {p["session_id"] for p in c.find("clarify.respond")})
+                # the approval goes unanswered past its 30 s: settled -> expired as a timeout, tagged
+                t[0] = 1031.0
+                c.push("approval.settled", {"prompt_id": "apf"}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "prompt.expired" for e in ev))
+                exp = [e for e in s.events if e["event"] == "prompt.expired"]
+                self.assertEqual([(e["request_id"], e["reason"], e.get("session")) for e in exp], [("apf", "timeout", fid)])
+
     async def test_gateway_loss_closes_folder_chats(self):
         with tempfile.TemporaryDirectory() as folder:
             async with Env() as env:

@@ -791,6 +791,12 @@ export function selectAsks(state: AppState): Ask[] {
   return out;
 }
 
+/** Who an ask comes from, as the Needs-you list names it: the bot's name, or for a SESSIONS chat its route's
+ *  label (the session's folder and agent, "web-app · Claude Code"). */
+export function askFrom(state: AppState, key: string): string {
+  return chatRoute(key)?.label ?? state.bots.find((b) => b.name === key)?.display_name ?? key;
+}
+
 /** One plain line for an ask: "Allow `rm -rf build/`?" or the (first) question. */
 export function askText(it: ApprovalItem | ClarifyItem): string {
   if (it.kind === "approval") return it.command ? `Allow \`${it.command}\`?` : it.title || "Allow this command?";

@@ -360,12 +360,25 @@
   --needs: #9a6200;
 }
 .bot-p.ss-needs {
-  color: var(--needs);
+  color: var(--needs-text, var(--needs));
   font-weight: 600;
+}
+/* typing dots end the agent name like they end a bot's live step */
+.ss-row .bot-p.live {
+  flex: 0 1 auto;
 }
 .ss-head-st.needs {
   color: var(--needs);
 }
 .ss-head-st.needs::before {
   background: var(--needs);
+}
+/* a session's face outside its row (Needs-you list, typing bubble): the agent mark in the row's box */
+.ss-face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
 }

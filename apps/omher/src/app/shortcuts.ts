@@ -1,7 +1,7 @@
 // App-wide keyboard shortcuts. ⌘ on macOS, Ctrl elsewhere:
 //   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search
 //   ⌘.     show or hide Details                    ⌘,  Settings
-//   ⌘J     jump to the next approval or question waiting on you (any bot)
+//   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
 // An approval card's own 1/2/3 keys live on the card (src/chat/cards), never here.
 import { useEffect } from "react";

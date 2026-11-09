@@ -262,7 +262,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     const key = keys.get(id)!;
     const r = rec(id);
     setChatRoute(key, {
-      label: r ? `${agentDef(r.agent).label} · ${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd}` : "Session",
+      // folder first: it tells sessions apart, and a narrow Needs-you row keeps it when the name is cut
+      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentDef(r.agent).label}` : "Session",
       open: () => store().actions.openSession(id),
       send: (text) => send(id, text),
       interrupt: () => input(id, { kind: "interrupt" }),
@@ -472,7 +473,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     disposeTerm(id);
     void stopChat(id);
     const key = keys.get(id);
-    if (key) setChatRoute(key, null);
+    if (key) {
+      setChatRoute(key, null);
+      store().dispatch({ type: "chat.forget", bot: key }); // its asks leave the Needs-you strip with it
+    }
     keys.delete(id);
     const idx = state.list.findIndex((s) => s.id === id);
     const list = state.list.filter((s) => s.id !== id);
@@ -527,6 +531,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     send,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
+    /** The session whose chat has app-store key `key`. */
+    byKey: (key: string) => {
+      for (const [id, k] of keys) if (k === key) return rec(id) ?? null;
+      return null;
+    },
     /** The app-store chat key of session `id`'s chat, if it has one. */
     chatKey: (id: string | null) => (id ? (keys.get(id) ?? null) : null),
     /** Hook for system notifications of session chats (the app sets it). */

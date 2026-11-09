@@ -68,11 +68,12 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   expect(st).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
 
   const row = page.locator("[data-testid=session-list] .ss-row").first();
-  await expect(row.getByTestId("live-dot")).toHaveCount(0); // idle chat: no live dot
+  await expect(row.getByTestId("live-ring")).toHaveCount(0); // idle chat: no ring
   await page.getByTestId("composer").fill("explain the sessions feature");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-user")).toHaveText("explain the sessions feature");
-  await expect(row.getByTestId("live-dot")).toBeVisible(); // live while the turn runs
+  await expect(row.getByTestId("live-ring")).toBeVisible(); // the answer ring while the turn runs, as on a bot row
+  await expect(row.getByTestId("live-dot")).toHaveCount(0); // a chat row rings; only a terminal row keeps the dot
   await expect(page.getByTestId("session-status")).toHaveText("Working");
   await expect(page.getByTestId("bubble-bot")).toHaveText("(mock Claude Code) You said: explain the sessions feature");
   // one activity line for the turn, collapsing to a summary; the step detail is the tool's argument
@@ -81,7 +82,7 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   await expect(page.getByTestId("activity-text")).toContainText("Worked for");
   await page.getByTestId("activity-toggle").click();
   await expect(page.getByTestId("activity-step")).toHaveText(/Read\s*README\.md/);
-  await expect(row.getByTestId("live-dot")).toHaveCount(0);
+  await expect(row.getByTestId("live-ring")).toHaveCount(0);
   const send = (await calls(page)).find((c) => c.op === "chat.input")!;
   expect(send.input).toEqual({ kind: "send", text: "explain the sessions feature" });
   // a session chat never goes to the bot's main chat
@@ -103,6 +104,10 @@ test("an approval card in a session: Deny first, answered with Allow for session
   await expect(row).toHaveAttribute("data-needs-you", "true");
   await expect(row.getByTestId("session-sub")).toHaveText("Claude Code · Needs you");
   await expect(page.getByTestId("session-status")).toHaveText("Needs you");
+  // the bot row's waiting state: amber dot and "waiting", the ring stops
+  await expect(row.getByTestId("needs")).toBeVisible();
+  await expect(row.getByTestId("bot-time")).toHaveText("waiting");
+  await expect(row.getByTestId("live-ring")).toHaveCount(0);
   // the activity line waits with the card
   await expect(page.getByTestId("activity-text")).toContainText("Waiting for approval");
 

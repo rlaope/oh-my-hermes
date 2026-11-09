@@ -16,7 +16,8 @@ function divider(prev: TimelineItem | undefined, cur: TimelineItem): string | nu
   return null;
 }
 
-export function Timeline({ bot }: { bot: Bot }) {
+/** `face` stands in for the bot's picture beside the typing bubble (a SESSIONS chat: its agent's mark). */
+export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
@@ -91,7 +92,7 @@ export function Timeline({ bot }: { bot: Bot }) {
       })}
       {typing && (
         <div className="row row-assistant row-typing" data-kind="typing">
-          <TypingRow bot={bot.name} name={bot.display_name} />
+          <TypingRow bot={bot.name} name={bot.display_name} face={face} />
         </div>
       )}
       {streaming && (

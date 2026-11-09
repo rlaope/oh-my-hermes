@@ -3,7 +3,7 @@
 // mode) or the agent's terminal.
 import { useEffect, useRef, useState } from "react";
 import type { ITheme } from "@xterm/xterm";
-import { useStore } from "../state/store";
+import { selectAsks, useStore } from "../state/store";
 import { resolveTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
@@ -12,6 +12,7 @@ import "../chat/model/model.css";
 import { ChevronDown, ModelIcon, Popover } from "../ui";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
+import { SessionFace } from "./SessionFace";
 import { agentDef, terminalNote, tildePath, type SessionRec } from "./agents";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 
@@ -110,7 +111,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
-      <Timeline bot={bot} />
+      <Timeline bot={bot} face={<SessionFace chatKey={chatKey} size={28} />} />
       {ended && (
         <div className="ss-ended" role="status" data-testid="session-ended">
           {rec.status === "failed" ? "Could not start" : "Ended"}
@@ -121,6 +122,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         key={chatKey}
         bot={bot}
         running={!!chat?.turn}
+        asking={selectAsks(s).some((a) => a.bot === chatKey)}
         offline={rec.status !== "running"}
         offlineText={offlineText}
         onSend={(t) => void getSessions().send(rec.id, t)}
@@ -220,12 +222,8 @@ export function SessionView() {
   const showChat = rec.view === "chat" && !!chatKey;
   const c = chatKey ? s.chats[chatKey] : undefined;
   const turn = !!c?.turn;
-  // an approval or question of the running turn is still open
-  const needs =
-    !!c?.turn &&
-    c.items.some(
-      (i) => i.ts >= c.turn!.startedAt / 1000 - 1 && ((i.kind === "approval" && !i.resolved) || (i.kind === "clarify" && i.answer === undefined)),
-    );
+  // an approval or question of this chat is still open (the Needs-you model: answered, expired or its turn over closes it)
+  const needs = !!chatKey && selectAsks(s).some((a) => a.bot === chatKey);
   const status =
     rec.view === "terminal" && canToggle
       ? "Terminal view"
