@@ -633,8 +633,28 @@ class ReadOnlyRule(BridgeCase):
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
-        for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic", "subprocess"):
+        for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
             self.assertNotIn(needle, src, needle)
+
+    def test_the_only_program_it_runs_is_read_only_git(self):
+        import ast
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        uses = []
+        for fn in ast.walk(tree):
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for n in ast.walk(fn):
+                    if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "subprocess" \
+                            and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
+                        uses.append(fn.name)
+        self.assertEqual(uses, ["_git"])
+        self.assertNotIn("create_subprocess", src)
+        self.assertNotIn("os.system", src)
+        self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",)})
+        for bad in (["push"], ["commit", "-m", "x"], ["checkout", "main"], ["worktree", "add", "x"], ["reset", "--hard"],
+                    ["apply"], ["clean", "-fd"], ["config", "user.name", "x"]):
+            with self.assertRaises(ValueError, msg=bad):
+                ob._git(bad, ".")
 
 
 class Discovery(unittest.TestCase):
@@ -928,3 +948,89 @@ class BotIdentity(BridgeCase):
             self.assertEqual((d / "state.db").stat().st_mtime_ns, before)
             r = (await s.req("bots.info", bot="default"))["result"]
             self.assertEqual(r["places"], {})
+
+
+class SidePanel(unittest.TestCase):
+    """Terminal / Worktrees / Diff tabs: read-only reads of state.db and git."""
+
+    def _db(self, d: Path, cwd: str):
+        import sqlite3
+        con = sqlite3.connect(d / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT,"
+                    " tool_call_id TEXT, tool_calls TEXT, tool_name TEXT, timestamp REAL)")
+        con.execute("INSERT INTO sessions VALUES ('s1', 'slack'), ('s2', 'tui')")
+        call = lambda cid, cmd: json.dumps([{"id": cid, "type": "function", "function": {
+            "name": "terminal", "arguments": json.dumps({"command": cmd})}}])
+        rows = [
+            ("s1", "assistant", "", None, call("t1", "git status"), None, 1.0),
+            ("s1", "tool", json.dumps({"output": "clean", "exit_code": 0, "cwd": cwd}), "t1", None, "terminal", 2.0),
+            ("s2", "assistant", "", None, call("t2", "false"), None, 3.0),
+            ("s2", "tool", json.dumps({"output": "x" * 5000, "exit_code": 1, "cwd": cwd}), "t2", None, "terminal", 4.0),
+            ("s2", "assistant", "", None, json.dumps([{"id": "r1", "function": {"name": "read_file",
+                                                                             "arguments": "{}"}}]), None, 5.0),
+            ("s2", "tool", "file text", "r1", None, "read_file", 6.0),
+        ]
+        con.executemany("INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name, timestamp)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+        con.commit()
+        con.close()
+
+    def _repo(self, d: Path) -> Path:
+        import subprocess
+        repo = d / "repo"
+        repo.mkdir()
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+               "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+        for args in (["init", "-q", "-b", "main"], ["commit", "-q", "--allow-empty", "-m", "first"]):
+            subprocess.run(["git", *args], cwd=repo, check=True, env=env)
+        (repo / "a.txt").write_text("one\n", encoding="utf-8")
+        subprocess.run(["git", "add", "a.txt"], cwd=repo, check=True, env=env)
+        subprocess.run(["git", "commit", "-q", "-m", "add a"], cwd=repo, check=True, env=env)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8")
+        return repo
+
+    def test_terminal_runs_pair_each_command_with_its_output_newest_first(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._db(Path(d), "/x")
+            runs = ob.read_terminal_runs(Path(d))
+        self.assertEqual([r["command"] for r in runs], ["false", "git status"])
+        self.assertEqual(runs[0]["exit_code"], 1)
+        self.assertEqual(runs[0]["source"], "tui")
+        self.assertEqual(runs[1]["source"], "slack")
+        self.assertEqual(runs[1]["output"], "clean")
+        self.assertLessEqual(len(runs[0]["output"]), ob.PANEL_OUT)
+        self.assertTrue(runs[0]["output"].endswith("…"))
+
+    def test_no_state_db_means_no_runs(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(ob.read_terminal_runs(Path(d)), [])
+
+    def test_worktrees_and_diff_come_from_folders_the_bot_used_and_change_nothing(self):
+        import shutil
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db(prof, str(repo))
+            before = {p: p.stat().st_mtime_ns for p in (repo / ".git").rglob("*") if p.is_file()}
+            trees = ob.read_worktrees(prof)
+            self.assertEqual(len(trees), 1)
+            self.assertEqual(Path(trees[0]["path"]).resolve(), repo.resolve())
+            self.assertEqual(trees[0]["branch"], "main")
+            self.assertEqual(trees[0]["dirty"], 1)
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual(diff["files"], [{"path": "a.txt", "add": 1, "del": 0}])
+            self.assertIn("+two", diff["patch"])
+            after = {p: p.stat().st_mtime_ns for p in (repo / ".git").rglob("*") if p.is_file()}
+            self.assertEqual(after, before, "a git read wrote into .git")
+            # a clean tree shows its last commit instead
+            (repo / "a.txt").write_text("one\n", encoding="utf-8")
+            self.assertEqual(ob.read_diff(prof, trees[0]["path"])["scope"], "last commit")
+            # a folder the bot never worked in is refused
+            with self.assertRaises(ob.BridgeError) as e:
+                ob.read_diff(prof, str(Path(d)))
+            self.assertEqual(e.exception.code, "not_found")

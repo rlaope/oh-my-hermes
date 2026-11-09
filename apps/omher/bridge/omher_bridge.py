@@ -26,6 +26,7 @@ import logging
 import os
 import re
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -231,6 +232,186 @@ def ro_uri(db: Path) -> str:
     and percent-escapes `?`, `#`, `%` and spaces, which a hand-built `file:{path}` mangles (a drive letter or
     a `#` in a folder name ended the path early)."""
     return Path(db).resolve().as_uri() + "?mode=ro"
+
+
+# ---------------------------------------------------------------- side panel (read-only)
+
+PANEL_RUNS = 40          # terminal runs shown in the Terminal tab
+PANEL_WINDOW = 8000      # newest message rows scanned (keeps the read fast on a large state.db)
+PANEL_OUT = 1200         # chars of output kept per run
+DIFF_MAX = 60_000        # chars of patch sent to the UI
+GIT_TIMEOUT = 4.0
+# The only git commands omher runs. All are reads; `--no-optional-locks` keeps `status` from writing the index.
+GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",)}
+
+
+def _json_obj(raw):
+    try:
+        v = json.loads(raw) if isinstance(raw, str) and raw else None
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def read_terminal_runs(profile_dir: Path, limit: int = PANEL_RUNS) -> list[dict]:
+    """The bot's latest terminal commands with their output, newest first, from state.db (read-only):
+    the command from the assistant's tool call, the output/exit code/cwd from the tool's result row."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not db.is_file():
+        return []
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            top = con.execute("SELECT MAX(id) FROM messages").fetchone()[0] or 0
+            lo = max(0, top - PANEL_WINDOW)
+            results = con.execute(
+                "SELECT m.tool_call_id, m.content, m.timestamp, m.session_id, s.source FROM messages m"
+                " LEFT JOIN sessions s ON s.id = m.session_id"
+                " WHERE m.id > ? AND m.role = 'tool' AND m.tool_name = 'terminal' ORDER BY m.id DESC LIMIT ?",
+                (lo, limit)).fetchall()
+            calls = con.execute(
+                "SELECT tool_calls FROM messages WHERE id > ? AND role = 'assistant' AND tool_calls LIKE ?",
+                (lo, '%"terminal"%')).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return []
+    commands: dict[str, dict] = {}
+    for (raw,) in calls:
+        try:
+            items = json.loads(raw) if raw else []
+        except ValueError:
+            continue
+        for c in items if isinstance(items, list) else []:
+            fn = c.get("function") if isinstance(c, dict) else None
+            if not isinstance(fn, dict) or fn.get("name") != "terminal":
+                continue
+            args = _json_obj(fn.get("arguments")) or {}
+            for key in (c.get("id"), c.get("call_id")):
+                if key:
+                    commands[str(key)] = args
+    runs = []
+    for call_id, content, ts, sid, source in results:
+        args = commands.get(str(call_id)) or {}
+        command = args.get("command")
+        if not isinstance(command, str) or not command.strip():
+            continue
+        res = _json_obj(content) or {}
+        out = res.get("output") if isinstance(res.get("output"), str) else (content if isinstance(content, str) else "")
+        out = out.rstrip()
+        cwd = res.get("cwd") or args.get("workdir") or ""
+        runs.append({"id": str(call_id), "command": command.strip(), "ts": float(ts or 0.0),
+                     "output": out if len(out) <= PANEL_OUT else out[: PANEL_OUT - 1] + "…",
+                     "exit_code": res.get("exit_code") if isinstance(res.get("exit_code"), int) else None,
+                     "cwd": str(cwd) if isinstance(cwd, str) else "", "source": str(source or ""),
+                     "session_id": str(sid or "")})
+    return runs
+
+
+def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT) -> str | None:
+    """Run one read-only git command; None on any failure. Only GIT_READS commands are allowed."""
+    head = tuple(args[:2]) if args[:1] == ["worktree"] else (args[0],)
+    if head not in GIT_READS:
+        raise ValueError(f"not a read-only git command: {args[:2]}")
+    kw = {}
+    if os.name == "nt":
+        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        r = subprocess.run(["git", "--no-optional-locks", *args], cwd=str(cwd), capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
+                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}, **kw)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def _norm(path: str | Path) -> str:
+    """One spelling per folder: symlinks resolved (macOS /var -> /private/var, a symlinked home), case
+    folded where the OS ignores case."""
+    return os.path.normcase(os.path.realpath(str(path)))
+
+
+def read_worktrees(profile_dir: Path, runs: list[dict] | None = None, max_repos: int = 6) -> list[dict]:
+    """Git worktrees of the repositories the bot worked in, found from the folders its terminal runs used.
+    Each: path, branch, head, dirty (changed files), last (newest run there), repo. Newest first."""
+    runs = read_terminal_runs(profile_dir, limit=400) if runs is None else runs
+    seen_at: dict[str, float] = {}
+    for r in runs:
+        cwd = r.get("cwd") or ""
+        if cwd and os.path.isdir(cwd):
+            seen_at[cwd] = max(seen_at.get(cwd, 0.0), float(r.get("ts") or 0.0))
+    repos: dict[str, dict] = {}
+    for cwd, ts in sorted(seen_at.items(), key=lambda kv: -kv[1]):
+        if len(repos) >= max_repos and not any(_norm(cwd).startswith(_norm(w["path"])) for rp in repos.values() for w in rp["worktrees"]):
+            continue
+        common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd)
+        if not common:
+            continue
+        key = _norm(common.strip())
+        if key not in repos:
+            listing = _git(["worktree", "list", "--porcelain"], cwd) or ""
+            wts, cur = [], {}
+            for line in listing.splitlines() + [""]:
+                if not line.strip():
+                    if cur.get("path"):
+                        wts.append(cur)
+                    cur = {}
+                elif line.startswith("worktree "):
+                    cur = {"path": line[9:], "branch": "", "head": "", "last": 0.0, "dirty": None}
+                elif line.startswith("HEAD "):
+                    cur["head"] = line[5:][:9]
+                elif line.startswith("branch "):
+                    cur["branch"] = line[7:].removeprefix("refs/heads/")
+                elif line == "detached":
+                    cur["branch"] = ""
+            main = Path(common.strip()).parent
+            repos[key] = {"repo": main.name, "worktrees": [w for w in wts if os.path.isdir(w["path"])]}
+        for w in repos[key]["worktrees"]:
+            if _norm(cwd) == _norm(w["path"]) or _norm(cwd).startswith(_norm(w["path"]) + os.sep):
+                w["last"] = max(w["last"], ts)
+    out = []
+    for rp in repos.values():
+        for w in rp["worktrees"]:
+            if w["last"] <= 0:
+                continue  # only worktrees the bot actually worked in
+            status = _git(["status", "--porcelain"], w["path"])
+            w["dirty"] = None if status is None else len([l for l in status.splitlines() if l.strip()])
+            out.append({**w, "repo": rp["repo"]})
+    out.sort(key=lambda w: -w["last"])
+    return out[:30]
+
+
+_DIFF_FILE = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+
+
+def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> dict:
+    """Uncommitted changes (vs HEAD) of one worktree the bot worked in, or its last commit when clean.
+    `path` must be one of read_worktrees(); anything else is refused."""
+    known = {_norm(w["path"]): w for w in read_worktrees(profile_dir, runs)}
+    w = known.get(_norm(path or ""))
+    if not w:
+        raise BridgeError("not_found", "not a worktree this bot worked in")
+    patch = _git(["diff", "HEAD", "--no-color", "--no-ext-diff"], w["path"], timeout=8.0)
+    scope = "uncommitted"
+    if patch is not None and not patch.strip():
+        patch = _git(["log", "-1", "--no-color", "--patch", "--format=%h %s"], w["path"], timeout=8.0)
+        scope = "last commit"
+    if patch is None:
+        raise BridgeError("unavailable", "git could not read this worktree")
+    files, cur = [], None
+    for line in patch.splitlines():
+        m = _DIFF_FILE.match(line)
+        if m:
+            cur = {"path": m.group(2), "add": 0, "del": 0}
+            files.append(cur)
+        elif cur is not None and line.startswith("+") and not line.startswith("+++"):
+            cur["add"] += 1
+        elif cur is not None and line.startswith("-") and not line.startswith("---"):
+            cur["del"] += 1
+    truncated = len(patch) > DIFF_MAX
+    return {"path": w["path"], "branch": w["branch"], "repo": w["repo"], "scope": scope, "files": files,
+            "patch": patch[:DIFF_MAX], "truncated": truncated}
 
 
 def read_bot_facts(profile_dir: Path) -> dict:
@@ -511,6 +692,8 @@ class Bridge:
             "chat.set_model": self.op_set_model,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
+            "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
+            "panel.diff": self.op_panel_diff,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -1052,6 +1235,21 @@ class Bridge:
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
+
+    async def op_panel_terminal(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"runs": await asyncio.to_thread(read_terminal_runs, bot["path"])}
+
+    async def op_panel_worktrees(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"worktrees": await asyncio.to_thread(read_worktrees, bot["path"])}
+
+    async def op_panel_diff(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        path = p.get("path")
+        if not isinstance(path, str) or not path:
+            raise BridgeError("bad_request", "missing path")
+        return await asyncio.to_thread(read_diff, bot["path"], path)
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}
