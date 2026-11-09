@@ -2,7 +2,13 @@
 .mp-wrap {
   position: relative;
 }
+.mp-wrap,
+.head-right {
+  min-width: 0;
+}
 .mp {
+  max-width: 100%;
+  min-width: 0;
   height: 26px;
   border-radius: var(--r);
   background: var(--raise);
@@ -13,6 +19,17 @@
   font-size: 12px;
   color: var(--ink);
   white-space: nowrap;
+}
+/* only the model id gives way when the header is tight */
+.mp > :not(.mp-l) {
+  flex: none;
+}
+/* a long model id ellipsizes; the full id is in the title */
+.mp-l {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mp:hover,
 .mp.on {
@@ -60,10 +77,75 @@
 
 .mp-h {
   font-size: 10.5px;
-  color: var(--quiet);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   padding: 4px 6px 2px;
+}
+/* search field at the top of the popover */
+.mp-search {
+  height: 28px;
+  border-radius: var(--r);
+  background: var(--raise);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  color: var(--quiet);
+  cursor: text;
+}
+/* keyboard focus ring for the search, chips and rows: 2px ink at 40%, 2px off the edge */
+.mp-search:focus-within,
+.mp-chip:focus-visible,
+.mp-opt:focus-visible,
+.mp-pop .mseg button:focus-visible,
+.mp-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 40%, transparent);
+  outline-offset: 2px;
+}
+.mp-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.mp-search input::placeholder {
+  color: var(--muted);
+}
+.mp-search input::-webkit-search-cancel-button {
+  display: none;
+}
+/* vendor chips: All plus one per company that has a model; the chosen one is gray */
+.mp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px 0 3px;
+}
+.mp-chip {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mp-chip:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.mp-chip.on {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
+  border-color: transparent;
 }
 .mp-h2 {
   margin-top: 6px;
@@ -71,6 +153,9 @@
 .mp-list {
   max-height: 300px;
   overflow-y: auto;
+  /* room for a row's focus ring inside the scroll box */
+  padding: 4px;
+  margin: 0 -4px;
 }
 .mp-g {
   font-size: 11px;
@@ -79,7 +164,7 @@
 }
 .mp-empty {
   font-size: 12px;
-  color: var(--quiet);
+  color: var(--muted);
   padding: 6px;
 }
 .mp-opt {
@@ -93,12 +178,14 @@
   color: var(--body);
   text-align: left;
 }
-.mp-opt:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+/* one highlight row, moved by the mouse or by Up/Down from the search field */
+.mp-opt.kb:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
+/* the current model: check mark and full ink; the fill belongs to the highlight row only */
 .mp-opt.on {
   color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  font-weight: 500;
 }
 .mp-n {
   min-width: 0;
@@ -128,7 +215,7 @@
   margin-top: 8px;
   padding: 7px 6px 2px;
   font-size: 11px;
-  color: var(--quiet);
+  color: var(--muted);
 }
 .mp-link {
   font-size: 11px;
