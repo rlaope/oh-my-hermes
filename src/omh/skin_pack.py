@@ -191,17 +191,26 @@ def write_update_check_choice(omh_home: Path, on: bool) -> Path:
     return _write_theme_store(omh_home, "update_check", "on" if on else "off")
 
 
-# Where the OMH TUI opens its sessions (`runtime`, beside the theme): `shared`, the Hermes gateway that also serves
-# the bots (the default), or `own`, a TUI-only Hermes home under the OMH home with a gateway of its own
-# (`tui/own_runtime.py`).
+# Where the OMH TUI opens its sessions (`runtime`, beside the theme): `own` (the default), a TUI-only Hermes profile
+# with a gateway of its own (`tui/own_runtime.py`, `TUI_PROFILE`), or `shared`, the Hermes gateway that also serves
+# the bots.
 RUNTIME_SHARED, RUNTIME_OWN = "shared", "own"
 RUNTIME_CHOICES = (RUNTIME_SHARED, RUNTIME_OWN)
+RUNTIME_DEFAULT = RUNTIME_OWN
+# The Hermes profile the TUI's own runtime is: `<root>/profiles/omh-tui`. Every OMH surface that lists the person's
+# Hermes profiles (bots) leaves it out.
+TUI_PROFILE = "omh-tui"
 
 
 def read_runtime_choice(omh_home: Path) -> str | None:
-    """`own` or `shared` as saved for this OMH home; None when nothing this module wrote says (shared, then)."""
+    """`own` or `shared` as saved for this OMH home; None when nothing this module wrote says (`RUNTIME_DEFAULT`, then)."""
     value = _theme_store_record(omh_home).get("runtime")
     return value if value in RUNTIME_CHOICES else None
+
+
+def effective_runtime(omh_home: Path) -> str:
+    """The runtime bare `omh` opens on: the saved choice, else `RUNTIME_DEFAULT`."""
+    return read_runtime_choice(omh_home) or RUNTIME_DEFAULT
 
 
 def write_runtime_choice(omh_home: Path, runtime: str) -> Path:

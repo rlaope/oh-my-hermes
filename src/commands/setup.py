@@ -870,6 +870,30 @@ def _sync_hermes_profiles(args: argparse.Namespace) -> list[dict[str, object]]:
     return results
 
 
+def _uninstall_tui_runtime(paths: OmhPaths, *, remove_all: bool, dry_run: bool) -> dict[str, object]:
+    """Remove the TUI's own runtime profile (`tui/own_runtime.py`) on a full uninstall: OMH's, built from the root.
+
+    `absent` when there is none, `kept` when its gateway runs or the directory
+    carries no OMH marker (then it is not OMH's to remove), `would_remove` on
+    a dry run, `removed`, or `failed` with the error; a failure never fails the
+    uninstall. Registration-only and `--remove-files` scopes leave it
+    (`not_requested`), as they leave the bots' profiles.
+    """
+    from ..tui.own_runtime import MARKER_FILE, remove_tui_home, tui_home_path
+
+    home = tui_home_path(Path(paths.hermes_home))
+    entry: dict[str, object] = {"path": str(home)}
+    if not remove_all:
+        return {**entry, "status": "not_requested"}
+    if dry_run:
+        return {**entry, "status": "would_remove" if (home / MARKER_FILE).is_file() else "absent" if not home.is_dir() else "kept"}
+    try:
+        return {**entry, "status": remove_tui_home(Path(paths.hermes_home))}
+    except OSError as exc:
+        print(f"note: the TUI's own runtime profile at {home} was not removed: {exc}", file=sys.stderr)
+        return {**entry, "status": "failed", "reason": str(exc)}
+
+
 def _uninstall_hermes_profiles(
     args: argparse.Namespace, *, remove_all: bool, record: dict[str, object], primary: OmhPaths | None = None
 ) -> list[dict[str, object]]:
@@ -1425,23 +1449,23 @@ def _refresh_installed_plugin_bundle(args: argparse.Namespace) -> dict[str, obje
 
 
 def _refresh_tui_home(args: argparse.Namespace) -> dict[str, object] | None:
-    """Rebuild the TUI's own runtime home (`tui/own_runtime.py`) from the root Hermes home this update targets.
+    """Rebuild the TUI's own runtime profile (`tui/own_runtime.py`) from the root Hermes home this update targets.
 
-    Only where the OMH home's saved choice is `own`; None otherwise, so a home
-    left behind by `omh theme runtime shared` gets no fresh credential copies.
-    The plugin bundle the home links moved with this update, and a skill or
-    credential the root gained since the last launch is carried now rather
-    than at the next `omh`. A failure is noted and never fails the update: the
-    next bare `omh` builds the home again, or opens on the shared gateway
-    saying why.
+    Unless the OMH home's saved choice is `shared` (None then, so a profile
+    left behind by `omh theme runtime shared` is not refreshed), and not on
+    Windows, where the OMH TUI does not run. The plugin bundle the profile
+    links moved with this update, and a skill or credential the root gained
+    since the last launch is carried now rather than at the next `omh`. A
+    failure is noted and never fails the update: the next bare `omh` builds
+    the profile again, or opens on the shared gateway saying why.
     """
-    from ..skin_pack import RUNTIME_OWN, read_runtime_choice
+    from ..skin_pack import RUNTIME_OWN, effective_runtime
     from ..tui.own_runtime import build_tui_home, tui_home_path
 
     paths = _paths(args)
-    home = tui_home_path(paths.omh_home)
-    if read_runtime_choice(paths.omh_home) != RUNTIME_OWN:
+    if os.name == "nt" or effective_runtime(paths.omh_home) != RUNTIME_OWN:
         return None
+    home = tui_home_path(Path(paths.hermes_home))
     if getattr(args, "dry_run", False):
         return {"status": "dry_run", "tui_home": str(home)}
     try:
@@ -2974,6 +2998,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     profile_results = [] if blocked else _uninstall_hermes_profiles(
         args, remove_all=remove_all, record=record, primary=paths
     )
+    tui_runtime_result = _uninstall_tui_runtime(paths, remove_all=remove_all and not blocked, dry_run=bool(args.dry_run))
     if not blocked and (remove_all or args.remove_files):
         detached = () if args.dry_run or not remove_all else tuple(
             paths.hermes_home / "profiles" / str(row["profile"])
@@ -3031,6 +3056,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     )
     if profile_results:
         result["hermes_profiles"] = profile_results
+    result["tui_runtime"] = tui_runtime_result
     result["command_package"] = _command_package_status_for_uninstall(result)
     code = 1 if blocked or any(row.get("status") == "failed" for row in profile_results) else 0
     result.update({"status": "failed" if blocked else "partial" if code else "ok", "exit_code": code})
@@ -5661,6 +5687,9 @@ def _print_uninstall_summary(payload: dict[str, object], *, language: str = "en"
             if isinstance(entry, dict)
         )
         print(f"  {tr(language, 'hermes_profiles_uninstalled', summary=summary)}")
+    tui_runtime = payload.get("tui_runtime")
+    if isinstance(tui_runtime, dict) and tui_runtime.get("status") in ("removed", "would_remove", "kept", "failed"):
+        print(f"  {tr(language, 'tui_runtime_uninstalled', status=str(tui_runtime.get('status')), path=str(tui_runtime.get('path', '')))}")
     print(_color(tr(language, "next"), "1;32", use_color))
     command_removed = payload.get("command_package_removed_paths", [])
     command_would_remove = payload.get("command_package_would_remove", [])

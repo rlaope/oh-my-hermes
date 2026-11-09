@@ -1,27 +1,39 @@
-"""The OMH TUI's own Hermes runtime: a TUI-only Hermes home beside the bots' gateway.
+"""The OMH TUI's own Hermes runtime: a TUI-only Hermes profile beside the bots' gateway.
 
 Hermes serves every profile under `<root>/profiles/` from one gateway per
 host, and refuses its standalone stdio entry beside that gateway. A session
 opened there shares the bots' fate: a whole-gateway restart with a bot turn
 running drains first (up to `agent.restart_after_turn_timeout`) and refuses
-every new or resumed session meanwhile. A home outside `profiles/` is its own
-root: a client on it gets an unmanaged gateway of its own, which exits once
-idle (`gateway.unmanaged_idle_exit_seconds`), and nothing that happens to the
-bots' gateway reaches it. Measured in `tools/qa/tui_own_runtime/RESULTS.md`.
+every new or resumed session meanwhile. A named profile whose config says
+`gateway.standalone: true` is the exception Hermes keeps: the host gateway
+never serves it, and a client on it gets an unmanaged gateway of its own,
+which exits once idle (`gateway.unmanaged_idle_exit_seconds`) unless a
+profile on the host has scheduled cron work (Hermes' ticker on any gateway
+under the root visits every profile's store, standing down for one another
+gateway owns). Nothing that happens to the bots' gateway reaches it. And
+because the profile sits under the root, Hermes reads the root's `auth.json`
+for every provider the profile has no entry of its own for, and rotates a
+provider's OAuth tokens back into the store it read them from: the person's
+login is the TUI's too, with no copy and no second login. Measured in
+`tools/qa/tui_own_runtime/RESULTS.md`.
 
-`build_tui_home` makes and refreshes that home under the OMH home
-(`<omh_home>/tui-home`), from the root Hermes home the bots run on:
+`build_tui_home` makes and refreshes that profile, `<root>/profiles/omh-tui`
+(`TUI_PROFILE`), from the root Hermes home the bots run on:
 
-- `config.yaml`: the root's, copied verbatim (model, providers and their keys,
-  memory, skills with `external_dirs` carrying OMH's own skills, plugins) and
-  refreshed whenever it differs from the root's; a copy the person changed in
-  the TUI home is replaced too, and `TuiHome.overwritten` says so. A root
-  config that names a messaging token under `platforms:`
+- `config.yaml`: the root's, copied with `standalone: true` set in its
+  `gateway:` block (`standalone_config`; the rest verbatim: model, providers
+  and their keys, memory, skills with `external_dirs` carrying OMH's own
+  skills, plugins) and refreshed whenever it differs from that; a copy the
+  person changed in the TUI home is replaced too, and `TuiHome.overwritten`
+  says so. A root config that names a messaging token under `platforms:`
   (`config_platform_credentials`) is reported, and the launch stays on the
   shared gateway: the TUI runtime must never poll a bot's token.
-- `auth.json`: copied when the root's is newer than the TUI home's. Hermes
-  rotates single-use OAuth refresh tokens into the store it read, so a TUI
-  home copy that moved after the root's is kept, never replaced by a stale one.
+- `auth.json`: never copied. The profile falls back to the root's store
+  (Hermes' own profile rule), so the login and its token rotation stay in
+  one place.
+- `.no-bundled-skills`: Hermes' own marker, so `hermes update`'s all-profile
+  skill seeding writes only its essential skills here; the links below
+  already carry the root's copies of every bundled skill.
 - `.env`: the root's, minus every messaging credential (`is_messaging_name`),
   so no adapter of the TUI runtime ever polls a bot's token beside the bots'
   gateway (Hermes' own warning against two pollers on one token). The root
@@ -42,23 +54,32 @@ bots' gateway reaches it. Measured in `tools/qa/tui_own_runtime/RESULTS.md`.
 - `omh-tui-home.json`: what was built from what, for `omh doctor`.
 
 Every file is written whole and moved into place, so a running TUI gateway
-never reads a half-written copy. Everything else in the home (`state.db`,
-`kanban.db`, `cache/`, `cron/`, `sessions/`, `memories/`) is Hermes' own,
-created by the TUI runtime's gateway, and never touched here. Bare `omh` reads
-the saved choice (`skin_pack.read_runtime_choice`, `omh theme runtime
-own|shared`) and opens the TUI on this home when it is `own`
-(`commands/bare_launch.py`).
+never reads a half-written copy; a profile that does not exist yet is built
+under a dot name (not a profile to Hermes) and renamed once complete, so the
+host gateway never sees it without its standalone key. Everything else in the
+home (`state.db`, `kanban.db`, `cache/`, `cron/`, `sessions/`, `memories/`)
+is Hermes' own, created by the TUI runtime's gateway, and never touched here.
+The home an earlier OMH built under the OMH home (`<omh_home>/tui-home`, with
+a copy of `auth.json`) is removed once its gateway is not running. Bare `omh`
+opens the TUI on this profile unless the saved choice is `shared`
+(`skin_pack.effective_runtime`, `omh theme runtime shared|own`;
+`commands/bare_launch.py`).
 """
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 from pathlib import Path
+import shutil
 
+from ..skin_pack import RUNTIME_DEFAULT, TUI_PROFILE
 from ..system.local_store import atomic_write_json
 
-TUI_HOME_DIR = "tui-home"
+# Where an OMH before the profile kept the TUI home: under the OMH home. Removed by `build_tui_home`.
+LEGACY_HOME_DIR = "tui-home"
+# Hermes' own opt-out marker: `hermes update` seeds only its essential bundled skills into a profile that carries it.
+NO_BUNDLED_SKILLS_MARKER = ".no-bundled-skills"
 MARKER_FILE = "omh-tui-home.json"
 MARKER_SCHEMA = "omh_tui_home/v1"
 # Symlinked to the root home's, where it exists.
@@ -101,8 +122,52 @@ class TuiHome:
     config_platform_credentials: tuple[str, ...]  # `platforms.<name>.<key>` entries of the root config that connect
 
 
-def tui_home_path(omh_home: Path) -> Path:
-    return Path(omh_home) / TUI_HOME_DIR
+def hermes_root(hermes_home: Path) -> Path:
+    """The Hermes root a home belongs to: a named profile's `<root>`, else the home itself (Hermes' own rule)."""
+    home = Path(hermes_home)
+    return home.parent.parent if home.parent.name == "profiles" else home
+
+
+def tui_home_path(hermes_home: Path) -> Path:
+    """The TUI's own runtime profile under the root of `hermes_home`: `<root>/profiles/omh-tui`."""
+    return hermes_root(hermes_home) / "profiles" / TUI_PROFILE
+
+
+def legacy_home_path(omh_home: Path) -> Path:
+    """Where an OMH before the profile built the TUI home: `<omh_home>/tui-home`."""
+    return Path(omh_home) / LEGACY_HOME_DIR
+
+
+def standalone_config(config_text: str) -> str:
+    """`config_text` with `standalone: true` in its top-level `gateway:` block, the rest byte for byte.
+
+    Line based, never parsed as YAML (no YAML writer here). A `standalone:` line already in the block is replaced; a
+    block that lacks one gets it as its first child, at the indentation of the block's first child (two spaces when
+    the block is empty); a config without a `gateway:` block gets one appended. A second top-level `gateway:` would
+    be a duplicate key Hermes' loader refuses, so the block is found, never added beside an existing one.
+    """
+    lines = config_text.splitlines(keepends=True)
+    start = next((index for index, line in enumerate(lines) if line.startswith("gateway:")), None)
+    if start is None:
+        body = config_text if not config_text or config_text.endswith("\n") else config_text + "\n"
+        return body + "gateway:\n  standalone: true\n"
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        text = lines[index]
+        if text.strip() and not text.startswith((" ", "\t", "#")):
+            end = index
+            break
+    children = [line for line in lines[start + 1:end] if line.strip() and not line.lstrip().startswith("#")]
+    inline = lines[start].partition(":")[2].split("#", 1)[0].strip()
+    if inline and not children:
+        # `gateway: {}` or another flow value: the block is rewritten as the one key it needs plus what it held.
+        kept = "" if inline in ("{}", "null", "~") else f"  # was: gateway: {inline}\n"
+        return "".join(lines[:start]) + "gateway:\n  standalone: true\n" + kept + "".join(lines[end:])
+    indent = (len(children[0]) - len(children[0].lstrip(" "))) if children else 2
+    pad = " " * indent
+    block = [line for line in lines[start + 1:end] if not line.strip().startswith("standalone:")
+             or (len(line) - len(line.lstrip(" "))) != indent]
+    return "".join(lines[:start + 1]) + f"{pad}standalone: true\n" + "".join(block) + "".join(lines[end:])
 
 
 def is_messaging_name(name: str) -> bool:
@@ -202,11 +267,12 @@ def served_profile_names(root: Path) -> tuple[str, ...]:
 
     gateway = read_gateway(Path(root))
     if gateway.live:
-        return tuple(dict.fromkeys(name for name in gateway.served if name and name != "default"))
+        return tuple(dict.fromkeys(name for name in gateway.served if name and name not in ("default", TUI_PROFILE)))
     profiles = Path(root) / "profiles"
     if not profiles.is_dir():
         return ()
-    return tuple(sorted(p.name for p in profiles.iterdir() if (p / "skills").is_dir()))
+    return tuple(sorted(p.name for p in profiles.iterdir()
+                        if p.name != TUI_PROFILE and not p.name.startswith(".") and (p / "skills").is_dir()))
 
 
 def skill_roots(root: Path, served: Sequence[str]) -> tuple[tuple[str, Path], ...]:
@@ -290,16 +356,43 @@ def _link(target: Path, destination: Path) -> bool:
     return True
 
 
-def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = None) -> TuiHome:
-    """Make or refresh the TUI home under `omh_home` from the root Hermes home; what it did (`TuiHome`).
+def build_tui_home(omh_home: Path, hermes_home: Path, served: Sequence[str] | None = None) -> TuiHome:
+    """Make or refresh the TUI profile under the root of `hermes_home`; what it did (`TuiHome`).
 
-    Idempotent and cheap: a build on an unchanged root writes nothing. Raises
+    Idempotent and cheap: a build on an unchanged root writes nothing. A
+    profile that does not exist yet is built whole under a dot name and
+    renamed into place. The home an earlier OMH built under `omh_home`
+    (`legacy_home_path`) is removed when its gateway is not running. Raises
     `OSError` when the home cannot be made or the root cannot be read, and
     `ValueError` when the root's `.env` or `config.yaml` is not UTF-8 text.
     """
-    root = Path(root)
-    home = tui_home_path(omh_home)
+    root = hermes_root(hermes_home)
+    final = tui_home_path(root)
     served = tuple(served) if served is not None else served_profile_names(root)
+    staging = not final.is_dir()
+    home = final.with_name(f".{final.name}.{os.getpid()}.omh-tmp") if staging else final
+    try:
+        built = _build(home, root, served)
+    except BaseException:
+        if staging:
+            shutil.rmtree(home, ignore_errors=True)  # a failed first build leaves no profile and no staging behind
+        raise
+    refreshed = list(built.refreshed)
+    if staging:
+        try:
+            os.rename(home, final)
+        except OSError:
+            if final.is_dir():  # another launch finished its build first: that one stands, this staging goes
+                shutil.rmtree(home, ignore_errors=True)
+            else:
+                raise
+    if _remove_legacy_home(legacy_home_path(omh_home)):
+        refreshed.append(f"{LEGACY_HOME_DIR} (removed)")
+    return replace(built, path=final, refreshed=tuple(refreshed))
+
+
+def _build(home: Path, root: Path, served: tuple[str, ...]) -> TuiHome:
+    """Write the profile's files into `home` (the final profile, or its staging directory); what was done."""
     refreshed: list[str] = []
     overwritten: list[str] = []
     for directory in (home, home / "skills", home / "plugins"):
@@ -309,8 +402,9 @@ def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = No
     platform_credentials: tuple[str, ...] = ()
     source = root / "config.yaml"
     if source.is_file():
-        data = source.read_bytes()
-        platform_credentials = config_platform_credentials(_decode(data, source))
+        text = _decode(source.read_bytes(), source)
+        platform_credentials = config_platform_credentials(text)
+        data = standalone_config(text).encode("utf-8")
         target = home / "config.yaml"
         stamp = source.stat()
         if platform_credentials:
@@ -322,14 +416,10 @@ def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = No
             _write_whole(target, data, stamp)
             refreshed.append("config.yaml")
 
-    source = root / "auth.json"
-    if source.is_file():
-        target = home / "auth.json"
-        stamp = source.stat()
-        current = _mtime(target)
-        if current is None or stamp.st_mtime_ns > current:
-            _write_whole(target, source.read_bytes(), stamp)
-            refreshed.append("auth.json")
+    if not (home / NO_BUNDLED_SKILLS_MARKER).exists():
+        _write_whole(home / NO_BUNDLED_SKILLS_MARKER,
+                     b"The OMH TUI's runtime profile: its skills/ links the root's skills; Hermes seeds only essentials here.\n")
+        refreshed.append(NO_BUNDLED_SKILLS_MARKER)
 
     scrubbed: tuple[str, ...] = ()
     source = root / ".env"
@@ -388,18 +478,49 @@ def build_tui_home(omh_home: Path, root: Path, served: Sequence[str] | None = No
     if plugin.is_dir() and _link(home / "plugins" / PLUGIN_NAME, plugin):
         refreshed.append(f"plugins/{PLUGIN_NAME}")
 
-    built = TuiHome(
-        path=home, root=root, served=served, skills=tuple(sorted({*wanted, *kept_local})),
-        clashes=tuple(clashes), kept_local=tuple(sorted(kept_local)), scrubbed=scrubbed, refreshed=tuple(refreshed),
-        overwritten=tuple(overwritten), config_platform_credentials=platform_credentials,
-    )
     marker = {
-        "schema_version": MARKER_SCHEMA, "root": str(root), "served": list(served), "skills": list(built.skills),
-        "clashes": [list(pair) for pair in clashes], "kept_local": list(built.kept_local), "scrubbed": list(scrubbed),
+        "schema_version": MARKER_SCHEMA, "root": str(root), "profile": TUI_PROFILE, "served": list(served),
+        "skills": sorted({*wanted, *kept_local}), "clashes": [list(pair) for pair in clashes],
+        "kept_local": sorted(kept_local), "scrubbed": list(scrubbed),
         "config_platform_credentials": list(platform_credentials),
     }
     atomic_write_json(home / MARKER_FILE, marker, private=True)
-    return built
+    return TuiHome(
+        path=home, root=root, served=served, skills=tuple(marker["skills"]),
+        clashes=tuple(clashes), kept_local=tuple(marker["kept_local"]), scrubbed=scrubbed, refreshed=tuple(refreshed),
+        overwritten=tuple(overwritten), config_platform_credentials=platform_credentials,
+    )
+
+
+def _remove_legacy_home(legacy: Path) -> bool:
+    """Remove the TUI home an earlier OMH built under the OMH home (it holds a copy of `auth.json`), when its marker
+    says OMH made it and no gateway of its runs; True when it went."""
+    if not (legacy / MARKER_FILE).is_file():
+        return False
+    from .bot_board import read_gateway
+
+    if read_gateway(legacy).live:
+        return False
+    shutil.rmtree(legacy)
+    return True
+
+
+def remove_tui_home(hermes_home: Path) -> str:
+    """Remove the TUI profile under the root of `hermes_home` (`omh uninstall`): `removed`, `absent`, `kept` when its
+    gateway runs or the directory carries no OMH marker (not ours to remove). Raises `OSError` on a failed removal."""
+    home = tui_home_path(hermes_home)
+    if not home.is_dir():
+        return "absent"
+    if not (home / MARKER_FILE).is_file():
+        return "kept"
+    from .bot_board import read_gateway
+
+    if read_gateway(home).live:
+        return "kept"
+    staging = home.with_name(f".{home.name}.{os.getpid()}.omh-rm")
+    os.rename(home, staging)  # gone as a profile at once; the files follow
+    shutil.rmtree(staging)
+    return "removed"
 
 
 def _shadow(relative: str, wanted: dict[str, Path], names: dict[str, str]) -> None:
@@ -468,14 +589,14 @@ class TuiHomeStatus:
         return bool(self.built_from)
 
 
-def tui_home_status(omh_home: Path, runtime: str | None) -> TuiHomeStatus:
-    """The TUI home as it is now, for the report surfaces; `runtime` is the saved choice (`read_runtime_choice`).
-    Read-only; a home that cannot be read reads as not built."""
+def tui_home_status(hermes_home: Path, runtime: str | None) -> TuiHomeStatus:
+    """The TUI profile as it is now, for the report surfaces; `runtime` is the saved choice (`read_runtime_choice`),
+    None meaning the default. Read-only; a home that cannot be read reads as not built."""
     import json
 
     from .bot_board import read_gateway
 
-    home = tui_home_path(omh_home)
+    home = tui_home_path(hermes_home)
     exists = home.is_dir()
     marker: dict[str, object] = {}
     if exists:
@@ -497,7 +618,7 @@ def tui_home_status(omh_home: Path, runtime: str | None) -> TuiHomeStatus:
     gateway = read_gateway(home) if exists else None
     live = bool(gateway is not None and gateway.live)
     return TuiHomeStatus(
-        runtime=runtime or "shared", home=home, exists=exists, built_from=str(marker.get("root") or ""),
+        runtime=runtime or RUNTIME_DEFAULT, home=home, exists=exists, built_from=str(marker.get("root") or ""),
         served=_strings(marker.get("served")),
         skill_count=len(_strings(marker.get("skills"))),
         clash_count=len(marker.get("clashes")) if isinstance(marker.get("clashes"), list) else 0,

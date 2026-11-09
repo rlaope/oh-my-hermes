@@ -773,7 +773,7 @@ def _tui_own_runtime_check(paths: OmhPaths) -> Check:
 
     name = "omh_tui_runtime"
     try:
-        status = tui_home_status(paths.omh_home, read_runtime_choice(paths.omh_home))
+        status = tui_home_status(Path(paths.hermes_home), read_runtime_choice(paths.omh_home))
     except OSError as error:
         return Check(name, True, f"the TUI's own runtime home could not be read: {error}", observed=False)
     if status.runtime != RUNTIME_OWN:

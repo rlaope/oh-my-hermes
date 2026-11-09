@@ -1,13 +1,15 @@
 """Bare `omh` on the TUI's own Hermes runtime: which home the launch opens on, and what the TUI is told.
 
-`_own_runtime_home` decides from the saved choice and the argv: an explicit home or profile, or a `--resume` of a
-session that lives in the shared gateway's store, stays on the shared gateway. `_run_terminal` hands Hermes'
-launcher the TUI home as `HERMES_HOME` and names the bots' home beside it; the TUI's `/gateway restart` then offers
-its own runtime's restart alone.
+`_own_runtime_home` decides from the saved choice (own by default) and the argv: an explicit home or profile, a
+saved `shared`, or a `--resume` of a session that lives in the shared gateway's store, stays on the shared gateway.
+`_run_terminal` hands Hermes' launcher the TUI profile as `HERMES_HOME` and names the bots' home beside it; the
+TUI's `/gateway restart` then offers its own runtime's restart alone.
 """
 
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stderr
 import json
 import os
 from pathlib import Path
@@ -48,10 +50,12 @@ class WindowsTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = _root(Path(tmp))
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
+            with patch.object(bare_launch.os, "name", "nt"):
+                self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
             write_runtime_choice(paths.omh_home, RUNTIME_OWN)
             with patch.object(bare_launch.os, "name", "nt"):
                 self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
-            self.assertFalse(tui_home_path(paths.omh_home).exists())
+            self.assertFalse(tui_home_path(Path(paths.hermes_home)).exists())
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -68,46 +72,45 @@ class EnvironmentTests(unittest.TestCase):
 
 @unittest.skipIf(os.name == "nt", "the OMH TUI does not run on Windows: the launch stays on the shared gateway there")
 class DecisionTests(unittest.TestCase):
-    def test_nothing_saved_or_shared_stays_on_the_shared_gateway(self) -> None:
+    def test_nothing_saved_builds_the_profile_and_names_it(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _root(Path(tmp))
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
-            write_runtime_choice(paths.omh_home, RUNTIME_SHARED)
-            self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
-            self.assertFalse(tui_home_path(paths.omh_home).exists())
-
-    def test_own_builds_the_home_and_names_it(self) -> None:
-        with TemporaryDirectory() as tmp:
-            root = _root(Path(tmp))
-            paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
             home = bare_launch._own_runtime_home(bare_launch_args([]), paths)
-            self.assertEqual(home, tui_home_path(paths.omh_home))
+            self.assertEqual(home, tui_home_path(Path(paths.hermes_home)))
+            self.assertEqual(home, Path(paths.hermes_home) / "profiles" / "omh-tui")
             self.assertTrue((home / "config.yaml").is_file())
+            self.assertIn("standalone: true", (home / "config.yaml").read_text(encoding="utf-8"))
             self.assertTrue((home / "skills" / "apple").is_symlink())
             self.assertTrue((home / MARKER_FILE).is_file())
+            self.assertFalse((home / "auth.json").exists())
+
+    def test_a_saved_own_does_the_same_and_a_saved_shared_stays_on_the_shared_gateway(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = _root(Path(tmp))
+            paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
+            write_runtime_choice(paths.omh_home, RUNTIME_SHARED)
+            self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
+            self.assertFalse(tui_home_path(Path(paths.hermes_home)).exists())
+            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
+            self.assertEqual(bare_launch._own_runtime_home(bare_launch_args([]), paths), tui_home_path(Path(paths.hermes_home)))
 
     def test_an_explicit_home_or_profile_stays_on_the_shared_gateway(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _root(Path(tmp))
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
             for argv in (["--hermes-home", str(root)], ["-p", "kami"], ["--profile", "kami", "--resume", "s-1"]):
                 with self.subTest(argv=argv):
                     self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args(argv), paths))
-            self.assertFalse(tui_home_path(paths.omh_home).exists())
+            self.assertFalse(tui_home_path(Path(paths.hermes_home)).exists())
 
     def test_a_resume_of_a_session_in_the_shared_store_opens_there_and_says_so(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _root(Path(tmp))
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
             _state_db(Path(paths.hermes_home), "shared-1")
-            home = tui_home_path(paths.omh_home)
+            home = tui_home_path(Path(paths.hermes_home))
             _state_db(home, "own-1")
-            import io
-            from contextlib import redirect_stderr
             stderr = io.StringIO()
             with redirect_stderr(stderr):
                 self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args(["--resume", "shared-1"]), paths))
@@ -118,16 +121,14 @@ class DecisionTests(unittest.TestCase):
             # A bare `--resume` (the picker) opens on the own runtime.
             self.assertEqual(bare_launch._own_runtime_home(bare_launch_args(["--resume"]), paths), home)
 
-    def test_a_resume_of_a_session_only_the_tui_home_knows_opens_there_even_after_switching_back(self) -> None:
+    def test_a_resume_of_a_session_only_the_tui_profile_knows_opens_there_even_after_switching_to_shared(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _root(Path(tmp))
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
             write_runtime_choice(paths.omh_home, RUNTIME_SHARED)
-            home = tui_home_path(paths.omh_home)
+            home = tui_home_path(Path(paths.hermes_home))
             _state_db(home, "own-1")
             _state_db(Path(paths.hermes_home), "shared-1")
-            import io
-            from contextlib import redirect_stderr
             stderr = io.StringIO()
             with redirect_stderr(stderr):
                 self.assertEqual(bare_launch._own_runtime_home(bare_launch_args(["--resume", "own-1"]), paths), home)
@@ -140,9 +141,6 @@ class DecisionTests(unittest.TestCase):
             root = _root(Path(tmp))
             (root / "config.yaml").write_text("platforms:\n  telegram:\n    token: 1:a\n", encoding="utf-8")
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
-            import io
-            from contextlib import redirect_stderr
             stderr = io.StringIO()
             with redirect_stderr(stderr):
                 self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
@@ -153,22 +151,17 @@ class DecisionTests(unittest.TestCase):
             root = _root(Path(tmp))
             (root / ".env").write_bytes(b"K=\xff\n")
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
-            import io
-            from contextlib import redirect_stderr
             stderr = io.StringIO()
             with redirect_stderr(stderr):
                 self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
             self.assertIn("could not prepare the TUI's own runtime home", stderr.getvalue())
             self.assertIn("not UTF-8", stderr.getvalue())
+            self.assertFalse(tui_home_path(Path(paths.hermes_home)).exists())
 
     def test_a_home_that_cannot_be_built_says_why_and_stays_on_the_shared_gateway(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _root(Path(tmp))
             paths = resolve_paths(str(Path(tmp) / "omh"), str(root))
-            write_runtime_choice(paths.omh_home, RUNTIME_OWN)
-            import io
-            from contextlib import redirect_stderr
             stderr = io.StringIO()
             with redirect_stderr(stderr), patch("omh.tui.own_runtime.build_tui_home", side_effect=OSError("disk full")):
                 self.assertIsNone(bare_launch._own_runtime_home(bare_launch_args([]), paths))
@@ -191,7 +184,7 @@ class LaunchTests(unittest.TestCase):
             )
             hermes.chmod(0o755)
             paths = resolve_paths(str(root / "omh"), str(root / "selected"))
-            tui_home = root / "tui-home"
+            tui_home = root / "selected" / "profiles" / "omh-tui"
             with patch.dict(os.environ, {"HERMES_HOME": str(root / "other"), "OMH_TUI_RUNTIME": "own",
                                          "TELEGRAM_BOT_TOKEN": "shell-token"}), \
                     patch.object(bare_launch, "_omh_tui_blocker", return_value=""):
@@ -216,7 +209,7 @@ class FallbackTests(unittest.TestCase):
             )
             hermes.chmod(0o755)
             paths = resolve_paths(str(root / "omh"), str(root / "selected"))
-            tui_home = root / "tui-home"
+            tui_home = root / "selected" / "profiles" / "omh-tui"
             with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "shell-token"}), \
                     patch.object(bare_launch, "_omh_tui_blocker", return_value="fixture blocker"), \
                     patch.object(bare_launch, "_node_available", return_value=False):

@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
+  your existing login and no extra command.** The TUI's runtime is now a
+  Hermes profile, `<root>/profiles/omh-tui`, whose copied config says
+  `gateway.standalone: true`: the host gateway never serves it, Hermes starts
+  an idle-exiting gateway for it when the TUI attaches, and a profile without
+  an `auth.json` of its own reads the root's store and rotates OAuth tokens
+  back into it (Hermes' profile rule), so nothing is copied and nobody logs
+  in twice. `own` is the default; `omh theme runtime shared` puts the TUI
+  back on the bots' gateway. The builder stages a new profile under a dot
+  name and renames it whole, writes Hermes' `.no-bundled-skills` marker, and
+  removes the home an earlier OMH built under the OMH home (it held a copy of
+  `auth.json`) once its gateway is not running; `omh uninstall` removes the
+  profile; the bot board, skill registration, the curator ledger and the
+  skill union leave `omh-tui` out. Measured on a live host
+  (`tools/qa/tui_own_runtime/RESULTS.md`): a prompt answered on the root's
+  OAuth login with the root store unchanged and the host gateway untouched.
+  Known cost, Hermes' own: on a host whose bots have scheduled cron jobs the
+  TUI gateway stays up between sessions.
 - **`omh update`, `omh doctor` and the menu bar know the TUI's own
   runtime home.** Update rebuilds `<omh_home>/tui-home` when the runtime
   choice is `own` or the home exists (the OMH plugin bundle it links moved

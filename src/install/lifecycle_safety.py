@@ -7,6 +7,7 @@ import re
 from .config_adapter import anchor_external_dir_entry, external_dirs, plugin_is_enabled, read_config
 from ..paths import managed_command_generations_dir
 from ..plugin_bundle.omh import runtime_paths
+from ..skin_pack import TUI_PROFILE
 
 
 def primary_hermes_home(home: Path) -> Path:
@@ -42,7 +43,9 @@ def store_removal_plan(paths, *, remove_profiles: bool, detached_homes: tuple[Pa
     try:
         root = primary / "profiles"
         try:
-            profiles = sorted(entry for entry in root.iterdir() if entry.is_dir() and not entry.name.startswith("."))
+            # The TUI's own runtime profile mirrors the root's config: it is OMH's, removed with it, never a reference.
+            profiles = sorted(entry for entry in root.iterdir()
+                              if entry.is_dir() and not entry.name.startswith(".") and entry.name != TUI_PROFILE)
         except FileNotFoundError:
             profiles = []
         homes = [primary, *profiles]

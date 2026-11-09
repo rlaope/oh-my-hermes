@@ -55,3 +55,49 @@ root's session authority only; the sandbox session never touched the root's cont
   what it waits for.
 - `/gateway restart` on the own runtime is a plain stop of an idle-exit gateway: the next launch
   starts a fresh one on the new OMH generation.
+
+## Profile spike (2026-11-09): the TUI home as a standalone named profile
+
+Verdict: **go**, and the shape the TUI runtime ships with. Measured 2026-11-09 14:56 KST on the owner's
+machine, Hermes 0.23.0 (`code_sha 2bd378ed`), root gateway pid 72122 serving `default` and `kami`, never
+signalled. Script: `run_profile_spike.py` (run from the checkout). Record: `profile-spike-result-2026-11-09.json`
+(provider names, token values and bot paths left out).
+
+Why: the custom home beside the root (above) could not share the login. Hermes reads `auth.json` only from
+the home and, for a named profile, from the root as a fallback (`_load_provider_state_with_source`), writing a
+rotated OAuth chain back to the store it came from under both locks. A home inside the root but outside
+`profiles/` is the default profile to Hermes and gets no gateway of its own (section 10 of the plan). A named
+profile with `gateway.standalone: true` is the one shape Hermes gives both: the host multiplexer never serves
+it (`profiles_to_serve` skips it) and its client starts an unmanaged gateway for it without `--force`.
+
+| Claim | Measured |
+| --- | --- |
+| The host leaves the profile alone | `served_profiles` `[default, kami]` before placing the profile, 3 s after, during the session, after |
+| A gateway of its own | pid 68447 beside 72122; `hermes_home` the profile; `platforms: {}` |
+| The login is shared with no copy | no `auth.json` in the profile before or after; `prompt.submit` answered `ok` on the root's OAuth provider; root `auth.json` mtime and provider set unchanged |
+| Skills | 273 in the create answer; no `Ambiguous skill name` |
+| Start | `gateway.ready` 7.6 s, `session.create` 0.8 s, prompt round trip 2.7 s |
+| Idle exit | NOT within 90 s: the gateway logged `Cron scheduler will tick 3 profile(s): ['default', 'kami', 'omh-tui']`; `_cron_tick_profile_homes` is `profiles_to_serve(True)` plus the launch profile for any gateway under the root, and `_cron_busy` counts kami's 5 scheduled jobs as work. It stands down per tick for a home another gateway owns (`_cron_profile_gate`). Hermes' fleet semantics; no config knob (`cron.provider` is a scheduler, not a switch). |
+| Root writes | the root ticker's own heartbeat/lock files; nothing under `~/.hermes` outside the profile and the root gateway's housekeeping |
+
+Consequences shipped: the builder targets `<root>/profiles/omh-tui`, sets `standalone: true` in the copied
+config's `gateway:` block, copies no `auth.json`, writes Hermes' `.no-bundled-skills` marker, stages a new
+profile under a dot name and renames it, removes the legacy `<omh_home>/tui-home`; `own` is the default; every
+OMH listing of Hermes profiles skips `omh-tui`. Known cost: on a host whose bots have scheduled cron jobs the
+TUI gateway stays up between sessions.
+
+### Shipped builder, live (2026-11-09 15:27 KST)
+
+`run_live_build.py`: this branch's `build_tui_home` against the real root, then a session the way `omh` opens
+one, then `remove_tui_home`. Record: `live-build-result-2026-11-09.json`. Built in 0.07 s (120 skills: 97 root +
+23 kami-only; 89 kami duplicates of root names recorded as clashes; nothing scrubbed, the root `.env` holds no
+messaging token; no `auth.json`; `.no-bundled-skills` present; the copied config's `gateway:` block carries
+`standalone: true`); a second build refreshed nothing; `gateway.ready` 4.0 s; session on profile `omh-tui`,
+273 skills, prompt answered `ok`; host `served_profiles` `[default, kami]` throughout; profile removed, only
+`kami` left under `profiles/`.
+
+Pitfall met on the way (the first spike script removed the profile while its gateway still ran): the dying
+gateway re-created the directory with `state.db` and no config, the host saw a marker-bearing profile without
+the standalone key and started serving it (`cron/`, `skills/`, `plugins/` appeared). `remove_tui_home` refuses
+while the record is live, and the staged build never shows the host a directory without its config; the ghost
+was cleared with the `unserve-profile` control verb plus removal, never a signal to the host.

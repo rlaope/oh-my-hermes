@@ -1,0 +1,62 @@
+{
+ "built": {
+  "path": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui",
+  "served": [
+   "kami"
+  ],
+  "skills": 120,
+  "clashes": 89,
+  "scrubbed": [],
+  "refreshed": 125,
+  "platform_credentials": [],
+  "seconds": 0.07
+ },
+ "config_has_standalone": true,
+ "config_gateway_block": [
+  "gateway:",
+  "  standalone: true"
+ ],
+ "auth_in_profile": false,
+ "no_bundled_marker": true,
+ "staging_left": [
+  ".DS_Store",
+  ".deleted"
+ ],
+ "second_build_refreshed": [],
+ "root_before": {
+  "pid": 72122,
+  "served_profiles": [
+   "default",
+   "kami"
+  ]
+ },
+ "gateway": {
+  "ready_seconds": 3.97,
+  "pid": 19145,
+  "platforms": [],
+  "hermes_home": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui"
+ },
+ "session": {
+  "profile": "omh-tui",
+  "model": "claude-opus-5-5",
+  "skills": 273
+ },
+ "prompt": {
+  "complete": true,
+  "text": "ok"
+ },
+ "root_during": {
+  "pid": 72122,
+  "served_profiles": [
+   "default",
+   "kami"
+  ]
+ },
+ "attach_exit": 0,
+ "removed": "removed",
+ "profiles_after": [
+  ".DS_Store",
+  ".deleted",
+  "kami"
+ ]
+}
