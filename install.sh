@@ -70,10 +70,34 @@ for omh_arg in "$@"; do
   esac
 done
 OMH_HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
-OMH_OMHER_RELEASES_URL="https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=40"
+OMH_OMHER_RELEASES_URL="https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10"
+OMH_OMHER_RELEASE_PAGES=5
 OMH_OMHER_SITE_URL="https://omher.app/"
+
+# Hermes runs a profile with HERMES_HOME=<root>/profiles/<name>, and its venv
+# lives under <root>. A home whose parent is `profiles` and whose root holds its
+# own config.yaml resolves to that root, the rule the omher bridge uses
+# (hermes_root_of). Without it a profile shell looked for Hermes inside the
+# profile folder and installed a second Hermes there.
+hermes_root_of() {
+  omh_root_home="${1%/}"
+  omh_root_parent="${omh_root_home%/*}"
+  case "$omh_root_parent" in
+    */profiles)
+      omh_root_dir="${omh_root_parent%/profiles}"
+      if [ -n "$omh_root_dir" ] && [ -f "$omh_root_dir/config.yaml" ]; then
+        printf '%s\n' "$omh_root_dir"
+        return 0
+      fi
+      ;;
+  esac
+  printf '%s\n' "$1"
+}
+
 OMH_HERMES_DIR="${HERMES_HOME:-}"
-if [ -z "$OMH_HERMES_DIR" ] && [ -n "$OMH_HOME_DIR" ]; then
+if [ -n "$OMH_HERMES_DIR" ]; then
+  OMH_HERMES_DIR="$(hermes_root_of "$OMH_HERMES_DIR")"
+elif [ -n "$OMH_HOME_DIR" ]; then
   OMH_HERMES_DIR="$OMH_HOME_DIR/.hermes"
 fi
 
@@ -640,6 +664,58 @@ install_hermes() {
   say_ok "Hermes Agent"
 }
 
+# The download URL of the newest omher release's asset whose name ends in $1.
+# Pages through /releases ten at a time (newest first) and stops at the first
+# omher-v* release that has the asset, so one install normally reads one small
+# page. Never /releases/latest: that is the Python package's release, and omher
+# releases are published with --latest=false. GITHUB_TOKEN, when set, is sent
+# through curl's config on stdin, never on the command line.
+# Status: 0 found (URL printed), 1 no omher release, 2 rate limited, 3 the API
+# did not answer.
+omher_release_asset_url() {
+  omh_asset_suffix="$1"
+  omh_page=1
+  while [ "$omh_page" -le "$OMH_OMHER_RELEASE_PAGES" ]; do
+    omh_page_file="$OMH_OMHER_TMP/releases-$omh_page.json"
+    omh_http="$(
+      if [ -n "${GITHUB_TOKEN:-}" ]; then
+        printf 'header = "Authorization: Bearer %s"\n' "$GITHUB_TOKEN"
+      fi | curl -sS --compressed --config - -o "$omh_page_file" -w '%{http_code}' \
+        -H 'Accept: application/vnd.github+json' "$OMH_OMHER_RELEASES_URL&page=$omh_page" 2>/dev/null
+    )" || omh_http="000"
+    case "$omh_http" in
+      200) ;;
+      403|429) return 2 ;;
+      *) return 3 ;;
+    esac
+    omh_url="$(tr -d '\r' <"$omh_page_file" |
+      grep -o "\"browser_download_url\": *\"https://[^\"]*/releases/download/omher-v[^\"/]*/omher-[^\"/]*-$omh_asset_suffix\"" |
+      head -n 1 |
+      sed 's/.*"\(https:[^"]*\)"$/\1/')" || omh_url=""
+    if [ -n "$omh_url" ]; then
+      printf '%s\n' "$omh_url"
+      return 0
+    fi
+    # A short page is the last one.
+    if [ "$(grep -o '"tag_name"' "$omh_page_file" | grep -c .)" -lt 10 ]; then
+      return 1
+    fi
+    omh_page=$((omh_page + 1))
+  done
+  return 1
+}
+
+# The SHA-256 of $1, with whichever tool this system has.
+omh_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | sed 's/[[:space:]].*//'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | sed 's/[[:space:]].*//'
+  else
+    return 1
+  fi
+}
+
 omher_app_failed() {
   say_fail "$1"
   say_note "Hermes and OMH are installed; only the app step failed. Download omher from $OMH_OMHER_SITE_URL"
@@ -666,25 +742,48 @@ install_omher_app() {
     OMH_OMHER_ARCH="arm64"
   fi
   say_step "[omher]" "Install the omher desktop app (macOS $OMH_OMHER_ARCH)"
-  # The newest omher-v* release, never /releases/latest: that is the Python
-  # package's release, and omher releases are published with --latest=false.
-  # The API lists releases newest first, and only omher releases carry an
-  # omher-<version>-macos-<arch>.dmg asset.
-  OMH_OMHER_DMG_URL="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$OMH_OMHER_RELEASES_URL" 2>/dev/null |
-    tr -d '\r' |
-    grep -o "\"browser_download_url\": *\"https://[^\"]*/releases/download/omher-v[^\"/]*/omher-[^\"/]*-macos-$OMH_OMHER_ARCH\\.dmg\"" |
-    head -n 1 |
-    sed 's/.*"\(https:[^"]*\)"$/\1/')"
-  if [ -z "$OMH_OMHER_DMG_URL" ]; then
-    say_note "No omher release was found (none is published yet, or GitHub's API did not answer)."
-    say_note "Hermes and OMH are installed. Get the app from $OMH_OMHER_SITE_URL when it is out."
-    return 0
-  fi
   OMH_OMHER_TMP="$(omh_temp_dir)"
+  OMH_OMHER_LOOKUP=0
+  OMH_OMHER_DMG_URL="$(omher_release_asset_url "macos-$OMH_OMHER_ARCH\\.dmg")" || OMH_OMHER_LOOKUP=$?
+  case "$OMH_OMHER_LOOKUP" in
+    0) ;;
+    1)
+      rm -rf "$OMH_OMHER_TMP"
+      say_note "No omher release was found on GitHub yet."
+      say_note "Hermes and OMH are installed. Get the app from $OMH_OMHER_SITE_URL when it is out."
+      return 0
+      ;;
+    2)
+      rm -rf "$OMH_OMHER_TMP"
+      omher_app_failed "GitHub's API rate limit was reached (60 requests an hour per network without a token). Wait an hour, or set GITHUB_TOKEN, and run this again."
+      ;;
+    *)
+      rm -rf "$OMH_OMHER_TMP"
+      omher_app_failed "GitHub's API did not answer, so the omher release could not be looked up."
+      ;;
+  esac
+  say_note "omher image: $OMH_OMHER_DMG_URL"
   if ! curl -fsSL -o "$OMH_OMHER_TMP/omher.dmg" "$OMH_OMHER_DMG_URL"; then
     rm -rf "$OMH_OMHER_TMP"
     omher_app_failed "Could not download $OMH_OMHER_DMG_URL"
   fi
+  # Checked against the release's SHA256SUMS.txt before anything is mounted.
+  OMH_OMHER_SUMS_URL="${OMH_OMHER_DMG_URL%/*}/SHA256SUMS.txt"
+  if ! curl -fsSL -o "$OMH_OMHER_TMP/SHA256SUMS.txt" "$OMH_OMHER_SUMS_URL"; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not download $OMH_OMHER_SUMS_URL to check the image."
+  fi
+  OMH_OMHER_DMG_NAME="${OMH_OMHER_DMG_URL##*/}"
+  OMH_OMHER_WANT="$(tr -d '\r' <"$OMH_OMHER_TMP/SHA256SUMS.txt" |
+    awk -v name="$OMH_OMHER_DMG_NAME" '$2 == name || $2 == "*" name { print $1; exit }')"
+  OMH_OMHER_GOT="$(omh_sha256 "$OMH_OMHER_TMP/omher.dmg")" || OMH_OMHER_GOT=""
+  if [ -z "$OMH_OMHER_WANT" ] || [ -z "$OMH_OMHER_GOT" ] || [ "$OMH_OMHER_WANT" != "$OMH_OMHER_GOT" ]; then
+    rm -rf "$OMH_OMHER_TMP"
+    [ -n "$OMH_OMHER_WANT" ] || OMH_OMHER_WANT="no entry for $OMH_OMHER_DMG_NAME"
+    [ -n "$OMH_OMHER_GOT" ] || OMH_OMHER_GOT="no checksum tool"
+    omher_app_failed "The downloaded image does not match SHA256SUMS.txt (expected $OMH_OMHER_WANT, got $OMH_OMHER_GOT)."
+  fi
+  say_ok "SHA-256 matches SHA256SUMS.txt ($OMH_OMHER_DMG_NAME)"
   mkdir -p "$OMH_OMHER_TMP/mnt"
   if ! hdiutil attach -nobrowse -readonly -noautoopen -quiet -mountpoint "$OMH_OMHER_TMP/mnt" "$OMH_OMHER_TMP/omher.dmg" </dev/null; then
     rm -rf "$OMH_OMHER_TMP"
@@ -702,23 +801,44 @@ install_omher_app() {
   else
     OMH_OMHER_DEST="$OMH_HOME_DIR/Applications"
   fi
-  mkdir -p "$OMH_OMHER_DEST"
-  if [ -e "$OMH_OMHER_DEST/omher.app" ]; then
-    rm -rf "$OMH_OMHER_DEST/omher.app"
-    say_note "Replacing the omher.app that was already in $OMH_OMHER_DEST."
+  if ! mkdir -p "$OMH_OMHER_DEST"; then
+    hdiutil detach -quiet "$OMH_OMHER_TMP/mnt" </dev/null || true
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not create $OMH_OMHER_DEST."
   fi
+  # Copied under a hidden temporary name in the same folder first, and swapped
+  # in only once the copy is whole: a failed copy (disk full, permissions, the
+  # image going away) leaves an existing omher.app as it was.
+  OMH_OMHER_NEW="$OMH_OMHER_DEST/.omher.app.new.$$"
+  OMH_OMHER_OLD="$OMH_OMHER_DEST/.omher.app.old.$$"
+  rm -rf "$OMH_OMHER_NEW" "$OMH_OMHER_OLD"
+  OMH_OMHER_COPY_OK=0
   if command -v ditto >/dev/null 2>&1; then
-    OMH_OMHER_COPY_OK=0
-    ditto "$OMH_OMHER_TMP/mnt/omher.app" "$OMH_OMHER_DEST/omher.app" && OMH_OMHER_COPY_OK=1
+    ditto "$OMH_OMHER_TMP/mnt/omher.app" "$OMH_OMHER_NEW" && OMH_OMHER_COPY_OK=1
   else
-    OMH_OMHER_COPY_OK=0
-    cp -R "$OMH_OMHER_TMP/mnt/omher.app" "$OMH_OMHER_DEST/omher.app" && OMH_OMHER_COPY_OK=1
+    cp -R "$OMH_OMHER_TMP/mnt/omher.app" "$OMH_OMHER_NEW" && OMH_OMHER_COPY_OK=1
   fi
   hdiutil detach -quiet "$OMH_OMHER_TMP/mnt" </dev/null || true
   rm -rf "$OMH_OMHER_TMP"
   if [ "$OMH_OMHER_COPY_OK" != "1" ]; then
+    rm -rf "$OMH_OMHER_NEW"
     omher_app_failed "Could not copy omher.app into $OMH_OMHER_DEST."
   fi
+  if [ -e "$OMH_OMHER_DEST/omher.app" ]; then
+    if ! mv "$OMH_OMHER_DEST/omher.app" "$OMH_OMHER_OLD"; then
+      rm -rf "$OMH_OMHER_NEW"
+      omher_app_failed "Could not move the existing omher.app in $OMH_OMHER_DEST aside."
+    fi
+    say_note "Replacing the omher.app that was already in $OMH_OMHER_DEST."
+  fi
+  if ! mv "$OMH_OMHER_NEW" "$OMH_OMHER_DEST/omher.app"; then
+    if [ -e "$OMH_OMHER_OLD" ]; then
+      mv "$OMH_OMHER_OLD" "$OMH_OMHER_DEST/omher.app" || true
+    fi
+    rm -rf "$OMH_OMHER_NEW"
+    omher_app_failed "Could not move the new omher.app into $OMH_OMHER_DEST."
+  fi
+  rm -rf "$OMH_OMHER_OLD"
   # curl sets no quarantine flag, so Gatekeeper should not ask; cleared anyway
   # in case a browser download of the same image left one behind.
   xattr -dr com.apple.quarantine "$OMH_OMHER_DEST/omher.app" 2>/dev/null || true
@@ -946,7 +1066,13 @@ else
 fi
 if [ "$OMH_OMHER_BETA" = "1" ]; then
   if [ "$OMH_INSTALL_HERMES" = "1" ]; then
-    say "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
+    # With the app (installed now, or the app that runs this with
+    # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
+    if [ -n "$OMH_OMHER_APP_PATH" ] || [ "$OMH_WITH_DESKTOP" = "0" ]; then
+      say "Hermes was installed without its setup wizard. Open omher and pick a model from the model menu at the top of the chat."
+    else
+      say "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
+    fi
   fi
   if [ -n "$OMH_OMHER_APP_PATH" ]; then
     say "omher is in $OMH_OMHER_APP_PATH. Open it from there or from Launchpad."

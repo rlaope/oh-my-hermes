@@ -4,6 +4,10 @@
 #   Read-OmhInstallerArgs  : no argument, omher@beta, and a refused unknown one
 #   Select-OmherAssetUrl   : newest omher-v* release only, never the OMH package
 #   Get-OmherInstallerArguments : the NSIS silent switches
+#   Get-OmhHermesRoot      : a profile HERMES_HOME resolves to its root (the bridge's rule)
+#   Get-OmherExpectedSha256: the SHA256SUMS.txt entry for one asset
+#   the script-block exit  : a failed run leaves its exit code in $LASTEXITCODE, which the omher app's
+#                            `; exit $LASTEXITCODE` turns into the process exit code
 # -InjectRegression swaps in a picker that ignores the tag prefix; the
 # "package release listed first" case must catch it.
 param([switch]$InjectRegression)
@@ -46,7 +50,7 @@ try {
     $installerPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..\install.ps1')).ProviderPath
     $installerAst = [System.Management.Automation.Language.Parser]::ParseFile($installerPath, [ref]$null, [ref]$errors)
     if ($errors) { throw "install.ps1 does not parse: $($errors[0].Message)" }
-    foreach ($functionName in @('Get-OmhPropertyValue', 'Read-OmhInstallerArgs', 'Select-OmherAssetUrl', 'Get-OmherInstallerArguments')) {
+    foreach ($functionName in @('Get-OmhPropertyValue', 'Read-OmhInstallerArgs', 'Select-OmherAssetUrl', 'Get-OmherInstallerArguments', 'Get-OmhHermesRoot', 'Get-OmherExpectedSha256')) {
         $definition = @($installerAst.FindAll({
             param($node)
             $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $functionName
@@ -95,6 +99,47 @@ try {
     # -- NSIS switches -----------------------------------------------------------------------
     Assert-Omh 'silent by default' ((Get-OmherInstallerArguments '') -join ' ') '/S'
     Assert-Omh 'a folder goes last as /D=' ((Get-OmherInstallerArguments 'C:\Apps\omher') -join ' ') '/S /D=C:\Apps\omher'
+
+    # -- a profile HERMES_HOME -----------------------------------------------------------------
+    $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('omh-root-' + [guid]::NewGuid().ToString('N'))
+    try {
+        $root = Join-Path $tmpRoot 'hermes'
+        $profileHome = Join-Path (Join-Path $root 'profiles') 'kami'
+        New-Item -ItemType Directory -Path $profileHome -Force | Out-Null
+        Assert-Omh 'a profile without a root config.yaml stays as given' (Get-OmhHermesRoot $profileHome) $profileHome
+        Set-Content -LiteralPath (Join-Path $root 'config.yaml') -Value 'model: x'
+        Assert-Omh 'a profile home resolves to its root' (Get-OmhHermesRoot $profileHome) $root
+        Assert-Omh 'a trailing separator too' (Get-OmhHermesRoot ($profileHome + [System.IO.Path]::DirectorySeparatorChar)) $root
+        Assert-Omh 'the root itself stays' (Get-OmhHermesRoot $root) $root
+        $other = Join-Path (Join-Path $root 'elsewhere') 'kami'
+        Assert-Omh 'only a parent named profiles counts' (Get-OmhHermesRoot $other) $other
+        Assert-Omh 'empty stays empty' (Get-OmhHermesRoot '') ''
+    } finally {
+        Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # -- SHA256SUMS.txt ------------------------------------------------------------------------
+    $sums = "AAAA111  omher-0.1.0-macos-arm64.dmg`r`nbbbb222  omher-0.1.0-windows-x64-setup.exe`n"
+    Assert-Omh 'the entry for the installer' (Get-OmherExpectedSha256 -Sums $sums -Name 'omher-0.1.0-windows-x64-setup.exe') 'bbbb222'
+    Assert-Omh 'lower-cased' (Get-OmherExpectedSha256 -Sums $sums -Name 'omher-0.1.0-macos-arm64.dmg') 'aaaa111'
+    Assert-Omh 'binary-mode star' (Get-OmherExpectedSha256 -Sums 'cccc  *omher-x.exe' -Name 'omher-x.exe') 'cccc'
+    Assert-Omh 'no entry' (Get-OmherExpectedSha256 -Sums $sums -Name 'omher-0.1.0-windows-x64.msi') ''
+
+    # -- the script-block form reports failure through $LASTEXITCODE ----------------------------
+    # install.ps1 run as a script block with a bad argument: it stops, and the caller's
+    # `; exit $LASTEXITCODE` (the omher app's command) must see a non-zero code.
+    $installerText = [System.IO.File]::ReadAllText($installerPath)
+    $hostExe = (Get-Process -Id $PID).Path
+    $probeFile = Join-Path ([System.IO.Path]::GetTempPath()) ('omh-probe-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    try {
+        Set-Content -LiteralPath $probeFile -Value $installerText -Encoding UTF8
+        $command = "`$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create([System.IO.File]::ReadAllText('$probeFile'))) omher@nope } catch { `$_.Exception.Message; exit 1 }; exit `$LASTEXITCODE"
+        & $hostExe -NoProfile -ExecutionPolicy Bypass -Command $command *> $null
+        $code = $LASTEXITCODE
+        Assert-Omh 'a failed script-block run exits non-zero' ($code -ne 0) $true
+    } finally {
+        Remove-Item -LiteralPath $probeFile -Force -ErrorAction SilentlyContinue
+    }
 
     if ($InjectRegression) {
         if (-not ($script:OmhFailures -match 'package release listed first')) {

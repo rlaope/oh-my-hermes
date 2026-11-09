@@ -11,6 +11,7 @@ installed on the machine running the suite.
 from __future__ import annotations
 
 import glob
+import hashlib
 import json
 import shutil
 import subprocess
@@ -35,7 +36,7 @@ HOST_PYTHON_GLOBS = (
 # `ditto` or `xattr` never is.
 SYSTEM_TOOLS = (
     "sh", "bash", "awk", "sed", "grep", "tr", "tail", "head", "dirname", "readlink",
-    "ln", "mkdir", "cp", "chmod", "rm", "mktemp", "cat",
+    "ln", "mkdir", "cp", "chmod", "rm", "mktemp", "cat", "mv", "shasum", "sha256sum", "perl",
 )
 
 # A supported interpreter that stands in for `-m venv`, `-m pip` and
@@ -58,15 +59,22 @@ esac
 exit 0
 """
 
-# Logs each call; answers the Hermes installer, the release list and the dmg
-# from files the test prepares under $FAKE_NET.
+# Logs each call (and every argument, so a token on the command line would
+# show); answers the Hermes installer, the release pages, the dmg and its
+# SHA256SUMS.txt from files the test prepares under $FAKE_NET. `--config -`
+# is read from stdin into its own log. FAKE_RELEASES_STATUS makes the API
+# answer with that HTTP status instead.
 STUB_CURL = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_LOG/curl-argv"
 out=""
 url=""
+fmt=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -o) out="$2"; shift 2 ;;
     -H) shift 2 ;;
+    -w) fmt="$2"; shift 2 ;;
+    --config) cat >> "$FAKE_LOG/curl-config"; shift 2 ;;
     -*) shift ;;
     *) url="$1"; shift ;;
   esac
@@ -74,12 +82,33 @@ done
 printf '%s\\n' "$url" >> "$FAKE_LOG/curl"
 case "$url" in
   https://hermes-agent.nousresearch.com/install.sh) src="$FAKE_NET/hermes-install.sh" ;;
-  https://api.github.com/repos/rlaope/oh-my-hermes/releases*) src="$FAKE_NET/releases.json" ;;
+  https://api.github.com/repos/rlaope/oh-my-hermes/releases*)
+    if [ -n "${FAKE_RELEASES_STATUS:-}" ]; then
+      printf '{"message":"API rate limit exceeded"}' > "$out"
+      printf '%s' "$FAKE_RELEASES_STATUS"
+      exit 0
+    fi
+    page="${url##*page=}"
+    src="$FAKE_NET/releases-$page.json"
+    [ -f "$src" ] || src="$FAKE_NET/releases.json"
+    ;;
+  */SHA256SUMS.txt) src="$FAKE_NET/SHA256SUMS.txt" ;;
   *.dmg) src="$FAKE_NET/omher.dmg" ;;
-  *) exit 22 ;;
+  *) [ -n "$fmt" ] && printf '404'; exit 22 ;;
 esac
-[ -f "$src" ] || exit 22
-if [ -n "$out" ]; then cp "$src" "$out"; else cat "$src"; fi
+[ -f "$src" ] || { [ -n "$fmt" ] && printf '404'; exit 22; }
+if [ -n "$out" ]; then /bin/cp "$src" "$out"; else cat "$src"; fi
+[ -n "$fmt" ] && printf '200'
+exit 0
+"""
+
+# `cp` that refuses to copy omher.app when FAKE_CP_FAIL is set (the disk
+# filling up mid-copy); every other copy goes through.
+STUB_CP = """#!/bin/sh
+case "$*" in
+  *omher.app*) [ -n "${FAKE_CP_FAIL:-}" ] && exit 1 ;;
+esac
+exec /bin/cp "$@"
 """
 
 # What Hermes' installer leaves behind: its venv Python, nothing else.
@@ -129,6 +158,9 @@ def _release(tag: str, names: list[str]) -> dict[str, object]:
     }
 
 
+DMG = b"not really a dmg"
+DMG_SHA256 = hashlib.sha256(DMG).hexdigest()
+
 # Newest first, as the API lists them: an OMH package release ahead of the app's.
 RELEASES = [
     _release("v4.0.7", ["oh_my_hermes-4.0.7-py3-none-any.whl"]),
@@ -164,12 +196,21 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.tools = tools
         for name, body in (
             ("curl", STUB_CURL), ("hdiutil", STUB_HDIUTIL), ("uname", STUB_UNAME), ("xattr", STUB_XATTR),
+            ("cp", STUB_CP),
         ):
             self._write(self.bin / name, body)
         self._write(self.net / "python-stub", STUB_PYTHON)
         self._write(self.net / "hermes-install.sh", FAKE_HERMES_INSTALLER)
-        (self.net / "omher.dmg").write_bytes(b"not really a dmg")
+        (self.net / "omher.dmg").write_bytes(DMG)
+        self._sums(DMG_SHA256)
         (self.net / "releases.json").write_text(json.dumps(RELEASES), encoding="utf-8")
+
+    def _sums(self, digest: str) -> None:
+        (self.net / "SHA256SUMS.txt").write_text(
+            "".join(f"{digest}  {name}\n" for name in ("omher-0.1.0-macos-arm64.dmg", "omher-0.1.0-macos-x64.dmg"))
+            + f"{'0' * 64}  omher-0.1.0-windows-x64-setup.exe\n",
+            encoding="utf-8",
+        )
 
     @staticmethod
     def _write(path: Path, body: str) -> None:
@@ -209,6 +250,9 @@ class OmherBetaInstallerTests(unittest.TestCase):
     def _calls(self, name: str) -> list[str]:
         path = self.log / name
         return path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+
+    def _dmg_call(self) -> str:
+        return next(u for u in self._calls("curl") if u.endswith(".dmg"))
 
     def _setup_ran(self) -> bool:
         return any(" -m omh.cli setup " in f" {line} " for line in self._calls("omh-cli"))
@@ -262,7 +306,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.assertNotIn(HERMES_URL, self._calls("curl"))
         self.assertFalse(self._setup_ran())
         self._assert_app_installed(result)
-        self.assertTrue(self._calls("curl")[-1].endswith("/omher-v0.1.0/omher-0.1.0-macos-arm64.dmg"), self._calls("curl"))
+        self.assertTrue(self._dmg_call().endswith("/omher-v0.1.0/omher-0.1.0-macos-arm64.dmg"), self._calls("curl"))
 
     def test_a_hermes_user_without_omh_gets_omh_setup_and_the_app(self) -> None:
         self._system_python()
@@ -285,7 +329,9 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.assertEqual(self._calls("hermes-installer-args"), ["--non-interactive"])
         self.assertTrue(self._setup_ran())
         self._assert_app_installed(result)
-        self.assertIn("run 'hermes setup'", result.stdout)
+        # the model is picked in the app, not in a terminal
+        self.assertIn("pick a model from the model menu", result.stdout)
+        self.assertNotIn("hermes setup", result.stdout)
         # Hermes came first: its installer ran before the OMH venv existed.
         self.assertLess(result.stdout.index("Install Hermes Agent"), result.stdout.index("Install OMH package"))
 
@@ -328,7 +374,7 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._existing_omh()
         result = self._run("omher@beta", FAKE_UNAME_M="x86_64")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(self._calls("curl")[-1].endswith("/omher-0.1.0-macos-x64.dmg"), self._calls("curl"))
+        self.assertTrue(self._dmg_call().endswith("/omher-0.1.0-macos-x64.dmg"), self._calls("curl"))
 
     def test_pretty_printed_api_json_is_read_too(self) -> None:
         (self.net / "releases.json").write_text(json.dumps(RELEASES, indent=2), encoding="utf-8")
@@ -358,6 +404,9 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.assertTrue(self._setup_ran())
         self.assertEqual(self._calls("hdiutil"), [])
         self.assertIn("OMH_WITH_DESKTOP=0", result.stdout)
+        # this is the app's own Install button: the app is where the model gets picked
+        self.assertIn("pick a model from the model menu", result.stdout)
+        self.assertNotIn("hermes setup", result.stdout)
 
     def test_linux_skips_the_app_with_a_note(self) -> None:
         self._system_python()
@@ -374,6 +423,109 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("omh doctor reported problems", result.stdout)
         self._assert_app_installed(result)
+
+    def test_a_failed_copy_keeps_the_existing_app(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        old = self.apps / "omher.app" / "Contents"
+        old.mkdir(parents=True)
+        (old / "stale").write_text("old\n", encoding="utf-8")
+        result = self._run("omher@beta", FAKE_CP_FAIL="1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Could not copy omher.app", result.stdout)
+        self.assertEqual((old / "stale").read_text(encoding="utf-8"), "old\n")
+        self.assertEqual(sorted(p.name for p in self.apps.iterdir()), ["omher.app"])
+
+    def test_the_image_is_checked_against_sha256sums(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("SHA-256 matches SHA256SUMS.txt (omher-0.1.0-macos-arm64.dmg)", result.stdout)
+        self.assertIn(
+            "https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/SHA256SUMS.txt", self._calls("curl"),
+        )
+
+    def test_a_checksum_mismatch_stops_before_anything_is_mounted(self) -> None:
+        self._sums("f" * 64)
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("does not match SHA256SUMS.txt", result.stdout)
+        self.assertEqual(self._calls("hdiutil"), [])
+        self.assertFalse((self.apps / "omher.app").exists())
+
+    def test_the_release_lookup_reads_one_small_page_and_stops(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        api = [u for u in self._calls("curl") if u.startswith("https://api.github.com/")]
+        self.assertEqual(api, ["https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10&page=1"])
+        self.assertTrue(any("--compressed" in line for line in self._calls("curl-argv")))
+
+    def test_an_omher_release_behind_ten_package_releases_is_still_found(self) -> None:
+        packages = [_release(f"v4.1.{i}", [f"oh_my_hermes-4.1.{i}-py3-none-any.whl"]) for i in range(10)]
+        (self.net / "releases-1.json").write_text(json.dumps(packages), encoding="utf-8")
+        (self.net / "releases-2.json").write_text(json.dumps(RELEASES), encoding="utf-8")
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        api = [u for u in self._calls("curl") if u.startswith("https://api.github.com/")]
+        self.assertEqual([u.rsplit("=", 1)[1] for u in api], ["1", "2"])
+        self._assert_app_installed(result)
+
+    def test_a_rate_limited_api_fails_loudly_instead_of_skipping_the_app(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta", FAKE_RELEASES_STATUS="403")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("rate limit", result.stdout)
+        self.assertIn("GITHUB_TOKEN", result.stdout)
+        self.assertEqual(self._calls("hdiutil"), [])
+
+    def test_github_token_is_sent_through_curl_config_not_argv(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        self._existing_omh()
+        result = self._run("omher@beta", GITHUB_TOKEN="ghs_example_not_real")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('header = "Authorization: Bearer ghs_example_not_real"', self._calls("curl-config"))
+        self.assertFalse(any("ghs_example_not_real" in line for line in self._calls("curl-argv")))
+        self.assertNotIn("ghs_example_not_real", result.stdout + result.stderr)
+
+    # -- a profile HERMES_HOME ----------------------------------------------------------------------
+
+    def test_a_profile_hermes_home_finds_hermes_under_its_root(self) -> None:
+        self._system_python()
+        self._existing_hermes()
+        (self.home / ".hermes" / "config.yaml").write_text("model: x\n", encoding="utf-8")
+        profile = self.home / ".hermes" / "profiles" / "kami"
+        profile.mkdir(parents=True)
+        (profile / "config.yaml").write_text("model: y\n", encoding="utf-8")
+        result = self._run("omher@beta", HERMES_HOME=str(profile), OMH_WITH_DESKTOP="0")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("found Hermes without OMH", result.stdout)
+        self.assertNotIn(HERMES_URL, self._calls("curl"))
+        self.assertFalse((profile / "hermes-agent").exists())
+
+    def test_a_profiles_folder_without_a_root_config_is_taken_as_given(self) -> None:
+        # the same rule as the bridge: no <root>/config.yaml, no mapping
+        self._system_python()
+        self._existing_hermes()
+        home = self.root / "elsewhere" / "profiles" / "kami"
+        home.mkdir(parents=True)
+        result = self._run("omher@beta", HERMES_HOME=str(home), OMH_WITH_DESKTOP="0")
+        self.assertIn("found neither Hermes nor OMH", result.stdout)
+        self.assertEqual(self._calls("curl")[0], HERMES_URL)
 
     def test_a_failed_hermes_download_stops_before_omh(self) -> None:
         (self.net / "hermes-install.sh").unlink()

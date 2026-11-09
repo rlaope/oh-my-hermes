@@ -301,12 +301,19 @@ The `omher@beta` argument adds three things to the plain install, and only with 
 | Hermes, no OMH | OMH is installed, `omh setup` + `omh doctor` connect it to Hermes; the app is added |
 | Neither | Hermes' official installer runs non-interactively first, then OMH, `omh setup`, and the app |
 
-The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is mounted, `omher.app` is copied
-to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`) and replaces an older copy; on Windows the per-user
-installer runs silently. Linux gets Hermes and OMH only, with a note. `OMH_WITH_HERMES=0` skips installing Hermes
-and `OMH_WITH_DESKTOP=0` skips the app. A Hermes installed this way skipped its setup wizard, so run
-`hermes setup` once to choose a model. `irm ... | iex` cannot pass an argument, which is why the PowerShell form
-runs the downloaded script as a script block.
+The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is checked against the release's
+`SHA256SUMS.txt`, mounted, and `omher.app` is copied to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`)
+under a temporary name, then swapped for an older copy only once the copy is whole; on Windows the per-user
+installer is checked the same way and runs silently. Linux gets Hermes and OMH only, with a note.
+`OMH_WITH_HERMES=0` skips installing Hermes and `OMH_WITH_DESKTOP=0` skips the app. Run from a Hermes profile
+shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes under `<root>`, as omher does.
+
+The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
+GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
+model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
+leaves its exit code in `$LASTEXITCODE`.
 
 ### Windows (PowerShell 5.1+)
 

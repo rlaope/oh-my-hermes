@@ -121,7 +121,8 @@ $OmhAppDir          = Get-OmhEnv 'OMH_APP_DIR'
 # Taken here, at script scope: inside a function $args is that function's own.
 $OmhScriptArgs      = @($args)
 $OmhHermesInstallUrl  = 'https://hermes-agent.nousresearch.com/install.ps1'
-$OmhOmherReleasesUrl  = 'https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=40'
+$OmhOmherReleasesUrl  = 'https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10'
+$OmhOmherReleasePages = 5
 $OmhOmherSiteUrl      = 'https://omher.app/'
 $OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
 $script:OmhOmherBeta     = $false
@@ -825,9 +826,27 @@ function Read-OmhInstallerArgs {
     return $beta
 }
 
+function Get-OmhHermesRoot {
+    <#
+        Hermes runs a profile with HERMES_HOME=<root>\profiles\<name>, and its
+        venv lives under <root>. A home whose parent is `profiles` and whose root
+        holds its own config.yaml resolves to that root; the omher bridge reads
+        it the same way (hermes_root_of).
+    #>
+    param([string]$HermesHome)
+    if (-not $HermesHome) { return $HermesHome }
+    $trimmed = $HermesHome.TrimEnd('\', '/')
+    $parent = Split-Path -Parent $trimmed
+    if ($parent -and (Split-Path -Leaf $parent) -eq 'profiles') {
+        $root = Split-Path -Parent $parent
+        if ($root -and (Test-Path -LiteralPath (Join-Path $root 'config.yaml') -PathType Leaf)) { return $root }
+    }
+    return $HermesHome
+}
+
 function Get-OmhHermesHome {
     $hermesHome = Get-OmhEnv 'HERMES_HOME'
-    if ($hermesHome) { return $hermesHome }
+    if ($hermesHome) { return (Get-OmhHermesRoot $hermesHome) }
     if ($OmhLocalAppData) { return (Join-Path $OmhLocalAppData 'hermes') }
     if ($OmhHomeDir) { return (Join-Path $OmhHomeDir 'AppData\Local\hermes') }
     return ''
@@ -936,6 +955,53 @@ function Select-OmherAssetUrl {
     return ''
 }
 
+function Get-OmhHttpStatus {
+    <#  The HTTP status a failed Invoke-RestMethod carried, or 0 when there was no answer.  #>
+    param([object]$ErrorRecord)
+    $response = Get-OmhPropertyValue (Get-OmhPropertyValue $ErrorRecord 'Exception') 'Response'
+    $status = Get-OmhPropertyValue $response 'StatusCode'
+    if ($null -eq $status) { return 0 }
+    try { return [int]$status } catch { return 0 }
+}
+
+function Find-OmherAssetUrl {
+    <#
+        Pages through /releases ten at a time, newest first, and stops at the
+        first omher-v* release with the asset, so one install normally reads
+        one small page. GITHUB_TOKEN is sent when set. Returns
+        @{ Url; Status } with Status 'found', 'none', 'rate-limited' or 'no-answer'.
+    #>
+    param([string]$Suffix)
+    $headers = @{ Accept = 'application/vnd.github+json' }
+    $token = Get-OmhEnv 'GITHUB_TOKEN'
+    if ($token) { $headers['Authorization'] = "Bearer $token" }
+    for ($page = 1; $page -le $OmhOmherReleasePages; $page++) {
+        try {
+            $releases = @(Invoke-RestMethod -Uri "$OmhOmherReleasesUrl&page=$page" -Headers $headers -UseBasicParsing -ErrorAction Stop)
+        } catch {
+            $status = Get-OmhHttpStatus $_
+            if ($status -eq 403 -or $status -eq 429) { return @{ Url = ''; Status = 'rate-limited' } }
+            return @{ Url = ''; Status = 'no-answer' }
+        }
+        # Windows PowerShell 5.1 hands a JSON array back as one object holding it.
+        if ($releases.Count -eq 1 -and $releases[0] -is [System.Array]) { $releases = @($releases[0]) }
+        $url = Select-OmherAssetUrl -Releases $releases -Suffix $Suffix
+        if ($url) { return @{ Url = $url; Status = 'found' } }
+        if ($releases.Count -lt 10) { break }
+    }
+    return @{ Url = ''; Status = 'none' }
+}
+
+function Get-OmherExpectedSha256 {
+    <#  The SHA-256 SHA256SUMS.txt lists for $Name (sha256sum format), or ''.  #>
+    param([string]$Sums, [string]$Name)
+    foreach ($line in ($Sums -split "`n")) {
+        $parts = @($line.Trim() -split '\s+')
+        if ($parts.Count -ge 2 -and ($parts[1] -eq $Name -or $parts[1] -eq "*$Name")) { return $parts[0].ToLowerInvariant() }
+    }
+    return ''
+}
+
 function Get-OmherInstallerArguments {
     <#  NSIS silent install; /D= must come last and unquoted.  #>
     param([string]$Directory = '')
@@ -958,28 +1024,45 @@ function Install-OmherApp {
         return
     }
     Write-OmhStep '[omher]' 'Install the omher desktop app (Windows x64)'
-    $releases = @()
-    try {
-        $releases = @(Invoke-RestMethod -Uri $OmhOmherReleasesUrl -Headers @{ Accept = 'application/vnd.github+json' } -UseBasicParsing -ErrorAction Stop)
-    } catch {
-        $releases = @()
+    $lookup = Find-OmherAssetUrl -Suffix 'windows-x64-setup.exe'
+    switch ($lookup.Status) {
+        'none' {
+            Write-OmhNote 'No omher release was found on GitHub yet.'
+            Write-OmhNote "Hermes and OMH are installed. Get the app from $OmhOmherSiteUrl when it is out."
+            return
+        }
+        'rate-limited' {
+            Stop-OmherApp "GitHub's API rate limit was reached (60 requests an hour per network without a token). Wait an hour, or set GITHUB_TOKEN, and run this again."
+        }
+        'no-answer' {
+            Stop-OmherApp "GitHub's API did not answer, so the omher release could not be looked up."
+        }
     }
-    # Windows PowerShell 5.1 hands a JSON array back as one object holding it.
-    if ($releases.Count -eq 1 -and $releases[0] -is [System.Array]) { $releases = @($releases[0]) }
-    $url = Select-OmherAssetUrl -Releases $releases -Suffix 'windows-x64-setup.exe'
-    if (-not $url) {
-        Write-OmhNote "No omher release was found (none is published yet, or GitHub's API did not answer)."
-        Write-OmhNote "Hermes and OMH are installed. Get the app from $OmhOmherSiteUrl when it is out."
-        return
-    }
+    $url = $lookup.Url
+    Write-OmhNote "omher installer: $url"
     $tmp = New-OmhTempDir
-    $setup = Join-Path $tmp 'omher-setup.exe'
+    $name = $url.Substring($url.LastIndexOf('/') + 1)
+    $setup = Join-Path $tmp $name
     try {
         try {
             Invoke-WebRequest -Uri $url -OutFile $setup -UseBasicParsing -ErrorAction Stop
         } catch {
             Stop-OmherApp "Could not download $url"
         }
+        # Checked against the release's SHA256SUMS.txt before it runs.
+        $sumsUrl = $url.Substring(0, $url.LastIndexOf('/')) + '/SHA256SUMS.txt'
+        $sumsFile = Join-Path $tmp 'SHA256SUMS.txt'
+        try {
+            Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsFile -UseBasicParsing -ErrorAction Stop
+        } catch {
+            Stop-OmherApp "Could not download $sumsUrl to check the installer."
+        }
+        $want = Get-OmherExpectedSha256 -Sums ([System.IO.File]::ReadAllText($sumsFile)) -Name $name
+        $got = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+        if (-not $want -or $want -ne $got) {
+            Stop-OmherApp "The downloaded installer does not match SHA256SUMS.txt (expected $(if ($want) { $want } else { "no entry for $name" }), got $got)."
+        }
+        Write-OmhOk "SHA-256 matches SHA256SUMS.txt ($name)"
         # The installer is unsigned. Run silently and per user (no admin), which
         # is how the release is built (nsis installMode currentUser).
         $process = Start-Process -FilePath $setup -ArgumentList (Get-OmherInstallerArguments $OmhAppDir) -Wait -PassThru
@@ -1170,7 +1253,13 @@ try {
     }
     if ($script:OmhOmherBeta) {
         if ($script:OmhInstallHermes) {
-            Write-OmhLine "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
+            # With the app (installed now, or the app that runs this with
+            # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
+            if ($script:OmhOmherAppPath -or $OmhWithDesktop -eq '0') {
+                Write-OmhLine 'Hermes was installed without its setup wizard. Open omher and pick a model from the model menu at the top of the chat.'
+            } else {
+                Write-OmhLine "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
+            }
         }
         if ($script:OmhOmherAppPath) {
             Write-OmhLine 'omher is installed. Open it from the Start menu.'
@@ -1191,3 +1280,8 @@ if ($OmhInvocationCommand) {
     if ($OmhInvocationPathProperty) { $OmhInvocationPath = [string]$OmhInvocationPathProperty.Value }
 }
 if ($OmhInstallFailed -and $OmhInvocationPath) { exit $OmhExitCode }
+# Run as a script block (the omher@beta form, and the omher app's Install button) there is no file,
+# so the `exit` above never runs. Leave the result in $LASTEXITCODE instead, which a caller ending
+# with `; exit $LASTEXITCODE` turns into the process exit code; a native probe earlier in the run
+# must not leave a stale non-zero there after a clean install.
+if ($OmhInstallFailed) { $global:LASTEXITCODE = $OmhExitCode } else { $global:LASTEXITCODE = 0 }

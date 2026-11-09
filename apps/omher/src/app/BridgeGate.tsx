@@ -44,6 +44,14 @@ function testShell(): GateShell | null {
 const hasShell = () => inTauri() || testShell() !== null;
 const MAX_LINES = 400;
 
+/** How a log line reads: the installer's `[failed]`/`ERROR` lines in the danger colour, its `[ok]` lines muted. */
+export function lineTone(text: string): "bad" | "ok" | "plain" {
+  const t = text.trimStart();
+  if (/^\[failed\]/i.test(t) || /^(ERROR|error:|fatal:|curl: \(\d+\))/.test(t)) return "bad";
+  if (/^\[ok\]/i.test(t)) return "ok";
+  return "plain";
+}
+
 /** Append one installer line, keeping the newest MAX_LINES. */
 export function appendLine(lines: string[], text: string, max = MAX_LINES): string[] {
   const next = [...lines, text];
@@ -63,8 +71,10 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [copied]);
   const [exitCode, setExitCode] = useState<number | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
   const shellRef = useRef<GateShell | null>(null);
   const logRef = useRef<HTMLPreElement | null>(null);
+  const installRef = useRef<HTMLButtonElement | null>(null);
 
   const shell = useCallback(async () => {
     if (!shellRef.current) shellRef.current = testShell() ?? (await tauriShell());
@@ -118,10 +128,17 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     }
   }, [shell]);
 
+  // Focus follows the one action that matters: Install on arrival, Install again after a failure.
+  const failedInstall = install === "failed";
+  useEffect(() => {
+    if (failedInstall) installRef.current?.focus();
+  }, [failedInstall]);
+
   const runInstall = useCallback(async () => {
     setInstall("running");
     setLines([]);
     setExitCode(null);
+    setInstallError(null);
     try {
       const code = await (await shell()).install((e) => {
         if (e.kind === "line") setLines((l) => appendLine(l, e.text));
@@ -135,7 +152,9 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         setInstall("failed");
       }
     } catch (e) {
-      setLines((l) => appendLine(l, String(e)));
+      // The shell refuses with a message: it could not start the installer, or the installer exited 0
+      // and Hermes is still not where omher looks.
+      setInstallError(String(e));
       setInstall("failed");
     }
   }, [shell]);
@@ -147,7 +166,9 @@ export function BridgeGate({ children }: { children: ReactNode }) {
       <div className="gate" data-testid="bridge-gate" data-state="setup">
         <div className="gate-box gate-setup" data-testid="setup-screen">
           <img className="gate-mark" src={mark} alt="" width={44} height={44} />
-          <div className="gate-head">Install Hermes to start</div>
+          <div className="gate-head" data-testid="setup-head">
+            {install === "failed" ? "Install didn’t finish" : "Install Hermes to start"}
+          </div>
           <p className="gate-text">
             Your bots run on Hermes Agent, which isn’t on this computer yet. Install runs the command below: Hermes,
             then oh-my-hermes.
@@ -188,7 +209,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
           {lines.length > 0 && (
             <pre className="gate-log" data-testid="setup-log" ref={logRef} aria-live="polite">
               {lines.map((line, i) => (
-                <span key={i} className="gate-line">
+                <span key={i} className={`gate-line gate-line--${lineTone(line)}`}>
                   {line}
                 </span>
               ))}
@@ -196,9 +217,11 @@ export function BridgeGate({ children }: { children: ReactNode }) {
           )}
           {install === "failed" && (
             <p className="gate-error gate-error--bad" data-testid="setup-failed">
-              {exitCode === null
-                ? "The installer could not run."
-                : `The installer stopped (exit ${exitCode}). The output above says why. Fix it and press Install again.`}
+              {installError
+                ? installError
+                : exitCode === null
+                  ? "The installer could not run."
+                  : `The installer stopped (exit ${exitCode}). The output above says why. Fix it and press Install again.`}
             </p>
           )}
           <div className="gate-actions">
@@ -206,6 +229,8 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               type="button"
               className="gate-retry gate-primary"
               data-testid="setup-install"
+              ref={installRef}
+              autoFocus
               disabled={running}
               onClick={runInstall}
             >
@@ -222,9 +247,11 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               Check again
             </button>
           </div>
-          <p className="gate-note">
-            Takes a few minutes. Then pick a model once with <code>hermes setup</code>.
-          </p>
+          {install !== "failed" && (
+            <p className="gate-note" data-testid="setup-note">
+              Takes a few minutes. You’ll pick a model in the app after.
+            </p>
+          )}
         </div>
       </div>
     );

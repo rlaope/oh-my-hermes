@@ -31,7 +31,23 @@ RULES = (
 )
 SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
 SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
-ONE_LINER = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta"
+# The shell's fixed run: the documented one-liner, downloaded to a temp file first so a failed download
+# is a failed install (`curl … | sh` exits 0 when curl fails), and on Windows ending with the
+# installer's exit status (a script block never reaches install.ps1's own `exit`).
+UNIX_RUN = (
+    "f=$(mktemp) && trap 'rm -f \"$f\"' EXIT && curl -fsSL -o \"$f\" "
+    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh && sh \"$f\" omher@beta"
+)
+WINDOWS_RUN = (
+    "$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create((irm "
+    "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta } "
+    "catch { $_.Exception.Message; exit 1 }; exit $LASTEXITCODE"
+)
+
+
+def _rust_strings(source: str) -> list[str]:
+    """The string literals in a piece of Rust source, with `\\"` unescaped."""
+    return [m.replace('\\"', '"') for m in re.findall(r'"((?:[^"\\]|\\.)*)"', source)]
 
 
 def _flat(text: str) -> str:
@@ -63,19 +79,21 @@ class TheOneInstaller(unittest.TestCase):
         setup = SETUP_RS.read_text(encoding="utf-8")
         # The definitions themselves, not the Rust tests that repeat them.
         unix = setup[setup.index("const UNIX: InstallCommand"):]
-        unix = unix[: unix.index("};")]
-        self.assertEqual(re.findall(r'"([^"]*)"', unix), ["/bin/sh", "-c", ONE_LINER])
+        unix = unix[: unix.index("\n};")]
+        self.assertEqual(_rust_strings(unix), ["/bin/sh", "-c", UNIX_RUN])
+        self.assertNotIn("|", UNIX_RUN)
         windows = setup[setup.index("const WINDOWS: InstallCommand"):]
-        windows = windows[: windows.index("};")]
+        windows = windows[: windows.index("\n};")]
         self.assertEqual(
-            re.findall(r'"([^"]*)"', windows),
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-             "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta"],
+            _rust_strings(windows),
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", WINDOWS_RUN],
         )
         env = setup[setup.index("const ENV: &[(&str, &str)]"):]
         self.assertEqual(re.findall(r'"([^"]*)"', env[: env.index(";")]), ["OMH_WITH_DESKTOP", "0", "NO_COLOR", "1"])
-        # The doc names the same command.
-        self.assertIn(f"`{ONE_LINER}`", DOC.read_text(encoding="utf-8"))
+        # The doc names the same commands.
+        doc = DOC.read_text(encoding="utf-8")
+        self.assertIn(f"`{UNIX_RUN}`", doc)
+        self.assertIn(f"`{WINDOWS_RUN}`", doc)
 
     def test_only_two_places_in_the_shell_start_a_process(self) -> None:
         spawns = {}

@@ -12,6 +12,10 @@ All notable changes will be documented here.
   installer on Windows; Linux skips the app with a note). The plain one-liner is unchanged. An omher
   installed first offers the same install, minus the app, on its first launch when Hermes is missing,
   and streams the installer's output on that screen. The README shows the one-liner and a screenshot.
+  A failed download or install is reported as a failure, on the app's setup screen too (it used to
+  read as success); the app image is checked against the release's `SHA256SUMS.txt` and swapped in
+  only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
+  one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
 
 ## 4.0.7 - 2026-11-09
 

@@ -76,6 +76,10 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
     .map_err(|e| e.to_string());
     installing.store(false, Ordering::SeqCst);
     let code = result??;
+    // An installer can exit 0 without leaving Hermes where omher looks; say so instead of showing the
+    // setup screen again as if nothing had run.
+    let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
+    let code = setup::check_installed(code, found)?;
     if code == Some(0) {
         shell.bridge.start(shell.resource_dir.clone());
     }

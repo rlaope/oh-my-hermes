@@ -82,7 +82,7 @@
   border-radius: var(--r-sm, 4px);
   background: var(--raise2, #232026);
   color: var(--body, #dcd6de);
-  font: 500 11px/1 var(--font, system-ui);
+  font: 500 12px/1 var(--font, system-ui);
   cursor: pointer;
 }
 .gate-copy:hover {
@@ -116,7 +116,7 @@
   border-radius: var(--r-sm, 4px);
   background: var(--page, #050406);
   color: var(--body, #dcd6de);
-  font: 11px/1.5 var(--mono, ui-monospace, monospace);
+  font: 12px/1.5 var(--mono, ui-monospace, monospace);
   text-align: left;
   white-space: normal;
 }
@@ -127,6 +127,13 @@
   text-indent: -2ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* the installer's own markers: failures in the danger colour, done steps quiet */
+.gate-line--bad {
+  color: var(--danger, #f08a8a);
+}
+.gate-line--ok {
+  color: var(--muted, #9a929d);
 }
 .gate-tok {
   white-space: pre;
@@ -172,7 +179,7 @@
   opacity: 0.85;
 }
 .gate-note code {
-  font: 11px var(--mono, ui-monospace, monospace);
+  font: 12px var(--mono, ui-monospace, monospace);
   color: var(--body, #dcd6de);
 }
 .gate-spin {

@@ -4,6 +4,12 @@
 //! command is FIXED here: OMH's own one-line installer with the `omher@beta` argument and
 //! `OMH_WITH_DESKTOP=0` (Hermes when missing, then OMH; the app is already installed). Nothing the UI
 //! sends reaches the command line: the Tauri command takes no text from the page.
+//!
+//! Neither command pipes the download into the interpreter. `curl … | sh` exits 0 when curl fails (sh
+//! runs an empty script), and `install.ps1` run as a script block never reaches its own `exit`, so a
+//! failed install would look like a clean one. Unix downloads to a temp file first and runs it only
+//! when the download succeeded; Windows ends the command with `exit $LASTEXITCODE`, which
+//! `install.ps1` sets on failure, and turns a failed download into exit 1.
 
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
@@ -29,7 +35,7 @@ const UNIX: InstallCommand = InstallCommand {
     program: "/bin/sh",
     args: &[
         "-c",
-        "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta",
+        "f=$(mktemp) && trap 'rm -f \"$f\"' EXIT && curl -fsSL -o \"$f\" https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh && sh \"$f\" omher@beta",
     ],
     env: ENV,
 };
@@ -41,7 +47,7 @@ const WINDOWS: InstallCommand = InstallCommand {
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta",
+        "$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta } catch { $_.Exception.Message; exit 1 }; exit $LASTEXITCODE",
     ],
     env: ENV,
 };
@@ -53,7 +59,9 @@ pub fn install_command(os: Os) -> &'static InstallCommand {
     }
 }
 
-/// What the setup screen shows as "this is what will run", in the form a person would type it.
+/// What the setup screen shows as "this is what will run", in the form a person would type it: the
+/// documented one-liner with the same URL, argument and `OMH_WITH_DESKTOP=0`. The run itself downloads
+/// first (see the module note), which matters for its exit status, not for what it installs.
 pub fn display_line(os: Os) -> &'static str {
     match os {
         Os::Unix => "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_DESKTOP=0 sh -s -- omher@beta",
@@ -88,6 +96,18 @@ pub fn clean_line(raw: &str) -> String {
         out.push(c);
     }
     out.trim_end().to_string()
+}
+
+/// What the screen is told after an installer that exited 0 when Hermes still cannot be found.
+pub const INSTALLED_BUT_NOT_FOUND: &str =
+    "Install finished but Hermes was not found. The output above shows where the installer put it.";
+
+/// Exit 0 is trusted only when Hermes can now be found; anything else is returned as it came.
+pub fn check_installed(code: Option<i32>, hermes_found: bool) -> Result<Option<i32>, String> {
+    if code == Some(0) && !hermes_found {
+        return Err(INSTALLED_BUT_NOT_FOUND.to_string());
+    }
+    Ok(code)
 }
 
 /// Streamed to the setup screen through a Tauri channel.
@@ -145,21 +165,83 @@ mod tests {
     const INSTALL_SH_URL: &str = "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh";
     const INSTALL_PS1_URL: &str = "https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1";
 
+    /// Test only: the production Unix command with its URL swapped for `url`, so a run never touches the
+    /// network. Everything else (the download-then-run script, the argument, the env) is the real one.
+    #[cfg(unix)]
+    fn unix_command_from(url: &str) -> InstallCommand {
+        let script = UNIX.args[1];
+        assert_eq!(script.matches(INSTALL_SH_URL).count(), 1);
+        let leaked: &'static str = Box::leak(script.replace(INSTALL_SH_URL, url).into_boxed_str());
+        let args: &'static [&'static str] = Box::leak(vec!["-c", leaked].into_boxed_slice());
+        InstallCommand { program: UNIX.program, args, env: UNIX.env }
+    }
+
+    #[cfg(unix)]
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("omher-setup-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failed_download_is_a_failed_install_not_exit_0() {
+        // the old `curl … | sh -s` form exited 0 here: sh ran an empty script
+        let dir = scratch("missing");
+        let cmd = unix_command_from(&format!("file://{}/no-such-install.sh", dir.display()));
+        let code = run_install(&cmd, |_| {}).unwrap();
+        assert!(matches!(code, Some(c) if c != 0), "{code:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failing_installer_script_passes_its_exit_code_through() {
+        let dir = scratch("failing");
+        let script = dir.join("install.sh");
+        std::fs::write(&script, "echo \"[failed] args=$* desktop=$OMH_WITH_DESKTOP\"\nexit 7\n").unwrap();
+        let cmd = unix_command_from(&format!("file://{}", script.display()));
+        let mut seen = Vec::new();
+        let code = run_install(&cmd, |e| seen.push(e)).unwrap();
+        assert_eq!(code, Some(7));
+        assert!(seen.contains(&InstallEvent::Line { text: "[failed] args=omher@beta desktop=0".into() }), "{seen:?}");
+        // and a script that succeeds is exit 0, with the temp file gone afterwards
+        std::fs::write(&script, "echo ok\n").unwrap();
+        assert_eq!(run_install(&cmd, |_| {}).unwrap(), Some(0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn exit_0_counts_only_when_hermes_is_found_afterwards() {
+        assert_eq!(check_installed(Some(0), true), Ok(Some(0)));
+        assert_eq!(check_installed(Some(0), false), Err(INSTALLED_BUT_NOT_FOUND.to_string()));
+        assert!(INSTALLED_BUT_NOT_FOUND.starts_with("Install finished but Hermes was not found"));
+        assert_eq!(check_installed(Some(3), false), Ok(Some(3)));
+        assert_eq!(check_installed(None, true), Ok(None));
+    }
+
     #[test]
     fn the_command_is_the_fixed_omher_beta_one_liner_without_the_app() {
         let unix = install_command(Os::Unix);
         assert_eq!(unix.program, "/bin/sh");
         assert_eq!(
             unix.args,
-            ["-c", "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta"]
+            [
+                "-c",
+                "f=$(mktemp) && trap 'rm -f \"$f\"' EXIT && curl -fsSL -o \"$f\" https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh && sh \"$f\" omher@beta"
+            ]
         );
-        assert!(unix.args[1].starts_with(&format!("curl -fsSL {INSTALL_SH_URL} |")));
+        // downloaded to a file, never piped: a failed curl must not reach sh
+        assert!(unix.args[1].contains(&format!("curl -fsSL -o \"$f\" {INSTALL_SH_URL} && sh")));
+        assert!(!unix.args[1].contains('|'));
         let win = install_command(Os::Windows);
         assert_eq!(win.program, "powershell.exe");
         assert_eq!(
             win.args.last().copied(),
-            Some("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta")
+            Some("$ErrorActionPreference = 'Stop'; try { & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta } catch { $_.Exception.Message; exit 1 }; exit $LASTEXITCODE")
         );
+        assert!(win.args.last().unwrap().ends_with("; exit $LASTEXITCODE"));
         assert!(win.args.last().unwrap().contains(INSTALL_PS1_URL));
         for cmd in [unix, win] {
             assert!(cmd.env.contains(&("OMH_WITH_DESKTOP", "0")), "{cmd:?}");
@@ -190,9 +272,12 @@ mod tests {
             let shown = display_line(os);
             let cmd = install_command(os);
             let script = cmd.args.last().unwrap();
-            // The shown line is the run command with the one env var written inline.
+            // The shown line is the documented one-liner: the same URL and argument as the run, with the
+            // one env var written inline.
             assert!(shown.contains("OMH_WITH_DESKTOP") && shown.contains("omher@beta"), "{shown}");
-            assert_eq!(shown.replace("OMH_WITH_DESKTOP=0 ", "").replace("$env:OMH_WITH_DESKTOP = '0'; ", ""), *script);
+            let url = if os == Os::Unix { INSTALL_SH_URL } else { INSTALL_PS1_URL };
+            assert!(shown.contains(url) && script.contains(url), "{shown}");
+            assert!(script.contains(" omher@beta"), "{script}");
         }
     }
 
