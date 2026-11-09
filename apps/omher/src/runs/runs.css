@@ -177,7 +177,6 @@
 .rn-badge.running .rn-bar i:not(.bad) {
   background: rgba(var(--rn-green), 0.85);
 }
-.rn-badge.failed .rn-bar i,
 .rn-bar i.bad {
   background: var(--danger);
 }
@@ -218,8 +217,12 @@
 .rg {
   position: relative;
 }
+/* the panel graph scrolls inside its box when the run is larger (both ways, capped height); the fades say so */
 .rg-panel {
-  overflow: hidden;
+  overflow: auto;
+  max-height: 460px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .rg-canvas {
   position: relative;
@@ -1790,4 +1793,108 @@
 }
 .rn-row.on .rn-agent {
   background: var(--hover);
+}
+
+/* ---------------------------------------------------------------- panel overflow: fades, hint, pinned legend */
+.rg-fade {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.rg-fade.on {
+  opacity: 1;
+}
+.rg-fade.l,
+.rg-fade.r {
+  top: 0;
+  bottom: 0;
+  width: 56px;
+}
+.rg-fade.t,
+.rg-fade.b {
+  left: 0;
+  right: 0;
+  height: 36px;
+}
+.rg-fade.l {
+  left: 0;
+  background: linear-gradient(90deg, var(--bg) 45%, color-mix(in srgb, var(--bg) 60%, transparent) 75%, transparent);
+}
+.rg-fade.r {
+  right: 0;
+  background: linear-gradient(270deg, var(--bg) 45%, color-mix(in srgb, var(--bg) 60%, transparent) 75%, transparent);
+}
+.rg-fade.t {
+  top: 0;
+  background: linear-gradient(180deg, var(--bg) 30%, transparent);
+}
+.rg-fade.b {
+  bottom: 0;
+  background: linear-gradient(0deg, var(--bg) 30%, transparent);
+}
+.rg-fit {
+  overflow: hidden;
+}
+/* the card's time never gives way: the route chip shortens first */
+.rg-panel .rg-card .rg-mt {
+  flex: none;
+  overflow: visible;
+}
+.rg-panel .rg-card .rg-route {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the legend stays on screen under the graph: pinned to the panel's bottom while the run is in view */
+.rn-run .rg-legend.row {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: 0 -10px -16px;
+  padding: 8px 14px 14px;
+  background: var(--side);
+}
+.rn-full-hint {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 4px 0 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--body);
+  pointer-events: auto;
+}
+.rn-full-hint:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rn-full-hint kbd {
+  font: inherit;
+  font-size: 10.5px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--raise2);
+  color: var(--body);
+}
+/* the run list: 12 newest by default, "Show all (N)" opens the rest */
+.rn-list.all {
+  max-height: 336px;
+}
+
+.rn-more {
+  display: block;
+  margin: -6px 4px 12px;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--muted);
+}
+.rn-more:hover {
+  background: var(--hover);
+  color: var(--ink);
 }

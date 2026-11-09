@@ -127,5 +127,9 @@ describe("clampWords", () => {
     const out = clampWords("Honest pack status + omh update refresh", 12 * 6, 2, m);
     for (const w of out.replace(/…/g, "").split(/\s+/).filter(Boolean)) expect("Honest pack status + omh update refresh".split(" ")).toContain(w);
     expect(clampWords("supercalifragilistic word", 8 * 6, 1, m)).toBe("superca…");
+    // a token wider than a line breaks inside itself, after a "/" when one fits; no line is wider than the card
+    const slash = clampWords("Claude/Codex/pi session runs", 13 * 6, 3, m);
+    expect(slash).toBe("Claude/Codex/\npi session\nruns");
+    for (const l of clampWords("abcdefghijklmnopqrstuvwxyz end", 8 * 6, 3, m).split("\n")) expect(m(l)).toBeLessThanOrEqual(8 * 6);
   });
 });

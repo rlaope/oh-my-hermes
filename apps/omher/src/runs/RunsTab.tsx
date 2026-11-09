@@ -7,6 +7,7 @@ import type { Bot } from "../lib/protocol";
 import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, IconButton, ModelIcon, Spinner } from "../ui";
+import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
 import { Legend, RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
@@ -25,6 +26,18 @@ import "./runs.css";
 
 const act = () => getStore().actions;
 
+/** How many runs a list shows before "Show all (N)": the newest, running ones first (the list comes sorted). */
+export const LIST_CAP = 12;
+
+/** The runs a list shows: the first `LIST_CAP` (running first, then newest), plus the open run when it is further
+ *  down, so the selected row is always on screen. */
+export function shownRuns<T extends { id: string }>(sorted: T[], all: boolean, selected: string | undefined): T[] {
+  if (all || sorted.length <= LIST_CAP) return sorted;
+  const head = sorted.slice(0, LIST_CAP);
+  const sel = selected === undefined ? undefined : sorted.find((r) => r.id === selected);
+  return sel && !head.includes(sel) ? [...head, sel] : head;
+}
+
 /** The run a `ui.runId` names: a full id, or a dag run's short name from a chat line. */
 export function pickRun<T extends { id: string }>(runs: T[], runId: string | null): T | null {
   return runs.find((r) => r.id === runId) ?? runs.find((r) => runId !== null && runName(r.id) === runId) ?? runs[0] ?? null;
@@ -42,6 +55,34 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
     return () => ro.disconnect();
   }, []);
   return [ref, w];
+}
+
+const MIN_GRAPH_H = 220;
+const MAX_GRAPH_H = 460;
+const LEGEND_H = 40;
+
+/** The panel graph's height cap: the side panel's height less the run's own header and plan card above the graph
+ *  and the pinned legend below it (the list above scrolls away), between MIN_GRAPH_H and MAX_GRAPH_H. The box then
+ *  fits on screen whole and its own scroll does the rest. */
+function useRoom(ref: React.RefObject<HTMLElement | null>, ready: boolean): number {
+  const [h, setH] = useState(MAX_GRAPH_H);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const sc = el?.closest(".pn-scroll") as HTMLElement | null;
+    const sec = el?.closest(".rn-run") as HTMLElement | null;
+    if (!el || !sc || !sec) return;
+    const read = () => {
+      const above = el.getBoundingClientRect().top - sec.getBoundingClientRect().top;
+      const room = Math.floor(sc.clientHeight - above - LEGEND_H - 12);
+      setH(Math.max(MIN_GRAPH_H, Math.min(MAX_GRAPH_H, room)));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(sc);
+    if (sc.firstElementChild) ro.observe(sc.firstElementChild);
+    return () => ro.disconnect();
+  }, [ref, ready]);
+  return h;
 }
 
 function useRuns(bot: string, n = 0) {
@@ -169,6 +210,8 @@ const ExpandIcon = () => (
 export function RunsTab({ bot }: { bot: Bot }) {
   const s = useStore();
   const [n, setN] = useState(0);
+  const [all, setAll] = useState(false);
+  const [allCli, setAllCli] = useState(false);
   const { runs, cli, error } = useRuns(bot.name, n);
   const nowMs = useNow(!!runs?.some((r) => r.state === "running") || cli.some((r) => r.state === "running"));
   if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>;
@@ -192,22 +235,32 @@ export function RunsTab({ bot }: { bot: Bot }) {
         </div>
       )}
       {runs.length > 0 && (
-        <ul className="rn-list" data-testid="run-list">
-          {runs.map((r) => (
+        <ul className={`rn-list${all ? " all" : ""}`} data-testid="run-list">
+          {shownRuns(runs, all, selected?.id).map((r) => (
             <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} />
           ))}
         </ul>
+      )}
+      {runs.length > LIST_CAP && (
+        <button type="button" className="rn-more" data-testid="run-list-more" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show all (${runs.length})`}
+        </button>
       )}
       {cli.length > 0 && (
         <>
           <div className="pn-sec rn-sec2">
             CLI agents<span>{cli.length}</span>
           </div>
-          <ul className="rn-list" data-testid="cli-run-list">
-            {cli.map((r) => (
+          <ul className={`rn-list${allCli ? " all" : ""}`} data-testid="cli-run-list">
+            {shownRuns(cli, allCli, selected?.id).map((r) => (
               <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} testId="cli-run-row" />
             ))}
           </ul>
+          {cli.length > LIST_CAP && (
+            <button type="button" className="rn-more" data-testid="cli-run-list-more" onClick={() => setAllCli((v) => !v)}>
+              {allCli ? "Show fewer" : `Show all (${cli.length})`}
+            </button>
+          )}
         </>
       )}
       {selected && <PanelRun key={selected.id} bot={bot} summary={selected} nowS={nowS} />}
@@ -220,8 +273,20 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
   const { detail, error } = useDetail(bot.name, summary);
   const [open, setOpen] = useState<string | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
+  const [over, setOver] = useState(false);
   const run = detail?.run;
+  const room = useRoom(ref, !!run);
+  // a box taller than what the panel shows: bring the run's box into view once, so its focus node is on screen
+  useEffect(() => {
+    const el = ref.current;
+    const sc = el?.closest(".pn-scroll") as HTMLElement | null;
+    if (!run || !el || !sc) return;
+    const below = el.getBoundingClientRect().bottom + LEGEND_H - sc.getBoundingClientRect().bottom;
+    if (below > 1) sc.scrollTop += below;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.id]);
   const node = run?.nodes.find((x) => x.id === open) ?? null;
+  const fullKey = isMac() ? "⌘⇧G" : "Ctrl+Shift+G";
   return (
     <div className="rn-run" data-testid="run-graph-box" data-run={summary.id} data-state={summary.state}>
       <div className="rn-head">
@@ -237,11 +302,22 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
           <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>
         ) : (
           <>
-            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} />
+            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={setOver} maxH={room} />
           </>
         )}
       </div>
-      {run && <Legend run={run} />}
+      {run && (
+        <Legend
+          run={run}
+          extra={
+            over ? (
+              <button type="button" className="rn-full-hint" data-testid="run-full-hint" onClick={() => s.setRunsFull(true)} title="Open the whole run over the chat">
+                Open full view <kbd>{fullKey}</kbd>
+              </button>
+            ) : null
+          }
+        />
+      )}
       {run && node && <NodeDrawer runId={run.id} node={node} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />}
     </div>
   );

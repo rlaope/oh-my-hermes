@@ -67,12 +67,17 @@ export function clampWords(text: string, width: number, lines: number, measure: 
   while (i < words.length && out.length < lines) {
     let line = words[i];
     if (measure(line) > width) {
-      // one long token: cut it by characters
+      // one long token: on the last line cut it with "…"; before that, break it where it still fits (after a "/"
+      // or "-" when there is one) and carry the rest to the next line
       let cut = line;
       while (cut.length > 1 && measure(cut + "…") > width) cut = cut.slice(0, -1);
       if (out.length === lines - 1) return [...out, `${cut}…`].join("\n");
-      out.push(line);
-      i++;
+      let head = line;
+      while (head.length > 1 && measure(head) > width) head = head.slice(0, -1);
+      const soft = Math.max(head.lastIndexOf("/"), head.lastIndexOf("-"));
+      if (soft > 0) head = head.slice(0, soft + 1);
+      out.push(head);
+      words[i] = line.slice(head.length);
       continue;
     }
     i++;

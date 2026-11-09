@@ -113,6 +113,15 @@ describe("ordering and time", () => {
   });
   it("span is coarse", () => {
     expect([span(40), span(14 * 60 + 30), span(2 * 3600 + 5 * 60), span(3 * 3600), span(5 * 86400)]).toEqual(["40s", "14m", "2h 5m", "3h", "5d"]);
+    // one rule at every size: under a day "h m", from a day "d h" (never "34h 31m" next to "2d")
+    expect([span(59), span(3599), span(23 * 3600 + 59 * 60), span(24 * 3600), span(34 * 3600 + 31 * 60), span(2 * 86400 + 5 * 3600 + 59)]).toEqual([
+      "59s",
+      "59m",
+      "23h 59m",
+      "1d",
+      "1d 10h",
+      "2d 5h",
+    ]);
   });
 });
 

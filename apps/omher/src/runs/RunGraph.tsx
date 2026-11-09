@@ -24,6 +24,7 @@ const MAX_ENTRANCE = { panel: 950, full: 1500 };
 const DRAG_PX = 4;
 const DRAWER_W = 392;
 const MIN_FIT = 0.72; // below this the cards stop being readable: Fit keeps this scale and shows the open card
+const PANEL_MIN_FIT = 0.8; // the panel shrinks a run that is a little too large to fit whole; past this it scrolls
 
 const GLYPH: Record<RunNode["state"], string> = {
   done: "✓",
@@ -106,8 +107,8 @@ function edgePath(a: Box, sa: Size, b: Box, sb: Size, lanes: Lane[], rowGap: num
   return { x1, y1, x2, y2, d: routeEdge(x1, y1, x2, y2, between, rowGap) };
 }
 
-/** The legend as a slim row (under the panel graph). */
-export function Legend({ run }: { run: AgentRun }) {
+/** The legend as a slim row (under the panel graph); `extra` sits at its right end (the full-view hint). */
+export function Legend({ run, extra }: { run: AgentRun; extra?: React.ReactNode }) {
   const lay = layoutRun(run.nodes, { width: 400, ...SIZE.panel });
   return (
     <div className="rg-legend row" aria-label="Legend" data-testid="run-legend">
@@ -117,7 +118,18 @@ export function Legend({ run }: { run: AgentRun }) {
           {word}
         </span>
       ))}
+      {extra}
     </div>
+  );
+}
+
+/** The node the panel opens on: the first running one (layer order, top to bottom), else the first open failure. */
+export function focusNode(run: AgentRun, pos: Map<string, Box>): RunNode | null {
+  const order = [...run.nodes].sort((a, b) => a.layer - b.layer || (pos.get(a.id)?.y ?? 0) - (pos.get(b.id)?.y ?? 0));
+  return (
+    order.find((n) => n.state === "running") ??
+    order.find((n) => (n.state === "failed" || n.state === "blocked") && !isRepaired(n, run.nodes)) ??
+    null
   );
 }
 
@@ -130,10 +142,16 @@ export function RunGraph({
   onOpen,
   nowS,
   bot,
+  onOverflow,
+  maxH,
 }: {
   run: AgentRun;
   handoffs: Record<string, string>;
   mode: GraphMode;
+  /** Panel: told whether the run is larger than the box (the panel then offers the full view). */
+  onOverflow?: (over: boolean) => void;
+  /** Panel: the box's height cap (what the side panel has left under the plan card). */
+  maxH?: number;
   /** The bot's own model: the last fallback for a node's logo. */
   bot?: BotModel;
   /** Width to lay out into (the box's inner width). */
@@ -306,6 +324,59 @@ export function RunGraph({
     requestAnimationFrame(() => fit(drawerOpen ? DRAWER_W : 0));
   };
 
+  // ---- panel: the box scrolls both ways when the run is larger; it opens on the first running (else failed)
+  // node, and soft fades on the sides that hold more
+  const pbox = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ l: false, r: false, t: false, b: false });
+  const measure = useCallback(() => {
+    const el = pbox.current;
+    if (!el) return;
+    const m = {
+      l: el.scrollLeft > 1,
+      r: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+      t: el.scrollTop > 1,
+      b: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
+    };
+    setMore((p) => (p.l === m.l && p.r === m.r && p.t === m.t && p.b === m.b ? p : m));
+  }, []);
+  // a run only a little larger than the box is shown whole, scaled down (auto-fit); a larger one keeps its size and
+  // the box scrolls to its focus node
+  const fitK = useMemo(() => {
+    if (mode !== "panel") return 1;
+    const k = Math.min(1, width / lay.w, (maxH ?? 460) / lay.h);
+    return k < 1 && k >= PANEL_MIN_FIT ? Math.floor(k * 1000) / 1000 : 1;
+  }, [mode, width, lay, maxH]);
+  const focusedFor = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const el = pbox.current;
+    if (mode !== "panel" || !el) return;
+    const key = `${run.id}@${maxH ?? ""}@${fitK}`;
+    if (focusedFor.current !== key) {
+      // once per run (and box height): later refreshes keep wherever the person scrolled to
+      focusedFor.current = key;
+      const f = focusNode(run, lay.pos);
+      if (f) {
+        const p = lay.pos.get(f.id)!;
+        const s = lay.size.get(f.id)!;
+        // start at a column's left edge (never a sliced card) as far left as still shows the whole focus card
+        const maxL = el.scrollWidth - el.clientWidth;
+        const starts = lay.columns.map((c) => Math.max(0, c.x - z.pad)).sort((x, y) => x - y);
+        const fits = starts.find((x) => x <= p.x && p.x + s.w + z.pad <= x + el.clientWidth);
+        el.scrollLeft = Math.min(maxL, fits ?? Math.max(0, p.x + s.w / 2 - el.clientWidth / 2));
+        el.scrollTop = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, p.y + s.h / 2 - el.clientHeight / 2));
+      } else {
+        el.scrollLeft = 0;
+        el.scrollTop = 0;
+      }
+    }
+    measure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.id, mode, lay, maxH, fitK]);
+  const overflows = more.l || more.r || more.t || more.b;
+  useEffect(() => {
+    if (mode === "panel") onOverflow?.(overflows);
+  }, [overflows, mode, onOverflow]);
+
   const [hover, setHover] = useState<string | null>(null);
   const moved = Object.keys(over).length > 0;
   // keep the click-to-open for the node the person opened in the panel
@@ -422,20 +493,31 @@ export function RunGraph({
 
   if (mode === "panel")
     return (
-      <div
-        className={`rg rg-panel${still ? " still" : ""}`}
-        data-testid="run-graph"
-        data-cols={lay.columns.length}
-        data-layout-ms={lay.ms.toFixed(2)}
-        data-crossings={lay.crossings}
-        style={{ height: lay.h }}
-        onScroll={(e) => {
-          e.currentTarget.scrollLeft = 0;
-          e.currentTarget.scrollTop = 0;
-        }}
-      >
-        {canvas}
-      </div>
+      <>
+        <div
+          ref={pbox}
+          className={`rg rg-panel${still ? " still" : ""}`}
+          data-testid="run-graph"
+          data-cols={lay.columns.length}
+          data-layout-ms={lay.ms.toFixed(2)}
+          data-crossings={lay.crossings}
+          data-overflow={overflows ? "true" : "false"}
+          data-fit={fitK < 1 ? fitK.toFixed(2) : undefined}
+          style={{ height: Math.ceil(lay.h * fitK), ...(maxH ? { maxHeight: maxH } : {}) }}
+          onScroll={measure}
+        >
+          {fitK < 1 ? (
+            <div className="rg-fit" style={{ width: Math.floor(lay.w * fitK), height: Math.ceil(lay.h * fitK) }}>
+              <div style={{ transform: `scale(${fitK})`, transformOrigin: "0 0" }}>{canvas}</div>
+            </div>
+          ) : (
+            canvas
+          )}
+        </div>
+        {(["l", "r", "t", "b"] as const).map((k) => (
+          <i key={k} className={`rg-fade ${k}${more[k] ? " on" : ""}`} aria-hidden data-testid={`run-fade-${k}`} data-on={more[k] ? "true" : "false"} />
+        ))}
+      </>
     );
   return (
     <div

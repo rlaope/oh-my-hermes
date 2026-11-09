@@ -271,15 +271,16 @@ export function sortRuns<T extends { state: RunState; updated: number }>(runs: T
   return [...runs].sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated);
 }
 
-/** "38s", "14m", "2h 5m", "3d": a run's or node's length, coarse on purpose. */
+/** A run's or node's length, the one formatter for every Runs surface: under a minute "38s", under an hour "14m",
+ *  under a day "2h 5m", from a day "1d 10h". A zero second part is left out ("3h", "2d"). */
 export function span(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 48) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
-  return `${Math.floor(h / 24)}d`;
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
 }
 
 // ---- delegate adapter: Hermes `delegate_task` fan-outs (the bridge's `delegation_to_run` / `attach_delegations`) ----

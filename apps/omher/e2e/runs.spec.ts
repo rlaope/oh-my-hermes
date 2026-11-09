@@ -296,6 +296,116 @@ test("40 nodes: no two cards overlap, the layout takes under 50 ms, crossings ar
   expect(await box.getByTestId("run-canvas").evaluate((e) => getComputedStyle(e).transform)).toBe("none");
 });
 
+test("a run larger than the panel opens on its running node, with edge fades and an 'Open full view' hint", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page, "default");
+  await page.getByTestId("run-row").filter({ hasText: "Big run" }).click();
+  const box = panel(page);
+  await expect(box).toHaveAttribute("data-run", BIG);
+  const graph = box.getByTestId("run-graph");
+  await expect(graph).toHaveAttribute("data-overflow", "true");
+  // the first running node is in the visible part of the graph box, whole
+  const live = box.locator('[data-testid="run-node"][data-state="running"]').first();
+  const g = (await graph.boundingBox())!;
+  const c = (await live.boundingBox())!;
+  expect(c.x).toBeGreaterThanOrEqual(g.x - 1);
+  expect(c.y).toBeGreaterThanOrEqual(g.y - 1);
+  expect(c.x + c.width).toBeLessThanOrEqual(g.x + g.width + 1);
+  expect(c.y + c.height).toBeLessThanOrEqual(g.y + g.height + 1);
+  // a soft fade on each side that holds more of the run, none on a side that does not
+  const [sl, sw, cw, st, sh, ch] = await graph.evaluate((e) => [e.scrollLeft, e.scrollWidth, e.clientWidth, e.scrollTop, e.scrollHeight, e.clientHeight]);
+  await expect(box.getByTestId("run-fade-l")).toHaveAttribute("data-on", String(sl > 1));
+  await expect(box.getByTestId("run-fade-r")).toHaveAttribute("data-on", String(sl + cw < sw - 1));
+  await expect(box.getByTestId("run-fade-t")).toHaveAttribute("data-on", String(st > 1));
+  await expect(box.getByTestId("run-fade-b")).toHaveAttribute("data-on", String(st + ch < sh - 1));
+  expect(sw > cw || sh > ch).toBe(true);
+  // the hint sits in the legend row, on screen, and opens the full view
+  const hint = box.getByTestId("run-full-hint");
+  await expect(hint).toContainText(/Open full view (⌘⇧G|Ctrl\+Shift\+G)/);
+  const pane = (await page.getByTestId("details").boundingBox())!;
+  const h = (await hint.boundingBox())!;
+  expect(h.y + h.height).toBeLessThanOrEqual(pane.y + pane.height);
+  await hint.click();
+  await expect(full(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  // a small run fits: no fades, no hint
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await expect(box.getByTestId("run-graph")).toHaveAttribute("data-overflow", "false");
+  await expect(box.getByTestId("run-full-hint")).toHaveCount(0);
+  for (const k of ["l", "r", "t", "b"]) await expect(box.getByTestId(`run-fade-${k}`)).toHaveAttribute("data-on", "false");
+});
+
+test("a run only a little wider than the panel is shown whole, scaled to fit, with nothing cut", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page, "default");
+  await page.getByTestId("run-row").filter({ hasText: "omher v0.2" }).click();
+  const box = panel(page);
+  const graph = box.getByTestId("run-graph");
+  await expect(graph).toHaveAttribute("data-fit", /^0\.(8|9)\d$/);
+  await expect(graph).toHaveAttribute("data-overflow", "false");
+  const g = (await graph.boundingBox())!;
+  for (const c of await box.getByTestId("run-node").all()) {
+    const b = (await c.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(g.x - 1);
+    expect(b.x + b.width).toBeLessThanOrEqual(g.x + g.width + 1);
+    expect(b.y + b.height).toBeLessThanOrEqual(g.y + g.height + 1);
+  }
+  await expect(box.getByTestId("run-full-hint")).toHaveCount(0);
+});
+
+test("the run list shows the 12 newest, running first, with 'Show all (N)'", async ({ page }) => {
+  // 44 runs, as on a real profile: the mock's own four plus 40 finished copies
+  await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
+    const server = ws.connectToServer();
+    const ops = new Map<string, string>();
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      ops.set(msg.id, msg.op);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      if (ops.get(msg.id) === "runs.list" && msg.ok && msg.result.runs.length) {
+        const base = msg.result.runs.find((r: any) => r.state !== "running") ?? msg.result.runs[0];
+        for (let i = 0; i < 40; i++)
+          msg.result.runs.push({ ...base, id: `${base.id}-old${i}`, title: `Old run ${i}`, state: "done", updated: base.updated - 3600 * (i + 1) });
+        ws.send(JSON.stringify(msg));
+        return;
+      }
+      ws.send(raw);
+    });
+  });
+  await openRuns(page);
+  const rows = page.getByTestId("run-row");
+  await expect(rows).toHaveCount(12);
+  const states = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-state")));
+  const firstIdle = states.findIndex((x) => x !== "running");
+  expect(states.slice(firstIdle).includes("running")).toBe(false); // running ones first
+  expect(firstIdle).toBeGreaterThan(0);
+  const more = page.getByTestId("run-list-more");
+  await expect(more).toHaveText("Show all (44)");
+  await more.click();
+  await expect(rows).toHaveCount(44);
+  await expect(more).toHaveText("Show fewer");
+  await more.click();
+  await expect(rows).toHaveCount(12);
+});
+
+test("the legend under the panel graph is never clipped by the panel's bottom", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page);
+  for (const pick of [() => page.getByTestId("cli-run-row").first(), () => page.getByTestId("run-row").first()]) {
+    await pick().click();
+    const legend = panel(page).getByTestId("run-legend");
+    await expect(legend).toBeVisible();
+    const pane = (await page.locator(".details .pn-scroll").boundingBox())!;
+    const l = (await legend.boundingBox())!;
+    expect(l.y).toBeGreaterThanOrEqual(pane.y);
+    expect(l.y + l.height).toBeLessThanOrEqual(pane.y + pane.height + 0.5);
+  }
+});
+
 test("⌘⇧G and Expand open the full view over the chat; Esc and × close it; the header keeps one control", async ({ page }) => {
   await openRuns(page);
   const m = await mod(page);
