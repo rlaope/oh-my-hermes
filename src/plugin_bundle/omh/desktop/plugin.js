@@ -1818,6 +1818,15 @@ export function dagModel(graph) {
   }
 }
 
+// A settled dag-ulw run's model, for its figures alone, where any lane counted
+// anything; null otherwise, so a run that recorded nothing stays one line. A
+// settled run hides no lane (`dagRunSummary` reads none as settled then), so
+// the figures cover the whole run.
+export function closingDag(graph) {
+  const dag = dagModel(graph)
+  return dag && dag.total.lanes ? dag : null
+}
+
 // What the card line under a lane's route says: a waiting lane the lanes it waits on, any other its state, time and output.
 export function laneStatus(lane) {
   if (lane.state === 'waiting' && exceeds(lane.waits, 0)) return `${lane.glyph} ${t('dgWaitsOn', { count: lane.waits })}`
@@ -3113,11 +3122,25 @@ function DagView({ dag, fallback }) {
 // else a row per lane; once every lane has settled, one summary line, as the
 // TUI's live block keeps. A dag-ulw run takes the DAG view instead (cards with
 // their figures and stats), falling back to those only past DAG_CARD_LIMIT.
+// A dag-ulw run that has settled keeps its figures under the summary line
+// (#2684): what the run used is what a finished run is read for, and the
+// cards collapsing took it away exactly then.
 function DelegationSection({ payload }) {
   const view = delegationView(payload)
   if (!view) return null
   // A run every lane of which has settled is one summary line, cards or not, as the TUI clears its block at run end.
   const dag = view.settled ? null : dagModel(payload.delegation_graph)
+  const closing = view.settled ? closingDag(payload.delegation_graph) : null
+  if (closing) {
+    return [
+      jsx(SectionHeader, { label: t('sectionDelegation') }, 'delegation-head'),
+      div(
+        'omh-pane-block',
+        [div('omh-pane-run', view.summary, 'run'), jsx(DagKpis, { dag: closing }, 'kpis')],
+        'delegation-body'
+      )
+    ]
+  }
   const drawing = view.settled ? null : drawingLines(payload)
   const lanes = view.settled || drawing
     ? []
