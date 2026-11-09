@@ -195,7 +195,7 @@
   height: 13px;
 }
 .st-dot.working {
-  background: var(--g-logo);
+  background: var(--g-accent);
   box-shadow: 0 0 0 2px rgba(211, 60, 141, 0.18);
 }
 .st-count {
@@ -542,4 +542,93 @@
   align-items: center;
   gap: 4px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Appearance: live preview + colour swatches */
+.ap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ap-preview {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.ap-pv-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.ap-pv-chip {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 18px;
+  color: #fff;
+  background: var(--g-accent);
+}
+.ap-pv-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--spin);
+}
+.ap-pv-send {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r);
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+  background: var(--g-accent);
+  font-size: 13px;
+}
+.st-row.ap-row-col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.ap-sw {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.ap-swb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 6px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+.ap-swb:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.ap-swb.on {
+  border-color: var(--line-strong);
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ap-swc {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(120deg, var(--a1), var(--a2) 55%, var(--a3));
+}
+.ap-swb.on .ap-swc {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--muted);
 }

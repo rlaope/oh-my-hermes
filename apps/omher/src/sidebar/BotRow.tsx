@@ -49,7 +49,7 @@ export function BotRow({
       aria-current={active ? "true" : undefined}
       data-testid={`bot-${bot.name}`}
     >
-      <Avatar bot={bot.name} size={32} />
+      <Avatar bot={bot.name} size={34} />
       {running && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
       <span className="bot-m">
         <span className="bot-r1">

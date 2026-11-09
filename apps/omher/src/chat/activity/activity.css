@@ -58,7 +58,7 @@
   font-family: var(--mono);
   font-size: 11px;
   color: #fff;
-  background: var(--g-logo);
+  background: var(--g-accent);
   flex: none;
   white-space: nowrap;
   animation: pop 0.22s ease both;

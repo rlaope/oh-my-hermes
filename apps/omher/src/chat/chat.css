@@ -32,11 +32,11 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 0 16px;
+  padding: 18px 0 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  gap: 18px;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
 }
 .thread > * {
   width: min(var(--thread-w), calc(100% - 56px));
@@ -44,14 +44,20 @@
   flex: none;
 }
 .thread > .day {
-  margin: 6px auto 2px;
+  margin: 10px auto 2px;
   text-align: center;
   color: var(--quiet);
   font-size: 11px;
+  letter-spacing: 0.01em;
 }
+/* consecutive messages from the same side sit close; a new turn gets air */
 .row-user + .row-user,
-.row-assistant + .row-assistant {
-  margin-top: -4px;
+.row-assistant + .row-assistant,
+.row-away + .row-away,
+.row-away + .row-assistant,
+.row-assistant + .row-away,
+.row-activity + .row-assistant {
+  margin-top: -12px;
 }
 
 /* bubbles: filled both sides, no border, 10px radius */
@@ -67,9 +73,9 @@
 }
 .msg .b {
   border-radius: var(--r-bubble);
-  padding: 8px 12px;
-  line-height: 1.5;
-  font-size: 13px;
+  padding: 9px 13px;
+  line-height: var(--lh-msg);
+  font-size: var(--fs-msg);
   /* Korean/CJK wraps at spaces, long tokens still break */
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -87,7 +93,24 @@
 .msg.a .b {
   background: var(--bub-bot);
   color: var(--body);
-  max-width: 76%;
+  max-width: 80%;
+}
+
+/* bubble styles (Settings > Appearance) */
+[data-bubbles="solid"] .msg.u .b {
+  background: var(--g-accent);
+  color: var(--on-accent);
+}
+[data-bubbles="solid"] .msg.u .b code {
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
+}
+[data-bubbles="open"] .msg.a .b {
+  background: none;
+  padding-left: 0;
+  padding-right: 0;
+  max-width: 100%;
+  border-radius: 0;
 }
 .msg-err {
   margin-top: 3px;
@@ -122,7 +145,7 @@
 .md h2,
 .md h3,
 .md h4 {
-  font-size: 13px;
+  font-size: var(--fs-msg);
   font-weight: 600;
   color: var(--ink);
   margin: 6px 0 2px;
@@ -231,22 +254,23 @@
 .cw {
   position: relative;
   width: min(var(--thread-w), calc(100% - 56px));
-  margin: 2px auto 16px;
+  margin: 0 auto 22px;
   flex: none;
 }
 .composer {
-  min-height: 40px;
-  border-radius: 8px;
+  min-height: 46px;
+  border-radius: var(--r-bubble);
   border: 1px solid var(--line);
   background: var(--side);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  padding: 5px 5px 5px 12px;
-  transition: border-color 0.2s;
+  padding: 7px 7px 7px 14px;
+  transition: border-color 0.2s, background 0.2s;
 }
 .composer:focus-within {
-  border-color: var(--quiet);
+  border-color: var(--line-strong);
 }
 .composer textarea {
   flex: 1;
@@ -256,19 +280,19 @@
   border: 0;
   outline: 0;
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--fs-msg);
   line-height: 20px;
-  padding: 4px 0;
+  padding: 5px 0;
   max-height: 200px;
 }
 .composer textarea::placeholder {
   color: var(--quiet);
 }
 .send {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--r);
-  background: var(--g-logo);
+  background: var(--g-accent);
   color: #fff;
   display: grid;
   place-items: center;
@@ -278,6 +302,9 @@
 .composer:not(.has) .send:not(.stop) {
   background: var(--raise2);
   color: var(--quiet);
+}
+.send:not(:disabled):hover {
+  filter: brightness(1.08);
 }
 .send.stop {
   background: var(--raise2);

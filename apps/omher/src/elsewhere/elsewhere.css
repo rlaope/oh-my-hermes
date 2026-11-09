@@ -51,7 +51,6 @@
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   white-space: nowrap;
-  margin-left: 4px;
 }
 .ew-where {
   color: var(--muted);
@@ -177,7 +176,7 @@ div.ew-ss {
   height: 6px;
   border-radius: 50%;
   margin-right: 5px;
-  background: var(--g-logo);
+  background: var(--g-accent);
 }
 .ew-more {
   width: 100%;

@@ -8,11 +8,12 @@ import { Sidebar } from "../sidebar/Sidebar";
 import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
 import { SettingsView } from "./SettingsView";
-import { useThemeAttribute } from "./theme";
+import { useLookAttributes, useThemeAttribute } from "./theme";
 
 export function App() {
   const s = useStore();
   useThemeAttribute(s.ui.theme);
+  useLookAttributes(s.ui.look);
   useEffect(() => {
     void s.init();
     // init is idempotent in the store; run once on mount
