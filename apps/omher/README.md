@@ -31,7 +31,7 @@ Without `omher@beta` the one-liner installs only the `omh` command, as before.
 "omher needs Hermes and oh-my-hermes" with an **Install** button that runs the same one-liner without the app
 (`OMH_WITH_DESKTOP=0`), shows the output, and opens your bots when it finishes. omher needs Hermes only; OMH comes
 along because the installer sets both up. This is the only program omher runs besides its bridge
-([boundary rule 10](../../docs/OMHER-BOUNDARY.md)).
+([boundary rule 11](../../docs/OMHER-BOUNDARY.md)).
 
 ### Download
 

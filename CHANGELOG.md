@@ -17,6 +17,48 @@ All notable changes will be documented here.
   only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
   one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
 
+- **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
+  Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
+  alone, so a user without OpenAI access fell straight back to the parent
+  model. Fable 5.1 heading this one category does not change the Opus 5.5
+  before Fable 5.1 order anywhere else. A child on Fable 5.1 at `xhigh` is
+  now labelled `ultrabrain` (it was `architect`), and one on GPT-6 Astra at
+  `xhigh` is labelled `forensics` (it was `ultrabrain`) when no route record
+  names its lane, unless the machine's recorded providers put GPT-6 Astra
+  first in `ultrabrain`: the label follows the chains as shaped by those
+  providers. Pricing is unchanged: no model was added.
+
+- **Planning work runs on `ultrabrain`.** The `brain` role chain for Codex,
+  Claude Code and a category-maestro table now heads on `ultrabrain` and
+  keeps `deep` and `unspecified-low` behind it, so `omh coding model-route
+  --role brain` names GPT-6 Astra at `xhigh` on Codex and the Opus 5.5 chain
+  at `xhigh` on Claude Code. A Hermes-owner `brain`, `research` depth
+  `deep` or scale `large` unit reads `ultrabrain` and, when no generative
+  model there is confirmed active, steps to `deep` before the shared last
+  resort, never into a cheaper tier: a set without an `ultrabrain` model keeps
+  `deep`'s effort. No route moves down, every other unit resolves as before,
+  and a requested category is never widened. On the Hermes lane,
+  `ulw-work` routes planning, decomposition and hard-debugging lanes to
+  `ultrabrain` and ideation to `deep`, and `ulw-plan` and `omh-plan` set
+  `omh_delegate_route` to `ultrabrain` before dispatching a planner or critic
+  child and clear it afterwards. Planning itself still runs in the parent
+  session.
+
+- **dag-ulw names the node whose judgement decides the run, and gives it
+  `ultrabrain`.** The skill told the model to climb `quick` ->
+  `unspecified-low` -> `unspecified-high` and capped `ultrabrain` at one
+  node, but never said when to use it; on the owner's machine no node in recent
+  dag-ulw graphs used it. The skill now says that when one build node's
+  judgement decides the run (a design decision, a root cause, a contested
+  trade-off), it takes `ultrabrain` where the user's routes serve it, at most
+  one; every other node keeps the ladder, and review, baseline and verify
+  nodes keep their own rules.
+  `omh_dag define` adds the advice `no_judgement_node` to a graph of 4+ nodes
+  with no `ultrabrain`, `architect` or `forensics` node, with an exit (go on
+  when no node decides the run). Repair and extend rounds do not raise it,
+  and the reply leaves it out when the user's `model_map` options have no
+  `ultrabrain` option. Like all lint it never refuses a run.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

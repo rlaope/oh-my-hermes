@@ -60,9 +60,13 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_ten_numbered_rules(self) -> None:
-        rules = re.findall(r"^\d+\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 10, len(rules))
+    def test_boundary_is_between_six_and_eleven_numbered_rules(self) -> None:
+        # 11: rule 10 (the bridge's read-only git) and rule 11 (the one installer) each widened the boundary
+        # on purpose; the rules stay numbered 1..n with no gap or repeat.
+        text = DOC.read_text(encoding="utf-8")
+        rules = re.findall(r"^(\d+)\. ", text, re.M)
+        self.assertTrue(6 <= len(rules) <= 11, len(rules))
+        self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
         context = CONTEXT.read_text(encoding="utf-8")
@@ -73,7 +77,7 @@ class DocPins(unittest.TestCase):
 
 
 class TheOneInstaller(unittest.TestCase):
-    """Rule 10: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
+    """Rule 11: the shell spawns the bridge and, on Install, one fixed installer; nothing else."""
 
     def test_the_installer_is_the_omher_beta_one_liner_without_the_app(self) -> None:
         setup = SETUP_RS.read_text(encoding="utf-8")

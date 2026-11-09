@@ -81,7 +81,12 @@ fn hermes_homes<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> 
     let set = |k: &str| env(k).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
     let mut homes = Vec::new();
     if let Some(h) = set("HERMES_HOME") {
-        homes.push(PathBuf::from(h));
+        let h = PathBuf::from(h);
+        // `HERMES_HOME=<root>/profiles/<name>` (Hermes running a profile): the venv lives under the root.
+        if let Some(root) = h.parent().filter(|p| p.file_name().is_some_and(|n| n == "profiles")).and_then(|p| p.parent()) {
+            homes.push(root.to_path_buf());
+        }
+        homes.push(h);
     }
     match os {
         Os::Unix => {
@@ -517,6 +522,14 @@ mod tests {
         // A Unix-layout venv is not what Windows Hermes makes, so it is not picked there.
         let unix = win(&["C:/Users/k", "AppData", "Local", "hermes", "hermes-agent", "venv", "bin", "python"]);
         assert_eq!(discover_python_for(env_of(&[("USERPROFILE", "C:/Users/k")]), fs_of(&[&unix]), Os::Windows).unwrap_err(), HERMES_NOT_FOUND);
+    }
+
+    #[test]
+    fn a_profile_home_finds_the_venv_at_its_root() {
+        // Hermes runs a profile as HERMES_HOME=<root>/profiles/<name>; the venv is under <root>.
+        let venv = win(&["/h/.hermes", "hermes-agent", "venv", "bin", "python"]);
+        let env = env_of(&[("HERMES_HOME", "/h/.hermes/profiles/kami"), ("HOME", "/elsewhere")]);
+        assert_eq!(discover_python(env, fs_of(&[&venv])), Ok(PathBuf::from(&venv)));
     }
 
     #[test]
