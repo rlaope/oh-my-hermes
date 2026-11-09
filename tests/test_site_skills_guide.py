@@ -71,6 +71,12 @@ class SiteSkillGuideTests(unittest.TestCase):
         docs = (ROOT / "site" / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertIn('href="skills/"', docs)
 
+    def test_hidden_lanes_and_cards_really_hide(self) -> None:
+        # .docs-section sets display:grid, which beats the UA [hidden] rule; without
+        # this override a filter leaves every lane heading on screen with no cards.
+        css = (ROOT / "site" / "styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.skill-lane\[hidden\],\s*\.skill-card\[hidden\]\s*\{\s*display: none;")
+
     def test_pages_workflow_refreshes_the_guide(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
         self.assertIn("python tools/render_site_skills.py --write", workflow)

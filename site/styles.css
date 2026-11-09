@@ -2513,6 +2513,11 @@ a.reference-link:hover,
   gap: 8px;
 }
 
+.skill-lane[hidden],
+.skill-card[hidden] {
+  display: none;
+}
+
 .skill-lane h2 {
   margin-bottom: 8px;
 }
