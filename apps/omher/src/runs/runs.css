@@ -1766,3 +1766,28 @@
 .rg-card.s-running .rg-word {
   font-weight: 650;
 }
+
+/* ---------------------------------------------------------------- CLI agents' runs (runs.cli) */
+.rn-sec2 {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+/* the agent badge: one width for "Claude" and "Codex", so the titles after it line up */
+.rn-agent {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 58px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--raise2);
+  color: var(--body);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+.rn-row.on .rn-agent {
+  background: var(--hover);
+}

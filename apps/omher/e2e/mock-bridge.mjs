@@ -183,6 +183,47 @@ function runsSeed() {
   }
   return { kami: runs, friren: [], default: other };
 }
+// T6: CLI agents' runs (runs.cli) - the real bridge's CliRuns output over the redacted Claude Code and Codex
+// fixtures (src/lib/__fixtures__/runs-cli.json, bridge/tests/fixtures/cli). Plus one live copy of the Claude
+// session moved to "now" with its last subagent still working (mock-only, so the running look can be checked).
+const CLI_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-cli.json", import.meta.url), "utf-8"));
+function cliSeed() {
+  const runs = structuredClone(CLI_FIXTURE.runs);
+  const live = structuredClone(runs.find((r) => r.agent === "claude"));
+  live.id = "claude:live-session";
+  live.owner = { type: "session", id: "live-session" };
+  live.title = "Fix the flaky login test";
+  live.state = "running";
+  // the session opened 4 minutes ago; its three calls went out 3m30s, 3m and 1m30s ago
+  live.started = now() - 240;
+  live.updated = now() - 20;
+  delete live.ended;
+  live.nodes.forEach((n, i) => {
+    const at = now() - [210, 180, 90][i];
+    const dur = (n.ended ?? n.started) - n.started;
+    n.started = at;
+    if (typeof n.ended === "number") n.ended = at + Math.min(dur, 150);
+    for (const a of n.attempts) {
+      a.started = at;
+      if (typeof a.ended === "number") a.ended = n.ended;
+    }
+    if (i === 0) {
+      // the failed call, retried with the right agent type: done
+      n.state = "done";
+      n.attempts = [{ n: 1, outcome: "completed", started: n.started, ended: n.started + 40 }];
+      n.ended = n.started + 40;
+      n.summary = "Reviewed the login flow: the test waited on a stale selector; fixed.";
+    }
+    if (i === live.nodes.length - 1) {
+      n.state = "running";
+      n.attempts = [{ n: 1, outcome: "open", started: n.started }];
+      delete n.ended;
+      delete n.summary;
+    }
+  });
+  return [live, ...runs];
+}
+
 // the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
 const runCounts = (r) => {
   const fixed = r.nodes.filter(
@@ -206,7 +247,7 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 // ---- mutable state ---------------------------------------------------------------------------
 
 let calls = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars, runs;
+let bots, history, models, turns, pending, idSeq, queues, avatars, runs, cliRuns;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -229,6 +270,7 @@ function reset() {
   queues = {};
   avatars = {};
   runs = runsSeed();
+  cliRuns = cliSeed();
   pending = new Map();
   idSeq = 0;
   calls = [];
@@ -505,9 +547,24 @@ const OPS = {
       .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
       .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
   }),
+  "runs.cli": (p) => {
+    const AGENTS = ["claude", "codex", "pi", "omp", "grok"];
+    if (p.agent !== undefined && !AGENTS.includes(p.agent)) throw new OpError("bad_request", `agent must be one of ${AGENTS.join(", ")}`);
+    if (p.cwd !== undefined && (typeof p.cwd !== "string" || !p.cwd)) throw new OpError("bad_request", "cwd must be a folder path");
+    if (p.since !== undefined && typeof p.since !== "number") throw new OpError("bad_request", "since must be epoch seconds");
+    return {
+      runs: cliRuns
+        .filter((r) => (p.agent === undefined || r.agent === p.agent) && (p.cwd === undefined || r.cwd === p.cwd) && r.started >= (p.since ?? 0))
+        .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
+        .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
+      agents: CLI_FIXTURE.agents,
+    };
+  },
   "runs.get": (p) => {
     const b = needBot(p);
     const id = needStr(p, "run");
+    const cli = cliRuns.find((r) => r.id === id);
+    if (cli) return { run: cli, handoffs: {} };
     const run = (runs[b.name] ?? []).find((r) => r.id === id);
     if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
     return { run, handoffs: HANDOFFS[id] ?? {} };

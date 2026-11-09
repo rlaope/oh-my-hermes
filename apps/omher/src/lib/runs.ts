@@ -56,6 +56,9 @@ export interface AgentRun {
   id: string;
   kind: RunKind;
   owner: { type: "bot" | "session"; id: string };
+  /** For a CLI agent's run (`runs.cli`): which CLI, and the folder its session ran in. */
+  agent?: CliAgent;
+  cwd?: string;
   title: string;
   goal?: string;
   state: RunState;
@@ -248,6 +251,20 @@ export function fromDag(rec: DagRecord, bot: string, handoffs: Iterable<string> 
   }
   return run;
 }
+
+// ---- CLI agent runs (`runs.cli`): Claude Code Task/Agent subagents and Codex spawned sub-agents, read by the bridge
+// from the CLIs' own session files. One session with sub-runs = one run, one sub-run = one node.
+
+export type CliAgent = "claude" | "codex" | "pi" | "omp" | "grok";
+/** `found`: the CLI's session folder exists; `no_adapter`: installed, but it keeps no sub-run record omher reads. */
+export type CliAgentStatus = "found" | "not_installed" | "no_adapter";
+export const CLI_AGENTS: CliAgent[] = ["claude", "codex", "pi", "omp", "grok"];
+const CLI_NAME: Record<CliAgent, string> = { claude: "Claude", codex: "Codex", pi: "pi", omp: "omp", grok: "Grok" };
+
+/** "Claude" / "Codex": the badge on a CLI run's row. */
+export const cliName = (agent: CliAgent | undefined) => (agent ? CLI_NAME[agent] : "");
+/** A run id from `runs.cli` (`claude:<session>`, `codex:<thread>`), which no bot owns. */
+export const isCliRun = (id: string) => CLI_AGENTS.some((a) => id.startsWith(`${a}:`));
 
 /** Running first, then the most recently updated. */
 export function sortRuns<T extends { state: RunState; updated: number }>(runs: T[]): T[] {

@@ -676,3 +676,128 @@ test("screenshots: entrance frames at 0 / 300 / 800 ms", async ({ page }) => {
   expect(Math.max(...seen[1])).toBeLessThan(2);
   expect(seen[2]).toHaveLength(6);
 });
+
+// ---- T6: CLI agents' runs (Claude Code subagents, Codex sub-agents) ----
+
+const CLI_CLAUDE = "claude:ec38bc0b-8eb7-936b-b856-daaee28015c4";
+const CLI_CODEX = "codex:c5e14c89-54b2-c703-769f-a6207ed501ea";
+const CLI_LIVE = "claude:live-session";
+
+test("CLI runs: listed under the bot's own runs with the agent's mark and name; each opens as a graph", async ({ page }) => {
+  await openRuns(page);
+  // the bot's own list is unchanged
+  await expect(page.getByTestId("run-row")).toHaveCount(4);
+  const rows = page.getByTestId("cli-run-row");
+  await expect(rows).toHaveCount(3);
+  await expect(page.getByTestId("panel-runs")).toContainText("CLI agents");
+  expect(await rows.evaluateAll((els) => els.map((e) => [e.getAttribute("data-agent"), e.getAttribute("data-state")]))).toEqual([
+    ["claude", "running"],
+    ["claude", "failed"],
+    ["codex", "done"],
+  ]);
+  // a plain text badge with the official mark: "Claude" / "Codex"
+  await expect(rows.nth(0).getByTestId("run-agent")).toHaveText("Claude");
+  await expect(rows.nth(0).locator("[data-mark]")).toHaveAttribute("data-mark", "claude");
+  await expect(rows.nth(2).getByTestId("run-agent")).toHaveText("Codex");
+  await expect(rows.nth(2).locator("[data-mark]")).toHaveAttribute("data-mark", "openai");
+  await expect(rows.nth(0).locator(".rn-live")).toHaveCount(1);
+  await expect(rows.nth(1)).toContainText("Failed");
+  await expect(rows.nth(2).locator(".rn-n")).toHaveText(/^2\/2 · /);
+  // the badge is gray, never the brand gradient, and one width so the titles after it line up
+  expect(await rows.nth(0).getByTestId("run-agent").evaluate((e) => getComputedStyle(e).backgroundImage)).toBe("none");
+  const titleX = await rows.evaluateAll((els) => els.map((e) => Math.round(e.querySelector(".rn-title")!.getBoundingClientRect().x)));
+  expect(new Set(titleX).size).toBe(1);
+
+  // Claude: one layer, the subagent's model on every node, the plan card, a failed call with its reason
+  await rows.nth(1).click();
+  const box = panel(page);
+  await expect(box).toHaveAttribute("data-run", CLI_CLAUDE);
+  await expect(box.getByTestId("run-node")).toHaveCount(3);
+  await expect(box.getByTestId("run-graph")).toHaveAttribute("data-cols", "1");
+  expect(await box.getByTestId("node-mark").evaluateAll((els) => els.map((e) => [e.getAttribute("data-mark"), e.getAttribute("data-source")]))).toEqual([
+    ["claude", "ran"],
+    ["claude", "ran"],
+    ["claude", "ran"],
+  ]);
+  await expect(box).not.toContainText("model not logged");
+  await expect(box.getByTestId("run-plan")).toBeVisible();
+  const bad = box.locator('[data-testid="run-node"][data-state="failed"]');
+  await expect(bad).toHaveCount(1);
+  await bad.click();
+  const drawer = page.getByTestId("run-drawer");
+  await expect(drawer).toContainText("Agent type not available in this folder.");
+  await expect(drawer).toContainText("Opus 5.5");
+  // a CLI session is not the bot's: no "Ask in chat" retry
+  await expect(drawer.getByTestId("run-ask")).toHaveCount(0);
+  await drawer.getByRole("button", { name: "Close node" }).click();
+  await box.locator('[data-testid="run-node"][data-state="done"]').first().click();
+  await expect(page.getByTestId("run-summary")).toContainText("The Windows build compiles");
+
+  // Codex: OpenAI marks with the child's own model
+  await rows.nth(2).click();
+  await expect(box).toHaveAttribute("data-run", CLI_CODEX);
+  await expect(box.getByTestId("node-mark")).toHaveCount(2);
+  expect(await box.getByTestId("node-mark").evaluateAll((els) => els.map((e) => e.getAttribute("data-mark")))).toEqual(["openai", "openai"]);
+  await box.getByTestId("run-node").first().click();
+  await expect(page.getByTestId("run-drawer")).toContainText("gpt-6-astra · low");
+  await expect(page.getByTestId("run-summary")).toContainText("API review done");
+
+  // read-only: only reads went to the bridge
+  const calls = (await mock("mock.calls")).calls.map((c: any) => c.op);
+  expect(calls).toContain("runs.cli");
+  expect(calls.filter((op: string) => WRITES.includes(op))).toEqual([]);
+});
+
+for (const theme of ["dark", "light"] as const) {
+  test(`CLI runs: a live Claude session with its running subagent, panel and full view, ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
+    await openRuns(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await page.getByTestId("cli-run-row").first().click();
+    const box = panel(page);
+    await expect(box).toHaveAttribute("data-run", CLI_LIVE);
+    await expect(box.locator('[data-testid="run-node"][data-state="running"] [data-testid="node-mark"]')).toHaveAttribute("data-mark", "claude");
+    mkdirSync(SHOTS, { recursive: true });
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(SHOTS, `T6-cli-panel-${theme}.png`), animations: "disabled" });
+    await page.getByTestId("graph-expand").click();
+    const f = full(page);
+    await expect(f.getByTestId("node-mark")).toHaveCount(3);
+    await expect(f.locator('[data-testid="run-node"][data-state="running"]')).toHaveCount(1);
+    await expect(f.getByTestId("run-node").first()).toContainText("Opus 5.5");
+    // the running subagent's clock counts from its own start (1m30s ago), not 0s
+    await expect(f.locator('[data-testid="run-node"][data-state="running"]')).toContainText(/1m so far/);
+    await expect(f).not.toContainText("model not logged");
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(SHOTS, `T6-cli-full-${theme}.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await page.getByTestId("cli-run-row").nth(2).click();
+    await expect(box).toHaveAttribute("data-run", CLI_CODEX);
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(SHOTS, `T6-cli-codex-${theme}.png`), animations: "disabled" });
+  });
+}
+
+test("runs.cli: filters by agent, cwd and since; bad params are refused", async () => {
+  expect((await mock("runs.cli", { agent: "codex" })).runs.map((r: any) => r.id)).toEqual([CLI_CODEX]);
+  expect((await mock("runs.cli", { cwd: "/w/web-app" })).runs.map((r: any) => r.agent)).toEqual(["claude", "claude"]);
+  expect((await mock("runs.cli", { since: Date.now() / 1000 - 3600 })).runs.map((r: any) => r.id)).toEqual([CLI_LIVE]);
+  expect((await mock("runs.cli", { agent: "grok" })).runs).toEqual([]);
+  for (const bad of [{ agent: "cursor" }, { cwd: "" }, { since: "yesterday" }]) expect(await mockError("runs.cli", bad)).toBe("bad_request");
+});
+
+/** The error code of a mock op that fails. */
+async function mockError(op: string, params: Record<string, unknown>): Promise<string> {
+  const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
+  await new Promise<void>((res, rej) => {
+    ws.onopen = () => res();
+    ws.onerror = () => rej(new Error("mock websocket error"));
+  });
+  const reply = await new Promise<any>((res) => {
+    ws.onmessage = (m) => res(JSON.parse(String(m.data)));
+    ws.send(JSON.stringify({ id: "e1", op, ...params }));
+  });
+  ws.close();
+  return reply.error?.code;
+}

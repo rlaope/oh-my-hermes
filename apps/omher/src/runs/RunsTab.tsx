@@ -1,10 +1,12 @@
 // Runs tab: the bot's runs (OMH dag runs, Hermes delegate fan-outs) as a list and a compact read-only graph,
-// plus the full-size view over the chat column (⌘⇧G / Expand). Nothing here retries, settles or cancels.
+// plus the full-size view over the chat column (⌘⇧G / Expand). Below the bot's own runs, the CLI agents' runs on
+// this machine (Claude Code subagents, Codex sub-agents) in the same list style. Nothing here retries, settles or
+// cancels.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
-import { sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
+import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
-import { CloseIcon, IconButton, Spinner } from "../ui";
+import { CloseIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { useNow } from "../elsewhere/useNow";
 import { Legend, RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
@@ -43,22 +45,65 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
 }
 
 function useRuns(bot: string, n = 0) {
-  const [list, setList] = useState<{ bot: string; runs: AgentRunSummary[] } | null>(null);
+  const [list, setList] = useState<{ bot: string; runs: AgentRunSummary[]; cli: AgentRunSummary[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
     setError(null);
+    // the CLI list is extra: a bridge without `runs.cli` (or a failed read) leaves the bot's own runs showing
+    const cli = act()
+      .runsCli()
+      .then((r) => sortRuns(r.runs))
+      .catch(() => [] as AgentRunSummary[]);
     act()
       .runsList(bot)
-      .then(
-        (r) => live && setList({ bot, runs: sortRuns(r.runs) }),
-        (e) => live && setError(String(e?.message ?? e)),
-      );
+      .then(async (r) => live && setList({ bot, runs: sortRuns(r.runs), cli: await cli }))
+      .catch((e) => live && setError(String(e?.message ?? e)));
     return () => {
       live = false;
     };
   }, [bot, n]);
-  return { runs: list?.bot === bot ? list.runs : null, error };
+  const mine = list?.bot === bot ? list : null;
+  return { runs: mine?.runs ?? null, cli: mine?.cli ?? [], error };
+}
+
+/** One run in the list: state dot, title, tags, done/total and time. CLI runs carry their agent's mark and name. */
+function RunRow({ r, on, nowS, testId = "run-row" }: { r: AgentRunSummary; on: boolean; nowS: number; testId?: string }) {
+  const s = useStore();
+  return (
+    <li>
+      <button
+        type="button"
+        className={`rn-row${on ? " on" : ""}`}
+        data-testid={testId}
+        data-state={r.state}
+        data-kind={r.kind}
+        data-agent={r.agent}
+        aria-current={on ? "true" : undefined}
+        onClick={() => s.openRun(r.id)}
+        title={[r.goal || r.title, r.cwd].filter(Boolean).join(" · ")}
+      >
+        <i className={r.state === "running" ? "rn-live" : `rn-dot ${r.state}${r.state === "done" && r.counts.failed > 0 ? " mixed" : ""}`} aria-label={r.state} />
+        {r.agent && (
+          <span className="rn-agent" data-testid="run-agent">
+            <ModelIcon model={r.agent} size={11} />
+            {cliName(r.agent)}
+          </span>
+        )}
+        <span className="rn-title">{r.title}</span>
+        {r.kind === "delegate" && <span className="rn-tag">helpers</span>}
+        {r.state !== "failed" && r.state !== "cancelled" && r.counts.failed > 0 && <span className="rn-tag bad">{r.counts.failed} failed</span>}
+        {r.state !== "failed" && r.state !== "cancelled" && !r.counts.failed && (r.counts.repaired ?? 0) > 0 && (
+          <span className="rn-tag fix">{r.counts.repaired} repaired</span>
+        )}
+        {r.state === "cancelled" && <span className="rn-tag">Cancelled</span>}
+        {r.state === "failed" && <span className="rn-tag bad">Failed</span>}
+        <span className="rn-n">
+          {r.counts.done}/{r.counts.nodes} · {span((r.ended ?? nowS) - r.started)}
+        </span>
+      </button>
+    </li>
+  );
 }
 
 function useDetail(bot: string, summary: AgentRunSummary | null) {
@@ -124,10 +169,10 @@ const ExpandIcon = () => (
 export function RunsTab({ bot }: { bot: Bot }) {
   const s = useStore();
   const [n, setN] = useState(0);
-  const { runs, error } = useRuns(bot.name, n);
-  const nowMs = useNow(!!runs?.some((r) => r.state === "running"));
+  const { runs, cli, error } = useRuns(bot.name, n);
+  const nowMs = useNow(!!runs?.some((r) => r.state === "running") || cli.some((r) => r.state === "running"));
   if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>;
-  const selected = pickRun(runs, s.ui.runId);
+  const selected = pickRun([...runs, ...cli], s.ui.runId);
   const nowS = nowMs / 1000;
   return (
     <div className="pn-body rn" data-testid="panel-runs">
@@ -149,33 +194,21 @@ export function RunsTab({ bot }: { bot: Bot }) {
       {runs.length > 0 && (
         <ul className="rn-list" data-testid="run-list">
           {runs.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                className={`rn-row${r.id === selected?.id ? " on" : ""}`}
-                data-testid="run-row"
-                data-state={r.state}
-                data-kind={r.kind}
-                aria-current={r.id === selected?.id ? "true" : undefined}
-                onClick={() => s.openRun(r.id)}
-                title={r.goal || r.title}
-              >
-                <i className={r.state === "running" ? "rn-live" : `rn-dot ${r.state}${r.state === "done" && r.counts.failed > 0 ? " mixed" : ""}`} aria-label={r.state} />
-                <span className="rn-title">{r.title}</span>
-                {r.kind === "delegate" && <span className="rn-tag">helpers</span>}
-                {r.state !== "failed" && r.state !== "cancelled" && r.counts.failed > 0 && <span className="rn-tag bad">{r.counts.failed} failed</span>}
-                {r.state !== "failed" && r.state !== "cancelled" && !r.counts.failed && (r.counts.repaired ?? 0) > 0 && (
-                  <span className="rn-tag fix">{r.counts.repaired} repaired</span>
-                )}
-                {r.state === "cancelled" && <span className="rn-tag">Cancelled</span>}
-                {r.state === "failed" && <span className="rn-tag bad">Failed</span>}
-                <span className="rn-n">
-                  {r.counts.done}/{r.counts.nodes} · {span((r.ended ?? nowS) - r.started)}
-                </span>
-              </button>
-            </li>
+            <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} />
           ))}
         </ul>
+      )}
+      {cli.length > 0 && (
+        <>
+          <div className="pn-sec rn-sec2">
+            CLI agents<span>{cli.length}</span>
+          </div>
+          <ul className="rn-list" data-testid="cli-run-list">
+            {cli.map((r) => (
+              <RunRow key={r.id} r={r} on={r.id === selected?.id} nowS={nowS} testId="cli-run-row" />
+            ))}
+          </ul>
+        </>
       )}
       {selected && <PanelRun key={selected.id} bot={bot} summary={selected} nowS={nowS} />}
     </div>
@@ -217,8 +250,8 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
 /** The full-size graph over the chat column. The side panel stays; Esc or × closes it. */
 export function RunsFull({ bot }: { bot: Bot }) {
   const s = useStore();
-  const { runs, error } = useRuns(bot.name);
-  const selected = runs ? pickRun(runs, s.ui.runId) : null;
+  const { runs, cli, error } = useRuns(bot.name);
+  const selected = runs ? pickRun([...runs, ...cli], s.ui.runId) : null;
   const { detail } = useDetail(bot.name, selected);
   const nowMs = useNow(selected?.state === "running");
   const [open, setOpen] = useState<string | null>(null);

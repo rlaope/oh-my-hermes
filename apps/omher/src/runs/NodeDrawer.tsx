@@ -3,7 +3,7 @@
 // chat composer so the person can ask the bot; it never sends.
 import { useEffect, useState } from "react";
 import type { RunNode } from "../lib/runs";
-import { span } from "../lib/runs";
+import { isCliRun, span } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
 import { CloseIcon, IconButton } from "../ui";
 import { getStore } from "../state/store";
@@ -89,7 +89,7 @@ export function NodeDrawer({
       ) : (
         !node.summary && <div className="rn-none">No handoff written.</div>
       )}
-      {bad && (
+      {bad && !isCliRun(runId) && (
         <div className="rn-ask">
           <button type="button" className="rn-askb" onClick={ask} data-testid="run-ask">
             Ask in chat

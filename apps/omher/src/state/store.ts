@@ -19,7 +19,7 @@ import type {
   Worktree,
   WorktreeDiff,
 } from "../lib/protocol";
-import type { AgentRunSummary, RunDetail } from "../lib/runs";
+import type { AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
@@ -666,6 +666,7 @@ export interface Actions {
   /** Runs tab reads (read-only: nothing here retries or cancels a run). */
   runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
   runsGet(bot: string, run: string): Promise<RunDetail>;
+  runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -922,6 +923,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
     runsList: (bot) => bridge.request("runs.list", { bot }),
     runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
+    runsCli: (params = {}) => bridge.request("runs.cli", params),
   };
 
   return {

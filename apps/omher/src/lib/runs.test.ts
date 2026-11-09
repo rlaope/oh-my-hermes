@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { attachDelegations, attachOwners, attachPlanned, countsOf, fromDag, fromDelegation, layerOf, nodeModel, routeTable, sortRuns, span, summary, type AgentRun, type DagRecord, type Delegation, type RouteRecord } from "./runs";
+import { markFor } from "../ui/ModelIcon";
+import { attachDelegations, attachOwners, attachPlanned, cliName, countsOf, fromDag, isCliRun, fromDelegation, layerOf, nodeModel, routeTable, sortRuns, span, summary, type AgentRun, type DagRecord, type Delegation, type RouteRecord } from "./runs";
 
 const fx = (name: string) => readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), "utf-8");
 const rec = (name: string) => JSON.parse(fx(name)) as DagRecord;
@@ -187,5 +188,35 @@ describe("delegations", () => {
       const d = routed.delegations.find((x) => `delegate:${x.id}` === b.id)!;
       expect(JSON.parse(JSON.stringify(fromDelegation(d, "default")))).toEqual(b);
     }
+  });
+});
+
+describe("CLI runs (runs.cli, real bridge output over the redacted Claude Code and Codex fixtures)", () => {
+  const cli = JSON.parse(fx("runs-cli.json")) as { runs: AgentRun[]; summaries: (AgentRun & { counts: unknown })[] };
+  const claude = cli.runs.find((r) => r.agent === "claude")!;
+  const codex = cli.runs.find((r) => r.agent === "codex")!;
+  it("is one layer of sub-runs per session, counted like any run", () => {
+    for (const r of [claude, codex]) {
+      expect(new Set(r.nodes.map((n) => n.layer))).toEqual(new Set([0]));
+      expect(cli.summaries.find((s) => s.id === r.id)!.counts).toEqual(countsOf(r));
+    }
+    expect(summary(claude)).toBe("3 nodes · 2 done · 1 failed");
+    expect(summary(codex)).toBe("2 nodes · 2 done");
+  });
+  it("every node names its model, so the graph draws the Claude or OpenAI mark (never 'model not logged')", () => {
+    for (const n of claude.nodes) expect(nodeModel(n)).toMatchObject({ model: "claude-opus-5-5", source: "ran" });
+    for (const n of codex.nodes) expect(nodeModel(n)).toMatchObject({ model: "gpt-6-astra", source: "ran" });
+    for (const n of codex.nodes) expect(markFor(n.model, n.provider)).toBe("openai");
+    for (const n of claude.nodes) expect(markFor(n.model, n.provider)).toBe("claude");
+  });
+  it("names the CLI and tells its run ids apart from a bot's", () => {
+    expect([cliName(claude.agent), cliName(codex.agent), cliName(undefined)]).toEqual(["Claude", "Codex", ""]);
+    expect([isCliRun(claude.id), isCliRun(codex.id), isCliRun("dag:s/run"), isCliRun("delegate:deleg_1")]).toEqual([true, true, false, false]);
+  });
+  it("sends only labels, a title and final text: no prompt placeholder reaches the UI", () => {
+    const text = JSON.stringify(cli);
+    expect(text).not.toContain("(prompt removed)");
+    expect(text).not.toContain("(step removed)");
+    for (const n of [...claude.nodes, ...codex.nodes]) expect((n.summary ?? "").length).toBeLessThanOrEqual(600);
   });
 });
