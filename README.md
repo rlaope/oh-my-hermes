@@ -12,7 +12,7 @@
 <br>
 <br>
 
-**All-in-one package for Hermes Agent. Install once, then just type `dag-ulw`.**
+**The ultrawork agent with AI coworkers wired into you. Just type `dag-ulw`.**
 
 [![GitHub Release](https://img.shields.io/github/v/release/rlaope/oh-my-hermes?color=58a6ff&labelColor=black&logo=github&style=flat-square)](https://github.com/rlaope/oh-my-hermes/releases)
 [![npm downloads](https://img.shields.io/npm/dt/oh-my-hermes?color=3fb950&labelColor=black&logo=npm&label=downloads&style=flat-square)](https://www.npmjs.com/package/oh-my-hermes)
@@ -23,8 +23,18 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Русский](README.ru.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md) | [Italiano](README.it.md)
 
+### omher, the desktop app
+
+<img src="assets/omher-in-use-dark.webp" alt="The omher desktop app in dark mode: a bot list on the left, and a chat with the bot Kami that reports a nightly digest from Discord, picks up a Slack thread about 502 errors, runs four steps and answers with the fix" width="900">
+
+[macOS (Apple silicon)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-arm64.dmg) · [macOS (Intel)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-x64.dmg) · [Windows](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-windows-x64-setup.exe) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+```
+
 **oh-my-hermes** is an operating layer for [Hermes Agent](https://github.com/NousResearch/hermes-agent).<br>
-You keep talking to Hermes. OMH picks the skill and a model for each lane, and runs the work in parallel.<br>
+You keep talking to Hermes. OMH puts a coworker with its own skill and model on each lane, in parallel.<br>
 It never patches or replaces Hermes, and it never reports planned work as done.
 
 </div>
@@ -37,17 +47,6 @@ omh setup
 ```
 
 [Windows and other options →](docs/INSTALLATION.md)
-
-**omher desktop app (beta).** One command installs Hermes and OMH if they are missing, then the omher app
-(macOS and Windows). Download buttons are on [omher.app](https://omher.app/).
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
-```
-
-<p align="center">
-  <img src="assets/omher-in-use-dark.webp" alt="The omher desktop app in dark mode: a bot list on the left, and a chat with the bot Kami that reports a nightly digest from Discord, picks up a Slack thread about 502 errors, runs four steps and answers with the fix" width="900">
-</p>
 
 <br>
 
