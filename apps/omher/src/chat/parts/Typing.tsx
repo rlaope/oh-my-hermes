@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Chat } from "../../state/store";
 import { askOpen, turnHasActivity } from "../../state/store";
 import { Avatar, LiveRing, TypingDots } from "../../ui";
@@ -18,11 +19,11 @@ export function awaitingFirstToken(chat: Chat | undefined): boolean {
 
 /** The bot's face with the live ring and a typing bubble beside it, until the first delta replaces it with
  *  the streaming bubble. Face 28px + 10px gap: the same column as the face beside bot bubbles. */
-export function TypingRow({ bot, name }: { bot: string; name: string }) {
+export function TypingRow({ bot, name, face }: { bot: string; name: string; face?: ReactNode }) {
   return (
     <div className="msg a typing" data-testid="typing" role="status" aria-label={`${name} is writing`}>
       <LiveRing on size={28} gap={3} testId="typing-ring" seed={bot}>
-        <Avatar bot={bot} size={28} className="msg-face" />
+        {face ?? <Avatar bot={bot} size={28} className="msg-face" />}
       </LiveRing>
       <div className="b" data-testid="typing-bubble">
         <TypingDots size={6} />

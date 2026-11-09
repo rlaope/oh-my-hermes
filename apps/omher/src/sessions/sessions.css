@@ -21,20 +21,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-right: 2px;
-  height: 22px;
+  padding-right: 3px; /* the + sits on the "Add a bot" + column above */
+  height: 24px;
   padding-bottom: 4px;
 }
 .ss-add {
   display: flex;
 }
 .ss-plus {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-sm);
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
   display: grid;
   place-items: center;
-  color: var(--quiet);
+  color: var(--muted);
 }
 .ss-plus:hover,
 .ss-plus[aria-expanded="true"] {
@@ -50,14 +50,14 @@
 }
 .ss-h {
   font-size: 10.5px;
-  color: var(--quiet);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   padding: 4px 6px 4px;
 }
 .ss-empty {
   font-size: 12px;
-  color: var(--quiet);
+  color: var(--muted);
   padding: 6px;
 }
 .ss-item {
@@ -76,7 +76,7 @@
   background: var(--raise2);
 }
 .ss-item:disabled {
-  color: var(--quiet);
+  color: var(--muted);
 }
 .ss-item:disabled .ss-ic {
   /* the official mark stays as is; "Not installed" in the text says why the row is off */
@@ -97,19 +97,18 @@
 }
 .ss-cmd {
   font-size: 10.5px;
-  color: var(--quiet);
+  color: var(--muted);
   background: none;
   padding: 0;
 }
 .ss-missing {
   font-size: 10.5px;
-  color: var(--quiet);
-  opacity: 0.8;
+  color: var(--muted);
   flex: none;
 }
 .ss-path {
   font-size: 10.5px;
-  color: var(--quiet);
+  color: var(--muted);
   font-family: var(--mono);
   max-width: 96px;
   white-space: nowrap;
@@ -140,16 +139,77 @@
 }
 
 /* rows */
+/* empty section: one row-sized button and one muted line of installed agents (BOTS and SESSIONS stay balanced) */
 .ss-none {
-  padding: 4px var(--side-x);
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--quiet);
+  flex: none;
+  padding-top: 2px;
 }
-.ss-none b {
+.ss-start-w {
+  position: relative; /* the + menu opens right under the button, at the section's width */
+}
+/* a centred, raised button: the search field and the selected row are flat gray fills, so it uses
+   neither look (a fill one step lighter than the sidebar, and an edge) */
+.ss-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--side-x);
+  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--side)); /* 3:1 on the sidebar, both themes */
+  border-radius: var(--r);
+  background: var(--pop);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: background 0.12s;
+}
+/* the same + as the header's, in the same --muted */
+.ss-start > svg {
+  flex: none;
   color: var(--muted);
-  font-weight: 600;
 }
+.ss-start:hover > svg,
+.ss-start[aria-expanded="true"] > svg {
+  color: var(--ink);
+}
+.ss-start:hover,
+.ss-start[aria-expanded="true"] {
+  background: var(--raise2);
+}
+/* the installed agents' official marks (up to 4) with their names */
+.ss-start-ag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 17px;
+  margin-top: 8px;
+  padding: 0 var(--side-x);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ss-start-a {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.ss-start-a .ag-mark,
+.ss-start-dot {
+  flex: none;
+}
+.ss-start-dot {
+  margin: 0 2px 0 6px; /* even space either side once the mark's own gap is added */
+  font-weight: 700;
+}
+.ss-start-n {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ss-row.bot {
   padding: 0;
   gap: 0;
@@ -266,7 +326,7 @@
   min-width: 0;
 }
 .ss-head-st {
-  margin-left: auto;
+  margin-left: 4px;
   font-size: 11.5px;
   color: var(--quiet);
   flex: none;
@@ -316,4 +376,69 @@
   background-color: transparent;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
+}
+
+/* chat sessions */
+.ss-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ss-toggle {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--body);
+  background: var(--raise);
+}
+.ss-toggle:hover,
+.ss-toggle.on {
+  color: var(--ink);
+  background: var(--raise2);
+}
+.ss-head-st.idle::before {
+  animation: none;
+  background: var(--ok);
+}
+.ss-ended {
+  width: min(var(--thread-w), calc(100% - 56px));
+  margin: 0 auto 8px;
+  font-size: 11.5px;
+  color: var(--quiet);
+  text-align: center;
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* an approval or question waits: amber, the app's "needs attention" colour (never the brand gradient) */
+:root {
+  --needs: #eaaf55;
+}
+[data-theme="light"] {
+  --needs: #9a6200;
+}
+.bot-p.ss-needs {
+  color: var(--needs-text, var(--needs));
+  font-weight: 600;
+}
+/* typing dots end the agent name like they end a bot's live step */
+.ss-row .bot-p.live {
+  flex: 0 1 auto;
+}
+.ss-head-st.needs {
+  color: var(--needs);
+}
+.ss-head-st.needs::before {
+  background: var(--needs);
+}
+/* a session's face outside its row (Needs-you list, typing bubble): the agent mark in the row's box */
+.ss-face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
 }

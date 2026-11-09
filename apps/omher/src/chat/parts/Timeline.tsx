@@ -19,7 +19,9 @@ function divider(prev: TimelineItem | undefined, cur: TimelineItem): string | nu
 /** A bot bubble right above: the next bot bubble keeps the indent but not the face (one face per run). */
 const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" || it?.kind === "away";
 
-export function Timeline({ bot }: { bot: Bot }) {
+/** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
+ *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
+export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
@@ -43,7 +45,7 @@ export function Timeline({ bot }: { bot: Bot }) {
         return <Bubble item={it} />;
       case "assistant":
         // the face shows on the first bot bubble after something else (the user, a day line, a card)
-        return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} />;
+        return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} />;
       case "activity": {
         const C = slots.activity ?? ActivityFallback;
         return <C bot={bot.name} item={it} live={chat?.turn?.id === it.turn.id} />;
@@ -103,12 +105,18 @@ export function Timeline({ bot }: { bot: Bot }) {
       })}
       {typing && (
         <div className="row row-assistant row-typing" data-kind="typing">
-          <TypingRow bot={bot.name} name={bot.display_name} />
+          <TypingRow bot={bot.name} name={bot.display_name} face={face} />
         </div>
       )}
       {streaming && (
         <div className="row row-assistant" data-kind="streaming">
-          <Bubble item={{ kind: "assistant", text: streaming }} streaming bot={bot.name} face={!botSpoke(items[items.length - 1])} />
+          <Bubble
+            item={{ kind: "assistant", text: streaming }}
+            streaming
+            bot={bot.name}
+            face={!botSpoke(items[items.length - 1])}
+            faceEl={face}
+          />
         </div>
       )}
     </div>
