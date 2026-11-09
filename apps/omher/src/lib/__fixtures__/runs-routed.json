@@ -1,0 +1,1621 @@
+{
+ "kami": [
+  {
+   "id": "dag:20261026_134438_3ae70257/omh-dap",
+   "kind": "dag",
+   "owner": {
+    "type": "bot",
+    "id": "kami"
+   },
+   "title": "omh-dap",
+   "state": "cancelled",
+   "nodes": [
+    {
+     "id": "tool",
+     "label": "debug_python tool + registration",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "3 commits + parent merge d9f0b36a9: real-debugpy 39 passed, policy Ran 137 OK",
+       "started": 1793257616.167948,
+       "ended": 1793263068.886291
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "started": 1793257616.167948,
+     "ended": 1793263068.886291,
+     "handoff": "tool.md",
+     "layer": 0,
+     "planned": {
+      "model": "claude-opus-5-5",
+      "provider": "claude-proxy",
+      "effort": "high"
+     }
+    },
+    {
+     "id": "bench",
+     "label": "bench dap surface + dap-ab split",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "54ef5c7f2; 55 passed, corpus ok, fake 9/9; parent checked 3 fixtures fail with value-only asserts",
+       "started": 1793257616.167948,
+       "ended": 1793258330.069538
+      }
+     ],
+     "category": "unspecified-low",
+     "route": "unspecified-low",
+     "started": 1793257616.167948,
+     "ended": 1793258330.069538,
+     "handoff": "bench.md",
+     "layer": 0
+    },
+    {
+     "id": "adversarial",
+     "label": "break the tool before paying",
+     "deps": [
+      "tool"
+     ],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "a-i pass; j's 2 defects fixed by parent 67b3a5c6a, rerun j 7/7 d 6/6 f 13/13",
+       "started": 1793263068.886291,
+       "ended": 1793264111.802546
+      }
+     ],
+     "category": "unspecified-low",
+     "route": "unspecified-low",
+     "started": 1793263068.886291,
+     "ended": 1793264111.802546,
+     "handoff": "adversarial.md",
+     "layer": 1
+    },
+    {
+     "id": "measure",
+     "label": "8-model patch vs dap A/B",
+     "deps": [
+      "adversarial",
+      "bench"
+     ],
+     "state": "cancelled",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "parked",
+       "reason": "parent launched 144-run A/B detached (138 paid + 6 seeded)",
+       "started": 1793264111.802546,
+       "ended": 1793272244.384185
+      }
+     ],
+     "category": "unspecified-low",
+     "route": "unspecified-low",
+     "started": 1793264111.802546,
+     "handoff": "measure.md",
+     "layer": 2
+    },
+    {
+     "id": "verify",
+     "label": "independent recompute + re-test",
+     "deps": [
+      "measure"
+     ],
+     "state": "cancelled",
+     "attempts": [],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "layer": 3,
+     "planned": {
+      "model": "claude-opus-5-5",
+      "provider": "claude-proxy",
+      "effort": "high"
+     }
+    }
+   ],
+   "started": 1793257616.167948,
+   "updated": 1793281500.3679621,
+   "goal": "Opt-in debug_python (omh-dap) tool via debugpy DAP, merged only if the pre-registered 8-model A/B gate passes",
+   "ended": 1793281500.3679621
+  },
+  {
+   "id": "dag:20261028_093610_1b12a114/route-hint-dedup",
+   "kind": "dag",
+   "owner": {
+    "type": "bot",
+    "id": "kami"
+   },
+   "title": "Route hint dedup",
+   "state": "done",
+   "nodes": [
+    {
+     "id": "implement",
+     "label": "Dedup route hint render",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "a498a6994; scope matches; 392 tests OK, drift clean; handoff read",
+       "started": 1793158622.319177,
+       "ended": 1793159842.3633559
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "started": 1793158622.319177,
+     "ended": 1793159842.3633559,
+     "handoff": "implement.md",
+     "layer": 0,
+     "planned": {
+      "model": "claude-opus-5-5",
+      "provider": "claude-proxy",
+      "effort": "high"
+     }
+    },
+    {
+     "id": "verify",
+     "label": "Independent verify",
+     "deps": [
+      "implement"
+     ],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "retry",
+       "reason": "og glm-5.3 unavailable after 3 attempts; no work done",
+       "started": 1793159842.3633559,
+       "ended": 1793159877.568856
+      },
+      {
+       "n": 2,
+       "outcome": "accepted",
+       "reason": "renders byte-identical on kept lines; 6 base failures pre-existing; drift clean",
+       "started": 1793159877.568856,
+       "ended": 1793164791.1733289
+      }
+     ],
+     "category": "unspecified-low",
+     "route": "unspecified-low",
+     "started": 1793159842.3633559,
+     "ended": 1793164791.1733289,
+     "handoff": "verify.md",
+     "layer": 1
+    }
+   ],
+   "started": 1793158622.319177,
+   "updated": 1793164791.1733289,
+   "goal": "Route hint drops repeated text, routing tests and per-turn budgets green, one commit ready for PR",
+   "ended": 1793164791.1733289
+  },
+  {
+   "id": "dag:20261102_235818_fcfb1bdd/codex-coexist",
+   "kind": "dag",
+   "owner": {
+    "type": "bot",
+    "id": "kami"
+   },
+   "title": "Codex coexistence fixes",
+   "state": "done",
+   "nodes": [
+    {
+     "id": "t1-discovery",
+     "label": "Codex skill discovery reads .agents/skills",
+     "deps": [],
+     "state": "failed",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "failed",
+       "reason": "Codex made no edit: fence denied zsh heredoc temp file and uv cache",
+       "lane": "fanout",
+       "started": 1793681151.350927,
+       "ended": 1793681865.127282
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681151.350927,
+     "ended": 1793681865.127282,
+     "layer": 0,
+     "executor": "codex"
+    },
+    {
+     "id": "t2-status-update",
+     "label": "Honest pack status + omh update refresh",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "Codex staged diff; parent re-ran VERIFY (67 OK, ruff clean) and committed 9aac531bf",
+       "lane": "fanout",
+       "started": 1793681151.350927,
+       "ended": 1793681865.072238
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681151.350927,
+     "ended": 1793681865.072238,
+     "handoff": "t2-status-update.md",
+     "layer": 0,
+     "executor": "codex"
+    },
+    {
+     "id": "t3-doctor",
+     "label": "Doctor check for the Codex pack",
+     "deps": [
+      "t2-status-update"
+     ],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "113478347; 114 OK; parent moved home lookup to agent_skills_user_home (ba4b3ae1e)",
+       "lane": "fanout",
+       "started": 1793681151.350927,
+       "ended": 1793682829.018086,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-low",
+     "route": "unspecified-low",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681151.350927,
+     "ended": 1793682829.018086,
+     "handoff": "t3-doctor.md",
+     "layer": 1,
+     "executor": "codex",
+     "model": "claude-opus-5-5",
+     "summary": "`omh doctor` now has the read-only `agent_skills_pack` check. It's committed in the codex-coexist worktree as `113478347 fix(doctor): warn when the Codex/.agents OMH pack is stale or edited`, signed off with all 7 trailers, and not pushed. The six VERIFY modules pass: 114 tests ran, OK with 1 skipped, and ruff is clean on both files. **What the check reports** (it sits right after `skill_layout` a …(+99 chars)"
+    },
+    {
+     "id": "t5-verify",
+     "label": "Independent verify vs base + live probes",
+     "deps": [
+      "t1-discovery",
+      "t2-status-update",
+      "t3-doctor"
+     ],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "retry",
+       "reason": "openai-codex OAuth 401 mid-run; checks done, parent re-ran tests",
+       "started": 1793682829.018086,
+       "ended": 1793684022.927134,
+       "model": "gpt-6.1-sol"
+      },
+      {
+       "n": 2,
+       "outcome": "accepted",
+       "reason": "2nd verifier HOLD (2 blockers) fixed in e400a5cf1, rechecked with its scripts",
+       "started": 1793684022.927134,
+       "ended": 1793688259.688023,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "review",
+     "route": "review",
+     "role": "verify",
+     "started": 1793682829.018086,
+     "ended": 1793688259.688023,
+     "handoff": "t5-verify.md",
+     "layer": 2,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "summary": "**Verdict: HOLD.** Two real defects block a PASS. Both fixes are a few lines; I didn't touch the code. I overwrote `t5-verify.md` with 14 numbered findings. **Tests and spot checks** - **Tests:** the five modules on HEAD with the system TMPDIR gave `Ran 150 tests` / `OK (skipped=19)`. The skips are the Linux bwrap tests. The live zsh heredoc test ran and passed inside the macOS fence. - **Real pac …(+99 chars)"
+    },
+    {
+     "id": "t1-hermes",
+     "label": "Codex skill discovery reads .agents/skills (Hermes)",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "7723d45f8 cherry-picked as e8708d5bd; 276 OK, ruff clean (child), reviewed diff",
+       "lane": "fanout",
+       "started": 1793681934.135648,
+       "ended": 1793682828.9664419,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681934.135648,
+     "ended": 1793682828.9664419,
+     "handoff": "t1-hermes.md",
+     "repairOf": "t1-discovery",
+     "layer": 1,
+     "executor": "codex",
+     "model": "claude-opus-5-5",
+     "summary": "Codex skill discovery now reads the same roots Codex does. On this Mac, a Codex implementation unit now gets `$omh-plan` → `$omh-build-failure-triage` → `$omh-code-review` instead of `$generate2dsprite` → `$game-video-feedback-loop`. It's committed as `7723d45f8` (\"fix(coding): discover Codex skills from the roots Codex itself loads\") on `fix/codex-coexist-t1`, with `-s` and the trailers. Not push …(+99 chars)"
+    },
+    {
+     "id": "t4-fence",
+     "label": "Fence allows zsh heredocs and uv cache",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "51b1f0b55 cherry-picked as b75a31af6; 252 OK, probe rc=0 for heredoc and uv",
+       "lane": "fanout",
+       "started": 1793681934.135648,
+       "ended": 1793682828.991691,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681934.135648,
+     "ended": 1793682828.991691,
+     "handoff": "t4-fence.md",
+     "repairOf": "t1-discovery",
+     "layer": 1,
+     "executor": "codex",
+     "model": "claude-opus-5-5",
+     "summary": "Codex fanout units can now run zsh heredocs and uv inside the macOS fence. The fence itself is unchanged: no new write roots or mach services. All checks passed, and I committed without pushing. **Commit:** `51b1f0b55` \"fix(fanout): point zsh TMPPREFIX and UV_CACHE_DIR into the fence scratch dir\" on `fix/codex-coexist-fence`, signed off with all the spec trailers. **What changed:** - **`src/coding …(+98 chars)"
+    }
+   ],
+   "started": 1793681142.2275681,
+   "updated": 1793688259.688023,
+   "goal": "OMH suggests its own skills to Codex fanouts, reports a stale Codex pack honestly, and refreshes it on update.",
+   "ended": 1793688259.688023
+  },
+  {
+   "id": "dag:20261102_235818_fcfb1bdd/codex-coexist-live",
+   "kind": "dag",
+   "owner": {
+    "type": "bot",
+    "id": "kami"
+   },
+   "title": "Codex coexistence (live)",
+   "state": "running",
+   "nodes": [
+    {
+     "id": "t1-discovery",
+     "label": "Codex skill discovery reads .agents/skills",
+     "deps": [],
+     "state": "failed",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "failed",
+       "reason": "Codex made no edit: fence denied zsh heredoc temp file and uv cache",
+       "lane": "fanout",
+       "started": 1793681151.350927,
+       "ended": 1793681865.127282
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681151.350927,
+     "ended": 1793681865.127282,
+     "layer": 0,
+     "executor": "codex"
+    },
+    {
+     "id": "t2-status-update",
+     "label": "Honest pack status + omh update refresh",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "Codex staged diff; parent re-ran VERIFY (67 OK, ruff clean) and committed 9aac531bf",
+       "lane": "fanout",
+       "started": 1793681151.350927,
+       "ended": 1793681865.072238
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681151.350927,
+     "ended": 1793681865.072238,
+     "handoff": "t2-status-update.md",
+     "layer": 0,
+     "executor": "codex"
+    },
+    {
+     "id": "t3-doctor",
+     "label": "Doctor check for the Codex pack",
+     "deps": [
+      "t2-status-update"
+     ],
+     "state": "running",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "open",
+       "lane": "fanout",
+       "started": 1793681151.350927
+      }
+     ],
+     "category": "unspecified-low",
+     "route": "unspecified-low",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681151.350927,
+     "layer": 1,
+     "executor": "codex"
+    },
+    {
+     "id": "t5-verify",
+     "label": "Independent verify vs base + live probes",
+     "deps": [
+      "t1-discovery",
+      "t2-status-update",
+      "t3-doctor"
+     ],
+     "state": "waiting",
+     "attempts": [],
+     "category": "review",
+     "route": "review",
+     "role": "verify",
+     "layer": 2,
+     "planned": {
+      "model": "claude-opus-5-5",
+      "provider": "claude-proxy",
+      "effort": "high"
+     }
+    },
+    {
+     "id": "t1-hermes",
+     "label": "Codex skill discovery reads .agents/skills (Hermes)",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "7723d45f8 cherry-picked as e8708d5bd; 276 OK, ruff clean (child), reviewed diff",
+       "lane": "fanout",
+       "started": 1793681934.135648,
+       "ended": 1793682828.9664419
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681934.135648,
+     "ended": 1793682828.9664419,
+     "handoff": "t1-hermes.md",
+     "repairOf": "t1-discovery",
+     "layer": 1,
+     "executor": "codex"
+    },
+    {
+     "id": "t4-fence",
+     "label": "Fence allows zsh heredocs and uv cache",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "51b1f0b55 cherry-picked as b75a31af6; 252 OK, probe rc=0 for heredoc and uv",
+       "lane": "fanout",
+       "started": 1793681934.135648,
+       "ended": 1793682828.991691
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "lane": "fanout",
+     "started": 1793681934.135648,
+     "ended": 1793682828.991691,
+     "handoff": "t4-fence.md",
+     "repairOf": "t1-discovery",
+     "layer": 1,
+     "executor": "codex"
+    }
+   ],
+   "started": 1793681142.2275681,
+   "updated": 1793681934.135648,
+   "goal": "OMH suggests its own skills to Codex fanouts, reports a stale Codex pack honestly, and refreshes it on update."
+  }
+ ],
+ "default": [
+  {
+   "id": "dag:20261108_213859_c9a97486/omher-v02",
+   "kind": "dag",
+   "owner": {
+    "type": "bot",
+    "id": "default"
+   },
+   "title": "omher v0.2 orchestrator",
+   "state": "running",
+   "nodes": [
+    {
+     "id": "t0-t3-runs",
+     "label": "Runs model + dag adapter + Runs tab",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "12a0b535f + e29e8ba35. Parent re-ran: tsc 0, vitest 46, bridge OK, full playwright 76 passed, boundary OK, diff-check clean. Chat-line deep link deferred to T4/T5 (no run id in chat events yet).",
+       "started": 1794223728.943542,
+       "ended": 1794227362.931766,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "started": 1794223728.943542,
+     "ended": 1794227362.931766,
+     "handoff": "t0-t3-runs.md",
+     "layer": 0,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high",
+     "summary": "T0 and T3 are both done and every VERIFY check passes. There are two signed-off commits in `v02-runs`, not pushed. **Commits** - `12a0b535f` feat(omher): AgentRun model, dag adapter, runs.list / runs.get bridge ops - `e29e8ba35` feat(omher): Runs tab with a read-only layered graph **VERIFY tails** - `pnpm typecheck && pnpm test`: `Tests 46 passed (46)` - Bridge unittest: `Ran 59 tests … OK`. It al …(+98 chars)"
+    },
+    {
+     "id": "t7-t10-usage",
+     "label": "Agent logos + usage meters",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "17c11dfa8 AgentIcon + 22 marks + credits; fe8398d6f usage.read + sidebar rings. Parent re-ran: typecheck 0 errors, vitest 43, bridge OK, usage.spec 5 passed, boundary OK, diff-check clean.",
+       "started": 1794223728.943542,
+       "ended": 1794226142.315711,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "visual-engineering",
+     "route": "visual-engineering",
+     "role": "build",
+     "started": 1794223728.943542,
+     "ended": 1794226142.315711,
+     "handoff": "t7-t10-usage.md",
+     "layer": 0,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high",
+     "summary": "T7 (agent logos) and T10 (usage meters) are both finished and committed. All checks pass on the final commit `fe8398d6f`. **Commits** (signed off, not pushed): - `17c11dfa8` feat(omher): agent marks - AgentIcon and 22 logos - `fe8398d6f` feat(omher): usage meters - usage.read and sidebar rings **T7, logos:** - The 22 marks are copied unedited into `src/assets/agents/`. - `src/ui/AgentIcon.tsx` map …(+97 chars)"
+    },
+    {
+     "id": "t1-media-in",
+     "label": "Media in: MEDIA lines render inline",
+     "deps": [],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "66a5bb11d. Parent re-ran: tsc 0, vitest 39, bridge OK, full playwright 72 passed, boundary OK, diff-check clean. Real-app Open/Show in Finder not exercised.",
+       "started": 1794223728.943542,
+       "ended": 1794227362.9607449,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "started": 1794223728.943542,
+     "ended": 1794227362.9607449,
+     "handoff": "t1-media-in.md",
+     "layer": 0,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high",
+     "summary": "T1 is finished and every VERIFY gate passes. `MEDIA:/path` lines in a bot answer no longer show as text; they render below the answer as an image, video, audio player or file card. It's one signed-off commit, `66a5bb11d` on `feat/omher-v02-media`, not pushed. **What was built** - **UI (`Media.tsx`, `mediaLines.ts`, `media.css`):** - Images are tiles up to 360px; clicking one opens a full-window li …(+95 chars)"
+    },
+    {
+     "id": "t2-attach",
+     "label": "Media out: + menu, drop, paste, chips",
+     "deps": [
+      "t1-media-in"
+     ],
+     "state": "running",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "open",
+       "started": 1794227362.9607449,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "started": 1794227362.9607449,
+     "layer": 1,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high"
+    },
+    {
+     "id": "t4-t5-graph",
+     "label": "Big-run layout, full view, routing on cards",
+     "deps": [
+      "t0-t3-runs"
+     ],
+     "state": "running",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "open",
+       "started": 1794227362.931766,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "started": 1794227362.931766,
+     "layer": 1,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high"
+    },
+    {
+     "id": "t6-cli-runs",
+     "label": "Claude/Codex/pi/omp/grok session runs",
+     "deps": [
+      "t0-t3-runs",
+      "t4-t5-graph"
+     ],
+     "state": "waiting",
+     "attempts": [],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "layer": 2,
+     "planned": {
+      "model": "claude-opus-5-5",
+      "provider": "claude-proxy",
+      "effort": "high"
+     }
+    },
+    {
+     "id": "t11-accounts",
+     "label": "Accounts: stacked, switch, auto-switch",
+     "deps": [
+      "t7-t10-usage"
+     ],
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "accepted",
+       "reason": "3d21d5bc7; parent re-ran all gates (e2e 80, cargo 27) and real read_accounts shows no tokens",
+       "started": 1794226142.315711,
+       "ended": 1794229841.4799051,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
+     "started": 1794226142.315711,
+     "ended": 1794229841.4799051,
+     "handoff": "t11-accounts.md",
+     "layer": 1,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high",
+     "summary": "T11 is done. Every VERIFY check passes on the committed tree, in commit `3d21d5bc7` on `feat/omher-v02-acct` (signed off, not pushed). **What it does** - **Entry:** clicking the \"You\" row in the sidebar opens Settings › Accounts, which is now first in the settings nav. - **When CLIProxyAPI (CPA) is running** (`~/.cli-proxy-api/config.yaml` exists and its port answers): - Accounts are read from CPA …(+97 chars)"
+    },
+    {
+     "id": "t8-site",
+     "label": "Site: short copy, Download app, beam, new shot",
+     "deps": [
+      "t0-t3-runs",
+      "t7-t10-usage"
+     ],
+     "state": "running",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "open",
+       "started": 1794227362.931766,
+       "model": "claude-opus-5-5"
+      }
+     ],
+     "category": "visual-engineering",
+     "route": "visual-engineering",
+     "role": "build",
+     "started": 1794227362.931766,
+     "layer": 1,
+     "model": "claude-opus-5-5",
+     "provider": "claude-proxy",
+     "effort": "high"
+    },
+    {
+     "id": "t9-verify",
+     "label": "Closing gate: integrate lanes, full gates, real-data look",
+     "deps": [
+      "t11-accounts",
+      "t2-attach",
+      "t6-cli-runs",
+      "t8-site"
+     ],
+     "state": "waiting",
+     "attempts": [],
+     "category": "review",
+     "route": "review",
+     "role": "verify",
+     "layer": 3,
+     "planned": {
+      "model": "claude-opus-5-5",
+      "provider": "claude-proxy",
+      "effort": "high"
+     }
+    }
+   ],
+   "started": 1794223728.943542,
+   "updated": 1794229841.4799051,
+   "goal": "omher v0.2: media in/out, Runs graph for dag/subagents/CLI, logos, usage, accounts, site; all gates green"
+  },
+  {
+   "id": "delegate:deleg_6c87b01a",
+   "kind": "delegate",
+   "owner": {
+    "type": "bot",
+    "id": "default"
+   },
+   "title": "Bug-first code review of the integrated omher PR stack (#2695 #2702 #2703 #2704 #2706 #2707) +2",
+   "state": "running",
+   "nodes": [
+    {
+     "id": "task-0",
+     "label": "Bug-first code review of the integrated omher PR stack (#2695 #2702 #2703 #2704 #2706 #2707)",
+     "deps": [],
+     "layer": 0,
+     "state": "running",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "running",
+       "started": 1794226922.0
+      }
+     ],
+     "started": 1794226922.0
+    },
+    {
+     "id": "task-1",
+     "label": "Performance review of the integrated omher PR stack with measured before/after numbers",
+     "deps": [],
+     "layer": 0,
+     "state": "running",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "running",
+       "started": 1794226922.0
+      }
+     ],
+     "started": 1794226922.0
+    },
+    {
+     "id": "task-2",
+     "label": "Hands-on usability review of the integrated omher PR stack",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1794226922.0
+      }
+     ],
+     "summary": "I walked all seven tasks on the integ branch (mock bridge plus Playwright) in dark and light, at 1440×900, 1024×700 and 900×700. 900 is the app's smallest allowed window width. Every task can be finished: I found 0 blockers, 9 should-fix and 12 minor issues, and no console errors. The servers on :5531 and :5532 are stopped. **Top 5:** 1. **Keyboard focus starts inside the hidden right panel (#2695 …(+98 chars)",
+     "started": 1794226922.0
+    }
+   ],
+   "started": 1794226922.0,
+   "updated": 1794226922.0
+  },
+  {
+   "id": "delegate:deleg_e8b94630",
+   "kind": "delegate",
+   "owner": {
+    "type": "bot",
+    "id": "default"
+   },
+   "title": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in the rlaope/oh-my-hermes repo), add search and provider-category filtering to the model picker, then open a PR (do NOT merge it). +1",
+   "state": "done",
+   "nodes": [
+    {
+     "id": "task-0",
+     "label": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in the rlaope/oh-my-hermes repo), add search and provider-category filtering to the model picker, then open a PR (do NOT merge it).",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1794221323.0,
+       "ended": 1794224116.0
+      }
+     ],
+     "model": "claude-opus-5-5",
+     "summary": "{\"pr_url\":\"https://github.com/rlaope/oh-my-hermes/pull/2702\",\"commit\":\"2a4f268b1cc4ace077be9e9c7dfe9b37f7f365a3\",\"gates\":\"pnpm typecheck passed. pnpm test (vitest): 39/39 passed, 4 files, 5 new in src/chat/model/modelSearch.test.ts. Playwright (OMHER_PORT=5381, OMHER_MOCK_PORT=5382, under lockf): 68 passed, 1 skipped. The skip is the new screenshot test, which runs only when OMHER_SHOTS is set; it …(+100 chars)",
+     "started": 1794221323.0,
+     "ended": 1794224116.0
+    },
+    {
+     "id": "task-1",
+     "label": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in rlaope/oh-my-hermes), add a SESSIONS section to the sidebar under BOTS where the user starts NEW terminal agent sessions — exac…",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1794221323.0,
+       "ended": 1794224116.0
+      }
+     ],
+     "model": "claude-opus-5-5",
+     "summary": "{\"pr_url\":\"https://github.com/rlaope/oh-my-hermes/pull/2704\",\"commits\":[\"5dfc66184 docs(omher): boundary rule 10, sessions start only allow-listed agents\",\"a7f88d42b feat(omher): PTY sessions in the Tauri shell for claude, codex, omh, pi, omp\",\"fd85169fa feat(omher): SESSIONS in the sidebar, start agents and use them in a terminal\"],\"gates\":\"All gates passed locally, all from apps/omher except the …(+100 chars)",
+     "started": 1794221323.0,
+     "ended": 1794224116.0
+    }
+   ],
+   "started": 1794221323.0,
+   "updated": 1794224116.0,
+   "ended": 1794224116.0
+  }
+ ],
+ "delegations": [
+  {
+   "id": "deleg_1741f184",
+   "started": 1793681958.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "IMPLEMENT (write code, not review): make OMH's Codex executor skill discovery read the same skill roots Codex does (~/.agents/skills, repo .agents/skills, $CODEX_HOME), so fanout units get OMH skill…",
+     "status": "completed",
+     "started": 1793681958.0,
+     "model": "claude-opus-5-5",
+     "summary": "Codex skill discovery now reads the same roots Codex does. On this Mac, a Codex implementation unit now gets `$omh-plan` → `$omh-build-failure-triage` → `$omh-code-review` instead of `$generate2dsprite` → `$game-video-feedback-loop`. It's committed as `7723d45f8` (\"fix(coding): discover Codex skills from the roots Codex itself loads\") on `fix/codex-coexist-t1`, with `-s` and the trailers. Not push …(+99 chars)",
+     "dag": {
+      "run": "codex-coexist",
+      "node": "t1-hermes"
+     }
+    },
+    {
+     "index": 1,
+     "goal": "IMPLEMENT (write code, not review): make Codex fanout units able to use zsh heredocs and uv inside OMH's macOS fence by pointing TMPPREFIX and UV_CACHE_DIR into the unit's confinement tmp dir, withou…",
+     "status": "completed",
+     "started": 1793681958.0,
+     "model": "claude-opus-5-5",
+     "summary": "Codex fanout units can now run zsh heredocs and uv inside the macOS fence. The fence itself is unchanged: no new write roots or mach services. All checks passed, and I committed without pushing. **Commit:** `51b1f0b55` \"fix(fanout): point zsh TMPPREFIX and UV_CACHE_DIR into the fence scratch dir\" on `fix/codex-coexist-fence`, signed off with all the spec trailers. **What changed:** - **`src/coding …(+98 chars)",
+     "dag": {
+      "run": "codex-coexist",
+      "node": "t4-fence"
+     }
+    },
+    {
+     "index": 2,
+     "goal": "IMPLEMENT (write code, not review): add a read-only `agent_skills_pack` check to omh doctor that warns (next action `omh update`) when the ~/.agents/skills OMH pack is stale or locally modified, and…",
+     "status": "completed",
+     "started": 1793681958.0,
+     "model": "claude-opus-5-5",
+     "summary": "`omh doctor` now has the read-only `agent_skills_pack` check. It's committed in the codex-coexist worktree as `113478347 fix(doctor): warn when the Codex/.agents OMH pack is stale or edited`, signed off with all 7 trailers, and not pushed. The six VERIFY modules pass: 114 tests ran, OK with 1 skipped, and ruff is clean on both files. **What the check reports** (it sits right after `skill_layout` a …(+99 chars)",
+     "dag": {
+      "run": "codex-coexist",
+      "node": "t3-doctor"
+     }
+    }
+   ],
+   "ended": 1793682504.0,
+   "model": "claude-opus-5-5"
+  },
+  {
+   "id": "deleg_23c3091c",
+   "started": 1793682849.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Independent verify vs base + live probes",
+     "status": "failed",
+     "started": 1793682849.0,
+     "model": "gpt-6.1-sol",
+     "summary": "ChatGPT or Codex Subscription rejected your sign-in, so the model can't be reached. Sign in again: `hermes -p kami auth add openai-codex --type oauth`. Provider said: HTTP 401: Encountered invalidated oauth token for user, failing request",
+     "error": "HTTP 401: Encountered invalidated oauth token for user, failing request",
+     "dag": {
+      "run": "codex-coexist",
+      "node": "t5-verify"
+     }
+    }
+   ],
+   "ended": 1793683535.0,
+   "model": "gpt-6.1-sol",
+   "provider": "openai-codex"
+  },
+  {
+   "id": "deleg_296145a8",
+   "started": 1793684042.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Independent verify vs base + live probes",
+     "status": "completed",
+     "started": 1793684042.0,
+     "model": "claude-opus-5-5",
+     "summary": "**Verdict: HOLD.** Two real defects block a PASS. Both fixes are a few lines; I didn't touch the code. I overwrote `t5-verify.md` with 14 numbered findings. **Tests and spot checks** - **Tests:** the five modules on HEAD with the system TMPDIR gave `Ran 150 tests` / `OK (skipped=19)`. The skips are the Linux bwrap tests. The live zsh heredoc test ran and passed inside the macOS fence. - **Real pac …(+99 chars)",
+     "dag": {
+      "run": "codex-coexist",
+      "node": "t5-verify"
+     }
+    }
+   ],
+   "ended": 1793687858.0,
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy"
+  },
+  {
+   "id": "deleg_4dec9e33",
+   "started": 1794227395.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Site: short copy, Download app, beam, new shot",
+     "status": "running",
+     "started": 1794227395.0,
+     "model": "claude-opus-5-5",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t8-site"
+     }
+    }
+   ],
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "route": {
+    "category": "visual-engineering",
+    "origin": "explicit",
+    "provider": "claude-proxy",
+    "effort": "high"
+   }
+  },
+  {
+   "id": "deleg_57ba6014",
+   "started": 1794226156.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Accounts: stacked, switch, auto-switch",
+     "status": "completed",
+     "started": 1794226156.0,
+     "model": "claude-opus-5-5",
+     "summary": "T11 is done. Every VERIFY check passes on the committed tree, in commit `3d21d5bc7` on `feat/omher-v02-acct` (signed off, not pushed). **What it does** - **Entry:** clicking the \"You\" row in the sidebar opens Settings › Accounts, which is now first in the settings nav. - **When CLIProxyAPI (CPA) is running** (`~/.cli-proxy-api/config.yaml` exists and its port answers): - Accounts are read from CPA …(+97 chars)",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t11-accounts"
+     }
+    }
+   ],
+   "ended": 1794229710.0,
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "route": {
+    "category": "unspecified-high",
+    "origin": "explicit",
+    "provider": "claude-proxy",
+    "effort": "high"
+   }
+  },
+  {
+   "id": "deleg_6c87b01a",
+   "started": 1794226922.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Bug-first code review of the integrated omher PR stack (#2695 #2702 #2703 #2704 #2706 #2707)",
+     "status": "running",
+     "started": 1794226922.0
+    },
+    {
+     "index": 1,
+     "goal": "Performance review of the integrated omher PR stack with measured before/after numbers",
+     "status": "running",
+     "started": 1794226922.0
+    },
+    {
+     "index": 2,
+     "goal": "Hands-on usability review of the integrated omher PR stack",
+     "status": "completed",
+     "started": 1794226922.0,
+     "summary": "I walked all seven tasks on the integ branch (mock bridge plus Playwright) in dark and light, at 1440×900, 1024×700 and 900×700. 900 is the app's smallest allowed window width. Every task can be finished: I found 0 blockers, 9 should-fix and 12 minor issues, and no console errors. The servers on :5531 and :5532 are stopped. **Top 5:** 1. **Keyboard focus starts inside the hidden right panel (#2695 …(+98 chars)"
+    }
+   ]
+  },
+  {
+   "id": "deleg_80420ea8",
+   "started": 1794223747.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Runs model + dag adapter + Runs tab",
+     "status": "completed",
+     "started": 1794223747.0,
+     "model": "claude-opus-5-5",
+     "summary": "T0 and T3 are both done and every VERIFY check passes. There are two signed-off commits in `v02-runs`, not pushed. **Commits** - `12a0b535f` feat(omher): AgentRun model, dag adapter, runs.list / runs.get bridge ops - `e29e8ba35` feat(omher): Runs tab with a read-only layered graph **VERIFY tails** - `pnpm typecheck && pnpm test`: `Tests 46 passed (46)` - Bridge unittest: `Ran 59 tests … OK`. It al …(+98 chars)",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t0-t3-runs"
+     }
+    },
+    {
+     "index": 1,
+     "goal": "Media in: MEDIA lines render inline",
+     "status": "completed",
+     "started": 1794223747.0,
+     "model": "claude-opus-5-5",
+     "summary": "T1 is finished and every VERIFY gate passes. `MEDIA:/path` lines in a bot answer no longer show as text; they render below the answer as an image, video, audio player or file card. It's one signed-off commit, `66a5bb11d` on `feat/omher-v02-media`, not pushed. **What was built** - **UI (`Media.tsx`, `mediaLines.ts`, `media.css`):** - Images are tiles up to 360px; clicking one opens a full-window li …(+95 chars)",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t1-media-in"
+     }
+    }
+   ],
+   "ended": 1794226988.0,
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "route": {
+    "category": "unspecified-high",
+    "origin": "explicit",
+    "provider": "claude-proxy",
+    "effort": "high"
+   }
+  },
+  {
+   "id": "deleg_c463b02d",
+   "started": 1794227381.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Big-run layout, full view, routing on cards",
+     "status": "running",
+     "started": 1794227381.0,
+     "model": "claude-opus-5-5",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t4-t5-graph"
+     }
+    },
+    {
+     "index": 1,
+     "goal": "Media out: + menu, drop, paste, chips",
+     "status": "running",
+     "started": 1794227381.0,
+     "model": "claude-opus-5-5",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t2-attach"
+     }
+    }
+   ],
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "route": {
+    "category": "unspecified-high",
+    "origin": "explicit",
+    "provider": "claude-proxy",
+    "effort": "high"
+   }
+  },
+  {
+   "id": "deleg_d2fd3d58",
+   "started": 1794223768.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "Agent logos + usage meters",
+     "status": "completed",
+     "started": 1794223768.0,
+     "model": "claude-opus-5-5",
+     "summary": "T7 (agent logos) and T10 (usage meters) are both finished and committed. All checks pass on the final commit `fe8398d6f`. **Commits** (signed off, not pushed): - `17c11dfa8` feat(omher): agent marks - AgentIcon and 22 logos - `fe8398d6f` feat(omher): usage meters - usage.read and sidebar rings **T7, logos:** - The 22 marks are copied unedited into `src/assets/agents/`. - `src/ui/AgentIcon.tsx` map …(+97 chars)",
+     "dag": {
+      "run": "omher-v02",
+      "node": "t7-t10-usage"
+     }
+    }
+   ],
+   "ended": 1794226114.0,
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "route": {
+    "category": "visual-engineering",
+    "origin": "explicit",
+    "provider": "claude-proxy",
+    "effort": "high"
+   }
+  },
+  {
+   "id": "deleg_e8b94630",
+   "started": 1794221323.0,
+   "tasks": [
+    {
+     "index": 0,
+     "goal": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in the rlaope/oh-my-hermes repo), add search and provider-category filtering to the model picker, then open a PR (do NOT merge it).",
+     "status": "completed",
+     "started": 1794221323.0,
+     "model": "claude-opus-5-5",
+     "summary": "{\"pr_url\":\"https://github.com/rlaope/oh-my-hermes/pull/2702\",\"commit\":\"2a4f268b1cc4ace077be9e9c7dfe9b37f7f365a3\",\"gates\":\"pnpm typecheck passed. pnpm test (vitest): 39/39 passed, 4 files, 5 new in src/chat/model/modelSearch.test.ts. Playwright (OMHER_PORT=5381, OMHER_MOCK_PORT=5382, under lockf): 68 passed, 1 skipped. The skip is the new screenshot test, which runs only when OMHER_SHOTS is set; it …(+100 chars)"
+    },
+    {
+     "index": 1,
+     "goal": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in rlaope/oh-my-hermes), add a SESSIONS section to the sidebar under BOTS where the user starts NEW terminal agent sessions — exac…",
+     "status": "completed",
+     "started": 1794221323.0,
+     "model": "claude-opus-5-5",
+     "summary": "{\"pr_url\":\"https://github.com/rlaope/oh-my-hermes/pull/2704\",\"commits\":[\"5dfc66184 docs(omher): boundary rule 10, sessions start only allow-listed agents\",\"a7f88d42b feat(omher): PTY sessions in the Tauri shell for claude, codex, omh, pi, omp\",\"fd85169fa feat(omher): SESSIONS in the sidebar, start agents and use them in a terminal\"],\"gates\":\"All gates passed locally, all from apps/omher except the …(+100 chars)"
+    }
+   ],
+   "ended": 1794224116.0,
+   "model": "claude-opus-5-5"
+  }
+ ],
+ "handoffs": {
+  "dag:20261026_134438_3ae70257/omh-dap": {
+   "adversarial": "# omh-dap / adversarial: handoff\n\nVerdict: **fix_first**. Cases a-i, the ones in the brief, all PASS against real debugpy 1.8.22. I also ran an extra case, j, outside the brief. It found two defects, and both have cheap fixes (below).\n\nTree: worktree dap-nav at HEAD d9f0b36a9, read-only (no repo edits). The real `debug_python_handler` ran under the scratch venv python (debugpy 1.8.22, Python 3.13.15) with `PYTHONPATH=<worktree>/src`. OMH_LSP_TOOLS, OMH_HASHLINE_TOOLS, OMH_DAP_TOOLS, PYTHONPATH and HERMES_HOME were unset (`run.sh`). The root comes from `TERMINAL_CWD` (the handler's fallback when no Hermes tree is present). No paid calls were made.\n\nCommand for each case: `cd ~/.hermes/profiles/kami/cache/scratch/dap-adv && ./run.sh <x>`. It runs `case_<x>.py` and writes `logs/<x>.log`, whose last line is `EXIT <rc>`.\n\n| case | what | exit | result | output tail (literal, trimmed) |\n|---|---|---|---|---|\n| a | `../`, absolute path outside the root, `/etc/hosts`, file symlink, dir symlink, `src/../../` as program and as breakpoint path | 0 | PASS 11/11 | `{\"ok\": false, \"error\": \"scope_mismatch\", \"hint\": \"'link_out.py' resolves outside the workspace root ...\"}`; `a:no adapter launched before=[] after=[]` |\n| b | missing, non-exec, directory, empty, int, `/usr/bin/python3` (no debugpy), `/bin/echo`, `/usr/bin/true` | 0 | PASS 10/10 | missing/non-exec/dir/empty/int -> `invalid_argument` in 0.0s; `/usr/bin/python3` -> `adapter_unavailable` in 0.2s with `stderr_tail: \"...No module named 'debugpy'\"`; echo/true -> `adapter_unavailable` in 0.0s; `before=[] after=[]` |\n| c | `while True: pass`, no breakpoint, launch timeout=25 | 0 | PASS 11/11 | launch -> `timeout` in 28.0s; continue(5) -> `timeout` in 5.0s; inspect/step -> `not_stopped`; terminate in 2.0s, `output_tail: \"spinning\\n\"`; no adapter and no spin.py left; then `no_session` |\n| d | 1 MB of lines + one 5 MB write, then a breakpoint | 0 | PASS 6/6 | stop reply len=170; `session ring <= 64KB ring=65536`; exit reply len=2064, tail_len=2000 |\n| e | 10k list, 1 MB str, 5k dict, 100 locals | 0 | PASS 11/11 | inspect: 40 locals, `locals_omitted=63`, max repr 200, reply 1279 B; evaluate `s` -> 2041 B; `1/0` -> `adapter_error \"ZeroDivisionError: division by zero\"`, session survives; frame 99 -> `invalid_argument` |\n| f | second launch, same task_id; tasks A and B in different roots | 0 | PASS 13/13 | 2nd launch -> `session_active` in 0.0s, still 1 adapter; A `cart=[1, 2]`, B `cart=[70, 80]`; roots pinned per session; distinct adapter pids; terminating A leaves B ok |\n| g | SIGKILL the adapter while stopped | 0 | PASS 8/8 | inspect -> `adapter_error \"the debug adapter exited: ... Broken pipe\"` in 0.0s; later calls -> `no_session`; no orphaned launcher/debuggee; relaunch stops at line 9 in 3.3s |\n| h | gate | 0 | PASS 13/13 | off for: no env + empty/missing/other-setting/`dap_tools: off` config, and env `0`/`false`/``/`2`; on for env `1`/` YES ` and profile `dap_tools: true`; `register_tool(... check_fn=_dap_tools_enabled)`, toolset `omh-dap` |\n| i | AST import/spawn scan | 0 | PASS 14/14 | client: `[collections, itertools, json, queue, subprocess, threading, time, typing]`; session/tool: no subprocess, no network imports, no dynamic imports; exactly one `subprocess.Popen(list(argv), ..., shell=False)`; argv `[python, \"-m\", \"debugpy.adapter\"]` |\n| j (extra) | output flood while running; two launches on the same task_id at once | 1 | **FAIL 3/7** | `client._output after 20s launch timeout = 241397098 bytes`, then `363545891`; `j2 results: ['ok', 'ok'] adapters live: 2`; after terminate: `['80778 ... -m debugpy.adapter']` |\n\nCase f failed on the first run (10/11) because of my fixture: `cart = add(p)` overwrites the marker. I fixed the fixture and reran f: 13/13.\n\n## Defects\n\n1. **Output buffer is unbounded while the program runs** (`dap_client.DapClient._sort` appends to `self._output` with no cap; the 64 KB ring is applied only in `Session.collect_output` at stop/exit). A program that prints in a loop and never stops grows the Hermes process by about 12 MB/s: 241 MB after a 20 s launch, 364 MB 10 s later. The maximum timeout is 180 s, so that is about 2 GB per call. Replies stay bounded, so only memory is at risk.\n   Repro: `flood.py` = `import sys\\nwhile True: sys.stdout.write('F'*65536+'\\n')`; `launch(program=flood.py, timeout=20)`; then `len(''.join(SESSIONS._sessions['t1'].client._output))`.\n   Fix: trim `_output` in `_sort` to the last OUTPUT_RING characters (keep a running size, like `_stderr`).\n2. **Two launches racing on the same task_id leak an adapter and its debuggee.** `SessionManager.launch` checks `key in self._sessions` under the lock, releases it, spawns and handshakes, then stores `self._sessions[key] = session`, which overwrites any session already stored. Two parallel calls both pass the check, and both get `ok` with a stopped reply. The first session is orphaned: `terminate` closes only the second, and the first `python -m debugpy.adapter`, its launcher and the paused pytest stay alive until Hermes exits. Hermes runs parallel tool calls concurrently, so one turn with two `launch` calls is enough to trigger it.\n   Repro: two threads, each calling `debug_python_handler({\"action\":\"launch\",\"python\":PY,\"args\":[\"-q\",\"tests\"],\"breakpoints\":[{\"path\":\"src/app/cart.py\",\"line\":9}]}, task_id=\"R\")`, then one `terminate` on R. `pgrep -f debugpy.adapter` still shows one pid.\n   Fix: reserve the key under the lock before spawning (a placeholder or a \"launching\" set), so the second call gets `session_active`; remove the reservation on failure.\n\n## Non-blocking observations\n- When `python` is not an interpreter (e.g. `/bin/echo`), the hint still says \"is debugpy installed? run: /bin/echo -m pip install debugpy\". The code is right; the wording is odd.\n- A launch timeout of 25 s returned after 28.0 s: the 25 s wait plus about 2 s of handshake. That is within bound.\n- `evaluate` returns up to 2000 chars of result plus JSON overhead, about 2.04 KB. That matches the spec.\n\n## VERIFY\n- Every case a-i has a recorded command, exit code and result (table above; logs in `scratch/dap-adv/logs/`).\n- `pgrep -fl debugpy.adapter` after the whole run: empty, rc=1. `pgrep -fl 'debugpy|flood.py|spin.py'`: empty. Case j's leaked adapter (pid 80778) was SIGKILLed by the cleanup loop at the end of `case_j.py`.\n\n## Files (all scratch, no repo edits)\n`~/.hermes/profiles/kami/cache/scratch/dap-adv/`: `common.py`, `case_a.py`..`case_j.py`, `run.sh`, `logs/*.log`, `ws/` (temporary workspaces).\n\n## Open\n- After the two fixes, rerun `./run.sh j` (expect 7/7), plus `./run.sh d` and `./run.sh f` as regressions.\n- Not tested: Windows, and the idle timeout after 10 minutes (the 600 s path was not run live).\n",
+   "bench": "# bench node handoff\n\nStatus: DONE. Commit `54ef5c7f2` on `feature/omh-dap` (signed-off, not pushed). Only files under benchmarks/live-model-tools/v1/ were touched.\n\n## What changed\n- `lib/omh_live.py`: `--edit-surface dap` uses toolsets `file,terminal,omh-dap`. `_current_session_environment` now also pops `OMH_DAP_TOOLS` and sets it to 1 for the dap arm only. Added `debug_directive(patch|dap)`, the exact spec.md pair, which `directive_text(..., \"debug\")` returns. The patch, hashline and rename texts are unchanged.\n- `bench.py`: added `dap-ab` to `--split`, `dap` to `--edit-surface` and `debug` to `--edit-directive`. A non-patch surface on a non-current-session harness is still refused, and so is `debug` with lsp or hashline.\n- `lib/runner.py`: `--test-env` installs `pytest debugpy` (both arms). The task text is unchanged. In a fake `dap-ab` run, each record's `observation.toolsets` holds the patch and dap argv toolsets, built offline and never executed.\n- `lib/corpus.py`: new `dap-ab` split with 3 templates (D-MUTABLE-DEFAULT, D-ALIASED-STATE, D-ORDER-DEPENDENT) × seeds 104729/130363/155921. The seed sets the names, prices and rates. Goldens are private: test names, assert count and hidden checks. The prompt names `python -m pytest -q tests/<file>` and says \"Find and fix the cause\", with no hint at the cause. `generate_public` is untouched.\n- `lib/validation.py`: dap grading checks four things. Changed paths must be under `src/benchapp/` or `tests/`. The test functions must be kept, with no fewer asserts. The workspace tests run in file order, and the hidden checks run. Both kinds of check run in a fresh interpreter with `PYTHONPATH=<ws>/src`.\n- `adapters/fake_harness.py`: `DAP_FIXES` holds the reference fixes.\n- `tests/test_dap_ab.py`: for every template × seed, the untouched fixture fails, the reference fix passes and the named wrong fix fails. The wrong fixes are `lines.clear()` in build_order, `copy.copy(plan)` in upgrade, and a cache key of `id(SETTINGS)`. Also covered: weakened-test and out-of-scope cases, seed variation, prompt wording, a fake run of 9/9 with toolsets for both arms, the argv for all 4 surfaces, the env pop, the directive pair plus the unchanged existing directives, the CLI guards, and debugpy in the test env (skipped without uv).\n\n## VERIFY (literal output)\n- pytest: `55 passed, 15 subtests passed in 126.97s`\n- corpus --verify: exit 0, `corpus_digest c4ea899a…7b33` (unchanged), `verified: true`\n- fake run dap-ab: `\"scheduled\": 9`, `\"graded\": 9`, `\"passed\": 9`, exit 0\n- ruff: only the 3 pre-existing F841 (runner.py:28, validation.py:17, validation.py:19)\n- `git diff --stat origin/main -- …/corpus …/manifest.json`: empty\n\n## Open\n- No live or paid run was made. The debugpy env test did really install debugpy through uv and import `debugpy.adapter`.\n- The untouched fixtures fail exactly 1 test each under real pytest, which I checked by hand. In the MUTABLE-DEFAULT and ORDER-DEPENDENT templates the failure depends on test order (the second test fails), which matches the intent.\n",
+   "measure": "# measure (parent-run) — verdict: GATE FAIL (clause 3)\n\nHEAD 9528a8c73, split dap-ab, --edit-directive debug --git-init-workspace --test-env, 8 models x 2 arms x 9.\nScript: scratch/dap-bench/run_all.sh; gate: scratch/dap-bench/gate_dap.py -> gate_dap.txt.\nRecords 143/144 (gpt-4.1-nano dap D-MUTABLE-DEFAULT-155921 missing -> scored fail).\nqwen D-MUTABLE-DEFAULT both arms seeded from smoke4 (same HEAD/flags), decided before the run (cap 160 - 20 spent).\n\n- clause 1 weak dap >= patch+3: PASS 9 -> 12 (qwen 0->2, nano 0->1, grok 9->9, 4o-mini 0->0)\n- clause 2 strong dap >= patch-1: PASS 35 -> 34 (glm 8->7)\n- clause 3 no dap run > 3x patch median: FAIL, 7 runs (qwen 3 timeouts 191-312x incl. orphan continuation; nano 6.27x; MiniMax 3.70x; grok 3.27x; +1)\n- clause 4 adoption >= 50%: PASS 46/65 main-run dap sessions called debug_python\n\nInfra contamination (does not change the verdict; clause 3 already fails on completed runs):\n- 22:18 KST og began returning 401 model_access_denied for qwen-flash, gpt-4o-mini, gpt-4.1-nano (deepseek still OK):\n  6 gpt-4o-mini dap runs crashed in 10 s, nano dap 155921 has no record.\n- Timed-out runs did not stop: `hermes -p <bench>` is served by the long-lived gateway, so the bench's subprocess\n  timeout kills only the client; the agent turn kept running until the 401s (qwen session 18:42 -> 22:18, 200M tokens).\n  9 sessions span > 1830 s. Profile token totals over 24 h: dapbench 708M, dapbenchp 440M.\n",
+   "tool": "# omh-dap / tool: handoff\n\nStatus: DONE for everything this node owns. The unittest VERIFY line still exits 1, but only on failures that also happen on base 79c5308d2: the omh-lsp policy entries plus 2 Hermes-tree-absent tests. The proof is below. Commits are not pushed.\n\n## Commits (feature/omh-dap, signed-off, on top of 54ef5c7f2 bench)\n- 92f15f8f3 feat(dap): stdio DAP client and session logic for debugpy\n- e1a389235 feat(dap): opt-in debug_python tool (toolset omh-dap)\n- 5f90d90dd test(policy): register the omh-dap modules with the boundary gates\n\n## Files\n- New: src/plugin_bundle/omh/dap_client.py (only module importing subprocess), dap_session.py, tools/dap_tool.py, tests/test_dap_tool.py\n- Registration: omh/__init__.py, tools/__init__.py (BUILTIN_TOOL_NAMES + collector), metadata.py, plugin.yaml, tests/test_plugin_distribution.py\n- Budget: src/maintenance/release.py PLUGIN_TOOL_SCHEMA_CHAR_LIMIT 71831 -> 73612 (debug_python = 1781, with a reason comment); tests/test_ai_job_search_context_budget.py literal 73612\n- Policy: PROCESS_SPAWN_ALLOWLIST entry for dap_client.py (with a reason); broad-except inventory: 3 dap_tool sites classified, counts 72->75 / 64->67 (re-derive at merge with lsp's 72->82 / 64->74: expect 85 / 77)\n- Follows the parent's lsp patterns: schema constant `OMH_DAP_DEBUG_PYTHON_SCHEMA`; runtime_paths bound at module scope (no call-time sibling import); no asyncio/socket; native paths (os.path.join) and newline=\"\" in the tests. The `frame` description doesn't restate its bound, so no overlap verdict is needed. No debug_python overlap finding remains.\n\n## VERIFY (final tree, run 2026-10-29)\n- uv sync: rc=0\n- pytest line 1 (with debugpy): `39 passed, 26 subtests passed in 44.95s`, rc=0, 0 skipped. The interpreter there is uv's ephemeral env, which has debugpy 1.8.22. Verbose:\n  `tests/test_dap_tool.py::RealDebugpyIntegrationTests::test_probe_scenario PASSED`\n  `tests/test_dap_tool.py::RealDebugpyIntegrationTests::test_terminate_mid_session PASSED`\n  (probe scenario: stop at src/app/cart.py:9 reason breakpoint, locals cart=[1, 2], add.__defaults__ = ([1, 2],), second hit cart=[1, 2, 5], clear + continue -> exited exit_code 1 with \"assert 8 == 5\" in output_tail)\n- pytest line 2 (no debugpy): `85 passed, 2 skipped, 26 subtests passed`, rc=0. The 2 skips are the debugpy class, which is expected because that line has no `--with debugpy`.\n- unittest line: `Ran 266 tests in 2046.665s FAILED (failures=8, skipped=2)`. All 8 also fail on a detached worktree of 79c5308d2 (scratch/dap-base-79c5308d2, logs scratch/dapbase_*.log):\n  - handoff INVARIANT 2: lsp_bridge.py imports asyncio (base: same)\n  - broad_exception x2: unclassified sites are lsp_bridge/lsp_nav/lsp_nav_tool only; 85 != 75 (base 82 != 72; +3 = my 3 classified dap sites)\n  - plugin_bundle_standalone: tools/lsp_nav_tool.py:81 call-time import (base: same)\n  - schema_overlap verdicts: lsp_*.line only (base: same)\n  - schema_overlap collector: 28 != 25. The missing names are the 3 LSP_* schemas; base shows 27 != 24.\n  - plugin_distribution x2 test_real_admission_*: reason hermes_code_tree_absent (base: same, environment)\n  All lsp ones are fixed on origin/feature/omh-lsp-nav (515d42bd0, 8792cc79e, 296931c3a) and clear at the parent's merge.\n- ruff: `All checks passed!` rc=0\n- test_ai_job_search_context_budget, test_plugin_tool_surface, test_per_turn_budgets: OK\n\n## Open\n- At merge, re-derive EXPECTED_HANDLER_COUNT/ANCHOR_COUNT and PLUGIN_TOOL_SCHEMA_CHAR_LIMIT (both branches move them).\n- Not tested on Windows.\n- Live smoke outside the tests: launch -> stop at 6-7 s, the whole scenario takes about 7.5 s.\n"
+  },
+  "dag:20261028_093610_1b12a114/route-hint-dedup": {
+   "implement": "# route-hint-dedup / implement — DONE\n\nCommit: a498a699473bc37a27e17cdf11e6e8f3b45bff42 on omh/route-hint-core (not pushed).\n\n## What changed\n- src/plugin_bundle/omh/awareness.py `awareness_route_hint_context_from_payload`: three render-only dedups\n  1. per-hint `  adjacent_workflows=` omitted when it equals the top-level line (kept if it differs or there is no top-level line)\n  2. `fallback_action_label=L; ` dropped when L == A.replace(\"_\",\" \")\n  3. `next_action_label=L; ` on the `- selected=` line dropped under the same rule\n  The payload, selection, first_response_shape (incl. dag-ulw override), not_evidence_yet and plan_todo are untouched.\n- src/plugin_bundle/omh/turn_budget.py: PRE_LLM_CALL_CONTEXT_CHAR_LIMIT 5786 -> 5632, FALLBACK 7338 -> 7184, each with a dated history comment. Measured with budget_report(): live = limit, headroom 0. The -154 is the `handoff-guide` role render on the routed request: -81 from the adjacent line, -73 from the fallback label.\n- tests/test_ai_job_search_context_budget.py: this pinned-limit test asserted the old 5786/7338. It is a pin fixture the change moves, so I updated it to the new values with reasons.\n- tests/test_route_hint_dedup.py (new, 10 tests): each dedup both ways, plus first_response_shape, not_evidence_yet and plan_todo unchanged, plus a live routed request.\n- CHANGELOG.md: one entry at the top of Unreleased.\n- I left the fixtures at test_chat_router.py:448 and test_cli.py:864 alone. They are a route hint block pasted into the router's input, and nothing compares them to render output.\n- release.py: drift named nothing, so I did not edit it.\n\n## VERIFY (last lines)\n- unittest (the 8 required modules + test_ai_job_search_context_budget): `Ran 392 tests in 282.405s` / `OK (skipped=2)`\n- `uv run python -m omh.cli release drift`: `No drift. 29 checks passed.`\n- `uv run --group lint ruff check src tests`: `All checks passed!`\n- `git diff --check`: clean\n- `git log -1`: a498a6994 \"Drop repeated text from the rendered route hint\", Lore trailers + Signed-off-by\n\n## Open\n- Nothing is blocked. I did not re-measure the 11.8% / 27,147-character figure; it is quoted from the spec.\n",
+   "verify": "# route-hint-dedup / verify — DONE: PASS (with pre-existing failures named)\n\nWorktree: route-hint-core, HEAD a498a6994 (base e98cfe616). No tracked files edited.\n\n## (1) git show --stat HEAD\n```\ncommit a498a699473bc37a27e17cdf11e6e8f3b45bff42\n    Drop repeated text from the rendered route hint\n CHANGELOG.md                               |  10 +++\n src/plugin_bundle/omh/awareness.py         |  14 +++-\n src/plugin_bundle/omh/turn_budget.py       |  11 ++-\n tests/test_ai_job_search_context_budget.py |   4 +-\n tests/test_route_hint_dedup.py             | 125 +++++++++++++++++++++++++++++\n 5 files changed, 157 insertions(+), 7 deletions(-)\n```\n(Lore trailers + Signed-off-by: rlaope present.)\n\n## (2) Before/after render, 5 ROUTING_INTERVENTION_CASES producing [OMH Route Hint]\npre_llm_call on HEAD~1 (/tmp/rh-base worktree) vs HEAD; per-key line lists compared.\n```\n2390 -> 2264 first_response_shape same/2, not_evidence_yet same/2, plan_todo same/0, selected same/3, reason same/2  \"Compare this HellaSwag log to the paper's rep\"\n1868 -> 1735 ... all same (1/1/0/2/1)  'Estimate TAM SAM SOM for US dental clinics us'\n1609 -> 1476 ... all same             'Prepare a customer evidence analysis and JTBD'\n1868 -> 1735 ... all same             'Can you do market sizing for dental clinics i'\n1676 -> 1541 ... all same             'Make a product showcase video for a Japanese '\ntotal 9411 -> 8751 -660 (7.0%)\nremoved: per-hint adjacent_workflows= lines (equal to top-level) and fallback_action_label=... lines whose label == action with spaces\n```\n- first_response_shape, not_evidence_yet, selected, reason: byte-identical (raw compare, no normalisation needed).\n- plan_todo: 0 occurrences in these 5 samples -> identity NOT observed here (covered only by implementer's test_route_hint_dedup).\n- No next_action_label dedup fired in these 5 (selected lines raw-identical).\n\n## (3) VERIFY\n### unittest (8 required modules), run in parallel with HEAD~1 under load avg ~40\nHEAD tail:\n```\nRan 812 tests in 1912.011s\nFAILED (failures=7, skipped=2)\n```\nHEAD~1 (same 7 modules; test_route_hint_dedup does not exist there) tail:\n```\nRan 802 tests in 1906.110s\nFAILED (failures=6, skipped=2)\n```\nSix failures happen on both HEAD and HEAD~1, so they predate this commit and are not caused by it:\n- tests.test_cli.CliTests.test_release_evidence_bundle_cli_packages_optional_write_artifact\n- tests.test_cli.CliTests.test_release_evidence_bundle_verify_nonmatching_exits_one_in_json_and_human_output\n- tests.test_cli.CliTests.test_release_product_readiness_cli_summarizes_product_story\n- tests.test_cli.CliTests.test_uninstall_defaults_to_full_managed_cleanup_and_preserves_unrelated_hermes_files\n- tests.test_plugin_distribution.PluginHermesAdmissionTests.test_real_admission_accepts_declared_range\n- tests.test_plugin_distribution.PluginHermesAdmissionTests.test_real_admission_rejects_unsupported_version_before_register\n\nOne failure appeared only on HEAD: tests.test_cli.CliTests.test_release_evidence_bundle_verify_matching_exits_zero_in_json_and_human_output (`AssertionError: 1 != 0`, empty stderr). I re-ran it alone, twice on each side:\n```\nroute-hint-core run1: OK\nroute-hint-core run2: OK\nrh-base run1: FAILED (failures=1)\nrh-base run2: FAILED (failures=1)\n```\nIt passes on HEAD and fails on HEAD~1 when run alone, so it is flaky or depends on environment and was not caused by this commit.\nAll 10 test_route_hint_dedup tests and all test_route_hint_installed_skills, test_hook_manifest, test_dag_ulw_routing, test_chat_router and test_per_turn_budgets tests pass (none appear in the failure list).\n\nAn earlier serial HEAD-only run had 6 failures: `Ran 812 tests in 1279.538s / FAILED (failures=6, skipped=2)`.\n\n### release drift\n```\nNo drift. 29 checks passed.\n```\n\n## Run goal check\n- The route hint drops repeated text: OBSERVED. On 5 cases, 9411 -> 8751 chars (-7.0%). The kept lines are byte-identical.\n- Routing tests green: OBSERVED for the routing and dedup modules. Not fully green overall: the 6 test_cli/test_plugin_distribution failures above also fail on HEAD~1.\n- Per-turn budgets green: OBSERVED. test_per_turn_budgets passes with the lowered limits.\n- One commit ready for PR: one commit a498a6994 on top of e98cfe616, clean tree, not pushed. Because of the pre-existing failures, CI on this branch may be red for reasons that have nothing to do with this change.\n\n## Not observed / open\n- plan_todo= appears in none of the 5 sampled cases, so its byte-identity was not checked here. The only evidence is the implementer's test.\n- The next_action_label= dedup (rule 3) did not fire in the 5 samples.\n- I did not re-measure the 11.8% / 27,147 figure; the 5-sample saving is 7.0%.\n- The implementer reported `392 OK`, but my run of the 8 required modules has 6 pre-existing failures. The implementer's module set seems to have been different (it included test_ai_job_search_context_budget and probably excluded test_cli and test_plugin_distribution).\n\n## Files changed\nOnly this handoff file. /tmp/rh-base was created, then removed and pruned. Scratch scripts and logs are under ~/.hermes/profiles/kami/cache/scratch. Stray /tmp/rh-home-* and worktrees/rh-home-* dirs from my first render run were deleted.\n"
+  },
+  "dag:20261102_235818_fcfb1bdd/codex-coexist": {
+   "t1-hermes": "# t1-hermes handoff — Codex skill discovery roots\n\nCommit: `7723d45f8` — fix(coding): discover Codex skills from the roots Codex itself loads\nBranch: fix/codex-coexist-t1 (worktree `/w/oh-my-hermes-worktrees/codex-coexist-t1`), not pushed.\n\n## Files changed\n- `src/coding/executor_skill_discovery.py` (+86/-9)\n- `tests/test_executor_skill_discovery.py` (+130)\n\n## Behaviour\n- Codex sources in Codex precedence order: `codex_repo_agent_skills` (`<project_root>/.agents/skills`, only when project_root is given), `codex_prompts` (`<codex_home>/prompts`, `/name`), `codex_skills` (`<codex_home>/skills`, `$name`), `codex_user_agent_skills` (`base/.agents/skills`, `$name`).\n- `<codex_home>` = `$CODEX_HOME` (stripped, `~`-expanded) when set, non-empty, AND `home` was not passed; else `base/.codex`.\n- New payload field `shadowed_name_count` (int, every profile; 0 for claude-code / pi-family-runtime / unsupported).\n- Codex skill-dir sources use `confine_to_root=True`: a symlinked child that resolves outside the root (or cannot resolve) is skipped; symlinks resolving inside the root are kept. Claude sources unchanged (no confinement) so claude-code output is byte-identical apart from the new 0 field.\n- Real-home check (read-only, this Mac): codex sources = prompts absent, codex_skills present, codex_user_agent_skills present; 135 skills, shadowed 0, rejected 0; implementation sequence now `$omh-plan` → `$omh-build-failure-triage` → `$omh-code-review` (was `$generate2dsprite` → `$game-video-feedback-loop`).\n\n## Verify (literal tails)\n`PYTHONPATH=tests uv run python -m unittest test_executor_skill_discovery test_unit_prompt_assembly test_fanout_dispatch test_broad_exception_policy test_module_patch_policy`:\n```\nRan 276 tests in 306.041s\n\nOK\n```\n`uv run --group lint ruff check src/coding/executor_skill_discovery.py tests/test_executor_skill_discovery.py`:\n```\nAll checks passed!\n```\n\n## Changed existing assertions\nNone. No test pins the payload key set exactly (grep for `rejected_name_count`/payload keys outside this test file found nothing); the new field needed no assertion change.\n\n## Judgement calls\n1. Dedup key is the resolved invocation (`$name` / `/name`), not the bare name: a Codex prompt `/planner` and skill `$planner` are distinct commands, so they don't shadow each other (test `test_codex_prompt_and_skill_with_one_name_do_not_shadow`). Across the three `$name` skill roots this is exactly \"same name → first wins\".\n2. Hidden dirs: Codex's real `~/.codex/skills/.system` has no SKILL.md of its own, so it's skipped by the existing SKILL.md check; a hidden dir that does carry SKILL.md is rejected by `_safe_name` and counted in `rejected_name_count` (existing behaviour, kept).\n3. Symlink confinement is only on for the Codex roots. Today `_skill_dir_source` follows every symlink (is_dir() follows). On this Mac `~/.agents/skills` has 39 `vg-*` symlinks into `~/Desktop/owner/org-marketing-skills/...` (outside the root), so they are now skipped in Codex discovery — intended per brief, but the parent should know those personal `vg-*` skills no longer appear for Codex. Claude roots (`~/.claude/skills` has the same symlinks) keep following them so claude-code output stays unchanged.\n4. Extra tests beyond the brief list: `test_codex_prompt_and_skill_with_one_name_do_not_shadow`, `test_claude_code_payload_gains_only_a_zero_shadowed_count`.\n\n## Left undone\n- `fanout_dispatch.py` docstring at ~L1019 still says repo-local `.claude/skills` only; out of write scope.\n- Windows symlink behaviour not exercised (test self-skips if symlinks are unavailable).\n",
+   "t2-status-update": "# t2-status-update handoff (written by the parent)\n\nWritten by the parent from fanout `fanout-32ea20834da3` (Codex, gpt-6.1-sol, 229 s). Codex implemented and staged the four scoped files but could not commit: the OMH macOS fence denied zsh's heredoc temp file (`can't create temp file for here document: operation not permitted`). The parent re-ran VERIFY in the unit worktree, applied the staged diff to the integration branch and committed it.\n\n- Integration worktree: `/w/oh-my-hermes-worktrees/codex-coexist` (branch `fix/codex-agent-skills-coexist`)\n- Commit: `9aac531bf fix(agents): report the primary pack's real state and refresh it on update`\n- Files: src/commands/setup.py (+10), src/install/agent_skills_projection.py (+51/-?), tests/test_agent_skills_projection.py (+43), tests/test_update_agent_skills.py (new, 151)\n- API for t3: `agent_skills_status(target, mirror=None)` now returns `primary` (`fresh|stale|missing`), `mirror` (`fresh|stale|missing|none`); `refresh_installed_agent_skills(home, *, dry_run)` in the same module.\n\n## VERIFY observed by the parent\n```\nPYTHONPATH=tests uv run python -m unittest test_agent_skills_projection test_update_agent_skills test_update_refreshes_hermes_skill_dirs test_atomic_installer_update test_broad_exception_policy test_module_patch_policy\nRan 67 tests in 65.523s\nOK\nruff check (4 files): All checks passed!\n```\n\n## Changed existing assertions (disclosed by Codex, checked by the parent)\n- `test_repo_scope_installs_and_repairs_claude_mirror` (CLI, ~line 650): after deleting the mirror receipt of a two-root install, `--status` `projection` `missing` → `fresh` (primary is fresh; the mirror loss now shows as `mirror: missing` + warning). Intent kept: the repair run right after still restores the mirror.\n- `test_manifest_revision_and_mirror_loss_are_not_fresh`: after the mirror receipt loss with a stale primary, `missing` → `stale`. Intent kept: still not fresh.\n",
+   "t3-doctor": "# t3-doctor handoff\n\n- Worktree: `/w/oh-my-hermes-worktrees/codex-coexist` (branch `fix/codex-agent-skills-coexist`, on top of T2 `9aac531bf`)\n- Commit: `113478347 fix(doctor): warn when the Codex/.agents OMH pack is stale or edited` (signed off, all 7 trailers; not pushed)\n- Files: `src/maintenance/doctor.py` (+64), `tests/test_doctor_agent_skills.py` (new, 113)\n\n## Behaviour\n`_agent_skills_pack_check()` runs in `run_doctor` right after `_flat_skill_layout_check`. It reads only `Path.home()/.agents/skills` and writes nothing.\n- No receipt: ok, \"OMH Agent Skills pack for Codex/.agents hosts is not installed at …\", no warning.\n- Receipt with `target_dirs == [\".\"]`: single-target status. Otherwise exactly 2 absolute dirs give target+mirror (`target_dirs[1]`). Any other shape is ValueError, so it shows as \"could not read\".\n- Fresh: ok, \"… matches catalog <revision[:12]>\".\n- Locally modified (checked before stale): warning, \"<n> locally-modified file(s) …\", `next_action` = the status payload's `next_action`.\n- Stale or missing projection: warning, \"… is stale: <n> file(s) differ from the current catalog\". The count is the symmetric diff of the receipt's file digests against the current catalog, and the \": <n> …\" part is left out when the count is 0 (revision-only drift). `next_action=\"omh update\"`.\n- `(OSError, ValueError, UnicodeDecodeError)`: warning, \"could not read …\", `observed=False`.\n- Every branch is `ok=True`, so `doctor_ok` and the exit code never change.\n\n## VERIFY (literal tail, /w/.hermes/profiles/kami/cache/scratch/t3-verify.log)\n```\nPYTHONPATH=tests uv run python -m unittest test_doctor_agent_skills test_doctor_advisory test_doctor_privacy_controls test_tui_doctor test_broad_exception_policy test_module_patch_policy\n----------------------------------------------------------------------\nRan 114 tests in 99.700s\n\nOK (skipped=1)\nEXIT=0\nuv run --group lint ruff check src/maintenance/doctor.py tests/test_doctor_agent_skills.py\nAll checks passed!\n```\nNew module alone: `Ran 9 tests in 0.402s / OK`.\nMutation: with the stale branch disabled (`if False:`), `test_stale_revision_warns_with_omh_update` and `test_catalog_change_counts_differing_files` FAIL. The file was restored before VERIFY.\nLive read-only run on this Mac: `ok | OMH Agent Skills pack at /w/.agents/skills matches catalog c408094695b3` (the editable build's catalog; this pack was apparently already refreshed).\n\n## Judgement calls\n- `WARNING_NEXT_ACTION_PRIORITY`: nothing added. The pack is optional, and a stale Codex pack should not displace first-run headline actions. The warning still shows in the list with its own next action.\n- doctor imports the module (`from ..install import agent_skills_projection`), not its names, so tests that patch `projection.agent_skill_files` cover both the status call and the diff count. It uses the module-private `_read_manifest` so the receipt is validated the same way status and refresh validate it.\n- Locally modified takes precedence over stale. `omh update` refuses edited toolkit files, so pointing at it first would fail.\n- Unlike `refresh_installed_agent_skills`, there is no extra check that `target_dirs[0] == target`. Status reads both roots anyway. The \"could not read\" path covers malformed counts and relative paths.\n- Cost: `agent_skill_files()` takes about 1.7 s cold (lru-cached after). It runs only when a receipt exists.\n- No existing assertions changed.\n",
+   "t4-fence": "# t4-fence handoff\n\nCommit: `51b1f0b554b4e0c08a2614a8964cfab786cb5572` fix(fanout): point zsh TMPPREFIX and UV_CACHE_DIR into the fence scratch dir\nBranch: fix/codex-coexist-fence (worktree `/w/oh-my-hermes-worktrees/codex-coexist-fence`), not pushed. Signed off, all spec trailers present.\n\n## Files\n- `src/coding/fanout_confinement.py`: `FanoutFilesystemConfinement.command_environment` now also sets `TMPPREFIX=<work>/.omh/confinement-tmp/zsh` and `UV_CACHE_DIR=<work>/.omh/confinement-tmp/uv-cache` under the same condition as TMPDIR (enforced fence, `sandbox-exec`/`bwrap`). A caller value is kept only if it is absolute and its realpath is inside a write root. New private helper `_within_write_roots`. The fence profile, write roots and mach services are unchanged.\n- `tests/test_fanout_confinement.py`: 3 new tests plus 1 changed pin (below).\n  - `FanoutConfinementPolicyTests.test_zsh_and_uv_scratch_follow_tmpdir_only_for_an_enforced_fence`\n  - `FanoutConfinementPolicyTests.test_caller_uv_cache_and_tmpprefix_are_kept_only_inside_a_write_root` (inside the worktree is kept; outside `~/.cache/uv`-style, `/tmp/zsh` and a relative path are replaced)\n  - `FanoutFilesystemConfinementTests.test_zsh_heredoc_runs_inside_the_fence` (live; darwin class skip plus a skip when sandbox-exec or zsh is missing; caller TMPPREFIX=/tmp/zsh gets replaced and the heredoc prints `ok`)\n\nScratch dir creation: `<work>/.omh/confinement-tmp` is already created during preparation by `_write_scratch_ignore` (called from `prepare_fanout_filesystem_confinement` for sandbox-exec/bwrap). zsh only needs the parent of the prefix (`.../confinement-tmp`) to exist, and uv creates its cache dir itself, so no new mkdir was added. The live test and the probe both pass on that basis.\n\n## Changed existing pin\n`test_fanout_confinement.FanoutConfinementPolicyTests.test_bwrap_command_environment_keeps_toolchain_scratch_in_the_worktree`\nold: `{\"PATH\", \"OMH_MARK\", \"TMPDIR\": <scratch>}` → new: the same keys plus `\"TMPPREFIX\": <scratch>/zsh` and `\"UV_CACHE_DIR\": <scratch>/uv-cache`. Why: the env delta now intentionally includes the two new redirects.\n\n## Tests (literal tail)\n`PYTHONPATH=tests uv run python -m unittest test_fanout_confinement test_fanout_dispatch test_broad_exception_policy test_module_patch_policy`\n```\n----------------------------------------------------------------------\nRan 252 tests in 200.768s\n\nOK (skipped=19)\n```\n`uv run --group lint ruff check src/coding/fanout_confinement.py tests/test_fanout_confinement.py`\n```\nAll checks passed!\n```\n\n## Probe\nCopy: `/w/.hermes/profiles/kami/cache/scratch/codex-coexist/fence_probe_t4.py` (sys.path → fence worktree), run with the fence worktree's `.venv/bin/python`.\n\nBefore (base, original probe):\n```\nzsh_heredoc: rc=1 out='' err=\"zsh:1: can't create temp file for here document: operation not permitted\"\nzsh_heredoc_tmpprefix: rc=0 out='heredoc-ok' err=''\nuv_version: rc=0 out='uv 0.12.5 (Homebrew 2026-08-14 aarch64-apple-darwin)' err=''\nuv_cache_dir: rc=0 out='/w/.cache/uv' err=''\nuv_pip_list: rc=2 out='' err='error: Failed to initialize cache at `/w/.cache/uv`\\n  Caused by: failed to open file `/w/.cache/uv/sdists-v9/.git`: Oper'\n```\nAfter (fence worktree):\n```\nzsh_heredoc: rc=0 out='heredoc-ok' err=''\nzsh_heredoc_tmpprefix: rc=0 out='heredoc-ok' err=''\nuv_version: rc=0 out='uv 0.12.5 (Homebrew 2026-08-14 aarch64-apple-darwin)' err=''\nuv_cache_dir: rc=0 out='/private/var/folders/45/9gtdct614mz4rplqs209nykm0000gn/T/fence-probe-wpqkbal8/.o' err=''\nuv_pip_list: rc=0 out='Package      Version Editable project location\\n------------ ------- ------------' err='Using Python 3.14.7 environment at: /w/oh-my-hermes-worktrees/codex-coexist-fence/.venv'\n```\n\n## Not tested\n- Linux bwrap live path (no bwrap on this host; the bwrap env pin is unit-tested).\n- Reusing a warm uv cache across units. Each unit gets a cold cache on purpose.\n",
+   "t5-verify": "# t5-verify handoff (second, independent verifier)\n\nTree: `fix/codex-agent-skills-coexist` HEAD `c74e9646a`, base `333e8e323`. This is a review only; no code was changed. Scratch work is in `/w/.hermes/profiles/kami/cache/scratch/codex-coexist/verify/second/`.\n\n## Verdict: HOLD\n\nMost of the change holds up: discovery, fence env, status semantics, the update dry run and malformed receipts, doctor's warning-only branches, and test isolation. The HOLD rests on finding 1: a mirrored user pack under a HOME path that contains a symlink makes `omh update` exit 1 on every run, and makes doctor report a fresh pack as stale. Base exits 0. Finding 2 is a smaller breach of the t3 exception and exit-code criterion. Each fix is a few lines (listed under the finding). Everything else below is non-blocking.\n\n## Tests (run here)\n`env TMPDIR=/var/folders/45/9gtdct614mz4rplqs209nykm0000gn/T/ PYTHONPATH=tests uv run python -m unittest test_executor_skill_discovery test_fanout_confinement test_update_agent_skills test_doctor_agent_skills test_home_isolation`, on HEAD (`second/head-tests.log`):\n```\nRan 150 tests in 11.639s\n\nOK (skipped=19)\nEXIT=0\n```\nThe 19 skips are the Linux bwrap classes. `test_zsh_heredoc_runs_inside_the_fence` ran live (sandbox-exec) and passed (`second/fence-verbose.log`). The real `~/.agents/skills/.omh-agent-skills-manifest.json` was sha256 `828186c0…0df5`, mtime `1793682592.027780302`, both before and after all my runs. A stat listing of `~/.agents` and `~/.codex/skills` showed no difference before vs after (`real-home-before.txt` / `real-home-after.txt`).\n\n## Parent evidence I confirmed\n- Parent's 512-test run: `head-final.log` reads `TMPDIR=/var/folders/…` / `Ran 512 tests in 253.922s` / `OK (skipped=20)`. Base `base-tests.log` reads `Ran 422 tests` / `OK (skipped=1)`. I read both files but did not re-run them.\n- Logs from the first verifier, read but not re-run: ruff on HEAD and base both say `All checks passed!` with EXIT=0, and `release drift` says `No drift. 29 checks passed.`\n- Claude parity: `head-claude-parity.out` and `base-claude-parity.out` are byte-identical. The script pops `observed_at` and `shadowed_name_count` before comparing.\n- Fanout (`fanout-comparison.json`): HEAD recommends `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review` for coupons, cart and tests. The base arm of this run is `executor_not_ready`/`blocked_by_dependency` with no recommendations, so the base `$generate2dsprite` claim still rests on the earlier inspection run, as the draft says.\n\n## Spot checks re-run (scratch copies of the real packs; `second/spot-checks.log`)\n| probe | HEAD | base | matches first verifier |\n| --- | --- | --- | --- |\n| discovery `d('codex')` | `135 121 {codex_prompts: absent, codex_skills: present, codex_user_agent_skills: present} 0` | `6 0 {…} None` | yes |\n| `install --target agents --scope user --status --json`, stale copy | projection `stale`, primary `stale`, mirror `missing`, 1 warning | projection `missing` | yes |\n| doctor `agent_skills_pack`, stale copy | ok=True, warning, `omh update` | check absent | yes |\n\n## Codex upstream (read-only `gh api`, `host_roots.rs` @ 28cade4f5a7a, 2026-10-27) and live `codex debug prompt-input` (codex-cli 0.166.0-alpha.5.1, scratch HOME)\n- Root order (`host_roots.rs:119-158`, then `:99-107`) is: project `.codex/skills`, `$CODEX_HOME/skills`, `~/.agents/skills`, `$CODEX_HOME/skills/.system`, `/etc/codex/skills`, plugin and extra roots, then repo `.agents/skills` from the project root down to cwd. `dedupe_skill_roots_by_path` (`:395-398`) dedupes roots by path only.\n- Skills are deduped by SKILL.md path, not by name. They are then sorted by scope rank, Repo < User < System < Admin, then by name (`loader/host_merge.rs:228-229, 241-247, 260-266`). A plain `$name` mention is selected only when exactly one skill has that name (`skills/selection.rs:181-193`).\n- Directory symlinks are followed for User, Repo and Admin roots and ignored for System (`loader/host.rs:164-166`). The walk does no root-confinement check (`exec-server/local_file_system.rs:837`).\n\n## Findings\n\n### Blocking\n1. **A symlinked HOME plus a mirrored user receipt makes `omh update` fail on every run and doctor report false staleness.** Code: `src/install/agent_skills_projection.py:222`, then `:227` and `:237`; `src/maintenance/doctor.py:1481`.\n   - Input: run `omh install --target agents --scope user` (no `--host`) when the HOME path contains a symlink. The receipt then records resolved paths (`:71` uses `Path.home().resolve()`). `agent_skills_user_home()` returns `Path.home()` unresolved, and `:227` only calls `.absolute()`. So `Path(directories[0]) != target` and the refresh raises `ValueError: Invalid installed user Agent Skills target_dirs`.\n   - Observed through `cmd_update` (`second/update-cases.log`): `exit 1 {\"agent_skills\": null, \"failures\": [{\"phase\": \"agent_skills\", …}], \"status\": \"partial\"}`, and the same again on a second run. Base, same input: `exit 0 … \"status\": \"ok\"` (`update-cases-base.log`).\n   - Doctor on the same, freshly installed pack via the symlinked home gives `warning … is stale`, `next_action: omh update`. That update then fails, so the user loops. Via the real path doctor says `ok` (`edge-probes.log` B.*). Status compares the string `target_dirs` at `:170`, which is why it reads stale.\n   - The same root cause makes the mirror-absent warning (`:182`) say `--scope repo` for a user install (`status-scope.log`).\n   - This breaks t2 B (\"one listing absolute dirs is a mirrored install (refresh those dirs as target+mirror)\") and t3 (\"Fresh → ok\"). The tests miss it because both new test files `.resolve()` their temp home. An unresolved macOS `/var/folders` temp dir would expose it.\n   - Fix: resolve in `agent_skills_user_home()`, or compare resolved paths in refresh, doctor and `:182`.\n2. **Doctor can crash instead of warning on Python 3.11–3.13.** `src/maintenance/doctor.py:1482`: `(target / MANIFEST_NAME).is_file()` sits outside the `try`. On Python 3.11–3.13 (pyproject `>=3.11`), when `~/.agents/skills` has no search permission, `is_file()` raises `PermissionError`, which escapes `run_doctor`.\n   - Observed: `3.13.15 0o0 ESCAPES main(): PermissionError [Errno 13]`. With the same input, 3.14.7 gives `EXIT 1 ok …not installed` and base on 3.13 gives `EXIT 1` (`doctor-cli-perm*.log`).\n   - The input is unusual, but it breaks t3's \"catch (OSError, ValueError, UnicodeDecodeError) → warning\" and \"never change the doctor exit code\". `quickstart.py:137` also calls `run_doctor`.\n   - Fix: move the probe inside the `try`.\n\n### Non-blocking\n3. **Codex keeps duplicate names; OMH reports only the first.** `executor_skill_discovery.py:163-167, 178-184`. The comment says \"Codex resolves a duplicate skill name to the first root\". Upstream (above) and a live probe say otherwise: with `dup-skill` in both `$CODEX_HOME/skills` and `~/.agents/skills`, Codex lists both (`r0` and `r1`, `codex-dup-probe/`). Selection then refuses a plain `$dup-skill` because the count is 2. OMH lists one copy and still recommends `$dup-skill`. This matches the t1 brief as written; the brief's premise is what's wrong. No effect on this Mac (`shadowed_name_count` 0). Repo ordering (Repo before User) does agree with Codex's scope sort.\n4. **The symlink skip diverges from Codex, and the integration note's justification for it is wrong.** `executor_skill_discovery.py:515`. Codex follows escaping skill-dir symlinks: a scratch `escaping-skill` linked outside `~/.agents/skills` is listed (`codex-symlink-probe/`). On the real pack Codex lists all 39 `vg-*` skills, named `org-marketing:vg-*` through the target repo's plugin manifest (`codex-realpack-probe/`). The note says \"`codex debug prompt-input` showed 0 `vg-*` entries\", but that grep missed the namespaced form. The skip is what the t1 brief asked for, and it avoids recommending a wrong bare `$vg-*` name. The record should not say it \"matches Codex\", though.\n5. **Roots and depths OMH does not pro"
+  },
+  "dag:20261102_235818_fcfb1bdd/codex-coexist-live": {
+   "t1-hermes": "# t1-hermes handoff — Codex skill discovery roots\n\nCommit: `7723d45f8` — fix(coding): discover Codex skills from the roots Codex itself loads\nBranch: fix/codex-coexist-t1 (worktree `/w/oh-my-hermes-worktrees/codex-coexist-t1`), not pushed.\n\n## Files changed\n- `src/coding/executor_skill_discovery.py` (+86/-9)\n- `tests/test_executor_skill_discovery.py` (+130)\n\n## Behaviour\n- Codex sources in Codex precedence order: `codex_repo_agent_skills` (`<project_root>/.agents/skills`, only when project_root is given), `codex_prompts` (`<codex_home>/prompts`, `/name`), `codex_skills` (`<codex_home>/skills`, `$name`), `codex_user_agent_skills` (`base/.agents/skills`, `$name`).\n- `<codex_home>` = `$CODEX_HOME` (stripped, `~`-expanded) when set, non-empty, AND `home` was not passed; else `base/.codex`.\n- New payload field `shadowed_name_count` (int, every profile; 0 for claude-code / pi-family-runtime / unsupported).\n- Codex skill-dir sources use `confine_to_root=True`: a symlinked child that resolves outside the root (or cannot resolve) is skipped; symlinks resolving inside the root are kept. Claude sources unchanged (no confinement) so claude-code output is byte-identical apart from the new 0 field.\n- Real-home check (read-only, this Mac): codex sources = prompts absent, codex_skills present, codex_user_agent_skills present; 135 skills, shadowed 0, rejected 0; implementation sequence now `$omh-plan` → `$omh-build-failure-triage` → `$omh-code-review` (was `$generate2dsprite` → `$game-video-feedback-loop`).\n\n## Verify (literal tails)\n`PYTHONPATH=tests uv run python -m unittest test_executor_skill_discovery test_unit_prompt_assembly test_fanout_dispatch test_broad_exception_policy test_module_patch_policy`:\n```\nRan 276 tests in 306.041s\n\nOK\n```\n`uv run --group lint ruff check src/coding/executor_skill_discovery.py tests/test_executor_skill_discovery.py`:\n```\nAll checks passed!\n```\n\n## Changed existing assertions\nNone. No test pins the payload key set exactly (grep for `rejected_name_count`/payload keys outside this test file found nothing); the new field needed no assertion change.\n\n## Judgement calls\n1. Dedup key is the resolved invocation (`$name` / `/name`), not the bare name: a Codex prompt `/planner` and skill `$planner` are distinct commands, so they don't shadow each other (test `test_codex_prompt_and_skill_with_one_name_do_not_shadow`). Across the three `$name` skill roots this is exactly \"same name → first wins\".\n2. Hidden dirs: Codex's real `~/.codex/skills/.system` has no SKILL.md of its own, so it's skipped by the existing SKILL.md check; a hidden dir that does carry SKILL.md is rejected by `_safe_name` and counted in `rejected_name_count` (existing behaviour, kept).\n3. Symlink confinement is only on for the Codex roots. Today `_skill_dir_source` follows every symlink (is_dir() follows). On this Mac `~/.agents/skills` has 39 `vg-*` symlinks into `~/Desktop/owner/org-marketing-skills/...` (outside the root), so they are now skipped in Codex discovery — intended per brief, but the parent should know those personal `vg-*` skills no longer appear for Codex. Claude roots (`~/.claude/skills` has the same symlinks) keep following them so claude-code output stays unchanged.\n4. Extra tests beyond the brief list: `test_codex_prompt_and_skill_with_one_name_do_not_shadow`, `test_claude_code_payload_gains_only_a_zero_shadowed_count`.\n\n## Left undone\n- `fanout_dispatch.py` docstring at ~L1019 still says repo-local `.claude/skills` only; out of write scope.\n- Windows symlink behaviour not exercised (test self-skips if symlinks are unavailable).\n",
+   "t2-status-update": "# t2-status-update handoff (written by the parent)\n\nWritten by the parent from fanout `fanout-32ea20834da3` (Codex, gpt-6.1-sol, 229 s). Codex implemented and staged the four scoped files but could not commit: the OMH macOS fence denied zsh's heredoc temp file (`can't create temp file for here document: operation not permitted`). The parent re-ran VERIFY in the unit worktree, applied the staged diff to the integration branch and committed it.\n\n- Integration worktree: `/w/oh-my-hermes-worktrees/codex-coexist` (branch `fix/codex-agent-skills-coexist`)\n- Commit: `9aac531bf fix(agents): report the primary pack's real state and refresh it on update`\n- Files: src/commands/setup.py (+10), src/install/agent_skills_projection.py (+51/-?), tests/test_agent_skills_projection.py (+43), tests/test_update_agent_skills.py (new, 151)\n- API for t3: `agent_skills_status(target, mirror=None)` now returns `primary` (`fresh|stale|missing`), `mirror` (`fresh|stale|missing|none`); `refresh_installed_agent_skills(home, *, dry_run)` in the same module.\n\n## VERIFY observed by the parent\n```\nPYTHONPATH=tests uv run python -m unittest test_agent_skills_projection test_update_agent_skills test_update_refreshes_hermes_skill_dirs test_atomic_installer_update test_broad_exception_policy test_module_patch_policy\nRan 67 tests in 65.523s\nOK\nruff check (4 files): All checks passed!\n```\n\n## Changed existing assertions (disclosed by Codex, checked by the parent)\n- `test_repo_scope_installs_and_repairs_claude_mirror` (CLI, ~line 650): after deleting the mirror receipt of a two-root install, `--status` `projection` `missing` → `fresh` (primary is fresh; the mirror loss now shows as `mirror: missing` + warning). Intent kept: the repair run right after still restores the mirror.\n- `test_manifest_revision_and_mirror_loss_are_not_fresh`: after the mirror receipt loss with a stale primary, `missing` → `stale`. Intent kept: still not fresh.\n",
+   "t4-fence": "# t4-fence handoff\n\nCommit: `51b1f0b554b4e0c08a2614a8964cfab786cb5572` fix(fanout): point zsh TMPPREFIX and UV_CACHE_DIR into the fence scratch dir\nBranch: fix/codex-coexist-fence (worktree `/w/oh-my-hermes-worktrees/codex-coexist-fence`), not pushed. Signed off, all spec trailers present.\n\n## Files\n- `src/coding/fanout_confinement.py`: `FanoutFilesystemConfinement.command_environment` now also sets `TMPPREFIX=<work>/.omh/confinement-tmp/zsh` and `UV_CACHE_DIR=<work>/.omh/confinement-tmp/uv-cache` under the same condition as TMPDIR (enforced fence, `sandbox-exec`/`bwrap`). A caller value is kept only if it is absolute and its realpath is inside a write root. New private helper `_within_write_roots`. The fence profile, write roots and mach services are unchanged.\n- `tests/test_fanout_confinement.py`: 3 new tests plus 1 changed pin (below).\n  - `FanoutConfinementPolicyTests.test_zsh_and_uv_scratch_follow_tmpdir_only_for_an_enforced_fence`\n  - `FanoutConfinementPolicyTests.test_caller_uv_cache_and_tmpprefix_are_kept_only_inside_a_write_root` (inside the worktree is kept; outside `~/.cache/uv`-style, `/tmp/zsh` and a relative path are replaced)\n  - `FanoutFilesystemConfinementTests.test_zsh_heredoc_runs_inside_the_fence` (live; darwin class skip plus a skip when sandbox-exec or zsh is missing; caller TMPPREFIX=/tmp/zsh gets replaced and the heredoc prints `ok`)\n\nScratch dir creation: `<work>/.omh/confinement-tmp` is already created during preparation by `_write_scratch_ignore` (called from `prepare_fanout_filesystem_confinement` for sandbox-exec/bwrap). zsh only needs the parent of the prefix (`.../confinement-tmp`) to exist, and uv creates its cache dir itself, so no new mkdir was added. The live test and the probe both pass on that basis.\n\n## Changed existing pin\n`test_fanout_confinement.FanoutConfinementPolicyTests.test_bwrap_command_environment_keeps_toolchain_scratch_in_the_worktree`\nold: `{\"PATH\", \"OMH_MARK\", \"TMPDIR\": <scratch>}` → new: the same keys plus `\"TMPPREFIX\": <scratch>/zsh` and `\"UV_CACHE_DIR\": <scratch>/uv-cache`. Why: the env delta now intentionally includes the two new redirects.\n\n## Tests (literal tail)\n`PYTHONPATH=tests uv run python -m unittest test_fanout_confinement test_fanout_dispatch test_broad_exception_policy test_module_patch_policy`\n```\n----------------------------------------------------------------------\nRan 252 tests in 200.768s\n\nOK (skipped=19)\n```\n`uv run --group lint ruff check src/coding/fanout_confinement.py tests/test_fanout_confinement.py`\n```\nAll checks passed!\n```\n\n## Probe\nCopy: `/w/.hermes/profiles/kami/cache/scratch/codex-coexist/fence_probe_t4.py` (sys.path → fence worktree), run with the fence worktree's `.venv/bin/python`.\n\nBefore (base, original probe):\n```\nzsh_heredoc: rc=1 out='' err=\"zsh:1: can't create temp file for here document: operation not permitted\"\nzsh_heredoc_tmpprefix: rc=0 out='heredoc-ok' err=''\nuv_version: rc=0 out='uv 0.12.5 (Homebrew 2026-08-14 aarch64-apple-darwin)' err=''\nuv_cache_dir: rc=0 out='/w/.cache/uv' err=''\nuv_pip_list: rc=2 out='' err='error: Failed to initialize cache at `/w/.cache/uv`\\n  Caused by: failed to open file `/w/.cache/uv/sdists-v9/.git`: Oper'\n```\nAfter (fence worktree):\n```\nzsh_heredoc: rc=0 out='heredoc-ok' err=''\nzsh_heredoc_tmpprefix: rc=0 out='heredoc-ok' err=''\nuv_version: rc=0 out='uv 0.12.5 (Homebrew 2026-08-14 aarch64-apple-darwin)' err=''\nuv_cache_dir: rc=0 out='/private/var/folders/45/9gtdct614mz4rplqs209nykm0000gn/T/fence-probe-wpqkbal8/.o' err=''\nuv_pip_list: rc=0 out='Package      Version Editable project location\\n------------ ------- ------------' err='Using Python 3.14.7 environment at: /w/oh-my-hermes-worktrees/codex-coexist-fence/.venv'\n```\n\n## Not tested\n- Linux bwrap live path (no bwrap on this host; the bwrap env pin is unit-tested).\n- Reusing a warm uv cache across units. Each unit gets a cold cache on purpose.\n"
+  },
+  "dag:20261108_213859_c9a97486/omher-v02": {
+   "t0-t3-runs": "# T0 + T3: Runs model, dag adapter, Runs tab (lane runs, wt v02-runs)\n\nStatus: **done**. Every VERIFY passes. Nothing pushed.\n\n## Commits (branch in `oh-my-hermes-worktrees/v02-runs`, on base 8a6d72016)\n- `12a0b535f` feat(omher): AgentRun model, dag adapter, runs.list / runs.get bridge ops\n- `e29e8ba35` feat(omher): Runs tab with a read-only layered graph\n\nBoth commits are signed off (`-s`) and carry the trailers Constraint, Rejected, Confidence, Scope-risk, Directive, Tested and Not-tested.\n\n## What was built\n**T0**\n- `apps/omher/src/lib/runs.ts`:\n  - The `AgentRun`, `RunNode`, `RunAttempt`, `AgentRunSummary` (with `counts`) and `RunDetail` types.\n  - `layerOf`: longest-path layering; throws on a cycle.\n  - `summary`: renders \"7 nodes · 3 done · 1 running · 1 failed\".\n  - `countsOf`, `sortRuns` (running first, then newest) and `span`.\n  - `fromDag`: the dag adapter.\n- Bridge (`bridge/omher_bridge.py`):\n  - `omh_home_for(profile)` takes the profile's `plugins.entries.omh.settings.omh_home`, else `OMH_HOME`, else `~/.omh`.\n  - `layer_of` and `dag_to_run` use the same mapping as `fromDag`.\n  - The `DagRuns` reader keeps an mtime+size cache, and keeps the last good parse when a record is caught mid-write.\n  - A run belongs to a bot when its `session_id` is in the bot's `state.db` sessions (read with `ro_uri`).\n  - A handoff is read only when it is a plain file inside the dag dir. Symlinked files and folders are refused, and text is capped at 8000 chars.\n  - A record with a cycle or a bad shape is skipped, never raised.\n  - New ops: `runs.list {bot}` returns `{runs}`, and `runs.get {bot, run}` returns `{run, handoffs}`. Both go through `asyncio.to_thread`. No new subprocess.\n- State mapping. A node's state comes from its last attempt:\n\n  | Last attempt | Node state |\n  |---|---|\n  | `accepted` | done |\n  | `failed` | failed |\n  | `blocked` | blocked |\n  | `parked` | parked |\n  | `retry` | waiting |\n  | handed out, not settled | running |\n  | none | waiting |\n\n  - `cancelled_at` makes the run cancelled, and its live or waiting nodes cancelled.\n  - The run state follows OMH's own derivation: a failed node counts as settled when its latest repair group is all accepted, and older groups are superseded. On the real dag dir the results matched OMH's own `dag_run.derive`/`run_state` for every run I checked.\n- Store and protocol: `PanelTabId` gains `runs`. Added `ui.runId`, `openRun(run)`, `runsList` and `runsGet`, plus protocol entries for both ops.\n- Fixtures:\n  - `bridge/tests/fixtures/dag/` holds three real runs with their handoffs:\n    - codex-coexist: a fan-out with a failed attempt and a repair.\n    - omh-dap: a cancelled run.\n    - route-hint-dedup: a small run.\n  - Redaction: `/w` → `/w`, names and emails removed, secret patterns stripped, prompts dropped. A grep for owner, org, `/Users/` and `sk-` finds 0.\n  - `dag-truncated.json` is a record cut in half.\n  - `src/lib/__fixtures__/` holds the same records, a live variant (`codex-coexist-live`: one node out, one never handed out), and `runs-bridge.json`, which is the real `dag_to_run` output used by the vitest parity test and the mock.\n- Tests:\n  - `runs.test.ts` (12 tests): layering, cycles, summary, state mapping on all 3 fixtures plus the live one, and field-for-field parity with the bridge output.\n  - Bridge `Runs` and `RunsOps` (7 tests):\n    - list/get on a temp dag dir, with no mtime changing anywhere;\n    - a truncated file keeps the last good parse, and a fresh reader skips it;\n    - a symlinked handoff file and a symlinked run folder are refused;\n    - a missing dir means no runs;\n    - a cyclic record is skipped;\n    - **a copy of the real `~/.omh/runtime/dag` (moved to tmp) lists ≥1 run**;\n    - the ops over the socket, including bad_request, not_found and unknown_bot.\n- Boundary: added BOUNDARY rule 11 (dag records are read only for the bot's own sessions, symlinks are refused, and runs are never settled, retried or cancelled). `test_omher_boundary` pins two sentences of it. The rule-count bound went from 6–10 to 6–12, because rule 11 is the 11th rule.\n\n**T3**\n- `src/elsewhere/RunsTab.tsx` and `runs.css`:\n  - Runs is the 6th tab; its icon is three nodes with edges. The panel is 460px.\n  - Run list: a live dot when running, the title, `3/6 · 14m`, and a Cancelled/Failed tag.\n  - Graph: columns = layers, cards 112px wide, and SVG cubic edges from a dep's right-middle to the node's left-middle. The graph scrolls horizontally inside its own box.\n  - Card states: done is a green ✓; running is a soft pink ring (`box-shadow`, no gradient); failed is a red rail, ✕ and class `bad`; blocked and parked are amber; waiting is dimmed.\n  - Drawer: attempt k of n, model:effort · lane · duration, the last reason, earlier attempts, and the handoff through react-markdown with Show all at 1200 chars. Failed nodes add \"Ask <bot> in chat to retry\". There are no write buttons.\n- `e2e/mock-bridge.mjs` serves `runs.list`/`runs.get` from `runs-bridge.json`, with the live run shifted to \"now\".\n- `e2e/runs.spec.ts` (8 tests):\n  - the 6th tab exists and the header keeps one control;\n  - the panel is 460px, and the selection is gray;\n  - list order and the live dot;\n  - the fan-out shows 6 cards in 3 columns, with equal x per layer;\n  - edge count = total deps (4), and each edge's endpoints equal its cards' right-mid and left-mid;\n  - the failed node has `bad`;\n  - the drawer shows attempt 2 of 2, the reason, the handoff and Show all;\n  - no write ops appear in the mock call log;\n  - the cancelled run is labelled with dimmed nodes;\n  - the empty state;\n  - dark and light screenshots.\n- `e2e/panel.spec.ts`: the tab test now expects six tabs, with Runs last.\n\n## VERIFY (literal tails)\n```\npnpm typecheck && pnpm test\n$ tsc -b --noEmit\n Test Files  4 passed (4)\n      Tests  46 passed (46)\nTS_EXIT=0\n\n~/.hermes/hermes-agent/venv/bin/python -m unittest discover -s bridge/tests\nRan 59 tests in 0.812s\nOK\nBRIDGE_EXIT=0\n(also under env -u PYTHONUTF8 LC_ALL=C LANG=C python -X utf8=0: Ran 59 tests ... OK)\n\nOMHER_PORT=5421 OMHER_MOCK_PORT=5422 /usr/bin/lockf -k ~/.hermes/profiles/kami/cache/scratch/omher-heavy.lock \\\n  pnpm exec playwright test e2e/runs.spec.ts e2e/panel.spec.ts e2e/mock.spec.ts --reporter=line\n  23 passed (25.6s)\nE2E_EXIT=0\n\nPYTHONPATH=tests ~/.hermes/hermes-agent/venv/bin/python -m unittest tests.test_omher_boundary   (repo root)\nRan 8 tests in 3.484s\nOK\nBOUNDARY_EXIT=0\n\ngit diff --check 8a6d72016 HEAD  -> clean (DIFFCHECK_OK)\n```\nFull log: `~/.hermes/profiles/kami/cache/scratch/omher-v02/verify.log`\n\n## Screenshots\n- `~/.hermes/profiles/kami/cache/scratch/omher-v02/T3-runs-dark.png`\n- `~/.hermes/profiles/kami/cache/scratch/omher-v02/T3-runs-light.png`\n\nBoth show the live fan-out with the drawer open on its failed node. A vision pass flagged faint edges and cards in light mode and two misaligned drawer lines. I fixed those by using the `--quiet` edge stroke, the `--line-strong` card border in light, waiting at 0.75 opacity, and an indent for the hint and none lines. Cards that read as \"orphans\" are real data: the repair nodes t1-hermes and t4-fence have no deps.\n\n## Decisions and open items\n- **Clickable dag line in chat: skipped.** No chat line or event carries a dag run id today: the bridge has no `omh_dag` detail, and the activity line shows only tool verbs. The store already exposes `openRun(runId)`, which opens the panel on Runs with that run selected, so T4/T5 can hook a run line up to it once a run id reaches the chat.\n- Node `model`, `provider`, `effort`, `route` and `tokens` are not in dag JSON, so the cards show the category (non-`unspecified`) or the lane plus time, and no numbers are invented. The `omh_delegate_route` join is for the graph lane (T4/T5).\n- `tests/test_omher_boundary.py` changed outside `apps/omher`: one bound and two pinned sentences. It is needed because the spec requires a numbered rule per new read surface.\n- Full Playwright suite, cargo and the Windows check were not run. No Rust w",
+   "t1-media-in": "# T1 media in: handoff\n\nStatus: **done**. All VERIFY gates passed. One commit on `feat/omher-v02-media` (wt `v02-media`). Not pushed.\n\n## Commit\n- `66a5bb11d` feat(omher): show files the bot sends (MEDIA: lines) as images, video, audio and file cards (signed-off)\n\n## What was built (files)\n- `apps/omher/src/chat/parts/mediaLines.ts` (+ `mediaLines.test.ts`): `splitMedia` takes only whole `MEDIA:<abs path>` lines out of the text and skips fenced code. It accepts optional quotes/backticks and `/`, `~/`, `C:\\` anchors. Also kind by extension (image png/jpg/jpeg/gif/webp; video mp4/mov/webm/m4v; audio mp3/m4a/wav/ogg; anything else, HEIC included, is a file), plus name and size labels.\n  - The file is named `mediaLines.ts`, not `media.ts`, because `media.ts` would collide with `Media.tsx` on a case-insensitive filesystem.\n- `apps/omher/src/chat/parts/Media.tsx` + `media.css`:\n  - `MediaList` renders the files in order.\n  - Image tile: max 360×360, object-fit cover, radius 8. Clicking opens a lightbox portaled to `<body>` (full-window dim, image fitted, Esc or click closes, wheel zooms 1–4×).\n  - `<video controls preload=\"metadata\">` from a blob URL, width 420.\n  - Compact `<audio controls>`.\n  - 220px file card: ext badge, name, size, \"Open\". \"Show in Finder\"/\"Show in Explorer\" appears only in Tauri.\n  - Loading skeleton while reading; on error a \"Couldn't load file · name\" line.\n- `Bubble.tsx`: renders the remaining markdown, then the media. While streaming it only hides the lines (no reads mid-stream).\n- `Timeline.tsx`: passes the bot name to the bubble. A ResizeObserver keeps the thread pinned to the bottom when media loads.\n- `sidebar/BotRow.tsx`: the preview strips MEDIA lines. A media-only answer shows its file names.\n- `src/lib/openMedia.ts`: invokes `open_media` in Tauri; does nothing in the browser/e2e.\n- `src/lib/protocol.ts` and `src/state/store.ts`: the `media.read` op type, `MediaFile`, and a `readMedia` action.\n- Bridge `bridge/omher_bridge.py`:\n  - `media_paths`: same parser as the UI.\n  - `media_named`: state.db through `ro_uri`, assistant rows only, sessions = title `Bot Chat` OR source not in LOCAL_SOURCES/subagent/oneshot (the main chat plus elsewhere), newest 50 rows containing the path, then an exact line match.\n  - `media_file`: absolute only; refuses missing files, directories, and symlinks whose target leaves the link's own directory.\n  - `read_media`: returns `{path,name,mime,size,data_base64}`, or `too_big:true` above 25 MB without opening the file.\n  - `op_media_read` is registered as `\"media.read\"`. Anything not allowed returns `not_found`.\n  - No new subprocess, so `_git` is still the only subprocess user.\n- Rust:\n  - `src-tauri/src/bridge.rs`: the stdout reader parses `OMHER_MEDIA_SERVED {\"path\":…}` lines into a served set (capped at 2000).\n  - `src-tauri/src/lib.rs`: new command `open_media(path, reveal?)` → `media_target` (served AND absolute AND still a file) → `tauri_plugin_opener::open_path` / `reveal_item_in_dir`.\n  - Tests: `open_media_refuses_paths_the_bridge_did_not_serve`, `media_line_names_one_absolute_file`, `only_served_media_is_known`.\n- `docs/OMHER-BOUNDARY.md`: rule **11** covers `media.read` and `open_media`.\n  - `tests/test_omher_boundary.py`: pins the sentences, raises the rule-count cap from 10 to 11, and adds `test_media_read_checks_the_bots_own_messages_read_only`.\n- Mock and e2e:\n  - `e2e/mock-bridge.mjs`: the default bot (Hermes) gets a seeded answer with 3 MEDIA lines, plus a `media.read` op serving `e2e/fixtures/media/` (chart.png 9.5 KB, clip.mp4 7.8 KB / 2 s, built with ffmpeg; report.zip 136 B).\n  - `e2e/media.spec.ts` has 4 tests:\n    - tiles render with no literal `MEDIA:` text; tile ≤360 with cover and radius 8; video readyState ≥1 and ≤420 wide; card name, size and 220px width\n    - lightbox fills the window; Esc closes it; a click closes it\n    - not_found for an unnamed path or another bot; a missing file shows \"Couldn't load file\"\n    - screenshots\n  - `bridge/tests/test_bridge.py` class `Media`:\n    - served: main chat, elsewhere, symlink inside its folder\n    - not_found: user message, cli session, subagent, prose (not a whole line), fenced code, symlink escape, directory, never named\n    - too_big without the file being opened (spy on `open`)\n    - state.db mtime unchanged\n    - parser parity with the UI\n\n## Decisions (made within the brief)\n- **`media.read` takes an optional `info: true`**: it returns name/mime/size without bytes. File cards use it, so a 20 MB zip is never base64'd just to print its size. Bytes are only sent for image, video and audio.\n- **How `open_media` knows \"the paths the bridge just served\"**: the bridge prints one `OMHER_MEDIA_SERVED {\"path\": real}` stdout line per successful read (only when run as the app's child, `announce_media`). The Rust reader keeps that set. The UI cannot add to it.\n- The bridge returns the resolved real path. The UI passes that path to `open_media`.\n\n## VERIFY (literal tails)\n- `pnpm typecheck && pnpm test` → `$ tsc -b --noEmit` … `Test Files  4 passed (4)` / `Tests  39 passed (39)`\n- `~/.hermes/hermes-agent/venv/bin/python -m unittest discover -s bridge/tests` → `Ran 56 tests in 0.880s` / `OK`\n- `OMHER_PORT=5411 OMHER_MOCK_PORT=5412 /usr/bin/lockf -k …/omher-heavy.lock pnpm exec playwright test e2e/media.spec.ts --reporter=line` → `4 passed (4.5s)`\n- Extra regression run, same ports: shell, elsewhere, appearance, activity, mock and usability specs → `39 passed (50.3s)`\n- `PYTHONPATH=tests …python -m unittest tests.test_omher_boundary` (repo root) → `Ran 9 tests in 3.629s` / `OK`\n- `git diff --check` → clean\n- `(cd src-tauri && lockf … cargo test)` → `test result: ok. 22 passed; 0 failed` (includes the 3 new tests) / `EXIT 0`\n- Windows: `cargo check --target x86_64-pc-windows-msvc` (CARGO_TARGET_DIR=…/omher-wincheck-t1) → `Finished \\`dev\\` profile [unoptimized + debuginfo] target(s) in 48.17s` / `EXIT 0`\n- Logs: `~/.hermes/profiles/kami/cache/scratch/omher-t1-{cargo,win,verify}.log`\n\n## Screenshots\n- `~/.hermes/profiles/kami/cache/scratch/omher-v02/T1-media-dark.png`\n- `~/.hermes/profiles/kami/cache/scratch/omher-v02/T1-lightbox-dark.png`\n- `~/.hermes/profiles/kami/cache/scratch/omher-v02/T1-media-light.png`\n\n## Open / not done\n- I did not run the real Tauri app by hand, so \"Open\" / \"Show in Finder\" on a real file is untested beyond the Rust unit test and the Windows compile.\n- I did not try `media.read` against the live kami state.db through a running bridge. The query was timed by hand on the real 357 MB db: about 0.6 s cold.\n- The full e2e suite was not run; that's T9's job. Specs that touch the timeline, bubbles or the default bot all passed (list above).\n",
+   "t11-accounts": "# T11 handoff: Accounts (lane acct, wt v02-acct, branch feat/omher-v02-acct)\n\nStatus: DONE. Every VERIFY passes. The commit is signed off and not pushed.\n\n## Commit\n- `3d21d5bc7` feat(omher): accounts - stacked logins, one-click switch, auto-switch (on top of T7/T10 `fe8398d6f`)\n\n## What was built\n\n### Entry\n- The sidebar user row (\"You\") is now a button that opens Settings › Accounts.\n- Settings nav has a new \"You\" section with Accounts as the first item.\n- The row turns gray while Accounts is open. The Settings nav item is not highlighted then.\n\n### Bridge (`bridge/omher_bridge.py`, new \"accounts\" section)\n- `read_accounts()` groups accounts per CLI. A CLI is listed only when it is on PATH or has accounts.\n\n**Backend A: CPA.** Used when `~/.cli-proxy-api/config.yaml` exists and a bare TCP connect to `10.0.0.1:<port>` succeeds.\n- `read_cpa_file` keeps only `email, disabled, expired, last_refresh, type`. It clears the parsed dict at once.\n- States: ready, disabled, or expired.\n- The group carries `{port, management, strategy}`.\n- `management` is only whether `secret-key` is non-empty. The key itself is never returned.\n\n**Backend B: omher.** Accounts live in `~/.omher/accounts/<cli>/<id>/`.\n- A \"default\" row (the CLI's own home) is listed first.\n- State is `login` until the CLI's login file exists. This is a stat only; the file is never opened.\n- For Claude, the email comes from `.claude.json` `oauthAccount.emailAddress`.\n- Each account gets its own usage record, through `_claude_usage` / `_codex_usage`. Their new `root=` parameter is the only change to T10 code.\n- A limited usage record makes the account `limited` with `resets_at`.\n- The active account is stored per CLI in `active.json`.\n\n**Ops**\n- `accounts.list`, `accounts.add` (label → slug, mkdir 0700 + `account.json`), `accounts.set_active`, `accounts.remove`, `accounts.cpa_action`.\n- add, set_active and remove emit an `accounts.update` event.\n- remove deletes only `~/.omher/accounts/<cli>/<id>`. It refuses `..`, slashes, `default`, symlinks, and unknown CLIs.\n\n**Decision: ops take `account`, not `id`.** `id` is the frame's own request id, so an `id` param was silently overwritten. I found this in e2e; the protocol comment now says so.\n\n**Decision: the bridge makes no HTTP call.** `test_bridge_has_no_http_or_llm_client` and rule 5 stay true. `accounts.cpa_action` only validates the request and returns `{port, method, path, body}`. The app sends it.\n\n### Rust (`src-tauri/src/accounts.rs`, commands in `lib.rs`)\n- `account_env(home, cli, id) -> Vec<(String,String)>`:\n  - claude → `CLAUDE_CONFIG_DIR`\n  - codex → `CODEX_HOME`\n  - grok → `GROK_HOME`\n  - gemini → `GEMINI_CLI_HOME`\n  - `default` gives no env. Bad ids are refused.\n  - Grok and Gemini env names were checked against their docs (Grok Build `GROK_HOME`; Gemini CLI `GEMINI_CLI_HOME`, which makes `.gemini` inside).\n- Keychain via the `keyring` 3 crate: apple-native on macOS, windows-native on Windows, linux-native kernel keyring on Linux (no system lib needed for the CI ubuntu matrix).\n  - Commands: `cpa_key_set`, `cpa_key_present`, `cpa_key_clear`.\n  - The key is never returned to the UI and never written to a file.\n- `cpa_send(request)`:\n  - It accepts only PATCH `/v0/management/auth-files/status` with exactly `{name, disabled:bool}`, or DELETE `/v0/management/auth-files?name=<plain .json>`.\n  - It connects to `10.0.0.1` only, sends the Bearer key, and maps the status to a plain message. The response body is never shown.\n- Tauri commands: `account_env`, `cpa_key_set`, `cpa_key_present`, `cpa_key_clear`, `cpa_send`.\n- `accounts_add` is the bridge op, which creates the dir and returns `{id, dir}`. The env comes from `account_env`. The PTY stays with the SESSIONS PR.\n\n### UI\n- `src/settings/accounts/AccountsPage.tsx` + `accounts.css`.\n  - Groups have an AgentIcon, a name and a source tag (CLIProxyAPI / omher).\n  - Each row shows: the T10 usage ring (`Ring` is now exported from `sidebar/Usage.tsx`), the masked email (`k***@domain`, full email on hover via `title`), the plan, a state chip (Active / Ready / Limited until hh:mm / Expired / Disabled / Log in) and a ⋯ menu.\n  - **CPA group:**\n    - \"Auto-switch: CPA fill-first\" (CPA's own strategy).\n    - With management off: the exact hint text and no ⋯ menu (read-only).\n    - With management on: a keychain key field (desktop only), then a Disable/Enable/Remove menu.\n    - \"+ Add account\" shows `cliproxyapi -claude-login` etc.\n  - **omher group:**\n    - On/Off auto-switch control (gray `Seg`, default on, saved in localStorage `omher.autoswitch`).\n    - ⋯ menu: Make active, Re-login, Remove…. Remove has an inline confirm that names the folder; the default login has no Remove.\n    - \"+ Add account\" asks for a name, then shows the stub \"Run login in a new session: `CODEX_HOME=<dir> codex login`\".\n  - Disabled/expired rows are dimmed; their chips are outlined.\n- `src/settings/accounts/rules.ts`:\n  - `nextAccount(accounts, usage, activeId)`: fill-first. Limited or expired active → first Ready that isn't limited, in list order.\n  - Also `maskEmail`, `stateChip`, `switchNote`, `autoSwitchOn`.\n  - Tests in `rules.test.ts` (8 vitest cases).\n- `useAccounts.ts`:\n  - A shared copy, plus an `AccountsWatcher` mounted in the sidebar. It refreshes every 60 s and on `accounts.update`.\n  - When an omher group's active account is limited and auto-switch is on, it calls `accounts.set_active` and adds a toast inside that group.\n- **owner addition: system line in the bot chat.**\n  - New `SystemItem` (`kind: \"system\"`) in the store, added via the `systemNote` action. It is never sent to the bot.\n  - Rendered by Timeline as a centered quiet line with hairlines, e.g. \"Switched to Codex #2 Work (limit on #1 Default, resets Tue 00:05)\".\n  - Ids and names in the line are labels or masked emails only, never tokens.\n\n### Mock + e2e\n- `e2e/mock-bridge.mjs`:\n  - Claude: 5 CPA rows with management off, one of them Disabled.\n  - Codex: an omher stack with Default (active) and Work.\n  - add / set_active / remove, and `cpa_action` → `cpa_management_off`.\n  - Test op `mock.accounts {limit}` marks an account limited.\n- `e2e/accounts.spec.ts` has 7 tests:\n  1. The user row opens Accounts, listed first.\n  2. 5 CPA rows are read-only, with the hint and the strategy; emails masked, full on hover; no token in the DOM; no cpa_action call.\n  3. Add → the row appears in the \"Log in\" state, with the login hint; Make active moves the chip.\n  4. Remove asks first; Cancel keeps the row and Confirm deletes only that account; default has no Remove.\n  5. Auto-switch: limit → Work becomes Active, a toast appears in the Codex group, one system line shows in the Kami chat, and no chat.send is made.\n  6. With auto-switch off, nothing moves.\n  7. Screenshots.\n\n### BOUNDARY\n- New rule 12 in `docs/OMHER-BOUNDARY.md`: accounts are the one exception to 4/5/11. It covers the five CPA fields, writes only under `~/.omher/accounts/`, the loopback-only single CPA request, the key kept in the keychain, no tokens, and that a switch never stops a session.\n- `tests/test_omher_boundary.py`:\n  - pins 5 sentences of the rule;\n  - adds `AccountsNeverCarryAToken`: 25 fuzz rounds of fake CPA files and omher folders holding `access_token/refresh_token/id_token/api_key/OPENAI_API_KEY`, with wrong types and nested tokens. It asserts no key or secret appears in `read_accounts` (CPA up and down) or in `cpa_request`.\n  - The cap stays ≤12 (rule 12 fills it; the comment notes this).\n- Bridge test class `Accounts` has 9 tests: the five-field reader, the fuzz, management off/on request building with bad names refused, the add/activate/remove lifecycle, remove refusing every other path (incl. symlink), Claude email + limited from its own folder, CPA down → omher fallback, and that the accounts code has no subprocess, http, keyring or environ writes.\n\n## Real data on this Mac\n- `read_accounts()` gives Claude: cpa, 5 rows, `management: false`, `strategy: fill-first`, no token keys in ",
+   "t7-t10-usage": "# T7 + T10 handoff (lane acct, wt v02-acct, branch feat/omher-v02-acct)\n\nStatus: DONE. Every VERIFY passes. Commits are signed off and not pushed.\n\n## Commits\n- `17c11dfa8` feat(omher): agent marks - AgentIcon and 22 logos\n- `fe8398d6f` feat(omher): usage meters - usage.read and sidebar rings\n\n## T7: logos\n- `apps/omher/src/assets/agents/`: 22 files copied unedited from scratch/omher-plan/logos (19 Lobe SVGs, pi.svg, omp.svg, omh.png).\n- `apps/omher/src/ui/AgentIcon.tsx`:\n  - `agentIcon(id)` and `<AgentIcon>` import the SVGs via `?raw` and draw them inline. Ids are prefixed per mark so gradients never clash.\n  - Monochrome marks get `fill=currentColor`; colour marks keep their own fills; omh is an `<img>`.\n  - Vendor aliases (claudecode, githubcopilot, kilocode, roocode, geminicli…) map in, and the lookup ignores case.\n  - Unknown ids get a letter mark.\n  - `AGENT_IDS` has 22 entries: the 20 from the brief plus `openai` and `gemini-app` for the two extra Lobe files.\n  - Exported from `src/ui/index.ts`.\n- `apps/omher/src/ui/agentIcon.test.ts`: every id maps, aliases work, unknown ids get a letter, the mono/colour split holds, and no `<title>` or duplicate id appears.\n- `apps/omher/e2e/agents.html` + `agents-grid.tsx`: a test-only grid page served by the vite dev server, not part of the app build.\n- `apps/omher/README.md`: new \"Credits\" section (Lobe Icons MIT, pi-mono MIT (checked with `gh api`: MIT), omp official mark, OMH kami mark).\n\n## T10: usage meters\n- Bridge `usage.read` → `read_usage()` in `bridge/omher_bridge.py`:\n  - Codex: newest `rate_limits` event across the newest 5 rollout files, reading the last 512 KB of each. `primary`/`secondary` become windows (300 → \"5 hours\", 10080 → \"Weekly\", else `<n>h`/`<n>d`). It also returns `plan_type`. State is near at ≥70 and limited at ≥100 or when `rate_limit_reached_type` is set.\n  - Claude: newest `rate_limit_info` (nested under `apiErrorParams` in real files; found by key search) across the newest 5 `projects/*/*.jsonl`. `rejected` gives limited, `resetsAt` sets the window reset, `five_hour`/`seven_day` give the label. It never returns a %.\n  - Grok/Gemini: this Mac has no `~/.grok*` or `~/.gemini` and neither CLI is on PATH. So the code returns `connected` only when `which(cli)` finds one, and omits the provider otherwise.\n  - A window whose `resets_at` has passed gets `stale: true` and loses `used_percent`. If every window is stale, the provider is `stale`.\n  - No new subprocess (`shutil.which` only), no writes, no auth files.\n- Real-data smoke run of `read_usage()` on this Mac: Codex Weekly 21% pro, ok. Claude's last rejection (`seven_day`) has already reset, so it shows stale.\n- `bridge/tests/test_bridge.py` class `Usage` (7 tests) uses copied, redacted real lines:\n  - Codex 15% weekly pro → `Weekly 15%`, with resets_at.\n  - Claude rejected/seven_day → limited, no %.\n  - Also covers the newest event across files, the 5 hours/Weekly windows, stale, connected/omitted, the tail read dropping a cut line, and no write or auth names in the reader.\n- Protocol/store/mock:\n  - `UsageProvider` types in `src/lib/protocol.ts`; `usage()` action in `src/state/store.ts`.\n  - `e2e/mock-bridge.mjs`: `usage.read` fixture (codex 73/60 near, claude limited, grok connected), plus a test-control op `mock.usage {fixture:\"stale\"}`.\n- UI:\n  - `src/sidebar/Usage.tsx` sits in the sidebar foot above the user row. It shows a 26px button per provider: a 14px AgentIcon with an SVG ring at the max live % (gray <70, amber 70–90, red >90), or a state dot when there is no %. A limited provider gets a red dot.\n  - Hover or focus opens the card; click pins it; Escape or an outside click closes it. The card has radius 8 and 12px text and shows provider + plan, then `5 hours  73%  resets in 1h 47m`, `Limited until Tue 00:15`, `stale`, or `Connected · no usage record`.\n  - It refreshes every 60 s while the bridge is open.\n  - Pure rules live in `src/sidebar/usageFormat.ts`, tested by `usageFormat.test.ts`.\n- `e2e/usage.spec.ts` (5 tests): marks render above the user row; amber ring vs no ring; the hover card text; Claude shows \"Limited until\" and no %; the stale fixture shows \"stale\" with no number or ring; plus the screenshots.\n- BOUNDARY: new rule 11 in `docs/OMHER-BOUNDARY.md` (reads only the CLIs' own usage records, never auth/tokens, no writes, sends nothing). `tests/test_omher_boundary.py` pins the sentence, and the rule cap went from 10 to 12 with a reason comment. That edit is outside apps/omher; it was needed because rule 11 broke the old 6–10 cap.\n\n## VERIFY (literal tails, final run on HEAD fe8398d6f; log ~/.hermes/profiles/kami/cache/scratch/omher-v02/t7t10-verify.log)\n```\n== typecheck+test\n Test Files  5 passed (5)\n      Tests  43 passed (43)\nrc=0\n== bridge\nRan 59 tests in 0.756s\nOK\nrc=0\n== e2e   (OMHER_PORT=5431 OMHER_MOCK_PORT=5432 lockf … playwright test e2e/usage.spec.ts)\n  5 passed (6.0s)\nrc=0\n== boundary   (PYTHONPATH=tests … unittest tests.test_omher_boundary)\nRan 8 tests in 3.368s\nOK\nrc=0\n== diff-check   (git diff --check 8a6d72016 HEAD)\nrc=0\n```\n\n## Screenshots (~/.hermes/profiles/kami/cache/scratch/omher-v02/)\n- T7-agents-dark.png (vision 8.5/10), T7-agents-light.png (8/10): the 22 marks plus the `zed` letter fallback, at 22px and 16px.\n- T10-usage-codex-dark.png (8.5/10), T10-usage-codex-light.png (7.5 before the margin fix; the fix was then confirmed on the dark shot).\n- T10-usage-claude-dark.png (7 before the margin fix), T10-usage-claude-light.png (8/10 after the fix).\n- Vision found and I fixed: a translucent card in the screenshots (the fade-in was captured, so screenshots now run with animations disabled); the no-% row overflowing (that row now has two columns); the card sitting flush against the sidebar divider (it now spans left:0/right:0 of the footer column).\n\n## Open / notes\n- Leftover vision nitpicks I did not act on: the pi and Kilo Code marks lose detail at 16px (the marks are unedited by rule); the omp tile has low contrast on dark (it is the official tile); there is no caret on the card.\n- AgentIcon is not yet wired into the SESSIONS `+` menu, which belongs to another lane.\n- Grok/Gemini adapters are state-only, because no local usage record format exists on this machine.\n"
+  }
+ },
+ "owners": {
+  "omh-dap": {},
+  "route-hint-dedup": {},
+  "codex-coexist": {
+   "t1-discovery": "codex",
+   "t2-status-update": "codex",
+   "t3-doctor": "codex",
+   "t1-hermes": "codex",
+   "t4-fence": "codex"
+  },
+  "omher-v02": {},
+  "codex-coexist-live": {
+   "t1-discovery": "codex",
+   "t2-status-update": "codex",
+   "t3-doctor": "codex",
+   "t1-hermes": "codex",
+   "t4-fence": "codex"
+  }
+ },
+ "records": [
+  {
+   "alias": "claude-opus-5-5",
+   "category": "review",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793852767.308363
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "quick",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "medium",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1793853947.924635
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793854088.428444
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793855038.869309
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793864286.2995892
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "review",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793865030.54096
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793865721.757555
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793869686.836792
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-9bd349382e58915f24a6ff6a8656a5eec0accc8cb204da7ea9b11598f9dd0d13",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1793870160.761896
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "quick",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "medium",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794037521.81232
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794037535.531768
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "unspecified-low",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "medium",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794037867.413217
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794037998.810698
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "writing",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "medium",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794039545.848512
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "unspecified-low",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "medium",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794039754.0508668
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "review",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794040318.9177542
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794042995.8160288
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "unspecified-low",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "medium",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794049657.9825
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "review",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "local-c5ef24d9274a005d9292b0326b278181c101abfabd5083d63c51f0c8b1925090",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794050014.740752
+  },
+  {
+   "alias": "deepseek-v4.1-flash-ultrafast",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "head",
+   "provider": "og",
+   "reasoning_effort": "medium",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "deepseek/deepseek-v4.1-flash-ultrafast",
+   "written_at": 1794150795.8562
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794150800.65964
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "visual-engineering",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794152281.261624
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "visual-engineering",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794153290.255743
+  },
+  {
+   "alias": "claude-sonnet-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-sonnet-5-5",
+   "written_at": 1794153319.744242
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "review",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794155250.624876
+  },
+  {
+   "alias": "deepseek-v4.1-flash-ultrafast",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "head",
+   "provider": "og",
+   "reasoning_effort": "medium",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "deepseek/deepseek-v4.1-flash-ultrafast",
+   "written_at": 1794223730.916472
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794223733.666368
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "visual-engineering",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794223747.4433641
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794223862.2920341
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794226145.494611
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "unspecified-high",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794227364.82192
+  },
+  {
+   "alias": "claude-opus-5-5",
+   "category": "visual-engineering",
+   "from_alias": "",
+   "origin": "explicit",
+   "provider": "claude-proxy",
+   "reasoning_effort": "high",
+   "session_id": "20261108_213859_c9a97486",
+   "wire_model": "claude-opus-5-5",
+   "written_at": 1794227381.247597
+  }
+ ],
+ "sessions": [
+  "20261102_235818_fcfb1bdd",
+  "20261108_213859_c9a97486"
+ ],
+ "table": {
+  "unspecified-high": {
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "effort": "high"
+  },
+  "visual-engineering": {
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "effort": "high"
+  },
+  "review": {
+   "model": "claude-opus-5-5",
+   "provider": "claude-proxy",
+   "effort": "high"
+  }
+ }
+}

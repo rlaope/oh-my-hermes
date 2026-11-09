@@ -51,6 +51,12 @@ RULES = (
     "The command is fixed in the shell; nothing from the page reaches it.",
     "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
     "the desktop app opens only a file the bridge just served this way.",
+    "omher reads OMH dag run records (`<omh home>/runtime/dag/*/*.json`) and their handoff files only for runs whose\n    session is in the bot's own `state.db`",
+    "never settles, retries or cancels a run; the Runs tab is read-only.",
+    "For the Runs graph omher also reads, never writes, Hermes' delegate_task folders",
+    "and uses only the records written by the bot's own sessions.",
+    "the CLI agents' own session files on this machine",
+    "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
 )
 SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
 SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
@@ -83,12 +89,13 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_thirteen_numbered_rules(self) -> None:
-        # 13: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
-        # rule 12 (the one installer) and rule 13 (media.read) each widened the boundary on purpose; the rules
-        # stay numbered 1..n with no gap or repeat.
+    def test_boundary_is_between_six_and_sixteen_numbered_rules(self) -> None:
+        # 16: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+        # rule 12 (the one installer), rule 13 (media.read) and rules 14-16 (Runs: dag records, delegation and
+        # route reads, CLI agents' session files) each widened the boundary on purpose; the rules stay numbered
+        # 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 13, len(rules))
+        self.assertTrue(6 <= len(rules) <= 16, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:

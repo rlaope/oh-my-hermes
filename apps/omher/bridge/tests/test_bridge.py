@@ -1750,3 +1750,517 @@ class Media(BridgeCase):
     def test_media_lines_match_the_ui_parser(self):
         text = "Done.\nMEDIA:/w/a.png\n  MEDIA: `/w/b c.mp4`\nsee MEDIA:/w/x.png\nMEDIA:rel.png\n```\nMEDIA:/w/f.png\n```"
         self.assertEqual(ob.media_paths(text), ["/w/a.png", "/w/b c.mp4"])
+
+DAG_FIXTURES = HERE / "fixtures" / "dag"
+FAN, CANCELLED, SMALL = (
+    "20261102_235818_fcfb1bdd-96bc7f91f27a766c", "20261026_134438_3ae70257-dac2fb5045223e90",
+    "20261028_093610_1b12a114-ba5ac497c940e83f")
+
+
+def _runs_profile(root: Path, sessions, dag_src: Path = DAG_FIXTURES) -> tuple[Path, Path]:
+    """A profile whose config points OMH at `root/omh`, a copy of the dag dir there, and a state.db holding
+    `sessions`. Returns (profile dir, dag dir)."""
+    import shutil
+    import sqlite3
+    prof, dag = root / "prof", root / "omh" / "runtime" / "dag"
+    prof.mkdir(parents=True)
+    shutil.copytree(dag_src, dag, symlinks=True)
+    (prof / "config.yaml").write_text(
+        f"plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: '{root / 'omh'}'\n", encoding="utf-8")
+    con = sqlite3.connect(prof / "state.db")
+    con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT)")
+    con.executemany("INSERT INTO sessions VALUES (?, 'discord')", [(s,) for s in sessions])
+    con.commit()
+    con.close()
+    return prof, dag
+
+
+def _mtimes(*roots: Path) -> dict:
+    return {p: p.lstat().st_mtime_ns for r in roots for p in ([r] if r.is_file() else r.rglob("*"))}
+
+
+class Runs(unittest.TestCase):
+    """runs.list / runs.get over OMH dag records: read-only, owned by the bot through its state.db sessions."""
+
+    def test_list_and_get_only_the_bots_runs_and_write_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261102_235818_fcfb1bdd", "20261026_134438_3ae70257"])
+            before = _mtimes(dag, prof)
+            runs = ob.DagRuns().list("kami", prof)
+            self.assertEqual([r["id"] for r in runs], ["dag:20261102_235818_fcfb1bdd/codex-coexist",
+                                                       "dag:20261026_134438_3ae70257/omh-dap"])  # newest first
+            fan, cancelled = runs
+            # the failed discovery node was fixed by its two repairs: repaired, not an open failure
+            self.assertEqual((fan["state"], fan["counts"]), ("done", {"nodes": 6, "done": 5, "running": 0, "failed": 0,
+                                                                      "repaired": 1}))
+            self.assertEqual(cancelled["state"], "cancelled")
+            self.assertNotIn("nodes", fan)
+            got = ob.DagRuns().get("kami", prof, fan["id"])
+            nodes = {n["id"]: n for n in got["run"]["nodes"]}
+            self.assertEqual(nodes["t1-discovery"]["state"], "failed")
+            self.assertEqual(nodes["t5-verify"]["layer"], 2)
+            self.assertEqual(sum(len(n["deps"]) for n in nodes.values()), 4)
+            self.assertEqual(sorted(got["handoffs"]), ["t1-hermes", "t2-status-update", "t3-doctor", "t4-fence", "t5-verify"])
+            self.assertNotIn("handoff", nodes["t1-discovery"])
+            self.assertTrue(all(len(t) <= ob.HANDOFF_MAX for t in got["handoffs"].values()))
+            self.assertEqual(len(got["handoffs"]["t5-verify"]), ob.HANDOFF_MAX)  # 12.5k on disk, clipped
+            with self.assertRaises(ob.BridgeError) as e:  # a run of another bot's session
+                ob.DagRuns().get("kami", prof, "dag:20261028_093610_1b12a114/route-hint-dedup")
+            self.assertEqual(e.exception.code, "not_found")
+            self.assertEqual(_mtimes(dag, prof), before, "a runs read wrote something")
+
+    def test_a_record_cut_mid_write_keeps_the_last_good_parse(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114"])
+            reader = ob.DagRuns()
+            first = reader.list("kami", prof)
+            self.assertEqual([r["state"] for r in first], ["done"])
+            rec = dag / SMALL / "route-hint-dedup.json"
+            rec.write_text((HERE / "fixtures" / "dag-truncated.json").read_text(encoding="utf-8"), encoding="utf-8")
+            st = rec.stat()
+            os.utime(rec, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+            self.assertEqual(reader.list("kami", prof), first)
+            self.assertEqual(reader.get("kami", prof, first[0]["id"])["run"]["state"], "done")
+            # a fresh reader that never saw it whole skips it rather than raising
+            self.assertEqual(ob.DagRuns().list("kami", prof), [])
+
+    def test_symlinked_handoffs_and_folders_are_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114", "20261026_134438_3ae70257"])
+            secret = Path(d) / "outside.md"
+            secret.write_text("outside the dag dir", encoding="utf-8")
+            small = dag / SMALL / "route-hint-dedup"
+            (small / "verify.md").unlink()
+            try:
+                (small / "verify.md").symlink_to(secret)
+            except OSError:
+                self.skipTest("this system cannot make symlinks (Windows without the privilege)")
+            folder = dag / CANCELLED / "omh-dap"
+            import shutil
+            shutil.move(str(folder), str(Path(d) / "moved"))
+            folder.symlink_to(Path(d) / "moved", target_is_directory=True)
+            reader = ob.DagRuns()
+            got = reader.get("kami", prof, "dag:20261028_093610_1b12a114/route-hint-dedup")
+            self.assertEqual(sorted(got["handoffs"]), ["implement"])
+            self.assertNotIn("handoff", got["run"]["nodes"][1])
+            got = reader.get("kami", prof, "dag:20261026_134438_3ae70257/omh-dap")
+            self.assertEqual(got["handoffs"], {})
+            self.assertFalse(any("outside the dag dir" in t for t in got["handoffs"].values()))
+
+    def test_no_dag_dir_or_no_state_db_means_no_runs(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(ob.DagRuns().list("kami", Path(d)), [])
+
+    def test_a_cyclic_record_is_skipped_not_raised(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114"])
+            rec = dag / SMALL / "route-hint-dedup.json"
+            data = json.loads(rec.read_text(encoding="utf-8"))
+            data["nodes"][0]["depends_on"] = ["verify"]
+            rec.write_text(json.dumps(data), encoding="utf-8")
+            self.assertEqual(ob.DagRuns().list("kami", prof), [])
+            with self.assertRaises(ValueError):
+                ob.layer_of([{"id": "a", "deps": ["b"]}, {"id": "b", "deps": ["a"]}])
+
+    def test_a_copy_of_the_real_dag_dir_lists_runs(self):
+        """Real `~/.omh/runtime/dag`, copied to a temp dir, owned through the real sessions it names."""
+        real = Path.home() / ".omh" / "runtime" / "dag"
+        if not real.is_dir() or not any(real.glob("*/*.json")):
+            self.skipTest("no real dag runs on this machine")
+        sids = set()
+        for f in real.glob("*/*.json"):
+            try:
+                sids.add(json.loads(f.read_text(encoding="utf-8"))["session_id"])
+            except (ValueError, KeyError, OSError):
+                continue
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), sorted(sids), dag_src=real)
+            runs = ob.DagRuns().list("kami", prof)
+            self.assertGreaterEqual(len(runs), 1)
+            states = [r["state"] for r in runs]
+            self.assertEqual(states, sorted(states, key=lambda s: s != "running"))  # running first
+            got = ob.DagRuns().get("kami", prof, runs[0]["id"])
+            self.assertEqual(len(got["run"]["nodes"]), runs[0]["counts"]["nodes"])
+
+
+FIX = HERE / "fixtures"
+
+
+class RunsJoin(unittest.TestCase):
+    """T5: who ran each node. Delegation folders give the helper's model, OMH's route records the category it went
+    out under, a run's fanout unit files the agent CLI (codex) that took a fanout node. Read-only."""
+
+    def test_route_table_keeps_the_newest_record_per_category_from_the_bots_sessions(self):
+        records = ob.load_route_records(FIX)
+        self.assertGreater(len(records), 5)
+        table = ob.route_table(records, {"20261108_213859_c9a97486"})
+        self.assertEqual(table["unspecified-high"]["model"], "claude-opus-5-5")
+        self.assertEqual(table["review"], {"model": "claude-opus-5-5", "provider": "claude-proxy", "effort": "high"})
+        # another session's records are not this bot's
+        self.assertEqual(ob.route_table(records, {"nobody"}), {})
+
+    def test_fanout_owners_name_the_agent_cli_and_skip_anything_else(self):
+        folder = FIX / "dag" / "20261102_235818_fcfb1bdd-96bc7f91f27a766c" / "codex-coexist"
+        owners = ob.fanout_owners(folder)
+        self.assertEqual(owners, {"t1-discovery": "codex", "t2-status-update": "codex", "t3-doctor": "codex",
+                                  "t1-hermes": "codex", "t4-fence": "codex"})
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d)
+            (f / "fanout-abc123-units.json").write_text("{not json", encoding="utf-8")
+            (f / "notes-units.json").write_text('{"units": [{"unit_id": "x", "owner": "codex"}]}', encoding="utf-8")
+            self.assertEqual(ob.fanout_owners(f), {})
+            self.assertEqual(ob.fanout_owners(f / "missing"), {})
+
+    def test_every_node_of_the_live_fanout_gets_a_model_to_show(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261102_235818_fcfb1bdd"])
+            (Path(d) / "omh" / "routing").mkdir(parents=True)
+            (Path(d) / "omh" / "routing" / "route-provenance.json").write_text(
+                (FIX / "routing" / "route-provenance.json").read_text(encoding="utf-8"), encoding="utf-8")
+            before = _mtimes(dag, Path(d) / "omh" / "routing")
+            got = ob.DagRuns().get("kami", prof, "dag:20261102_235818_fcfb1bdd/codex-coexist")
+            by = {n["id"]: n for n in got["run"]["nodes"]}
+            self.assertEqual(by["t1-discovery"]["executor"], "codex")
+            self.assertEqual(by["t5-verify"]["role"], "verify")
+            self.assertEqual(_mtimes(dag, Path(d) / "omh" / "routing"), before, "a runs read wrote something")
+
+    def test_a_finished_task_of_a_running_fan_out_ends_at_its_own_final_line(self):
+        # two helpers: one finished after 120.5s, one still working; the manifest has no `completed` yet
+        from datetime import timezone
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "cache" / "delegation" / "live" / "deleg_00aa11bb"
+            folder.mkdir(parents=True)
+            (folder / "manifest.json").write_text(json.dumps({
+                "started": "2026-11-10 06:00:00", "model": "claude-opus-5-5",
+                "tasks": [{"index": 0, "goal": "A", "status": "running"}, {"index": 1, "goal": "B", "status": "running"}]}),
+                encoding="utf-8")
+            head = "=== Hermes subagent live transcript ===\ngoal: {g}\nstarted: 2026-11-10 06:00:0{s}\n"
+            (folder / "task-0.log").write_text(head.format(g="A", s=0) + "06:02:00 final    | status=completed duration=120.5s "
+                                               "summary: Done.\n06:02:00 final    | end status=completed exit_reason=completed\n",
+                                               encoding="utf-8")
+            (folder / "task-1.log").write_text(head.format(g="B", s=2) + "06:01:00 tool     | -> terminal(ls)\n", encoding="utf-8")
+            now = ob._local_ts("2026-11-10 06:05:00", timezone.utc)
+            for f in folder.iterdir():
+                os.utime(f, (now - 60, now - 60))  # the logs moved a minute ago: nothing has stalled
+            delegs = ob.Delegations(tz=timezone.utc).list(Path(d), now=now)
+            run = ob.delegation_to_run(delegs[0], "kami")
+            a, b = run["nodes"]
+            self.assertEqual((a["state"], b["state"], run["state"]), ("done", "running", "running"))
+            self.assertEqual(a["ended"] - a["started"], 120.5)
+            self.assertEqual(a["attempts"][0]["ended"], a["ended"])
+            self.assertNotIn("ended", b)
+            self.assertNotIn("ended", run)
+
+    def test_a_failure_its_repairs_fixed_counts_as_repaired(self):
+        nodes = [{"id": "a", "state": "failed"}, {"id": "b", "state": "done", "repairOf": "a"},
+                 {"id": "c", "state": "failed"}, {"id": "d", "state": "running", "repairOf": "c"}]
+        self.assertEqual(ob.repaired_ids(nodes), {"a"})
+        self.assertEqual(ob.run_summary({"id": "x", "nodes": nodes})["counts"],
+                         {"nodes": 4, "done": 1, "running": 1, "failed": 1, "repaired": 1})
+
+
+class RunsOps(BridgeCase):
+    async def test_runs_ops_over_the_socket(self):
+        async with Env() as env:
+            kami = env.home / "profiles" / "kami"
+            (kami / "config.yaml").unlink()
+            _runs_profile(env.home / "r", ["20261028_093610_1b12a114"])
+            import shutil
+            for f in (env.home / "r" / "prof").iterdir():
+                shutil.move(str(f), str(kami / f.name))
+            s = await self.open(env)
+            r = await s.req("runs.list", bot="kami")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual([x["title"] for x in r["result"]["runs"]], ["Route hint dedup"])
+            run_id = r["result"]["runs"][0]["id"]
+            r = await s.req("runs.get", bot="kami", run=run_id)
+            self.assertEqual(sorted(r["result"]["handoffs"]), ["implement", "verify"])
+            self.assertEqual((await s.req("runs.get", bot="kami"))["error"]["code"], "bad_request")
+            self.assertEqual((await s.req("runs.get", bot="kami", run="dag:x/y"))["error"]["code"], "not_found")
+            self.assertEqual((await s.req("runs.list", bot="nobody"))["error"]["code"], "unknown_bot")
+
+
+CLI_FIX = HERE / "fixtures" / "cli"
+CLAUDE_SID = "ec38bc0b-8eb7-936b-b856-daaee28015c4"
+CODEX_ROOT = "c5e14c89-54b2-c703-769f-a6207ed501ea"
+FIXED_NOW = 1793700000.0  # 2026-11-03, after both fixture sessions; `since=0` keeps them in range
+
+
+def _cli_home(root: Path) -> dict[str, Path]:
+    """A copy of the redacted CLI fixtures as Claude Code and Codex homes; pi/omp/grok absent."""
+    import shutil
+    shutil.copytree(CLI_FIX, root / "cli")
+    return {"claude": root / "cli" / "claude-home", "codex": root / "cli" / "codex",
+            "pi": root / "none-pi", "omp": root / "none-omp", "grok": root / "none-grok"}
+
+
+def _claude_layout(root: Path) -> Path:
+    """Fixtures keep the project folder at `claude/<slug>`; Claude Code has it at `<home>/projects/<slug>`."""
+    import shutil
+    home = root / "cli" / "claude-home"
+    (home / "projects").mkdir(parents=True)
+    shutil.move(str(root / "cli" / "claude" / "-w-web-app"), str(home / "projects" / "-w-web-app"))
+    return home / "projects" / "-w-web-app"
+
+
+def _jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows), encoding="utf-8")
+
+
+def _age(path: Path, seconds: float, now: float = FIXED_NOW) -> None:
+    os.utime(path, (now - seconds, now - seconds))
+
+
+class CliRunsClaude(unittest.TestCase):
+    """Claude Code Agent/Task subagents from a real (redacted) transcript: one run per session, one node per call."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.homes = _cli_home(self.root)
+        self.proj = _claude_layout(self.root)
+        self.main = self.proj / f"{CLAUDE_SID}.jsonl"
+        self.subs = self.proj / CLAUDE_SID / "subagents"
+
+    def cli(self, now: float = FIXED_NOW) -> ob.CliRuns:
+        return ob.CliRuns(self.homes, clock=lambda: now)
+
+    def test_the_real_session_is_one_layer_with_each_calls_state_model_and_final_text(self):
+        before = _mtimes(self.root / "cli")
+        cli = self.cli()
+        listed = cli.list("claude", "/w/web-app", 0.0)
+        self.assertEqual([r["id"] for r in listed["runs"]], [f"claude:{CLAUDE_SID}"])
+        summary = listed["runs"][0]
+        self.assertEqual((summary["kind"], summary["agent"], summary["title"], summary["cwd"]),
+                         ("claude-task", "claude", "Ship the API fix", "/w/web-app"))
+        self.assertEqual(summary["counts"], {"nodes": 3, "done": 2, "running": 0, "failed": 1})
+        run = cli.get(summary["id"])["run"]
+        self.assertEqual({n["layer"] for n in run["nodes"]}, {0})
+        by = {n["label"]: n for n in run["nodes"]}
+        # the first call came back as an error: failed, with the tool result as the reason
+        bad = by["Review the API change"]
+        self.assertEqual((bad["state"], bad["attempts"][0]["reason"]), ("failed", "Agent type not available in this folder."))
+        # the two background agents finished through their task notifications, with their final text
+        for label, text in (("Check the build on Windows", "The Windows build compiles; one warning about an unused import."),
+                            ("Write the release note", "Release note drafted under Unreleased with the PR link.")):
+            n = by[label]
+            self.assertEqual((n["state"], n["summary"]), ("done", text))
+            self.assertLessEqual(len(n["summary"]), ob.SUMMARY_MAX)
+            self.assertLess(n["started"], n["ended"])
+        # the subagent's own transcript names its model; the call only said "opus"
+        self.assertEqual({n["model"] for n in run["nodes"]}, {"claude-opus-5-5"})
+        self.assertTrue(all(n["executor"] == "claude" and n["lane"] == "executor" for n in run["nodes"]))
+        self.assertEqual(run["state"], "failed")
+        self.assertEqual(_mtimes(self.root / "cli"), before, "reading a transcript changed a file")
+
+    def test_two_task_calls_with_results_are_a_done_run_of_two(self):
+        rows = _jsonl(self.main)
+        call = next(r for r in rows if r["type"] == "assistant")
+        bad_id = call["message"]["content"][0]["id"]
+        rows = [r for r in rows if r is not call and not any(
+            isinstance(c, dict) and c.get("tool_use_id") == bad_id for c in (r.get("message") or {}).get("content") or [])]
+        _write_jsonl(self.main, rows)
+        run = self.cli().get(f"claude:{CLAUDE_SID}")["run"]
+        self.assertEqual([(n["state"], n["layer"]) for n in run["nodes"]], [("done", 0), ("done", 0)])
+        self.assertTrue(all(n["summary"] for n in run["nodes"]))
+        self.assertEqual(run["state"], "done")
+        self.assertEqual(run["ended"], max(n["ended"] for n in run["nodes"]))
+
+    def _drop_notes(self):
+        rows = [r for r in _jsonl(self.main) if "task-notification" not in json.dumps(r)]
+        _write_jsonl(self.main, rows)
+        import shutil
+        shutil.rmtree(self.subs)
+
+    def test_a_task_with_no_result_in_a_file_quiet_for_over_10_minutes_failed_no_result(self):
+        self._drop_notes()
+        _age(self.main, 11 * 60)
+        run = self.cli().get(f"claude:{CLAUDE_SID}")["run"]
+        quiet = [n for n in run["nodes"] if n["label"] != "Review the API change"]
+        self.assertEqual([(n["state"], n["attempts"][0]["reason"]) for n in quiet], [("failed", "no result")] * 2)
+        self.assertEqual(quiet[0]["summary"], "no result")
+
+    def test_the_same_task_in_a_file_that_moved_recently_is_still_running(self):
+        self._drop_notes()
+        _age(self.main, 60)
+        run = self.cli().get(f"claude:{CLAUDE_SID}")["run"]
+        self.assertEqual(sorted(n["state"] for n in run["nodes"]), ["failed", "running", "running"])
+        self.assertEqual(run["state"], "running")
+        self.assertNotIn("ended", run)
+
+    def test_a_subagent_still_writing_keeps_a_quiet_session_running(self):
+        """The main transcript is quiet while a background agent works: the subagent's own file counts."""
+        rows = [r for r in _jsonl(self.main) if "task-notification" not in json.dumps(r)]
+        _write_jsonl(self.main, rows)
+        for meta in self.subs.glob("*.meta.json"):
+            m = json.loads(meta.read_text(encoding="utf-8"))
+            m.pop("finished")
+            meta.write_text(json.dumps(m), encoding="utf-8")
+        _age(self.main, 30 * 60)
+        for log in self.subs.glob("*.jsonl"):
+            _age(log, 30)
+        run = self.cli().get(f"claude:{CLAUDE_SID}")["run"]
+        self.assertEqual(sorted(n["state"] for n in run["nodes"]), ["failed", "running", "running"])
+
+    def test_bodies_never_leave_the_reader(self):
+        """Prompts and step text stay in the transcript: only labels, the title and final text are sent."""
+        rows = _jsonl(self.main)
+        for r in rows:
+            for c in (r.get("message") or {}).get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    c["input"]["prompt"] = "SECRET-PROMPT " * 50
+        _write_jsonl(self.main, rows)
+        cli = self.cli()
+        out = json.dumps([cli.list(None, None, 0.0), cli.get(f"claude:{CLAUDE_SID}")])
+        self.assertNotIn("SECRET-PROMPT", out)
+        self.assertNotIn("(step removed)", out)
+
+    def test_appended_lines_are_read_incrementally_and_a_half_written_line_waits(self):
+        cli = self.cli()
+        self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 3)
+        call = {"type": "assistant", "isSidechain": False, "timestamp": "2026-10-27T03:10:00.000Z", "sessionId": CLAUDE_SID,
+                "message": {"model": "claude-opus-5-5", "content": [{"type": "tool_use", "id": "toolu_new", "name": "Task",
+                                                                     "input": {"description": "Trace the slow query"}}]}}
+        line = json.dumps(call) + "\n"
+        with open(self.main, "a", encoding="utf-8") as fh:
+            fh.write(line[:40])  # mid-write
+        self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 3)
+        with open(self.main, "a", encoding="utf-8") as fh:
+            fh.write(line[40:])
+        run = cli.get(f"claude:{CLAUDE_SID}")["run"]
+        self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 4)
+        self.assertIn("Trace the slow query", [n["label"] for n in cli.get(f"claude:{CLAUDE_SID}")["run"]["nodes"]])
+        self.assertEqual(len(run["nodes"]), 3)  # the earlier object is not mutated by the later read
+
+    def test_cwd_and_since_filter_and_request_snapshots_are_not_calls(self):
+        cli = self.cli()
+        self.assertEqual(cli.list("claude", "/w/other", 0.0)["runs"], [])
+        self.assertEqual(cli.list("claude", "/w/web-app", FIXED_NOW)["runs"], [])
+        # an api-request snapshot repeats tool names; it must never count as a call
+        with open(self.main, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "api-request-shape", "tools": [{"name": "Agent"}],
+                                 "message": {"content": [{"type": "tool_use", "id": "x", "name": "Agent"}]}}) + "\n")
+        self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 3)
+
+    def test_a_symlinked_project_folder_is_refused(self):
+        import shutil
+        outside = self.root / "elsewhere"
+        shutil.move(str(self.proj), str(outside))
+        self.proj.symlink_to(outside, target_is_directory=True)  # projects/-w-web-app -> a folder outside projects
+        cli = self.cli()
+        self.assertEqual(cli.list("claude", "/w/web-app", 0.0)["runs"], [])
+        self.assertEqual(cli.list("claude", None, 0.0)["runs"], [])
+
+
+class CliRunsCodex(unittest.TestCase):
+    """Codex spawned sub-agents from a real (redacted) parent rollout and its two child rollouts."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.homes = _cli_home(self.root)
+        self.day = self.root / "cli" / "codex" / "sessions" / "2026" / "11" / "02"
+
+    def test_children_are_nodes_with_their_own_model_effort_and_last_message(self):
+        before = _mtimes(self.root / "cli")
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        listed = cli.list("codex", "/w/api-server", 0.0)
+        self.assertEqual([r["id"] for r in listed["runs"]], [f"codex:{CODEX_ROOT}"])
+        self.assertEqual(listed["runs"][0]["title"], "Harden the API server")
+        self.assertEqual(listed["runs"][0]["counts"], {"nodes": 2, "done": 2, "running": 0, "failed": 0})
+        run = cli.get(f"codex:{CODEX_ROOT}")["run"]
+        self.assertEqual((run["kind"], run["agent"], run["state"]), ("codex-sub", "codex", "done"))
+        self.assertEqual([n["label"] for n in run["nodes"]], ["Review api", "Check build"])
+        for n, text in zip(run["nodes"], ("API review done: one missing null check, fixed.",
+                                          "Build checked on both targets; no errors.")):
+            # the child's own turn (after its copied parent history), never the parent's model
+            self.assertEqual((n["model"], n["effort"], n["executor"]), ("gpt-6-astra", "low", "codex"))
+            self.assertEqual((n["state"], n["summary"], n["layer"], n["deps"]), ("done", text, 0, []))
+            self.assertLess(n["started"], n["ended"])
+        self.assertEqual(_mtimes(self.root / "cli"), before)
+
+    def test_an_aborted_child_is_cancelled_and_a_silent_one_fails_no_result(self):
+        kid = next(p for p in self.day.glob("*.jsonl") if "dd005c2c" in p.name)
+        rows = _jsonl(kid)
+        rows = rows[:-1] + [{"timestamp": "2026-11-02T16:38:56.000Z", "ordinal": 9999, "type": "event_msg",
+                             "payload": {"type": "turn_aborted", "reason": "interrupted"}}]
+        _write_jsonl(kid, rows)
+        other = next(p for p in self.day.glob("*.jsonl") if "72893de0" in p.name)
+        _write_jsonl(other, _jsonl(other)[:-1])  # no task_complete yet
+        _age(other, 20 * 60)
+        run = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).get(f"codex:{CODEX_ROOT}")["run"]
+        by = {n["label"]: n for n in run["nodes"]}
+        self.assertEqual((by["Review api"]["state"], by["Review api"]["attempts"][0]["reason"]), ("cancelled", "interrupted"))
+        self.assertEqual((by["Check build"]["state"], by["Check build"]["attempts"][0]["reason"]), ("failed", "no result"))
+        self.assertEqual(run["state"], "failed")
+
+    def test_the_parent_history_copy_is_not_the_childs_turn(self):
+        """A child file opens with its parent's turns; before `subagent_history_start_ordinal` nothing counts."""
+        kid = next(p for p in self.day.glob("*.jsonl") if "dd005c2c" in p.name)
+        rows = _jsonl(kid)
+        rows[0]["payload"]["subagent_history_start_ordinal"] = 10_000
+        _write_jsonl(kid, rows)
+        _age(kid, 60)
+        node = next(n for n in ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).get(f"codex:{CODEX_ROOT}")["run"]["nodes"]
+                    if n["label"] == "Review api")
+        self.assertEqual(node["state"], "running")
+        self.assertNotIn("model", node)
+
+    def test_a_session_without_sub_agents_is_not_a_run(self):
+        for p in self.day.glob("*.jsonl"):
+            if CODEX_ROOT not in p.name:
+                p.unlink()
+        self.assertEqual(ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).list("codex", None, 0.0)["runs"], [])
+
+
+class CliRunsAgents(unittest.TestCase):
+    def test_pi_omp_and_grok_have_no_runs_and_say_why(self):
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            (Path(d) / "none-grok").mkdir()
+            cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            for agent in ("pi", "omp", "grok"):
+                self.assertEqual(cli.list(agent, None, 0.0)["runs"], [])
+            self.assertEqual({k: v for k, v in cli.agents().items() if k in ("pi", "omp", "grok")},
+                             {"pi": "not_installed", "omp": "not_installed", "grok": "no_adapter"})
+
+    def test_missing_homes_mean_no_runs(self):
+        with tempfile.TemporaryDirectory() as d:
+            homes = {k: Path(d) / k for k in ob.CLI_AGENTS}
+            out = ob.CliRuns(homes).list(None, None, None)
+            self.assertEqual(out["runs"], [])
+            self.assertEqual(set(out["agents"].values()), {"not_installed"})
+
+    def test_claude_slug_matches_claude_codes_folder_names(self):
+        self.assertEqual(ob.claude_slug("/Users/a.b@c.ai/Desktop/x_y"), "-Users-a-b-c-ai-Desktop-x-y")
+
+    def test_cli_homes_follow_the_tools_own_env_vars(self):
+        homes = ob.cli_homes({"CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"})
+        self.assertEqual((homes["claude"], homes["codex"]), (Path("/c"), Path("/x")))
+
+
+class CliRunsOps(BridgeCase):
+    async def test_runs_cli_over_the_socket_and_runs_get_for_a_cli_run(self):
+        async with Env() as env:
+            homes = _cli_home(env.home / "r")
+            _claude_layout(env.home / "r")
+            env.bridge.cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            s = await self.open(env)
+            r = await s.req("runs.cli", since=0)
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(sorted(x["id"] for x in r["result"]["runs"]),
+                             sorted([f"claude:{CLAUDE_SID}", f"codex:{CODEX_ROOT}"]))
+            self.assertTrue(all("nodes" not in x for x in r["result"]["runs"]))
+            r = await s.req("runs.cli", agent="codex", cwd="/w/api-server", since=0)
+            self.assertEqual([x["agent"] for x in r["result"]["runs"]], ["codex"])
+            r = await s.req("runs.get", bot="kami", run=f"claude:{CLAUDE_SID}")
+            self.assertEqual((len(r["result"]["run"]["nodes"]), r["result"]["handoffs"]), (3, {}))
+            for bad in ({"agent": "cursor"}, {"cwd": ""}, {"since": "yesterday"}, {"since": True}):
+                self.assertEqual((await s.req("runs.cli", **bad))["error"]["code"], "bad_request", bad)
+            self.assertEqual((await s.req("runs.get", bot="kami", run="codex:nope"))["error"]["code"], "not_found")

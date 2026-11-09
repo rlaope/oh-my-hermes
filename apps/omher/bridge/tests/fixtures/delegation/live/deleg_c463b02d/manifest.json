@@ -1,0 +1,21 @@
+{
+  "delegation_id": "deleg_c463b02d",
+  "started": "2026-11-09 21:29:41",
+  "task_count": 2,
+  "model": "claude-opus-5-5",
+  "provider": "claude-proxy",
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Big-run layout, full view, routing on cards [dag:omher-v02/t4-t5-graph]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_c463b02d/task-0.log",
+      "status": "running"
+    },
+    {
+      "index": 1,
+      "goal": "Media out: + menu, drop, paste, chips [dag:omher-v02/t2-attach]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_c463b02d/task-1.log",
+      "status": "running"
+    }
+  ]
+}

@@ -147,6 +147,114 @@ const PANEL_DIFF = {
   "/w/gateway": { scope: "last commit", files: [{ path: "README.md", add: 1, del: 0 }], patch: "a91b0c2 docs: note the 60s upstream limit\n\ndiff --git a/README.md b/README.md\n@@ -1 +1,2 @@\n # gateway\n+Upstream closes idle connections after 60s." },
 };
 
+// Runs tab: what the real bridge's dag_to_run returns for three real (redacted) dag runs plus a live variant
+// (src/lib/__fixtures__/runs-bridge.json). The live one is moved to "now" so its times read like a running run.
+const RUNS_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-bridge.json", import.meta.url), "utf-8"));
+// T4/T5: the same runs with their helpers' models and routes joined (runs-routed.json, real bridge output), the
+// omher-v02 run and two plain delegate fan-outs for "default", and a synthetic 40-node run for the layout.
+const ROUTED = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-routed.json", import.meta.url), "utf-8"));
+const BIG = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/big-run.json", import.meta.url), "utf-8"));
+const HANDOFFS = { ...RUNS_FIXTURE.handoffs, ...ROUTED.handoffs };
+function runsSeed() {
+  const runs = structuredClone(ROUTED.kami);
+  for (const r of runs) {
+    if (r.state !== "running") continue;
+    const shift = now() - 90 - r.updated;
+    const move = (o) => {
+      for (const k of ["started", "ended", "updated"]) if (typeof o[k] === "number") o[k] += shift;
+    };
+    move(r);
+    for (const n of r.nodes) {
+      move(n);
+      n.attempts.forEach(move);
+    }
+  }
+  // "default" keeps its runs at their real times, except the live ones, moved to "now" like kami's. It also has
+  // one run nobody has started (the live fan-out's plan with no attempts; `startsAt` is a mock-only field, OMH
+  // records no start timer), for the plan card's "Starts in" / Start now / Edit.
+  const planned = structuredClone(ROUTED.kami.find((r) => r.id.endsWith("/codex-coexist-live")));
+  planned.id = "dag:20261102_235818_fcfb1bdd/codex-coexist-next";
+  planned.title = "Codex coexistence (next)";
+  planned.owner = { type: "bot", id: "default" };
+  planned.state = "running";
+  for (const n of planned.nodes) {
+    n.state = "waiting";
+    n.attempts = [];
+    for (const k of ["started", "ended", "handoff", "model", "summary"]) delete n[k];
+  }
+  planned.started = planned.updated = now() - 5;
+  planned.startsAt = now() + 10;
+  delete planned.ended;
+  const other = structuredClone([...ROUTED.default, BIG, planned]);
+  for (const r of other) {
+    if (r.state !== "running") continue;
+    const shift = now() - 120 - r.updated;
+    const move = (o) => {
+      for (const k of ["started", "ended", "updated"]) if (typeof o[k] === "number") o[k] += shift;
+    };
+    move(r);
+    for (const n of r.nodes) {
+      move(n);
+      n.attempts.forEach(move);
+    }
+  }
+  return { kami: runs, friren: [], default: other };
+}
+// T6: CLI agents' runs (runs.cli) - the real bridge's CliRuns output over the redacted Claude Code and Codex
+// fixtures (src/lib/__fixtures__/runs-cli.json, bridge/tests/fixtures/cli). Plus one live copy of the Claude
+// session moved to "now" with its last subagent still working (mock-only, so the running look can be checked).
+const CLI_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-cli.json", import.meta.url), "utf-8"));
+function cliSeed() {
+  const runs = structuredClone(CLI_FIXTURE.runs);
+  const live = structuredClone(runs.find((r) => r.agent === "claude"));
+  live.id = "claude:live-session";
+  live.owner = { type: "session", id: "live-session" };
+  live.title = "Fix the flaky login test";
+  live.state = "running";
+  // the session opened 4 minutes ago; its three calls went out 3m30s, 3m and 1m30s ago
+  live.started = now() - 240;
+  live.updated = now() - 20;
+  delete live.ended;
+  live.nodes.forEach((n, i) => {
+    const at = now() - [210, 180, 90][i];
+    const dur = (n.ended ?? n.started) - n.started;
+    n.started = at;
+    if (typeof n.ended === "number") n.ended = at + Math.min(dur, 150);
+    for (const a of n.attempts) {
+      a.started = at;
+      if (typeof a.ended === "number") a.ended = n.ended;
+    }
+    if (i === 0) {
+      // the failed call, retried with the right agent type: done
+      n.state = "done";
+      n.attempts = [{ n: 1, outcome: "completed", started: n.started, ended: n.started + 40 }];
+      n.ended = n.started + 40;
+      n.summary = "Reviewed the login flow: the test waited on a stale selector; fixed.";
+    }
+    if (i === live.nodes.length - 1) {
+      n.state = "running";
+      n.attempts = [{ n: 1, outcome: "open", started: n.started }];
+      delete n.ended;
+      delete n.summary;
+    }
+  });
+  return [live, ...runs];
+}
+
+// the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
+const runCounts = (r) => {
+  const fixed = r.nodes.filter(
+    (n) => (n.state === "failed" || n.state === "blocked") && r.nodes.some((m) => m.repairOf === n.id) && r.nodes.filter((m) => m.repairOf === n.id).every((m) => m.state === "done"),
+  ).length;
+  return {
+    nodes: r.nodes.length,
+    done: r.nodes.filter((n) => n.state === "done").length,
+    running: r.nodes.filter((n) => n.state === "running").length,
+    failed: r.nodes.filter((n) => n.state === "failed" || n.state === "blocked").length - fixed,
+    ...(fixed ? { repaired: fixed } : {}),
+  };
+};
+
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
   { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
@@ -165,7 +273,7 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars, folders;
+let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -188,6 +296,8 @@ function reset() {
   queues = {};
   avatars = {};
   folders = new Map(); // folder chat id -> { bot, cwd, open }
+  runs = runsSeed();
+  cliRuns = cliSeed();
   pending = new Map();
   idSeq = 0;
   calls = [];
@@ -556,6 +666,33 @@ const OPS = {
     if (kind === "pdf") return { kind, name, text: `[User attached PDF: ${name} (1 page(s))]`, ref_text: "", bytes };
     return { kind, name, text: "", ref_text: `@file:.hermes/attachments/${name}`, bytes };
   },
+  "runs.list": (p) => ({
+    runs: (runs[needBot(p).name] ?? [])
+      .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
+      .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
+  }),
+  "runs.cli": (p) => {
+    const AGENTS = ["claude", "codex", "pi", "omp", "grok"];
+    if (p.agent !== undefined && !AGENTS.includes(p.agent)) throw new OpError("bad_request", `agent must be one of ${AGENTS.join(", ")}`);
+    if (p.cwd !== undefined && (typeof p.cwd !== "string" || !p.cwd)) throw new OpError("bad_request", "cwd must be a folder path");
+    if (p.since !== undefined && typeof p.since !== "number") throw new OpError("bad_request", "since must be epoch seconds");
+    return {
+      runs: cliRuns
+        .filter((r) => (p.agent === undefined || r.agent === p.agent) && (p.cwd === undefined || r.cwd === p.cwd) && r.started >= (p.since ?? 0))
+        .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
+        .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
+      agents: CLI_FIXTURE.agents,
+    };
+  },
+  "runs.get": (p) => {
+    const b = needBot(p);
+    const id = needStr(p, "run");
+    const cli = cliRuns.find((r) => r.id === id);
+    if (cli) return { run: cli, handoffs: {} };
+    const run = (runs[b.name] ?? []).find((r) => r.id === id);
+    if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
+    return { run, handoffs: HANDOFFS[id] ?? {} };
+  },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({
       id: r.id,
@@ -704,6 +841,7 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
+  if (text.startsWith("/delegate")) return scriptDelegate(bot);
   scriptNormal(bot, text);
 }
 
@@ -726,6 +864,20 @@ function scriptNormal(bot, text) {
     [2300, () => ev(bot, "delta", { text: parts[2] })],
     [2400, () => say(bot, answer)],
     [2500, () => endTurn(bot, "done")],
+  ]);
+}
+
+// A delegate_task that hands out two parts of the codex-coexist dag run (one returns, one keeps working).
+function scriptDelegate(bot) {
+  const dag = [
+    { run: "codex-coexist-live", node: "t3-doctor" },
+    { run: "codex-coexist-live", node: "t5-verify" },
+  ];
+  schedule(bot, [
+    [80, () => ev(bot, "tool.start", { tool_id: "d1", name: "delegate_task", detail: "Doctor check for the Codex pack (+1 more)", dag })],
+    [400, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 320 })],
+    [500, () => say(bot, "Both helpers are on it.")],
+    [600, () => endTurn(bot, "done")],
   ]);
 }
 

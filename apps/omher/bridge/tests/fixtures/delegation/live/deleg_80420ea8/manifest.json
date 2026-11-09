@@ -1,0 +1,26 @@
+{
+  "delegation_id": "deleg_80420ea8",
+  "started": "2026-11-09 20:29:07",
+  "task_count": 2,
+  "model": "claude-opus-5-5",
+  "provider": "claude-proxy",
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Runs model + dag adapter + Runs tab [dag:omher-v02/t0-t3-runs]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_80420ea8/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    },
+    {
+      "index": 1,
+      "goal": "Media in: MEDIA lines render inline [dag:omher-v02/t1-media-in]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_80420ea8/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    }
+  ],
+  "completed": "2026-11-09 21:23:08"
+}

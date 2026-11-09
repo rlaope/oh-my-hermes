@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_23c3091c",
+  "started": "2026-11-03 14:14:09",
+  "task_count": 1,
+  "model": "gpt-6.1-sol",
+  "provider": "openai-codex",
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Independent verify vs base + live probes [dag:codex-coexist/t5-verify]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_23c3091c/task-0.log",
+      "status": "failed",
+      "exit_reason": "error",
+      "model": "gpt-6.1-sol"
+    }
+  ],
+  "completed": "2026-11-03 14:25:35"
+}

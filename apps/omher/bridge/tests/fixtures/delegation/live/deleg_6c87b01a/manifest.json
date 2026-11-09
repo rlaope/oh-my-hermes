@@ -1,0 +1,27 @@
+{
+  "delegation_id": "deleg_6c87b01a",
+  "started": "2026-11-09 21:22:02",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Bug-first code review of the integrated omher PR stack (#2695 #2702 #2703 #2704 #2706 #2707)",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_6c87b01a/task-0.log",
+      "status": "running"
+    },
+    {
+      "index": 1,
+      "goal": "Performance review of the integrated omher PR stack with measured before/after numbers",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_6c87b01a/task-1.log",
+      "status": "running"
+    },
+    {
+      "index": 2,
+      "goal": "Hands-on usability review of the integrated omher PR stack",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_6c87b01a/task-2.log",
+      "status": "running"
+    }
+  ]
+}

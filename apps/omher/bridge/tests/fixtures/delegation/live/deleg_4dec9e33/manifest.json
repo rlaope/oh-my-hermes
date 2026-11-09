@@ -1,0 +1,15 @@
+{
+  "delegation_id": "deleg_4dec9e33",
+  "started": "2026-11-09 21:29:55",
+  "task_count": 1,
+  "model": "claude-opus-5-5",
+  "provider": "claude-proxy",
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Site: short copy, Download app, beam, new shot [dag:omher-v02/t8-site]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_4dec9e33/task-0.log",
+      "status": "running"
+    }
+  ]
+}

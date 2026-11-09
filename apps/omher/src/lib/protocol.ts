@@ -1,6 +1,8 @@
 // UI <-> bridge protocol v1. Mirrors the protocol table in the omher briefs (01-protocol.md).
 // The UI only ever talks to the bridge (real: Python, mock: e2e/mock-bridge.mjs).
 
+import type { AgentRunSummary, CliAgent, CliAgentStatus, RunDetail } from "./runs";
+
 export type BotStatus = "online" | "offline" | "starting";
 
 export interface Bot {
@@ -185,6 +187,15 @@ export interface OpMap {
   "media.read": { params: { bot: string; path: string; info?: boolean }; result: MediaFile };
   /** Stage one file the person picked for the next `chat.send`, in the bot's main chat only. */
   "chat.attach": { params: { bot: string; kind: AttachKind; name: string; data_base64: string }; result: AttachResult };
+  /** Runs tab, read-only: the bot's agent runs (OMH dag runs today) and one run with its handoffs. */
+  "runs.list": { params: { bot: string }; result: { runs: AgentRunSummary[] } };
+  "runs.get": { params: { bot: string; run: string }; result: RunDetail };
+  /** CLI agent sessions with sub-runs on this machine (Claude Code subagents, Codex sub-agents), read-only. A run's
+   *  detail comes from `runs.get` with its id. `since` is epoch seconds (the last week when absent). */
+  "runs.cli": {
+    params: { agent?: CliAgent; cwd?: string; since?: number };
+    result: { runs: AgentRunSummary[]; agents: Record<CliAgent, CliAgentStatus> };
+  };
 }
 
 /** Which Hermes attach call a file takes: `image.attach_bytes`, `pdf.attach` or `file.attach`. */
@@ -276,7 +287,14 @@ export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
   | (EventBase & { event: "status"; text: string })
   | (EventBase & { event: "thinking" })
-  | (EventBase & { event: "tool.start"; tool_id: string; name: string; detail: string })
+  | (EventBase & {
+      event: "tool.start";
+      tool_id: string;
+      name: string;
+      detail: string;
+      /** delegate_task only: the `[dag:<run>/<node>]` parts it hands out. */
+      dag?: { run: string; node: string }[];
+    })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
   | (EventBase & { event: "skill"; name: string })
   | (EventBase & { event: "delta"; text: string })

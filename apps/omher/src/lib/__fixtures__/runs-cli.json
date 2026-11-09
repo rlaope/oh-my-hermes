@@ -1,0 +1,195 @@
+{
+ "runs": [
+  {
+   "id": "claude:ec38bc0b-8eb7-936b-b856-daaee28015c4",
+   "kind": "claude-task",
+   "agent": "claude",
+   "owner": {
+    "type": "session",
+    "id": "ec38bc0b-8eb7-936b-b856-daaee28015c4"
+   },
+   "title": "Ship the API fix",
+   "cwd": "/w/web-app",
+   "state": "failed",
+   "nodes": [
+    {
+     "id": "toolu_7002c753ee3db143a33bc775",
+     "label": "Review the API change",
+     "deps": [],
+     "layer": 0,
+     "state": "failed",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "failed",
+       "started": 1793069375.848,
+       "ended": 1793069397.506,
+       "reason": "Agent type not available in this folder."
+      }
+     ],
+     "started": 1793069375.848,
+     "ended": 1793069397.506,
+     "summary": "Agent type not available in this folder.",
+     "model": "claude-opus-5-5",
+     "executor": "claude",
+     "lane": "executor"
+    },
+    {
+     "id": "toolu_798504aa8132a3d10804ac90",
+     "label": "Check the build on Windows",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1793069391.083,
+       "ended": 1793070279.814
+      }
+     ],
+     "started": 1793069391.083,
+     "ended": 1793070279.814,
+     "summary": "The Windows build compiles; one warning about an unused import.",
+     "model": "claude-opus-5-5",
+     "executor": "claude",
+     "lane": "executor"
+    },
+    {
+     "id": "toolu_fdeaea396dc21b0b1c7fd624",
+     "label": "Write the release note",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1793069434.38,
+       "ended": 1793069730.587
+      }
+     ],
+     "started": 1793069434.38,
+     "ended": 1793069730.587,
+     "summary": "Release note drafted under Unreleased with the PR link.",
+     "model": "claude-opus-5-5",
+     "executor": "claude",
+     "lane": "executor"
+    }
+   ],
+   "started": 1793068976.033,
+   "updated": 1794245531.6543915,
+   "ended": 1793070279.814
+  },
+  {
+   "id": "codex:c5e14c89-54b2-c703-769f-a6207ed501ea",
+   "kind": "codex-sub",
+   "agent": "codex",
+   "owner": {
+    "type": "session",
+    "id": "c5e14c89-54b2-c703-769f-a6207ed501ea"
+   },
+   "title": "Harden the API server",
+   "cwd": "/w/api-server",
+   "state": "done",
+   "nodes": [
+    {
+     "id": "dd005c2c-a3e3-62b4-c80c-05668a18c7ca",
+     "label": "Review api",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1793637526.0,
+       "ended": 1793637536.0
+      }
+     ],
+     "started": 1793637526.0,
+     "ended": 1793637536.0,
+     "summary": "API review done: one missing null check, fixed.",
+     "model": "gpt-6-astra",
+     "effort": "low",
+     "executor": "codex"
+    },
+    {
+     "id": "72893de0-3f10-deb3-7027-351e2a97f92d",
+     "label": "Check build",
+     "deps": [],
+     "layer": 0,
+     "state": "done",
+     "attempts": [
+      {
+       "n": 1,
+       "outcome": "completed",
+       "started": 1793637532.0,
+       "ended": 1793637541.0
+      }
+     ],
+     "started": 1793637532.0,
+     "ended": 1793637541.0,
+     "summary": "Build checked on both targets; no errors.",
+     "model": "gpt-6-astra",
+     "effort": "low",
+     "executor": "codex"
+    }
+   ],
+   "started": 1793637506.732,
+   "updated": 1794245487.225892,
+   "ended": 1793637541.0
+  }
+ ],
+ "summaries": [
+  {
+   "id": "claude:ec38bc0b-8eb7-936b-b856-daaee28015c4",
+   "kind": "claude-task",
+   "agent": "claude",
+   "owner": {
+    "type": "session",
+    "id": "ec38bc0b-8eb7-936b-b856-daaee28015c4"
+   },
+   "title": "Ship the API fix",
+   "cwd": "/w/web-app",
+   "state": "failed",
+   "started": 1793068976.033,
+   "updated": 1794245531.6543915,
+   "ended": 1793070279.814,
+   "counts": {
+    "nodes": 3,
+    "done": 2,
+    "running": 0,
+    "failed": 1
+   }
+  },
+  {
+   "id": "codex:c5e14c89-54b2-c703-769f-a6207ed501ea",
+   "kind": "codex-sub",
+   "agent": "codex",
+   "owner": {
+    "type": "session",
+    "id": "c5e14c89-54b2-c703-769f-a6207ed501ea"
+   },
+   "title": "Harden the API server",
+   "cwd": "/w/api-server",
+   "state": "done",
+   "started": 1793637506.732,
+   "updated": 1794245487.225892,
+   "ended": 1793637541.0,
+   "counts": {
+    "nodes": 2,
+    "done": 2,
+    "running": 0,
+    "failed": 0
+   }
+  }
+ ],
+ "agents": {
+  "claude": "found",
+  "codex": "found",
+  "pi": "not_installed",
+  "omp": "not_installed",
+  "grok": "not_installed"
+ }
+}

@@ -1,0 +1,41 @@
+{
+  "units": [
+    {
+      "category": "unspecified-high",
+      "depends_on": [],
+      "file_scope": [
+        "src/coding/executor_skill_discovery.py",
+        "tests/test_executor_skill_discovery.py"
+      ],
+      "owner": "codex",
+      "title": "Codex skill discovery reads .agents/skills",
+      "unit_id": "t1-discovery"
+    },
+    {
+      "category": "unspecified-high",
+      "depends_on": [],
+      "file_scope": [
+        "codex-coexist-t2:src/commands/setup.py",
+        "codex-coexist-t2:src/install/agent_skills_projection.py",
+        "codex-coexist-t2:tests/test_agent_skills_projection.py",
+        "codex-coexist-t2:tests/test_update_agent_skills.py"
+      ],
+      "owner": "codex",
+      "title": "Honest pack status + omh update refresh",
+      "unit_id": "t2-status-update"
+    },
+    {
+      "category": "unspecified-low",
+      "depends_on": [
+        "t2-status-update"
+      ],
+      "file_scope": [
+        "codex-coexist-t2:src/maintenance/doctor.py",
+        "codex-coexist-t2:tests/test_doctor_agent_skills.py"
+      ],
+      "owner": "codex",
+      "title": "Doctor check for the Codex pack",
+      "unit_id": "t3-doctor"
+    }
+  ]
+}

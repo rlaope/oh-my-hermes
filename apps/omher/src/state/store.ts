@@ -27,8 +27,9 @@ import type {
   AttachKind,
   AttachResult,
 } from "../lib/protocol";
+import type { AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
 
-export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
+export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
 // ---- view model types -----------------------------------------------------------------------
 
@@ -39,6 +40,8 @@ export interface Step {
   startedAt: number; // ms
   endedAt?: number; // ms
   ok?: boolean;
+  /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
+  dag?: { run: string; node: string }[];
 }
 
 export interface Turn {
@@ -177,6 +180,12 @@ export const PALETTES: Palette[] = ["omh", "graphite", "ocean", "forest", "sunse
 export interface Ui {
   panelOpen: boolean;
   panelTab: PanelTabId;
+  /** The run the Runs tab shows (a full id, or a dag run name from a chat line); null = the first in its list. */
+  runId: string | null;
+  /** The Runs graph fills the chat column (⌘⇧G); the side panel stays. */
+  runsFull: boolean;
+  /** Text put into a bot's composer for the person to edit and send (never sent by omher). */
+  draft: { bot: string; text: string; n: number } | null;
   theme: Theme;
   look: Look;
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
@@ -327,6 +336,9 @@ export function initialState(): AppState {
     ui: {
       panelOpen: false,
       panelTab: "details",
+      runId: null,
+      runsFull: false,
+      draft: null,
       theme: readTheme(),
       look: readLook(),
       view: "chat",
@@ -480,6 +492,9 @@ export type Action =
   | { type: "model.set"; bot: string; current: ModelCurrent }
   | { type: "ui.panel"; open?: boolean }
   | { type: "ui.panelTab"; tab: PanelTabId }
+  | { type: "ui.run"; run: string | null }
+  | { type: "ui.runsFull"; open: boolean }
+  | { type: "ui.draft"; bot: string; text: string }
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
@@ -543,7 +558,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
-          steps: [...t.steps, { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now }],
+          steps: [
+            ...t.steps,
+            { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
+          ],
         })),
       );
     case "tool.end":
@@ -780,6 +798,12 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, panelOpen: a.open ?? !state.ui.panelOpen } };
     case "ui.panelTab":
       return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: a.tab } };
+    case "ui.run":
+      return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: "runs", runId: a.run } };
+    case "ui.runsFull":
+      return { ...state, ui: { ...state.ui, runsFull: a.open, ...(a.open ? { panelOpen: true, panelTab: "runs" as const } : {}) } };
+    case "ui.draft":
+      return { ...state, ui: { ...state.ui, draft: { bot: a.bot, text: a.text, n: (state.ui.draft?.n ?? 0) + 1 } } };
     case "ui.theme":
       return { ...state, ui: { ...state.ui, theme: a.theme } };
     case "ui.look":
@@ -930,6 +954,12 @@ export interface Actions {
   togglePanel(open?: boolean): void;
   /** Open the side panel on one tab (Details, Terminal, Schedule, Worktrees, Diff). */
   setPanelTab(tab: PanelTabId): void;
+  /** Open the Runs tab on one run (null: the first in the list). */
+  openRun(run: string | null): void;
+  /** Show or hide the full-size Runs graph over the chat column. */
+  setRunsFull(open: boolean): void;
+  /** Put text in the selected bot's composer and focus it. Never sends. */
+  prefill(text: string): void;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -962,6 +992,10 @@ export interface Actions {
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
   /** A file the bot sent (`MEDIA:` line); never cached in the store. */
   readMedia(bot: string, path: string, info?: boolean): Promise<MediaFile>;
+  /** Runs tab reads (read-only: nothing here retries or cancels a run). */
+  runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
+  runsGet(bot: string, run: string): Promise<RunDetail>;
+  runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -1242,6 +1276,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     togglePanel: (open) => dispatch({ type: "ui.panel", open }),
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
+    openRun: (run) => dispatch({ type: "ui.run", run }),
+    setRunsFull: (open) => dispatch({ type: "ui.runsFull", open }),
+    prefill(text) {
+      const bot = state.selectedBot;
+      if (!bot) return;
+      if (state.ui.view !== "chat") dispatch({ type: "ui.closeSettings" });
+      dispatch({ type: "ui.draft", bot, text });
+    },
     setTheme(theme) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem("omher.theme", theme);
@@ -1311,6 +1353,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
     readMedia: (bot, path, info) => bridge.request("media.read", info ? { bot, path, info } : { bot, path }),
+    runsList: (bot) => bridge.request("runs.list", { bot }),
+    runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
+    runsCli: (params = {}) => bridge.request("runs.cli", params),
   };
 
   return {

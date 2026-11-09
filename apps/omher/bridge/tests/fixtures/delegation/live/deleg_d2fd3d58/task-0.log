@@ -1,0 +1,9 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_d2fd3d58   task: 0
+goal: Agent logos + usage meters [dag:omher-v02/t7-t10-usage]
+started: 2026-11-09 20:29:28
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)
+21:08:34 final    | status=completed duration=2346.18s summary: T7 (agent logos) and T10 (usage meters) are both finished and committed. All checks pass on the final commit `fe8398d6f`. **Commits** (signed off, not pushed): - `17c11dfa8` feat(omher): agent marks - AgentIcon and 22 logos - `fe8398d6f` feat(omher): usage meters - usage.read and sidebar rings **T7, logos:** - The 22 marks are copied unedited into `src/assets/agents/`. - `src/ui/AgentIcon.tsx` map …(+97 chars)
+21:08:34 final    | end status=completed exit_reason=completed

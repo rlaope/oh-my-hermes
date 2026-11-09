@@ -8,7 +8,7 @@ import { SourceIcon, Spinner } from "../ui";
 import { cadence, nextRun, sourceName } from "./format";
 import "./panel.css";
 
-export type PanelTab = "details" | "terminal" | "schedule" | "worktrees" | "diff";
+export type PanelTab = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
 export const TABS: { id: PanelTab; label: string }[] = [
   { id: "details", label: "Details" },
@@ -16,6 +16,7 @@ export const TABS: { id: PanelTab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
   { id: "worktrees", label: "Worktrees" },
   { id: "diff", label: "Diff" },
+  { id: "runs", label: "Runs" },
 ];
 
 const I = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -49,6 +50,15 @@ export const TAB_ICON: Record<PanelTab, ReactElement> = {
   diff: (
     <svg viewBox="0 0 24 24" {...I}>
       <path d="M8 3v8M4 7h8M4 18h8M15 6h6M15 18h6M15 12h6" />
+    </svg>
+  ),
+  // three nodes with edges: one on the left feeding two on the right
+  runs: (
+    <svg viewBox="0 0 24 24" {...I}>
+      <rect x="2.5" y="9.5" width="5" height="5" rx="1" />
+      <rect x="16.5" y="3.5" width="5" height="5" rx="1" />
+      <rect x="16.5" y="15.5" width="5" height="5" rx="1" />
+      <path d="M7.5 12c4.5 0 4.5-6 9-6M7.5 12c4.5 0 4.5 6 9 6" />
     </svg>
   ),
 };

@@ -3,7 +3,7 @@
 // "Worked for 2m 41s · 6 steps" and a click opens one detail row per step.
 import { useEffect, useState } from "react";
 import type { SlotProps } from "../../features";
-import { liveLabel, type Step } from "../../state/store";
+import { activityText, getStore, liveLabel, type Step, type Turn } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
 import "./activity.css";
@@ -77,7 +77,38 @@ function Ticker({ label }: { label: Label }) {
   );
 }
 
+/** "Assigned `t8-site` to a helper · working": one plain line per dag part a delegate_task handed out. The
+ *  status is read-only (nothing here reassigns); the run link opens the Runs tab on that run. */
+function DagRows({ step, live }: { step: Step; live: boolean }) {
+  const running = step.endedAt === undefined;
+  const status = step.ok === false ? "failed" : running ? (live ? "working" : "stopped") : "returned";
+  return (
+    <>
+      {step.dag!.map((d) => (
+        <div key={`${d.run}/${d.node}`} className={`act-step act-dag${step.ok === false ? " fail" : ""}`} data-testid="activity-dag">
+          <span className="v prose">
+            Assigned <code>{d.node}</code> to a helper
+          </span>
+          <span className={`act-dag-st ${status}`} data-testid="activity-dag-status">
+            {status}
+          </span>
+          <button
+            type="button"
+            className="act-dag-open"
+            onClick={() => getStore().actions.openRun(d.run)}
+            data-testid="activity-dag-open"
+            title={`Open run ${d.run}`}
+          >
+            {d.run}
+          </button>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }) {
+  if (step.name === "delegate_task" && step.dag?.length) return <DagRows step={step} live={live} />;
   const failed = step.ok === false;
   const running = step.endedAt === undefined;
   const ms = (step.endedAt ?? now) - step.startedAt;

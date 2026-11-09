@@ -1,0 +1,9 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_e8b94630   task: 1
+goal: In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in rlaope/oh-my-hermes), add a SESSIONS section to the sidebar under BOTS where the user starts NEW terminal agent sessions — exactly like typing `claude`, `codex`, `omh`, `pi` or `omp` in a terminal — and works with them inside omher. Open a PR (do NOT merge).
+started: 2026-11-09 19:48:43
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)
+20:35:16 final    | status=completed duration=2792.52s summary: {"pr_url":"https://github.com/rlaope/oh-my-hermes/pull/2704","commits":["5dfc66184 docs(omher): boundary rule 10, sessions start only allow-listed agents","a7f88d42b feat(omher): PTY sessions in the Tauri shell for claude, codex, omh, pi, omp","fd85169fa feat(omher): SESSIONS in the sidebar, start agents and use them in a terminal"],"gates":"All gates passed locally, all from apps/omher except the …(+100 chars)
+20:35:16 final    | end status=completed exit_reason=completed

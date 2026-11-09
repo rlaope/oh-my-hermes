@@ -12,6 +12,7 @@ import logo from "../assets/omher-mark.png";
 import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
 import { DiffTab, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
 import { useNow } from "./useNow";
+import { RunsTab } from "../runs/RunsTab";
 import "./elsewhere.css";
 
 export const slot = "detailsPanel";
@@ -58,6 +59,7 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
           {open && tab === "schedule" && <ScheduleTab bot={bot} />}
           {open && tab === "worktrees" && <WorktreesTab bot={bot} onOpenDiff={openDiff} />}
           {open && tab === "diff" && <DiffTab bot={bot} path={diffPath} onPick={setDiffPath} />}
+          {open && tab === "runs" && <RunsTab bot={bot} />}
         </div>
       </div>
     );

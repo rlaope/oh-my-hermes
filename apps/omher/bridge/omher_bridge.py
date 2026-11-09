@@ -765,6 +765,1241 @@ def _to_ts(value) -> float:
         return time.time()
 
 
+# ---------------------------------------------------------------- runs: OMH dag records (read-only)
+
+DAG_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")  # OMH's own id rule for runs and nodes
+HANDOFF_MAX = 8000  # chars of one node's handoff sent to the UI
+_OUTCOME_STATE = {"accepted": "done", "failed": "failed", "blocked": "blocked", "parked": "parked", "retry": "waiting"}
+
+
+def omh_home_for(profile_dir: Path) -> Path:
+    """The OMH store a profile's plugin uses: its `plugins.entries.omh.settings.omh_home`, else `OMH_HOME`,
+    else `~/.omh` (OMH's own standalone order)."""
+    node = _load_yaml(profile_dir / "config.yaml")
+    for key in ("plugins", "entries", "omh", "settings"):
+        node = node.get(key) if isinstance(node, dict) else None
+    value = node.get("omh_home") if isinstance(node, dict) else None
+    if isinstance(value, str) and value.strip():
+        path = Path(os.path.expanduser(value.strip()))
+        return path if path.is_absolute() else profile_dir / path
+    env = (os.environ.get("OMH_HOME") or "").strip()
+    return Path(os.path.expanduser(env)) if env else Path.home() / ".omh"
+
+
+def _num(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def layer_of(nodes: list[dict]) -> dict[str, int]:
+    """Longest-path layer of each node from its deps (deps on unknown ids are ignored). A cycle raises."""
+    deps = {n["id"]: n["deps"] for n in nodes}
+    memo: dict[str, int] = {}
+    visiting: set[str] = set()
+
+    def visit(i: str) -> int:
+        if i in memo:
+            return memo[i]
+        if i in visiting:
+            raise ValueError(f"cycle through {i}")
+        visiting.add(i)
+        memo[i] = 1 + max((visit(d) for d in deps[i]), default=-1)
+        visiting.discard(i)
+        return memo[i]
+
+    for i in deps:
+        visit(i)
+    return memo
+
+
+def dag_to_run(record: dict, bot: str, handoffs=()) -> dict:
+    """One `omh_dag/v1` record as an AgentRun (src/lib/runs.ts has the same mapping as `fromDag`)."""
+    raw = [n for n in record.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
+    ids = {n["id"] for n in raw}
+    cancelled = record.get("cancelled_at") is not None
+    nodes = []
+    for n in raw:
+        attempts = [a for a in n.get("attempts") or [] if isinstance(a, dict)]
+        last = attempts[-1] if attempts else None
+        state = "waiting" if last is None else _OUTCOME_STATE.get(str(last.get("outcome") or ""), "running")
+        if cancelled and state in ("running", "parked", "waiting"):
+            state = "cancelled"
+        node = {"id": n["id"], "label": str(n.get("label") or n["id"]),
+                "deps": [d for d in n.get("depends_on") or [] if d in ids], "state": state, "attempts": []}
+        if isinstance(n.get("category"), str) and n["category"]:
+            node["category"] = node["route"] = n["category"]
+        if isinstance(n.get("role"), str) and n["role"]:
+            node["role"] = n["role"]
+        for a in attempts:
+            item = {"n": int(a["n"]) if isinstance(a.get("n"), int) else len(node["attempts"]) + 1,
+                    "outcome": str(a.get("outcome") or "") or "open"}
+            for src, dst in (("reason", "reason"), ("lane", "lane")):
+                if isinstance(a.get(src), str) and a[src]:
+                    item[dst] = a[src]
+            for src, dst in (("handed_out_at", "started"), ("settled_at", "ended")):
+                if _num(a.get(src)) is not None:
+                    item[dst] = _num(a.get(src))
+            node["attempts"].append(item)
+        if node["attempts"]:
+            first, end = node["attempts"][0], node["attempts"][-1]
+            if "lane" in end:
+                node["lane"] = end["lane"]
+            if "started" in first:
+                node["started"] = first["started"]
+            if state in ("done", "failed", "blocked") and "ended" in end:
+                node["ended"] = end["ended"]
+        if n["id"] in handoffs:
+            node["handoff"] = f"{n['id']}.md"
+        nodes.append(node)
+    repairs = record.get("repairs")
+    groups: dict = repairs if isinstance(repairs, dict) else {}
+    by_id = {node["id"]: node for node in nodes}
+    # each repair member points at the node it repairs (the latest group naming it wins), so the graph can
+    # draw that link and place the repair after the failure
+    for target, g in groups.items():
+        if target not in by_id or not isinstance(g, list):
+            continue
+        for group in g:
+            for m in group if isinstance(group, list) else []:
+                if m in by_id and m != target:
+                    by_id[m]["repairOf"] = target
+    layers = layer_of([{"id": node["id"], "deps": node["deps"] + ([node["repairOf"]] if "repairOf" in node else [])}
+                       for node in nodes])
+    for node in nodes:
+        node["layer"] = layers[node["id"]]
+    superseded = {m for g in groups.values() if isinstance(g, list) for older in g[:-1] if isinstance(older, list)
+                  for m in older if by_id.get(m, {}).get("state") != "done"}
+
+    def satisfied(node) -> bool:
+        if node["state"] == "done":
+            return True
+        latest = (groups.get(node["id"]) or [[]])[-1]
+        return node["state"] in ("failed", "blocked") and bool(latest) and all(
+            by_id.get(m, {}).get("state") == "done" for m in latest)
+
+    live = [node for node in nodes if node["id"] not in superseded]
+    if cancelled:
+        run_state = "cancelled"
+    elif all(satisfied(node) for node in live):
+        run_state = "done"
+    elif any(node["state"] in ("running", "parked") or node["state"] == "waiting" and all(
+            satisfied(by_id[d]) for d in node["deps"]) for node in live):
+        run_state = "running"
+    else:
+        run_state = "failed"
+    sid, run = str(record.get("session_id") or ""), str(record.get("run") or "")
+    out = {"id": f"dag:{sid}/{run}", "kind": "dag", "owner": {"type": "bot", "id": bot},
+           "title": str(record.get("name") or run), "state": run_state, "nodes": nodes,
+           "started": _num(record.get("defined_at")) or 0.0, "updated": _num(record.get("updated_at")) or 0.0}
+    if isinstance(record.get("goal"), str) and record["goal"]:
+        out["goal"] = record["goal"]
+    if run_state != "running":
+        ends = [a["ended"] for node in nodes for a in node["attempts"] if "ended" in a]
+        ended = _num(record.get("cancelled_at")) if cancelled else (max(ends) if ends else None)
+        if ended is not None:
+            out["ended"] = ended
+    return out
+
+
+def repaired_ids(nodes: list[dict]) -> set[str]:
+    """Failed (or blocked) nodes whose repairs all finished: OMH counts them as satisfied."""
+    fixes: dict[str, list[dict]] = {}
+    for n in nodes:
+        if n.get("repairOf"):
+            fixes.setdefault(n["repairOf"], []).append(n)
+    return {n["id"] for n in nodes if n["state"] in ("failed", "blocked") and fixes.get(n["id"])
+            and all(m["state"] == "done" for m in fixes[n["id"]])}
+
+
+def run_summary(run: dict) -> dict:
+    """A run without its nodes, plus counts. `failed` is open failures only; a failure its repairs fixed counts as
+    `repaired` (and appears only when there is one)."""
+    out = {k: v for k, v in run.items() if k != "nodes"}
+    states = [n["state"] for n in run["nodes"]]
+    fixed = len(repaired_ids(run["nodes"]))
+    out["counts"] = {"nodes": len(states), "done": states.count("done"), "running": states.count("running"),
+                     "failed": states.count("failed") + states.count("blocked") - fixed}
+    if fixed:
+        out["counts"]["repaired"] = fixed
+    return out
+
+
+# ---------------------------------------------------------------- runs: Hermes delegate_task fan-outs (read-only)
+
+DELEG_ID = re.compile(r"^deleg_[0-9a-f]{6,32}$")
+DAG_MARK = re.compile(r"\[dag:([a-z0-9][a-z0-9-]{0,31})/([a-z0-9][a-z0-9-]{0,31})\]")
+SUMMARY_MAX = 600       # chars of a helper's final summary sent to the UI
+DELEG_LIMIT = 40        # newest delegation folders read per bot
+LOG_HEAD = 2048         # bytes read from the top of a task log (goal, started)
+LOG_TAIL = 6144         # bytes read from its end (the `final` lines)
+STALE_AFTER = 3600.0    # a "running" task whose log has not moved for this long has stopped reporting
+ROUTE_FRESH = 900.0     # OMH's own window: a route record older than this no longer describes a dispatch
+_FINAL = re.compile(r"^\d\d:\d\d:\d\d final\s+\|\s*(.*)$")
+_TASK_STATE = {"running": "running", "completed": "done", "failed": "failed", "error": "failed",
+               "timeout": "failed", "stalled": "failed", "interrupted": "cancelled", "cancelled": "cancelled"}
+_ROUTE_WHY = {"head": "chain head", "fallback": "fallback", "exhausted_to_inherit": "chain exhausted"}
+
+
+def _local_ts(text, tz=None) -> float | None:
+    """`2026-11-09 21:29:55` (Hermes writes local time) as epoch seconds; `tz` pins the zone for tests."""
+    try:
+        dt = datetime.strptime(str(text), "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    return (dt.replace(tzinfo=tz) if tz is not None else dt).timestamp()
+
+
+def _clip(text: str, n: int) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def read_task_log(path: Path) -> dict:
+    """Head lines (goal, started) and the `final` lines of one `task-N.log`; the transcript between is skipped."""
+    out: dict = {}
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(LOG_HEAD).decode("utf-8", "replace")
+            size = fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, size - LOG_TAIL))
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return out
+    for line in head.split("\n")[:6]:
+        key, _, value = line.partition(": ")
+        if key in ("goal", "started") and value.strip():
+            out[key] = value.strip()
+    for line in tail.split("\n"):
+        m = _FINAL.match(line)
+        if not m:
+            continue
+        body = m.group(1)
+        if body.startswith("end "):
+            for k, v in re.findall(r"(status|exit_reason)=(\S+)", body):
+                out[k] = v
+            if " error: " in body:
+                out["error"] = _clip(body.split(" error: ", 1)[1], SUMMARY_MAX)
+        elif "summary:" in body:
+            out["summary"] = _clip(body.split("summary:", 1)[1], SUMMARY_MAX)
+            st = re.search(r"status=(\S+)", body)
+            if st:
+                out.setdefault("status", st.group(1))
+            took = re.search(r"\bduration=(\d+(?:\.\d+)?)s\b", body.split("summary:", 1)[0])
+            if took:
+                out["duration"] = float(took.group(1))
+    return out
+
+
+def load_route_records(omh_home: Path) -> list[dict]:
+    """OMH's `routing/route-provenance.json` (what `omh_delegate_route` wrote before a dispatch), oldest first.
+    Anything unreadable is no records."""
+    try:
+        raw = json.loads((omh_home / "routing" / "route-provenance.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, dict) or raw.get("schema_version") != "delegation_route_provenance/v1":
+        return []
+    out = []
+    for r in raw.get("records") or []:
+        if isinstance(r, dict) and _num(r.get("written_at")) is not None and isinstance(r.get("origin"), str):
+            out.append(r)
+    return sorted(out, key=lambda r: r["written_at"])
+
+
+def route_for(records: list[dict], started: float, model: str, sessions: set[str]) -> dict | None:
+    """The route record that preceded a dispatch, by OMH's own pairing rule: the newest record written before
+    the child started, no older than ROUTE_FRESH, not a `cleared` one, naming the child's model, and written by
+    one of this bot's sessions. Hermes stamps a start in whole seconds (truncated), so a record from inside that
+    second may have come after the dispatch: only records before the stamp count."""
+    for r in reversed(records):
+        if r.get("session_id") and r["session_id"] not in sessions:
+            continue
+        if r["written_at"] > started:
+            continue
+        if started - r["written_at"] > ROUTE_FRESH or r.get("origin") == "cleared":
+            return None
+        if model and model in (r.get("alias"), r.get("wire_model")):
+            route = {"category": str(r.get("category") or ""), "origin": r["origin"]}
+            for src, dst in (("provider", "provider"), ("reasoning_effort", "effort"), ("from_alias", "from")):
+                if isinstance(r.get(src), str) and r[src]:
+                    route[dst] = r[src]
+            return route if route["category"] else None
+        return None
+    return None
+
+
+class Delegations:
+    """Reads `<profile>/cache/delegation/live/deleg_*/` (Hermes' delegate_task manifest plus the head and final
+    lines of each task log) into plain dicts. Cached per folder by the mtimes and sizes inside it."""
+
+    def __init__(self, tz=None):
+        self.tz = tz
+        self._cache: dict[str, tuple[tuple, dict]] = {}
+
+    def _one(self, folder: Path, now: float) -> dict | None:
+        try:
+            files = sorted(p for p in folder.iterdir() if p.name == "manifest.json" or re.match(r"^task-\d+\.log$", p.name))
+            stamp = tuple((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in files if not p.is_symlink())
+        except OSError:
+            return None
+        hit = self._cache.get(str(folder))
+        if hit and hit[0] == stamp:
+            d = hit[1]
+        else:
+            try:
+                man = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return hit[1] if hit else None
+            if not isinstance(man, dict) or not isinstance(man.get("tasks"), list):
+                return None
+            d = {"id": folder.name, "started": _local_ts(man.get("started"), self.tz) or 0.0, "tasks": []}
+            ended = _local_ts(man.get("completed"), self.tz)
+            if ended is not None:
+                d["ended"] = ended
+            for key in ("model", "provider"):
+                if isinstance(man.get(key), str) and man[key]:
+                    d[key] = man[key]
+            for t in man["tasks"]:
+                if not isinstance(t, dict) or not isinstance(t.get("index"), int):
+                    continue
+                log = folder / f"task-{t['index']}.log"
+                head = read_task_log(log) if log.is_file() and not log.is_symlink() else {}
+                goal = str(t.get("goal") or head.get("goal") or "")
+                task = {"index": t["index"], "goal": _clip(DAG_MARK.sub("", goal), 200),
+                        "status": str(t.get("status") or head.get("status") or "running")}
+                if task["status"] == "running" and head.get("status"):
+                    task["status"] = head["status"]  # the log's final line can land before the manifest's
+                started = _local_ts(head.get("started"), self.tz)
+                if started is not None:
+                    task["started"] = started
+                    # the task's own end (its final line's duration): a fan-out still running has no `completed`
+                    # yet, and its finished tasks must not keep counting
+                    if head.get("duration") is not None and task["status"] != "running":
+                        task["ended"] = round(started + head["duration"], 3)
+                model = t.get("model") or d.get("model")
+                if isinstance(model, str) and model:
+                    task["model"] = model
+                for key in ("summary", "error"):
+                    if head.get(key):
+                        task[key] = head[key]
+                m = DAG_MARK.search(goal)
+                if m:
+                    task["dag"] = {"run": m.group(1), "node": m.group(2)}
+                try:
+                    task["_mtime"] = log.stat().st_mtime
+                except OSError:
+                    task["_mtime"] = d["started"]
+                d["tasks"].append(task)
+            self._cache[str(folder)] = (stamp, d)
+        out = json.loads(json.dumps(d))
+        for task in out["tasks"]:
+            if task["status"] == "running" and now - task.pop("_mtime") > STALE_AFTER:
+                task["status"] = "stalled"
+                task.setdefault("error", "No log update for over an hour; the helper stopped reporting.")
+            task.pop("_mtime", None)
+        return out
+
+    def list(self, profile_dir: Path, now: float | None = None) -> list[dict]:
+        root = profile_dir / "cache" / "delegation" / "live"
+        if not root.is_dir() or root.is_symlink():
+            return []
+        now = time.time() if now is None else now
+        try:
+            folders = [p for p in root.iterdir() if DELEG_ID.match(p.name) and p.is_dir() and not p.is_symlink()]
+        except OSError:
+            return []
+        folders.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return [d for d in (self._one(f, now) for f in folders[:DELEG_LIMIT]) if d is not None]
+
+
+def attach_routes(delegs: list[dict], records: list[dict], sessions: set[str]) -> list[dict]:
+    """Give each delegation the OMH route record that prepared it, when one pairs (`route_for`)."""
+    for d in delegs:
+        model = d.get("model") or next((t["model"] for t in d["tasks"] if t.get("model")), "")
+        route = route_for(records, d["started"], model, sessions) if d["started"] else None
+        if route:
+            d["route"] = route
+    return delegs
+
+
+def _task_node(t: dict, d: dict) -> dict:
+    """The node fields one delegation task gives (model, provider, effort, route, summary)."""
+    out = {}
+    if t.get("model"):
+        out["model"] = t["model"]
+    route = d.get("route") or {}
+    provider = d.get("provider") or route.get("provider")
+    if provider:
+        out["provider"] = provider
+    if route.get("effort"):
+        out["effort"] = route["effort"]
+    if route.get("category"):
+        out["route"] = route["category"]
+        why = _ROUTE_WHY.get(route.get("origin", ""))
+        if why:
+            out["routeWhy"] = why + (f" from {route['from']}" if why == "fallback" and route.get("from") else "")
+    if t.get("summary") or t.get("error"):
+        out["summary"] = t.get("summary") or t.get("error")
+    return out
+
+
+def delegation_to_run(d: dict, bot: str) -> dict:
+    """One delegate_task fan-out as a one-layer AgentRun (src/lib/runs.ts `fromDelegation` is the same mapping)."""
+    nodes = []
+    for t in d["tasks"]:
+        state = _TASK_STATE.get(t["status"], "running")
+        att = {"n": 1, "outcome": t["status"]}
+        if t.get("started") is not None or d["started"]:
+            att["started"] = t.get("started", d["started"])
+        end = t.get("ended", d.get("ended"))
+        if state != "running" and end is not None:
+            att["ended"] = end
+        if state in ("failed", "cancelled") and (t.get("error") or t.get("summary")):
+            att["reason"] = t.get("error") or t.get("summary")
+        node = {"id": f"task-{t['index']}", "label": t["goal"] or f"Task {t['index'] + 1}", "deps": [], "layer": 0,
+                "state": state, "attempts": [att]}
+        node.update(_task_node(t, d))
+        if "started" in att:
+            node["started"] = att["started"]
+        if "ended" in att:
+            node["ended"] = att["ended"]
+        nodes.append(node)
+    states = [n["state"] for n in nodes]
+    run_state = ("running" if "running" in states else "failed" if "failed" in states
+                 else "cancelled" if "cancelled" in states else "done")
+    first = nodes[0]["label"] if nodes else d["id"]
+    run = {"id": f"delegate:{d['id']}", "kind": "delegate", "owner": {"type": "bot", "id": bot},
+           "title": first + (f" +{len(nodes) - 1}" if len(nodes) > 1 else ""), "state": run_state, "nodes": nodes,
+           "started": d["started"], "updated": max([d["started"], d.get("ended") or 0.0]
+                                                   + [n.get("started", 0.0) for n in nodes])}
+    if run_state != "running" and d.get("ended") is not None:
+        run["ended"] = d["ended"]
+    return run
+
+
+FANOUT_UNITS = re.compile(r"^fanout-[0-9a-f]{6,32}-units\.json$")
+
+
+def fanout_owners(folder: Path) -> dict[str, str]:
+    """{node id: owner} from a dag run's own `fanout-*-units.json` files (what `omh_dag export` handed to an agent
+    CLI such as codex). Plain files inside the run folder only; anything unreadable is skipped."""
+    out: dict[str, str] = {}
+    if not folder.is_dir() or folder.is_symlink():
+        return out
+    for f in sorted(folder.iterdir()):
+        if not FANOUT_UNITS.match(f.name) or f.is_symlink() or not f.is_file():
+            continue
+        try:
+            units = json.loads(f.read_text(encoding="utf-8")).get("units")
+        except (OSError, ValueError, AttributeError):
+            continue
+        for u in units if isinstance(units, list) else []:
+            if isinstance(u, dict) and isinstance(u.get("unit_id"), str) and isinstance(u.get("owner"), str) and u["owner"]:
+                out[u["unit_id"]] = u["owner"]
+    return out
+
+
+def attach_owners(run: dict, owners: dict[str, str]) -> dict:
+    """Name the agent CLI that ran each fanout node (`executor`), when the run's unit files say so."""
+    for node in run["nodes"]:
+        if node.get("lane") == "fanout" and owners.get(node["id"]):
+            node["executor"] = owners[node["id"]]
+    return run
+
+
+def route_table(records: list[dict], sessions: set[str]) -> dict[str, dict]:
+    """{category: {model, provider?, effort?}}: what each routing category resolved to in this bot's newest route
+    record (OMH's `route-provenance.json`), so a node no helper has reported on can show the model it goes to."""
+    table: dict[str, dict] = {}
+    for r in records:  # oldest first: a newer record replaces an older one
+        if r.get("origin") == "cleared" or (r.get("session_id") and r["session_id"] not in sessions):
+            continue
+        cat, model = r.get("category"), r.get("wire_model") or r.get("alias")
+        if not (isinstance(cat, str) and cat and isinstance(model, str) and model):
+            continue
+        row = {"model": model}
+        for src, dst in (("provider", "provider"), ("reasoning_effort", "effort")):
+            if isinstance(r.get(src), str) and r[src]:
+                row[dst] = r[src]
+        table[cat] = row
+    return table
+
+
+def attach_planned(run: dict, table: dict[str, dict]) -> dict:
+    """`planned` = the route table's model for a node with no reported model and no named executor."""
+    for node in run["nodes"]:
+        if not node.get("model") and not node.get("executor") and table.get(node.get("route") or ""):
+            node["planned"] = dict(table[node["route"]])
+    return run
+
+
+def attach_delegations(run: dict, delegs: list[dict]) -> dict:
+    """Fill a dag run's nodes with what their helpers ran on (model, provider, effort, route record, summary).
+    A task belongs to a node through the `[dag:<run>/<node>]` marker in its goal; attempt k pairs with the
+    first matching task that started at or after that attempt was handed out. The dag's own fields win."""
+    name = run["id"].rsplit("/", 1)[-1]
+    tasks = sorted(((t, d) for d in delegs for t in d["tasks"]
+                    if t.get("dag", {}).get("run") == name and d["started"] >= run["started"] - 60),
+                   key=lambda td: td[0].get("started", td[1]["started"]))
+    for node in run["nodes"]:
+        mine = [(t, d) for t, d in tasks if t["dag"]["node"] == node["id"]]
+        if not mine:
+            continue
+        used: set[int] = set()
+        last = None
+        for att in node["attempts"]:
+            at = att.get("started")
+            pick = next((i for i, (t, d) in enumerate(mine) if i not in used
+                         and (at is None or t.get("started", d["started"]) >= at - 5)), None)
+            if pick is None:
+                continue
+            used.add(pick)
+            t, d = mine[pick]
+            if t.get("model"):
+                att["model"] = t["model"]
+            last = (t, d)
+        if last is None:
+            continue
+        for k, v in _task_node(*last).items():
+            node.setdefault(k, v)
+    return run
+
+
+class DagRuns:
+    """Reads `<omh home>/runtime/dag/*/*.json` for one bot: a run belongs to the bot when its `session_id` is a
+    session in the bot's own state.db. A record caught mid-write keeps its last good parse (cache keyed by
+    mtime and size); nothing here writes, settles or retries a run."""
+
+    def __init__(self, delegations: Delegations | None = None):
+        self._cache: dict[str, tuple[tuple[int, int], dict]] = {}
+        self.delegations = delegations or Delegations()
+
+    def _record(self, path: Path) -> dict | None:
+        key = str(path)
+        hit = self._cache.get(key)
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        stamp = (st.st_mtime_ns, st.st_size)
+        if hit and hit[0] == stamp:
+            return hit[1]
+        try:
+            rec = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return hit[1] if hit else None
+        if not isinstance(rec, dict) or not isinstance(rec.get("nodes"), list):
+            return hit[1] if hit else None
+        self._cache[key] = (stamp, rec)
+        return rec
+
+    @staticmethod
+    def _sessions(profile_dir: Path) -> set[str]:
+        import sqlite3
+        db = profile_dir / "state.db"
+        if not db.is_file():
+            return set()
+        try:
+            con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+            try:
+                return {str(r[0]) for r in con.execute("SELECT id FROM sessions")}
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return set()
+
+    def _owned(self, bot: str, profile_dir: Path):
+        """(json path or None, record or None, AgentRun) for each of the bot's runs: its dag runs with their
+        helpers' models and routes filled in, then its delegate_task fan-outs that belong to no dag run."""
+        mine = self._sessions(profile_dir)
+        home = omh_home_for(profile_dir)
+        records = load_route_records(home)
+        delegs = attach_routes(self.delegations.list(profile_dir), records, mine)
+        table = route_table(records, mine)
+        out = [(path, rec, attach_planned(attach_delegations(run, delegs), table))
+               for path, rec, run in self._dag(bot, profile_dir, mine)]
+        for d in delegs:
+            if d["tasks"] and not any(t.get("dag") for t in d["tasks"]):
+                out.append((None, None, delegation_to_run(d, bot)))
+        return out
+
+    def _dag(self, bot: str, profile_dir: Path, mine: set[str]):
+        root = omh_home_for(profile_dir) / "runtime" / "dag"
+        if not root.is_dir():
+            return []
+        out = []
+        for path in sorted(root.glob("*/*.json")):
+            if path.is_symlink() or path.parent.is_symlink() or not DAG_ID.match(path.stem):
+                continue
+            rec = self._record(path)
+            if rec is None or str(rec.get("session_id") or "") not in mine:
+                continue
+            try:
+                run = dag_to_run(rec, bot, self._handoff_names(root, path, rec))
+            except (ValueError, TypeError, KeyError, RecursionError):
+                continue  # a cycle or a malformed record: not drawable, skip it
+            attach_owners(run, fanout_owners(path.parent / path.stem))
+            out.append((path, rec, run))
+        return out
+
+    @staticmethod
+    def _handoff_file(root: Path, path: Path, node: str) -> Path | None:
+        """`<run>/<node>.md` next to the record, when it is a plain file inside the dag dir (no symlinks)."""
+        if not DAG_ID.match(node):
+            return None
+        folder = path.parent / path.stem
+        f = folder / f"{node}.md"
+        if folder.is_symlink() or f.is_symlink() or not f.is_file():
+            return None
+        real, top = os.path.realpath(f), os.path.realpath(root)
+        if os.path.commonpath([real, top]) != top:
+            return None
+        return f
+
+    def _handoff_names(self, root: Path, path: Path, rec: dict) -> set[str]:
+        ids = [str(n["id"]) for n in rec.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
+        return {i for i in ids if self._handoff_file(root, path, i) is not None}
+
+    def list(self, bot: str, profile_dir: Path) -> list[dict]:
+        runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir)]
+        runs.sort(key=lambda r: (r["state"] != "running", -r["updated"]))
+        return runs
+
+    def get(self, bot: str, profile_dir: Path, run_id: str) -> dict:
+        root = omh_home_for(profile_dir) / "runtime" / "dag"
+        for path, _, run in self._owned(bot, profile_dir):
+            if run["id"] != run_id:
+                continue
+            handoffs = {}
+            for node in run["nodes"]:
+                f = self._handoff_file(root, path, node["id"]) if node.get("handoff") and path else None
+                if f is None:
+                    continue
+                try:
+                    with open(f, "rb") as fh:
+                        data = fh.read(HANDOFF_MAX * 4)
+                except OSError:
+                    continue
+                handoffs[node["id"]] = data.decode("utf-8", "replace")[:HANDOFF_MAX]
+            return {"run": run, "handoffs": handoffs}
+        raise BridgeError("not_found", f"no run {run_id} for {bot}")
+
+
+# ---------------------------------------------------------------- runs: CLI agent sub-runs (read-only)
+# Claude Code Task/Agent subagents and Codex spawned sub-agents, each session with sub-runs as one AgentRun.
+# Only a session's short title and each sub-run's name, model, state, times and final text (SUMMARY_MAX) leave
+# here; prompts and message bodies are never kept. Nothing here starts, resumes or stops a CLI session.
+
+CLI_AGENTS = ("claude", "codex", "pi", "omp", "grok")
+CLI_STALE = 600.0           # a sub-run with no result whose transcript has not moved for this long: failed, "no result"
+CLI_WINDOW = 7 * 86400.0    # default `since`: sessions started in the last week
+CLI_FILES = 60              # newest session files read per agent and call
+CLI_RUNS = 30               # runs returned per call
+CLI_TITLE = 80              # chars of a session title or a sub-run label
+CLI_TAIL = 65536            # bytes read from the end of a Claude subagent transcript (its model and last words)
+CLI_HEAD = 600              # bytes of a Codex line searched for its event type
+_CLAUDE_TOOLS = ("Agent", "Task")
+_TOOL_RESULT_ID = re.compile(rb'"tool_use_id"\s*:\s*"([^"]{1,120})"')
+_TASK_CALL = re.compile(rb'"name"\s*:\s*"(?:Agent|Task)"')
+_API_REQUEST = re.compile(rb'^\{\s*"type"\s*:\s*"api-request')
+_ASSISTANT = re.compile(rb'"type"\s*:\s*"assistant"')
+_NOTE = re.compile(r"<task-notification>(.*?)</task-notification>", re.S)
+_NOTE_TAG = re.compile(r"<(task-id|tool-use-id|status|result|summary)>(.*?)</\1>", re.S)
+_NOTE_STATE = {"completed": "done", "failed": "failed", "stopped": "cancelled", "killed": "cancelled",
+               "cancelled": "cancelled"}
+_CODEX_EVENTS = (b'"turn_context"', b'"task_started"', b'"task_complete"', b'"turn_aborted"')
+_OUTCOME = {"done": "completed", "failed": "failed", "running": "open", "cancelled": "stopped"}
+
+
+def cli_homes(environ=None) -> dict[str, Path]:
+    """Where each CLI keeps its sessions: Claude Code `CLAUDE_CONFIG_DIR` (else ~/.claude), Codex `CODEX_HOME`
+    (else ~/.codex)."""
+    env = os.environ if environ is None else environ
+    home = Path.home()
+    return {"claude": Path(env.get("CLAUDE_CONFIG_DIR") or home / ".claude"),
+            "codex": Path(env.get("CODEX_HOME") or home / ".codex"),
+            "pi": home / ".pi", "omp": home / ".omp", "grok": home / ".grok"}
+
+
+def claude_slug(cwd: str) -> str:
+    """Claude Code's project folder for a cwd: every character that is not a letter or a digit becomes `-`."""
+    return re.sub(r"[^A-Za-z0-9]", "-", cwd)
+
+
+def _iso_ts(text) -> float | None:
+    if not isinstance(text, str) or not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _one_line(text, n: int) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
+def _texts(value) -> list[str]:
+    """The plain strings of a message `content` (a string, or a list of `{type: text, text}` parts)."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [c["text"] for c in value if isinstance(c, dict) and isinstance(c.get("text"), str)]
+    return []
+
+
+def _plain_file(path: Path) -> bool:
+    try:
+        return path.is_file() and not path.is_symlink()
+    except OSError:
+        return False
+
+
+class _LineFeed:
+    """Folds a growing JSONL file into a small state, reading only the whole lines appended since the last read
+    (same inode and not shorter; else from the start). A last line without its newline waits for the next read."""
+
+    def __init__(self, new_state, fold):
+        self.new_state, self.fold = new_state, fold
+        self._files: dict[str, list] = {}
+
+    def read(self, path: Path):
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        hit = self._files.get(str(path))
+        if hit is None or hit[0] != st.st_ino or st.st_size < hit[1]:
+            hit = [st.st_ino, 0, self.new_state()]
+        if st.st_size > hit[1]:
+            try:
+                with open(path, "rb") as fh:
+                    fh.seek(hit[1])
+                    for raw in fh:
+                        if not raw.endswith(b"\n"):
+                            break
+                        hit[1] += len(raw)
+                        try:
+                            self.fold(hit[2], raw)
+                        except (ValueError, TypeError, KeyError, AttributeError):
+                            continue  # one odd line never stops the read
+            except OSError:
+                return hit[2] if str(path) in self._files else None
+        self._files[str(path)] = hit
+        return hit[2]
+
+
+def _claude_state() -> dict:
+    return {"sid": None, "cwd": None, "first": None, "title": None, "model": None, "tasks": {}, "notes": {}}
+
+
+def _claude_fold(s: dict, raw: bytes) -> None:
+    """One line of a Claude Code session transcript. Only lines that can matter are parsed: Agent/Task calls of
+    the main thread, their tool results, task notifications and status, the AI title, and the first stamped line."""
+    if _API_REQUEST.match(raw):
+        return  # request snapshots repeat every tool name; never a call
+    call = b'"tool_use"' in raw and _TASK_CALL.search(raw) is not None
+    result = bool(s["tasks"]) and b'"tool_result"' in raw and any(
+        m.decode("utf-8", "replace") in s["tasks"] for m in _TOOL_RESULT_ID.findall(raw))
+    note = b"<task-notification>" in raw
+    status = b'"task_status"' in raw
+    title = b'"ai-title"' in raw
+    head = s["first"] is None and b'"timestamp"' in raw
+    if not (call or result or note or status or title or head):
+        return
+    o = json.loads(raw)
+    if not isinstance(o, dict):
+        return
+    ts = _iso_ts(o.get("timestamp"))
+    if s["first"] is None and ts is not None:
+        s["first"] = ts
+    if s["sid"] is None and isinstance(o.get("sessionId"), str):
+        s["sid"] = o["sessionId"]
+    if s["cwd"] is None and isinstance(o.get("cwd"), str):
+        s["cwd"] = o["cwd"]
+    if o.get("type") == "ai-title" and isinstance(o.get("aiTitle"), str) and o["aiTitle"].strip():
+        s["title"] = _one_line(o["aiTitle"], CLI_TITLE)
+    msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+    content = msg.get("content")
+    if call and o.get("type") == "assistant" and not o.get("isSidechain") and isinstance(content, list):
+        if isinstance(msg.get("model"), str) and not msg["model"].startswith("<"):
+            s["model"] = msg["model"]
+        for c in content:
+            if not (isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") in _CLAUDE_TOOLS
+                    and isinstance(c.get("id"), str)):
+                continue
+            inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+            s["tasks"][c["id"]] = {"label": _one_line(inp.get("description") or "", CLI_TITLE),
+                                   "type": str(inp.get("subagent_type") or ""),
+                                   "alias": str(inp.get("model") or ""), "started": ts}
+    if result and isinstance(content, list):
+        tur = o.get("toolUseResult") if isinstance(o.get("toolUseResult"), dict) else {}
+        for c in content:
+            if not (isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in s["tasks"]):
+                continue
+            t = s["tasks"][c["tool_use_id"]]
+            if isinstance(tur.get("agentId"), str):
+                t["agent"] = tur["agentId"]
+            if isinstance(tur.get("resolvedModel"), str) and tur["resolvedModel"]:
+                t["resolved"] = tur["resolvedModel"]
+            if tur.get("status") in ("async_launched", "teammate_spawned") and not c.get("is_error"):
+                t["launched"] = True  # a background agent: its end arrives later as a task notification
+            else:
+                t["result"] = {"error": bool(c.get("is_error")),
+                               "text": _one_line("\n".join(_texts(c.get("content"))), SUMMARY_MAX), "ended": ts}
+    if note:
+        att = o.get("attachment") if isinstance(o.get("attachment"), dict) else {}
+        blob = "\n".join(_texts(content) + _texts(o.get("content")) + _texts(att.get("prompt")))
+        for block in _NOTE.findall(blob):
+            tags: dict[str, str] = {}
+            for k, v in _NOTE_TAG.findall(block):
+                tags.setdefault(k, v.strip())
+            state = _NOTE_STATE.get(tags.get("status", ""))
+            if not state:
+                continue
+            item = {"state": state, "text": _one_line(tags.get("result") or tags.get("summary") or "", SUMMARY_MAX),
+                    "ended": ts}
+            for key in (tags.get("task-id"), tags.get("tool-use-id")):
+                if not key:
+                    continue
+                old = s["notes"].get(key)
+                if old and old["state"] == state:
+                    if old["text"] or not item["text"]:
+                        continue
+                    item = {**item, "ended": old["ended"] or ts}
+                s["notes"][key] = item
+    if status:
+        att = o.get("attachment") if isinstance(o.get("attachment"), dict) else {}
+        state = _NOTE_STATE.get(str(att.get("status") or ""))
+        if att.get("type") == "task_status" and state and isinstance(att.get("taskId"), str):
+            s["notes"].setdefault(att["taskId"], {"state": state, "text": "", "ended": ts})
+
+
+def _claude_sub_tail(path: Path) -> dict:
+    """Model, stop reason and last words of a subagent transcript, from its last assistant line in the tail."""
+    out: dict = {}
+    try:
+        with open(path, "rb") as fh:
+            size = fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, size - CLI_TAIL))
+            tail = fh.read()
+        out["mtime"] = path.stat().st_mtime
+    except OSError:
+        return out
+    for raw in reversed(tail.split(b"\n")):
+        if not _ASSISTANT.search(raw):
+            continue
+        try:
+            o = json.loads(raw)
+        except ValueError:
+            continue  # the first, cut line of the tail
+        msg = o.get("message") if isinstance(o, dict) and isinstance(o.get("message"), dict) else {}
+        if "stop" not in out:
+            out["stop"] = msg.get("stop_reason")
+            out["text"] = _one_line("\n".join(_texts(msg.get("content"))), SUMMARY_MAX)
+        model = msg.get("model")
+        if isinstance(model, str) and model and not model.startswith("<"):  # "<synthetic>" marks an error line
+            out["model"] = model
+            break
+    return out
+
+
+def _codex_state() -> dict:
+    return {"meta": None, "start": None, "model": None, "effort": None, "status": None, "started": None,
+            "ended": None, "text": None, "reason": None}
+
+
+def _codex_fold(s: dict, raw: bytes) -> None:
+    """One line of a Codex rollout: the session meta (first line), then the child's own turn contexts and task
+    events. A spawned child's file starts with a copy of its parent's history; lines before its
+    `subagent_history_start_ordinal` are that copy and are skipped."""
+    if s["meta"] is None:
+        o = json.loads(raw)
+        pl = o.get("payload") if isinstance(o, dict) and o.get("type") == "session_meta" else None
+        if not isinstance(pl, dict) or not isinstance(pl.get("id"), str):
+            s["meta"] = {}
+            return
+        src = pl.get("source")
+        spawn = (src.get("subagent") or {}).get("thread_spawn") if isinstance(src, dict) else None
+        meta = {"id": pl["id"], "started": _iso_ts(pl.get("timestamp")) or _iso_ts(o.get("timestamp")),
+                "cwd": pl.get("cwd") if isinstance(pl.get("cwd"), str) else ""}
+        if isinstance(spawn, dict) and isinstance(spawn.get("parent_thread_id"), str):
+            meta["parent"] = spawn["parent_thread_id"]
+            meta["path"] = str(spawn.get("agent_path") or pl.get("agent_path") or "")
+            meta["nick"] = str(spawn.get("agent_nickname") or pl.get("agent_nickname") or "")
+        s["meta"] = meta
+        if isinstance(pl.get("subagent_history_start_ordinal"), int):
+            s["start"] = pl["subagent_history_start_ordinal"]
+        return
+    if not s["meta"] or not any(k in raw[:CLI_HEAD] for k in _CODEX_EVENTS):
+        return
+    o = json.loads(raw)
+    if not isinstance(o, dict):
+        return
+    if s["start"] is not None and isinstance(o.get("ordinal"), int) and o["ordinal"] < s["start"]:
+        return
+    pl = o.get("payload") if isinstance(o.get("payload"), dict) else {}
+    ts = _iso_ts(o.get("timestamp"))
+    if o.get("type") == "turn_context":
+        if isinstance(pl.get("model"), str) and pl["model"]:
+            s["model"] = pl["model"]
+        if isinstance(pl.get("effort"), str) and pl["effort"]:
+            s["effort"] = pl["effort"]
+    elif pl.get("type") == "task_started":
+        s["status"] = "running"
+        if s["started"] is None:
+            s["started"] = _num(pl.get("started_at")) or ts
+    elif pl.get("type") == "task_complete":
+        s["status"] = "done"
+        s["ended"] = _num(pl.get("completed_at")) or ts
+        s["text"] = _one_line(pl.get("last_agent_message") or "", SUMMARY_MAX)
+        s["reason"] = None
+    elif pl.get("type") == "turn_aborted":
+        s["status"] = "cancelled"
+        s["ended"] = _num(pl.get("completed_at")) or ts
+        s["reason"] = _one_line(pl.get("reason") or "", 120)
+
+
+def _run_of(nodes: list[dict]) -> tuple[str, float | None]:
+    """Run state from its sub-runs (as a delegate fan-out), and its end when it is not running."""
+    states = [n["state"] for n in nodes]
+    state = ("running" if "running" in states else "failed" if "failed" in states
+             else "cancelled" if "cancelled" in states else "done")
+    ends = [n["ended"] for n in nodes if n.get("ended") is not None]
+    return state, (max(ends) if ends and state != "running" else None)
+
+
+def _cli_node(nid: str, label: str, state: str, started, ended, *, summary: str = "", reason: str = "") -> dict:
+    att: dict = {"n": 1, "outcome": "no result" if reason == "no result" else _OUTCOME[state]}
+    node: dict = {"id": nid, "label": label, "deps": [], "layer": 0, "state": state, "attempts": [att]}
+    if started is not None:
+        att["started"] = node["started"] = started
+    if ended is not None and state != "running":
+        att["ended"] = node["ended"] = ended
+    if reason:
+        att["reason"] = reason
+    if summary or reason:
+        node["summary"] = summary or reason
+    return node
+
+
+class CliRuns:
+    """`runs.cli`: CLI agent sessions on this machine that ran sub-runs, as AgentRuns. Claude Code keeps one
+    transcript per session in `<claude>/projects/<cwd slug>/<id>.jsonl` (subagents in `<id>/subagents/`), Codex one
+    rollout per thread in `<codex>/sessions/YYYY/MM/DD/`, a spawned sub-agent being its own thread whose session
+    meta names its parent. pi, omp and grok keep no sub-run record omher can read; they return no runs."""
+
+    def __init__(self, homes: dict[str, Path] | None = None, clock=time.time):
+        self.homes = {**cli_homes(), **(homes or {})}
+        self.clock = clock
+        self._claude = _LineFeed(_claude_state, _claude_fold)
+        self._codex = _LineFeed(_codex_state, _codex_fold)
+        self._small: dict[str, tuple[tuple, object]] = {}
+        self._last: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    # ---- small cached reads
+    def _cached(self, path: Path, read):
+        try:
+            st = path.stat()
+        except OSError:
+            return None
+        stamp = (st.st_mtime_ns, st.st_size)
+        hit = self._small.get(str(path))
+        if hit and hit[0] == stamp:
+            return hit[1]
+        value = read(path)
+        self._small[str(path)] = (stamp, value)
+        return value
+
+    @staticmethod
+    def _json(path: Path):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    # ---- status
+    def agents(self) -> dict[str, str]:
+        out = {"claude": "found" if (self.homes["claude"] / "projects").is_dir() else "not_installed",
+               "codex": "found" if (self.homes["codex"] / "sessions").is_dir() else "not_installed"}
+        for name in ("pi", "omp", "grok"):
+            out[name] = "no_adapter" if self.homes[name].exists() else "not_installed"
+        return out
+
+    # ---- Claude Code
+    def _claude_files(self, cwd: str | None, since: float) -> list[Path]:
+        root = self.homes["claude"] / "projects"
+        if not root.is_dir() or root.is_symlink():
+            return []
+        dirs = [root / claude_slug(cwd)] if cwd else None
+        files: list[tuple[float, Path]] = []
+        try:
+            for d in dirs if dirs is not None else [e for e in os.scandir(root) if e.is_dir(follow_symlinks=False)]:
+                d = Path(d)
+                if not d.is_dir() or d.is_symlink():
+                    continue
+                for e in os.scandir(d):
+                    if e.name.endswith(".jsonl") and e.is_file(follow_symlinks=False):
+                        m = e.stat().st_mtime
+                        if m >= since:
+                            files.append((m, Path(e.path)))
+        except OSError:
+            return []
+        files.sort(key=lambda x: -x[0])
+        return [p for _, p in files[:CLI_FILES]]
+
+    def _claude_subagents(self, folder: Path) -> dict[str, dict]:
+        """{agent id or tool_use id: {meta…, tail…}} from `<session>/subagents/agent-<id>.meta.json` + `.jsonl`."""
+        out: dict[str, dict] = {}
+        if not folder.is_dir() or folder.is_symlink():
+            return out
+        try:
+            names = [e.name for e in os.scandir(folder)]
+        except OSError:
+            return out
+        for name in names:
+            if not (name.startswith("agent-") and name.endswith(".meta.json")):
+                continue
+            meta_p = folder / name
+            if not _plain_file(meta_p):
+                continue
+            meta = self._cached(meta_p, self._json)
+            if not isinstance(meta, dict):
+                continue
+            aid = name[len("agent-"):-len(".meta.json")]
+            log = folder / f"agent-{aid}.jsonl"
+            info = {"finished": meta.get("finished") is True,
+                    "meta_model": meta["model"] if isinstance(meta.get("model"), str) else "",
+                    "type": str(meta.get("agentType") or "")}
+            if _plain_file(log):
+                info.update(self._cached(log, _claude_sub_tail) or {})
+            out[aid] = info
+            if isinstance(meta.get("toolUseId"), str):
+                out.setdefault(meta["toolUseId"], info)
+        return out
+
+    def _claude_run(self, path: Path, now: float) -> dict | None:
+        s = self._claude.read(path)
+        if not s or not s["tasks"] or not s["sid"]:
+            return None
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            return None
+        subs = self._claude_subagents(path.parent / path.stem / "subagents")
+        nodes = []
+        for tid, t in s["tasks"].items():
+            sub = subs.get(t.get("agent") or "") or subs.get(tid) or {}
+            res, note = t.get("result"), s["notes"].get(t.get("agent") or "") or s["notes"].get(tid)
+            moved = max(mtime, sub.get("mtime") or 0.0)
+            summary = reason = ""
+            ended = None
+            if res and res["error"]:
+                state, reason, ended = "failed", res["text"] or "error", res["ended"]
+            elif res:
+                state, summary, ended = "done", res["text"], res["ended"]
+            elif note:
+                state, ended = note["state"], note["ended"]
+                if state == "done":
+                    summary = note["text"] or sub.get("text", "")
+                else:
+                    reason = note["text"] or state
+            elif sub.get("finished"):
+                state, summary, ended = "done", sub.get("text", ""), sub.get("mtime")
+            elif now - moved <= CLI_STALE:
+                state = "running"
+            elif sub.get("stop") == "end_turn":
+                state, summary, ended = "done", sub.get("text", ""), sub.get("mtime")  # an idle teammate
+            else:
+                state, reason, ended = "failed", "no result", moved
+            kind = t["type"].split(":")[-1] or sub.get("type", "").split(":")[-1]
+            node = _cli_node(tid, t["label"] or kind or "Subagent", state, t["started"], ended,
+                             summary=summary, reason=reason)
+            # the child's own transcript first, then what Claude Code resolved, the meta, the call's alias, the parent
+            # an alias ("opus") the parent's own model id spells out reads as that id
+            alias = s["model"] if t["alias"] and s["model"] and t["alias"] in s["model"] else t["alias"]
+            for m in (sub.get("model"), t.get("resolved"), sub.get("meta_model"), alias, s["model"]):
+                if isinstance(m, str) and m and m != "inherit":
+                    node["model"] = m
+                    break
+            node["executor"] = "claude"
+            if kind:
+                node["lane"] = kind
+            nodes.append(node)
+        state, ended = _run_of(nodes)
+        run = {"id": f"claude:{s['sid']}", "kind": "claude-task", "agent": "claude",
+               "owner": {"type": "session", "id": s["sid"]}, "title": s["title"] or "Claude Code session",
+               "cwd": s["cwd"] or "", "state": state, "nodes": nodes,
+               "started": s["first"] if s["first"] is not None else mtime,
+               "updated": max([mtime] + [n.get("ended") or 0.0 for n in nodes])}
+        if ended is not None:
+            run["ended"] = ended
+        return run
+
+    def claude(self, cwd: str | None, since: float, now: float) -> list[dict]:
+        runs = []
+        for path in self._claude_files(cwd, since):
+            run = self._claude_run(path, now)
+            if run is None or run["started"] < since:
+                continue
+            if cwd and _norm(run["cwd"] or "") != _norm(cwd):
+                continue  # the folder slug is lossy ("/a/b-c" and "/a/b/c" share it)
+            runs.append(run)
+        return runs
+
+    # ---- Codex
+    def _codex_rollouts(self, since: float) -> list[Path]:
+        root = self.homes["codex"] / "sessions"
+        if not root.is_dir() or root.is_symlink():
+            return []
+        first_day = time.strftime("%Y/%m/%d", time.localtime(since - 86400)) if since > 86400 else "0000/00/00"
+        out = []
+        for day in sorted(root.glob("[0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]")):
+            rel = day.relative_to(root).as_posix()
+            if rel < first_day or day.is_symlink() or day.parent.is_symlink():
+                continue
+            out.extend(p for p in day.glob("rollout-*.jsonl") if _plain_file(p))
+        return out
+
+    def _codex_titles(self) -> dict[str, str]:
+        idx = self.homes["codex"] / "session_index.jsonl"
+
+        def read(path: Path) -> dict[str, str]:
+            names: dict[str, str] = {}
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                return names
+            for line in lines:
+                try:
+                    o = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(o, dict) and isinstance(o.get("id"), str) and isinstance(o.get("thread_name"), str):
+                    names[o["id"]] = _one_line(o["thread_name"], CLI_TITLE)
+            return names
+        return (self._cached(idx, read) or {}) if _plain_file(idx) else {}
+
+    def _codex_meta(self, path: Path) -> dict | None:
+        """The first line only (immutable once written): cached per file without reading the rest."""
+        def read(p: Path):
+            s = _codex_state()
+            try:
+                with open(p, "rb") as fh:
+                    _codex_fold(s, fh.readline())
+            except (OSError, ValueError, TypeError, AttributeError):
+                return None
+            return s["meta"] or None
+        hit = self._small.get(f"meta:{path}")
+        if hit:
+            return hit[1]
+        meta = read(path)
+        if meta is not None:
+            self._small[f"meta:{path}"] = ((), meta)
+        return meta
+
+    def codex(self, cwd: str | None, since: float, now: float) -> list[dict]:
+        metas: dict[str, tuple[Path, dict]] = {}
+        for p in self._codex_rollouts(since):
+            m = self._codex_meta(p)
+            if m:
+                metas[m["id"]] = (p, m)
+        kids = {i: pm for i, pm in metas.items() if pm[1].get("parent")}
+
+        def root_of(i: str) -> str:
+            seen = set()
+            while i in kids and i not in seen:
+                seen.add(i)
+                i = kids[i][1]["parent"]
+            return i
+        groups: dict[str, list[str]] = {}
+        for i in kids:
+            groups.setdefault(root_of(i), []).append(i)
+        titles = self._codex_titles()
+
+        def newest(ids: list[str]) -> float:
+            out = 0.0
+            for i in ids:
+                try:
+                    out = max(out, metas[i][0].stat().st_mtime)
+                except OSError:
+                    pass
+            return out
+        order = sorted(groups, key=lambda r: -newest(groups[r] + ([r] if r in metas else [])))
+        runs = []
+        for root in order[:CLI_FILES]:
+            head = metas.get(root, (None, {}))[1]
+            ids = sorted(groups[root], key=lambda i: metas[i][1].get("started") or 0.0)
+            run_cwd = head.get("cwd") or metas[ids[0]][1].get("cwd") or ""
+            started = head.get("started") or metas[ids[0]][1].get("started") or 0.0
+            if started < since or (cwd and _norm(run_cwd) != _norm(cwd)):
+                continue
+            nodes = []
+            for i in ids:
+                path, meta = metas[i]
+                s = self._codex.read(path) or _codex_state()
+                try:
+                    moved = path.stat().st_mtime
+                except OSError:
+                    moved = 0.0
+                state, reason = s["status"] or "running", s["reason"] or ""
+                ended = s["ended"]
+                if state == "running" and now - moved > CLI_STALE:
+                    state, reason, ended = "failed", "no result", moved
+                name = (meta.get("path") or "").rstrip("/").rsplit("/", 1)[-1] or meta.get("nick") or "sub-agent"
+                label = _one_line(name.replace("_", " ").replace("-", " "), CLI_TITLE)
+                node = _cli_node(i, label[:1].upper() + label[1:], state, s["started"] or meta.get("started"), ended,
+                                 summary=s["text"] or "", reason=reason)
+                if meta["parent"] in groups[root]:
+                    node["deps"] = [meta["parent"]]  # spawned by another sub-agent of this run
+                node["model"] = s["model"] or ""
+                if not node["model"]:
+                    del node["model"]
+                if s["effort"]:
+                    node["effort"] = s["effort"]
+                node["executor"] = "codex"
+                nodes.append(node)
+            layers = layer_of(nodes)
+            for n in nodes:
+                n["layer"] = layers[n["id"]]
+            state, ended = _run_of(nodes)
+            run = {"id": f"codex:{root}", "kind": "codex-sub", "agent": "codex",
+                   "owner": {"type": "session", "id": root}, "title": titles.get(root) or "Codex session",
+                   "cwd": run_cwd, "state": state, "nodes": nodes, "started": started,
+                   "updated": max([newest(groups[root] + ([root] if root in metas else []))]
+                                  + [n.get("ended") or 0.0 for n in nodes])}
+            if ended is not None:
+                run["ended"] = ended
+            runs.append(run)
+        return runs
+
+    # ---- ops
+    def list(self, agent: str | None = None, cwd: str | None = None, since: float | None = None) -> dict:
+        now = self.clock()
+        since = now - CLI_WINDOW if since is None else float(since)
+        with self._lock:
+            runs: list[dict] = []
+            if agent in (None, "claude"):
+                runs += self.claude(cwd, since, now)
+            if agent in (None, "codex"):
+                runs += self.codex(cwd, since, now)
+            runs.sort(key=lambda r: (r["state"] != "running", -r["updated"]))
+            runs = runs[:CLI_RUNS]
+            self._last.update({r["id"]: r for r in runs})
+        return {"runs": [run_summary(r) for r in runs], "agents": self.agents()}
+
+    def get(self, run_id: str) -> dict:
+        agent = run_id.split(":", 1)[0]
+        run = self._last.get(run_id)
+        if run is None and agent in ("claude", "codex"):
+            self.list(agent, None, 0.0)
+            run = self._last.get(run_id)
+        if run is None:
+            raise BridgeError("not_found", f"no CLI run {run_id}")
+        return {"run": run, "handoffs": {}}
+
+
 # ---------------------------------------------------------------- transcript helpers
 
 _AUTHOR_RE = re.compile(r"^\[(?P<author>[^\]|]+?)\s*\|[^\]]*\]\s*(?P<rest>.*)$", re.DOTALL)
@@ -804,6 +2039,18 @@ def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
         text = goals[0] + (f" (+{len(goals) - 1} more)" if len(goals) > 1 else "") if goals else context
     line = " ".join(str(text or "").split())
     return line if len(line) <= n else line[: n - 1] + "…"
+
+
+def dag_parts(args: dict) -> list[dict]:
+    """The `[dag:<run>/<node>]` parts a delegate_task call hands out (its `goal` or each task's), in order."""
+    goals = [args.get("goal")] + [t.get("goal") for t in args.get("tasks") or [] if isinstance(t, dict)]
+    out: list[dict] = []
+    for g in goals:
+        for m in DAG_MARK.finditer(g if isinstance(g, str) else ""):
+            part = {"run": m.group(1), "node": m.group(2)}
+            if part not in out:
+                out.append(part)
+    return out
 
 
 def read_origins(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
@@ -1098,9 +2345,12 @@ class Bridge:
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
-            "chat.attach": self.op_chat_attach,
+            "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
+            "runs.cli": self.op_runs_cli,
         }
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
+        self.runs = DagRuns()
+        self.cli = CliRuns()
 
     # ------------------------------------------------------------ lifecycle
 
@@ -1396,7 +2646,12 @@ class Bridge:
             tool = str(p.get("name") or p.get("tool_name") or "tool")
             context = p.get("context") if isinstance(p.get("context"), str) else ""
             args = p.get("args") if isinstance(p.get("args"), dict) else {}
-            await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
+            extra = {}
+            if tool == "delegate_task":
+                parts = dag_parts(args)
+                if parts:
+                    extra["dag"] = parts
+            await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context), **extra)
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
                 skill = str(args.get("name") or context).strip()
@@ -1883,6 +3138,31 @@ class Bridge:
         if self.announce_media:
             print(MEDIA_READY_PREFIX + json.dumps({"path": out["path"]}), flush=True)
         return out
+
+    async def op_runs_list(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"runs": await asyncio.to_thread(self.runs.list, bot["name"], bot["path"])}
+
+    async def op_runs_get(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        run = p.get("run")
+        if not isinstance(run, str) or not run:
+            raise BridgeError("bad_request", "missing run")
+        if run.split(":", 1)[0] in CLI_AGENTS:
+            return await asyncio.to_thread(self.cli.get, run)
+        return await asyncio.to_thread(self.runs.get, bot["name"], bot["path"], run)
+
+    async def op_runs_cli(self, p) -> dict:
+        """CLI agent sessions with sub-runs: `agent` (claude, codex, pi, omp, grok; all when absent), `cwd` (only
+        sessions in that folder) and `since` (epoch seconds; the last week when absent)."""
+        agent, cwd, since = p.get("agent"), p.get("cwd"), p.get("since")
+        if agent is not None and agent not in CLI_AGENTS:
+            raise BridgeError("bad_request", f"agent must be one of {', '.join(CLI_AGENTS)}")
+        if cwd is not None and (not isinstance(cwd, str) or not cwd):
+            raise BridgeError("bad_request", "cwd must be a folder path")
+        if since is not None and (isinstance(since, bool) or not isinstance(since, (int, float))):
+            raise BridgeError("bad_request", "since must be epoch seconds")
+        return await asyncio.to_thread(self.cli.list, agent, cwd, since)
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}

@@ -1,0 +1,9 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_e8b94630   task: 0
+goal: In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in the rlaope/oh-my-hermes repo), add search and provider-category filtering to the model picker, then open a PR (do NOT merge it).
+started: 2026-11-09 19:48:43
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)
+20:01:21 final    | status=completed duration=758.03s summary: {"pr_url":"https://github.com/rlaope/oh-my-hermes/pull/2702","commit":"2a4f268b1cc4ace077be9e9c7dfe9b37f7f365a3","gates":"pnpm typecheck passed. pnpm test (vitest): 39/39 passed, 4 files, 5 new in src/chat/model/modelSearch.test.ts. Playwright (OMHER_PORT=5381, OMHER_MOCK_PORT=5382, under lockf): 68 passed, 1 skipped. The skip is the new screenshot test, which runs only when OMHER_SHOTS is set; it …(+100 chars)
+20:35:16 final    | end status=completed exit_reason=completed
