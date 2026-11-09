@@ -927,15 +927,45 @@ fn deliver(sink: &ChatSink, events: Vec<Event>) {
     }
 }
 
+/// The command a chat runs: `argv` in `cwd` on pipes, with the child `PATH` and the chosen account's home
+/// variable (`account_env`, empty for the CLI's own login), the same env a terminal session gets. Nothing
+/// else is added.
+fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, account_env: &[(String, String)]) -> Result<Command, String> {
+    let (prog, rest) = argv.split_first().ok_or("empty argv")?;
+    let mut cmd = Command::new(prog);
+    cmd.args(rest).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if let Some(p) = path_env {
+        cmd.env("PATH", p);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0); // its own group, so close stops helpers it started too
+        if std::env::var_os("LANG").is_none() {
+            cmd.env("LANG", "en_US.UTF-8");
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    for (k, v) in account_env {
+        cmd.env(k, v);
+    }
+    Ok(cmd)
+}
+
 impl ChatSessions {
     pub fn new() -> Arc<ChatSessions> {
         Arc::new(ChatSessions::default())
     }
 
     /// Start allow-listed agent `agent_id` in its chat mode in `cwd`. `resume` (Claude Code only) continues
-    /// that conversation. Anything not on the allow-list, or without a chat mode, is refused before a
-    /// process exists.
-    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, sink: F) -> Result<u32, String>
+    /// that conversation. `account_env` is `accounts::session_env` for that agent, as for a terminal session:
+    /// the chosen account's home variable, or nothing. Anything not on the allow-list, or without a chat
+    /// mode, is refused before a process exists.
+    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], sink: F) -> Result<u32, String>
     where
         F: FnMut(ChatOut) + Send + 'static,
     {
@@ -950,38 +980,28 @@ impl ChatSessions {
         if let Some(r) = resume {
             argv.extend(resume_args(agent_id, r)?);
         }
-        self.spawn(argv, cwd, Some(path_env), adapter, sink)
+        self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)
     }
 
     /// Start `argv` on pipes in `cwd` with `adapter`. Crate-internal: the app reaches it only through
     /// [`ChatSessions::start_agent`], so argv always comes from the allow-list (tests use it directly).
-    pub(crate) fn spawn<F>(&self, argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, mut adapter: Box<dyn Adapter>, sink: F) -> Result<u32, String>
+    pub(crate) fn spawn<F>(
+        &self,
+        argv: Vec<OsString>,
+        cwd: &Path,
+        path_env: Option<OsString>,
+        account_env: &[(String, String)],
+        mut adapter: Box<dyn Adapter>,
+        sink: F,
+    ) -> Result<u32, String>
     where
         F: FnMut(ChatOut) + Send + 'static,
     {
         if !cwd.is_absolute() || !cwd.is_dir() {
             return Err(format!("not a folder: {}", cwd.display()));
         }
-        let (prog, rest) = argv.split_first().ok_or("empty argv")?;
-        let mut cmd = Command::new(prog);
-        cmd.args(rest).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        if let Some(p) = path_env {
-            cmd.env("PATH", p);
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0); // its own group, so close stops helpers it started too
-            if std::env::var_os("LANG").is_none() {
-                cmd.env("LANG", "en_US.UTF-8");
-            }
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        }
-        let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", Path::new(prog).display()))?;
+        let mut cmd = command_for(&argv, cwd, path_env, account_env)?;
+        let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", Path::new(&argv[0]).display()))?;
         let mut stdout = child.stdout.take().ok_or("no stdout")?;
         let stderr = child.stderr.take().ok_or("no stderr")?;
         let mut pipe = child.stdin.take().ok_or("no stdin")?;
@@ -1448,9 +1468,9 @@ mod tests {
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
         for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
-            assert!(c.start_agent(bad, &tmp, None, |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), |_| {}).is_err());
+        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 
@@ -1487,7 +1507,7 @@ mod tests {
         let (out, sink) = collect();
         let mut adapter: Box<dyn Adapter> = Box::new(Claude::default());
         adapter.on_input(Input::Send { text: "say hi".into() }).unwrap();
-        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, adapter, sink).unwrap();
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], adapter, sink).unwrap();
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end")), 10));
         let first = std::fs::read_to_string(&mark).unwrap();
         assert!(first.contains("\"initialize\""), "{first}");
@@ -1511,11 +1531,63 @@ mod tests {
         let mut adapter: Box<dyn Adapter> = Box::new(Claude::default());
         adapter.on_input(Input::Send { text: "x".into() }).unwrap();
         let tmp = std::env::temp_dir().canonicalize().unwrap();
-        c.spawn(vec!["/bin/sh".into(), "-c".into(), "echo 'Error: not logged in' >&2; exit 2".into()], &tmp, None, adapter, sink).unwrap();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), "echo 'Error: not logged in' >&2; exit 2".into()], &tmp, None, &[], adapter, sink).unwrap();
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
         let got = out.lock().unwrap().clone();
         assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "error").contains("not logged in"))), "{got:?}");
         assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(2), e) if e.contains("not logged in"))), "{got:?}");
+    }
+
+    /// A temp home whose `active.json` picks `active` for claude, with that account's folder made.
+    fn home_with_claude(name: &str, active: &str) -> std::path::PathBuf {
+        let home = std::env::temp_dir().join(format!("omher-chat-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let root = home.join(".omher").join("accounts");
+        std::fs::create_dir_all(root.join("claude").join("work")).unwrap();
+        std::fs::write(root.join("active.json"), format!(r#"{{"claude":"{active}"}}"#)).unwrap();
+        home
+    }
+
+    #[test]
+    fn a_claude_chat_carries_the_stacked_account_home_and_this_computer_carries_none() {
+        let cwd = std::env::temp_dir();
+        // the argv chat_start builds for claude: the program, then the allow-list's chat arguments
+        let argv: Vec<OsString> = std::iter::once(OsString::from("/x/claude")).chain(chat_args("claude").unwrap().iter().map(OsString::from)).collect();
+        let envs = |cmd: &Command| -> Vec<(String, String)> {
+            cmd.get_envs().filter_map(|(k, v)| Some((k.to_string_lossy().into_owned(), v?.to_string_lossy().into_owned()))).collect()
+        };
+        let base = envs(&command_for(&argv, &cwd, None, &[]).unwrap());
+
+        let home = home_with_claude("stacked", "work");
+        let cmd = command_for(&argv, &cwd, None, &crate::accounts::session_env(&home, "claude")).unwrap();
+        let work = home.join(".omher").join("accounts").join("claude").join("work");
+        assert_eq!(cmd.get_args().collect::<Vec<_>>(), argv[1..].iter().map(|a| a.as_os_str()).collect::<Vec<_>>(), "the account changes no argument");
+        // the chosen account's home is the only thing added
+        let added: Vec<_> = envs(&cmd).into_iter().filter(|p| !base.contains(p)).collect();
+        assert_eq!(added, vec![("CLAUDE_CONFIG_DIR".to_string(), work.to_string_lossy().into_owned())]);
+
+        let mine = home_with_claude("this-computer", "default");
+        let cmd = command_for(&argv, &cwd, None, &crate::accounts::session_env(&mine, "claude")).unwrap();
+        assert_eq!(envs(&cmd), base);
+        assert!(!envs(&cmd).iter().any(|(k, _)| k == "CLAUDE_CONFIG_DIR"));
+        let _ = (std::fs::remove_dir_all(home), std::fs::remove_dir_all(mine));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_account_home_reaches_the_chat_program() {
+        let home = home_with_claude("pipes", "work");
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let mark = tmp.join(format!("omher-chat-env-{}", std::process::id()));
+        let script = format!("echo \"cfg=${{CLAUDE_CONFIG_DIR-unset}}\" > '{}'", mark.display());
+        let (out, sink) = collect();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &crate::accounts::session_env(&home, "claude"), Box::new(Pi::default()), sink)
+            .unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let work = home.join(".omher").join("accounts").join("claude").join("work");
+        assert_eq!(std::fs::read_to_string(&mark).unwrap().trim(), format!("cfg={}", work.display()));
+        let _ = (std::fs::remove_file(mark), std::fs::remove_dir_all(home));
     }
 
     #[cfg(unix)]
@@ -1524,7 +1596,7 @@ mod tests {
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir().canonicalize().unwrap();
         let (out, sink) = collect();
-        c.spawn(vec!["/bin/sh".into(), "-c".into(), "trap '' HUP TERM; while :; do sleep 1; done".into()], &tmp, None, Box::new(Pi::default()), sink).unwrap();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), "trap '' HUP TERM; while :; do sleep 1; done".into()], &tmp, None, &[], Box::new(Pi::default()), sink).unwrap();
         c.close_all();
         assert_eq!(c.count(), 0);
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
@@ -1544,11 +1616,11 @@ mod tests {
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir().canonicalize().unwrap();
         let (stuck_out, stuck_sink) = collect();
-        let stuck = c.spawn(vec!["/bin/sh".into(), "-c".into(), "sleep 60".into()], &tmp, None, Box::new(Pi::default()), stuck_sink).unwrap();
+        let stuck = c.spawn(vec!["/bin/sh".into(), "-c".into(), "sleep 60".into()], &tmp, None, &[], Box::new(Pi::default()), stuck_sink).unwrap();
         let (_, other_sink) = collect();
         let mark = tmp.join(format!("omher-chat-other-{}", std::process::id()));
         let script = format!("while read l; do printf '%s\\n' \"$l\" >> '{}'; done", mark.display());
-        let other = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, Box::new(Pi::default()), other_sink).unwrap();
+        let other = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::default()), other_sink).unwrap();
         // 1 MB of prompts: the pipe takes about 64 KB, the rest must not hold anything up
         let started = Instant::now();
         for _ in 0..16 {
@@ -1577,7 +1649,7 @@ mod tests {
         let script = format!(
             "i=0; while [ $i -lt 2000 ]; do printf '%s\\n' '{line}'; i=$((i+1)); done; printf '%s' '{{\"type\":\"message_update\",'; sleep 0.1; printf '%s\\n' '\"assistantMessageEvent\":{{\"type\":\"text_delta\",\"delta\":\"ab\"}}}}'; printf '%s' '{{\"type\":\"message_update\",\"assistantMessageEvent\":{{\"type\":\"text_delta\",\"delta\":\"z\"}}}}'"
         );
-        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, Box::new(Pi::default()), sink).unwrap();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::default()), sink).unwrap();
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 20));
         let got = out.lock().unwrap();
         let deltas: Vec<String> = got.iter().filter_map(|o| match o { ChatOut::Event(e) if s(e, "event") == "delta" => Some(s(e, "text")), _ => None }).collect();
@@ -1599,7 +1671,7 @@ mod tests {
         let out = Arc::new(Mutex::new(Vec::new()));
         let o = out.clone();
         let id = c
-            .start_agent("claude", &dir.canonicalize().unwrap(), None, move |x| {
+            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") != "session.models" {
                         println!("event {e}");

@@ -1,3 +1,4 @@
+mod accounts;
 mod agent_chat;
 mod bridge;
 mod sessions;
@@ -19,6 +20,7 @@ struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
     installing: Arc<AtomicBool>,
+    logins: Arc<accounts::Logins>,
     sessions: Arc<Sessions>,
     chats: Arc<ChatSessions>,
 }
@@ -124,6 +126,55 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
     Ok(code)
 }
 
+fn user_home() -> Result<PathBuf, String> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "no home folder".to_string())
+}
+
+/// The env a new session of `cli` starts with to use omher account `id` (`default` = the CLI's own home).
+/// SESSIONS calls this when it starts an agent with the account picked for new sessions.
+#[tauri::command]
+async fn account_env(cli: String, id: String) -> Result<Vec<(String, String)>, String> {
+    accounts::account_env(&user_home()?, &cli, &id)
+}
+
+/// Which coding CLIs are on this computer (PATH and the install folders a Dock-started app does not see).
+#[tauri::command]
+async fn account_clis() -> Result<Vec<(&'static str, bool)>, String> {
+    tauri::async_runtime::spawn_blocking(accounts::clis_on_this_computer).await.map_err(|e| e.to_string())
+}
+
+/// The CLI's own login status for account `id`, through its fixed status command (Claude Code, Codex). Only
+/// signed in / email / plan / method come back; `null` for CLIs that have no status command.
+#[tauri::command]
+async fn account_status(cli: String, id: String) -> Result<Option<accounts::LoginStatus>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || accounts::status(&home, &cli, &id)).await.map_err(|e| e.to_string())?
+}
+
+/// Start the CLI's own sign-in (`claude auth login`, `codex login`) with omher account `id` as its home. The
+/// browser part happens in the CLI; its plain output lines and then its exit arrive on `on_event`.
+#[tauri::command]
+async fn account_login_start(
+    shell: State<'_, Shell>,
+    cli: String,
+    id: String,
+    on_event: tauri::ipc::Channel<accounts::LoginEvent>,
+) -> Result<u32, String> {
+    shell.logins.start(&user_home()?, &cli, &id, move |ev| {
+        let _ = on_event.send(ev);
+    })
+}
+
+/// Cancel a sign-in started above. Its exit still arrives on its channel.
+#[tauri::command]
+async fn account_login_cancel(shell: State<'_, Shell>, login: u32) -> Result<(), String> {
+    shell.logins.cancel(login);
+    Ok(())
+}
+
 /// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
 /// was found, if anywhere.
 #[tauri::command]
@@ -148,7 +199,10 @@ async fn session_start(
 ) -> Result<u32, String> {
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), cols, rows, move |ev| match ev {
+        // The account Settings › Accounts picked for new sessions of this agent's CLI: its home variable, or
+        // nothing ("This computer"). chat_start passes the same.
+        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -194,7 +248,9 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
 async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     let chats = shell.chats.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), move |out| {
+        // The same account as a terminal session of this agent: its home variable, or nothing ("This computer").
+        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, move |out| {
             let _ = on_event.send(match out {
                 ChatOut::Event(e) => e,
                 ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),
@@ -268,6 +324,11 @@ pub fn run() {
             open_external,
             install_engine,
             install_engine_command,
+            account_env,
+            account_clis,
+            account_status,
+            account_login_start,
+            account_login_cancel,
             sessions_agents,
             session_start,
             session_write,
@@ -288,6 +349,7 @@ pub fn run() {
                 bridge,
                 resource_dir,
                 installing: Arc::new(AtomicBool::new(false)),
+                logins: accounts::Logins::new(),
                 sessions: Sessions::new(),
                 chats: ChatSessions::new(),
             });
@@ -301,6 +363,7 @@ pub fn run() {
             if let Some(shell) = handle.try_state::<Shell>() {
                 shell.sessions.close_all();
                 shell.chats.close_all();
+                shell.logins.cancel_all();
                 shell.bridge.stop();
             }
         }

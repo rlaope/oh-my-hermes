@@ -22,10 +22,13 @@ import type {
   BotInfo,
   TerminalRun,
   Worktree,
+  UsageProvider,
   WorktreeDiff,
   MediaFile,
   AttachKind,
   AttachResult,
+  AccountCli,
+  AccountGroup,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
 
@@ -127,7 +130,9 @@ export type RoutineItem = {
   name: string;
   status: string;
 };
-export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem;
+/** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
+export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
+export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem | SystemItem;
 export type TimelineItem = ChatItem | AwayItem;
 
 export interface Chat {
@@ -499,6 +504,7 @@ export type Action =
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
   | { type: "ui.closeSettings" }
+  | { type: "system.note"; bot: string; text: string; now: number }
   | { type: "ui.pin"; bot: string; on: boolean }
   | { type: "ui.hide"; bot: string; on: boolean }
   | { type: "ui.focusAsk"; bot: string; id: string }
@@ -656,6 +662,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       };
     case "elsewhere.update":
     case "bots.update":
+    case "accounts.update":
       return state; // the store refetches; nothing to change here
     case "routine.ran": {
       const next = touchChat(state, bot, (c) =>
@@ -812,6 +819,10 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
       return { ...state, ui: { ...state.ui, view: "chat" } };
+    case "system.note":
+      return touchChat(state, a.bot, (c) =>
+        withItems(c, [...c.items, { kind: "system", id: `system-${a.now}-${c.items.length}`, ts: a.now / 1000, text: a.text }]),
+      );
     case "ui.session":
       return a.id
         ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
@@ -996,6 +1007,20 @@ export interface Actions {
   runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
   runsGet(bot: string, run: string): Promise<RunDetail>;
   runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
+  /** Subscription usage meters (sidebar); the meter keeps its own copy. */
+  usage(): Promise<{ providers: UsageProvider[] }>;
+  /** Settings › Accounts (the page keeps its own copy). */
+  accounts(): Promise<{ groups: AccountGroup[] }>;
+  addAccount(cli: AccountCli, label: string): Promise<{ id: string; dir: string }>;
+  setActiveAccount(cli: AccountCli, id: string): Promise<void>;
+  removeAccount(cli: AccountCli, id: string): Promise<void>;
+  labelAccount(cli: AccountCli, id: string, label: string): Promise<void>;
+  /** A cancelled sign-in: the new, still empty folder goes. */
+  discardAccount(cli: AccountCli, id: string): Promise<void>;
+  /** A quiet omher line in a bot's main chat (the selected bot when none is given). */
+  systemNote(text: string, bot?: string): void;
+  /** Every bridge event, for views that keep their own copy (Accounts listens for `accounts.update`). */
+  onBridgeEvent(fn: (ev: BridgeEvent) => void): () => void;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -1041,6 +1066,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   let localSeq = 0;
   let snapshot: (AppState & Actions) | null = null;
   let started = false;
+  const eventFns = new Set<(ev: BridgeEvent) => void>();
 
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
@@ -1140,6 +1166,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         dispatch({ type: "event", ev, now: now() });
         for (const l of [...bridgeListeners]) l(ev);
         opts.onEvent?.(ev.session ? { ...ev, bot: folderKey(ev.bot, ev.session) } : ev, state);
+        for (const fn of [...eventFns]) fn(ev);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
@@ -1356,6 +1383,29 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     runsList: (bot) => bridge.request("runs.list", { bot }),
     runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
     runsCli: (params = {}) => bridge.request("runs.cli", params),
+    usage: () => bridge.request("usage.read", {}),
+    accounts: () => bridge.request("accounts.list", {}),
+    addAccount: (cli, label) => bridge.request("accounts.add", { cli, label }),
+    async setActiveAccount(cli, id) {
+      await bridge.request("accounts.set_active", { cli, account: id });
+    },
+    async removeAccount(cli, id) {
+      await bridge.request("accounts.remove", { cli, account: id });
+    },
+    async labelAccount(cli, id, label) {
+      await bridge.request("accounts.label", { cli, account: id, label });
+    },
+    async discardAccount(cli, id) {
+      await bridge.request("accounts.discard", { cli, account: id });
+    },
+    systemNote(text, bot) {
+      const b = bot ?? state.selectedBot ?? state.bots[0]?.name;
+      if (b) dispatch({ type: "system.note", bot: b, text, now: now() });
+    },
+    onBridgeEvent(fn) {
+      eventFns.add(fn);
+      return () => eventFns.delete(fn);
+    },
   };
 
   return {

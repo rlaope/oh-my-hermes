@@ -282,7 +282,86 @@ const INFO_SEED = {
   default: { places: {}, first: null, skills: 41 },
 };
 
+// Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (no %), Grok on PATH only.
+// "stale": the same Codex record after both reset times passed (no numbers). Switch with mock.usage {fixture}.
+let usageFixture = "default";
+const USAGE = {
+  default: () => [
+    { id: "codex", plan: "pro", state: "near", source_mtime: now() - 120,
+      windows: [
+        { label: "5 hours", used_percent: 73, resets_at: now() + 107 * MIN },
+        { label: "Weekly", used_percent: 60, resets_at: now() + (4 * 24 + 23) * 3600 },
+      ] },
+    { id: "claude", state: "limited", source_mtime: now() - 600,
+      windows: [{ label: "Weekly", resets_at: now() + 3 * 3600 + 12 * MIN }] },
+    { id: "grok", state: "connected", source_mtime: null, windows: [] },
+  ],
+  stale: () => [
+    { id: "codex", plan: "pro", state: "stale", source_mtime: now() - 9 * 24 * 3600,
+      windows: [
+        { label: "5 hours", resets_at: now() - 8 * 24 * 3600, stale: true },
+        { label: "Weekly", resets_at: now() - 2 * 24 * 3600, stale: true },
+      ] },
+  ],
+};
+
+// Accounts (accounts.*), shaped like the real bridge: every coding CLI, the CLI's own login first ("default").
+// Claude: signed in on this computer (owner@example.com), plus a local CLIProxyAPI holding 5 logins (counted
+// only). Codex: this computer + "Work", this computer in use. pi: on this computer, signed in. oh-my-pi, Grok,
+// Gemini: not installed. mock.accounts {limit: id, cli?} marks an account limited (as its usage record would).
+const ACCT_CLIS = ["claude", "codex", "pi", "omp", "grok", "gemini"];
+const ACCT_INSTALLED = { claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false };
+let acct, acctActive, acctLimited, acctLabels;
+const ACCT_ID = /^[a-z0-9][a-z0-9._-]{0,39}$/;
+function accountsList() {
+  return {
+    groups: ACCT_CLIS.map((cli) => {
+      const rows = acct[cli].map((a) => {
+        const limited = acctLimited[`${cli}:${a.id}`];
+        const state = !a.logged_in ? "login" : limited ? "limited" : a.id === acctActive[cli] ? "active" : "ready";
+        return {
+          id: a.id,
+          label: a.id === "default" ? acctLabels[cli] ?? "" : a.label,
+          email: a.email ?? "",
+          state,
+          dir: a.id === "default" ? null : `/mock/.omher/accounts/${cli}/${a.id}`,
+          usage: cli === "codex" && a.id === "default" ? USAGE.default()[0] : null,
+          ...(limited ? { resets_at: limited } : {}),
+        };
+      });
+      return {
+        cli,
+        installed: ACCT_INSTALLED[cli],
+        active: acctActive[cli],
+        accounts: rows,
+        ...(cli === "claude" ? { also: { name: "CLIProxyAPI", accounts: 5 } } : {}),
+      };
+    }),
+  };
+}
+const acctUpdate = () => setTimeout(() => broadcast({ event: "accounts.update", bot: "" }), 0);
+function acctFind(p) {
+  if (!ACCT_CLIS.includes(p.cli)) throw new OpError("bad_request", "unknown cli");
+  const id = p.account;
+  if (typeof id !== "string" || (id !== "default" && !ACCT_ID.test(id))) throw new OpError("bad_request", "bad account id");
+  const a = acct[p.cli].find((x) => x.id === id);
+  if (!a) throw new OpError("not_found", "no such account");
+  return a;
+}
+
 function reset() {
+  usageFixture = "default";
+  acct = {
+    claude: [{ id: "default", label: "", email: "owner@example.com", logged_in: true }],
+    codex: [{ id: "default", label: "", logged_in: true }, { id: "work", label: "Work", logged_in: true }],
+    pi: [{ id: "default", label: "", logged_in: true }],
+    omp: [{ id: "default", label: "", logged_in: false }],
+    grok: [{ id: "default", label: "", logged_in: false }],
+    gemini: [{ id: "default", label: "", logged_in: false }],
+  };
+  acctActive = Object.fromEntries(ACCT_CLIS.map((c) => [c, "default"]));
+  acctLimited = {};
+  acctLabels = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
   bots = Object.fromEntries(BOT_SEED.map((b) => [b.name, { ...b }]));
   history = Object.fromEntries(
@@ -726,7 +805,70 @@ const OPS = {
     };
     return { ...models[b.name] };
   },
+  "usage.read": () => ({ providers: USAGE[usageFixture]() }),
+  "accounts.list": () => accountsList(),
+  "accounts.add": (p) => {
+    if (!ACCT_CLIS.includes(p.cli)) throw new OpError("bad_request", "unknown cli");
+    const label = String(p.label ?? "").trim().slice(0, 40);
+    const list = acct[p.cli];
+    let id = label.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+    if (!id || id === "default") {
+      let n = 2;
+      while (list.some((a) => a.id === `account-${n}`)) n += 1;
+      id = `account-${n}`;
+    }
+    if (list.some((a) => a.id === id)) throw new OpError("exists", `an account named ${id} already exists`);
+    list.push({ id, label, logged_in: false });
+    acct[p.cli] = [list[0], ...list.slice(1).sort((a, b) => a.id.localeCompare(b.id))];
+    acctUpdate();
+    return { id, dir: `/mock/.omher/accounts/${p.cli}/${id}` };
+  },
+  "accounts.set_active": (p) => {
+    acctFind(p);
+    acctActive[p.cli] = p.account;
+    acctUpdate();
+    return {};
+  },
+  "accounts.label": (p) => {
+    const a = acctFind(p);
+    const label = String(p.label ?? "").trim().slice(0, 40);
+    if (a.id === "default") acctLabels[p.cli] = label;
+    else a.label = label;
+    acctUpdate();
+    return {};
+  },
+  "accounts.remove": (p) => {
+    const a = acctFind(p);
+    if (a.id === "default") throw new OpError("bad_request", "bad account id");
+    acct[p.cli] = acct[p.cli].filter((x) => x !== a);
+    if (acctActive[p.cli] === a.id) acctActive[p.cli] = "default";
+    acctUpdate();
+    return {};
+  },
+  "accounts.discard": (p) => {
+    const a = acctFind(p);
+    if (a.id === "default") throw new OpError("bad_request", "bad account id");
+    if (a.logged_in) throw new OpError("signed_in", "this account is signed in; remove it from its menu");
+    acct[p.cli] = acct[p.cli].filter((x) => x !== a);
+    acctUpdate();
+    return {};
+  },
   // ---- test control (not part of the protocol)
+  "mock.usage": (p) => {
+    if (!(p.fixture in USAGE)) throw new OpError("bad_request", "unknown usage fixture");
+    usageFixture = p.fixture;
+    return {};
+  },
+  "mock.accounts": (p) => {
+    const cli = typeof p.cli === "string" ? p.cli : "codex";
+    if (typeof p.limit === "string") acctLimited[`${cli}:${p.limit}`] = now() + 2 * 3600;
+    if (p.signed_in && typeof p.signed_in === "object") {
+      const a = acct[cli]?.find((x) => x.id === p.signed_in.id);
+      if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });
+    }
+    broadcast({ event: "accounts.update", bot: "" });
+    return {};
+  },
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
   "mock.submits": () => ({ submits: submits.map((x) => ({ ...x })) }),
   "mock.emit": (p) => {

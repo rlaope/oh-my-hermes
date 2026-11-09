@@ -5,6 +5,8 @@ import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
 import { BotRow } from "./BotRow";
+import { Usage } from "./Usage";
+import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { HiddenList, NeedsStrip } from "./Needs";
@@ -101,19 +103,27 @@ export function Sidebar() {
         </button>
         <button
           type="button"
-          className={`nav${inSettings ? " on" : ""}`}
+          className={`nav${inSettings && s.ui.settingsPage !== "accounts" ? " on" : ""}`}
           onClick={() => (inSettings ? s.closeSettings() : s.openSettings())}
           data-testid="nav-settings"
         >
           <GearIcon />
           Settings
         </button>
-        <div className="me">
+        <Usage />
+        <AccountsWatcher />
+        <button
+          type="button"
+          className={`me${inSettings && s.ui.settingsPage === "accounts" ? " on" : ""}`}
+          onClick={() => s.openSettings("accounts")}
+          title="Accounts"
+          data-testid="me"
+        >
           <span className="me-i" aria-hidden="true">
             Y
           </span>
           <span>You</span>
-        </div>
+        </button>
       </div>
     </aside>
   );

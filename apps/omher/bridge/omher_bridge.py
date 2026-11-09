@@ -737,6 +737,171 @@ def read_bot_facts(profile_dir: Path) -> dict:
             "last_active": last, "skills": skills, "routines": len(read_routines(profile_dir))}
 
 
+# ---------------------------------------------------------------- usage meters (read-only)
+
+USAGE_FILES = 5               # newest session files read per CLI
+USAGE_TAIL = 512 * 1024       # bytes read from the end of each file
+_CLAUDE_WINDOWS = {"five_hour": "5 hours", "seven_day": "Weekly", "seven_day_opus": "Weekly (Opus)",
+                   "seven_day_sonnet": "Weekly (Sonnet)"}
+
+
+def _tail_lines(path: Path, needle: str, limit: int = USAGE_TAIL):
+    """Lines of the last `limit` bytes of `path` that contain `needle`, newest first (a cut first line is dropped)."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - limit))
+            data = fh.read()
+    except OSError:
+        return []
+    lines = data.decode("utf-8", errors="replace").split("\n")
+    if size > limit:
+        lines = lines[1:]
+    return [ln for ln in reversed(lines) if needle in ln]
+
+
+def _newest(paths, n: int = USAGE_FILES) -> list[tuple[float, Path]]:
+    out = []
+    for p in paths:
+        try:
+            out.append((p.stat().st_mtime, p))
+        except OSError:
+            continue
+    out.sort(key=lambda t: -t[0])
+    return out[:n]
+
+
+def _window_label(minutes) -> str:
+    m = int(minutes or 0)
+    if m == 300:
+        return "5 hours"
+    if m == 10080:
+        return "Weekly"
+    if m <= 0:
+        return "Limit"
+    if m % 1440 == 0:
+        return f"{m // 1440}d"
+    return f"{max(1, round(m / 60))}h"
+
+
+def _finish(provider: dict, now: float) -> dict:
+    """A window whose reset time has passed loses its number (`stale`); a provider whose every window is stale
+    is `stale` itself. No number is ever made up: windows keep `used_percent` only when the source gave one."""
+    windows = provider["windows"]
+    for w in windows:
+        if w.get("resets_at") is not None and w["resets_at"] <= now:
+            w.pop("used_percent", None)
+            w["stale"] = True
+    if windows and all(w.get("stale") for w in windows):
+        provider["state"] = "stale"
+    return provider
+
+
+def _codex_usage(user_home: Path, now: float, root: Path | None = None) -> dict | None:
+    root = root or user_home / ".codex" / "sessions"
+    if not root.is_dir():
+        return None
+    best = None  # (event ts, mtime, rate_limits)
+    for mtime, path in _newest(root.rglob("rollout-*.jsonl")):
+        for line in _tail_lines(path, '"rate_limits"'):
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            payload = ev.get("payload") if isinstance(ev, dict) else None
+            rl = payload.get("rate_limits") if isinstance(payload, dict) else None
+            if not isinstance(rl, dict) or not (rl.get("primary") or rl.get("secondary")):
+                continue
+            ts = _to_ts(ev.get("timestamp")) if ev.get("timestamp") else mtime
+            if best is None or ts > best[0]:
+                best = (ts, mtime, rl)
+            break  # newest usable event of this file
+    if best is None:
+        return None
+    ts, mtime, rl = best
+    windows = []
+    for key in ("primary", "secondary"):
+        w = rl.get(key)
+        if not isinstance(w, dict):
+            continue
+        out: dict = {"label": _window_label(w.get("window_minutes"))}
+        if isinstance(w.get("used_percent"), (int, float)):
+            out["used_percent"] = float(w["used_percent"])
+        if isinstance(w.get("resets_at"), (int, float)):
+            out["resets_at"] = float(w["resets_at"])
+        elif isinstance(w.get("resets_in_seconds"), (int, float)):
+            out["resets_at"] = ts + float(w["resets_in_seconds"])
+        windows.append(out)
+    top = max((w.get("used_percent", 0.0) for w in windows), default=0.0)
+    state = "limited" if rl.get("rate_limit_reached_type") or top >= 100 else "near" if top >= 70 else "ok"
+    provider = {"id": "codex", "windows": windows, "state": state, "source_mtime": mtime}
+    if isinstance(rl.get("plan_type"), str) and rl["plan_type"]:
+        provider["plan"] = rl["plan_type"]
+    return _finish(provider, now)
+
+
+def _find_key(obj, key: str, depth: int = 0):
+    if depth > 4 or not isinstance(obj, dict):
+        return None
+    if isinstance(obj.get(key), dict):
+        return obj[key]
+    for v in obj.values():
+        hit = _find_key(v, key, depth + 1)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _claude_usage(user_home: Path, now: float, root: Path | None = None) -> dict | None:
+    root = root or user_home / ".claude" / "projects"
+    if not root.is_dir():
+        return None
+    best = None  # (event ts, mtime, rate_limit_info)
+    for mtime, path in _newest(root.glob("*/*.jsonl")):
+        for line in _tail_lines(path, '"rate_limit_info"'):
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            info = _find_key(ev, "rate_limit_info")
+            if not info or not info.get("status"):
+                continue
+            ts = _to_ts(ev.get("timestamp")) if isinstance(ev, dict) and ev.get("timestamp") else mtime
+            if best is None or ts > best[0]:
+                best = (ts, mtime, info)
+            break
+    if best is None:
+        return None
+    _, mtime, info = best
+    kind = str(info.get("rateLimitType") or "")
+    window: dict = {"label": _CLAUDE_WINDOWS.get(kind) or (kind.replace("_", " ").capitalize() or "Limit")}
+    if isinstance(info.get("resetsAt"), (int, float)):
+        window["resets_at"] = float(info["resetsAt"])
+    status = str(info.get("status"))
+    state = "limited" if status == "rejected" else "near" if status == "allowed_warning" else "ok"
+    return _finish({"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}, now)
+
+
+def read_usage(user_home: Path | None = None, *, now: float | None = None, which=None) -> dict:
+    """Subscription usage per CLI, from the CLIs' own local session files only (read-only, tail reads, no
+    network, no tokens). Codex gives percentages; Claude Code gives a state and a reset time, never a %.
+    A CLI with no usage record shows as `connected` when it is on PATH, and not at all otherwise."""
+    import shutil
+    user_home = Path(user_home) if user_home else Path.home()
+    now = time.time() if now is None else now
+    which = which or shutil.which
+    providers = []
+    for pid, reader, cli in (("codex", _codex_usage, "codex"), ("claude", _claude_usage, "claude"),
+                             ("grok", None, "grok"), ("gemini", None, "gemini")):
+        found = reader(user_home, now) if reader else None
+        if found is None and which(cli):
+            found = {"id": pid, "windows": [], "state": "connected", "source_mtime": None}
+        if found is not None:
+            providers.append(found)
+    return {"providers": providers}
+
+
 def read_routines(profile_dir: Path) -> list[dict]:
     try:
         data = json.loads((profile_dir / "cron" / "jobs.json").read_text(encoding="utf-8"))
@@ -2000,6 +2165,238 @@ class CliRuns:
         return {"run": run, "handoffs": {}}
 
 
+# ---------------------------------------------------------------- accounts (coding-CLI logins on this computer)
+#
+# Settings › Accounts lists, per coding CLI, the login already on this computer (the CLI's own home: the
+# "default" row) and the extra subscriptions added in omher, one folder each under ~/.omher/accounts/<cli>/<id>/
+# that a new session uses as the CLI's home (CLAUDE_CONFIG_DIR, CODEX_HOME, PI_CODING_AGENT_DIR…). Logging in
+# is always the CLI's own; the app runs it (Rust) and asks the CLI for its status. From here: Claude Code's
+# signed-in email (`.claude.json` `oauthAccount.emailAddress`, no token lives there), whether a login file
+# exists (a stat, never opened), and the usage records of rule 17. A local CLIProxyAPI is only counted.
+
+ACCOUNT_CLIS = ("claude", "codex", "pi", "omp", "grok", "gemini")
+_ACCOUNT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
+_CPA_FILE = re.compile(r"^claude-[A-Za-z0-9@._+-]{1,120}\.json$")
+# Files whose presence (stat only, never opened) means the CLI logged in there. Claude Code keeps its login in
+# the OS keychain, so its mark is the signed-in email instead (see `_signed_in`).
+_LOGIN_MARK = {"codex": ("auth.json",), "pi": ("auth.json",), "omp": ("agent.db",),
+               "grok": ("auth.json", "user-settings.json"), "gemini": (".gemini/oauth_creds.json",)}
+# Each CLI's own home on this computer (the "This computer" row).
+_DEFAULT_HOME = {"claude": "", "codex": ".codex", "pi": ".pi/agent", "omp": ".omp/agent", "grok": ".grok",
+                 "gemini": ""}
+
+
+def omher_accounts_root(user_home: Path | None = None) -> Path:
+    return (Path(user_home) if user_home else Path.home()) / ".omher" / "accounts"
+
+
+def cpa_count(user_home: Path) -> int:
+    """How many Claude logins a local CLIProxyAPI holds: auth file NAMES counted, no file opened."""
+    if not (user_home / ".cli-proxy-api" / "config.yaml").is_file():
+        return 0
+    cfg = _load_yaml(user_home / ".cli-proxy-api" / "config.yaml")
+    oauth = cfg.get("oauth") if isinstance(cfg.get("oauth"), dict) else {}
+    auth_dir = str(oauth.get("auth-dir") or cfg.get("auth-dir") or "~/.cli-proxy-api")
+    cfg.clear()
+    auth = Path(auth_dir.replace("~", str(user_home), 1) if auth_dir.startswith("~") else auth_dir)
+    try:
+        return sum(1 for p in auth.iterdir() if _CPA_FILE.match(p.name)) if auth.is_dir() else 0
+    except OSError:
+        return 0
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _read_active(root: Path) -> dict:
+    data = _read_json(root / "active.json")
+    return {k: v for k, v in data.items() if k in ACCOUNT_CLIS and isinstance(v, str)}
+
+
+def _claude_email(home_dir: Path) -> str:
+    """The signed-in email from Claude Code's own `.claude.json` (`oauthAccount.emailAddress`; no token lives there)."""
+    acct = _read_json(home_dir / ".claude.json").get("oauthAccount")
+    email = acct.get("emailAddress") if isinstance(acct, dict) else None
+    return email if isinstance(email, str) else ""
+
+
+def _signed_in(cli: str, folder: Path) -> bool:
+    if cli == "claude":
+        return bool(_claude_email(folder))
+    return any((folder / m).exists() for m in _LOGIN_MARK[cli])
+
+
+def _account_usage(cli: str, folder: Path, user_home: Path, now: float) -> dict | None:
+    if cli == "claude":
+        return _claude_usage(user_home, now, root=folder / "projects")
+    if cli == "codex":
+        return _codex_usage(user_home, now, root=folder / "sessions")
+    return None
+
+
+def _text(value) -> str:
+    """A label as the person typed it: a string, or "" for anything else (never `str()` of a dict)."""
+    return value[:40] if isinstance(value, str) else ""
+
+
+def _default_row(cli: str, user_home: Path, usage: dict | None, label: str, which) -> dict:
+    """The CLI's own login on this computer."""
+    if cli == "claude":
+        email = _claude_email(user_home)
+        signed = bool(email)
+    else:
+        email = ""
+        home = _DEFAULT_HOME[cli]
+        signed = _signed_in(cli, user_home / home) if home else bool(which(cli))
+    return {"id": "default", "label": label, "email": email, "state": "ready" if signed else "login",
+            "dir": None, "usage": usage}
+
+
+def _omher_rows(cli: str, user_home: Path, now: float, default_usage: dict | None, labels: dict, which) -> list[dict]:
+    """The CLI's own login on this computer first, then each omher account folder in name order."""
+    root = omher_accounts_root(user_home) / cli
+    rows = [_default_row(cli, user_home, default_usage, _text(labels.get(cli)), which)]
+    for folder in sorted(root.iterdir()) if root.is_dir() else []:
+        if not folder.is_dir() or folder.is_symlink() or not _ACCOUNT_ID.match(folder.name):
+            continue
+        meta = _read_json(folder / "account.json")
+        rows.append({"id": folder.name, "label": _text(meta.get("label")),
+                     "email": _claude_email(folder) if cli == "claude" else "",
+                     "state": "ready" if _signed_in(cli, folder) else "login", "dir": str(folder),
+                     "usage": _account_usage(cli, folder, user_home, now)})
+    for r in rows:
+        u = r["usage"]
+        if r["state"] == "ready" and u and u.get("state") == "limited":
+            r["state"] = "limited"
+            r["resets_at"] = max((w["resets_at"] for w in u["windows"] if "resets_at" in w), default=None)
+    return rows
+
+
+def read_accounts(user_home: Path | None = None, *, now: float | None = None, which=None) -> dict:
+    """Every coding CLI omher knows, with `installed` (on the bridge's PATH; the app re-checks in its own
+    install folders) and its rows. Never a token: a label, Claude Code's signed-in email, a usage record."""
+    import shutil
+    user_home = Path(user_home) if user_home else Path.home()
+    now = time.time() if now is None else now
+    which = which or shutil.which
+    usage = {p["id"]: p for p in read_usage(user_home, now=now, which=lambda _: None)["providers"]}
+    root = omher_accounts_root(user_home)
+    active = _read_active(root)
+    labels = _read_json(root / "labels.json")
+    cpa = cpa_count(user_home)
+    groups = []
+    for cli in ACCOUNT_CLIS:
+        rows = _omher_rows(cli, user_home, now, usage.get(cli), labels, which)
+        ids = [r["id"] for r in rows]
+        current = active.get(cli) if active.get(cli) in ids else "default"
+        for r in rows:
+            if r["id"] == current and r["state"] == "ready":
+                r["state"] = "active"
+        group = {"cli": cli, "installed": bool(which(cli)), "active": current, "accounts": rows}
+        if cli == "claude" and cpa:
+            group["also"] = {"name": "CLIProxyAPI", "accounts": cpa}
+        groups.append(group)
+    return {"groups": groups}
+
+
+def _account_folder(cli, account_id, user_home: Path | None = None) -> Path:
+    """`~/.omher/accounts/<cli>/<id>`, refusing anything that is not exactly one plain folder name there."""
+    if cli not in ACCOUNT_CLIS:
+        raise BridgeError("bad_request", "unknown cli")
+    if not isinstance(account_id, str) or not _ACCOUNT_ID.match(account_id) or account_id == "default":
+        raise BridgeError("bad_request", "bad account id")
+    base = omher_accounts_root(user_home) / cli
+    folder = base / account_id
+    if folder.parent != base or os.path.realpath(folder.parent) != os.path.realpath(base):
+        raise BridgeError("bad_request", "bad account id")
+    return folder
+
+
+def _clean_label(label) -> str:
+    return re.sub(r"\s+", " ", str(label or "")).strip()[:40]
+
+
+def add_account(cli, label, user_home: Path | None = None) -> dict:
+    """A new, empty account folder; the app then runs the CLI's own login with it as the CLI's home."""
+    text = _clean_label(label)
+    slug = re.sub(r"[^a-z0-9._-]+", "-", text.lower()).strip("-.")[:40]
+    if cli not in ACCOUNT_CLIS:
+        raise BridgeError("bad_request", "unknown cli")
+    base = omher_accounts_root(user_home) / str(cli)
+    if not slug or slug == "default":
+        n = 2
+        while (base / f"account-{n}").exists():
+            n += 1
+        slug = f"account-{n}"
+    elif (base / slug).exists():
+        raise BridgeError("exists", f"an account named {slug} already exists")
+    folder = _account_folder(cli, slug, user_home)
+    folder.mkdir(parents=True, mode=0o700)
+    (folder / "account.json").write_text(json.dumps({"label": text, "created_at": time.time()}), encoding="utf-8")
+    return {"id": slug, "dir": str(folder)}
+
+
+def label_account(cli, account_id, label, user_home: Path | None = None) -> None:
+    """The person's own name for a row ("" clears it). The default row's label lives in labels.json."""
+    text = _clean_label(label)
+    root = omher_accounts_root(user_home)
+    if account_id == "default":
+        if cli not in ACCOUNT_CLIS:
+            raise BridgeError("bad_request", "unknown cli")
+        labels = {k: v for k, v in _read_json(root / "labels.json").items() if k in ACCOUNT_CLIS and isinstance(v, str)}
+        labels[cli] = text
+        _write_json(root, "labels.json", {k: v for k, v in labels.items() if v})
+        return
+    folder = _account_folder(cli, account_id, user_home)
+    if folder.is_symlink() or not folder.is_dir():
+        raise BridgeError("not_found", "no such account")
+    meta = _read_json(folder / "account.json")
+    meta = {"label": text, "created_at": meta.get("created_at") if isinstance(meta.get("created_at"), (int, float)) else None}
+    (folder / "account.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def remove_account(cli, account_id, user_home: Path | None = None, *, only_if_empty: bool = False) -> None:
+    """Deletes `~/.omher/accounts/<cli>/<id>/` and nothing else. `only_if_empty`: a cancelled sign-in, so
+    refuse when the CLI did log in there."""
+    import shutil
+    folder = _account_folder(cli, account_id, user_home)
+    if folder.is_symlink() or not folder.is_dir():
+        raise BridgeError("not_found", "no such account")
+    if only_if_empty and _signed_in(cli, folder):
+        raise BridgeError("signed_in", "this account is signed in; remove it from its menu")
+    shutil.rmtree(folder)
+    root = omher_accounts_root(user_home)
+    active = _read_active(root)
+    if active.get(cli) == account_id:
+        active.pop(cli)
+        _write_json(root, "active.json", active)
+
+
+def _write_json(root: Path, name: str, data: dict) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    tmp = root / f"{name}.tmp"
+    tmp.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, root / name)
+
+
+def set_active_account(cli, account_id, user_home: Path | None = None) -> None:
+    """The account new sessions of `cli` start with. Running sessions are never touched."""
+    if account_id != "default":
+        if not _account_folder(cli, account_id, user_home).is_dir():
+            raise BridgeError("not_found", "no such account")
+    elif cli not in ACCOUNT_CLIS:
+        raise BridgeError("bad_request", "unknown cli")
+    root = omher_accounts_root(user_home)
+    active = _read_active(root)
+    active[cli] = account_id
+    _write_json(root, "active.json", active)
+
+
 # ---------------------------------------------------------------- transcript helpers
 
 _AUTHOR_RE = re.compile(r"^\[(?P<author>[^\]|]+?)\s*\|[^\]]*\]\s*(?P<rest>.*)$", re.DOTALL)
@@ -2347,6 +2744,10 @@ class Bridge:
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
             "runs.cli": self.op_runs_cli,
+            "usage.read": self.op_usage_read,
+            "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
+            "accounts.remove": self.op_accounts_remove, "accounts.set_active": self.op_accounts_set_active,
+            "accounts.label": self.op_accounts_label, "accounts.discard": self.op_accounts_discard,
         }
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self.runs = DagRuns()
@@ -3121,6 +3522,33 @@ class Bridge:
     async def op_panel_worktrees(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return {"worktrees": await asyncio.to_thread(read_worktrees, bot["path"])}
+
+    async def op_usage_read(self, p) -> dict:
+        return await asyncio.to_thread(read_usage)
+
+    async def op_accounts_list(self, p) -> dict:
+        return await asyncio.to_thread(read_accounts)
+
+    async def op_accounts_add(self, p) -> Reply:
+        out = await asyncio.to_thread(add_account, p.get("cli"), p.get("label"))
+        return Reply(out, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_remove(self, p) -> Reply:
+        await asyncio.to_thread(remove_account, p.get("cli"), p.get("account"))
+        return Reply({}, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_set_active(self, p) -> Reply:
+        await asyncio.to_thread(set_active_account, p.get("cli"), p.get("account"))
+        return Reply({}, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_label(self, p) -> Reply:
+        await asyncio.to_thread(label_account, p.get("cli"), p.get("account"), p.get("label"))
+        return Reply({}, lambda: self.emit("accounts.update", ""))
+
+    async def op_accounts_discard(self, p) -> Reply:
+        """A cancelled sign-in: removes the new folder, refused when the CLI logged in there."""
+        await asyncio.to_thread(remove_account, p.get("cli"), p.get("account"), only_if_empty=True)
+        return Reply({}, lambda: self.emit("accounts.update", ""))
 
     async def op_panel_diff(self, p) -> dict:
         bot = self._bot(p.get("bot"))

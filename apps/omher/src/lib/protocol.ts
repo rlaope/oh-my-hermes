@@ -140,7 +140,8 @@ export interface FolderOpenResult {
 }
 
 /** op name -> { params, result }. `bot` is always the profile name. `session` (optional) names a folder chat
- *  the bridge created with `folder.open`; without it an op acts on the bot's main chat. */
+ *  the bridge created with `folder.open`; without it an op acts on the bot's main chat. `id` is the frame's
+ *  own request id, so no op takes a param named `id` (accounts use `account`). */
 export interface OpMap {
   hello: { params: Record<string, never>; result: HelloResult };
   "bots.list": { params: Record<string, never>; result: { bots: Bot[] } };
@@ -196,6 +197,20 @@ export interface OpMap {
     params: { agent?: CliAgent; cwd?: string; since?: number };
     result: { runs: AgentRunSummary[]; agents: Record<CliAgent, CliAgentStatus> };
   };
+  /** Subscription usage of the CLIs on this machine, from their own session files (read-only). */
+  "usage.read": { params: Record<string, never>; result: { providers: UsageProvider[] } };
+  /** The coding CLIs on this computer with their logins: the CLI's own home first, then omher's added ones. */
+  "accounts.list": { params: Record<string, never>; result: { groups: AccountGroup[] } };
+  /** A new empty folder ~/.omher/accounts/<cli>/<id>/; the app then runs the CLI's own sign-in with it. */
+  "accounts.add": { params: { cli: AccountCli; label: string }; result: { id: string; dir: string } };
+  /** The account new sessions of the CLI start with (running sessions are untouched). */
+  "accounts.set_active": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
+  /** Deletes ~/.omher/accounts/<cli>/<id>/ and nothing else. */
+  "accounts.remove": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
+  /** The person's own name for a row ("" clears it); `default` = the CLI's own login. */
+  "accounts.label": { params: { cli: AccountCli; account: string; label: string }; result: Record<string, never> };
+  /** A cancelled sign-in: removes the new folder; refused when the CLI did sign in there. */
+  "accounts.discard": { params: { cli: AccountCli; account: string }; result: Record<string, never> };
 }
 
 /** Which Hermes attach call a file takes: `image.attach_bytes`, `pdf.attach` or `file.attach`. */
@@ -219,6 +234,58 @@ export interface MediaFile {
   /** The bytes; absent when `info` was asked or the file is over 25 MB (`too_big`). */
   data_base64?: string;
   too_big?: boolean;
+}
+
+export type AccountCli = "claude" | "codex" | "pi" | "omp" | "grok" | "gemini";
+/** login = nobody is signed in there (yet). */
+export type AccountState = "active" | "ready" | "limited" | "login";
+
+export interface Account {
+  /** "default" = the CLI's own home on this computer; otherwise the omher folder name. Never a token. */
+  id: string;
+  label: string;
+  /** Claude Code's signed-in email (from its own `.claude.json`), else "". */
+  email: string;
+  state: AccountState;
+  /** Limited accounts: when the limit resets (seconds). */
+  resets_at?: number | null;
+  /** omher accounts: the folder new sessions use. */
+  dir?: string | null;
+  /** The usage record found in that account's own folder. */
+  usage?: UsageProvider | null;
+}
+
+export interface AccountGroup {
+  cli: AccountCli;
+  /** On the bridge's PATH (the desktop app re-checks the install folders). */
+  installed: boolean;
+  /** The account new sessions start with. */
+  active: string | null;
+  accounts: Account[];
+  /** Another tool on this computer that holds logins for this CLI (only counted, managed there). */
+  also?: { name: string; accounts: number };
+}
+
+export type UsageState = "ok" | "near" | "limited" | "stale" | "connected";
+
+export interface UsageWindow {
+  /** "5 hours", "Weekly", "2d"… */
+  label: string;
+  /** Only when the source gave one (Codex does, Claude Code never does). */
+  used_percent?: number;
+  /** Seconds since epoch. */
+  resets_at?: number;
+  /** The reset time has passed since the source was written: no number is shown. */
+  stale?: boolean;
+}
+
+export interface UsageProvider {
+  id: "codex" | "claude" | "grok" | "gemini";
+  plan?: string;
+  windows: UsageWindow[];
+  state: UsageState;
+  /** mtime of the file the numbers came from; null when only the CLI was found on PATH. */
+  source_mtime: number | null;
 }
 
 export interface TerminalRun {
@@ -324,6 +391,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  /** omher accounts changed (added, removed, made active); the Accounts views re-read accounts.list. */
+  | (EventBase & { event: "accounts.update" })
   | (EventBase & { event: "folder.closed"; reason?: string })
   | (EventBase & {
       event: "routine.ran";
