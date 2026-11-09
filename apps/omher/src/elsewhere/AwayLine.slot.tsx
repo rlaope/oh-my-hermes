@@ -2,7 +2,7 @@
 // bubble with one link back to the thread at the end. omher never writes to that thread.
 import type { SlotProps } from "../features";
 import { openExternal } from "../lib/openExternal";
-import { Spinner } from "../ui";
+import { SourceIcon, Spinner } from "../ui";
 import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
@@ -29,10 +29,14 @@ export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
         void openExternal(a.url!);
       }}
     >
-      {where}
+      <SourceIcon source={a.source} size={12} />
+      <span className="ew-lt">{where}</span>
     </a>
   ) : (
-    <span className="ew-where">{where}</span>
+    <span className="ew-where">
+      <SourceIcon source={a.source} size={12} />
+      <span className="ew-lt">{where}</span>
+    </span>
   );
   return (
     <div className="msg a ew-msg" data-testid="away" data-source={a.source} data-session={a.id}>

@@ -113,6 +113,7 @@ changed source.
 | `src/routing/lexical_shortlist.py` via `standalone_skill_shortlist_json()` in `src/routing/skill_shortlist_sidecar.py` | `src/plugin_bundle/omh/tools/skill_shortlist.json` | `uv run python -m omh.cli docs skill-shortlist` | `docs skill-shortlist --check`; ranking parity in `tests/test_skill_shortlist_sidecar.py` |
 | `ulw_inventory_payload()` in `src/skills/catalog.py` via `src/catalogs/ulw_surfaces.py` | marked ULW region of `README.md` | `uv run python -m omh.cli docs ulw-inventory` | `docs ulw-inventory --check`; `tests/test_ulw_inventory.py` |
 | Same producer | marked ULW region of `site/index.html` | `uv run python -m omh.cli docs ulw-site` | `docs ulw-site --check`; i18n parity in `tests/test_ulw_inventory.py` |
+| `skills/*/SKILL.md` (minus `ulw-*` and `dag-ulw`) via `tools/render_site_skills.py` | `site/docs/skills/index.html` (the public skill guide; Pages re-renders it on every deploy) | `uv run python tools/render_site_skills.py --write` | `tools/render_site_skills.py --check`; `tests/test_site_skills_guide.py` |
 | `SHIPPED_MODEL_RECOMMENDATIONS` in `src/coding/model_recommendations.py` via `src/catalogs/model_chain_table.py` | marked chain-table region of `docs/INSTALLATION.md` (the public chain table; the READMEs link to it) | `uv run python -m omh.cli docs chain-table` | `docs chain-table --check`; round-trip equality in `tests/test_model_chain_table.py` |
 
 - Never hand-edit `agent-skills/**`; regenerate the portable target without

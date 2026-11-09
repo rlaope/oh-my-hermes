@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/workflows/pages.yml"
       - "site/**"
+      - "skills/**"
+      - "tools/render_site_skills.py"
       - "README.md"
       - "docs/**"
   workflow_dispatch:
@@ -32,6 +34,8 @@ jobs:
         run: python -m omh.cli docs workflows --check
       - name: Validate harness catalog
         run: python -m omh.cli harness validate
+      - name: Refresh the skill guide from skills/*/SKILL.md
+        run: python tools/render_site_skills.py --write
       - name: Configure Pages
         uses: actions/configure-pages@v6
         with:
