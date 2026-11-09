@@ -8,6 +8,7 @@
 // Test-control ops (not part of the protocol): mock.calls, mock.emit {events}, mock.reset.
 import http from "node:http";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const argv = process.argv.slice(2);
 const arg = (name, dflt) => {
@@ -129,6 +130,32 @@ const PANEL_DIFF = {
   "/w/gateway": { scope: "last commit", files: [{ path: "README.md", add: 1, del: 0 }], patch: "a91b0c2 docs: note the 60s upstream limit\n\ndiff --git a/README.md b/README.md\n@@ -1 +1,2 @@\n # gateway\n+Upstream closes idle connections after 60s." },
 };
 
+// Runs tab: what the real bridge's dag_to_run returns for three real (redacted) dag runs plus a live variant
+// (src/lib/__fixtures__/runs-bridge.json). The live one is moved to "now" so its times read like a running run.
+const RUNS_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-bridge.json", import.meta.url), "utf-8"));
+function runsSeed() {
+  const runs = structuredClone(RUNS_FIXTURE.runs);
+  for (const r of runs) {
+    if (r.state !== "running") continue;
+    const shift = now() - 90 - r.updated;
+    const move = (o) => {
+      for (const k of ["started", "ended", "updated"]) if (typeof o[k] === "number") o[k] += shift;
+    };
+    move(r);
+    for (const n of r.nodes) {
+      move(n);
+      n.attempts.forEach(move);
+    }
+  }
+  return { kami: runs, friren: [], default: [] };
+}
+const runCounts = (r) => ({
+  nodes: r.nodes.length,
+  done: r.nodes.filter((n) => n.state === "done").length,
+  running: r.nodes.filter((n) => n.state === "running").length,
+  failed: r.nodes.filter((n) => n.state === "failed" || n.state === "blocked").length,
+});
+
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
   { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
@@ -138,7 +165,7 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 // ---- mutable state ---------------------------------------------------------------------------
 
 let calls = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars;
+let bots, history, models, turns, pending, idSeq, queues, avatars, runs;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -160,6 +187,7 @@ function reset() {
   turns = {};
   queues = {};
   avatars = {};
+  runs = runsSeed();
   pending = new Map();
   idSeq = 0;
   calls = [];
@@ -430,6 +458,18 @@ const OPS = {
     const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
     if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
     return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
+  },
+  "runs.list": (p) => ({
+    runs: (runs[needBot(p).name] ?? [])
+      .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
+      .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
+  }),
+  "runs.get": (p) => {
+    const b = needBot(p);
+    const id = needStr(p, "run");
+    const run = (runs[b.name] ?? []).find((r) => r.id === id);
+    if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
+    return { run, handoffs: RUNS_FIXTURE.handoffs[id] ?? {} };
   },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({
