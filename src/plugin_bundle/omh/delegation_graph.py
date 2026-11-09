@@ -716,11 +716,17 @@ def build_delegation_graph(
     scope: str = "session",
     linger: float | None = GRAPH_LINGER_SECONDS,
     segments: Sequence[str] | None = None,
+    dag_run: str = "",
+    keep_dag: bool = False,
 ) -> dict[str, Any]:
     """The graph of one conversation's delegated work, or of the fanout passed in when it has none.
 
+    ``dag_run`` names the dag run to draw instead of the newest. A named run that exists is drawn alone (no team,
+    no plain delegations beside it) and does not lapse after ``linger``; one that does not is the newest, as ever.
+
     A graph whose lanes have all settled is inactive once ``linger`` seconds
-    have passed since its last change; ``None`` keeps it (the chat end post of
+    have passed since its last change; ``None`` keeps it, and ``keep_dag`` keeps a dag run's (the Desktop pane, which
+    draws a finished run for its node summaries and figures) (the chat end post of
     a run it opened, `delegation_snapshot.py`). ``segments`` is
     `graph_segments`' answer for ``session_id`` when the caller already read
     it. Never raises: an unreadable record or database leaves the graph
@@ -735,7 +741,7 @@ def build_delegation_graph(
         if session_id and not segments:
             segments = _segments(connection, session_id)
         graph = _build(omh_home, hermes_home, session_id, moment, root_model, titles, scope, linger, segments or [],
-                       connection)
+                       connection, dag_run, keep_dag)
     except (OSError, ValueError, TypeError, KeyError, sqlite3.Error) as error:
         graph = inactive_graph(f"unreadable:{type(error).__name__}", scope=scope)
     finally:
@@ -760,6 +766,8 @@ def _build(
     linger: float | None,
     segments: Sequence[str],
     connection: sqlite3.Connection | None,
+    dag_pick: str = "",
+    keep_dag: bool = False,
 ) -> dict[str, Any]:
     if not session_id:
         return inactive_graph("no_session", scope=scope)
@@ -767,8 +775,14 @@ def _build(
     teams = [found for found in (_team_record(Path(omh_home), segment) for segment in segments) if found is not None]
     team = max(teams, key=lambda found: found[1]) if teams else None
     children = [child for ledger in ledgers.values() if ledger for child in ledger["children"]]
-    dag = _dag_run(Path(omh_home), session_id, ledgers)
+    dag = _dag_run(Path(omh_home), session_id, ledgers, dag_pick)
     if dag is not None:
+        run = str(dag["record"]["run"])
+        # Another run's children are that run's nodes, not waves of this graph.
+        children = [child for child in children
+                    if not (isinstance(child.get("dag"), Mapping) and child["dag"].get("run") not in (None, run))]
+        if dag["picked"]:
+            children, team, linger = [], None, None
         known = {child["child_session_id"] for child in children}
         children += [child for child in dag["children"] if child["child_session_id"] not in known]
     if not children and team is None and dag is None:
@@ -993,7 +1007,7 @@ def _build(
                  + [float(child["stop"]["observed_at"]) for child in children if isinstance(child.get("stop"), dict)]
                  + ([team[1]] if team is not None else [])
                  + ([float(dag["record"].get("updated_at") or 0.0)] if dag is not None else []))
-    if settled and linger is not None and now - newest > linger:
+    if settled and linger is not None and not (keep_dag and dag is not None) and now - newest > linger:
         return inactive_graph("settled", scope=scope)
     if dag is not None:
         name = dag_graph_name(dag["record"])
@@ -1074,31 +1088,79 @@ def dag_origin(node: Mapping[str, Any]) -> tuple[str, str]:
     return kind, str(node.get("found_by") or "")
 
 
-def _dag_run(
+def _dag_runs(
     omh_home: Path, session_id: str, ledgers: Mapping[str, Mapping[str, Any] | None]
-) -> dict[str, Any] | None:
-    """The conversation's newest `omh_dag/v1` run with the ledger children bound to it, or None.
+) -> tuple[list[str], list[tuple[dict[str, Any], Path]]]:
+    """The segments a conversation's runs are read from, and those runs.
 
     The run is stored under the segment that defined it; when this segment
     holds none, the conversation's other segments are read (the keys of
     ``ledgers``, `graph_segments`), so a compacted parent still finds its run.
-    The caller derives the states once it has joined the stops.
     """
     segments = [session_id]
     runs = session_runs(omh_home, session_id)
     if not runs:
         segments = sorted(ledgers)
         runs = [item for segment in segments for item in session_runs(omh_home, segment)]
+    return segments, runs
+
+
+def _dag_run(
+    omh_home: Path, session_id: str, ledgers: Mapping[str, Mapping[str, Any] | None], pick: str = ""
+) -> dict[str, Any] | None:
+    """The conversation's newest `omh_dag/v1` run, or the one named ``pick`` (``picked``), with its ledger children.
+
+    The caller derives the states once it has joined the stops.
+    """
+    segments, runs = _dag_runs(omh_home, session_id, ledgers)
     if not runs:
         return None
-    record = max(runs, key=lambda item: float(item[0].get("updated_at") or 0.0))[0]
+    named = next((item[0] for item in runs if pick and str(item[0].get("run")) == pick), None)
+    record = named or max(runs, key=lambda item: float(item[0].get("updated_at") or 0.0))[0]
     run = str(record["run"])
     children = [
         child for segment in segments for child in ((ledgers.get(segment) or {}).get("children") or [])
         if isinstance(child.get("dag"), Mapping) and child["dag"].get("run") == run
     ]
-    return {"record": record, "children": children}
+    return {"record": record, "children": children, "picked": named is not None}
 
+
+def dag_run_choices(
+    omh_home: Path, hermes_home: Path, session_id: str, *, now: float | None = None
+) -> list[dict[str, Any]]:
+    """Every dag run of one conversation, newest change first: what a pane offers to switch between.
+
+    Each is ``run``, ``name``, ``state`` (as `dag_run.run_state` words it), the ``nodes`` it holds and when it last
+    changed (``updated_at``). Never raises: an unreadable store is no choices.
+    """
+    if not session_id:
+        return []
+    moment = time.time() if now is None else now
+    connection = None
+    try:
+        connection = _connect(Path(hermes_home))
+        ledgers = {segment: read_ledger(Path(omh_home), segment) for segment in _segments(connection, session_id)}
+        segments, runs = _dag_runs(Path(omh_home), session_id, ledgers)
+        choices = []
+        for record, _path in runs:
+            run = str(record["run"])
+            children = [
+                child for segment in segments for child in ((ledgers.get(segment) or {}).get("children") or [])
+                if isinstance(child.get("dag"), Mapping) and child["dag"].get("run") == run
+            ]
+            choices.append({
+                "run": run,
+                "name": dag_graph_name(record),
+                "state": run_state(record, derive(record, children, moment)),
+                "nodes": len(record["nodes"]),
+                "updated_at": float(record.get("updated_at") or 0.0),
+            })
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error):
+        return []
+    finally:
+        if connection is not None:
+            connection.close()
+    return sorted(choices, key=lambda choice: choice["updated_at"], reverse=True)
 
 
 def _dag_nodes(

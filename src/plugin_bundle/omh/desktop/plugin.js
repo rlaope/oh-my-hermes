@@ -162,19 +162,21 @@ function countOf(list, predicate) {
 }
 
 // `cols` asks the backend to draw an active delegation graph that many
-// cells wide; without it the payload carries no drawing.
-export function hudPath(sessionId, cols) {
+// cells wide; without it the payload carries no drawing. `dagRun` names the
+// dag run to draw in place of the newest one.
+export function hudPath(sessionId, cols, dagRun) {
   const query = []
   if (sessionId) query.push(`session=${encodeURIComponent(sessionId)}`)
   if (Number.isInteger(cols) && exceeds(cols, 0)) query.push(`cols=${cols}`)
+  if (dagRun) query.push(`dag_run=${encodeURIComponent(dagRun)}`)
   return query.length ? `/hud?${query.join('&')}` : '/hud'
 }
 
-function fetchHud(sessionId, cols) {
+function fetchHud(sessionId, cols, dagRun) {
   if (!rest) {
     return Promise.reject(new Error('omh plugin context is not registered'))
   }
-  return rest(hudPath(sessionId, cols))
+  return rest(hudPath(sessionId, cols, dagRun))
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +257,9 @@ export const EN = {
   subagentsTip: "Each subagent is listed in Hermes Desktop's Agents panel.",
   dagDefaultName: 'delegation',
   dagDone: 'done {done}/{total}',
+  dagPickLabel: 'Show another DAG of this session',
+  dagPickOption: '{name} · {state} · {count} nodes',
+  dagPickLatest: ' · latest',
   dagStateCount: '{count} {state}',
   dagUnchecked: '{count} handoff not checked',
   graphTitle: function (vars) {
@@ -378,6 +383,8 @@ export const EN = {
   dgBlocksTitle: '{title} (blocks {count})',
   dgHighlight: 'Highlight',
   dgClearHighlight: 'Clear highlight',
+  dgEdgesAll: 'Show {count} implied edges',
+  dgEdgesReduced: 'Hide implied edges',
   dgNote: 'Cost counts only what Hermes priced; unpriced tokens stay tokens. Cache hit = cache read ÷ prompt tokens.',
   sectionUsage: 'USAGE',
   ubCalls: function (vars) {
@@ -396,6 +403,11 @@ export const EN = {
   ubTtftSub: 'send → first token',
   ubTtftAvg: 'avg {avg} · {count} turns',
   ubTtftTip: 'Time from send to the first streamed token of the last turn, as this window saw it; tool time before that token counts',
+  ubFree: 'Free window',
+  ubCacheLine: 'cache {cache}',
+  ubScope: 'Usage scope',
+  ubMain: 'Main',
+  ubWithSubs: '+ subagents ({count})',
   ubParts: 'Prompt composition'
 }
 
@@ -459,6 +471,9 @@ export const KO = {
   subagentsTip: '각 하위 에이전트는 Hermes Desktop의 에이전트 패널에 표시됩니다.',
   dagDefaultName: '위임',
   dagDone: '완료 {done}/{total}',
+  dagPickLabel: '이 세션의 다른 DAG 보기',
+  dagPickOption: '{name} · {state} · 노드 {count}개',
+  dagPickLatest: ' · 최신',
   dagStateCount: '{count} {state}',
   dagUnchecked: '핸드오프 {count}개 확인 안 됨',
   graphTitle: '준비 {ready}개 · 간선 {edges}개',
@@ -572,6 +587,8 @@ export const KO = {
   dgBlocksTitle: '{title} (후속 {count}개 대기)',
   dgHighlight: '강조',
   dgClearHighlight: '강조 해제',
+  dgEdgesAll: '생략된 간선 {count}개 보기',
+  dgEdgesReduced: '생략 가능한 간선 숨기기',
   dgNote: '비용은 Hermes가 과금한 것만 집계하며, 과금되지 않은 토큰은 토큰으로 남습니다. 캐시 적중 = 캐시 읽기 ÷ 프롬프트 토큰.',
   sectionUsage: '사용량',
   ubCalls: '호출 {count}회',
@@ -588,6 +605,11 @@ export const KO = {
   ubTtftSub: '전송 → 첫 토큰',
   ubTtftAvg: '평균 {avg} · {count}턴',
   ubTtftTip: '전송부터 마지막 턴의 첫 스트리밍 토큰까지의 시간으로, 이 창에서 관측한 값입니다. 첫 토큰 전의 도구 시간도 포함됩니다',
+  ubFree: '남은 창',
+  ubCacheLine: '캐시 {cache}',
+  ubScope: '집계 범위',
+  ubMain: '메인',
+  ubWithSubs: '+ 서브에이전트 ({count})',
   ubParts: '프롬프트 구성'
 }
 
@@ -1319,6 +1341,31 @@ export function delegationView(payload) {
   }
 }
 
+// The session's dag runs to switch between, newest first, or null where there is nothing to choose (fewer than two).
+// `picked` is the run the person switched to; one the backend no longer lists is the newest, which is what it draws.
+// `newest` is the run the pane follows when nothing is picked.
+export function dagRunChoices(payload, picked) {
+  const runs = rows(payload && payload.dag_runs).filter(function (item) {
+    return safeText(item.run)
+  })
+  if (!exceeds(runs.length, 1)) return null
+  const newest = safeText(runs[0].run)
+  const current = runs.some(function (item) {
+    return safeText(item.run) === picked
+  })
+    ? picked
+    : newest
+  return {
+    newest,
+    current,
+    options: runs.map(function (item, index) {
+      const run = safeText(item.run)
+      const label = t('dagPickOption', { name: safeText(item.name) || run, state: stateWord(item.state) || '?', count: Number(item.nodes) || 0 })
+      return { run, label: index ? label : label + t('dagPickLatest') }
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The drawing: the backend's `delegation_drawing`, the TUI's own boxes or
 // tree as lines of `{text, role}` segments. The pane never lays a cell out
@@ -1335,8 +1382,8 @@ const DRAWING_STATE_TONES = {
   stuck: 'warn',
   failed: 'error',
   interrupted: 'error',
-  done: 'tertiary',
-  dispatched: 'tertiary',
+  done: 'accent',
+  dispatched: 'warn',
   waiting: 'muted',
   unknown: 'muted'
 }
@@ -1564,11 +1611,24 @@ export function usageBoard(input) {
   const saved = sent && !sent.error && !!input.stored && sent.session_id === input.stored ? sent : {}
   const crumbs = input.breakdown && typeof input.breakdown === 'object' ? input.breakdown : {}
   const turns = Array.isArray(input.turns) ? input.turns : []
+  const subs = input.withSubs && input.subs && exceeds(input.subs.lanes, 0) ? input.subs : null
   const recorded = {
     input: positive(saved.input),
     read: positive(saved.cache_read),
     write: positive(saved.cache_write),
     output: positive(saved.output)
+  }
+  const hasMain = exceeds(allTokens(recorded), 0)
+  // With the subagents: their lanes' figures join the chat's own (the stream's counts stand in where the chat has no row).
+  if (subs) {
+    if (!hasMain) {
+      recorded.input = positive(live.prompt) || positive(live.input)
+      recorded.output = positive(live.output)
+    }
+    recorded.input += subs.input
+    recorded.read += subs.read
+    recorded.write += subs.write
+    recorded.output += subs.output
   }
   const hasRecord = exceeds(allTokens(recorded), 0)
   const prompt = hasRecord ? promptTokens(recorded) : positive(live.prompt) || positive(live.input)
@@ -1578,6 +1638,10 @@ export function usageBoard(input) {
   const recordedCost = Number.isFinite(saved.cost_usd)
   const streamedCost = !recordedCost && exceeds(positive(live.cost_usd), 0)
   const cost = recordedCost ? saved.cost_usd : streamedCost ? live.cost_usd : null
+  const costAll = subs && (cost !== null || subs.cost !== null) ? (cost || 0) + (subs.cost || 0) : cost
+  const costGuess = streamedCost || saved.cost_estimated === true || !!(subs && subs.estimated)
+  const costFloor =
+    (recordedCost && saved.cost_partial === true) || !!(subs && (subs.partial || exceeds(subs.lanes, subs.priced) || (cost === null && hasMain)))
   const counted = prompt + output
   const used = positive(live.context_used) || positive(crumbs.context_used)
   const max = positive(live.context_max) || positive(crumbs.context_max)
@@ -1598,7 +1662,7 @@ export function usageBoard(input) {
     return total + entry.tokens
   }, 0)
   const parts = listed.map(function (entry, index) {
-    return { id: String(entry.id || index), label: String(entry.label || entry.id || ''), tokens: entry.tokens, share: entry.tokens / sum }
+    return { id: String(entry.id || index), label: String(entry.label || entry.id || ''), tokens: entry.tokens, share: entry.tokens / (exceeds(max, sum) ? max : sum) }
   })
   if (!(exceeds(counted, 0) || exceeds(used, 0) || parts.length || turns.length || exceeds(tps, 0))) return null
   const marked = guess ? '~' : ''
@@ -1607,6 +1671,9 @@ export function usageBoard(input) {
     calls: positive(live.calls),
     sum,
     parts,
+    dial: { split: hasRecord ? { input: recorded.input, read: recorded.read, write: recorded.write, output: recorded.output } : null, total: counted, cache: hasRecord ? tokenCountText(recorded.read) : hit === null ? null : percentText(hit) },
+    window: exceeds(max, sum) ? max : 0,
+    free: exceeds(max, sum) ? max - sum : 0,
     cells: [
       {
         label: t('dgTokens'),
@@ -1623,8 +1690,8 @@ export function usageBoard(input) {
       },
       {
         label: t('dgCost'),
-        value: costText(cost, streamedCost || saved.cost_estimated === true, recordedCost && saved.cost_partial === true),
-        sub: cost === null ? (exceeds(counted, 0) ? t('dgUnpriced') : t('dgCostNone')) : '',
+        value: costText(costAll, costGuess, costFloor),
+        sub: costAll === null ? (exceeds(counted, 0) ? t('dgUnpriced') : t('dgCostNone')) : '',
         tip: t('ubCostTip')
       },
       {
@@ -1692,6 +1759,38 @@ function idsForTitles(lanes, titles) {
     .filter(Boolean)
 }
 
+// The dependency edges another chain of dependencies already implies (a to c where a to b to c stands), as `from.to`
+// keys. A repair or an extend edge only says where a node came from, so it neither implies nor is implied.
+function impliedEdges(edges) {
+  const next = new Map()
+  edges.forEach(function (edge) {
+    if (edge.kind === 'depends_on') next.set(edge.from, (next.get(edge.from) || []).concat([edge.to]))
+  })
+  function reaches(from, to) {
+    const seen = new Set()
+    const stack = [from]
+    while (stack.length) {
+      const at = stack.pop()
+      for (const step of next.get(at) || []) {
+        if (at === from && step === to) continue
+        if (step === to) return true
+        if (!seen.has(step)) {
+          seen.add(step)
+          stack.push(step)
+        }
+      }
+    }
+    return false
+  }
+  return edges
+    .filter(function (edge) {
+      return edge.kind === 'depends_on' && reaches(edge.from, edge.to)
+    })
+    .map(function (edge) {
+      return `${edge.from}.${edge.to}`
+    })
+}
+
 // The model of a DAG or verified fanout graph. Native/team graphs keep their drawing;
 // fanout has no backend critical-path record, so its path and bottlenecks stay empty.
 export function dagModel(graph) {
@@ -1715,7 +1814,7 @@ export function dagModel(graph) {
     const key = `${from}|${to}`
     if (!ids.has(from) || !ids.has(to) || from === to || taken.has(key)) continue
     taken.add(key)
-    edges.push({ from, to })
+    edges.push({ from, to, kind: safeText(edge.kind) })
     parents.set(to, (parents.get(to) || []).concat([from]))
     children.set(from, (children.get(from) || []).concat([to]))
   }
@@ -1799,6 +1898,7 @@ export function dagModel(graph) {
     index,
     layers,
     edges,
+    implied: impliedEdges(edges),
     models,
     bottlenecks,
     path: idsForTitles(lanes, topology && Array.isArray(topology.critical_path) ? topology.critical_path : []),
@@ -2043,8 +2143,9 @@ export const PANE_CSS = `
 .omh-pane-chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 10px}
 .omh-pane-rule{flex:none;border-top:1px solid var(--omh-edge)}
 .omh-pane-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:12px}
-.omh-pane-section{display:flex;align-items:baseline;gap:8px;padding:16px 12px 6px;min-width:0;max-width:640px;box-sizing:border-box}
-.omh-pane-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label);white-space:nowrap}
+.omh-pane-section{display:flex;align-items:baseline;gap:8px;margin:18px 0 8px;padding:6px 12px 6px 9px;min-width:0;max-width:640px;box-sizing:border-box;background:color-mix(in srgb,var(--ui-text-primary) 6%,transparent);border-left:3px solid var(--omh-brand);border-bottom:1px solid var(--ui-stroke-tertiary)}
+.omh-pane-body .omh-pane-section:first-child{margin-top:6px}
+.omh-pane-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--omh-label);white-space:nowrap}
 .omh-pane-section-title{min-width:0;flex:1;color:var(--ui-text-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-pane-section-count{margin-left:auto;font-size:11px;color:var(--omh-text-readable);white-space:nowrap}
 .omh-pane-block{padding:0 12px;min-width:0;max-width:640px;box-sizing:border-box}
@@ -2069,6 +2170,9 @@ export const PANE_CSS = `
 .omh-pane-catch{display:grid;grid-template-columns:20px minmax(0,1fr);gap:0 4px;align-items:baseline;padding:1px 0;color:var(--ui-text-secondary)}
 .omh-pane-catch-text{min-width:0;overflow-wrap:anywhere}
 .omh-pane-summary{display:block;padding:10px 0 0;color:var(--omh-text-readable);overflow-wrap:anywhere}
+.omh-pane-pick{position:relative;display:inline-flex;align-items:center;min-width:0;max-width:100%;margin-left:auto;color:var(--omh-text-readable)}
+.omh-pane-dag-pick{position:relative;max-width:100%;margin:0;padding:2px 20px 2px 8px;font:inherit;font-size:11px;text-align:left;color:inherit;background:transparent;border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);cursor:pointer;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}\n.omh-pane-dag-pick::after{content:'';position:absolute;right:7px;top:50%;width:4px;height:4px;margin-top:-4px;border:solid currentColor;border-width:0 1.2px 1.2px 0;transform:rotate(45deg)}\n.omh-pane-dag-pick:hover,.omh-pane-dag-pick:focus-visible,.omh-pane-dag-pick[aria-expanded=true]{color:var(--ui-text-primary);background:color-mix(in srgb,var(--ui-bg-card) 70%,transparent);outline:none}\n.omh-pane-pick{position:relative;display:inline-block}
+.omh-pane-pick-menu{position:absolute;z-index:50;right:0;top:100%;margin-top:4px;display:flex;flex-direction:column;min-width:100%;width:max-content;max-width:min(340px,calc(100cqw - 24px));max-height:240px;overflow-y:auto;padding:3px;background:var(--ui-bg-card);border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);color:var(--ui-text-primary)}\n.omh-pane-pick-opt{display:block;width:100%;margin:0;padding:4px 8px;font:inherit;font-size:11px;text-align:left;color:var(--ui-text-secondary);background:none;border:0;border-radius:var(--radius-sm,4px);cursor:pointer;white-space:normal;overflow-wrap:anywhere}\n.omh-pane-pick-opt:hover,.omh-pane-pick-opt:focus-visible{color:var(--ui-text-primary);background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent);outline:none}\n.omh-pane-pick-opt[data-on=true]{color:var(--ui-text-primary);background:color-mix(in srgb,var(--omh-brand) 18%,transparent)}
 .omh-pane-run{padding:0 0 3px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
 .omh-pane-dag-card{margin:2px 0 4px;padding:10px;border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);background:var(--ui-bg-card)}
 .omh-pane-dag{margin:0;font-family:${MONO};font-size:11px;line-height:1.2;white-space:pre;overflow-x:auto;overflow-y:hidden;color:var(--ui-text-primary)}
@@ -2106,13 +2210,17 @@ export const PANE_CSS = `
 .omh-pane-dv-kpi-value{font-family:${MONO};font-size:15px;font-weight:600;line-height:1.25;color:var(--ui-text-primary);font-variant-numeric:tabular-nums}
 .omh-pane-dv-kpi-sub{font-family:${MONO};font-size:10.5px;line-height:1.3;color:var(--omh-text-readable);overflow-wrap:anywhere;text-wrap:balance}
 .omh-pane-dv-kpi-ring{position:absolute;right:8px;top:8px;display:flex}
-.omh-pane-dv-canvas{position:relative;padding:4px 18px 4px 0}
+.omh-pane-dv-canvas{position:relative;padding:4px 30px 4px 0}
 .omh-pane-dv-edges{position:absolute;left:0;top:0;z-index:0;overflow:visible;pointer-events:none}
-.omh-pane-dv-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-bottom:34px}
+.omh-pane-dv-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;gap:44px 12px;margin-bottom:44px}
 .omh-pane-dv-row:last-child{margin-bottom:0}
 .omh-pane-dv-card{--dv-c:var(--omh-mark);box-sizing:border-box;flex:1 1 0;min-width:118px;max-width:300px;display:flex;flex-direction:column;gap:2px;margin:0;padding:7px 9px 8px;text-align:left;background:var(--ui-bg-card);border:1px solid var(--dv-c);border-radius:var(--radius-sm,2px);color:inherit;font:inherit;cursor:pointer;overflow:hidden;transition:opacity .15s,border-color .15s,background-color .15s}
 .omh-pane-dv-card:hover{background:color-mix(in srgb,var(--ui-bg-card),var(--ui-text-primary) 6%)}
 .omh-pane-dv-card:focus-visible{outline:2px solid var(--omh-brand);outline-offset:1px}
+.omh-pane-dv-card[data-state=running],.omh-pane-dv-card[data-state=dispatched]{position:relative;border:1.5px solid transparent}
+.omh-pane-dv-card[data-state=running]::before,.omh-pane-dv-card[data-state=dispatched]::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:linear-gradient(90deg,color-mix(in srgb,var(--dv-c) 15%,var(--ui-bg-card)),var(--dv-c),color-mix(in srgb,var(--dv-c) 15%,var(--ui-bg-card)));background-size:300% 100%;animation:omh-dv-flow 2.4s ease-in-out infinite alternate;-webkit-mask:linear-gradient(rgb(0,0,0),rgb(0,0,0)) content-box,linear-gradient(rgb(0,0,0),rgb(0,0,0));-webkit-mask-composite:xor;mask:linear-gradient(rgb(0,0,0),rgb(0,0,0)) content-box,linear-gradient(rgb(0,0,0),rgb(0,0,0));mask-composite:exclude;pointer-events:none}
+@keyframes omh-dv-flow{from{background-position:0% 0}to{background-position:100% 0}}
+@media (prefers-reduced-motion:reduce){.omh-pane-dv-card[data-state=running]::before,.omh-pane-dv-card[data-state=dispatched]::before{animation:none;background-position:50% 0}}
 .omh-pane-dv-card[data-tone=accent]{--dv-c:var(--ui-accent)}
 .omh-pane-dv-card[data-tone=warn]{--dv-c:var(--omh-warn)}
 .omh-pane-dv-card[data-tone=error]{--dv-c:var(--ui-red)}
@@ -2140,6 +2248,9 @@ export const PANE_CSS = `
 .omh-pane-dv-edge[data-hot=true],.omh-pane-dv-tip[data-hot=true]{--dv-e:var(--omh-brand)}
 .omh-pane-dv-edge[data-hot=true]{stroke-width:1.6}
 .omh-pane-dv-edge[data-hollow=true]{stroke-dasharray:4 3}
+.omh-pane-dv-edge[data-origin=true]{stroke-dasharray:2 3;opacity:.55}
+.omh-pane-dv-tip[data-origin=true]{opacity:.55}
+.omh-pane-dv-edgebar{display:flex;justify-content:flex-end;padding:0 0 4px}
 .omh-pane-dv-tip[data-hollow=true]{fill:var(--background)}
 .omh-pane-dv-edge[data-dim=true],.omh-pane-dv-tip[data-dim=true]{opacity:.3}
 .omh-pane-dv-detail{margin-top:12px;padding:10px;min-width:0;background:var(--ui-bg-card);border:1px solid var(--omh-edge);border-radius:var(--radius-md,4px)}
@@ -2177,6 +2288,7 @@ export const PANE_CSS = `
 .omh-pane-dv-stats[open] .omh-pane-dv-stats-h::before{content:'▾'}
 .omh-pane-dv-stats-c{margin-left:auto;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--omh-text-readable)}
 .omh-pane-dv-stats-body{padding:0 10px 10px}
+.omh-pane-dv-fold-h.omh-pane-dv-stats-h{padding:0 0 6px;font-size:inherit;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ui-text-secondary)}
 .omh-pane-dv-mrow{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1.5fr) 28px 54px minmax(60px,1fr) 56px;gap:0 8px;align-items:center;width:100%;margin:0;padding:4px 0;font-family:${MONO};font-size:11px;text-align:left;color:inherit;background:none;border:0;border-top:1px solid var(--ui-stroke-tertiary);transition:background-color .15s}
 button.omh-pane-dv-mrow{cursor:pointer}
 button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
@@ -2196,6 +2308,23 @@ button.omh-pane-dv-mrow:hover{background:var(--chrome-action-hover)}
 @media (pointer:coarse),(max-width:640px){.omh-pane-dv-x,.omh-pane-dv-link,.omh-pane-dv-hl{position:relative;height:32px;padding:0 12px;-webkit-tap-highlight-color:transparent}.omh-pane-dv-hl{padding:0 6px}.omh-pane-dv-x::after,.omh-pane-dv-link::after,.omh-pane-dv-hl::after{content:'';position:absolute;inset:-7px -5px}.omh-pane-dv-chips,.omh-pane-dv-links,.omh-pane-dv-path{gap:14px 8px}.omh-pane-dv-path{margin-top:14px}.omh-pane-dv-stats-h{padding:16px 10px}.omh-pane-dv-mrow{padding:16px 0}.omh-pane-dv-mh{padding:0 0 3px}.omh-pane-dv-card{padding:9px 10px 10px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}}
 @media (pointer:coarse){.omh-pane-dv .omh-pane-dag{overflow-x:hidden}}
 @container (min-width:520px){.omh-pane-dv-kpis.omh-pane-ub-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.omh-pane-ub-main{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:6px 0 10px}
+.omh-pane-ub-main .omh-pane-dv-kpis.omh-pane-ub-kpis{flex:1 1 150px;min-width:0;margin:0;grid-template-columns:minmax(0,1fr)}
+.omh-pane-ub-dial{position:relative;flex:none;width:96px;height:96px;cursor:help}
+.omh-pane-ub-center{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-align:center}
+.omh-pane-ub-total{font-family:${MONO};font-size:15px;font-weight:600;line-height:1.1;color:var(--ui-text-primary)}
+.omh-pane-ub-cache{font-family:${MONO};font-size:10px;color:var(--omh-text-readable)}
+.omh-pane-seg{display:inline-flex;margin-left:8px;border:1px solid var(--omh-edge);border-radius:var(--radius-md,6px);overflow:hidden}
+.omh-pane-seg-b{margin:0;padding:1px 8px;font:inherit;font-size:10.5px;text-transform:none;letter-spacing:0;color:var(--omh-text-readable);background:none;border:0;cursor:pointer}
+.omh-pane-seg-b[aria-pressed=true]{color:var(--ui-text-primary);background:color-mix(in srgb,var(--omh-brand) 22%,transparent)}
+.omh-pane-ub-kpis{gap:0 18px;margin:2px 0 10px}
+.omh-pane-ub-kpis .omh-pane-dv-kpi{flex-direction:row;align-items:baseline;gap:6px;padding:4px 0;background:none;border:0;border-bottom:1px solid var(--ui-stroke-tertiary);border-radius:0}
+.omh-pane-ub-kpis .omh-pane-dv-kpi-label{flex:none;min-width:58px}
+.omh-pane-ub-kpis .omh-pane-dv-kpi-value{flex:none;font-size:13px}
+.omh-pane-ub-kpis .omh-pane-dv-kpi-sub{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-wrap:nowrap}
+.omh-pane-ub-kpis .omh-pane-dv-kpi-ring{position:static;align-self:center;margin-left:auto}
+.omh-pane-ub-parts .omh-pane-dv-stats-h{flex-wrap:wrap}
+.omh-pane-ub-parts .omh-pane-dv-stack{flex:1 0 100%;height:8px;margin:2px 0 0;border:1px solid var(--ui-stroke-tertiary);box-sizing:border-box}
 .omh-pane-ub-c0{--dv-k:var(--omh-brand)}
 .omh-pane-ub-c1{--dv-k:var(--ui-accent)}
 .omh-pane-ub-c2{--dv-k:var(--omh-label)}
@@ -2311,10 +2440,13 @@ function useHud() {
   const busyRead = useValue(host.state.busy || host.state.gateway)
   const busy = host.state.busy ? busyRead === true : false
   const cols = useDrawingCells()
+  // The dag run the person switched to, kept for the session they switched it in; none follows the newest run.
+  const [pick, setPick] = useState({ session: '', run: '' })
+  const dagRun = pick.run && pick.session === (sessionId || '') ? pick.run : ''
   const query = useQuery({
-    queryKey: [PLUGIN_ID, 'hud', sessionId || '', cols],
+    queryKey: [PLUGIN_ID, 'hud', sessionId || '', cols, dagRun],
     queryFn: function () {
-      return fetchHud(sessionId, cols)
+      return fetchHud(sessionId, cols, dagRun)
     },
     refetchInterval: pollInterval(busy),
     enabled: gateway === 'open',
@@ -2327,6 +2459,10 @@ function useHud() {
   return {
     gateway,
     sessionId,
+    dagRun,
+    pickDagRun: function (run) {
+      setPick({ session: sessionId || '', run })
+    },
     data: query.data,
     error: query.error,
     receivedAt: Number.isFinite(query.dataUpdatedAt) ? query.dataUpdatedAt : 0
@@ -2398,11 +2534,12 @@ function Chips({ payload }) {
 
 // `PLAN  Desktop check          2/6`: the small label, an optional title,
 // the count at the right edge.
-function SectionHeader({ label, title, count, countClass, column }) {
+function SectionHeader({ label, title, count, countClass, column, control }) {
   return node('div', { className: 'omh-pane-section', 'data-column': column || 'full' }, [
     span('omh-pane-section-label', label),
     title ? span('omh-pane-section-title', title) : null,
-    count ? span(`omh-pane-section-count ${countClass || ''}`, count) : null
+    count ? span(`omh-pane-section-count ${countClass || ''}`, count) : null,
+    control || null
   ])
 }
 
@@ -2695,7 +2832,7 @@ function KpiGrid({ cells, wide }) {
           span('omh-pane-dv-kpi-label', cell.label),
           span('omh-pane-dv-kpi-value', cell.value),
           span('omh-pane-dv-kpi-sub', cell.sub),
-          cell.ring ? span('omh-pane-dv-kpi-ring', jsx(UsageRing, { usage: cell.ring, size: 26 })) : null
+          cell.ring ? span('omh-pane-dv-kpi-ring', jsx(UsageRing, { usage: cell.ring, size: wide ? 16 : 26 })) : null
         ],
         cell.label
       )
@@ -2726,6 +2863,7 @@ function LaneCard({ dag, lane, picked, dim, onPick }) {
       className: `omh-pane-dv-card${picked ? ' omh-pane-dv-picked' : ''}${dim ? ' omh-pane-dv-dim' : ''}`,
       'data-lane': lane.id,
       'data-tone': lane.border,
+      'data-state': lane.state,
       'aria-pressed': picked,
       onClick: function () {
         onPick(picked ? '' : lane.id)
@@ -2742,8 +2880,100 @@ function LaneCard({ dag, lane, picked, dim, onPick }) {
 }
 
 // Where each edge runs, measured from the cards as laid out: out of a card's
-// foot, along the gap, into the next card's head. An edge over a skipped layer
-// takes the right-hand gutter. `tone` is the state of the pair it joins.
+// foot, along a lane of the gap, into the next card's head. Every edge has a
+// port of its own on each card it touches and a lane of its own in its gap, so
+// no two edges lie on one line; where they must meet they cross. An edge over
+// a skipped line (a line, not a layer: a wrapped row is two lines) runs down a
+// gutter column of its own in the right-hand margin. `tone` is the state of
+// the pair it joins.
+const LANE_PAD = 6 // the room a lane keeps from a card's foot and from the arrow
+const LANE_STEP = 8 // the most apart two lanes of a gap sit
+const GUTTER_STEP = 4 // the cells between two gutter columns
+const PORT_STEP = 10 // the most apart two ports on one card sit; they share the middle of the card's width
+const MAX_PERMUTED = 7 // ponytail: past this many lanes in one gap the order they came in stands
+
+// The path through `pts` (axis-aligned runs) with its turns rounded by `r`, or less where a run is short.
+function roundedPath(pts, r) {
+  const kept = pts.filter(function (pt, i) {
+    return i === 0 || pt[0] !== pts[i - 1][0] || pt[1] !== pts[i - 1][1]
+  })
+  let d = `M${kept[0][0]} ${kept[0][1]}`
+  for (let i = 1; exceeds(kept.length, i + 1); i += 1) {
+    const [px, py] = kept[i - 1]
+    const [x, y] = kept[i]
+    const [nx, ny] = kept[i + 1]
+    const k = Math.min(r, (Math.abs(x - px) + Math.abs(y - py)) / 2, (Math.abs(nx - x) + Math.abs(ny - y)) / 2)
+    d += ` L${x - Math.sign(x - px) * k} ${y - Math.sign(y - py) * k} Q${x} ${y} ${x + Math.sign(nx - x) * k} ${y + Math.sign(ny - y) * k}`
+  }
+  const last = kept[kept.length - 1]
+  return `${d} L${last[0]} ${last[1]}`
+}
+
+// The segments of one piece of an edge inside a gap, its lane (if it has one) at `y`.
+function pieceSegments(piece, y, top, bottom) {
+  if (piece.fixed) return [{ x: piece.tx, y0: top, y1: bottom, v: true, piece }]
+  return [
+    { x: piece.tx, y0: top, y1: y, v: true, from: piece.srcTop ? piece.edge.from : null, piece },
+    { y, x0: Math.min(piece.tx, piece.bx), x1: Math.max(piece.tx, piece.bx), v: false, piece },
+    { x: piece.bx, y0: y, y1: bottom, v: true, to: piece.dstBottom ? piece.edge.to : null, piece }
+  ]
+}
+
+// How badly two segments of different edges read as one: a stretch of the same column is heavy (unless both leave
+// one source or both enter one target, which is a merge), a crossing is light.
+function segmentClash(a, b) {
+  if (a.v && b.v) {
+    if (exceeds(0.5, Math.abs(a.x - b.x))) {
+      const overlap = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0)
+      if (!exceeds(overlap, 0.5)) return 0
+      return (a.from && a.from === b.from) || (a.to && a.to === b.to) ? 0 : 50
+    }
+    return 0
+  }
+  if (a.v === b.v) return 0
+  const v = a.v ? a : b
+  const h = a.v ? b : a
+  return exceeds(v.x, h.x0 + 0.5) && exceeds(h.x1 - 0.5, v.x) && exceeds(h.y, v.y0 + 0.5) && exceeds(v.y1 - 0.5, h.y) ? 1 : 0
+}
+
+// The lanes of one gap, top to bottom, in the order that clashes least.
+function laneOrder(pieces, fixed, top, bottom, laneY) {
+  if (!exceeds(pieces.length, 1) || exceeds(pieces.length, MAX_PERMUTED)) return pieces
+  const standing = fixed.flatMap(function (piece) {
+    return pieceSegments(piece, 0, top, bottom)
+  })
+  let best = pieces
+  let bestCost = Infinity
+  function cost(order) {
+    const segs = order.flatMap(function (piece, i) {
+      return pieceSegments(piece, laneY(i, order.length), top, bottom)
+    })
+    const all = segs.concat(standing)
+    let sum = 0
+    for (let i = 0; exceeds(segs.length, i); i += 1) {
+      for (let j = i + 1; exceeds(all.length, j); j += 1) {
+        if (all[j].piece.edge !== segs[i].piece.edge) sum += segmentClash(segs[i], all[j])
+      }
+    }
+    return sum
+  }
+  function walk(rest, done) {
+    if (!rest.length) {
+      const c = cost(done)
+      if (exceeds(bestCost, c)) {
+        best = done
+        bestCost = c
+      }
+      return
+    }
+    rest.forEach(function (piece, i) {
+      walk(rest.slice(0, i).concat(rest.slice(i + 1)), done.concat([piece]))
+    })
+  }
+  walk(pieces, [])
+  return best
+}
+
 function edgeLines(canvas, dag, pick, lit) {
   const box = canvas.getBoundingClientRect()
   const at = {}
@@ -2751,54 +2981,149 @@ function edgeLines(canvas, dag, pick, lit) {
     const r = card.getBoundingClientRect()
     at[card.getAttribute('data-lane')] = { x: Math.round(r.left - box.left), y: Math.round(r.top - box.top), w: Math.round(r.width), h: Math.round(r.height) }
   })
-  const gutter = Math.round(box.width) - 8
-  const lines = []
+  // A layer's row wraps when its cards do not fit the width, so one layer can sit on several lines.
+  const lineOf = {}
+  const lineTop = []
+  const lineBottom = []
+  let line = -1
+  let seenTop = -Infinity
+  Object.keys(at)
+    .sort(function (a, b) {
+      return at[a].y - at[b].y
+    })
+    .forEach(function (id) {
+      if (exceeds(at[id].y - seenTop, 4)) {
+        line += 1
+        seenTop = at[id].y
+        lineTop[line] = at[id].y
+        lineBottom[line] = at[id].y + at[id].h
+      }
+      lineOf[id] = line
+      lineBottom[line] = Math.max(lineBottom[line], at[id].y + at[id].h)
+    })
+  const width = Math.round(box.width)
+  const routes = []
   dag.edges.forEach(function (edge) {
     const a = at[edge.from]
     const b = at[edge.to]
     if (!a || !b) return
+    const la = lineOf[edge.from]
+    const lb = lineOf[edge.to]
+    const down = exceeds(lb, la)
+    const skip = exceeds(lb - la, 1)
+    const x1 = a.x + Math.round(a.w / 2)
+    const x2 = down ? b.x + Math.round(b.w / 2) : x1
+    routes.push({ edge, la, lb, down, skip, x1, x2, yf: a.y + a.h, yt: b.y, gx: 0, lanes: {} })
+  })
+  const outs = {}
+  const ins = {}
+  routes.forEach(function (r) {
+    outs[r.edge.from] = (outs[r.edge.from] || []).concat([r])
+    if (r.down) ins[r.edge.to] = (ins[r.edge.to] || []).concat([r])
+  })
+  // Ports run in the order of the cards at the other end, so edges that can stay apart do.
+  function assignPorts(group, otherEnd, field) {
+    Object.keys(group).forEach(function (id) {
+      const list = group[id].slice().sort(function (p, q) {
+        return at[otherEnd(p)].x - at[otherEnd(q)].x
+      })
+      const step = Math.min(PORT_STEP, (at[id].w * 0.6) / Math.max(list.length - 1, 1))
+      list.forEach(function (r, i) {
+        r[field] = at[id].x + Math.round(at[id].w / 2 + (i - (list.length - 1) / 2) * step)
+      })
+    })
+  }
+  assignPorts(outs, function (r) {
+    return r.edge.to
+  }, 'x1')
+  assignPorts(ins, function (r) {
+    return r.edge.from
+  }, 'x2')
+  routes.forEach(function (r) {
+    if (!r.down) r.x2 = r.x1
+  })
+  const skips = routes.filter(function (r) {
+    return r.skip
+  })
+  const gutterStep = Math.min(GUTTER_STEP, Math.max(1, Math.floor(22 / Math.max(skips.length - 1, 1))))
+  skips.forEach(function (r, i) {
+    r.gx = width - 6 - gutterStep * i
+  })
+  // What each gap (the space under line g) holds: edges that turn take a lane, the others stand.
+  const gaps = {}
+  function put(g, piece) {
+    if (!gaps[g]) gaps[g] = { lanes: [], fixed: [] }
+    gaps[g][piece.fixed ? 'fixed' : 'lanes'].push(piece)
+  }
+  routes.forEach(function (r) {
+    if (!r.down) return
+    const edge = r.edge
+    if (!r.skip) {
+      if (exceeds(1, Math.abs(r.x2 - r.x1))) put(r.la, { edge, route: r, fixed: true, tx: r.x1, bx: r.x1 })
+      else put(r.la, { edge, route: r, slot: 'a', tx: r.x1, bx: r.x2, srcTop: true, dstBottom: true })
+      return
+    }
+    put(r.la, { edge, route: r, slot: 'a', tx: r.x1, bx: r.gx, srcTop: true, dstBottom: false })
+    for (let g = r.la + 1; exceeds(r.lb - 1, g); g += 1) put(g, { edge, route: r, fixed: true, tx: r.gx, bx: r.gx })
+    put(r.lb - 1, { edge, route: r, slot: 'b', tx: r.gx, bx: r.x2, srcTop: false, dstBottom: true })
+  })
+  Object.keys(gaps).forEach(function (key) {
+    const g = Number(key)
+    const top = lineBottom[g]
+    const bottom = lineTop[g + 1]
+    const near = top + LANE_PAD
+    const far = Math.max(near, bottom - ARROW_PX - LANE_PAD)
+    function laneY(i, count) {
+      const step = exceeds(count, 1) ? Math.min(LANE_STEP, (far - near) / (count - 1)) : 0
+      return far - (count - 1 - i) * step
+    }
+    const order = laneOrder(gaps[g].lanes, gaps[g].fixed, top, bottom, laneY)
+    order.forEach(function (piece, i) {
+      piece.route.lanes[piece.slot] = laneY(i, order.length)
+    })
+  })
+  const lines = []
+  routes.forEach(function (r) {
+    const edge = r.edge
     const from = dag.index[edge.from]
     const to = dag.index[edge.to]
-    const skip = exceeds(to.layer - from.layer, 1)
-    const x1 = a.x + Math.round(a.w / 2)
-    const y1 = a.y + a.h
-    const y2 = b.y
-    const x2 = b.x + Math.round(b.w / 2) + (skip ? Math.min(14, Math.round(b.w / 4)) : 0)
-    const bend = y2 - (skip ? 20 : 14)
-    let d
-    if (skip) {
-      d = `M${x1} ${y1} V${y1 + 12} H${gutter} V${bend} H${x2} V${y2 - ARROW_PX}`
-    } else if (exceeds(1, Math.abs(x2 - x1))) {
-      d = `M${x1} ${y1} V${y2 - ARROW_PX}`
-    } else {
-      const s = exceeds(x2, x1) ? 1 : -1
-      d = `M${x1} ${y1} V${bend - BEND_PX} Q${x1} ${bend} ${x1 + s * BEND_PX} ${bend} H${x2 - s * BEND_PX} Q${x2} ${bend} ${x2} ${bend + BEND_PX} V${y2 - ARROW_PX}`
-    }
+    const end = r.yt - ARROW_PX
+    let pts
+    if (!r.down || (!r.skip && r.lanes.a === undefined)) pts = [[r.x1, r.yf], [r.x2, end]]
+    else if (!r.skip) pts = [[r.x1, r.yf], [r.x1, r.lanes.a], [r.x2, r.lanes.a], [r.x2, end]]
+    else pts = [[r.x1, r.yf], [r.x1, r.lanes.a], [r.gx, r.lanes.a], [r.gx, r.lanes.b], [r.x2, r.lanes.b], [r.x2, end]]
     const bad = from.state === 'failed' || from.state === 'interrupted'
     const moving = from.state === 'done' && (to.state === 'running' || to.state === 'dispatched')
     const settled = from.state === 'done' && to.state === 'done'
     // An open lane lights its own edges; else a marked set (the path, a model) lights those between its lanes.
     const focus = pick ? edge.from === pick || edge.to === pick : lit ? lit.indexOf(edge.from) !== -1 && lit.indexOf(edge.to) !== -1 : null
     lines.push({
-      d,
-      tip: `M${x2 - 4} ${y2 - ARROW_PX} L${x2 + 4} ${y2 - ARROW_PX} L${x2} ${y2} Z`,
+      d: roundedPath(pts, BEND_PX),
+      points: pts,
+      origin: edge.kind === 'repair' || edge.kind === 'extend',
+      tip: `M${r.x2 - 4} ${end} L${r.x2 + 4} ${end} L${r.x2} ${r.yt} Z`,
       tone: bad ? 'error' : moving ? 'accent' : settled ? 'done' : 'wait',
       hollow: !(moving || settled),
       hot: focus === true,
       dim: focus === false
     })
   })
-  return { width: Math.round(box.width), height: Math.round(box.height), lines }
+  return { width, height: Math.round(box.height), lines }
 }
 
-function DagCanvas({ dag, pick, lit, onPick }) {
+function DagCanvas({ dag, pick, lit, reduce, onPick }) {
   const [canvas, setCanvas] = useState(null)
   const [drawn, setDrawn] = useState({ width: 0, height: 0, lines: [] })
   // What decides the edges; a poll that changes none of it leaves them be, and a card that grows is the observer's.
+  const shown = reduce
+    ? dag.edges.filter(function (edge) {
+        return dag.implied.indexOf(`${edge.from}.${edge.to}`) === -1
+      })
+    : dag.edges
   const shape = [
     pick,
     lit ? lit.join(',') : '',
-    dag.edges
+    shown
       .map(function (edge) {
         return `${edge.from}.${edge.to}`
       })
@@ -2813,7 +3138,7 @@ function DagCanvas({ dag, pick, lit, onPick }) {
     function () {
       if (!canvas) return undefined
       function draw() {
-        setDrawn(edgeLines(canvas, dag, pick, lit))
+        setDrawn(edgeLines(canvas, { ...dag, edges: shown }, pick, lit))
       }
       draw()
       const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(draw) : null
@@ -2829,7 +3154,7 @@ function DagCanvas({ dag, pick, lit, onPick }) {
       'svg',
       { className: 'omh-pane-dv-edges', width: drawn.width, height: drawn.height, 'aria-hidden': 'true' },
       drawn.lines.flatMap(function (line, index) {
-        const flags = { 'data-tone': line.tone, 'data-hollow': line.hollow, 'data-hot': line.hot, 'data-dim': line.dim }
+        const flags = { 'data-tone': line.tone, 'data-hollow': line.hollow, 'data-origin': line.origin, 'data-hot': line.hot, 'data-dim': line.dim }
         return [
           node('path', { className: 'omh-pane-dv-edge', d: line.d, ...flags }, [], `e${index}`),
           node('path', { className: 'omh-pane-dv-tip', d: line.tip, ...flags }, [], `a${index}`)
@@ -3077,6 +3402,8 @@ function DagView({ dag, fallback }) {
   const [pick, setPick] = useState('')
   const [mark, setMark] = useState(null)
   const [statsOpen, setStatsOpen] = useState(true)
+  // Edges another dependency chain already implies are left out of the drawing unless the person asks for them.
+  const [reduce, setReduce] = useState(true)
   const [seat, setSeat] = useState(null)
   // A lane opened below the cards is scrolled into reach once, when it opens.
   useEffect(
@@ -3102,10 +3429,130 @@ function DagView({ dag, fallback }) {
     [
       jsx(DagKpis, { dag }, 'kpis'),
       jsx(DagStats, { dag, mark, onMark: toggle, onPick: setPick, open: statsOpen, onOpen: setStatsOpen }, 'stats'),
-      dag.cards ? jsx(DagCanvas, { dag, pick, lit: markedLanes(dag, mark), onPick: setPick }, 'canvas') : fallback,
+      dag.cards && exceeds(dag.implied.length, 0)
+        ? div(
+            'omh-pane-dv-edgebar',
+            node(
+              'button',
+              {
+                type: 'button',
+                className: 'omh-pane-dv-hl',
+                'aria-pressed': !reduce,
+                onClick: function () {
+                  setReduce(!reduce)
+                }
+              },
+              reduce ? t('dgEdgesAll', { count: dag.implied.length }) : t('dgEdgesReduced')
+            ),
+            'edgebar'
+          )
+        : null,
+      dag.cards ? jsx(DagCanvas, { dag, pick, lit: markedLanes(dag, mark), reduce, onPick: setPick }, 'canvas') : fallback,
       exceeds(dag.hidden, 0) ? div('omh-pane-more', t('graphMore', { count: dag.hidden }), 'hidden') : null,
       lane ? jsx(LaneDetail, { dag, lane, onPick: setPick, seat: setSeat }, 'detail') : null
     ]
+  )
+}
+
+// The session's dag runs in a menu; the newest is what the pane follows, so choosing it clears the pick.
+// The menu is drawn in the pane's own tokens: the native one a select opens takes its colours from the system, not the theme.
+function DagRunPicker({ choices, onPick }) {
+  const [open, setOpen] = useState(false)
+  const [root, setRoot] = useState(null)
+  useEffect(
+    function () {
+      if (!open || typeof document === 'undefined') return undefined
+      const away = function (event) {
+        if (root && !root.contains(event.target)) setOpen(false)
+      }
+      document.addEventListener('mousedown', away)
+      return function () {
+        document.removeEventListener('mousedown', away)
+      }
+    },
+    [open, root]
+  )
+  const current =
+    choices.options.find(function (option) {
+      return option.run === choices.current
+    }) || choices.options[0]
+  // Arrow keys walk the options; Escape closes and gives the focus back to the button.
+  const walk = function (event) {
+    if (event.key === 'Escape' && open) {
+      setOpen(false)
+      if (root) root.querySelector('button').focus()
+    } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && root) {
+      event.preventDefault()
+      if (!open) return setOpen(true)
+      const items = Array.from(root.querySelectorAll('[role=option]'))
+      const at = items.indexOf(document.activeElement)
+      const next = event.key === 'ArrowDown' ? at + 1 : at - 1
+      const target = items[Math.min(items.length - 1, Math.max(0, next))]
+      if (target) target.focus()
+    }
+  }
+  return node(
+    'span',
+    { className: 'omh-pane-pick', ref: setRoot, onKeyDown: walk },
+    [
+      node(
+        'button',
+        {
+          type: 'button',
+          className: 'omh-pane-dag-pick',
+          'aria-label': t('dagPickLabel'),
+          'aria-haspopup': 'listbox',
+          'aria-expanded': open,
+          onClick: function () {
+            setOpen(!open)
+          }
+        },
+        current ? current.label : '',
+        'button'
+      ),
+      open
+        ? node(
+            'div',
+            { className: 'omh-pane-pick-menu', role: 'listbox', 'aria-label': t('dagPickLabel') },
+            choices.options.map(function (option) {
+              const on = option.run === choices.current
+              return node(
+                'button',
+                {
+                  type: 'button',
+                  role: 'option',
+                  className: 'omh-pane-pick-opt',
+                  'aria-selected': on,
+                  'data-on': on,
+                  onClick: function () {
+                    setOpen(false)
+                    onPick(option.run === choices.newest ? '' : option.run)
+                  }
+                },
+                option.label,
+                option.run
+              )
+            }),
+            'menu'
+          )
+        : null
+    ]
+  )
+}
+
+// A finished run keeps its drawing, for the node summaries and figures; its one summary line is the handle that folds it.
+function FoldedRun({ summary, children }) {
+  const [open, setOpen] = useState(true)
+  return node(
+    'details',
+    {
+      className: 'omh-pane-dv-fold',
+      open,
+      onToggle: function (event) {
+        setOpen(event.currentTarget.open)
+      }
+    },
+    [node('summary', { className: 'omh-pane-dv-stats-h omh-pane-dv-fold-h' }, [span('', summary, 'label')], 'head'), ...children]
   )
 }
 
@@ -3113,12 +3560,18 @@ function DagView({ dag, fallback }) {
 // else a row per lane; once every lane has settled, one summary line, as the
 // TUI's live block keeps. A dag-ulw run takes the DAG view instead (cards with
 // their figures and stats), falling back to those only past DAG_CARD_LIMIT.
-function DelegationSection({ payload }) {
+function DelegationSection({ payload, picked, onPick }) {
+  const choices = dagRunChoices(payload, picked)
+  const picker = choices ? jsx(DagRunPicker, { choices, onPick }, 'pick') : null
   const view = delegationView(payload)
-  if (!view) return null
-  // A run every lane of which has settled is one summary line, cards or not, as the TUI clears its block at run end.
-  const dag = view.settled ? null : dagModel(payload.delegation_graph)
-  const drawing = view.settled ? null : drawingLines(payload)
+  // A session whose runs have all lapsed still lets the person open one.
+  if (!view) {
+    return picker ? jsx(SectionHeader, { label: t('sectionDag'), control: picker }, 'delegation-head') : null
+  }
+  // A run every lane of which has settled is one summary line, as the TUI clears its block at run end; a dag-ulw run
+  // still draws beneath it, folded, for the node summaries and figures.
+  const dag = dagModel(payload.delegation_graph)
+  const drawing = view.settled && !dag ? null : drawingLines(payload)
   const lanes = view.settled || drawing
     ? []
     : view.lanes.map(function (lane, index) {
@@ -3140,20 +3593,23 @@ function DelegationSection({ payload }) {
   if (dag) {
     const beyondCards = drawing ? jsx(DagDrawing, { lines: drawing }, 'drawing') : lanes
     return [
-      jsx(SectionHeader, { label: t('sectionDag') }, 'delegation-head'),
+      jsx(SectionHeader, { label: t('sectionDag'), control: picker }, 'delegation-head'),
       div(
         'omh-pane-block',
-        [
-          // The cards name no run, so the summary line stays; a drawing past the card limit has its own header.
-          dag.cards || !drawing ? div('omh-pane-run', view.summary, 'run') : null,
-          jsx(DagView, { dag, fallback: dag.cards ? null : beyondCards }, 'dag')
-        ],
+        // The cards name no run, so the summary line stays; a drawing past the card limit has its own header.
+        // A finished run's summary line folds the drawing instead of replacing it.
+        view.settled
+          ? jsx(FoldedRun, { summary: view.summary, children: [jsx(DagView, { dag, fallback: dag.cards ? null : beyondCards }, 'dag')] }, 'fold')
+          : [
+              dag.cards || !drawing ? div('omh-pane-run', view.summary, 'run') : null,
+              jsx(DagView, { dag, fallback: dag.cards ? null : beyondCards }, 'dag')
+            ],
         'delegation-body'
       )
     ]
   }
   return [
-    jsx(SectionHeader, { label: t('sectionDelegation') }, 'delegation-head'),
+    jsx(SectionHeader, { label: t('sectionDelegation'), control: picker }, 'delegation-head'),
     div(
       'omh-pane-block',
       [
@@ -3277,15 +3733,73 @@ function useTurns(sessionId) {
   return turns
 }
 
+// The chat's tokens as a ring (cache read, uncached input, cache write, output), the total and the cache in its middle.
+function UsageDial({ dial, title }) {
+  const size = 96
+  const stroke = 9
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  const mid = size / 2
+  const whole = dial.split ? allTokens(dial.split) : 0
+  let offset = 0
+  const arcs = []
+  USAGE_KEYS.map(function (key) {
+    return [key[0], key[1]]
+  })
+    .concat([['output', 'out']])
+    .forEach(function (key) {
+      const count = dial.split ? dial.split[key[0]] : 0
+      if (!exceeds(count, 0) || !exceeds(whole, 0)) return
+      const length = (count / whole) * circumference
+      arcs.push(
+        node(
+          'circle',
+          {
+            className: `omh-pane-dv-arc omh-pane-dv-${key[1]}`,
+            cx: mid,
+            cy: mid,
+            r: radius,
+            strokeWidth: stroke,
+            strokeDasharray: `${length.toFixed(2)} ${(circumference - length).toFixed(2)}`,
+            strokeDashoffset: (-offset).toFixed(2),
+            transform: `rotate(-90 ${mid} ${mid})`
+          },
+          [],
+          key[1]
+        )
+      )
+      offset += length
+    })
+  return node('div', { className: 'omh-pane-ub-dial', title }, [
+    node('svg', { className: 'omh-pane-dv-ring', width: size, height: size, viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true' }, [
+      node('circle', { className: 'omh-pane-dv-track', cx: mid, cy: mid, r: radius, strokeWidth: stroke }, [], 'track'),
+      ...arcs
+    ], 'ring'),
+    node('div', { className: 'omh-pane-ub-center' }, [
+      span('omh-pane-ub-total', tokensText(dial.total), 'total'),
+      dial.cache === null ? null : span('omh-pane-ub-cache', t('ubCacheLine', { cache: dial.cache }), 'cache')
+    ], 'center')
+  ])
+}
+
+// Which tokens the board counts: the chat's own, or with its subagents' lanes.
+function UsageScope({ withSubs, count, onPick }) {
+  return node('span', { className: 'omh-pane-seg', role: 'group', 'aria-label': t('ubScope') }, [
+    node('button', { type: 'button', className: 'omh-pane-seg-b', 'aria-pressed': !withSubs, onClick: function () { onPick(false) } }, t('ubMain'), 'main'),
+    node('button', { type: 'button', className: 'omh-pane-seg-b', 'aria-pressed': withSubs, onClick: function () { onPick(true) } }, t('ubWithSubs', { count }), 'subs')
+  ])
+}
+
 // The focused chat's own figures, first in the pane. The host's atoms are read
 // as the host holds them; an older host lacks some, and a hook cannot be
 // skipped, so there the read lands on the gateway atom and its value is ignored.
-function UsageBoard({ saved, stored }) {
+function UsageBoard({ saved, stored, graph }) {
   const gateway = useValue(host.state.gateway)
   const streamRead = useValue(host.state.focusedUsage || host.state.gateway)
   const runtimeRead = useValue(host.state.focusedSessionId || host.state.gateway)
   const busyRead = useValue(host.state.busy || host.state.gateway)
   const [partsOpen, setPartsOpen] = useState(true)
+  const [withSubs, setWithSubs] = useState(false)
   const live = host.state.focusedUsage && streamRead && typeof streamRead === 'object' ? streamRead : null
   const runtime = host.state.focusedSessionId && typeof runtimeRead === 'string' ? runtimeRead : ''
   const busy = host.state.busy ? busyRead === true : false
@@ -3303,25 +3817,39 @@ function UsageBoard({ saved, stored }) {
       return before && before.queryKey[2] === runtime ? previous : undefined
     }
   })
-  const board = usageBoard({ live, saved, stored, breakdown: composition.data, turns })
+  const subs = graph && typeof graph === 'object' ? sumUsage(lanesOf(graph).map(laneUsage)) : null
+  const board = usageBoard({ live, saved, stored, breakdown: composition.data, turns, subs, withSubs })
   if (!board) return null
+  // The bar sits in the summary, so it shows folded too; what the prompt leaves of the window is the empty end.
   const bar = node(
     'div',
-    { className: 'omh-pane-dv-stack omh-pane-dv-big' },
-    board.parts.map(function (part, index) {
-      return node('i', { className: `omh-pane-ub-c${index % PART_TONES}`, style: { flexGrow: part.tokens } }, [], part.id)
-    })
+    { className: 'omh-pane-dv-stack' },
+    board.parts
+      .map(function (part, index) {
+        return node('i', { className: `omh-pane-ub-c${index % PART_TONES}`, style: { flexGrow: part.tokens } }, [], part.id)
+      })
+      .concat(board.free ? [node('i', { style: { flexGrow: board.free } }, [], 'free')] : [])
   )
   const legend = node(
     'div',
     { className: 'omh-pane-dv-legend omh-pane-ub-legend' },
-    board.parts.flatMap(function (part, index) {
-      return [
-        node('span', { className: `omh-pane-dv-legend-k omh-pane-ub-c${index % PART_TONES}` }, [span('omh-pane-dv-swatch', ''), span('omh-pane-dv-chip-t', part.label)], `k-${part.id}`),
-        span('omh-pane-dv-legend-n', tokenCountText(part.tokens), `n-${part.id}`),
-        span('omh-pane-dv-legend-p', percentText(part.share), `p-${part.id}`)
-      ]
-    })
+    board.parts
+      .flatMap(function (part, index) {
+        return [
+          node('span', { className: `omh-pane-dv-legend-k omh-pane-ub-c${index % PART_TONES}` }, [span('omh-pane-dv-swatch', ''), span('omh-pane-dv-chip-t', part.label)], `k-${part.id}`),
+          span('omh-pane-dv-legend-n', tokenCountText(part.tokens), `n-${part.id}`),
+          span('omh-pane-dv-legend-p', percentText(part.share), `p-${part.id}`)
+        ]
+      })
+      .concat(
+        board.free
+          ? [
+              node('span', { className: 'omh-pane-dv-legend-k' }, [span('omh-pane-dv-chip-t', t('ubFree'))], 'k-free'),
+              span('omh-pane-dv-legend-n', tokenCountText(board.free), 'n-free'),
+              span('omh-pane-dv-legend-p', percentText(board.free / board.window), 'p-free')
+            ]
+          : []
+      )
   )
   const composed = board.parts.length
     ? node(
@@ -3334,15 +3862,42 @@ function UsageBoard({ saved, stored }) {
           }
         },
         [
-          node('summary', { className: 'omh-pane-dv-stats-h' }, [span('', t('ubParts'), 'label'), span('omh-pane-dv-stats-c', `~${tokenCountText(board.sum)}`, 'count')], 'head'),
-          node('div', { className: 'omh-pane-dv-stats-body' }, [bar, legend], 'body')
+          node(
+            'summary',
+            { className: 'omh-pane-dv-stats-h' },
+            [
+              span('', t('ubParts'), 'label'),
+              span('omh-pane-dv-stats-c', board.window ? `~${tokenCountText(board.sum)} / ${tokenCountText(board.window)}` : `~${tokenCountText(board.sum)}`, 'count'),
+              bar
+            ],
+            'head'
+          ),
+          node('div', { className: 'omh-pane-dv-stats-body' }, [legend], 'body')
         ],
         'parts'
       )
     : null
+  // The dial speaks for tokens and cache; the figures beside it are TPS, TTFT, cost and context, in that order.
+  const side = [4, 5, 2, 3].map(function (at) {
+    return board.cells[at]
+  })
+  const dialTip = board.cells
+    .slice(0, 2)
+    .map(function (cell) {
+      return [cell.label, cell.value, cell.sub].filter(Boolean).join(' · ')
+    })
+    .join('\n')
+  const scope = subs && exceeds(subs.lanes, 0) ? jsx(UsageScope, { withSubs, count: subs.lanes, onPick: setWithSubs }, 'scope') : null
   return [
-    jsx(SectionHeader, { label: t('sectionUsage'), title: board.model, count: board.calls ? t('ubCalls', { count: board.calls }) : '' }, 'usage-head'),
-    div('omh-pane-block', node('div', { className: 'omh-pane-dv' }, [jsx(KpiGrid, { cells: board.cells, wide: true }, 'kpis'), composed]), 'usage-body')
+    jsx(SectionHeader, { label: t('sectionUsage'), title: board.model, count: board.calls ? t('ubCalls', { count: board.calls }) : '', control: scope }, 'usage-head'),
+    div(
+      'omh-pane-block',
+      node('div', { className: 'omh-pane-dv' }, [
+        node('div', { className: 'omh-pane-ub-main' }, [jsx(UsageDial, { dial: board.dial, title: dialTip }, 'dial'), jsx(KpiGrid, { cells: side, wide: true }, 'kpis')], 'main'),
+        composed
+      ]),
+      'usage-body'
+    )
   ]
 }
 
@@ -3358,11 +3913,11 @@ function HudPane() {
     sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '70%' } }, 'skeleton-1'))
     sections.push(jsx(Skeleton, { className: 'omh-pane-skeleton', style: { width: '45%' } }, 'skeleton-2'))
   } else {
-    sections.push(jsx(UsageBoard, { saved: payload ? payload.session_usage : null, stored: hud.sessionId }, 'usage'))
+    sections.push(jsx(UsageBoard, { saved: payload ? payload.session_usage : null, stored: hud.sessionId, graph: payload ? payload.delegation_graph : null }, 'usage'))
     if (payload) {
       sections.push(jsx(CatchesSection, { payload }, 'catches'))
       sections.push(jsx(PlanSection, { payload }, 'plan'))
-      sections.push(jsx(DelegationSection, { payload }, 'delegation'))
+      sections.push(jsx(DelegationSection, { payload, picked: hud.dagRun, onPick: hud.pickDagRun }, 'delegation'))
       sections.push(jsx(SubagentSummary, { payload }, 'subagents'))
       sections.push(jsx(RoutesSection, { payload, receivedAt: hud.receivedAt }, 'routes'))
       sections.push(jsx(GraphSection, { graph: payload.graph }, 'graph'))

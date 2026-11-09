@@ -835,6 +835,17 @@ SCENARIOS["runtime_only"] = {
 }
 SCENARIOS["global_idle"] = {**SCENARIOS["no_todo_declared"], "stored": None}
 
+# A session's dag runs as the backend lists them, newest first.
+DAG_RUNS = [
+    {"run": "new", "name": "supplement", "state": "running", "nodes": 3, "updated_at": 20.0},
+    {"run": "old", "name": "main plan", "state": "done", "nodes": 31, "updated_at": 10.0},
+]
+
+SCENARIOS["dag_two_runs"] = {
+    **SCENARIOS["open_with_payload"],
+    "data": {**ESTABLISHED_PAYLOAD, "delegation_graph": DAG_GRAPH, "dag_runs": DAG_RUNS},
+}
+
 # Every fanout status the reader accepts (`runtime_reader._FANOUT_GRAPH_STATUSES`)
 # and every stuck unit state (`subagent_graph._STUCK_UNIT_STATES`): finite
 # reader vocabulary, so each one has a word in every table.
@@ -843,11 +854,18 @@ FANOUT_AND_STUCK_STATES = {
     *subagent_graph._STUCK_UNIT_STATES,
 }
 
+IMPLIED_EDGES_GRAPH = {
+    **_dag_graph([_dag_lane(name, name) for name in ("a", "b", "c", "fix")], [], [], []),
+    "edges": [{"from": f"d:r:{tail}", "to": f"d:r:{head}", "kind": kind}
+              for tail, head, kind in (("a", "b", "depends_on"), ("b", "c", "depends_on"), ("a", "c", "depends_on"),
+                                       ("c", "fix", "repair"), ("a", "fix", "depends_on"), ("a", "b", "depends_on"))],
+}
+
 # The TUI examples from the widget's own grammar, one call each; the report
 # carries the answers in this order.
 FORMATTER_CASES = {
     "pollInterval": [[True], [False]],
-    "hudPath": [[None, 44], ["s 1", 0], [None, None], ["s", 61]],
+    "hudPath": [[None, 44], ["s 1", 0], [None, None], ["s", 61], ["s", 61, "r 1"]],
     "segmentTone": [["node:running"], ["node:done"], ["node-title:done"], ["node-word:waiting"], ["glyph:failed"],
                     ["status:stuck"], ["node:interrupted"], ["edge"], ["connector"], ["connector:running"], ["header"],
                     ["frontier"], ["model"], ["something"], [""]],
@@ -867,6 +885,10 @@ FORMATTER_CASES = {
     "catchSentence": [[entry] for entry in CATCHES] + [[{"kind": "repeat_loop", "laps": True, "period": 1}], [{"kind": "unknown"}]],
     "catchRows": [[{"catches": [*CATCHES, {"seq": -1, "kind": "unarmed_wait"}, {"seq": 9, "kind": "unknown"}]}]],
     "delegationView": [[{}], [{"delegation_graph": {**NATIVE_GRAPH, "status": "inactive"}}], [{"delegation_graph": SETTLED_GRAPH}]],
+    "dagRunChoices": [
+        [{"dag_runs": DAG_RUNS}, ""], [{"dag_runs": DAG_RUNS}, "old"], [{"dag_runs": DAG_RUNS}, "gone"],
+        [{"dag_runs": DAG_RUNS[:1]}, ""], [{}, ""],
+    ],
     "dagModel": [
         [DAG_GRAPH],
         [FANOUT_GRAPH],
@@ -879,6 +901,9 @@ FORMATTER_CASES = {
         # A lane whose own cost is a floor (an unpriced auxiliary call) makes the run's a floor.
         [{**DAG_GRAPH, "nodes": [{**item, "usage": {**item["usage"], "cost_partial": True}} if item["id"] == "d:r:a" else item
                                  for item in DAG_GRAPH["nodes"]]}],
+        # a to b to c with a to c as well: a to c is implied. A repair edge only says where a node came from, so the
+        # a to fix dependency stays although a reaches fix through c's repair; a repeated edge is one edge.
+        [IMPLIED_EDGES_GRAPH],
     ],
     "t": [["graphTitle", {"ready": 1, "edges": 1}], ["graphTitle", {"ready": 1, "edges": 2}], ["stateIdle", {}, "ko"]],
     "foldLabels": [[[{"state": "done"}] * 4, {"start": 3, "earlier": 3, "later": 1}]],
@@ -955,6 +980,13 @@ FORMATTER_CASES = {
         # Some counted part unpriced: the priced sum, as a floor.
         [{"stored": "c1", "saved": {"session_id": "c1", "input": 100, "output": 10, "cost_usd": 0.521, "cost_estimated": True,
                                     "cost_partial": True}}],
+        # The chat with its subagents' lanes (one unpriced), then the same lanes left out.
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 1000, "cache_read": 500, "output": 100, "cost_usd": 0.5},
+          "withSubs": True, "subs": {"lanes": 2, "priced": 1, "input": 200, "read": 300, "write": 0, "output": 50, "cost": 0.25,
+                                     "estimated": False, "partial": False}}],
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 1000, "cache_read": 500, "output": 100, "cost_usd": 0.5},
+          "withSubs": False, "subs": {"lanes": 2, "priced": 1, "input": 200, "read": 300, "write": 0, "output": 50, "cost": 0.25,
+                                      "estimated": False, "partial": False}}],
     ],
     "elapsedText": [[12], [242], [7260], [None]],
     "costSegmentText": [
@@ -1442,7 +1474,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(render["refetchInterval"], 5000)
         self.assertTrue(render["enabled"])
         self.assertTrue(render["keepsPreviousData"])
-        self.assertEqual(render["queryKey"], ["omh", "hud", "20260924_101010_abc123", 41])
+        self.assertEqual(render["queryKey"], ["omh", "hud", "20260924_101010_abc123", 41, ""])
         self.assertEqual(render["restCalls"], ["/hud?session=20260924_101010_abc123&cols=41"])
 
     def test_the_pane_draws_the_plan_and_the_agent_rows_structurally(self) -> None:
@@ -1450,8 +1482,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(pane, [
             "OMH", "1 running", "this session", "2 tools · 4m 2s",
             # The usage board leads: the stream's counts (no recorded row here), its cost marked as unvouched.
-            "USAGE", "9 calls", "Tokens", "45.2k", "↓5.2k out · 40.0k in", "Cache hit", "—", "Cost", "~$0.0120",
-            "Context", "—", "TPS", "—", "TTFT", "—", "send → first token",
+            "USAGE", "9 calls", "45.2k", "TPS", "—", "TTFT", "—", "send → first token", "Cost", "~$0.0120",
+            "Context", "—",
             "PLAN", "Desktop check", "1/3", "Research", "1/1", "✓", "Read the pane spec",
             "Build", "0/2", "●", "Draw the structured pane", "○", "Screenshot the result",
             "waiting: needs the app", "2 subagents · 1 running",
@@ -1731,9 +1763,30 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertNotIn("omh-pane-dag", {node["className"] for node in settled})
         self.assertIn("DAG · Pane refresh · done 1/2 · 1 failed", self._pane("settled_drawn"))
 
+    def test_a_session_with_two_dag_runs_offers_to_switch_and_follows_the_newest_by_default(self) -> None:
+        choices = self._drive()["formatters"]["dagRunChoices"]
+        options = [
+            {"run": "new", "label": "supplement · running · 3 nodes · latest"},
+            {"run": "old", "label": "main plan · done · 31 nodes"},
+        ]
+        self.assertEqual(choices[0], {"newest": "new", "current": "new", "options": options})
+        self.assertEqual(choices[1]["current"], "old")  # a pick is the run drawn, the newest still what clears it
+        self.assertEqual(choices[1]["newest"], "new")
+        self.assertEqual(choices[2]["current"], "new")  # a run the backend no longer lists is the newest
+        self.assertIsNone(choices[3])  # one run is nothing to choose
+        self.assertIsNone(choices[4])  # a payload with no runs, as a host's older backend sends
+
+    def test_the_dag_section_carries_the_menu_only_where_there_are_two_runs(self) -> None:
+        shown = self._pane("dag_two_runs")
+        self.assertIn("supplement · running · 3 nodes · latest", shown)
+        # The menu is drawn in the pane's own tokens and stays shut: the run drawn is the one the button names.
+        self.assertNotIn("main plan · done · 31 nodes", shown)
+        self.assertFalse([line for line in self._pane("dag_cards") if "nodes · latest" in line])
+
     def test_the_drawing_width_is_measured_and_sent_as_cols(self) -> None:
         formatters = self._drive()["formatters"]
-        self.assertEqual(formatters["hudPath"], ["/hud?cols=44", "/hud?session=s%201", "/hud", "/hud?session=s&cols=61"])
+        self.assertEqual(formatters["hudPath"], ["/hud?cols=44", "/hud?session=s%201", "/hud", "/hud?session=s&cols=61",
+                          "/hud?session=s&cols=61&dag_run=r%201"])
         # (320 - 46) / 6.6 and (420 - 46) / 6.6 cells; nothing measured is no width; the probe is removed each time.
         self.assertEqual(formatters["measureCellsAt"], [[41, ["omh-pane-dag-probe"]], [56, ["omh-pane-dag-probe"]],
                                                         [0, ["omh-pane-dag-probe"]]])
@@ -1741,7 +1794,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_drawing_roles_take_the_tui_meaning_of_each_state(self) -> None:
         self.assertEqual(self._drive()["formatters"]["segmentTone"], [
-            "accent", "mark", "tertiary", "muted", "error", "warn", "error", "mark", "mark", "accent", "secondary",
+            "accent", "accent", "accent", "muted", "error", "warn", "error", "mark", "mark", "accent", "secondary",
             "mark", "tertiary", "", "",
         ])
 
@@ -1758,7 +1811,11 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertIn(".omh-pane-muted{color:var(--omh-text-readable)}", css)
         pane_rules = css[: css.index(".omh-bar{")]
         self.assertNotIn("color:var(--ui-text-quaternary)", pane_rules, "no pane word takes the faintest token")
-        self.assertNotRegex(css, r"gradient|box-shadow|text-shadow|filter:")
+        self.assertNotRegex(css, r"box-shadow|text-shadow|filter:")
+        # The one gradient the pane has is a node card's: its wash, and the running border that flows (owner, 2026-11-09).
+        rules = [rule for rule in css.split("}") if "gradient" in rule]
+        self.assertTrue(rules)
+        self.assertTrue(all(".omh-pane-dv-card" in rule for rule in rules), rules)
 
     def test_route_and_state_are_separate_fixed_grid_cells(self) -> None:
         report = self._drive()
@@ -1961,16 +2018,15 @@ class DesktopPluginNodeTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse([node for node in renders[name]["structure"] if cards & set(node["className"].split())])
 
-    def test_a_settled_dag_ulw_run_is_one_summary_line_not_cards(self) -> None:
-        """Mutation: take the card view for a run whose every lane has settled (the TUI clears its block at run end)."""
-        render = self._drive()["renders"]["dag_settled"]
-        structure = render["structure"]
-        self.assertFalse([node for node in structure if {"omh-pane-dv-kpis", "omh-pane-dv-canvas", "omh-pane-dv-card"}
-                          & set(node["className"].split()) and "omh-pane-ub-kpis" not in node["className"]])
-        runs = [node["text"] for node in structure if node["className"] == "omh-pane-run"]
-        self.assertEqual(len(runs), 1)
-        self.assertTrue(runs[0].startswith("DAG · Write and sum · "), runs[0])
-        self.assertNotIn("DAG", [node["text"] for node in structure if node["className"] == "omh-pane-section-label"])
+    def test_a_settled_dag_ulw_run_keeps_its_cards_under_a_folding_summary_line(self) -> None:
+        """Mutation: replace a finished run's drawing by its summary line (the node summaries and figures are for debugging)."""
+        structure = self._drive()["renders"]["dag_settled"]["structure"]
+        folds = [node for node in structure if node["className"] == "omh-pane-dv-fold"]
+        self.assertEqual(len(folds), 1)
+        self.assertTrue(folds[0]["text"].startswith("DAG · Write and sum · "), folds[0]["text"])
+        self.assertTrue({"omh-pane-dv-kpis", "omh-pane-dv-canvas", "omh-pane-dv-card"}
+                        <= {name for node in structure for name in node["className"].split()})
+        self.assertEqual([node for node in structure if node["className"] == "omh-pane-run"], [])
 
     def test_a_partly_priced_run_marks_its_cost_as_a_floor(self) -> None:
         """Mutation: show the priced lanes' sum as the run's cost, in the figures or in the by-model row."""
@@ -2015,19 +2071,22 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._board(render, "omh-pane-section-label")[0], "USAGE")
         self.assertEqual(self._board(render, "omh-pane-section-title")[0], "gpt-6-luna")
         self.assertEqual(self._board(render, "omh-pane-section-count")[0], "4 calls")
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-label"), ["Tokens", "Cache hit", "Cost", "Context", "TPS", "TTFT"])
+        # The dial holds the tokens and the cache; the figures beside it are TPS, TTFT, cost and context.
+        self.assertEqual(self._board(render, "omh-pane-ub-total"), ["12.6k"])
+        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 9.3k"])
+        self.assertEqual(self._board(render, "omh-pane-dv-kpi-label"), ["TPS", "TTFT", "Cost", "Context"])
         # The recorded row: 1600 + 9300 + 1100 prompt + 630 out; 9300 / 12000 read; $0.5 priced. Then the stream's
         # window (15.7k of 100.0k), its rolling speed, and the two waits this window timed (1850 ms, 410 ms).
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-value"), ["12.6k", "77.5%", "$0.5000", "16%", "42 t/s", "410ms"])
+        self.assertEqual(self._board(render, "omh-pane-dv-kpi-value"), ["42 t/s", "410ms", "$0.5000", "16%"])
         self.assertEqual(
             self._board(render, "omh-pane-dv-kpi-sub"),
-            ["↓630 out · 12.0k in", "9.3k of 12.0k prompt", "", "15.7k of 100.0k", "avg call 3.2s", "avg 1.1s · 2 turns"],
+            ["avg call 3.2s", "avg 1.1s · 2 turns", "", "15.7k of 100.0k"],
         )
-        # The composition: what the prompt is made of, as shares of the prompt itself (the window is the Context cell's).
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-k"), ["System prompt", "Tools", "Conversation"])
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-n"), ["3.0k", "6.0k", "6.7k"])
-        self.assertEqual(self._board(render, "omh-pane-dv-legend-p"), ["19.1%", "38.2%", "42.7%"])
-        self.assertEqual(self._board(render, "omh-pane-dv-stats-c"), ["~15.7k"])
+        # The composition: what the prompt is made of, as shares of the window, and the free end of it (100.0k - 15.7k).
+        self.assertEqual(self._board(render, "omh-pane-dv-legend-k"), ["System prompt", "Tools", "Conversation", "Free window"])
+        self.assertEqual(self._board(render, "omh-pane-dv-legend-n"), ["3.0k", "6.0k", "6.7k", "84.3k"])
+        self.assertEqual(self._board(render, "omh-pane-dv-legend-p"), ["3.0%", "6.0%", "6.7%", "84.3%"])
+        self.assertEqual(self._board(render, "omh-pane-dv-stats-c"), ["~15.7k / 100.0k"])
         pane = " ".join(render["byId"]["hud"])
         self.assertLess(pane.index("USAGE"), pane.index("PLAN"))
 
@@ -2039,13 +2098,15 @@ class DesktopPluginNodeTests(unittest.TestCase):
                 values = dict(zip(self._board(renders[name], "omh-pane-dv-kpi-label"),
                                   self._board(renders[name], "omh-pane-dv-kpi-value")))
                 # The stream's 12000 prompt and 630 out; its hit rate; its cost unvouched (the row's $0.5000 is gone).
-                self.assertEqual((values["Tokens"], values["Cache hit"], values["Cost"]), ("12.6k", "77.0%", "—"))
-                self.assertNotIn("9.3k of 12.0k prompt", self._board(renders[name], "omh-pane-dv-kpi-sub"))
+                self.assertEqual((self._board(renders[name], "omh-pane-ub-total"), values["Cost"]), (["12.6k"], "—"))
+                self.assertEqual(self._board(renders[name], "omh-pane-ub-cache"), ["cache 77.0%"], "no row, so the rate")
 
     def test_a_chat_with_only_a_stream_shows_what_it_carries_and_dashes_for_the_rest(self) -> None:
         render = self._drive()["renders"]["usage_board_stream_only"]
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-value"), ["4.3k", "50.0%", "—", "—", "—", "—"])
-        self.assertEqual(self._board(render, "omh-pane-dv-kpi-sub"), ["↓300 out · 4.0k in", "", "unpriced", "", "", "send → first token"])
+        self.assertEqual(self._board(render, "omh-pane-ub-total"), ["4.3k"])
+        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 50.0%"])
+        self.assertEqual(self._board(render, "omh-pane-dv-kpi-value"), ["—", "—", "—", "—"])
+        self.assertEqual(self._board(render, "omh-pane-dv-kpi-sub"), ["", "send → first token", "unpriced", ""])
         self.assertEqual(self._board(render, "omh-pane-dv-legend-k"), [], "no breakdown yet, so no composition")
 
     def test_a_chat_nothing_has_reported_on_gets_no_board(self) -> None:
@@ -2096,7 +2157,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: take the stream over the recorded row, drop the `~` from a cost the stream does not vouch for, or
         show a recorded zero read as a dash."""
         (streamed, recorded, zero_read, empty, calls_only, guessed, window, ragged,
-         other_chat, unnamed, failed, free, floor) = self._drive()["formatters"]["usageBoard"]
+         other_chat, unnamed, failed, free, floor, with_subs, without_subs) = self._drive()["formatters"]["usageBoard"]
 
         def cells(model: dict) -> dict:
             return {cell["label"]: (cell["value"], cell["sub"]) for cell in model["cells"]}
@@ -2122,8 +2183,13 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(cells(window)["Context"], ("25%", "8.0k of 32.0k"))
         self.assertEqual(
             [(part["label"], part["tokens"], part["share"]) for part in window["parts"]],
-            [("System prompt", 3000, 0.375), ("Conversation", 5000, 0.625)],
+            [("System prompt", 3000, 0.09375), ("Conversation", 5000, 0.15625)],
         )
+        # Subagents join the dial and the cost (a floor: one lane is unpriced); left out, the chat stands alone.
+        self.assertEqual(with_subs["dial"], {"split": {"input": 1200, "read": 800, "write": 0, "output": 150}, "total": 2150, "cache": "800"})
+        self.assertEqual(cells(with_subs)["Cost"][0], "≥$0.7500")
+        self.assertEqual(without_subs["dial"]["total"], 1600)
+        self.assertEqual(cells(without_subs)["Cost"][0], "$0.5000")
         self.assertEqual([(part["label"], part["share"]) for part in ragged["parts"]], [("A", 1.0)])
         self.assertEqual(ragged["sum"], 600)
         # A row for another chat, for no named chat, or a failed read: the stream's figures, the row's left out.
@@ -2134,14 +2200,14 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_a_korean_host_reads_the_usage_board_in_korean(self) -> None:
         hud = " ".join(self._drive()["korean"]["usage_board"]["byId"]["hud"])
-        for word in ("사용량", "호출 4회", "토큰", "캐시 적중", "비용", "컨텍스트", "100.0k 중 15.7k", "호출 평균 3.2s", "평균 1.1s · 2턴", "프롬프트 구성"):
+        for word in ("사용량", "호출 4회", "캐시 9.3k", "비용", "컨텍스트", "100.0k 중 15.7k", "호출 평균 3.2s", "평균 1.1s · 2턴", "프롬프트 구성"):
             with self.subTest(word=word):
                 self.assertIn(word, hud)
         for english in ("USAGE", "Context", "Prompt composition", "avg call"):
             self.assertNotIn(english, hud)
 
     def test_dag_model_lays_out_layers_and_skips_edges_it_cannot_draw(self) -> None:
-        plain, fanout, with_noise, cyclic, no_topology, inactive, beyond, floor = self._drive()["formatters"]["dagModel"]
+        plain, fanout, with_noise, cyclic, no_topology, inactive, beyond, floor, implied = self._drive()["formatters"]["dagModel"]
         self.assertEqual(plain["layers"], [["d:r:a", "d:r:b"], ["d:r:sum"], ["d:r:chk"]])
         self.assertEqual(plain["path"], ["d:r:a", "d:r:sum", "d:r:chk"])
         self.assertEqual(plain["bottlenecks"], [{"id": "d:r:sum", "blocks": 1}])
@@ -2161,6 +2227,9 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual((beyond["cards"], len(beyond["layers"]), beyond["hidden"]), (False, 17, 3))
         self.assertEqual(beyond["total"]["lanes"], 0)
         self.assertEqual((floor["total"]["priced"], floor["total"]["partial"]), (2, True))
+        self.assertEqual(implied["implied"], ["d:r:a.d:r:c"])
+        self.assertEqual(plain["implied"], [])  # edges that carry no kind are never implied
+        self.assertEqual([edge["kind"] for edge in implied["edges"]], ["depends_on", "depends_on", "depends_on", "repair", "depends_on"])
 
     def test_the_dag_view_leaves_the_hosts_sideways_swipe_alone(self) -> None:
         """Mutation: clip every drawing (native and team graphs too), clip in a narrow mouse window, or let the cards

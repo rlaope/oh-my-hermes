@@ -22,7 +22,7 @@ load_local_package()
 from _cli_harness import run_cli  # noqa: E402
 from _delegation_state import PARENT, homes, start, stop  # noqa: E402
 from omh.plugin_bundle.omh import dag_run  # noqa: E402
-from omh.plugin_bundle.omh.delegation_graph import build_delegation_graph, graph_fingerprint  # noqa: E402
+from omh.plugin_bundle.omh.delegation_graph import build_delegation_graph, dag_run_choices, graph_fingerprint  # noqa: E402
 from omh.plugin_bundle.omh.delegation_view import render_delegation_view  # noqa: E402
 from omh.plugin_bundle.omh.hooks import result_transforms  # noqa: E402
 from omh.plugin_bundle.omh.tools import dag_tool  # noqa: E402
@@ -294,6 +294,53 @@ class GraphTests(unittest.TestCase):
             home.rotate(PARENT, later)
             graph = build_delegation_graph(home.omh, home.hermes, later)
         self.assertEqual(graph["name"], "export feature")
+
+    def test_a_session_with_two_runs_draws_the_newest_and_any_named_one_alone(self) -> None:
+        with homes() as home:
+            defined(home)
+            now = time.time()
+            started(home, "api", now=now)
+            call(action="define", run="second", name="second feature", nodes=[NODES[0]])
+            start(home, "child-only", "sa-only", "only [dag:second/api]", now=now + 1)
+            home.session("child-only", "glm-5.3-flash", parent=PARENT, effort="low")
+
+            def drawn(**kwargs: str) -> tuple[str, set[str]]:
+                graph = build_delegation_graph(home.omh, home.hermes, PARENT, now=now + 2, **kwargs)
+                return graph["name"], {node["id"] for node in graph["nodes"] if node["kind"] != "root"}
+
+            name, ids = drawn()
+            self.assertEqual(name, "second feature")
+            self.assertTrue(all(node.startswith("d:second:") for node in ids), ids)  # no wave of the other run's child
+            name, ids = drawn(dag_run="export")
+            self.assertEqual(name, "export feature")
+            self.assertTrue(all(node.startswith("d:export:") for node in ids), ids)
+            self.assertEqual(drawn(dag_run="no-such-run"), drawn())
+            choices = dag_run_choices(home.omh, home.hermes, PARENT, now=now + 2)
+        self.assertEqual([(item["run"], item["name"], item["nodes"]) for item in choices],
+                         [("second", "second feature", 1), ("export", "export feature", 3)])
+
+    def test_a_named_run_does_not_lapse_after_it_is_over(self) -> None:
+        with homes() as home:
+            defined(home)
+            now = time.time()
+            call(action="cancel", run="export")
+            later = now + 24 * 3600
+            lapsed = build_delegation_graph(home.omh, home.hermes, PARENT, now=later)
+            named = build_delegation_graph(home.omh, home.hermes, PARENT, now=later, dag_run="export")
+        self.assertEqual(lapsed["status"], "inactive")
+        self.assertEqual((named["status"], named["name"]), ("active", "export feature"))
+
+    def test_a_finished_run_lapses_unless_the_pane_keeps_it(self) -> None:
+        """Mutation: let keep_dag lapse too, or keep every settled graph (the chat posts still need the linger)."""
+        with homes() as home:
+            defined(home)
+            now = time.time()
+            call(action="cancel", run="export")
+            later = now + 24 * 3600
+            lapsed = build_delegation_graph(home.omh, home.hermes, PARENT, now=later)
+            kept = build_delegation_graph(home.omh, home.hermes, PARENT, now=later, keep_dag=True)
+        self.assertEqual(lapsed["status"], "inactive")
+        self.assertEqual((kept["status"], kept["name"]), ("active", "export feature"))
 
     def test_a_node_whose_stop_hermes_filed_under_the_rotated_parent_has_returned(self) -> None:
         with homes() as home:
