@@ -207,12 +207,25 @@ struct Inner {
     generation: u64,
 }
 
-/// `{state: "ready"|"starting"|"failed", error?}`, the shape the UI reads.
+/// `{state: "ready"|"starting"|"failed", error?, missing?}`, the shape the UI reads. `missing:
+/// "hermes"` marks the one failure the first-run screen can fix by installing Hermes.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct BridgeStatus {
     pub state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<&'static str>,
+}
+
+impl BridgeStatus {
+    fn of(state: &'static str, error: Option<String>) -> BridgeStatus {
+        let missing = match error.as_deref() {
+            Some(HERMES_NOT_FOUND) => Some("hermes"),
+            _ => None,
+        };
+        BridgeStatus { state, error, missing }
+    }
 }
 
 pub struct Bridge {
@@ -386,9 +399,9 @@ impl Bridge {
             }
         }
         match &g.phase {
-            Phase::Starting => BridgeStatus { state: "starting", error: None },
-            Phase::Ready { .. } => BridgeStatus { state: "ready", error: None },
-            Phase::Failed(e) => BridgeStatus { state: "failed", error: Some(e.clone()) },
+            Phase::Starting => BridgeStatus::of("starting", None),
+            Phase::Ready { .. } => BridgeStatus::of("ready", None),
+            Phase::Failed(e) => BridgeStatus::of("failed", Some(e.clone())),
         }
     }
 
@@ -422,14 +435,14 @@ impl Bridge {
 /// A release build on Windows has no console of its own, so a console child (python.exe) would flash a
 /// terminal window. `CREATE_NO_WINDOW` keeps it hidden; elsewhere this does nothing.
 #[cfg(windows)]
-fn no_console_window(cmd: &mut Command) {
+pub(crate) fn no_console_window(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     cmd.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-fn no_console_window(_cmd: &mut Command) {}
+pub(crate) fn no_console_window(_cmd: &mut Command) {}
 
 fn stop_locked(g: &mut Inner) {
     g.stdin = None; // EOF first: the bridge exits on its own
@@ -624,10 +637,13 @@ mod tests {
 
     #[test]
     fn status_serialises_as_the_ui_expects() {
-        let ready = serde_json::to_string(&BridgeStatus { state: "ready", error: None }).unwrap();
+        let ready = serde_json::to_string(&BridgeStatus::of("ready", None)).unwrap();
         assert_eq!(ready, r#"{"state":"ready"}"#);
-        let failed = serde_json::to_string(&BridgeStatus { state: "failed", error: Some("x".into()) }).unwrap();
+        let failed = serde_json::to_string(&BridgeStatus::of("failed", Some("x".into()))).unwrap();
         assert_eq!(failed, r#"{"state":"failed","error":"x"}"#);
+        // Only "Hermes not found" offers the installer; any other failure keeps Retry alone.
+        let missing = serde_json::to_string(&BridgeStatus::of("failed", Some(HERMES_NOT_FOUND.into()))).unwrap();
+        assert_eq!(missing, r#"{"state":"failed","error":"Hermes not found: install Hermes Agent first","missing":"hermes"}"#);
     }
 
     #[test]
