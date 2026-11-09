@@ -7,7 +7,7 @@ from typing import Any, Mapping
 from .executor_cues import (
     NAMED_CODING_AGENT_PHRASES,
     PI_FAMILY_CODING_AGENT_PHRASES,
-    contains_boundary_phrase,
+    owner_mentioned,
     owner_named_as_doer,
 )
 from .localization import normalized_phrase
@@ -301,10 +301,13 @@ def resolve_coding_route_decision(
 
 
 def mentioned_executor_owners(normalized_query: str) -> tuple[str, ...]:
-    """The executor profile ids the request mentions at a word boundary, as the doer or not."""
+    """The executor profile ids the request mentions as a whole word, as the doer or not.
+
+    A negated mention ("don't use codex") or one inside a link or path does not count (`owner_mentioned`).
+    """
     return tuple(
         owner for owner, phrases in NAMED_EXECUTOR_OWNER_PHRASES
-        if contains_boundary_phrase(normalized_query, _normalized_options(phrases))
+        if any(owner_mentioned(normalized_query, phrase) for phrase in _normalized_options(phrases))
     )
 
 

@@ -71,8 +71,8 @@ from ..workflows.goal_ledger import (
     record_goal_checkpoint,
 )
 from ..workflows.role_context_packs import validate_accepted_role_context, write_role_context_pack
-from ..routing.coding_route_actions import NON_CLI_OWNERS
-from ..wrapper.contract import executor_target_mentioned_in_message, executor_target_named_in_message
+from ..routing.coding_route_actions import named_executor_owners
+from ..wrapper.contract import executor_target_named_in_message, profile_owner_conflict
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
     record_codex_dispatch,
@@ -269,12 +269,13 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             # An owner the person named in the message beats the setup-profile default, as it does in chat
             # (`message_mention`). It is still not `--explicit-owner-choice`: that flag stays the caller's own.
             named = executor_target_named_in_message(message)
-            mentioned = executor_target_mentioned_in_message(message)
             if named:
                 executor_target = named
-            elif mentioned and mentioned not in (executor_target, "hermes") and executor_target not in NON_CLI_OWNERS:
-                # Safety net: another CLI is mentioned but not as the doer ("fix the login bug in codex"); the
-                # profile default would run a different CLI than the one named, so the owner is asked for.
+            elif len(named_executor_owners(normalized_phrase(message))) > 1 or profile_owner_conflict(
+                message, executor_target
+            ):
+                # Two owners named as the doer, or another CLI mentioned but not as the doer while the profile
+                # default would run a different one ("fix the login bug in codex"): the owner is asked for.
                 executor_target = "choose"
         source_metadata.update(_explicit_source_metadata(args))
         input_representation = merged_input_representation(

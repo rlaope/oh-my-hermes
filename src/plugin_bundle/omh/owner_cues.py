@@ -118,6 +118,36 @@ def _folded_request_endings() -> tuple[tuple[str, ...], tuple[str, ...]]:
             tuple(normalized_phrase(value) for value in ("가 ", "이 ")))
 
 
+_SIGIL_ONLY = re.compile(r"\s*[/$][a-z0-9][a-z0-9:_-]*\s*")
+_NEGATED_BEFORE: tuple[str, ...] = ("don't ", "dont ", "do not ", "never ", "not ", "no ", "without ")
+
+
+def owner_mentioned(text: str, phrase: str) -> bool:
+    """Whether ``text`` mentions ``phrase`` at all, outside a URL or path, in a way that does not exclude it.
+
+    The safety net reads this: a mention that is not the doer may still be the CLI the person wants. A negated
+    mention ("don't use codex", "codex 말고", "not with codex", "codex 쓰지 마") excludes the CLI, and a name inside
+    a link or path ("github.com/openai/codex") names a page, so neither counts.
+    """
+    if not phrase:
+        return False
+    text, phrase = unicodedata.normalize("NFKD", text), unicodedata.normalize("NFKD", phrase)
+    _suffixes, negated_tails, _endings = _folded_cues()
+    start = text.find(phrase)
+    while start != -1:
+        end = start + len(phrase)
+        head, tail = text[:start], text[end:]
+        inside_path = head.endswith("/") or tail.startswith("/")
+        negated = any(
+            head.endswith(neg) or any(head.endswith(neg + lead + " ") for lead in _DOER_LEAD_WORDS)
+            for neg in _NEGATED_BEFORE
+        ) or tail.startswith(negated_tails) or tail.startswith(tuple(neg.strip() for neg in negated_tails))
+        if _bounded_at(text, start, end) and not inside_path and not negated:
+            return True
+        start = text.find(phrase, start + 1)
+    return False
+
+
 def _addressed_as_doer(head: str, tail: str) -> bool:
     """"codex가 고쳐줘", "codex, fix ...", "get codex to ...", "codex please ...", "can codex fix ...", "codexに…させ"."""
     endings, particles = _folded_request_endings()
@@ -126,7 +156,8 @@ def _addressed_as_doer(head: str, tail: str) -> bool:
         clause = tail[2:].split(".")[0]
         if any(ending in clause for ending in endings):
             return True
-    if not head.strip() and tail.startswith(",") and not question:
+    # A leading skill sigil ("/dag-ulw codex, fix ...") still leaves the name opening the request.
+    if (not head.strip() or _SIGIL_ONLY.fullmatch(head)) and tail.startswith(",") and not question:
         return True
     if head.endswith("get ") and tail.startswith(" to "):
         return True

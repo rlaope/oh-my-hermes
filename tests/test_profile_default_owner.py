@@ -242,6 +242,31 @@ class OwnerCueEntryPointTests(unittest.TestCase):
                 self.assertNotEqual(delegated.get("selected_executor_profile"), "codex")
                 self.assertFalse(stored)
 
+    def test_an_excluded_path_or_url_mention_lets_the_profile_default_run(self) -> None:
+        # Mutation: count a negated, path or substring mention again; each of these then asks and offers codex.
+        for message in ("don't use codex, fix the login bug", "codex 말고 로그인 버그 고쳐줘",
+                        "fix the login bug, not with codex", "codex 쓰지 마 그냥 고쳐줘", "fix codex-utils.py",
+                        "fix the link to https://github.com/openai/codex in the readme"):
+            with TemporaryDirectory() as tmp:
+                homes = _Homes(Path(tmp))
+                payload = homes.cli("chat", "interact", "--json", "--source", "discord", message)
+                delegated = homes.cli("coding", "delegate", message)
+            with self.subTest(message=message):
+                self.assertEqual(payload["executor_resolution"]["source"], "setup_profile")
+                self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "claude-code")
+                self.assertEqual(payload["executor_resolution"]["offered_owner"], "")
+                self.assertNotEqual(delegated.get("selected_executor_profile"), "codex")
+
+    def test_two_owners_named_as_the_doer_ask_on_every_entry_point(self) -> None:
+        message = "use codex or claude code to fix the login bug"
+        with TemporaryDirectory() as tmp:
+            homes = _Homes(Path(tmp))
+            payload = homes.cli("chat", "interact", "--json", "--source", "discord", message)
+            delegated = homes.cli("coding", "delegate", message)
+        self.assertEqual(payload["executor_resolution"]["source"], "multiple_owners_named")
+        self.assertEqual(payload["next_action"], "choose_executor")
+        self.assertIsNone(delegated.get("selected_executor_profile"))
+
     def test_a_subject_mention_with_no_profile_still_asks(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

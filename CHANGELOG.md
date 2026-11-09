@@ -506,7 +506,9 @@ All notable changes will be documented here.
   "codexに…させて"). When a request mentions a coding CLI but not as the one
   to do the work, and the profile default is a different CLI, nothing runs:
   the owner is asked for, with the mentioned CLI named first ("fix the login
-  bug in codex", "codex에서 로그인 버그 고쳐줘"). The plugin tool and the turn's route
+  bug in codex", "codex에서 로그인 버그 고쳐줘") A CLI the request excludes ("don't use
+  codex", "codex 말고"), or names only inside a link or a filename, is no such
+  mention, and naming two owners as the doer asks on every entry point. The plugin tool and the turn's route
   hint now say `owner_set_in_setup_profile` when the profile holds the owner,
   where they said the owner had to be asked for.
 

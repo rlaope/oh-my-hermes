@@ -45,6 +45,10 @@ class NamedOwnersTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(self.named(text), ())
 
+    def test_the_vocative_form_survives_the_skill_sigil(self) -> None:
+        self.assertEqual(self.named("/dag-ulw codex, fix the login bug"), ("codex",))
+        self.assertEqual(self.named("/dag-ulw codex, is it free?"), ())
+
     def test_the_bundle_reads_the_cue_the_router_reads(self) -> None:
         from omh.plugin_bundle.omh import owner_cues
         from omh.routing import executor_cues

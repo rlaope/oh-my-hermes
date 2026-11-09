@@ -47,7 +47,13 @@ from ..routing.chat import (
     route_explanation_payload,
     route_question_observation,
 )
-from ..routing.coding_route_actions import NON_CLI_OWNERS, coding_route_decision_payload, resolve_coding_route_decision
+from ..routing.coding_route_actions import (
+    NON_CLI_OWNERS,
+    coding_route_decision_payload,
+    mentioned_executor_owners,
+    named_executor_owners,
+    resolve_coding_route_decision,
+)
 from ..routing.executor_cues import owner_named_as_doer
 from ..routing.localization import normalized_phrase
 from ..routing.route_plan import public_workflow_identifier, with_public_skill_names
@@ -6056,22 +6062,27 @@ def _resolve_delegate_executor_target(
                 setup_default = candidate
                 setup_available = True
 
+    doers = named_executor_owners(normalized_phrase(message)) if requested == "choose" else ()
     if requested != "choose":
         resolved = requested
         source = "explicit"
+    elif len(doers) > 1:
+        # Two owners named as the doer ("use codex or claude code"): the person picks, as the route decision asks.
+        resolved = "choose"
+        source = "multiple_owners_named"
     elif message_hint:
         resolved = message_hint
         source = "message_mention"
     elif setup_available:
         resolved = setup_default
         source = "setup_profile"
-        mentioned = _executor_target_from_message(message)
-        if mentioned and mentioned != resolved and mentioned != "hermes" and resolved not in NON_CLI_OWNERS:
+        conflict = profile_owner_conflict(message, resolved)
+        if conflict:
             # Safety net: another CLI is mentioned, but not as the doer ("fix the login bug in codex"). Running the
             # profile default would silently pick a different CLI than the one named, so ask, offering it first.
             resolved = "choose"
             source = "mentioned_owner_unclear"
-            offered_owner = mentioned
+            offered_owner = conflict
     else:
         # An earlier request's choice never selects the owner: the person chooses again.
         resolved = "choose"
@@ -6096,9 +6107,19 @@ def executor_target_named_in_message(message: str) -> str:
     return _executor_choice_from_message(message)
 
 
-def executor_target_mentioned_in_message(message: str) -> str:
-    """A coding owner the message mentions at all, as the doer or not, or ""."""
-    return _executor_target_from_message(message)
+def profile_owner_conflict(message: str, owner: str) -> str:
+    """A coding CLI the message mentions but not as the doer, when ``owner`` would run a different CLI; else "".
+
+    Read with the route decision's whole-word, negation-aware matcher (`mentioned_executor_owners`), so the
+    wrapper, `coding delegate` and the route decision agree. Hermes and `generic` start no CLI: no conflict.
+    """
+    if owner in NON_CLI_OWNERS or owner == "choose":
+        return ""
+    folded = normalized_phrase(message)
+    if named_executor_owners(folded):
+        return ""
+    return next((mentioned for mentioned in mentioned_executor_owners(folded)
+                 if mentioned != owner and mentioned not in NON_CLI_OWNERS), "")
 
 
 @lru_cache(maxsize=4096)
@@ -8489,8 +8510,8 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         offered = str(_nested(delegation_payload, "coding_route_decision").get("offered_owner", "") or "")
         if offered:
             # The safety net asked instead of running the profile default: name the CLI the request mentioned first.
-            body = (f"The request mentions {executor_label(offered)} but not as the one to do the work, so pick the "
-                    f"coding agent: {executor_label(offered)}, or another one. {body}")
+            body = (f"The request mentions {executor_label(offered)}, and the setup profile names another coding "
+                    f"agent. Which one should do this work: {executor_label(offered)}, or another one? {body}")
         choice_actions, choice_next_action = _apply_action_gate_arbitration(
             [
                 _action("choose_executor", "Choose coding agent", "primary"),
