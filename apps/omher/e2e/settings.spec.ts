@@ -47,6 +47,8 @@ test("model pill: one control, popover lists providers and models with the curre
   await expect(right.locator(":scope > *")).toHaveCount(1);
   expect(await right.locator("button, a, [role=button], input, select").count()).toBe(1);
   const pill = page.getByTestId("model-pill");
+  // the model's company mark sits before the name (Opus -> Claude)
+  await expect(pill.locator('svg.model-ic[data-mark="claude"]')).toBeVisible();
   await expect(pill).toContainText("Opus 5.5");
   await expect(pill).toContainText("High");
 

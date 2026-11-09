@@ -6,3 +6,4 @@ export { Spinner } from "./Spinner";
 export { Popover } from "./Popover";
 export * from "./icons";
 export { SourceIcon, MARKED } from "./SourceIcon";
+export { ModelIcon, markFor } from "./ModelIcon";

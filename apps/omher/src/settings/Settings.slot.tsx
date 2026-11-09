@@ -6,7 +6,7 @@ import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
 import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
-import { Avatar, GridIcon, SourceIcon } from "../ui";
+import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
 import { Appearance } from "./Appearance";
@@ -97,11 +97,24 @@ function NavItem({
   );
 }
 
-function Row({ title, hint, children }: { title: string; hint?: string; children?: React.ReactNode }) {
+function Row({
+  title,
+  hint,
+  icon,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="st-row">
       <div className="st-k">
-        <b>{title}</b>
+        <b className={icon ? "st-kt" : undefined}>
+          {icon}
+          {title}
+        </b>
         {hint && <span>{hint}</span>}
       </div>
       {children !== undefined && <div className="st-v">{children}</div>}
@@ -280,7 +293,10 @@ function BotCard({ bot }: { bot: Bot }) {
       </span>
       {bot.description && <span className="bc-desc">{bot.description}</span>}
       <span className="bc-foot">
-        <span className="bc-model">{bot.model || "—"}</span>
+        <span className="bc-model">
+          <ModelIcon model={bot.model} provider={bot.provider} size={11} />
+          {bot.model || "—"}
+        </span>
         {places.map(([src, n]) => (
           <span key={src} className="bc-place" title={`${n} ${placeName(src)} sessions`}>
             <SourceIcon source={src} size={11} />
@@ -381,7 +397,12 @@ function ProvidersPage() {
           <Row title={bot?.status === "offline" ? "Not connected" : "Loading…"} />
         ) : (
           opts.providers.map((p) => (
-            <Row key={p.slug} title={p.name} hint={p.models.join(" · ") || "No models"}>
+            <Row
+              key={p.slug}
+              title={p.name}
+              icon={<ModelIcon model={p.models[0]} provider={`${p.slug} ${p.name}`} size={14} />}
+              hint={p.models.join(" · ") || "No models"}
+            >
               <Value mono>
                 {p.slug}
                 {p.slug === opts.current.provider && <small className="st-tag">in use</small>}

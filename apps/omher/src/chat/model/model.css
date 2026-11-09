@@ -25,12 +25,25 @@
 .mp.on svg {
   transform: rotate(180deg);
 }
+/* the model's mark, with the connection dot tucked on its corner */
+.mp-mk {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
 .mp-d {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--quiet);
+  box-shadow: 0 0 0 1.5px var(--raise);
+}
+.model-ic {
   flex: none;
+  color: var(--ink);
 }
 .mp-d.live {
   background: var(--ok);
@@ -72,7 +85,7 @@
 .mp-opt {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   padding: 5px 6px;
   border-radius: var(--r-sm);

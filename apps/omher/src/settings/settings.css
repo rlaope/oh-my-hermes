@@ -651,3 +651,14 @@
   box-shadow: inset 0 -1px 0 var(--line-strong);
   color: var(--ink);
 }
+
+.st-kt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.bc-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
