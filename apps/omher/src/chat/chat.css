@@ -39,7 +39,7 @@
   mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
 }
 .thread > * {
-  width: min(var(--thread-w), calc(100% - 56px));
+  width: min(var(--thread-w), calc(100% - 48px));
   margin: 0 auto;
   flex: none;
 }
@@ -71,6 +71,24 @@
 .msg.a {
   align-items: flex-start;
 }
+/* the bot's face beside its bubbles: on the first of a run, the rest keep the indent */
+.msg.a.face {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+.msg.a.face > .msg-face {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+}
+.msg.a.face > .msg-face.blank {
+  visibility: hidden;
+}
+.msg.a.face > .b {
+  max-width: min(80%, 760px);
+}
 .msg .b {
   border-radius: var(--r-bubble);
   padding: 9px 13px;
@@ -87,7 +105,7 @@
 .msg.u .b {
   background: var(--bub-me);
   color: var(--ink);
-  max-width: 70%;
+  max-width: min(70%, 640px);
   white-space: pre-wrap;
 }
 .msg.a .b {

@@ -2,14 +2,14 @@
 // bubble with one link back to the thread at the end. omher never writes to that thread.
 import type { SlotProps } from "../features";
 import { openExternal } from "../lib/openExternal";
-import { SourceIcon, Spinner } from "../ui";
+import { Avatar, SourceIcon, Spinner } from "../ui";
 import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
 
 export const slot = "elsewhereLine";
 
-export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
+export default function AwayLine({ bot, item, face }: SlotProps["elsewhereLine"]) {
   const a = item.away;
   const now = useNow(a.running);
   const src = sourceName(a.source);
@@ -39,7 +39,8 @@ export default function AwayLine({ item }: SlotProps["elsewhereLine"]) {
     </span>
   );
   return (
-    <div className="msg a ew-msg" data-testid="away" data-source={a.source} data-session={a.id}>
+    <div className="msg a face ew-msg" data-testid="away" data-source={a.source} data-session={a.id}>
+      <Avatar bot={bot} size={28} className={`msg-face${face === false ? " blank" : ""}`} />
       <div className="b">
         <span data-testid="away-text">{text}</span> {link}
         {a.running && (
