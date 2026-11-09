@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
+  Grok open as chats in a folder you pick (or as a terminal), and their
+  questions and approvals join the bots' asks in a "needs you" strip that ⌘J
+  walks. A bot row rings while it answers and shows how long it has been at
+  it. A message from Slack, Discord or cron gets "Reply there", which asks the
+  bot to answer in that thread with its own tools; omher never posts there
+  itself. The side panel has tabs, the model picker has search, and the chat
+  keeps one face per run of bot bubbles. (#2695, #2702, #2704, #2706, #2708,
+  #2709, #2710)
+
 - **One command installs Hermes, OMH and the omher desktop app (beta).**
   `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
   (and the PowerShell script-block form with the same argument) installs Hermes with its official
