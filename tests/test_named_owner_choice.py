@@ -26,19 +26,30 @@ class NamedOwnersTests(unittest.TestCase):
         for text in messages:
             with self.subTest(text=text):
                 self.assertEqual(self.named(text), ("codex", "claude-code"))
-        self.assertEqual(self.named("CLAUDE-CODE and CODEX and codex"), ("codex", "claude-code"))
+        self.assertEqual(self.named("use CLAUDE-CODE and CODEX and codex"), ("codex", "claude-code"))
 
-    def test_existing_executor_aliases_are_owner_names(self) -> None:
-        groups = (
-            ("codex", "claude code", "claude-code", "claudecode"),
-            ("codex", "claude code"),
-            ("코덱스", "클로드 코드", "클로드코드"),
-        )
-        for phrases in groups:
-            for phrase in phrases:
-                with self.subTest(phrase=phrase):
-                    expected = "codex" if phrase in ("codex", "코덱스") else "claude-code"
-                    self.assertEqual(self.named(phrase), (expected,))
+    def test_existing_executor_aliases_are_owner_names_with_an_owner_cue(self) -> None:
+        for phrase in ("codex", "claude code", "claude-code", "claudecode", "코덱스", "클로드 코드", "클로드코드"):
+            expected = ("codex",) if phrase in ("codex", "코덱스") else ("claude-code",)
+            for text in (f"/dag-ulw build it with {phrase}", f"/dag-ulw {phrase}로 구현해줘"):
+                with self.subTest(text=text):
+                    self.assertEqual(self.named(text), expected)
+            with self.subTest(bare=phrase):
+                # A bare name is what the work is about as often as who does it.
+                self.assertEqual(self.named(phrase), ())
+
+    def test_a_cli_named_as_the_subject_is_not_a_choice(self) -> None:
+        # Mutation: drop the owner-cue check; each of these then exports a node to the CLI it only names.
+        for text in ("/dag-ulw fix the codex adapter tests", "/dag-ulw codex 어댑터 테스트 고쳐줘",
+                     "/dag-ulw update the claude code docs", "/dag-ulw check the codex-utils.py script"):
+            with self.subTest(text=text):
+                self.assertEqual(self.named(text), ())
+
+    def test_the_bundle_reads_the_cue_the_router_reads(self) -> None:
+        from omh.plugin_bundle.omh import owner_cues
+        from omh.routing import executor_cues
+
+        self.assertIs(executor_cues.owner_named_as_doer, owner_cues.owner_named_as_doer)
 
     def test_bare_advisor_names_and_embedded_words_are_not_choices(self) -> None:
         for text in ("/dag-ulw build it; claude only reviews", "claude and gemini", "precodex codexify"):
@@ -158,6 +169,20 @@ class NamedOwnerHookTests(unittest.TestCase):
         self.hook()
         self.hook(tracker_event={"provider": "github", "tracker_content": "ci finished"})
         self.assertEqual(self.owners(), ())
+
+    def test_a_dag_ulw_request_about_a_cli_exports_nothing_to_it(self) -> None:
+        from _delegation_state import PARENT, homes
+        from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
+        from test_dag_tool import call, node, slots_table
+
+        with homes() as home:
+            slots_table(home)
+            pre_llm_call(omh_home=str(home.omh), hermes_home=str(home.hermes), session_id=PARENT,
+                         user_message="/dag-ulw fix the codex adapter tests", is_first_turn=False)
+            result = call(action="define", run="feat", nodes=[node("api", scope=("api.py",), owner="codex")])
+            refused = call(action="export", run="feat", owner="codex")
+        self.assertEqual(result["exports"], [], result)
+        self.assertEqual(refused["reason"], "owner_not_chosen")
 
     def test_the_hooks_turn_marker_reaches_omh_dag_define(self) -> None:
         from _delegation_state import PARENT, homes

@@ -498,7 +498,9 @@ All notable changes will be documented here.
   code", "have codex fix", "codex로", "codex한테", "클로드 코드로", "open this in
   codex"): "fix the codex adapter tests" or "update the claude code docs"
   names what the work is about and chooses no owner, on every entry point and
-  in the route decision, where a bare product name used to pick the owner. The plugin tool and the turn's route
+  in the route decision, where a bare product name used to pick the owner.
+  A dag-ulw request reads the same cue: "/dag-ulw fix the codex adapter tests"
+  no longer sends a node that names `owner: codex` to Codex. The plugin tool and the turn's route
   hint now say `owner_set_in_setup_profile` when the profile holds the owner,
   where they said the owner had to be asked for.
 
