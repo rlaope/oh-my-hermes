@@ -1029,6 +1029,30 @@ class LeaderShortcutTests(unittest.TestCase):
                     self.assertEqual(client.calls, [])
                     self.assertIsNone(app.rewind_picker)
 
+    def test_modified_escape_cancels_leader_before_modifier_filtering(self) -> None:
+        from test_tui_rewind import Clock
+
+        for modifier in ("ctrl", "alt", "shift", "reported_shift"):
+            for text, busy, kind in (("draft", False, "clear"), ("", True, "interrupt"), ("", False, "rewind")):
+                with self.subTest(modifier=modifier, kind=kind):
+                    clock = Clock()
+                    app, client = make_app(busy=busy, clock=clock)
+                    app.composer.set_vim(True)
+                    type_text(app, text)
+                    app._on_input(Key(ESCAPE))
+                    app._on_input(Key(ESCAPE))
+                    self.assertEqual(app.escape_armed, (kind, clock.now))
+                    before = (app.composer.text, app.composer.caret, app.composer.normal, list(app.composer.history))
+                    self.arm(app)
+                    app._on_input(Key(ESCAPE, **{modifier: True}))
+                    self.assertIsNone(app.escape_armed)
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual(
+                        (app.composer.text, app.composer.caret, app.composer.normal, app.composer.history), before,
+                    )
+                    self.assertEqual(client.calls, [])
+                    self.assertIsNone(app.rewind_picker)
+
     def test_non_escape_leader_followers_preserve_confirmation(self) -> None:
         for event in (Key(CHAR, "?"), Key(CHAR, "m", ctrl=True), Key(DOWN)):
             with self.subTest(event=event):
