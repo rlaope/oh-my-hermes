@@ -675,6 +675,62 @@ class HermesPath(unittest.TestCase):
         omher_bridge.ensure_hermes_on_path(Path("/nonexistent/hermes-agent"), path)
         self.assertEqual(path, [])
 
+    def test_read_only_uri_survives_odd_folder_names(self):
+        import sqlite3
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "a b#c?d%e@f"
+            folder.mkdir()
+            db = folder / "state.db"
+            con = sqlite3.connect(db)
+            con.execute("CREATE TABLE t (x)")
+            con.execute("INSERT INTO t VALUES (1)")
+            con.commit()
+            con.close()
+            uri = omher_bridge.ro_uri(db)
+            self.assertTrue(uri.startswith("file:///") or uri.startswith("file://"), uri)
+            self.assertTrue(uri.endswith("?mode=ro"), uri)
+            ro = sqlite3.connect(uri, uri=True)
+            try:
+                self.assertEqual(ro.execute("SELECT x FROM t").fetchall(), [(1,)])
+                with self.assertRaises(sqlite3.OperationalError):
+                    ro.execute("INSERT INTO t VALUES (2)")
+            finally:
+                ro.close()
+
+    def test_default_home_follows_hermes_on_each_platform(self):
+        import omher_bridge
+        home = omher_bridge.default_hermes_home
+        self.assertEqual(home({}, "darwin"), Path.home() / ".hermes")
+        self.assertEqual(home({}, "linux"), Path.home() / ".hermes")
+        self.assertEqual(home({"LOCALAPPDATA": "C:/Users/k/AppData/Local"}, "win32"),
+                         Path("C:/Users/k/AppData/Local") / "hermes")
+        self.assertEqual(home({}, "win32"), Path.home() / "AppData" / "Local" / "hermes")
+        self.assertEqual(home({"HERMES_HOME": "/srv/h", "LOCALAPPDATA": "C:/L"}, "win32"), Path("/srv/h"))
+        self.assertEqual(home({"HERMES_HOME": "  "}, "darwin"), Path.home() / ".hermes")
+
+    def test_signal_setup_survives_a_loop_without_signal_handlers(self):
+        import omher_bridge
+
+        class WindowsLoop:
+            def add_signal_handler(self, *a):
+                raise NotImplementedError
+
+        omher_bridge._stop_on_signals(WindowsLoop(), asyncio.Event())  # must not raise
+
+    def test_default_root_on_windows_reads_scripts_python(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "hermes-agent"
+            (root / "hermes_cli").mkdir(parents=True)
+            (root / "venv" / "Scripts").mkdir(parents=True)
+            real = sys.executable
+            try:
+                sys.executable = str(root / "venv" / "Scripts" / "python.exe")
+                self.assertEqual(omher_bridge._default_hermes_root(), root)
+            finally:
+                sys.executable = real
+
     def test_default_root_comes_from_the_interpreter_venv(self):
         import omher_bridge
         with tempfile.TemporaryDirectory() as d:

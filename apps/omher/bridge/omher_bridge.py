@@ -47,13 +47,29 @@ PEEK_CHARS = 400
 THINKING_MIN_GAP = 1.0
 CONNECT_TIMEOUT = 60.0
 OFFLINE_COOLDOWN = 10.0
+def default_hermes_home(environ=None, platform: str | None = None) -> Path:
+    """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
+    (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
+    environ = os.environ if environ is None else environ
+    platform = sys.platform if platform is None else platform
+    explicit = (environ.get("HERMES_HOME") or "").strip()
+    if explicit:
+        return Path(os.path.expanduser(explicit))
+    if platform == "win32":
+        local = (environ.get("LOCALAPPDATA") or "").strip()
+        base = Path(local) if local else Path.home() / "AppData" / "Local"
+        return base / "hermes"
+    return Path.home() / ".hermes"
+
+
 def _default_hermes_root() -> Path:
-    """The Hermes checkout whose venv runs this bridge (`<root>/venv/bin/python`), else ~/.hermes/hermes-agent."""
+    """The Hermes checkout whose venv runs this bridge (`<root>/venv/bin/python`, or `venv\\Scripts\\python.exe`
+    on Windows), else `<Hermes home>/hermes-agent`."""
     exe = Path(sys.executable)
     for venv in (exe.parent.parent,):
         if venv.name in ("venv", ".venv") and (venv.parent / "hermes_cli").is_dir():
             return venv.parent
-    return Path.home() / ".hermes" / "hermes-agent"
+    return default_hermes_home() / "hermes-agent"
 
 
 DEFAULT_HERMES_ROOT = _default_hermes_root()
@@ -210,6 +226,13 @@ def write_display_name(profile_dir: Path, name: str) -> None:
     tmp.replace(path)
 
 
+def ro_uri(db: Path) -> str:
+    """A read-only SQLite URI for *db* on every platform. `Path.as_uri()` gives `file:///C:/...` on Windows
+    and percent-escapes `?`, `#`, `%` and spaces, which a hand-built `file:{path}` mangles (a drive letter or
+    a `#` in a folder name ended the path early)."""
+    return Path(db).resolve().as_uri() + "?mode=ro"
+
+
 def read_bot_facts(profile_dir: Path) -> dict:
     """What the bot has done, for the bot page: sessions per place, first and last activity, skills
     and routines. Read from the profile's own files; ``state.db`` is opened read-only."""
@@ -219,7 +242,7 @@ def read_bot_facts(profile_dir: Path) -> dict:
     db = profile_dir / "state.db"
     if db.is_file():
         try:
-            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+            con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
             try:
                 for source, n, lo, hi in con.execute(
                         "SELECT source, COUNT(*), MIN(started_at), MAX(COALESCE(last_activity_at, started_at)) "
@@ -324,7 +347,7 @@ def read_session_facts(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
         return {}
     marks = ",".join("?" * len(ids))
     try:
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
         try:
             origins = con.execute(f"SELECT id, origin_json FROM sessions WHERE id IN ({marks})", ids).fetchall()
             try:
@@ -466,7 +489,7 @@ class Bridge:
     def __init__(self, *, token: str, hermes_home: Path | None = None, gateway_factory=None, eager: bool = False,
                  clock=time.monotonic, poll_s: float = 30.0, elsewhere_poll_s: float = 20.0):
         self.token = token
-        self.home = Path(hermes_home) if hermes_home else Path.home() / ".hermes"
+        self.home = Path(hermes_home) if hermes_home else default_hermes_home()
         self.gateway_factory = gateway_factory or self._default_connect
         self.eager = eager
         self.clock = clock
@@ -1178,13 +1201,22 @@ def _watch_stdin(loop, stop: asyncio.Event) -> None:
     threading.Thread(target=run, daemon=True, name="stdin-eof").start()
 
 
+def _stop_on_signals(loop, stop: asyncio.Event) -> None:
+    """Stop cleanly on SIGTERM/SIGINT. Windows' event loop has no signal handlers (NotImplementedError); there
+    the app's stdin EOF (`--exit-on-stdin-eof`) and process kill are what stop the bridge."""
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass
+
+
 async def amain(args) -> int:
     bridge = Bridge(token=args.token, hermes_home=Path(args.hermes_home) if args.hermes_home else None, eager=args.eager)
     port = await bridge.start("127.0.0.1", args.port)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, stop.set)
+    _stop_on_signals(loop, stop)
     if args.exit_on_stdin_eof:
         _watch_stdin(loop, stop)
     print("OMHER_BRIDGE_READY " + json.dumps({"port": port}), flush=True)

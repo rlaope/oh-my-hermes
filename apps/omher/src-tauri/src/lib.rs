@@ -25,16 +25,14 @@ async fn bridge_status(shell: State<'_, Shell>) -> Result<BridgeStatus, String> 
 }
 
 /// Open a thread in its own app. Only Slack / Discord / Telegram links: omher never opens arbitrary URLs.
+/// The system opener (`open` on macOS, the shell's URL handler on Windows, `xdg-open` on Linux) hands the
+/// link to the person's own Slack / Discord / browser.
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
     if !allowed_external(&url) {
         return Err("not a Slack, Discord or Telegram link".into());
     }
-    std::process::Command::new("open")
-        .arg(&url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| e.to_string())
 }
 
 pub(crate) fn allowed_external(url: &str) -> bool {
@@ -58,6 +56,7 @@ async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
 
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![bridge_url, bridge_status, bridge_retry, open_external])
         .setup(|app| {
             let bridge = Bridge::new();
