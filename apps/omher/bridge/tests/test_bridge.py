@@ -491,7 +491,7 @@ class Elsewhere(BridgeCase):
             self.assertTrue(by["s-slack"]["running"])
             self.assertEqual(by["s-slack"]["message_count"], 12)
             for a in rows:
-                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running"})
+                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place"})
                 self.assertTrue(a["label"])
 
     async def test_active_list_adds_live_sessions_and_caps_at_twenty(self):
@@ -688,3 +688,67 @@ class HermesPath(unittest.TestCase):
                 self.assertEqual(omher_bridge._default_hermes_root(), root)
             finally:
                 sys.executable = real
+
+
+class ToolDetail(unittest.TestCase):
+    """The activity line shows what actually ran, not Hermes' summary ("date + 1 command")."""
+
+    def test_terminal_shows_the_real_command(self):
+        import omher_bridge
+        self.assertEqual(omher_bridge.tool_detail("terminal", {"command": "date &&\n  sw_vers -productVersion"},
+                                                  "date + 1 command"), "date && sw_vers -productVersion")
+
+    def test_path_url_query_and_helper_goal(self):
+        import omher_bridge
+        self.assertEqual(omher_bridge.tool_detail("read_file", {"path": "gateway/run.py"}, "run.py"), "gateway/run.py")
+        self.assertEqual(omher_bridge.tool_detail("web_extract", {"urls": ["https://a.b/c"]}, "a.b"), "https://a.b/c")
+        self.assertEqual(omher_bridge.tool_detail("delegate_task", {"tasks": [{"goal": "Fix A"}, {"goal": "Fix B"}]},
+                                                  "2 tasks"), "Fix A (+1 more)")
+
+    def test_unknown_tool_or_missing_arg_keeps_hermes_context_and_clips(self):
+        import omher_bridge
+        self.assertEqual(omher_bridge.tool_detail("mystery", {}, "ctx"), "ctx")
+        self.assertEqual(omher_bridge.tool_detail("terminal", {}, "fallback"), "fallback")
+        self.assertEqual(len(omher_bridge.tool_detail("terminal", {"command": "x" * 500}, "")), 160)
+
+
+class OriginLinks(unittest.TestCase):
+    """Elsewhere sessions link to their thread; the origin comes from the profile's state.db, read-only."""
+
+    def _db(self, d: Path, rows):
+        import sqlite3
+        con = sqlite3.connect(d / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, origin_json TEXT)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?)", [(i, json.dumps(o) if o else None) for i, o in rows])
+        con.commit()
+        con.close()
+
+    def test_slack_and_discord_links_and_places(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self._db(Path(d), [
+                ("s1", {"platform": "slack", "chat_id": "C9", "chat_name": "product-opengateway", "thread_id": "1794186944.520669",
+                        "guild_id": "T5"}),
+                ("d1", {"platform": "discord", "chat_id": "456", "guild_id": "123",
+                        "chat_name": "Oh-My-Hermes Community / #cron / long thread title"}),
+                ("c1", None),
+            ])
+            o = omher_bridge.read_origins(Path(d), ["s1", "d1", "c1", "missing"])
+        self.assertEqual(set(o), {"s1", "d1"})
+        self.assertEqual(omher_bridge.origin_link("slack", o["s1"]),
+                         ("slack://channel?team=T5&id=C9&thread_ts=1794186944.520669", "#product-opengateway"))
+        self.assertEqual(omher_bridge.origin_link("discord", o["d1"]), ("https://discord.com/channels/123/456", "#cron"))
+        self.assertEqual(omher_bridge.origin_link("cron", {}), (None, None))
+
+    def test_db_is_opened_read_only(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self._db(Path(d), [("s1", {"platform": "slack", "chat_id": "C1"})])
+            before = (Path(d) / "state.db").stat().st_mtime_ns
+            omher_bridge.read_origins(Path(d), ["s1"])
+            self.assertEqual((Path(d) / "state.db").stat().st_mtime_ns, before)
+
+    def test_missing_db_gives_nothing(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(omher_bridge.read_origins(Path(d), ["x"]), {})

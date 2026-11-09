@@ -160,6 +160,81 @@ def split_author(text: str) -> tuple[str | None, str]:
     return m.group("author").strip() or None, m.group("rest")
 
 
+# The argument a person recognises for each tool. Hermes' own `context` summarises (e.g. a two-command
+# shell line becomes "date + 1 command"), which hides what actually ran.
+_DETAIL_ARG = {
+    "terminal": ("command",), "read_file": ("path", "file_path"), "write_file": ("path", "file_path"),
+    "patch": ("path", "file_path"), "search_files": ("pattern", "query"), "web_search": ("query",),
+    "web_extract": ("urls", "url"), "delegate_task": ("goal",), "skill_view": ("name",), "skill_use": ("name",),
+    "browser_navigate": ("url",),
+}
+
+
+def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
+    """One readable line for a tool call: the real command / path / query when the args carry it."""
+    value = None
+    for key in _DETAIL_ARG.get(tool, ()):
+        v = args.get(key)
+        if isinstance(v, list):
+            v = v[0] if v and isinstance(v[0], str) else None
+        if isinstance(v, str) and v.strip():
+            value = v
+            break
+    text = value if value is not None else context
+    if tool == "delegate_task" and value is None and isinstance(args.get("tasks"), list):
+        goals = [t.get("goal") for t in args["tasks"] if isinstance(t, dict) and isinstance(t.get("goal"), str)]
+        text = goals[0] + (f" (+{len(goals) - 1} more)" if len(goals) > 1 else "") if goals else context
+    line = " ".join(str(text or "").split())
+    return line if len(line) <= n else line[: n - 1] + "…"
+
+
+def read_origins(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
+    """Where each session lives (platform, channel name, ids) from the profile's own state.db, opened
+    read-only. `session.list` carries no origin, and without it a session cannot link back to its thread."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not ids or not db.is_file():
+        return {}
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+        try:
+            marks = ",".join("?" * len(ids))
+            rows = con.execute(f"SELECT id, origin_json FROM sessions WHERE id IN ({marks})", ids).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return {}
+    out = {}
+    for sid, raw in rows:
+        try:
+            origin = json.loads(raw) if raw else None
+        except ValueError:
+            origin = None
+        if isinstance(origin, dict):
+            out[sid] = origin
+    return out
+
+
+def origin_link(source: str, origin: dict) -> tuple[str | None, str | None]:
+    """(url, place) for a session's origin: a link that opens the thread in its own app, and a short
+    place name ("#product-opengateway", "#cron"). Either may be None."""
+    s = lambda k: str(origin.get(k) or "").strip()
+    chat, thread, guild, name = s("chat_id"), s("thread_id"), s("guild_id") or s("scope_id"), s("chat_name")
+    url = place = None
+    if source == "slack" and chat:
+        url = f"slack://channel?team={guild}&id={chat}" if guild else None
+        if thread and re.fullmatch(r"\d+\.\d+", thread) and guild:
+            url = f"slack://channel?team={guild}&id={chat}&thread_ts={thread}"
+        place = f"#{name}" if name and not name.startswith("#") else (name or None)
+    elif source == "discord" and chat and guild:
+        url = f"https://discord.com/channels/{guild}/{chat}"
+        parts = [p.strip() for p in name.split(" / ")] if name else []
+        place = parts[1] if len(parts) >= 2 else (parts[0] if parts else None)
+    elif source == "telegram" and chat:
+        place = name or None
+    return url, place
+
+
 def _clip(text: str, n: int = PEEK_CHARS) -> str:
     text = text.strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
@@ -516,7 +591,8 @@ class Bridge:
             tool_id = str(p.get("tool_id") or p.get("tool_call_id") or "")
             tool = str(p.get("name") or p.get("tool_name") or "tool")
             context = p.get("context") if isinstance(p.get("context"), str) else ""
-            await self.emit("tool.start", name, tool_id=tool_id, name=tool, detail=context[:160])
+            args = p.get("args") if isinstance(p.get("args"), dict) else {}
+            await self.emit("tool.start", name, tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
                 skill = str(args.get("name") or context).strip()
@@ -844,7 +920,13 @@ class Bridge:
                         "last_active": float(r.get("last_active") or started),
                         "message_count": int(r.get("message_count") or 0), "running": bool(r.get("running"))})
         out.sort(key=lambda a: a["last_active"], reverse=True)
-        return out[:MAX_ELSEWHERE]
+        out = out[:MAX_ELSEWHERE]
+        origins = await asyncio.to_thread(read_origins, conn.bot["path"], [a["id"] for a in out])
+        for a in out:
+            url, place = origin_link(a["source"], origins.get(a["id"]) or {})
+            a["url"] = url
+            a["place"] = place
+        return out
 
     async def op_elsewhere_list(self, p) -> dict:
         conn = await self._conn(p.get("bot"))
