@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import blob from "../assets/avatars/face-blob.svg";
 import ghost from "../assets/avatars/face-ghost.svg";
 import mochi from "../assets/avatars/face-mochi.svg";
 import star from "../assets/avatars/face-star.svg";
-import { getStore, useStore } from "../state/store";
+import { getStore } from "../state/store";
 
 /** The four built-in faces (blob, ghost, mochi, star). Known bots keep a fixed one; others get one by name. */
 const KNOWN: Record<string, string> = { kami: blob, friren: ghost, default: mochi, hermes: mochi };
@@ -45,8 +45,11 @@ export function useAvatarSrc(bot: string): string {
 }
 
 function useAvatar(bot: string): { src: string; own: boolean } {
-  const s = useStore();
-  const rev = s.bots.find((b) => b.name === bot)?.avatar_rev ?? null;
+  // subscribe to this bot's picture revision only: a face beside every bubble must not re-render on
+  // each streamed token the way a whole-store subscription does
+  const st = getStore();
+  const revOf = () => st.getSnapshot().bots.find((b) => b.name === bot)?.avatar_rev ?? null;
+  const rev = useSyncExternalStore(st.subscribe, revOf, revOf);
   const [own, setOwn] = useState<string | null>(rev === null ? null : ready.get(`${bot}:${rev}`) ?? null);
   useEffect(() => {
     if (rev === null) {
