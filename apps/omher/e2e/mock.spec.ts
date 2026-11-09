@@ -92,11 +92,12 @@ test("hello, bots and seeded data", async () => {
   expect(chat).toMatchObject({ model: "Opus 5.5", provider: "claude-proxy", running: false });
 
   const { sessions } = await c.ok("elsewhere.list", { bot: "kami" });
-  expect(sessions.map((s: any) => [s.source, s.title])).toEqual([
-    ["slack", "#og-dev › gateway 502 on /v1/responses"],
-    ["discord", "#cron › OpenMausBot 조사후 브리핑"],
-    ["discord", "#oh-my-hermes › PR #2657 review"],
+  expect(sessions.map((s: any) => [s.source, s.place, s.title])).toEqual([
+    ["slack", "#og-dev", "gateway 502 on /v1/responses"],
+    ["discord", "#cron", "OpenMausBot 조사후 브리핑"],
+    ["discord", "#oh-my-hermes", "PR #2657 review"],
   ]);
+  expect(sessions.every((s: any) => typeof s.url === "string" && s.url)).toBe(true);
   expect(sessions[0].running).toBe(true);
   expect(sessions.every((s: any) => s.label)).toBe(true);
 

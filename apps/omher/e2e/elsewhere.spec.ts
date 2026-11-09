@@ -1,4 +1,4 @@
-// Elsewhere: header places chip, read-only away lines with peek, Details panel (where + routines).
+// Elsewhere: header places chip, away lines that link to their thread, Details panel (where + routines).
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -73,54 +73,34 @@ test("header chip counts the other places and toggles the panel", async ({ page 
   await expect(page.getByTestId("places")).toHaveText("1 other place");
 });
 
-test("away line expands to a read-only peek", async ({ page }) => {
+test("away line is one link to the thread, with no replayed messages", async ({ page }) => {
+  const opened: string[] = [];
+  await page.exposeFunction("__omherOpened", (u: string) => opened.push(u));
+  await page.addInitScript(() => {
+    window.open = ((u: string) => {
+      (window as unknown as { __omherOpened: (u: string) => void }).__omherOpened(String(u));
+      return null;
+    }) as typeof window.open;
+  });
   await open(page);
   const tl = page.getByTestId("timeline");
-  const lines = tl.getByTestId("away");
-  await expect(lines).toHaveCount(2); // newest two in the timeline; the rest live in the panel
+  await expect(tl.getByTestId("away")).toHaveCount(2); // newest two in the timeline; the rest live in the panel
   const slack = tl.locator('[data-testid=away][data-source=slack]');
-  await expect(slack).toContainText("Slack");
-  await expect(slack).toContainText("#og-dev › gateway 502 on /v1/responses");
+  await expect(slack).toContainText("Slack #og-dev");
+  await expect(slack).toContainText("gateway 502 on /v1/responses");
   await expect(slack.getByTestId("away-time")).toHaveText(/^working · \d+m$/);
   await expect(slack.getByRole("status")).toBeVisible(); // spinner while the session works
-  const discord = tl.locator('[data-testid=away][data-source=discord]');
-  await expect(discord.getByTestId("away-time")).toHaveText(/^\d\d:\d\d$|^[A-Z][a-z]{2}( \d+)?$/);
+  const link = slack.getByTestId("away-link");
+  await expect(link).toHaveAttribute("href", /^slack:\/\/channel\?/);
+  await expect(link).toHaveAttribute("title", "Open in Slack");
 
-  await expect(slack.getByTestId("peek")).toHaveCount(0);
-  await slack.getByRole("button").click();
-  const peek = slack.getByTestId("peek");
-  await expect(peek).toBeVisible();
-  await expect(peek.getByTestId("peek-msg")).toHaveCount(4);
-  await expect(peek).toContainText("can we raise the pool idle timeout?");
-  await expect(peek.getByTestId("peek-msg").first().locator("b")).toHaveText("Kami"); // assistant row → bot name
-  await expect(peek.getByTestId("peek-msg").nth(1).locator("b")).toHaveText("jun");
-  const openLink = peek.getByText("Open in Slack ↗");
-  await expect(openLink).toHaveAttribute("title", "Opens in Slack");
-  await expect(peek).toContainText("+10 messages · read-only here");
-  // author bold, text gray and at most two lines
-  const style = await peek.getByTestId("peek-msg").first().evaluate((el) => {
-    const b = getComputedStyle(el.querySelector("b")!);
-    const t = getComputedStyle(el.querySelector("span")!);
-    return { weight: Number(b.fontWeight), clamp: t.getPropertyValue("-webkit-line-clamp"), color: t.color, bcolor: b.color };
-  });
-  expect(style.weight).toBeGreaterThanOrEqual(600);
-  expect(style.clamp).toBe("2");
-  expect(style.color).not.toBe(style.bcolor);
-
-  // clicking "Open in Slack" opens nothing in v0.1
-  const pages = page.context().pages().length;
-  await openLink.click();
-  expect(page.context().pages().length).toBe(pages);
-
+  await link.click();
+  await expect.poll(() => opened).toEqual([expect.stringMatching(/^slack:\/\/channel\?team=T1&id=C1/)]);
+  // no peek: nothing of that thread is replayed here, and no session is read
+  await expect(page.getByTestId("peek")).toHaveCount(0);
+  await expect(page.getByTestId("peek-msg")).toHaveCount(0);
+  expect((await calls()).filter((c) => c.op === "elsewhere.peek")).toEqual([]);
   await expectNoInputs(page);
-  const peeks = (await calls()).filter((c) => c.op === "elsewhere.peek");
-  expect(peeks).toEqual([
-    expect.objectContaining({ params: expect.objectContaining({ bot: "kami", session_id: "slack-og-dev-502", limit: 4 }) }),
-  ]);
-
-  // collapse
-  await slack.getByRole("button", { expanded: true }).click();
-  await expect(slack.getByTestId("peek")).toHaveCount(0);
 });
 
 test("Details panel: identity, where the bot is, note, routines", async ({ page }) => {
@@ -128,22 +108,23 @@ test("Details panel: identity, where the bot is, note, routines", async ({ page 
   await page.getByTestId("places").click();
   const panel = page.getByTestId("details-panel");
   await expect(panel).toBeVisible();
-  await expect(panel).toContainText("Hermes profile · kami · Opus 5.5");
+  await expect(panel).toContainText("Hermes profile · kami");
+  await expect(panel.locator(".details-sub.mono")).toHaveText("Opus 5.5");
   await expect(panel.getByTestId("where-sec")).toHaveText("Where Kami is4");
 
   const rows = panel.getByTestId("where-row");
   await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).toContainText("This chat");
   await expect(rows.nth(0)).toContainText("omher");
-  await expect(rows.nth(1)).toContainText("#og-dev › gateway 502 on /v1/responses");
-  await expect(rows.nth(1)).toContainText("Slack");
+  await expect(rows.nth(1)).toContainText("gateway 502 on /v1/responses");
+  await expect(rows.nth(1)).toContainText("Slack #og-dev");
   await expect(rows.nth(1)).toContainText(/working · \d+m/);
-  await expect(rows.nth(2)).toContainText("#cron › OpenMausBot 조사후 브리핑");
-  await expect(rows.nth(3)).toContainText("#oh-my-hermes › PR #2657 review");
-  await expect(rows.nth(3)).toContainText("Discord");
+  await expect(rows.nth(2)).toContainText("OpenMausBot 조사후 브리핑");
+  await expect(rows.nth(3)).toContainText("PR #2657 review");
+  await expect(rows.nth(3)).toContainText("Discord #oh-my-hermes");
 
   await expect(panel.getByTestId("where-note")).toHaveText(
-    "Talk to Kami here — it knows what it did in Slack and Discord. Those threads are read-only here; reply in their apps.",
+    "Talk to Kami here — it knows what it did in Slack and Discord. Replies to those threads go in their own apps.",
   );
 
   await expect(panel.getByTestId("routines-sec")).toHaveText("Routines2");
@@ -157,14 +138,17 @@ test("Details panel: identity, where the bot is, note, routines", async ({ page 
   await expect(routines.nth(1)).toContainText("weekly");
 
   await expectNoInputs(page);
-  // panel rows are plain read-only rows (no buttons that could act on another session)
-  expect(await panel.getByTestId("where-list").locator("button, a, input, textarea").count()).toBe(0);
+  // the only controls on other sessions are links out to their own apps
+  const links = panel.getByTestId("where-list").locator("a");
+  await expect(links).toHaveCount(3);
+  for (const l of await links.all()) await expect(l).toHaveAttribute("href", /^(slack:\/\/|https:\/\/discord\.com\/channels\/)/);
+  expect(await panel.getByTestId("where-list").locator("input, textarea, [contenteditable]").count()).toBe(0);
 
   await panel.getByRole("button", { name: "Close details" }).click();
   await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0)).toBeLessThan(2);
 });
 
-test("elsewhere.update re-fetches the list; nothing but peek names a session", async ({ page }) => {
+test("elsewhere.update re-fetches the list; no request names another session", async ({ page }) => {
   await open(page);
   await page.getByTestId("places").click();
   await expect(page.getByTestId("where-row")).toHaveCount(4);
@@ -173,32 +157,57 @@ test("elsewhere.update re-fetches the list; nothing but peek names a session", a
   await expect.poll(async () => (await calls()).filter((c) => c.op === "elsewhere.list").length).toBeGreaterThan(listed);
   await expect(page.getByTestId("where-row")).toHaveCount(4);
 
-  // interact: open both away lines, send a message to the main chat
-  for (const line of await page.getByTestId("timeline").getByTestId("away").all()) {
-    await line.getByRole("button").first().click();
-    await expect(line.getByTestId("peek")).toBeVisible();
-  }
+  // send a message to the main chat
   await page.getByTestId("composer").fill("status?");
   await page.getByTestId("composer").press("Enter");
   await expect(page.getByTestId("bubble-user").filter({ hasText: "status?" })).toBeVisible();
 
   const all = await calls();
-  const withSession = all.filter((c) => "session_id" in c.params);
-  expect(withSession.length).toBeGreaterThanOrEqual(2);
-  for (const c of withSession) expect(c.op, JSON.stringify(c)).toBe("elsewhere.peek");
+  expect(all.filter((c) => "session_id" in c.params)).toEqual([]); // no request ever names another session
   const send = all.filter((c) => c.op === "chat.send");
   expect(send).toEqual([expect.objectContaining({ params: { bot: "kami", text: "status?" } })]);
 });
 
-test("screenshots: dark and light with the panel and a peek open", async ({ page }) => {
+test("panel shows the 6 latest sessions, running first, and Show all for the rest", async ({ page }) => {
+  await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
+    const server = ws.connectToServer();
+    const ops = new Map<string, string>();
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      ops.set(msg.id, msg.op);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      if (ops.get(msg.id) === "elsewhere.list" && msg.ok && msg.result.sessions.length) {
+        const t = msg.result.sessions[0].last_active;
+        for (let i = 0; i < 6; i++)
+          msg.result.sessions.push({ id: `cron-${i}`, source: "cron", label: `superagent-observe run ${i + 1}`, title: "",
+            started_at: t - 9000 - i * 3600, last_active: t - 8000 - i * 3600, message_count: 2, running: false, url: null, place: null });
+        ws.send(JSON.stringify(msg));
+        return;
+      }
+      ws.send(raw);
+    });
+  });
+  await open(page);
+  await page.getByTestId("places").click();
+  const panel = page.getByTestId("details-panel");
+  const rows = panel.getByTestId("where-row");
+  await expect(rows).toHaveCount(7); // This chat + 6
+  await expect(rows.nth(1)).toContainText(/working/); // running first
+  await expect(panel.getByTestId("routines-sec")).toBeInViewport();
+  await panel.getByTestId("where-more").click();
+  await expect(rows).toHaveCount(10);
+  await expect(panel.getByTestId("where-more")).toHaveText("Show fewer");
+});
+
+test("screenshots: dark and light with the panel open", async ({ page }) => {
   mkdirSync(SHOTS, { recursive: true });
   await page.addInitScript(() => localStorage.removeItem("omher.theme"));
   await open(page);
   await page.getByTestId("places").click();
   await expect(page.getByTestId("routine-row")).toHaveCount(2);
-  const slack = page.locator('[data-testid=away][data-source=slack]');
-  await slack.getByRole("button").click();
-  await expect(slack.getByTestId("peek-msg")).toHaveCount(4);
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(SHOTS, "elsewhere-dark.png") });
   await page.evaluate(async () => {

@@ -46,14 +46,13 @@ const HISTORY_SEED = {
 // Away sessions are stored as offsets from "now" so the timeline always looks fresh.
 const AWAY_SEED = {
   kami: [
-    { id: "slack-og-dev-502", source: "slack", title: "#og-dev › gateway 502 on /v1/responses", started: 4 * MIN, last: 20, count: 14, running: true },
-    { id: "discord-cron-openmaus", source: "discord", title: "#cron › OpenMausBot 조사후 브리핑", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
-    { id: "discord-omh-2657", source: "discord", title: "#oh-my-hermes › PR #2657 review", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
+    { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", started: 4 * MIN, last: 20, count: 14, running: true },
+    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
+    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
   ],
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
 };
-
 const PEEK_SEED = {
   "slack-og-dev-502": [
     ["user", "minji", "502s are back on /v1/responses since 14:10", 9],
@@ -251,6 +250,8 @@ const awayFor = (bot) =>
       last_active: now() - a.last,
       message_count: a.count,
       running: a.running,
+      url: a.url ?? null,
+      place: a.place ?? null,
     }))
     .sort((x, y) => y.last_active - x.last_active)
     .slice(0, 20);

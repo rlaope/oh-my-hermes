@@ -32,6 +32,10 @@ export interface Away {
   last_active: number;
   message_count: number;
   running: boolean;
+  /** Opens the thread in its own app (slack:// or https://discord.com/channels/…), when known. */
+  url?: string | null;
+  /** Short place name, e.g. "#product-opengateway". */
+  place?: string | null;
 }
 
 export interface PeekMsg {
