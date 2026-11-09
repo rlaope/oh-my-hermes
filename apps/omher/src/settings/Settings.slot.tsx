@@ -203,7 +203,7 @@ function BotPage({ bot }: { bot: Bot }) {
         <Row title="Ask before" hint="Approvals follow this profile’s Hermes settings">
           <Value>Set in Hermes</Value>
         </Row>
-        <Row title="Use this Mac" hint="Click and type in your apps">
+        <Row title="Use this computer" hint="Click and type in your apps">
           <Value>Not in this version</Value>
         </Row>
       </div>
@@ -352,7 +352,7 @@ function ComputerPage() {
     <div className="st-page">
       <div className="st-gh st-gh0">Computer</div>
       <div className="st-grp">
-        <Row title="Use this Mac" hint="Let a bot click and type in your apps">
+        <Row title="Use this computer" hint="Let a bot click and type in your apps">
           <Value>Not in this version</Value>
         </Row>
       </div>

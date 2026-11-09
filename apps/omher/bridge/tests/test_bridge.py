@@ -366,7 +366,7 @@ class BotsAndChat(BridgeCase):
 
 class EventMapping(BridgeCase):
     def fixture_frames(self):
-        return json.loads(FIXTURE.read_text())
+        return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
     async def test_real_turn_maps_to_protocol_events(self):
         async with Env() as env:
@@ -626,13 +626,13 @@ class ReadOnlyRule(BridgeCase):
             self.assertEqual(len(c.find("prompt.submit")), 1)
 
     def test_source_has_exactly_one_submit_call_site(self):
-        src = (HERE.parent / "omher_bridge.py").read_text()
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"prompt\.submit", src)), 1)
         sites = re.findall(r"self\._submit\(([^)]*)\)", src)
         self.assertEqual(sites, ["conn, main, text, input_id"])
 
     def test_bridge_makes_no_model_or_http_call(self):
-        src = (HERE.parent / "omher_bridge.py").read_text()
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic", "subprocess"):
             self.assertNotIn(needle, src, needle)
 
@@ -674,6 +674,63 @@ class HermesPath(unittest.TestCase):
         path: list = []
         omher_bridge.ensure_hermes_on_path(Path("/nonexistent/hermes-agent"), path)
         self.assertEqual(path, [])
+
+    def test_read_only_uri_survives_odd_folder_names(self):
+        import sqlite3
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            # '#', '%' and spaces are legal everywhere; '?' only outside Windows
+            folder = Path(d) / ("a b#c%e@f" if os.name == "nt" else "a b#c?d%e@f")
+            folder.mkdir()
+            db = folder / "state.db"
+            con = sqlite3.connect(db)
+            con.execute("CREATE TABLE t (x)")
+            con.execute("INSERT INTO t VALUES (1)")
+            con.commit()
+            con.close()
+            uri = omher_bridge.ro_uri(db)
+            self.assertTrue(uri.startswith("file:///") or uri.startswith("file://"), uri)
+            self.assertTrue(uri.endswith("?mode=ro"), uri)
+            ro = sqlite3.connect(uri, uri=True)
+            try:
+                self.assertEqual(ro.execute("SELECT x FROM t").fetchall(), [(1,)])
+                with self.assertRaises(sqlite3.OperationalError):
+                    ro.execute("INSERT INTO t VALUES (2)")
+            finally:
+                ro.close()
+
+    def test_default_home_follows_hermes_on_each_platform(self):
+        import omher_bridge
+        home = omher_bridge.default_hermes_home
+        self.assertEqual(home({}, "darwin"), Path.home() / ".hermes")
+        self.assertEqual(home({}, "linux"), Path.home() / ".hermes")
+        self.assertEqual(home({"LOCALAPPDATA": "C:/Users/k/AppData/Local"}, "win32"),
+                         Path("C:/Users/k/AppData/Local") / "hermes")
+        self.assertEqual(home({}, "win32"), Path.home() / "AppData" / "Local" / "hermes")
+        self.assertEqual(home({"HERMES_HOME": "/srv/h", "LOCALAPPDATA": "C:/L"}, "win32"), Path("/srv/h"))
+        self.assertEqual(home({"HERMES_HOME": "  "}, "darwin"), Path.home() / ".hermes")
+
+    def test_signal_setup_survives_a_loop_without_signal_handlers(self):
+        import omher_bridge
+
+        class WindowsLoop:
+            def add_signal_handler(self, *a):
+                raise NotImplementedError
+
+        omher_bridge._stop_on_signals(WindowsLoop(), asyncio.Event())  # must not raise
+
+    def test_default_root_on_windows_reads_scripts_python(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "hermes-agent"
+            (root / "hermes_cli").mkdir(parents=True)
+            (root / "venv" / "Scripts").mkdir(parents=True)
+            real = sys.executable
+            try:
+                sys.executable = str(root / "venv" / "Scripts" / "python.exe")
+                self.assertEqual(omher_bridge._default_hermes_root(), root)
+            finally:
+                sys.executable = real
 
     def test_default_root_comes_from_the_interpreter_venv(self):
         import omher_bridge
@@ -793,7 +850,7 @@ class BotIdentity(BridgeCase):
             r = await s.req("bots.rename", bot="kami", name="  Kami   the Helper ")
             self.assertTrue(r["ok"], r)
             self.assertEqual(r["result"]["display_name"], "Kami the Helper")
-            text = meta.read_text()
+            text = meta.read_text(encoding="utf-8")
             self.assertIn("display_name: Kami the Helper", text)
             self.assertIn("Kami bot", text)  # the description written by Env survives
             await s.until(lambda ev: any(e["event"] == "bots.update" and e["bot"] == "kami" for e in ev))
@@ -803,7 +860,7 @@ class BotIdentity(BridgeCase):
             # empty goes back to the profile's own name
             r = await s.req("bots.rename", bot="kami", name="")
             self.assertEqual(r["result"]["display_name"], "Kami")
-            self.assertNotIn("display_name", meta.read_text())
+            self.assertNotIn("display_name", meta.read_text(encoding="utf-8"))
 
     async def test_rename_refuses_bad_input(self):
         async with Env() as env:
@@ -813,7 +870,7 @@ class BotIdentity(BridgeCase):
                 self.assertEqual(r["error"]["code"], code)
             r = await s.req("bots.rename", bot="ghost", name="x")
             self.assertEqual(r["error"]["code"], "unknown_bot")
-            self.assertFalse((env.home / "profiles" / "kami" / "profile.yaml").read_text().count("display_name"))
+            self.assertFalse((env.home / "profiles" / "kami" / "profile.yaml").read_text(encoding="utf-8").count("display_name"))
 
     async def test_picture_goes_through_hermes_set_asset_when_the_gateway_runs(self):
         async with Env() as env:

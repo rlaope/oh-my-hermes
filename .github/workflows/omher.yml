@@ -1,7 +1,7 @@
 name: omher
 
-# omher (apps/omher): UI checks, the Tauri shell's Rust tests and an unsigned debug .app build, plus the
-# bridge's unit tests against a FakeGateway (no Hermes needed). Signing is a later step.
+# omher (apps/omher) on macOS and Windows: UI checks, the Tauri shell's Rust tests and an unsigned debug build
+# per platform, plus the bridge's unit tests against a FakeGateway (no Hermes needed) on Linux and Windows.
 
 on:
   pull_request:
@@ -10,6 +10,7 @@ on:
       - "docs/OMHER-BOUNDARY.md"
       - "tests/test_omher_boundary.py"
       - ".github/workflows/omher.yml"
+      - ".github/workflows/omher-release.yml"
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +22,11 @@ permissions:
 
 jobs:
   bridge:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
@@ -38,7 +43,18 @@ jobs:
         run: python -m unittest tests.test_omher_boundary -v
 
   app:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bundles: app
+          - os: windows-latest
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -64,9 +80,17 @@ jobs:
       - name: Rust tests (Tauri shell)
         working-directory: apps/omher/src-tauri
         run: cargo test
-      - name: Build the unsigned debug .app
+      - name: Build an unsigned debug bundle
         working-directory: apps/omher
-        run: pnpm tauri build --debug --bundles app
-      - name: Check the bridge ships inside the .app
+        run: pnpm tauri build --debug --bundles ${{ matrix.bundles }}
+      - name: Check the bridge ships inside the macOS .app
+        if: runner.os == 'macOS'
         working-directory: apps/omher/src-tauri/target/debug/bundle/macos
         run: test -f omher.app/Contents/Resources/bridge/omher_bridge.py
+      - name: Check the Windows build carries the bridge and an installer
+        if: runner.os == 'Windows'
+        working-directory: apps/omher/src-tauri/target/debug
+        run: |
+          test -f omher.exe
+          test -f bridge/omher_bridge.py
+          ls bundle/nsis/*.exe
