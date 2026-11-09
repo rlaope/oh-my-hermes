@@ -31,6 +31,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from datetime import datetime
 from http import HTTPStatus
@@ -238,9 +239,12 @@ def ro_uri(db: Path) -> str:
 
 PANEL_RUNS = 40          # terminal runs shown in the Terminal tab
 PANEL_WINDOW = 8000      # newest message rows scanned (keeps the read fast on a large state.db)
-PANEL_OUT = 1200         # chars of output kept per run
+PANEL_OUT = 600          # chars of output kept per run (head and tail), clipped before the reply is encoded
 DIFF_MAX = 60_000        # chars of patch sent to the UI
+UNTRACKED_MAX = 200      # untracked entries listed in the Diff tab
 GIT_TIMEOUT = 4.0
+WORKTREES_TTL = 10.0     # seconds a scan of the bot's worktrees is reused by panel.diff
+GIT_POOL = 4             # git status calls run at once during a scan
 # The only git commands omher runs. All are reads; `--no-optional-locks` keeps `status` from writing the index.
 # `version` and the one fixed `config --list` query (_FILTER_QUERY) only feed the hardening in _git.
 GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",), ("version",), ("config",)}
@@ -306,14 +310,21 @@ def read_terminal_runs(profile_dir: Path, limit: int = PANEL_RUNS) -> list[dict]
             continue
         res = _json_obj(content) or {}
         out = res.get("output") if isinstance(res.get("output"), str) else (content if isinstance(content, str) else "")
-        out = out.rstrip()
+        out = _head_tail(out.rstrip(), PANEL_OUT)
         cwd = res.get("cwd") or args.get("workdir") or ""
-        runs.append({"id": str(call_id), "command": command.strip(), "ts": float(ts or 0.0),
-                     "output": out if len(out) <= PANEL_OUT else out[: PANEL_OUT - 1] + "…",
+        runs.append({"id": str(call_id), "command": command.strip(), "ts": float(ts or 0.0), "output": out,
                      "exit_code": res.get("exit_code") if isinstance(res.get("exit_code"), int) else None,
                      "cwd": str(cwd) if isinstance(cwd, str) else "", "source": str(source or ""),
                      "session_id": str(sid or "")})
     return runs
+
+
+def _head_tail(text: str, limit: int) -> str:
+    """At most `limit` chars: the head and the tail (where a failure usually says why), joined by an ellipsis."""
+    if len(text) <= limit:
+        return text
+    head = limit * 3 // 5
+    return text[:head] + "\n…\n" + text[-(limit - head - 3):]
 
 
 def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT, hardened: list[str] | None = None) -> str | None:
@@ -368,24 +379,81 @@ def _hardened(cwd: str | Path, timeout: float) -> list[str] | None:
     return out
 
 
+def _status_entries(status: str) -> list[tuple[str, str]]:
+    """(XY, path) pairs from `git status --porcelain -z` (a rename's or copy's source entry skipped)."""
+    out, parts, i = [], status.split("\0"), 0
+    while i < len(parts):
+        e = parts[i]
+        i += 1
+        if len(e) < 4:
+            continue
+        out.append((e[:2], e[3:]))
+        if e[0] in "RC":
+            i += 1
+    return out
+
+
 def _norm(path: str | Path) -> str:
     """One spelling per folder: symlinks resolved (macOS /var -> /private/var, a symlinked home), case
     folded where the OS ignores case."""
     return os.path.normcase(os.path.realpath(str(path)))
 
 
+_WORKTREES: dict[str, tuple[float, list[dict]]] = {}  # profile dir -> (monotonic time, last scan)
+_WORKTREES_LOCK = threading.Lock()
+
+
+def cached_worktrees(profile_dir: Path, max_age: float = WORKTREES_TTL) -> list[dict]:
+    """The bot's last worktree scan when it is under `max_age` seconds old, else a fresh scan."""
+    with _WORKTREES_LOCK:
+        hit = _WORKTREES.get(str(profile_dir))
+    if hit and time.monotonic() - hit[0] < max_age:
+        return hit[1]
+    return read_worktrees(profile_dir)
+
+
 def read_worktrees(profile_dir: Path, runs: list[dict] | None = None, max_repos: int = 6) -> list[dict]:
     """Git worktrees of the repositories the bot worked in, found from the folders its terminal runs used.
-    Each: path, branch, head, dirty (changed files), last (newest run there), repo. Newest first."""
+    Each: path, branch, head, dirty (changed files), last (newest run there), repo. Newest first.
+    A scan from the bot's own runs is kept for cached_worktrees()."""
+    scan = runs is None
     runs = read_terminal_runs(profile_dir, limit=400) if runs is None else runs
     seen_at: dict[str, float] = {}
     for r in runs:
         cwd = r.get("cwd") or ""
-        if cwd and os.path.isdir(cwd):
+        if cwd:
             seen_at[cwd] = max(seen_at.get(cwd, 0.0), float(r.get("ts") or 0.0))
+    seen_at = {c: t for c, t in seen_at.items() if os.path.isdir(c)}
+    norm: dict[str, str] = {}
+
+    def nm(path: str) -> str:
+        if path not in norm:
+            norm[path] = _norm(path)
+        return norm[path]
+
+    def under(cwd: str, wt: str) -> bool:
+        """cwd is the worktree or a folder in it that is not inside a nested repository."""
+        c, root = nm(cwd), nm(wt).rstrip(os.sep)
+        if c == root:
+            return True
+        if not c.startswith(root + os.sep):
+            return False
+        d = c
+        while d != root:
+            if os.path.lexists(os.path.join(d, ".git")):
+                return False
+            d = os.path.dirname(d)
+        return True
+
     repos: dict[str, dict] = {}
     for cwd, ts in sorted(seen_at.items(), key=lambda kv: -kv[1]):
-        if len(repos) >= max_repos and not any(_norm(cwd).startswith(_norm(w["path"])) for rp in repos.values() for w in rp["worktrees"]):
+        known = [w for rp in repos.values() for w in rp["worktrees"] if under(cwd, w["path"])]
+        if known:
+            # already inside a listed worktree: no rev-parse needed (the deepest one owns the folder)
+            w = max(known, key=lambda w: len(nm(w["path"])))
+            w["last"] = max(w["last"], ts)
+            continue
+        if len(repos) >= max_repos:
             continue
         common = _git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd)
         if not common:
@@ -409,35 +477,73 @@ def read_worktrees(profile_dir: Path, runs: list[dict] | None = None, max_repos:
                     cur["branch"] = ""
             main = Path(common.strip()).parent
             repos[key] = {"repo": main.name, "worktrees": [w for w in wts if os.path.isdir(w["path"])]}
-        for w in repos[key]["worktrees"]:
-            if _norm(cwd) == _norm(w["path"]) or _norm(cwd).startswith(_norm(w["path"]) + os.sep):
-                w["last"] = max(w["last"], ts)
-    out = []
-    for rp in repos.values():
-        for w in rp["worktrees"]:
-            if w["last"] <= 0:
-                continue  # only worktrees the bot actually worked in
-            status = _git(["status", "--porcelain"], w["path"])
-            w["dirty"] = None if status is None else len([l for l in status.splitlines() if l.strip()])
-            out.append({**w, "repo": rp["repo"]})
+        owners = [w for w in repos[key]["worktrees"] if under(cwd, w["path"])]
+        if owners:
+            w = max(owners, key=lambda w: len(nm(w["path"])))
+            w["last"] = max(w["last"], ts)
+    out = [{**w, "repo": rp["repo"]} for rp in repos.values() for w in rp["worktrees"] if w["last"] > 0]
     out.sort(key=lambda w: -w["last"])
-    return out[:30]
+    out = out[:30]
+
+    def dirty(w: dict) -> int | None:
+        status = _git(["status", "--porcelain", "-z", "--ignore-submodules=all"], w["path"])
+        return None if status is None else len(_status_entries(status))
+
+    if out:
+        with ThreadPoolExecutor(max_workers=min(GIT_POOL, len(out))) as pool:
+            for w, n in zip(out, pool.map(dirty, out)):
+                w["dirty"] = n
+    if scan:
+        with _WORKTREES_LOCK:
+            _WORKTREES[str(profile_dir)] = (time.monotonic(), out)
+    return out
 
 
-_DIFF_FILE = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+_DIFF_FILE = re.compile(r'^diff --git (?:"a/.*"|a/.+?) (?:"b/(?P<q>.*)"|b/(?P<p>.+))$')
+_DIFF_FLAGS = ["--no-color", "--ignore-submodules=all"]
+_C_ESC = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v", '"': '"', "\\": "\\"}
+
+
+def _unquote(s: str) -> str:
+    """Undo git's C-style quoting of a path (with core.quotepath=off only controls, quotes and backslashes)."""
+    raw, i = bytearray(), 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            n = s[i + 1]
+            if n in "0123" and re.fullmatch(r"[0-7]{3}", s[i + 1:i + 4]):
+                raw.append(int(s[i + 1:i + 4], 8))
+                i += 4
+                continue
+            raw += _C_ESC.get(n, n).encode()
+            i += 2
+            continue
+        raw += c.encode()
+        i += 1
+    return raw.decode("utf-8", "replace")
 
 
 def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> dict:
     """Uncommitted changes (vs HEAD) of one worktree the bot worked in, or its last commit when clean.
-    `path` must be one of read_worktrees(); anything else is refused."""
-    known = {_norm(w["path"]): w for w in read_worktrees(profile_dir, runs)}
-    w = known.get(_norm(path or ""))
+    Untracked files are listed by name (`untracked: true`, no content). `path` must be one of the bot's
+    worktrees (the scan cached_worktrees() keeps, or one over `runs`); anything else is refused."""
+    trees = cached_worktrees(profile_dir) if runs is None else read_worktrees(profile_dir, runs)
+    w = next((t for t in trees if _norm(t["path"]) == _norm(path or "")), None)
+    if not w and runs is None:  # a worktree newer than the kept scan
+        w = next((t for t in read_worktrees(profile_dir) if _norm(t["path"]) == _norm(path or "")), None)
     if not w:
         raise BridgeError("not_found", "not a worktree this bot worked in")
-    patch = _git(["diff", "HEAD", "--no-color", "--no-ext-diff"], w["path"], timeout=8.0)
+    hard = _hardened(w["path"], GIT_TIMEOUT)
+    if hard is None:
+        raise BridgeError("unavailable", "git could not read this worktree")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        patch_f = pool.submit(_git, ["diff", "HEAD", *_DIFF_FLAGS], w["path"], 8.0, hard)
+        status = _git(["status", "--porcelain", "-z", "--ignore-submodules=all"], w["path"], GIT_TIMEOUT, hard) or ""
+        patch = patch_f.result()
+    untracked = [p for xy, p in _status_entries(status) if xy == "??"]
     scope = "uncommitted"
-    if patch is not None and not patch.strip():
-        patch = _git(["log", "-1", "--no-color", "--patch", "--format=%h %s"], w["path"], timeout=8.0)
+    if patch is not None and not patch.strip() and not untracked:
+        patch = _git(["log", "-1", "--format=%h %s", "--patch", *_DIFF_FLAGS], w["path"], 8.0, hard)
         scope = "last commit"
     if patch is None:
         raise BridgeError("unavailable", "git could not read this worktree")
@@ -445,13 +551,15 @@ def read_diff(profile_dir: Path, path: str, runs: list[dict] | None = None) -> d
     for line in patch.splitlines():
         m = _DIFF_FILE.match(line)
         if m:
-            cur = {"path": m.group(2), "add": 0, "del": 0}
+            cur = {"path": _unquote(m.group("q")) if m.group("q") is not None else m.group("p"), "add": 0, "del": 0}
             files.append(cur)
         elif cur is not None and line.startswith("+") and not line.startswith("+++"):
             cur["add"] += 1
         elif cur is not None and line.startswith("-") and not line.startswith("---"):
             cur["del"] += 1
-    truncated = len(patch) > DIFF_MAX
+    if scope == "uncommitted":
+        files += [{"path": u, "add": 0, "del": 0, "untracked": True} for u in untracked[:UNTRACKED_MAX]]
+    truncated = len(patch) > DIFF_MAX or len(untracked) > UNTRACKED_MAX
     return {"path": w["path"], "branch": w["branch"], "repo": w["repo"], "scope": scope, "files": files,
             "patch": patch[:DIFF_MAX], "truncated": truncated}
 

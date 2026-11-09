@@ -7,7 +7,9 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -1002,7 +1004,7 @@ class SidePanel(unittest.TestCase):
         self.assertEqual(runs[1]["source"], "slack")
         self.assertEqual(runs[1]["output"], "clean")
         self.assertLessEqual(len(runs[0]["output"]), ob.PANEL_OUT)
-        self.assertTrue(runs[0]["output"].endswith("…"))
+        self.assertIn("\n…\n", runs[0]["output"])  # head and tail kept, clipped before the reply is encoded
 
     def test_no_state_db_means_no_runs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1099,7 +1101,7 @@ class SidePanel(unittest.TestCase):
             for w in trees:
                 diff = ob.read_diff(prof, w["path"])
                 self.assertEqual(diff["scope"], "uncommitted")
-                self.assertEqual([f["path"] for f in diff["files"]], ["a.txt"])
+                self.assertEqual([f["path"] for f in diff["files"] if not f.get("untracked")], ["a.txt"])
                 self.assertIn("+two", diff["patch"])  # the raw content, no textconv
                 self.assertIsNotNone(ob._git(["status", "--porcelain"], w["path"]))
                 self.assertIsNotNone(ob._git(["log", "-1", "--patch"], w["path"]))
@@ -1121,3 +1123,72 @@ class SidePanel(unittest.TestCase):
                         (json.dumps({"output": "", "exit_code": 0, "cwd": cwd}), f"t{i}", float(2 * i + 1)))
         con.commit()
         con.close()
+
+    def test_diff_lists_non_ascii_names_and_untracked_files(self):
+        import shutil
+        import subprocess
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                   "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+            (repo / "새파일.txt").write_text("가\n", encoding="utf-8")
+            subprocess.run(["git", "add", "새파일.txt"], cwd=repo, check=True, env=env)
+            subprocess.run(["git", "commit", "-q", "-m", "ko"], cwd=repo, check=True, env=env)
+            (repo / "새파일.txt").write_text("가\n나\n", encoding="utf-8")
+            (repo / "new.txt").write_text("fresh\n", encoding="utf-8")
+            (repo / "새 폴더").mkdir()
+            (repo / "새 폴더" / "메모.md").write_text("x\n", encoding="utf-8")
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db(prof, str(repo))
+            trees = ob.read_worktrees(prof)
+            self.assertEqual(trees[0]["dirty"], 4)  # a.txt, 새파일.txt, new.txt, 새 폴더/
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual(diff["files"], [
+                {"path": "a.txt", "add": 1, "del": 0},
+                {"path": "새파일.txt", "add": 1, "del": 0},
+                {"path": "new.txt", "add": 0, "del": 0, "untracked": True},
+                {"path": "새 폴더/", "add": 0, "del": 0, "untracked": True},
+            ])
+            # only new files: still "uncommitted", not the last commit
+            subprocess.run(["git", "checkout", "-q", "--", "."], cwd=repo, check=True, env=env)
+            diff = ob.read_diff(prof, trees[0]["path"])
+            self.assertEqual(diff["scope"], "uncommitted")
+            self.assertEqual([f["path"] for f in diff["files"]], ["new.txt", "새 폴더/"])
+
+    def test_quoted_diff_paths_are_unquoted(self):
+        self.assertEqual(ob._unquote(r"\355\225\234.txt"), "한.txt")
+        self.assertEqual(ob._unquote(r"tab\there \"q\" back\\slash"), 'tab\there "q" back\\slash')
+        m = ob._DIFF_FILE.match('diff --git "a/x\\ty" "b/x\\ty"')
+        self.assertEqual(ob._unquote(m.group("q")), "x\ty")
+
+    def test_diff_reuses_the_worktree_scan_and_skips_known_folders(self):
+        import shutil
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        with tempfile.TemporaryDirectory() as d:
+            repo = self._repo(Path(d))
+            (repo / "sub").mkdir()
+            prof = Path(d) / "prof"
+            prof.mkdir()
+            self._db_many(prof, [str(repo), str(repo / "sub"), str(repo)])
+            calls = []
+            real = ob._git
+
+            def spy(args, cwd, timeout=ob.GIT_TIMEOUT, hardened=None):
+                calls.append(args[0])
+                return real(args, cwd, timeout, hardened)
+            with mock.patch.object(ob, "_git", spy):
+                trees = ob.read_worktrees(prof)
+                self.assertEqual(calls.count("rev-parse"), 1, calls)  # repo/sub is inside a known worktree
+                calls.clear()
+                ob.read_diff(prof, trees[0]["path"])
+                self.assertNotIn("rev-parse", calls)  # the kept scan, not a rescan
+                self.assertNotIn("worktree", calls)
+                calls.clear()
+                with mock.patch.object(ob.time, "monotonic", return_value=time.monotonic() + ob.WORKTREES_TTL + 1):
+                    ob.read_diff(prof, trees[0]["path"])
+                self.assertIn("rev-parse", calls)  # stale: scanned again
