@@ -6,7 +6,7 @@ import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
 import { useStore } from "../state/store";
-import { Avatar, GridIcon } from "../ui";
+import { Avatar, GridIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
 import { Appearance } from "./Appearance";
@@ -281,7 +281,7 @@ function BotCard({ bot }: { bot: Bot }) {
         <span className="bc-model">{bot.model || "—"}</span>
         {places.map(([src, n]) => (
           <span key={src} className="bc-place" title={`${n} ${placeName(src)} sessions`}>
-            <i className={`src-sq src-${src}`} />
+            <SourceIcon source={src} size={11} />
             {n}
           </span>
         ))}

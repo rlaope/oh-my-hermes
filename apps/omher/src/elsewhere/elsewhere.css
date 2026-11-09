@@ -20,7 +20,8 @@
 }
 .ew-pd {
   display: flex;
-  gap: 3px;
+  align-items: center;
+  gap: 4px;
 }
 
 /* source label: square + name */
@@ -44,20 +45,35 @@
 .ew-msg .b {
   white-space: normal;
 }
+/* The thread link: the app's mark, then the underlined place ("[Slack] #og-dev"). Only the text is
+   underlined, so the mark reads as an icon, not as part of the word. */
 .ew-link,
 .ew-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: -2px;
   color: var(--link);
+  white-space: nowrap;
+}
+.ew-link .ew-lt {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
-  white-space: nowrap;
 }
 .ew-where {
   color: var(--muted);
-  text-decoration: none;
 }
 .ew-link:hover {
   color: var(--ink);
+}
+.ew-link .src-ic,
+.ew-where .src-ic {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+.ew-link:hover .src-ic {
+  transform: scale(1.12);
 }
 .ew-working {
   display: inline-flex;
