@@ -1,0 +1,9 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_80420ea8   task: 1
+goal: Media in: MEDIA lines render inline [dag:omher-v02/t1-media-in]
+started: 2026-11-09 20:29:07
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)
+21:01:04 final    | status=completed duration=1916.95s summary: T1 is finished and every VERIFY gate passes. `MEDIA:/path` lines in a bot answer no longer show as text; they render below the answer as an image, video, audio player or file card. It's one signed-off commit, `66a5bb11d` on `feat/omher-v02-media`, not pushed. **What was built** - **UI (`Media.tsx`, `mediaLines.ts`, `media.css`):** - Images are tiles up to 360px; clicking one opens a full-window li …(+95 chars)
+21:23:08 final    | end status=completed exit_reason=completed

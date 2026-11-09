@@ -1,0 +1,9 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_296145a8   task: 0
+goal: Independent verify vs base + live probes [dag:codex-coexist/t5-verify]
+started: 2026-11-03 14:34:02
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)
+15:37:37 final    | status=completed duration=3814.9s summary: **Verdict: HOLD.** Two real defects block a PASS. Both fixes are a few lines; I didn't touch the code. I overwrote `t5-verify.md` with 14 numbered findings. **Tests and spot checks** - **Tests:** the five modules on HEAD with the system TMPDIR gave `Ran 150 tests` / `OK (skipped=19)`. The skips are the Linux bwrap tests. The live zsh heredoc test ran and passed inside the macOS fence. - **Real pac …(+99 chars)
+15:37:38 final    | end status=completed exit_reason=completed

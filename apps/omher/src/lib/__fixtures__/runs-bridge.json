@@ -25,6 +25,7 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
      "started": 1793257616.167948,
      "ended": 1793263068.886291,
      "handoff": "tool.md",
@@ -45,6 +46,7 @@
       }
      ],
      "category": "unspecified-low",
+     "route": "unspecified-low",
      "started": 1793257616.167948,
      "ended": 1793258330.069538,
      "handoff": "bench.md",
@@ -67,6 +69,7 @@
       }
      ],
      "category": "unspecified-low",
+     "route": "unspecified-low",
      "started": 1793263068.886291,
      "ended": 1793264111.802546,
      "handoff": "adversarial.md",
@@ -90,6 +93,7 @@
       }
      ],
      "category": "unspecified-low",
+     "route": "unspecified-low",
      "started": 1793264111.802546,
      "handoff": "measure.md",
      "layer": 2
@@ -103,6 +107,7 @@
      "state": "cancelled",
      "attempts": [],
      "category": "unspecified-high",
+     "route": "unspecified-high",
      "layer": 3
     }
    ],
@@ -136,6 +141,7 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
      "started": 1793158622.319177,
      "ended": 1793159842.3633559,
      "handoff": "implement.md",
@@ -165,6 +171,7 @@
       }
      ],
      "category": "unspecified-low",
+     "route": "unspecified-low",
      "started": 1793159842.3633559,
      "ended": 1793164791.1733289,
      "handoff": "verify.md",
@@ -202,6 +209,8 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681151.350927,
      "ended": 1793681865.127282,
@@ -223,6 +232,8 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681151.350927,
      "ended": 1793681865.072238,
@@ -247,6 +258,8 @@
       }
      ],
      "category": "unspecified-low",
+     "route": "unspecified-low",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681151.350927,
      "ended": 1793682829.018086,
@@ -279,6 +292,8 @@
       }
      ],
      "category": "review",
+     "route": "review",
+     "role": "verify",
      "started": 1793682829.018086,
      "ended": 1793688259.688023,
      "handoff": "t5-verify.md",
@@ -300,11 +315,14 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681934.135648,
      "ended": 1793682828.9664419,
      "handoff": "t1-hermes.md",
-     "layer": 0
+     "repairOf": "t1-discovery",
+     "layer": 1
     },
     {
      "id": "t4-fence",
@@ -322,11 +340,14 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681934.135648,
      "ended": 1793682828.991691,
      "handoff": "t4-fence.md",
-     "layer": 0
+     "repairOf": "t1-discovery",
+     "layer": 1
     }
    ],
    "started": 1793681142.2275681,
@@ -360,6 +381,8 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681151.350927,
      "ended": 1793681865.127282,
@@ -381,6 +404,8 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681151.350927,
      "ended": 1793681865.072238,
@@ -403,6 +428,8 @@
       }
      ],
      "category": "unspecified-low",
+     "route": "unspecified-low",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681151.350927,
      "layer": 1
@@ -418,6 +445,8 @@
      "state": "waiting",
      "attempts": [],
      "category": "review",
+     "route": "review",
+     "role": "verify",
      "layer": 2
     },
     {
@@ -436,11 +465,14 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681934.135648,
      "ended": 1793682828.9664419,
      "handoff": "t1-hermes.md",
-     "layer": 0
+     "repairOf": "t1-discovery",
+     "layer": 1
     },
     {
      "id": "t4-fence",
@@ -458,11 +490,14 @@
       }
      ],
      "category": "unspecified-high",
+     "route": "unspecified-high",
+     "role": "build",
      "lane": "fanout",
      "started": 1793681934.135648,
      "ended": 1793682828.991691,
      "handoff": "t4-fence.md",
-     "layer": 0
+     "repairOf": "t1-discovery",
+     "layer": 1
     }
    ],
    "started": 1793681142.2275681,

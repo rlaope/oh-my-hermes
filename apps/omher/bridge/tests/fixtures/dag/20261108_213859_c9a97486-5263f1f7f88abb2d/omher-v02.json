@@ -1,0 +1,291 @@
+{
+ "cancelled_at": null,
+ "claim_boundary": "The plan a parent agent declared for a dag-ulw run and the outcomes it settled. A settled outcome is the parent's judgement; a child's status is Hermes' report. Not execution, verification, review, CI or merge evidence.",
+ "defined_at": 1794223728.943542,
+ "digest": "963230a2fa503062",
+ "goal": "omher v0.2: media in/out, Runs graph for dag/subagents/CLI, logos, usage, accounts, site; all gates green",
+ "lint": [
+  "no_review_node"
+ ],
+ "name": "omher v0.2 orchestrator",
+ "nodes": [
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794223728.943542,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "12a0b535f + e29e8ba35. Parent re-ran: tsc 0, vitest 46, bridge OK, full playwright 76 passed, boundary OK, diff-check clean. Chat-line deep link deferred to T4/T5 (no run id in chat events yet).",
+     "settled_at": 1794227362.931766
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t0-t3-runs",
+   "label": "Runs model + dag adapter + Runs tab",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-runs"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794223728.943542,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "17c11dfa8 AgentIcon + 22 marks + credits; fe8398d6f usage.read + sidebar rings. Parent re-ran: typecheck 0 errors, vitest 43, bridge OK, usage.spec 5 passed, boundary OK, diff-check clean.",
+     "settled_at": 1794226142.315711
+    }
+   ],
+   "category": "visual-engineering",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t7-t10-usage",
+   "label": "Agent logos + usage meters",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-acct"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794223728.943542,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "66a5bb11d. Parent re-ran: tsc 0, vitest 39, bridge OK, full playwright 72 passed, boundary OK, diff-check clean. Real-app Open/Show in Finder not exercised.",
+     "settled_at": 1794227362.9607449
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t1-media-in",
+   "label": "Media in: MEDIA lines render inline",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-media"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794227362.9607449,
+     "n": 1,
+     "outcome": "",
+     "provider_error": false,
+     "reason": "",
+     "settled_at": null
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [
+    "t1-media-in"
+   ],
+   "found_by": "",
+   "id": "t2-attach",
+   "label": "Media out: + menu, drop, paste, chips",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-media"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794227362.931766,
+     "n": 1,
+     "outcome": "",
+     "provider_error": false,
+     "reason": "",
+     "settled_at": null
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [
+    "t0-t3-runs"
+   ],
+   "found_by": "",
+   "id": "t4-t5-graph",
+   "label": "Big-run layout, full view, routing on cards",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-runs"
+   ]
+  },
+  {
+   "attempts": [],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [
+    "t0-t3-runs",
+    "t4-t5-graph"
+   ],
+   "found_by": "",
+   "id": "t6-cli-runs",
+   "label": "Claude/Codex/pi/omp/grok session runs",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-runs"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794226142.315711,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "3d21d5bc7; parent re-ran all gates (e2e 80, cargo 27) and real read_accounts shows no tokens",
+     "settled_at": 1794229841.4799051
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [
+    "t7-t10-usage"
+   ],
+   "found_by": "",
+   "id": "t11-accounts",
+   "label": "Accounts: stacked, switch, auto-switch",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-acct"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1794227362.931766,
+     "n": 1,
+     "outcome": "",
+     "provider_error": false,
+     "reason": "",
+     "settled_at": null
+    }
+   ],
+   "category": "visual-engineering",
+   "cycle": 0,
+   "depends_on": [
+    "t0-t3-runs",
+    "t7-t10-usage"
+   ],
+   "found_by": "",
+   "id": "t8-site",
+   "label": "Site: short copy, Download app, beam, new shot",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02-site"
+   ]
+  },
+  {
+   "attempts": [],
+   "category": "review",
+   "cycle": 0,
+   "depends_on": [
+    "t11-accounts",
+    "t2-attach",
+    "t6-cli-runs",
+    "t8-site"
+   ],
+   "found_by": "",
+   "id": "t9-verify",
+   "label": "Closing gate: integrate lanes, full gates, real-data look",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "verify",
+   "write_scope": [
+    "/w/oh-my-hermes-worktrees/v02"
+   ]
+  }
+ ],
+ "repairs": {},
+ "run": "omher-v02",
+ "schema_version": "omh_dag/v1",
+ "session_id": "20261108_213859_c9a97486",
+ "topology": {
+  "bottlenecks": [
+   {
+    "blocks": 4,
+    "node": "t0-t3-runs"
+   },
+   {
+    "blocks": 3,
+    "node": "t7-t10-usage"
+   },
+   {
+    "blocks": 2,
+    "node": "t1-media-in"
+   }
+  ],
+  "critical_path": [
+   "t0-t3-runs",
+   "t4-t5-graph",
+   "t6-cli-runs",
+   "t9-verify"
+  ],
+  "layers": [
+   [
+    "t0-t3-runs",
+    "t7-t10-usage",
+    "t1-media-in"
+   ],
+   [
+    "t2-attach",
+    "t4-t5-graph",
+    "t11-accounts",
+    "t8-site"
+   ],
+   [
+    "t6-cli-runs"
+   ],
+   [
+    "t9-verify"
+   ]
+  ]
+ },
+ "updated_at": 1794229841.4799051,
+ "workspace_root": "/w/.hermes/profiles/kami/workspace"
+}

@@ -1,0 +1,34 @@
+{
+  "delegation_id": "deleg_1741f184",
+  "started": "2026-11-03 13:59:18",
+  "task_count": 3,
+  "model": "claude-opus-5-5",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "[dag:codex-coexist/t1-hermes] IMPLEMENT (write code, not review): make OMH's Codex executor skill discovery read the same skill roots Codex does (~/.agents/skills, repo .agents/skills, $CODEX_HOME), so fanout units get OMH skill suggestions instead of unrelated personal skills.",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_1741f184/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    },
+    {
+      "index": 1,
+      "goal": "[dag:codex-coexist/t4-fence] IMPLEMENT (write code, not review): make Codex fanout units able to use zsh heredocs and uv inside OMH's macOS fence by pointing TMPPREFIX and UV_CACHE_DIR into the unit's confinement tmp dir, without widening the fence.",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_1741f184/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    },
+    {
+      "index": 2,
+      "goal": "[dag:codex-coexist/t3-doctor] IMPLEMENT (write code, not review): add a read-only `agent_skills_pack` check to omh doctor that warns (next action `omh update`) when the ~/.agents/skills OMH pack is stale or locally modified, and stays quiet when absent or fresh.",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_1741f184/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    }
+  ],
+  "completed": "2026-11-03 14:08:24"
+}

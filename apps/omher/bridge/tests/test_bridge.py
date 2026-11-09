@@ -1075,7 +1075,9 @@ class Runs(unittest.TestCase):
             self.assertEqual([r["id"] for r in runs], ["dag:20261102_235818_fcfb1bdd/codex-coexist",
                                                        "dag:20261026_134438_3ae70257/omh-dap"])  # newest first
             fan, cancelled = runs
-            self.assertEqual((fan["state"], fan["counts"]), ("done", {"nodes": 6, "done": 5, "running": 0, "failed": 1}))
+            # the failed discovery node was fixed by its two repairs: repaired, not an open failure
+            self.assertEqual((fan["state"], fan["counts"]), ("done", {"nodes": 6, "done": 5, "running": 0, "failed": 0,
+                                                                      "repaired": 1}))
             self.assertEqual(cancelled["state"], "cancelled")
             self.assertNotIn("nodes", fan)
             got = ob.DagRuns().get("kami", prof, fan["id"])
@@ -1164,6 +1166,55 @@ class Runs(unittest.TestCase):
             self.assertEqual(states, sorted(states, key=lambda s: s != "running"))  # running first
             got = ob.DagRuns().get("kami", prof, runs[0]["id"])
             self.assertEqual(len(got["run"]["nodes"]), runs[0]["counts"]["nodes"])
+
+
+FIX = HERE / "fixtures"
+
+
+class RunsJoin(unittest.TestCase):
+    """T5: who ran each node. Delegation folders give the helper's model, OMH's route records the category it went
+    out under, a run's fanout unit files the agent CLI (codex) that took a fanout node. Read-only."""
+
+    def test_route_table_keeps_the_newest_record_per_category_from_the_bots_sessions(self):
+        records = ob.load_route_records(FIX)
+        self.assertGreater(len(records), 5)
+        table = ob.route_table(records, {"20261108_213859_c9a97486"})
+        self.assertEqual(table["unspecified-high"]["model"], "claude-opus-5-5")
+        self.assertEqual(table["review"], {"model": "claude-opus-5-5", "provider": "claude-proxy", "effort": "high"})
+        # another session's records are not this bot's
+        self.assertEqual(ob.route_table(records, {"nobody"}), {})
+
+    def test_fanout_owners_name_the_agent_cli_and_skip_anything_else(self):
+        folder = FIX / "dag" / "20261102_235818_fcfb1bdd-96bc7f91f27a766c" / "codex-coexist"
+        owners = ob.fanout_owners(folder)
+        self.assertEqual(owners, {"t1-discovery": "codex", "t2-status-update": "codex", "t3-doctor": "codex",
+                                  "t1-hermes": "codex", "t4-fence": "codex"})
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d)
+            (f / "fanout-abc123-units.json").write_text("{not json", encoding="utf-8")
+            (f / "notes-units.json").write_text('{"units": [{"unit_id": "x", "owner": "codex"}]}', encoding="utf-8")
+            self.assertEqual(ob.fanout_owners(f), {})
+            self.assertEqual(ob.fanout_owners(f / "missing"), {})
+
+    def test_every_node_of_the_live_fanout_gets_a_model_to_show(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261102_235818_fcfb1bdd"])
+            (Path(d) / "omh" / "routing").mkdir(parents=True)
+            (Path(d) / "omh" / "routing" / "route-provenance.json").write_text(
+                (FIX / "routing" / "route-provenance.json").read_text(encoding="utf-8"), encoding="utf-8")
+            before = _mtimes(dag, Path(d) / "omh" / "routing")
+            got = ob.DagRuns().get("kami", prof, "dag:20261102_235818_fcfb1bdd/codex-coexist")
+            by = {n["id"]: n for n in got["run"]["nodes"]}
+            self.assertEqual(by["t1-discovery"]["executor"], "codex")
+            self.assertEqual(by["t5-verify"]["role"], "verify")
+            self.assertEqual(_mtimes(dag, Path(d) / "omh" / "routing"), before, "a runs read wrote something")
+
+    def test_a_failure_its_repairs_fixed_counts_as_repaired(self):
+        nodes = [{"id": "a", "state": "failed"}, {"id": "b", "state": "done", "repairOf": "a"},
+                 {"id": "c", "state": "failed"}, {"id": "d", "state": "running", "repairOf": "c"}]
+        self.assertEqual(ob.repaired_ids(nodes), {"a"})
+        self.assertEqual(ob.run_summary({"id": "x", "nodes": nodes})["counts"],
+                         {"nodes": 4, "done": 1, "running": 1, "failed": 1, "repaired": 1})
 
 
 class RunsOps(BridgeCase):

@@ -533,7 +533,9 @@ def dag_to_run(record: dict, bot: str, handoffs=()) -> dict:
         node = {"id": n["id"], "label": str(n.get("label") or n["id"]),
                 "deps": [d for d in n.get("depends_on") or [] if d in ids], "state": state, "attempts": []}
         if isinstance(n.get("category"), str) and n["category"]:
-            node["category"] = n["category"]
+            node["category"] = node["route"] = n["category"]
+        if isinstance(n.get("role"), str) and n["role"]:
+            node["role"] = n["role"]
         for a in attempts:
             item = {"n": int(a["n"]) if isinstance(a.get("n"), int) else len(node["attempts"]) + 1,
                     "outcome": str(a.get("outcome") or "") or "open"}
@@ -555,12 +557,22 @@ def dag_to_run(record: dict, bot: str, handoffs=()) -> dict:
         if n["id"] in handoffs:
             node["handoff"] = f"{n['id']}.md"
         nodes.append(node)
-    layers = layer_of(nodes)
-    for node in nodes:
-        node["layer"] = layers[node["id"]]
-    by_id = {node["id"]: node for node in nodes}
     repairs = record.get("repairs")
     groups: dict = repairs if isinstance(repairs, dict) else {}
+    by_id = {node["id"]: node for node in nodes}
+    # each repair member points at the node it repairs (the latest group naming it wins), so the graph can
+    # draw that link and place the repair after the failure
+    for target, g in groups.items():
+        if target not in by_id or not isinstance(g, list):
+            continue
+        for group in g:
+            for m in group if isinstance(group, list) else []:
+                if m in by_id and m != target:
+                    by_id[m]["repairOf"] = target
+    layers = layer_of([{"id": node["id"], "deps": node["deps"] + ([node["repairOf"]] if "repairOf" in node else [])}
+                       for node in nodes])
+    for node in nodes:
+        node["layer"] = layers[node["id"]]
     superseded = {m for g in groups.values() if isinstance(g, list) for older in g[:-1] if isinstance(older, list)
                   for m in older if by_id.get(m, {}).get("state") != "done"}
 
@@ -595,12 +607,360 @@ def dag_to_run(record: dict, bot: str, handoffs=()) -> dict:
     return out
 
 
+def repaired_ids(nodes: list[dict]) -> set[str]:
+    """Failed (or blocked) nodes whose repairs all finished: OMH counts them as satisfied."""
+    fixes: dict[str, list[dict]] = {}
+    for n in nodes:
+        if n.get("repairOf"):
+            fixes.setdefault(n["repairOf"], []).append(n)
+    return {n["id"] for n in nodes if n["state"] in ("failed", "blocked") and fixes.get(n["id"])
+            and all(m["state"] == "done" for m in fixes[n["id"]])}
+
+
 def run_summary(run: dict) -> dict:
+    """A run without its nodes, plus counts. `failed` is open failures only; a failure its repairs fixed counts as
+    `repaired` (and appears only when there is one)."""
     out = {k: v for k, v in run.items() if k != "nodes"}
     states = [n["state"] for n in run["nodes"]]
+    fixed = len(repaired_ids(run["nodes"]))
     out["counts"] = {"nodes": len(states), "done": states.count("done"), "running": states.count("running"),
-                     "failed": states.count("failed") + states.count("blocked")}
+                     "failed": states.count("failed") + states.count("blocked") - fixed}
+    if fixed:
+        out["counts"]["repaired"] = fixed
     return out
+
+
+# ---------------------------------------------------------------- runs: Hermes delegate_task fan-outs (read-only)
+
+DELEG_ID = re.compile(r"^deleg_[0-9a-f]{6,32}$")
+DAG_MARK = re.compile(r"\[dag:([a-z0-9][a-z0-9-]{0,31})/([a-z0-9][a-z0-9-]{0,31})\]")
+SUMMARY_MAX = 600       # chars of a helper's final summary sent to the UI
+DELEG_LIMIT = 40        # newest delegation folders read per bot
+LOG_HEAD = 2048         # bytes read from the top of a task log (goal, started)
+LOG_TAIL = 6144         # bytes read from its end (the `final` lines)
+STALE_AFTER = 3600.0    # a "running" task whose log has not moved for this long has stopped reporting
+ROUTE_FRESH = 900.0     # OMH's own window: a route record older than this no longer describes a dispatch
+_FINAL = re.compile(r"^\d\d:\d\d:\d\d final\s+\|\s*(.*)$")
+_TASK_STATE = {"running": "running", "completed": "done", "failed": "failed", "error": "failed",
+               "timeout": "failed", "stalled": "failed", "interrupted": "cancelled", "cancelled": "cancelled"}
+_ROUTE_WHY = {"head": "chain head", "fallback": "fallback", "exhausted_to_inherit": "chain exhausted"}
+
+
+def _local_ts(text, tz=None) -> float | None:
+    """`2026-11-09 21:29:55` (Hermes writes local time) as epoch seconds; `tz` pins the zone for tests."""
+    try:
+        dt = datetime.strptime(str(text), "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    return (dt.replace(tzinfo=tz) if tz is not None else dt).timestamp()
+
+
+def _clip(text: str, n: int) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def read_task_log(path: Path) -> dict:
+    """Head lines (goal, started) and the `final` lines of one `task-N.log`; the transcript between is skipped."""
+    out: dict = {}
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(LOG_HEAD).decode("utf-8", "replace")
+            size = fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, size - LOG_TAIL))
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return out
+    for line in head.split("\n")[:6]:
+        key, _, value = line.partition(": ")
+        if key in ("goal", "started") and value.strip():
+            out[key] = value.strip()
+    for line in tail.split("\n"):
+        m = _FINAL.match(line)
+        if not m:
+            continue
+        body = m.group(1)
+        if body.startswith("end "):
+            for k, v in re.findall(r"(status|exit_reason)=(\S+)", body):
+                out[k] = v
+            if " error: " in body:
+                out["error"] = _clip(body.split(" error: ", 1)[1], SUMMARY_MAX)
+        elif "summary:" in body:
+            out["summary"] = _clip(body.split("summary:", 1)[1], SUMMARY_MAX)
+            st = re.search(r"status=(\S+)", body)
+            if st:
+                out.setdefault("status", st.group(1))
+    return out
+
+
+def load_route_records(omh_home: Path) -> list[dict]:
+    """OMH's `routing/route-provenance.json` (what `omh_delegate_route` wrote before a dispatch), oldest first.
+    Anything unreadable is no records."""
+    try:
+        raw = json.loads((omh_home / "routing" / "route-provenance.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, dict) or raw.get("schema_version") != "delegation_route_provenance/v1":
+        return []
+    out = []
+    for r in raw.get("records") or []:
+        if isinstance(r, dict) and _num(r.get("written_at")) is not None and isinstance(r.get("origin"), str):
+            out.append(r)
+    return sorted(out, key=lambda r: r["written_at"])
+
+
+def route_for(records: list[dict], started: float, model: str, sessions: set[str]) -> dict | None:
+    """The route record that preceded a dispatch, by OMH's own pairing rule: the newest record written before
+    the child started, no older than ROUTE_FRESH, not a `cleared` one, naming the child's model, and written by
+    one of this bot's sessions. Hermes stamps a start in whole seconds (truncated), so a record from inside that
+    second may have come after the dispatch: only records before the stamp count."""
+    for r in reversed(records):
+        if r.get("session_id") and r["session_id"] not in sessions:
+            continue
+        if r["written_at"] > started:
+            continue
+        if started - r["written_at"] > ROUTE_FRESH or r.get("origin") == "cleared":
+            return None
+        if model and model in (r.get("alias"), r.get("wire_model")):
+            route = {"category": str(r.get("category") or ""), "origin": r["origin"]}
+            for src, dst in (("provider", "provider"), ("reasoning_effort", "effort"), ("from_alias", "from")):
+                if isinstance(r.get(src), str) and r[src]:
+                    route[dst] = r[src]
+            return route if route["category"] else None
+        return None
+    return None
+
+
+class Delegations:
+    """Reads `<profile>/cache/delegation/live/deleg_*/` (Hermes' delegate_task manifest plus the head and final
+    lines of each task log) into plain dicts. Cached per folder by the mtimes and sizes inside it."""
+
+    def __init__(self, tz=None):
+        self.tz = tz
+        self._cache: dict[str, tuple[tuple, dict]] = {}
+
+    def _one(self, folder: Path, now: float) -> dict | None:
+        try:
+            files = sorted(p for p in folder.iterdir() if p.name == "manifest.json" or re.match(r"^task-\d+\.log$", p.name))
+            stamp = tuple((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in files if not p.is_symlink())
+        except OSError:
+            return None
+        hit = self._cache.get(str(folder))
+        if hit and hit[0] == stamp:
+            d = hit[1]
+        else:
+            try:
+                man = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return hit[1] if hit else None
+            if not isinstance(man, dict) or not isinstance(man.get("tasks"), list):
+                return None
+            d = {"id": folder.name, "started": _local_ts(man.get("started"), self.tz) or 0.0, "tasks": []}
+            ended = _local_ts(man.get("completed"), self.tz)
+            if ended is not None:
+                d["ended"] = ended
+            for key in ("model", "provider"):
+                if isinstance(man.get(key), str) and man[key]:
+                    d[key] = man[key]
+            for t in man["tasks"]:
+                if not isinstance(t, dict) or not isinstance(t.get("index"), int):
+                    continue
+                log = folder / f"task-{t['index']}.log"
+                head = read_task_log(log) if log.is_file() and not log.is_symlink() else {}
+                goal = str(t.get("goal") or head.get("goal") or "")
+                task = {"index": t["index"], "goal": _clip(DAG_MARK.sub("", goal), 200),
+                        "status": str(t.get("status") or head.get("status") or "running")}
+                if task["status"] == "running" and head.get("status"):
+                    task["status"] = head["status"]  # the log's final line can land before the manifest's
+                started = _local_ts(head.get("started"), self.tz)
+                if started is not None:
+                    task["started"] = started
+                model = t.get("model") or d.get("model")
+                if isinstance(model, str) and model:
+                    task["model"] = model
+                for key in ("summary", "error"):
+                    if head.get(key):
+                        task[key] = head[key]
+                m = DAG_MARK.search(goal)
+                if m:
+                    task["dag"] = {"run": m.group(1), "node": m.group(2)}
+                try:
+                    task["_mtime"] = log.stat().st_mtime
+                except OSError:
+                    task["_mtime"] = d["started"]
+                d["tasks"].append(task)
+            self._cache[str(folder)] = (stamp, d)
+        out = json.loads(json.dumps(d))
+        for task in out["tasks"]:
+            if task["status"] == "running" and now - task.pop("_mtime") > STALE_AFTER:
+                task["status"] = "stalled"
+                task.setdefault("error", "No log update for over an hour; the helper stopped reporting.")
+            task.pop("_mtime", None)
+        return out
+
+    def list(self, profile_dir: Path, now: float | None = None) -> list[dict]:
+        root = profile_dir / "cache" / "delegation" / "live"
+        if not root.is_dir() or root.is_symlink():
+            return []
+        now = time.time() if now is None else now
+        try:
+            folders = [p for p in root.iterdir() if DELEG_ID.match(p.name) and p.is_dir() and not p.is_symlink()]
+        except OSError:
+            return []
+        folders.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return [d for d in (self._one(f, now) for f in folders[:DELEG_LIMIT]) if d is not None]
+
+
+def attach_routes(delegs: list[dict], records: list[dict], sessions: set[str]) -> list[dict]:
+    """Give each delegation the OMH route record that prepared it, when one pairs (`route_for`)."""
+    for d in delegs:
+        model = d.get("model") or next((t["model"] for t in d["tasks"] if t.get("model")), "")
+        route = route_for(records, d["started"], model, sessions) if d["started"] else None
+        if route:
+            d["route"] = route
+    return delegs
+
+
+def _task_node(t: dict, d: dict) -> dict:
+    """The node fields one delegation task gives (model, provider, effort, route, summary)."""
+    out = {}
+    if t.get("model"):
+        out["model"] = t["model"]
+    route = d.get("route") or {}
+    provider = d.get("provider") or route.get("provider")
+    if provider:
+        out["provider"] = provider
+    if route.get("effort"):
+        out["effort"] = route["effort"]
+    if route.get("category"):
+        out["route"] = route["category"]
+        why = _ROUTE_WHY.get(route.get("origin", ""))
+        if why:
+            out["routeWhy"] = why + (f" from {route['from']}" if why == "fallback" and route.get("from") else "")
+    if t.get("summary") or t.get("error"):
+        out["summary"] = t.get("summary") or t.get("error")
+    return out
+
+
+def delegation_to_run(d: dict, bot: str) -> dict:
+    """One delegate_task fan-out as a one-layer AgentRun (src/lib/runs.ts `fromDelegation` is the same mapping)."""
+    nodes = []
+    for t in d["tasks"]:
+        state = _TASK_STATE.get(t["status"], "running")
+        att = {"n": 1, "outcome": t["status"]}
+        if t.get("started") is not None or d["started"]:
+            att["started"] = t.get("started", d["started"])
+        if state != "running" and d.get("ended") is not None:
+            att["ended"] = d["ended"]
+        if state in ("failed", "cancelled") and (t.get("error") or t.get("summary")):
+            att["reason"] = t.get("error") or t.get("summary")
+        node = {"id": f"task-{t['index']}", "label": t["goal"] or f"Task {t['index'] + 1}", "deps": [], "layer": 0,
+                "state": state, "attempts": [att]}
+        node.update(_task_node(t, d))
+        if "started" in att:
+            node["started"] = att["started"]
+        if "ended" in att:
+            node["ended"] = att["ended"]
+        nodes.append(node)
+    states = [n["state"] for n in nodes]
+    run_state = ("running" if "running" in states else "failed" if "failed" in states
+                 else "cancelled" if "cancelled" in states else "done")
+    first = nodes[0]["label"] if nodes else d["id"]
+    run = {"id": f"delegate:{d['id']}", "kind": "delegate", "owner": {"type": "bot", "id": bot},
+           "title": first + (f" +{len(nodes) - 1}" if len(nodes) > 1 else ""), "state": run_state, "nodes": nodes,
+           "started": d["started"], "updated": max([d["started"], d.get("ended") or 0.0]
+                                                   + [n.get("started", 0.0) for n in nodes])}
+    if run_state != "running" and d.get("ended") is not None:
+        run["ended"] = d["ended"]
+    return run
+
+
+FANOUT_UNITS = re.compile(r"^fanout-[0-9a-f]{6,32}-units\.json$")
+
+
+def fanout_owners(folder: Path) -> dict[str, str]:
+    """{node id: owner} from a dag run's own `fanout-*-units.json` files (what `omh_dag export` handed to an agent
+    CLI such as codex). Plain files inside the run folder only; anything unreadable is skipped."""
+    out: dict[str, str] = {}
+    if not folder.is_dir() or folder.is_symlink():
+        return out
+    for f in sorted(folder.iterdir()):
+        if not FANOUT_UNITS.match(f.name) or f.is_symlink() or not f.is_file():
+            continue
+        try:
+            units = json.loads(f.read_text(encoding="utf-8")).get("units")
+        except (OSError, ValueError, AttributeError):
+            continue
+        for u in units if isinstance(units, list) else []:
+            if isinstance(u, dict) and isinstance(u.get("unit_id"), str) and isinstance(u.get("owner"), str) and u["owner"]:
+                out[u["unit_id"]] = u["owner"]
+    return out
+
+
+def attach_owners(run: dict, owners: dict[str, str]) -> dict:
+    """Name the agent CLI that ran each fanout node (`executor`), when the run's unit files say so."""
+    for node in run["nodes"]:
+        if node.get("lane") == "fanout" and owners.get(node["id"]):
+            node["executor"] = owners[node["id"]]
+    return run
+
+
+def route_table(records: list[dict], sessions: set[str]) -> dict[str, dict]:
+    """{category: {model, provider?, effort?}}: what each routing category resolved to in this bot's newest route
+    record (OMH's `route-provenance.json`), so a node no helper has reported on can show the model it goes to."""
+    table: dict[str, dict] = {}
+    for r in records:  # oldest first: a newer record replaces an older one
+        if r.get("origin") == "cleared" or (r.get("session_id") and r["session_id"] not in sessions):
+            continue
+        cat, model = r.get("category"), r.get("wire_model") or r.get("alias")
+        if not (isinstance(cat, str) and cat and isinstance(model, str) and model):
+            continue
+        row = {"model": model}
+        for src, dst in (("provider", "provider"), ("reasoning_effort", "effort")):
+            if isinstance(r.get(src), str) and r[src]:
+                row[dst] = r[src]
+        table[cat] = row
+    return table
+
+
+def attach_planned(run: dict, table: dict[str, dict]) -> dict:
+    """`planned` = the route table's model for a node with no reported model and no named executor."""
+    for node in run["nodes"]:
+        if not node.get("model") and not node.get("executor") and table.get(node.get("route") or ""):
+            node["planned"] = dict(table[node["route"]])
+    return run
+
+
+def attach_delegations(run: dict, delegs: list[dict]) -> dict:
+    """Fill a dag run's nodes with what their helpers ran on (model, provider, effort, route record, summary).
+    A task belongs to a node through the `[dag:<run>/<node>]` marker in its goal; attempt k pairs with the
+    first matching task that started at or after that attempt was handed out. The dag's own fields win."""
+    name = run["id"].rsplit("/", 1)[-1]
+    tasks = sorted(((t, d) for d in delegs for t in d["tasks"]
+                    if t.get("dag", {}).get("run") == name and d["started"] >= run["started"] - 60),
+                   key=lambda td: td[0].get("started", td[1]["started"]))
+    for node in run["nodes"]:
+        mine = [(t, d) for t, d in tasks if t["dag"]["node"] == node["id"]]
+        if not mine:
+            continue
+        used: set[int] = set()
+        last = None
+        for att in node["attempts"]:
+            at = att.get("started")
+            pick = next((i for i, (t, d) in enumerate(mine) if i not in used
+                         and (at is None or t.get("started", d["started"]) >= at - 5)), None)
+            if pick is None:
+                continue
+            used.add(pick)
+            t, d = mine[pick]
+            if t.get("model"):
+                att["model"] = t["model"]
+            last = (t, d)
+        if last is None:
+            continue
+        for k, v in _task_node(*last).items():
+            node.setdefault(k, v)
+    return run
 
 
 class DagRuns:
@@ -608,8 +968,9 @@ class DagRuns:
     session in the bot's own state.db. A record caught mid-write keeps its last good parse (cache keyed by
     mtime and size); nothing here writes, settles or retries a run."""
 
-    def __init__(self):
+    def __init__(self, delegations: Delegations | None = None):
         self._cache: dict[str, tuple[tuple[int, int], dict]] = {}
+        self.delegations = delegations or Delegations()
 
     def _record(self, path: Path) -> dict | None:
         key = str(path)
@@ -646,11 +1007,24 @@ class DagRuns:
             return set()
 
     def _owned(self, bot: str, profile_dir: Path):
-        """(json path, record, AgentRun) for each of the bot's runs."""
+        """(json path or None, record or None, AgentRun) for each of the bot's runs: its dag runs with their
+        helpers' models and routes filled in, then its delegate_task fan-outs that belong to no dag run."""
+        mine = self._sessions(profile_dir)
+        home = omh_home_for(profile_dir)
+        records = load_route_records(home)
+        delegs = attach_routes(self.delegations.list(profile_dir), records, mine)
+        table = route_table(records, mine)
+        out = [(path, rec, attach_planned(attach_delegations(run, delegs), table))
+               for path, rec, run in self._dag(bot, profile_dir, mine)]
+        for d in delegs:
+            if d["tasks"] and not any(t.get("dag") for t in d["tasks"]):
+                out.append((None, None, delegation_to_run(d, bot)))
+        return out
+
+    def _dag(self, bot: str, profile_dir: Path, mine: set[str]):
         root = omh_home_for(profile_dir) / "runtime" / "dag"
         if not root.is_dir():
             return []
-        mine = self._sessions(profile_dir)
         out = []
         for path in sorted(root.glob("*/*.json")):
             if path.is_symlink() or path.parent.is_symlink() or not DAG_ID.match(path.stem):
@@ -662,6 +1036,7 @@ class DagRuns:
                 run = dag_to_run(rec, bot, self._handoff_names(root, path, rec))
             except (ValueError, TypeError, KeyError, RecursionError):
                 continue  # a cycle or a malformed record: not drawable, skip it
+            attach_owners(run, fanout_owners(path.parent / path.stem))
             out.append((path, rec, run))
         return out
 
@@ -695,7 +1070,7 @@ class DagRuns:
                 continue
             handoffs = {}
             for node in run["nodes"]:
-                f = self._handoff_file(root, path, node["id"]) if node.get("handoff") else None
+                f = self._handoff_file(root, path, node["id"]) if node.get("handoff") and path else None
                 if f is None:
                     continue
                 try:
@@ -747,6 +1122,18 @@ def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
         text = goals[0] + (f" (+{len(goals) - 1} more)" if len(goals) > 1 else "") if goals else context
     line = " ".join(str(text or "").split())
     return line if len(line) <= n else line[: n - 1] + "…"
+
+
+def dag_parts(args: dict) -> list[dict]:
+    """The `[dag:<run>/<node>]` parts a delegate_task call hands out (its `goal` or each task's), in order."""
+    goals = [args.get("goal")] + [t.get("goal") for t in args.get("tasks") or [] if isinstance(t, dict)]
+    out: list[dict] = []
+    for g in goals:
+        for m in DAG_MARK.finditer(g if isinstance(g, str) else ""):
+            part = {"run": m.group(1), "node": m.group(2)}
+            if part not in out:
+                out.append(part)
+    return out
 
 
 def read_origins(profile_dir: Path, ids: list[str]) -> dict[str, dict]:
@@ -1198,7 +1585,13 @@ class Bridge:
             tool = str(p.get("name") or p.get("tool_name") or "tool")
             context = p.get("context") if isinstance(p.get("context"), str) else ""
             args = p.get("args") if isinstance(p.get("args"), dict) else {}
-            await self.emit("tool.start", name, tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context))
+            extra = {}
+            if tool == "delegate_task":
+                parts = dag_parts(args)
+                if parts:
+                    extra["dag"] = parts
+            await self.emit("tool.start", name, tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context),
+                            **extra)
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
                 skill = str(args.get("name") or context).strip()

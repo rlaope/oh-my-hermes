@@ -28,6 +28,8 @@ RULES = (
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
     "omher reads OMH dag run records (`<omh home>/runtime/dag/*/*.json`) and their handoff files only for runs whose\n    session is in the bot's own `state.db`",
     "never settles, retries or cancels a run; the Runs tab is read-only.",
+    "For the Runs graph omher also reads, never writes, Hermes' delegate_task folders",
+    "and uses only the records written by the bot's own sessions.",
 )
 
 
