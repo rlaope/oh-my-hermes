@@ -363,8 +363,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._recalled: dict[str, str] = {}
         self._recalled_blocks = ""
         self._prepared_record_revisions: dict[str, str] = {}
-        # The records the current pack lists by name in its `<record_index>`,
-        # as `listed:<revision>` tokens for `_recalled`.
+        # The records the current unanswered pack withholds (no query overlap,
+        # or no query terms), as `listed:<revision>` tokens for `_recalled`.
         self._prepared_listed: dict[str, str] = {}
         self._pack_blocks_digest = ""
         # True when the current pack left out a record only because it was
@@ -643,7 +643,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 self._served_recorded = True
                 self._record_served(self._prepared_record_ids)
                 self._recalled.update(self._prepared_record_revisions)
-            # Listed by name: held for later unanswered packs, never over a
+            # Withheld: held for later unanswered packs, never over a
             # record the conversation holds in full at this revision. A full
             # hold at an older revision is replaced: that text is stale, and
             # keeping it would list the revised record again every turn.
@@ -1311,10 +1311,12 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # lens, and the selector's own lifecycle, ranking and budget ladder.
         snapshot = read_record_store_snapshot(self._record_homes())
         # A live turn shows in full only what it asked for. A query that
-        # matches nothing, or has no terms at all, lists the records it would
-        # otherwise have shown by name in one `<record_index>` line; pins and
-        # records captured in this conversation stay in full. Records this
-        # conversation already holds -- shown, or listed in an earlier index --
+        # matches nothing, or has no terms at all, withholds the records it
+        # would otherwise have shown and names none of them, so with nothing
+        # else to serve the pack is empty and Hermes builds no memory block;
+        # pins and records captured in this conversation stay in full. The
+        # model reaches a withheld record with `omh_remember` recall. Records
+        # this conversation already holds -- shown, or withheld earlier --
         # are left out (`_recalled`). A turn that was only a host notice
         # considers no record at all: nobody wrote it, and on a messenger it
         # posted the recall line anyway.

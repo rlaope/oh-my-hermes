@@ -505,7 +505,7 @@ class SetPluginSettingTests(_Switches):
 
 
 class IndexOnlyPackTests(_Switches):
-    """#2535 lists records that match nothing in `<record_index>` instead of injecting them; the switches cover it too."""
+    """Records that match nothing are withheld and named nowhere in the pack; the switches cover it too."""
 
     UNRELATED = "what is the weather like"
 
@@ -513,9 +513,9 @@ class IndexOnlyPackTests(_Switches):
         live = self.on(platform, session_id)
         return live, self.turn(live, 1, self.UNRELATED, author_id=self.author(platform))
 
-    def test_auto_lists_the_index_and_its_line_follows_recall_line(self) -> None:
+    def test_auto_serves_nothing_and_posts_no_line_whatever_recall_line_says(self) -> None:
         self.seed()
-        for value, shown in ((None, {"tui"}), ("all", {"tui", "discord"}), ("off", set())):
+        for value in (None, "all", "off"):
             if value is None:
                 (self.hermes / "config.yaml").unlink(missing_ok=True)
             else:
@@ -523,14 +523,8 @@ class IndexOnlyPackTests(_Switches):
             for platform in ("tui", "discord"):
                 with self.subTest(recall_line=value, platform=platform):
                     live, pack = self.indexed(platform, f"{platform}-index-{value}")
-                    self.assertIn("<record_index", pack, "an index-only pack is served whatever the line does")
-                    self.assertEqual(rendered_ids(pack), [])
-                    status = live.recall_status()
-                    if platform in shown:
-                        assert status is not None
-                        self.assertEqual(status.count, 0, "index content without a discrete count")
-                    else:
-                        self.assertIsNone(status)
+                    self.assertEqual(pack, "", "an unmatched turn gets no memory block at all")
+                    self.assertIsNone(live.recall_status())
 
     def test_recall_mode_on_demand_and_off_list_no_index(self) -> None:
         self.seed()

@@ -242,20 +242,20 @@ class SnapshotRecallMarkerTests(unittest.TestCase):
         self.assertEqual(rendered, plain_rendered)
         self.assertEqual(text, plain, "the mark does not fit here, so the section is main's bytes")
 
-    def test_the_record_index_line_carries_no_mark(self) -> None:
+    def test_a_withheld_record_carries_no_mark(self) -> None:
         pairs = [reviewed("mem_one", summary=SNAPSHOT), reviewed("mem_two", summary=RELEASE_NOTE, subject="folder-export")]
         selected = selection(pairs, query="Astronomy telescope")
         records = [record for record, _ in pairs]
         section = memory_records.render_selected_memory_records(selected, records, index_fallback=True)
         self.assertEqual(sorted(section.indexed), ["mem_one", "mem_two"])
-        self.assertNotIn("snapshot", section.text)
+        self.assertEqual(section.text, "")
         # A snapshot captured in this conversation is shown in full, and marked.
         shown = memory_records.render_selected_memory_records(selected, records, index_fallback=True, full_text_ids={"mem_one"})
         self.assertEqual(_marked(shown.text), {"mem_one": True})
         self.assertEqual(shown.text.count("<snapshots>"), 1)
-        index_line = next(line for line in shown.text.splitlines() if "<record_index" in line)
-        self.assertNotIn("snapshot", index_line)
-        # Short of room for the mark, the indexed section keeps the same records and index, unmarked.
+        self.assertNotIn("mem_two", shown.text)
+        self.assertNotIn("folder-export", shown.text)
+        # Short of room for the mark, the section keeps the same records and withholds the same ones, unmarked.
         with patch.object(memory_records, "snapshot_marked", return_value=False):
             plain = memory_records.render_selected_memory_records(selected, records, index_fallback=True, full_text_ids={"mem_one"})
         tight = memory_records.render_selected_memory_records(

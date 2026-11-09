@@ -731,9 +731,8 @@ record ends with one shared line, never one per record:
 ```
 
 `omh_remember` / `omh_memory` recall rows carry `"snapshot": "as-of"`, and
-the result's `next_action` states the same rule once. The `<record_index>`
-line is unchanged: it names records without their text, so nothing there is
-marked.
+the result's `next_action` states the same rule once. A record the live pack
+withholds (see below) is not in the text, so nothing about it is marked.
 
 The mark is advisory and never costs a record. The section admits records
 exactly as it would unmarked. The attributes and the line are added only when
@@ -1464,28 +1463,30 @@ and whitespace collapse — the same normalization capture uses for
 `duplicate_record` with `duplicate_of` naming the record kept. The collapse
 runs after eligibility and before ranking, so a duplicate never spends budget.
 
-The memory provider's prefetch pack does not inject that fallback in full.
-When `query_fallback` is set, each readmitted record is listed by name in one
-index line inside `<memory_records>` instead of a `<record>` element:
+The memory provider's prefetch pack does not inject that fallback. When
+`query_fallback` is set, the readmitted records are withheld: no summary, no
+name, no line about them. With nothing else to serve, the provider returns an
+empty pack and Hermes builds no `<memory-context>` block for the turn. Records
+captured in the same conversation are the exception and still render in full:
+a record whose `source_ref` is `hermes-session:<id>` for this session or one
+of its verified compaction ancestors, and pinned records.
 
-```text
-  <record_index count="N" reason="no_query_overlap">N stored records did not match this message and are listed, not shown: ITEMS. Read one with omh_remember recall when it bears on the request.</record_index>
-```
-
-Each item is the record's `subject` slug, or `<record_type> <record_id>` when
-it has none; at most 8 are named, then `+K more`. Records captured in the same
-conversation are the exception and still render in full: a record whose
-`source_ref` is `hermes-session:<id>` for this session or one of its verified
-compaction ancestors, and pinned records. `omh_remember(action="recall",
-query=...)` reads an indexed record in full when the query is its subject slug
-or record id (the labels the index lists), or matches its words. The CLI
-`omh memory recall` and coding-handoff packs never index and still serve the
-active tier in full; tool recall never falls back.
-The prefetch receipt lists the indexed ids as `rendering.indexed_records`
-(always present on new receipts, read as empty on older ones); rendered ids
-must equal the selected ids with the indexed ids removed, as a prefix, and
-`selected_not_rendered` never names an indexed id. An indexed record is not
-rendered, so it counts as neither served nor seen.
+Until 2026-11 the provider listed withheld records by name in one English
+`<record_index>` line. Measured on live Hermes turns (2026-11-08, persona with
+no reply language, Korean-writing user, one stored record unrelated to the
+request), that line alone, inside Hermes' "should inform all responses"
+fence, took Korean replies from 14/20 to 5/20 (Fisher p=0.010), and no turn
+read the listed record. The model reaches a withheld record on purpose:
+`omh_remember(action="recall", query=...)` reads it in full when the query is
+its subject slug or record id, or matches its words. The CLI
+`omh memory recall` and coding-handoff packs never withhold and still serve
+the active tier in full; tool recall never falls back.
+The prefetch receipt lists the withheld ids as `rendering.indexed_records`
+(the key keeps its earlier name; always present on new receipts, read as
+empty on older ones); rendered ids must equal the selected ids with the
+withheld ids removed, as a prefix, and `selected_not_rendered` never names a
+withheld id. A withheld record is not rendered, so it counts as neither
+served nor seen.
 
 Two per-record counters exist, and only one of them is a ranking input:
 
@@ -1933,14 +1934,15 @@ A live turn serves only what it asked for, and only once per conversation
 (2026-11-03 audit: 89% of live-served records shared no word with the turn,
 and 84% repeated a record the session already held):
 
-- A query that matches no record gets the active-tier fallback as one
-  `<record_index>` line of names (see
-  [Recall Ranking and Delivery Usage](#recall-ranking-and-delivery-usage) above),
-  never the records in full. A query with no indexable terms ("야", an
-  empty message) gets the same: pinned records in full, every other record
-  it would serve listed by name. Records captured in this conversation stay in
-  full in both. So a pack never goes silent while approved active memory
-  exists (#2001), from the first turn on.
+- A query that matches no record gets none of the active-tier fallback (see
+  [Recall Ranking and Delivery Usage](#recall-ranking-and-delivery-usage) above):
+  the records are withheld and named nowhere. A query with no indexable terms
+  ("야", an empty message) gets the same: pinned records in full, every other
+  record it would serve withheld. Records captured in this conversation stay
+  in full in both. With nothing else to serve, the pack is empty. #2001's
+  rule that a pack never goes silent while approved active memory exists no
+  longer holds for the live turn; the selection still falls back, and the
+  receipt names what the pack withheld.
 - A turn that was only host framing or a host notice (a background-process
   or delegation-completion notice, a bare skill invocation; the sanitizer's
   `host_only`) considers no record at all: no records, no pins, no index,
@@ -2156,7 +2158,7 @@ plugins:
 | | `all` | Nothing: every surface shows the line, as before |
 | | `off` | The line everywhere |
 | `recall_mode` | `auto` (default) | Nothing: memory is recalled every turn |
-| | `on_demand` | Per-turn records, the `<record_index>` of unmatched ones, and blocks, and so the line. `omh_remember` / `omh_memory` recall and saving still work |
+| | `on_demand` | Per-turn records and blocks, and so the line. `omh_remember` / `omh_memory` recall and saving still work |
 | | `off` | The same, and tool recall too, which refuses with `reason: recall_disabled`. Saving still works |
 
 `recall_line` hides the line, never the memory. On a messenger, the owner's

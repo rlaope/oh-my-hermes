@@ -561,6 +561,15 @@ All notable changes will be documented here.
   says it was not copied, and so does `/copy`. A tmux, screen or zellij
   started inside the pane, or another terminal opened from it, keeps its own
   rule. Reported by @foxion37 in #2672.
+- **A turn whose message matches no stored memory gets no memory block.**
+  The live pack used to list such records by name in one English
+  `<record_index>` line, which Hermes wraps as context that "should inform
+  all responses". With a persona that sets no reply language, that line
+  alone moved a Korean-writing user's replies to English. Those records are
+  now withheld and named nowhere; with nothing else to serve, the provider
+  returns nothing. Records from this conversation and pinned records still
+  show in full, a matching message still gets the record, and
+  `omh_remember` recall still finds a withheld record by subject or words.
 - **Every arrow line in the per-turn primer names skills a model can load.**
   The generic tool map, workflow context cards and common cues named
   catalog names (`research`, `img-summary`) and shorthand that was no skill

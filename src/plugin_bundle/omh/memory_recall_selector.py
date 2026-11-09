@@ -414,8 +414,8 @@ def select_memory_recall(
     and a query that matches nothing serves no active-tier fallback. Tool
     recall uses it; the live turn, handoffs, the CLI and inspection keep the
     default. ``session_served`` maps the records a conversation already holds
-    to their `recall_revision` (shown in full) or ``listed:<revision>`` (named
-    in an earlier record index). A record still at that revision is excluded
+    to their `recall_revision` (shown in full) or ``listed:<revision>`` (withheld
+    by an earlier unanswered pack). A record still at that revision is excluded
     as `served_this_session`, and a listed one as `listed_this_session` when
     the query did not answer the pack; a query that does answer it still gets
     the record in full. For an answered query the exclusion runs before the
@@ -721,13 +721,13 @@ def select_memory_recall(
     excluded.extend(duplicates)
     candidates_by_id = {str(candidate[0].get("record_id", "")): candidate for candidate in candidates}
     # A pack the query did not answer (the active-tier fallback, or no query
-    # terms at all) is one a live turn lists by name rather than shows; the
+    # terms at all) is one a live turn withholds rather than shows; the
     # conversation's held records leave it only after the budget cut, so a
     # held record never pulls a further one into the list.
     unanswered = bool(fallback_served) or unqueried
 
     def without_held(items: list[dict[str, object]]) -> list[dict[str, object]]:
-        """Drop what the conversation holds: shown at this revision, or listed by name in an unanswered pack."""
+        """Drop what the conversation holds: shown at this revision, or withheld by an unanswered pack."""
         fresh: list[dict[str, object]] = []
         for item in items:
             record_id = str(item.get("record_id", ""))

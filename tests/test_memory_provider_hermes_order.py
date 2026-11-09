@@ -48,7 +48,7 @@ class HermesHookOrderTests(unittest.TestCase):
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
             self.assertIsNotNone(live.latest_prefetch_receipt(), "a served pack leaves its receipt")
 
-    def test_an_unmatched_first_turn_indexes_old_memory_but_shows_this_conversation(self) -> None:
+    def test_an_unmatched_first_turn_withholds_old_memory_but_shows_this_conversation(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".hermes").mkdir()
@@ -56,7 +56,8 @@ class HermesHookOrderTests(unittest.TestCase):
             current = approve(root, "This conversation chose a short answer", source_ref="hermes-session:session-a")
             live = provider(root)
             pack = hermes_turn(live, 1, "Astronomy telescope")
-            self.assertIn("<record_index", pack)
+            self.assertNotIn("<record_index", pack)
+            self.assertNotIn(old["record_id"], pack)
             self.assertNotIn(old["summary"], pack)
             self.assertEqual(rendered_ids(pack), [current["record_id"]])
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))

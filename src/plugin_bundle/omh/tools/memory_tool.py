@@ -1308,8 +1308,8 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             next_action="Recall is turned off for this profile; nothing was searched.",
         )
     snapshot = read_record_store_snapshot(lens.homes)
-    # The labels a `<record_index>` line lists ("decision mem_...",
-    # "deploy-branch") must read a record, and the selector never matches a
+    # A record label ("decision mem_...", "deploy-branch") must read a
+    # record, and the selector never matches a
     # subject. A query made only of record ids looks those records up and
     # nothing else. A query word that is a subject slug puts that record
     # first, but the words still search as usual, since a subject can also be

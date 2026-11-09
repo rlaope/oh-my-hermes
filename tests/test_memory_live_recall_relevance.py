@@ -8,14 +8,14 @@ cases that must not change:
 
 - the selector's active-tier fallback served the whole store in full for a
   query that matched nothing, and an unqueried selection for an empty one;
-  the live provider now lists both by name in one `<record_index>` line (#2535
-  for the first; pins and same-conversation captures stay in full), and tool
+  the live provider now withholds both and names neither (pins and
+  same-conversation captures stay in full), and tool
   recall passes ``query_fallback=False``, while the handoff facade keeps the
   fallback in full;
 - the provider re-served the same records every turn although Hermes replays
   each turn's injected block until compaction; it now skips a record the
-  conversation already holds at the same ``recall_revision``, a record it was
-  shown by name leaves later indexes, and both are forgotten at any session
+  conversation already holds at the same ``recall_revision``, a record it
+  withheld stays held for later unanswered turns, and both are forgotten at any session
   switch, so a compaction lets a record come back once;
 - a turn that was only a host notice was served the store; it now considers
   no record at all, not even pins or an index.
@@ -200,45 +200,42 @@ class ProviderLiveRecallTests(unittest.TestCase):
                         receipt["selection"]["exclusion_reason_counts"], {"listed_this_session": 1, "served_this_session": 1},
                     )
 
-    def test_a_turn_that_matches_nothing_lists_names_once(self) -> None:
+    def test_a_turn_that_matches_nothing_serves_nothing(self) -> None:
         deploy = approve(self.root, _DEPLOY)
         parser = approve(self.root, _PARSER)
         live = provider(self.root)
-        pack = hermes_turn(live, 1, "hello there")
-        self.assertIn('<record_index count="2" reason="no_query_overlap">', pack)
-        self.assertEqual(rendered_ids(pack), [])
-        self.assertNotIn(_DEPLOY, pack)
-        self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=0))
+        self.assertEqual(hermes_turn(live, 1, "hello there"), "")
+        self.assertIsNone(live.recall_status())
         receipt = live.latest_prefetch_receipt()
         assert receipt is not None
         self.assertEqual(sorted(receipt["rendering"]["indexed_records"]), sorted([deploy["record_id"], parser["record_id"]]))
         for turn, message in enumerate((_NO_MATCH, "야"), start=2):
             with self.subTest(message=message):
-                self.assertNotIn("<record_index", hermes_turn(live, turn, message))
+                self.assertEqual(hermes_turn(live, turn, message), "")
                 self.assertIsNone(live.recall_status())
-        # A message that does match a listed record gets it in full.
+        # A message that does match a withheld record gets it in full.
         self.assertEqual(rendered_ids(hermes_turn(live, 4, "when do deploys run?")), [deploy["record_id"]])
         self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
 
-    def test_a_record_pinned_after_it_was_listed_is_shown_in_full(self) -> None:
+    def test_a_record_pinned_after_it_was_withheld_is_shown_in_full(self) -> None:
         deploy = approve(self.root, _DEPLOY)
         approve(self.root, _PARSER)
         live = provider(self.root)
-        self.assertIn("<record_index", hermes_turn(live, 1, ""))
+        self.assertEqual(hermes_turn(live, 1, ""), "")
         memory.set_memory_pin(self.paths, deploy["record_id"], pinned=True)
-        # Listed before, but a pin is always in context: it is shown in full.
+        # Withheld before, but a pin is always in context: it is shown in full.
         self.assertEqual(rendered_ids(hermes_turn(live, 2, "")), [deploy["record_id"]])
 
-    def test_a_new_conversation_after_an_index_only_turn_lists_again(self) -> None:
-        # The old conversation was shown only names; its next turn renders with
-        # every record listed, and `/new` arrives after that render.
+    def test_a_new_conversation_after_a_withholding_turn_withholds_again(self) -> None:
+        # The old conversation was shown nothing; its next turn renders with
+        # every record withheld, and `/new` arrives after that render.
         deploy = approve(self.root, _DEPLOY)
         parser = approve(self.root, _PARSER)
         live = provider(self.root)
-        self.assertIn("<record_index", hermes_turn(live, 1, "hello there"))
+        self.assertEqual(hermes_turn(live, 1, "hello there"), "")
         live.on_turn_start(1, "hello there")
         pack = live.prefetch("hello there", session_id="session-new")
-        self.assertIn('<record_index count="2"', pack)
+        self.assertEqual(pack, "")
         receipt = live.latest_prefetch_receipt()
         assert receipt is not None
         self.assertEqual(sorted(receipt["rendering"]["indexed_records"]), sorted([deploy["record_id"], parser["record_id"]]))
@@ -371,6 +368,40 @@ class ToolRecallRelevanceTests(unittest.TestCase):
     def recall(self, query: str) -> dict:
         return json.loads(self.live.handle_tool_call("omh_remember", {"action": "recall", "query": query}))
 
+    def test_an_earlier_conversation_record_the_turn_does_not_touch_adds_no_memory_block(self) -> None:
+        # Measured 2026-11-08 (live Hermes, persona with no reply language, a
+        # Korean-writing user): an English line naming one unrelated stored
+        # record, inside Hermes' "should inform all responses" fence, took
+        # Korean replies from 14/20 to 5/20, and no turn read the record.
+        summary = (
+            "Team of 3 is building an internal ticket tool with about 50 writes per day. "
+            "They are deciding between SQLite and Postgres; lowest operational burden is the top priority."
+        )
+        saved = json.loads(self.live.handle_tool_call(
+            "omh_remember", {"summary": summary, "record_type": "fact", "subject": "ticket-tool-db-choice"}))
+        self.assertEqual(saved["status"], "remembered", saved)
+        self.live = provider(self.root, session_id="session-later")
+        for turn, message in enumerate((
+            "이 폴더의 calc.py에 버그가 있는지 리뷰해 주세요.",
+            "Review calc.py in this folder for bugs.",
+        ), start=1):
+            with self.subTest(message=message):
+                pack = hermes_turn(self.live, turn, message)
+                self.assertEqual(pack, "", "no record matched, so Hermes must get nothing to fence")
+                self.assertIsNone(self.live.recall_status())
+                receipt = self.live.latest_prefetch_receipt()
+                assert receipt is not None
+                self.assertEqual(receipt["rendering"]["rendered_records"], [])
+        # The model still reaches it on purpose, by subject or by its words.
+        for query in ("ticket-tool-db-choice", "SQLite Postgres"):
+            with self.subTest(query=query):
+                found = self.recall(query)
+                self.assertEqual((found["status"], [row["record_id"] for row in found["records"]]), ("found", [saved["record_id"]]))
+        # And a turn that does touch it is served the record in full.
+        pack = hermes_turn(self.live, 3, "Should the ticket tool use SQLite or Postgres?")
+        self.assertEqual(rendered_ids(pack), [saved["record_id"]])
+        self.assertIn(summary, pack)
+
     def test_a_query_that_matches_nothing_is_nothing_found(self) -> None:
         saved = json.loads(self.live.handle_tool_call("omh_remember", {"summary": _DEPLOY, "record_type": "decision"}))
         found = self.recall("nightly deploys")
@@ -412,14 +443,19 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         self.assertEqual(rendered_ids(hermes_turn(self.live, 3, "sdk license?")), [record["record_id"]])
         self.assertEqual(rendered_ids(hermes_turn(self.live, 4, "sdk license?")), [])
 
-    def test_a_record_shown_at_an_older_revision_is_listed_once_not_every_turn(self) -> None:
+    def test_a_record_shown_at_an_older_revision_is_withheld_on_unanswered_turns(self) -> None:
         record = approve(self.root, "Which license should the SDK carry", unresolved=True)
         hermes_turn(self.live, 1, "sdk license?")
         self.assertEqual(self.confirm(record["record_id"])["status"], "confirmed")
-        # Unanswered turns: the revised record is listed once, then held as listed.
-        self.assertIn("<record_index", hermes_turn(self.live, 2, "hello there"))
-        self.assertNotIn("<record_index", hermes_turn(self.live, 3, "hello there"))
-        self.assertIsNone(self.live.recall_status())
+        # Unanswered turns: the revised record is withheld, then held as withheld.
+        for turn in (2, 3):
+            self.assertEqual(hermes_turn(self.live, turn, "hello there"), "")
+            self.assertIsNone(self.live.recall_status())
+        receipt = self.live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(receipt["selection"]["exclusion_reason_counts"].get("listed_this_session"), 1)
+        # Asked again, the revised record comes back in full.
+        self.assertEqual(rendered_ids(hermes_turn(self.live, 4, "sdk license?")), [record["record_id"]])
 
     def test_a_query_naming_record_ids_still_finds_them(self) -> None:
         first = json.loads(self.live.handle_tool_call("omh_remember", {"summary": _DEPLOY, "record_type": "decision"}))["record_id"]

@@ -347,8 +347,9 @@ def render_selected_memory_records(
     tuple names exactly the records inside the returned text, each with the
     digest of its stored summary -- the same digest an incident anchors on.
 
-    With ``index_fallback``, a pack the active-tier fallback served lists its
-    records by name except ``full_text_ids``. ``index_unqueried`` does the
+    With ``index_fallback``, a pack the active-tier fallback served shows only
+    ``full_text_ids`` and withholds the rest: they leave no trace in the text,
+    and ``indexed`` names them for the receipt. ``index_unqueried`` does the
     same for a pack whose query had no terms at all, which selects every
     in-scope record unranked: the caller says so, since the pack cannot.
     """
@@ -371,11 +372,11 @@ def render_selected_memory_records(
     if index_fallback and ("query_fallback" in pack or index_unqueried):
         full_items = [item for item in items if str(item["record_id"]) in full_text_ids]
         index_items = [by_id[str(item["record_id"])] for item in items if str(item["record_id"]) not in full_text_ids]
-        text, rendered_items, indexed = _render_indexed_bounded(
-            full_items, index_items, budget_chars=budget_chars,
+        text, rendered_items = _render_full_text_bounded(
+            full_items, budget_chars=budget_chars,
             over_budget=int(selection.exclusion_reason_counts.get("over_budget", 0)),
-            full_prefix_limit=next((index for index, item in enumerate(items) if str(item["record_id"]) not in full_text_ids), len(items)),
         )
+        indexed = tuple(str(record["record_id"]) for record in index_items)
     else:
         text, rendered_items = _render_bounded(
             items,
@@ -398,37 +399,29 @@ def render_selected_memory_records(
     return RenderedRecordSection(text=text, rendered=rendered, omissions=omissions, budget_chars=max(budget_chars, 0), indexed=indexed)
 
 
-def _record_index_line(records: list[dict[str, Any]]) -> str:
-    labels = [str(record.get("subject") or f'{record.get("record_type", "")} {record["record_id"]}') for record in records[:8]]
-    if len(records) > 8:
-        labels.append(f"+{len(records) - 8} more")
-    count = len(records)
-    return (
-        f'  <record_index count="{_attribute(count)}" reason="no_query_overlap">'
-        f'{count} stored records did not match this message and are listed, not shown: '
-        f'{_text(", ".join(labels))}. Read one with omh_remember recall when it bears on the request.</record_index>'
-    )
+def _render_full_text_bounded(
+    full_items: list[dict[str, Any]], *, budget_chars: int, over_budget: int,
+) -> tuple[str, list[dict[str, Any]]]:
+    """The longest full-text prefix within the bound; nothing at all without one.
 
+    An unanswered pack names none of the records it withholds. An English
+    line naming them, under Hermes' "should inform all responses" fence,
+    turned a Korean user's replies to English (2026-11-08, persona with no
+    reply language: 14/20 Korean replies without it, 5/20 with it, Fisher
+    p=0.010), and no measured turn read a listed record. The model reaches a
+    stored record by `omh_remember` recall, which never withholds.
+    """
+    if not full_items:
+        return "", []
 
-def _render_indexed_bounded(
-    full_items: list[dict[str, Any]], index_items: list[dict[str, Any]], *, budget_chars: int, over_budget: int,
-    full_prefix_limit: int,
-) -> tuple[str, list[dict[str, Any]], tuple[str, ...]]:
-    """Prefer a full-text prefix, then one all-or-nothing index within the same bound."""
-    if not full_items and not index_items:
-        return "", [], ()
-    index_line = _record_index_line(index_items) if index_items else ""
-
-    def section(count: int, include_index: bool, mark: bool = False) -> str:
+    def section(count: int, mark: bool = False) -> str:
         lines = ["<memory_records>", *(_render_record(record, mark=mark) for record in full_items[:count])]
-        if include_index:
-            lines.append(index_line)
         unresolved = sum(1 for record in full_items[:count] if _is_open(record))
         if unresolved:
             lines.append(_unresolved_line(unresolved))
         if mark and any(snapshot_marked(record) for record in full_items[:count]):
             lines.append(SNAPSHOT_RECALL_LINE)
-        omitted = len(full_items) - count + (0 if include_index else len(index_items))
+        omitted = len(full_items) - count
         if omitted:
             lines.append(f'  <omitted count="{omitted}" reason="render_budget_exhausted" />')
         if over_budget:
@@ -436,20 +429,13 @@ def _render_indexed_bounded(
         lines.append("</memory_records>")
         return "\n".join(lines)
 
-    # Work backwards so the first fit is the longest full-text prefix. Index
-    # inclusion never promotes a later full-text record over an earlier one.
+    # Work backwards so the first fit is the longest full-text prefix.
     for count in range(len(full_items), -1, -1):
-        for include_index in ((True, False) if index_items else (False,)):
-            # Once the index is dropped, its ids cannot exempt a gap from
-            # the receipt's selected-minus-indexed prefix rule.
-            if not include_index and count > full_prefix_limit:
-                continue
-            text = section(count, include_index)
-            if len(text) <= max(budget_chars, 0):
-                indexed = tuple(str(record["record_id"]) for record in index_items) if include_index else ()
-                marked = section(count, include_index, mark=True)
-                return (marked if len(marked) <= max(budget_chars, 0) else text), full_items[:count], indexed
-    return "", [], ()
+        text = section(count)
+        if len(text) <= max(budget_chars, 0):
+            marked = section(count, mark=True)
+            return (marked if len(marked) <= max(budget_chars, 0) else text), full_items[:count]
+    return "", []
 
 
 def origin_record_ids(
