@@ -471,7 +471,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher::before{content:"";position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px,linear-gradient(90deg,rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px;
   -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
-.omher__t{position:relative;z-index:2;margin:0 0 26px;min-height:0;font:500 17px/1.2 var(--sans);letter-spacing:-.01em;color:var(--ink-3)}
+.omher__t{position:relative;z-index:2;margin:0 0 28px;min-height:0;font:500 clamp(26px,3.2vw,38px)/1.15 var(--sans);letter-spacing:-.02em;color:var(--ink-3)}
 .omher__t b{color:var(--ink);font-weight:600}
 .omher__shot{position:relative;z-index:2;width:min(1080px,100%,calc((100svh - 330px) * 2.091));min-width:min(640px,100%);margin:0 auto;--reveal:1;--lit:0;--bx:80%}
 .omher__shot img{display:block;width:100%;height:auto;filter:drop-shadow(0 34px 60px rgba(0,0,0,.55));
@@ -481,7 +481,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher__glow::after{content:"";position:absolute;left:var(--bx);top:0;width:min(560px,54%);height:min(300px,36%);transform:translate(-50%,-40%);opacity:var(--lit);
   background:radial-gradient(closest-side,rgba(255,250,253,.14),rgba(242,123,182,.04) 50%,transparent)}
 .omher__glow::before{content:"";position:absolute;left:calc(var(--bx) - 280px);top:0;width:560px;height:2px;opacity:var(--lit);background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);box-shadow:0 0 14px rgba(255,236,248,.7)}
-.omher__get{position:relative;z-index:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:28px auto 22px}
+.omher__get{position:relative;z-index:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:40px auto 22px}
 .osbtn{display:inline-flex;align-items:center;gap:9px;height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--line-2);color:var(--ink);font:500 14px var(--sans);transition:border-color var(--fast),background var(--fast),transform var(--fast)}
 .osbtn:hover{border-color:var(--ink-3);background:rgba(255,255,255,.03)}
 .osbtn svg{width:16px;height:16px;fill:currentColor;flex:none}
