@@ -1,6 +1,5 @@
 // Main column for a terminal session: header (agent + folder) and the live terminal.
 import { useEffect, useRef } from "react";
-import "@xterm/xterm/css/xterm.css";
 import type { ITheme } from "@xterm/xterm";
 import { useStore } from "../state/store";
 import { resolveTheme } from "../app/theme";

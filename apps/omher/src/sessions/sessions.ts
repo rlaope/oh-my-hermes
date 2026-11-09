@@ -3,8 +3,8 @@
 // SessionHost. Sessions live only while the app runs; the last few agent+folder pairs are remembered on
 // this computer for a quick relaunch.
 import { useSyncExternalStore } from "react";
-import { Terminal, type ITheme } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
+import type { ITheme, Terminal } from "@xterm/xterm";
+import type { FitAddon } from "@xterm/addon-fit";
 import { agentDef, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { getHost, type SessionHost } from "./host";
 import { getStore } from "../state/store";
@@ -25,6 +25,15 @@ interface Term {
   hostId: number | null;
   closed: boolean;
 }
+
+type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
+let xtermLoad: Promise<Xterm> | null = null;
+let xtermMods: Xterm | null = null;
+/** xterm (about 88 kB gz) loads when the first session opens, not with the app. */
+const loadXterm = () =>
+  (xtermLoad ??= Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit"), import("@xterm/xterm/css/xterm.css")]).then(
+    ([x, f]) => (xtermMods = [x, f]),
+  ));
 
 const readRecent = () => {
   try {
@@ -111,6 +120,19 @@ export function createSessions(host: SessionHost) {
 
   /** Mount session `id`'s terminal into `container` (creating and starting it the first time). */
   const attach = (id: string, container: HTMLElement, theme: ITheme): (() => void) => {
+    if (xtermMods) return mount(xtermMods, id, container, theme);
+    let detach: (() => void) | null = null;
+    let gone = false;
+    void loadXterm().then((m) => {
+      if (!gone) detach = mount(m, id, container, theme);
+    });
+    return () => {
+      gone = true;
+      detach?.();
+    };
+  };
+
+  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement, theme: ITheme): (() => void) => {
     let t = terms.get(id);
     const fresh = !t;
     if (!t) {
@@ -193,6 +215,8 @@ export function createSessions(host: SessionHost) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    /** Stop whatever an earlier load of this page left running (called once at startup). */
+    reset: ready,
     loadAgents,
     launch,
     attach,
