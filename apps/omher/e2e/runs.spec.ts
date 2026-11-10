@@ -484,7 +484,10 @@ test("full view: every line leaves a parent's bottom and ends with a ▼ on a ch
     expect(h.tip[0]).toBeGreaterThan(c.x);
     expect(h.tip[0]).toBeLessThan(c.x + c.w);
   }
-  // nothing ends in mid-air: each line's last point is on the bus, on an arrowhead's base, or on a box edge
+  // "· Same frontier" stands right of the first box's middle: the line that leaves that box is not drawn over
+  const label = await f.getByTestId("run-frontier").last().evaluate((e: HTMLElement) => e.offsetLeft);
+  const firstOfRow = Object.values(geo.boxes).filter((b) => b.y === geo.boxes["t3-doctor"].y).sort((a, b) => a.x - b.x)[0];
+  expect(label).toBeGreaterThan(firstOfRow.x + firstOfRow.w / 2 + 4);
   // motion: only the lines into the running node carry the slow dash
   const flowing = geo.lines.filter((l) => l.anim.includes("bv-flow"));
   expect(flowing.length).toBeGreaterThan(0);
@@ -538,6 +541,70 @@ test("Dependencies and Node details are plain text under the boxes", async ({ pa
   // the card opens the node
   await card.click();
   await expect(page.getByTestId("run-drawer")).toHaveAttribute("data-node", "t3-doctor");
+});
+
+test("full view: the text under the boxes keeps its own clicks and keys while the canvas pans", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openRuns(page, "default");
+  await pickRow(page, "Big run");
+  await page.getByTestId("graph-expand").click();
+  const f = full(page);
+  await expect(f.getByTestId("run-node")).toHaveCount(40);
+  await f.getByTestId("run-fit").click();
+  // "Show all" on the Dependencies list is a button inside the canvas the pointer pans
+  const more = f.getByTestId("run-deps-more");
+  await expect(f.getByTestId("run-dep")).toHaveCount(12);
+  await more.click();
+  await expect(f.getByTestId("run-dep")).not.toHaveCount(12);
+  await expect(more).toHaveText("Show fewer");
+  await more.click();
+  await expect(f.getByTestId("run-dep")).toHaveCount(12);
+  // a Node details card opens its node
+  const card = f.getByTestId("run-detail").first();
+  const id = await card.getAttribute("data-node");
+  await card.click();
+  await expect(f.getByTestId("run-drawer")).toHaveAttribute("data-node", id!);
+  // and it stays open: the click did not also land on the canvas, which closes the drawer
+  await page.waitForTimeout(200);
+  await expect(f.getByTestId("run-drawer")).toHaveCount(1);
+  await f.getByRole("button", { name: "Close node" }).click();
+  await expect(f.getByTestId("run-drawer")).toHaveCount(0);
+  // the keyboard opens a box too: focus it, Enter
+  const node = f.getByTestId("run-node").first();
+  await node.focus();
+  await page.keyboard.press("Enter");
+  await expect(f.getByTestId("run-drawer")).toHaveAttribute("data-node", (await node.getAttribute("data-node"))!);
+});
+
+test("a plan cancelled before anything started says Cancelled, not 'Not started', and offers nothing to start", async ({ page }) => {
+  // the mock's plan nobody has started, cancelled
+  await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
+    const server = ws.connectToServer();
+    const ops = new Map<string, string>();
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      ops.set(msg.id, msg.op);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      const op = ops.get(msg.id);
+      if (msg.ok && op === "runs.list") for (const r of msg.result.runs) if (r.id.endsWith("/codex-coexist-next")) r.state = "cancelled";
+      if (msg.ok && op === "runs.get" && msg.result.run?.id.endsWith("/codex-coexist-next")) {
+        msg.result.run.state = "cancelled";
+        for (const n of msg.result.run.nodes) n.state = "cancelled";
+      }
+      ws.send(op === "runs.list" || op === "runs.get" ? JSON.stringify(msg) : raw);
+    });
+  });
+  await openRuns(page, "default");
+  await pickRow(page, "Codex coexistence (next)");
+  const plan = panel(page).getByTestId("run-plan");
+  await expect(panel(page).locator('[data-testid="run-node"][data-state="cancelled"]')).toHaveCount(6);
+  await expect(plan.getByTestId("run-state")).toHaveText("Cancelled");
+  await expect(plan).not.toContainText("Not started");
+  await expect(plan.getByTestId("run-plan-start")).toHaveCount(0);
+  await expect(plan.getByTestId("run-plan-edit")).toHaveCount(0);
 });
 
 test("clicking a node opens its detail under 'Node details'; a failed node offers 'Ask in chat', which only prefills the composer", async ({ page }) => {

@@ -196,6 +196,10 @@
 .ph-l > * {
   flex: none;
 }
+/* a long count line ("… · 3 failed · 2 repaired · 18 waiting · 2h 5m") wraps between its parts */
+.ph-counts {
+  flex-wrap: wrap;
+}
 .ph-k {
   color: var(--body);
 }
@@ -462,8 +466,6 @@
   position: absolute;
   z-index: 1;
   height: var(--bv-line, 18px);
-  padding-right: var(--bv-cw, 7.2px);
-  background: var(--bv-surface);
   white-space: pre;
   color: var(--quiet);
 }

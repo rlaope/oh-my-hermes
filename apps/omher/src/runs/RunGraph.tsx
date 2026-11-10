@@ -198,10 +198,12 @@ export function RunGraph({
   );
   const fitRef = useRef(fit);
   fitRef.current = fit;
+  // fit when the run opens and when its drawing changes size (a node was added, the window was resized): a refresh
+  // of a live run that moves nothing keeps the view where the person left it
+  const shape = `${run.id}|${lay.boxes.length}|${Math.round(lay.w)}|${Math.round(lay.h)}`;
   useLayoutEffect(() => {
-    if (mode === "full") fitRef.current();
-    // fit once per run and layout; later drags keep the view where it is
-  }, [run.id, mode, lay]);
+    if (mode === "full") fitRef.current(openRef.current ? DRAWER_W : 0);
+  }, [shape, mode]);
   // the box grows while the side panel steps aside: refit on resize
   useEffect(() => {
     const el = box.current;
@@ -215,11 +217,19 @@ export function RunGraph({
     ro.observe(el);
     return () => ro.disconnect();
   }, [mode]);
-  // the drawer sits on the right: while it is open the run fits into what is left
+  // the drawer sits on the right: a box opened under it slides into view; the person's pan and zoom stay otherwise
   const drawerOpen = mode === "full" && !!open;
   useEffect(() => {
-    if (mode === "full") fitRef.current(drawerOpen ? DRAWER_W : 0);
-  }, [drawerOpen, mode]);
+    const el = box.current;
+    if (mode !== "full" || !el || !open || !lay.at.has(open)) return;
+    const r = rect(open);
+    setView((v) => {
+      const over = (r.x + r.w) * v.k + v.x - (el.clientWidth - DRAWER_W);
+      return over > 0 ? { ...v, x: v.x - over - 16 } : v;
+    });
+    // only when another node is opened
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode]);
 
   const zoomAt = (cx: number, cy: number, f: number) =>
     setView((v) => {
@@ -334,7 +344,13 @@ export function RunGraph({
           />
         ))}
         {lay.undrawn.map((u) => (
-          <g key={u.gap} className={`bv-undrawn${frontierRuns(u.gap + 1) ? " flow" : ""}${animate ? " enter" : ""}`} data-testid="run-undrawn" data-gap={u.gap}>
+          <g
+            key={u.gap}
+            className={`bv-undrawn${frontierRuns(u.gap + 1) ? " flow" : ""}${animate ? " enter" : ""}`}
+            style={animate ? ({ animationDelay: `${after(lay.shape.rows[u.gap + 1] ?? [])}ms` } as CSSProperties) : undefined}
+            data-testid="run-undrawn"
+            data-gap={u.gap}
+          >
             <path className="bv-dash" d={`M${u.x},${u.y1} V${u.y2 - GEOMETRY.arrow - 3}`} />
             <path className="bv-hollow" d={`M${u.x},${u.y2 - 1} l-4,-${GEOMETRY.arrow} h8 Z`} />
           </g>
@@ -352,6 +368,7 @@ export function RunGraph({
           className="bv-more"
           style={{ left: m.x, top: m.y }}
           data-testid="run-more"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => setOpened((o) => (o.has(m.frontier) ? new Set([...o].filter((f) => f !== m.frontier)) : new Set([...o, m.frontier])))}
         >
           {m.hidden > 0 ? `${t("graph.more", { n: m.hidden })} · ${t("graph.all", { n: m.total })}` : t("graph.fewer")}
@@ -381,7 +398,9 @@ export function RunGraph({
               e.stopPropagation();
               onDown(e, n.id);
             }}
-            onClick={mode === "panel" ? () => onOpen(n.id === open ? null : n.id) : undefined}
+            onClick={(e) => {
+              if (mode === "panel" || e.detail === 0) onOpen(n.id === open ? null : n.id);
+            }}
             onMouseEnter={() => setHover(n.id)}
             onMouseLeave={() => setHover(null)}
           >
@@ -410,7 +429,7 @@ export function RunGraph({
   );
 
   const sections = (
-    <>
+    <div className="bv-secs" onPointerDown={(e) => e.stopPropagation()}>
       {deps.length > 0 && (
         <section className="bv-sec" data-testid="run-deps" aria-label={t("graph.deps")}>
           <h4>{t("graph.deps")}</h4>
@@ -456,7 +475,7 @@ export function RunGraph({
           })}
         </section>
       )}
-    </>
+    </div>
   );
 
   const vars = { "--bv-font": `${type.font}px`, "--bv-line": `${type.line}px`, "--bv-cw": `${cw}px` } as CSSProperties;

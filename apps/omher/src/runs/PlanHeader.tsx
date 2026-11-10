@@ -37,7 +37,8 @@ export function PlanHeader({
   const c = summary.counts;
   const waiting = run ? run.nodes.filter((n) => n.state === "waiting" || n.state === "parked").length : 0;
   const repaired = run ? run.nodes.filter((n) => isRepaired(n, run.nodes)).length : (c.repaired ?? 0);
-  const started = !run || run.nodes.some((n) => n.started !== undefined);
+  // "not started" is a running plan nobody has handed out yet; a cancelled or failed one says so instead
+  const started = summary.state !== "running" || !run || run.nodes.some((n) => n.started !== undefined);
   const word = !started
     ? run?.startsAt !== undefined
       ? t("graph.startsIn", { t: clock(Math.max(0, run.startsAt - nowS)) })
@@ -61,7 +62,7 @@ export function PlanHeader({
         </b>
         {where && <span className="ph-dim"> · {where}</span>}
       </div>
-      <div className="ph-l" data-testid="run-plan-counts">
+      <div className="ph-l ph-counts" data-testid="run-plan-counts">
         <span className={`ph-w ${started ? summary.state : "waiting"}`} data-testid="run-state">
           {word}
         </span>

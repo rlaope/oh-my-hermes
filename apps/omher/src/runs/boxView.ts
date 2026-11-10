@@ -247,6 +247,9 @@ export interface Frontiers {
   drawn: EdgeRec[];
   /** A node added mid-run to repair another. */
   origin: Map<string, "repair">;
+  /** The recorded edges loop: the nodes on the loop share the last frontier, and no gap is drawn as lines (the
+   *  edges stay in the parents lines and under Dependencies). */
+  looped: boolean;
 }
 
 /** Each node's layer: the round after the last of its parents was placed (its longest path from a node with no
@@ -305,6 +308,7 @@ export function frontiers(nodes: RunNode[]): Frontiers {
     layer = layerOf(ids, pairs);
   }
   // a loop in the recorded edges themselves: what could not be placed stands in one last frontier
+  const looped = layer.size < ids.length;
   const last = Math.max(-1, ...layer.values()) + 1;
   for (const id of ids) if (!layer.has(id)) layer.set(id, last);
   // a node nothing leads to stands just above the first node that waits on it, so its edges join two neighbouring
@@ -361,7 +365,7 @@ export function frontiers(nodes: RunNode[]): Frontiers {
   const drawn = edges.filter((e) => !under.get(e.from)!.some((other) => other !== e.to && reaches(other, e.to)));
   const origin = new Map<string, "repair">();
   for (const e of edges) if (e.kind === "repair") origin.set(e.to, "repair");
-  return { rows, layer, parents, edges, drawn, origin };
+  return { rows, layer, parents, edges, drawn, origin, looped };
 }
 
 // ---- the layout ----
@@ -408,7 +412,8 @@ export interface BoxLayout {
   h: number;
   boxes: BoxAt[];
   at: Map<string, BoxAt>;
-  /** "· Same frontier", under each frontier of several boxes. */
+  /** "· Same frontier", under each frontier of several boxes: just right of the first box's middle, clear of the
+   *  line that leaves it. */
   labels: { frontier: number; x: number; y: number }[];
   /** A capped frontier's "+76 more · Show all 88" line. */
   more: { frontier: number; hidden: number; total: number; x: number; y: number }[];
@@ -493,7 +498,7 @@ export function layoutBoxes(run: Pick<AgentRun, "kind" | "nodes">, o: LayoutOpts
     }
     bottom[fi] = y;
     if (frontier.length > 1) {
-      labels.push({ frontier: fi, x: offset * cw, y });
+      labels.push({ frontier: fi, x: (offset + boxCells / 2 + 1.5) * cw, y });
       y += GEOMETRY.labelH;
     }
     if (shown.length < frontier.length || (o.capRows && rowsOf > o.capRows + 2)) {
@@ -506,7 +511,7 @@ export function layoutBoxes(run: Pick<AgentRun, "kind" | "nodes">, o: LayoutOpts
   const groups: Group[] = [];
   const undrawn: Undrawn[] = [];
   for (let gap = 0; gap < shape.rows.length - 1; gap++) {
-    const drawn = gapGroups(shape, gap, middle);
+    const drawn = shape.looped ? null : gapGroups(shape, gap, middle);
     if (drawn) groups.push(...drawn.map((g) => ({ gap, parents: g.parents, children: g.children, ports: Object.fromEntries(Object.entries(g.ports).map(([id, c]) => [id, c * cw])) })));
     else undrawn.push({ gap, x: (spanCells * cw) / 2, y1: top[gap + 1] - GEOMETRY.stub - GEOMETRY.drop + 4, y2: top[gap + 1] });
   }
@@ -517,7 +522,11 @@ export function layoutBoxes(run: Pick<AgentRun, "kind" | "nodes">, o: LayoutOpts
  *  a child several buses lead into takes each at its own port. Null where the gap cannot be drawn so: it holds no
  *  edge, an edge into or out of it skips a frontier, either frontier wraps, or two buses would share a stretch of
  *  the gap (their lines would cross). */
-function gapGroups(shape: Frontiers, upper: number, middle: Map<string, number>): { parents: string[]; children: string[]; ports: Record<string, number> }[] | null {
+export function gapGroups(
+  shape: Pick<Frontiers, "layer" | "drawn">,
+  upper: number,
+  middle: Map<string, number>,
+): { parents: string[]; children: string[]; ports: Record<string, number> }[] | null {
   const L = (id: string) => shape.layer.get(id)!;
   const at = (id: string) => middle.get(id)!;
   const crossing = shape.drawn.filter((e) => L(e.from) <= upper && upper < L(e.to));

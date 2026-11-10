@@ -10,6 +10,7 @@ import {
   fit,
   frontiers,
   GAP,
+  gapGroups,
   GEOMETRY,
   layoutBoxes,
   middleCut,
@@ -181,9 +182,11 @@ describe("frontiers", () => {
     expect(s.rows).toEqual([["a", "b"], ["a1", "a2", "b1"]]);
   });
 
-  it("keeps every node when the edges loop", () => {
+  it("keeps every node when the edges loop, and says the run looped", () => {
     const s = frontiers([node("a", ["b"]), node("b", ["a"]), node("c")]);
     expect(s.rows.flat().sort()).toEqual(["a", "b", "c"]);
+    expect(s.looped).toBe(true);
+    expect(frontiers(sample().nodes).looped).toBe(false);
   });
 });
 
@@ -248,11 +251,37 @@ describe("the layout", () => {
   });
 
   it("leaves a gap undrawn when two buses would share a stretch of it", () => {
-    // p1's fan spans c1..c3, and p2's only child c2 sits inside it
+    // p1's fan spans c1..c3, and p2's only child c2 sits inside it: the two buses would cross
+    const edge = (from: string, to: string) => ({ from, to, kind: "dep" as const });
+    const shape = { layer: new Map([["p1", 0], ["p2", 0], ["c1", 1], ["c2", 1], ["c3", 1]]), drawn: [edge("p1", "c1"), edge("p1", "c3"), edge("p2", "c2")] };
+    const crossed = new Map([["p1", 20], ["p2", 50], ["c1", 10], ["c2", 40], ["c3", 70]]);
+    expect(gapGroups(shape, 0, crossed)).toBeNull();
+    // the same edges with c2 moved out from between c1 and c3: two buses side by side
+    const apart = new Map([["p1", 20], ["p2", 75], ["c1", 10], ["c3", 40], ["c2", 70]]);
+    expect(gapGroups(shape, 0, apart)!.map((g) => [g.parents, g.children])).toEqual([
+      [["p1"], ["c1", "c3"]],
+      [["p2"], ["c2"]],
+    ]);
+    // in a run, a frontier is ordered under its parents first, which untangles this one
     const run = dag([node("p1"), node("p2"), node("c1", ["p1"]), node("c2", ["p2"]), node("c3", ["p1"])]);
+    expect(layoutBoxes(run, { cells: 120, metrics: M }).undrawn).toEqual([]);
+  });
+
+  it("draws no gap as lines when the edges loop: the nodes on the loop share a frontier no line could show", () => {
+    const run = dag([node("a"), node("b", ["a", "c"]), node("c", ["b"])]);
     const lay = layoutBoxes(run, { cells: 120, metrics: M });
-    if (lay.groups.length) expect(lay.undrawn).toEqual([]); // ordering under the parents untangled it
-    else expect(lay.undrawn.map((u) => u.gap)).toEqual([0]);
+    expect(lay.shape.looped).toBe(true);
+    expect(lay.groups).toEqual([]);
+    expect(lay.undrawn.map((u) => u.gap)).toEqual([0]);
+    expect(lay.shape.edges.map((e) => `${e.from}>${e.to}`).sort()).toEqual(["a>b", "b>c", "c>b"]);
+  });
+
+  it("puts '· Same frontier' right of the first box's middle, clear of the line that leaves it", () => {
+    const lay = layoutBoxes(sample(), { cells: 100, metrics: M });
+    const first = lay.at.get("button")!;
+    expect(lay.labels[0].x).toBeGreaterThan(first.x + lay.boxW / 2 + M.cw);
+    expect(lay.labels[0].x).toBeLessThan(first.x + lay.boxW);
+    expect(lay.labels[0].y).toBe(first.y + lay.boxH);
   });
 
   it("shows the first rows of a very long frontier, running then failed first, and how many more there are", () => {

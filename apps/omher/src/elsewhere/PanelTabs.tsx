@@ -17,7 +17,12 @@ export const TABS: { id: PanelTab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
   { id: "worktrees", label: "Worktrees" },
   { id: "diff", label: "Diff" },
-  { id: "runs", label: t("plans.tab") },
+  {
+    id: "runs",
+    get label() {
+      return t("plans.tab");
+    },
+  },
 ];
 
 const I = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
