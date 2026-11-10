@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   activityText,
+  chatRoute,
   createStore,
+  folderKey,
+  setChatRoute,
   initialState,
   reduce,
+  replyChipFor,
   selectTimeline,
   type Action,
   type AppState,
@@ -394,5 +398,94 @@ describe("store", () => {
     expect(store.getState().ui).toMatchObject({ view: "settings", settingsPage: "providers" });
     store.actions.closeSettings();
     expect(store.getState().ui.view).toBe("chat");
+    store.actions.openSession("s1");
+    expect(store.getState().ui).toMatchObject({ view: "session", session: "s1" });
+    await store.actions.selectBot("kami");
+    expect(store.getState().ui.view).toBe("chat");
+    store.actions.openSession("s1");
+    store.actions.openSession(null);
+    expect(store.getState().ui).toMatchObject({ view: "chat", session: null });
+  });
+
+  it("Reply there: the chip goes along as reply_to once, then clears; a turn end re-reads the places", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const a = away("e1", T0 / 1000 - 5, { place: "#og-dev", reply_target: "slack:C1:1794.5" });
+    const chip = replyChipFor(a)!;
+    expect(chip).toEqual({ session_id: "e1", source: "slack", place: "#og-dev", kind: "thread" });
+    expect(replyChipFor(away("c1", 1, { source: "cron" }))).toBeNull();
+    expect(replyChipFor(away("d1", 1, { source: "discord", reply_target: "discord:42" }))!.kind).toBe("channel");
+
+    store.actions.setReplyTo(chip);
+    expect(f.calls.filter((c) => c.op === "chat.send")).toHaveLength(0); // the chip alone sends nothing
+    await store.actions.send("결과 요약해서 남겨줘");
+    const sends = f.calls.filter((c) => c.op === "chat.send");
+    expect(sends.map((c) => c.params)).toEqual([{ bot: "kami", text: "결과 요약해서 남겨줘", reply_to: "e1" }]);
+    expect(store.getState().replyTo.kami).toBeNull();
+    expect(store.getState().chats.kami.items.at(-1)).toMatchObject({ kind: "user", reply: { source: "slack", label: "#og-dev" } });
+
+    const lists = () => f.calls.filter((c) => c.op === "elsewhere.list").length;
+    const before = lists();
+    f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
+    expect(lists()).toBe(before + 1);
+
+    // the next message, without a chip, is plain
+    await store.actions.send("there");
+    expect(f.calls.filter((c) => c.op === "chat.send").at(-1)!.params).toEqual({ bot: "kami", text: "there" });
+    f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
+    expect(lists()).toBe(before + 1);
+  });
+});
+
+describe("SESSIONS chats in the same reducer", () => {
+  it("a folder chat's events (tagged session) land under their own key and never move the bot's chat", () => {
+    let s = reduce(initialState(), { type: "chat.opened", bot: "kami", res: opened(), now: T0 });
+    const key = folderKey("kami", "f1");
+    s = run(s, realTurn("kami").map((e) => ({ ...e, session: "f1" }) as BridgeEvent));
+    s = reduce(s, { type: "event", ev: { event: "bot.status", bot: "kami", session: "f1", status: "online", running: true }, now: T0 });
+    expect(s.chats[key].messages.map((m) => m.text)).toEqual(["`echo omher-probe` 결과 `omher-probe`가 출력됐고 exit code는 0입니다."]);
+    expect(s.chats[key].lastTurn?.steps.map((x) => x.detail)).toEqual(["echo omher-probe"]);
+    expect(s.chats.kami.items.filter((i) => i.kind !== "user")).toEqual([]); // the bot's own chat is untouched
+    expect(s.chats.kami.turn).toBeNull();
+  });
+
+  it("answers on a session chat go to its route, not to the bridge's main chat", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const got: string[] = [];
+    setChatRoute("agent:s9", {
+      label: "Claude Code · app",
+      open: () => undefined,
+      send: async () => undefined,
+      interrupt: async () => undefined,
+      approve: async (id, choice) => void got.push(`${id}:${choice}`),
+      clarify: async (id, a) => void got.push(`${id}=${a}`),
+    });
+    store.dispatch({ type: "event", ev: { event: "approval.request", bot: "agent:s9", request_id: "r1", title: "Run this command?", command: "rm -rf build", choices: ["deny", "once", "session"] }, now: T0 });
+    await store.actions.respondApproval("r1", "session", "agent:s9");
+    expect(got).toEqual(["r1:session"]);
+    expect(f.calls.some((c) => c.op === "approval.respond")).toBe(false);
+    expect(store.getState().chats["agent:s9"].items.find((i) => i.kind === "approval")).toMatchObject({ resolved: "session" });
+    // a closed session refuses instead of answering the bot's main chat
+    setChatRoute("agent:s9", null);
+    expect(chatRoute("agent:s9")).toBeUndefined();
+    store.dispatch({ type: "event", ev: { event: "approval.request", bot: "agent:s9", request_id: "r2", title: "t", command: "c", choices: ["once"] }, now: T0 });
+    await store.actions.respondApproval("r2", "once", "agent:s9");
+    expect(f.calls.some((c) => c.op === "approval.respond")).toBe(false);
+    expect(store.getState().lastError).toMatch(/ended/);
+  });
+
+  it("losing the bridge ends Hermes chats' turns but not a shell agent chat's", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    store.dispatch({ type: "event", ev: { event: "turn.start", bot: "agent:s1" }, now: T0 });
+    f.emit({ event: "turn.start", bot: "kami", session: "f1" });
+    f.status("closed");
+    const s = store.getState();
+    expect(s.chats["agent:s1"].turn).not.toBeNull();
+    expect(s.chats[folderKey("kami", "f1")].turn).toBeNull();
   });
 });

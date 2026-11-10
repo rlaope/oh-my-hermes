@@ -283,6 +283,40 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
+### Hermes, OMH and the omher desktop app in one command (beta)
+
+```sh
+curl -fsSL https://omher.app/omher | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+```
+
+```powershell
+irm https://omher.app/omher.ps1 | iex
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+```
+
+The `omher@beta` argument adds three things to the plain install, and only with it:
+
+| Starting point | What runs |
+| --- | --- |
+| OMH and Hermes installed | OMH is upgraded; the omher app is added |
+| Hermes, no OMH | OMH is installed, `omh setup` + `omh doctor` connect it to Hermes; the app is added |
+| Neither | Hermes' official installer runs non-interactively first, then OMH, `omh setup`, and the app |
+
+The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is checked against the release's
+`SHA256SUMS.txt`, mounted, and `omher.app` is copied to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`)
+under a temporary name, then swapped for an older copy only once the copy is whole; on Windows the per-user
+installer is checked the same way and runs silently. Linux gets Hermes and OMH only, with a note.
+`OMH_WITH_HERMES=0` skips installing Hermes and `OMH_WITH_DESKTOP=0` skips the app. Run from a Hermes profile
+shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes under `<root>`, as omher does.
+
+The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
+GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
+model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
+leaves its exit code in `$LASTEXITCODE`.
+
 ### Windows (PowerShell 5.1+)
 
 ```powershell
@@ -1342,7 +1376,7 @@ Esc closes it):
 | Ctrl+_ / Ctrl+Y | Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); a run of typed characters is one edit |
 | Esc | Closes the `/` or `@` menu; on an empty composer, interrupts a running turn (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to the composer unsent); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
 | Esc Esc | With text, clears it and keeps it in this session's history; on an empty composer between turns, lists your prompts to rewind to (`/rewind` does too) |
-| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `iw aw` or a quote object (`i` or `a` with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner `y` keeps the register and moves inside, `d` keeps register and caret, and `c` enters INSERT inside), `p P`, `u` and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
+| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `iw aw`, a quote object (`i` or `a` with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner `y` keeps the register and moves inside, `d` keeps register and caret, and `c` enters INSERT inside), or a bracket object (`i` or `a` with `(`, `)`, `[`, `]`, `{`, `}`; closing aliases identical; inner and around count selects enclosing ancestor; empty inner `y` keeps register and moves to interior, `d` keeps register and caret, and `c` enters INSERT at interior), `p P`, `u` and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
 | Ctrl+V | Attaches the clipboard image as an `[Image #N]` token at the caret |
 | Ctrl+O | Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, while Hermes asks something, the whole question (it answers nothing); q leaves it |
 | Ctrl+L | Redraws the screen |
@@ -1369,6 +1403,17 @@ In Vim NORMAL, Esc cancels a pending Space leader and discards any earlier
 Escape confirmation without clearing the draft, interrupting a turn or opening
 rewind. The next Esc starts a fresh confirmation; another Esc within 0.8 s
 completes it. Ordinary Esc Esc still confirms as before.
+
+Bracket text objects (`(`, `)`, `[`, `]`, `{`, `}`) balance within the requested
+family across the entire composer, characterwise, preserving intervening newlines
+and indentation without linewise promotion or blank-line injection. Quotes and
+backslashes are treated as literal content rather than language or escape syntax.
+Count multiplication (capped at 9999) on both inner and around selects enclosing
+same-family ancestor depth; an unmatched or missing opener returns no span
+without mutating state. An empty inner span preserves register and caret on `d`,
+preserves register while moving caret to normal-clamped interior on `y`, and enters
+INSERT at interior on `c`. This target policy prioritizes deterministic composer
+integration rather than claiming exhaustive Vim parity.
 
 Ctrl+Enter and Shift+Enter reach the OMH TUI as keys of their own only where
 the terminal reports them. On start it asks iTerm2, kitty, WezTerm, tmux, VS

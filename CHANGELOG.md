@@ -4,6 +4,28 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
+  Grok open as chats in a folder you pick (or as a terminal), and their
+  questions and approvals join the bots' asks in a "needs you" strip that ⌘J
+  walks. A bot row rings while it answers and shows how long it has been at
+  it. A message from Slack, Discord or cron gets "Reply there", which asks the
+  bot to answer in that thread with its own tools; omher never posts there
+  itself. The side panel has tabs, the model picker has search, and the chat
+  keeps one face per run of bot bubbles. (#2695, #2702, #2704, #2706, #2708,
+  #2709, #2710)
+
+- **One command installs Hermes, OMH and the omher desktop app (beta).**
+  `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
+  (and the PowerShell script-block form with the same argument) installs Hermes with its official
+  installer when it is missing, installs or upgrades OMH, runs `omh setup` when OMH or Hermes is new on
+  the machine, then installs omher from the newest `omher-v*` release (dmg on macOS, silent per-user
+  installer on Windows; Linux skips the app with a note). The plain one-liner is unchanged. An omher
+  installed first offers the same install, minus the app, on its first launch when Hermes is missing,
+  and streams the installer's output on that screen. The README shows the one-liner and a screenshot.
+  A failed download or install is reported as a failure, on the app's setup screen too (it used to
+  read as success); the app image is checked against the release's `SHA256SUMS.txt` and swapped in
+  only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
+  one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
 - **Skill replies say verdicts and labels in plain words.** Live replies
   copied skill vocabulary to people: release-cut's "version surface",
   build-failure-triage's handoff and its `FIX_READY` / `NEEDS_MORE_LOGS`

@@ -36,8 +36,9 @@ class GatewayClientError(ValueError):
 class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
-    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None):
+    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None):
         self.name = name
+        self.caps = caps if caps is not None else {}  # client.capabilities answer, or an exception to raise
         self.events: asyncio.Queue = asyncio.Queue()
         self.calls: list[tuple[str, dict]] = []
         self.bot_chat = bot_chat
@@ -69,7 +70,17 @@ class FakeClient:
                         {"role": "user", "text": "secret", "display_kind": "hidden", "row_id": 4}],
                     "info": dict(self.model_info), "revision": self.revision, "execution_generation": 3,
                     "prompts": []}
+        if method == "client.capabilities":
+            if isinstance(self.caps, Exception):
+                raise self.caps
+            return dict(self.caps)
+        if method == "clarify.lock":
+            return {"status": "ok", "remaining": []}
         if method == "session.create":
+            if params.get("cwd"):  # a folder chat (SESSIONS > oh-my-hermes)
+                n = len(self.find("session.create")) - 1
+                return {"session_id": f"rt-folder-{n}", "stored_session_id": f"stored-folder-{n}", "messages": [],
+                        "info": {**self.model_info, "cwd": params["cwd"]}, "revision": 0, "execution_generation": 0}
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
         if method == "session.title":
@@ -467,6 +478,102 @@ class EventMapping(BridgeCase):
             self.assertEqual((await s.req("chat.send", bot="kami", text="x"))["error"]["code"], "bot_offline")
 
 
+class NeedsYou(BridgeCase):
+    """Asks raised while omher looks elsewhere: an interview (one clarify request with several questions),
+    expiry when the gateway stops waiting, and the clarify_batch flag on submit only when the gateway offers it."""
+
+    QUESTIONS = [{"qid": "q1", "question": "Who reads it?", "choices": ["Users", "Devs"], "multi_select": False},
+                 {"qid": "q2", "question": "Sections?", "choices": ["Fixes", "Thanks"], "multi_select": True},
+                 {"qid": "q3", "question": "Leave anything out?", "choices": None, "multi_select": False}]
+
+    def ask(self, c, rid="srq-abc123", sid=MAIN_RUNTIME, questions=None, **extra):
+        c.events.put_nowait({"jsonrpc": "2.0", "id": rid, "method": "clarify",
+                             "params": {"session_id": sid, "questions": questions or self.QUESTIONS, **extra}})
+
+    async def test_batch_clarify_is_one_interview_answered_by_locking_each_question(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            self.ask(c, rid="srq-foreign", sid="20261108_235229_aaaf70c4")  # another session's ask: not ours
+            self.ask(c)
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            asks = [e for e in s.events if e["event"] == "clarify.request"]
+            self.assertEqual(len(asks), 1)
+            self.assertEqual(asks[0]["request_id"], "srq-abc123")
+            self.assertEqual(asks[0]["question"], "Who reads it?")
+            self.assertEqual([q["qid"] for q in asks[0]["questions"]], ["q1", "q2", "q3"])
+            self.assertTrue(asks[0]["questions"][1]["multi_select"])
+            self.assertNotIn("choices", asks[0]["questions"][2])
+            r = await s.req("clarify.respond", bot="kami", request_id="srq-abc123",
+                            answers={"q1": "Users", "q2": None, "q3": "the beta"})
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(c.find("clarify.lock"), [
+                {"request_id": "srq-abc123", "question_id": "q1", "answer": "Users"},
+                {"request_id": "srq-abc123", "question_id": "q2", "answer": None},
+                {"request_id": "srq-abc123", "question_id": "q3", "answer": "the beta"}])
+            self.assertEqual(c.find("clarify.respond"), [])
+            bad = await s.req("clarify.respond", bot="kami", request_id="x", answers={"q1": 3})
+            self.assertEqual(bad["error"]["code"], "bad_request")
+
+    async def test_a_single_question_batch_keeps_its_choices(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            self.ask(c, questions=self.QUESTIONS[1:2])
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            ask = [e for e in s.events if e["event"] == "clarify.request"][0]
+            self.assertEqual((ask["question"], ask["choices"], ask["multi_select"]), ("Sections?", ["Fixes", "Thanks"], True))
+            self.assertNotIn("questions", ask)
+            self.assertTrue((await s.req("clarify.respond", bot="kami", request_id="srq-abc123", answer='["Fixes"]'))["ok"])
+            self.assertEqual(c.find("clarify.lock"), [{"request_id": "srq-abc123", "question_id": "q2", "answer": '["Fixes"]'}])
+
+    async def test_settled_or_cancelled_asks_expire_with_a_reason(self):
+        async with Env() as env:
+            t = [1000.0]
+            env.bridge.clock = lambda: t[0]
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("approval.request", {"prompt_id": "ap1", "kind": "approval", "execution_generation": 5,
+                                        "command": "rm -rf build/", "choices": ["once", "deny"], "timeout_s": 60})
+            c.push("clarify.request", {"prompt_id": "cl1", "kind": "clarify", "execution_generation": 5,
+                                       "question": "Which?", "choices": ["a"], "timeout_s": 300})
+            await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+            ap = [e for e in s.events if e["event"] == "approval.request"][0]
+            self.assertEqual(ap["timeout_s"], 60)
+            t[0] = 1061.0
+            c.push("approval.settled", {"prompt_id": "ap1", "execution_generation": 5})  # past its 60 s: timed out
+            c.push("clarify.settled", {"prompt_id": "cl1", "execution_generation": 5})   # early: answered elsewhere
+            c.push("approval.settled", {"prompt_id": "never-seen", "execution_generation": 5})
+            self.ask(c, rid="srq-iv")
+            await s.until(lambda ev: any(e["event"] == "clarify.request" and e["request_id"] == "srq-iv" for e in ev))
+            c.push("request.cancel", {"id": "srq-iv", "method": "clarify", "reason": "timeout"})
+            c.push("request.cancel", {"id": "srq-unknown", "method": "sudo", "reason": "timeout"})
+            await s.until(lambda ev: sum(e["event"] == "prompt.expired" for e in ev) == 3)
+            await asyncio.sleep(0.05)
+            got = [(e["request_id"], e["reason"]) for e in s.events if e["event"] == "prompt.expired"]
+            self.assertEqual(got, [("ap1", "timeout"), ("cl1", "resolved"), ("srq-iv", "timeout")])
+            # an expired ask cannot be answered through omher any more
+            r = await s.req("clarify.respond", bot="kami", request_id="srq-iv", answers={"q1": "Users"})
+            self.assertTrue(r["ok"])
+            self.assertEqual(c.find("clarify.lock"), [])
+
+    async def test_submit_declares_clarify_batch_only_when_the_gateway_offers_it(self):
+        for caps, want in (({"canonical_clarify_batch": True}, True), ({}, False),
+                           (GatewayRPCError("unknown_method"), False)):
+            async with Env(caps=caps) as env:
+                s = await self.open(env)
+                for text in ("one", "two"):
+                    self.assertTrue((await s.req("chat.send", bot="kami", text=text))["ok"])
+                c = env.clients["kami"]
+                self.assertEqual(c.find("client.capabilities"), [{}])  # asked once, with no flags
+                subs = c.find("prompt.submit")
+                self.assertEqual([p.get("clarify_batch") for p in subs], [True, True] if want else [None, None])
+                self.assertEqual({p["session_id"] for p in subs}, {MAIN_RUNTIME})
+
+
 class Elsewhere(BridgeCase):
     SESSIONS = [
         {"id": "s-slack", "title": "gateway 502", "source": "slack", "started_at": 1000.0, "message_count": 12, "running": True},
@@ -493,7 +600,7 @@ class Elsewhere(BridgeCase):
             self.assertTrue(by["s-slack"]["running"])
             self.assertEqual(by["s-slack"]["message_count"], 12)
             for a in rows:
-                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place", "last_reply", "last_reply_at"})
+                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place", "last_reply", "last_reply_at", "reply_target"})
                 self.assertTrue(a["label"])
 
     async def test_active_list_adds_live_sessions_and_caps_at_twenty(self):
@@ -635,8 +742,9 @@ class ReadOnlyRule(BridgeCase):
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        # Whole words: the gateway's own `open_requests` snapshot key is not the `requests` library.
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
-            self.assertNotIn(needle, src, needle)
+            self.assertIsNone(re.search(rf"\b{re.escape(needle)}\b", src), needle)
 
     def test_the_only_program_it_runs_is_read_only_git(self):
         import ast
@@ -661,6 +769,126 @@ class ReadOnlyRule(BridgeCase):
                 ob._git(bad, ".")
 
 
+class FolderChats(BridgeCase):
+    """SESSIONS > oh-my-hermes: a Hermes chat in a picked folder, through the same event path as the bot chat."""
+
+    async def test_open_send_events_answer_and_close(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                r = await s.req("folder.open", bot="kami", cwd=folder)
+                self.assertTrue(r["ok"], r)
+                fid = r["result"]["session"]
+                self.assertEqual(r["result"]["cwd"], folder)
+                c = env.clients["kami"]
+                create = c.find("session.create")
+                self.assertEqual(len(create), 1)
+                self.assertEqual(create[0]["cwd"], folder)
+                self.assertTrue(create[0]["cwd_explicit"])
+                self.assertEqual(create[0]["title"], "omher · " + Path(folder).name)
+                self.assertEqual(c.find("session.list"), [])  # never looks for or touches the Bot Chat
+
+                await s.req("chat.send", bot="kami", session=fid, text="list the files")
+                sub = c.find("prompt.submit")
+                self.assertEqual([x["session_id"] for x in sub], ["rt-folder-0"])
+                # the folder chat's events carry its id; the main chat's do not
+                c.push("message.start", {}, sid="rt-folder-0")
+                c.push("tool.start", {"tool_id": "t1", "name": "terminal", "args": {"command": "ls"}}, sid="rt-folder-0")
+                c.push("approval.request", {"prompt_id": "ap9", "command": "rm x", "description": "Delete", "choices": ["once", "deny"]},
+                       sid="rt-folder-0", execution_generation=2)
+                await s.until(lambda ev: any(e["event"] == "approval.request" for e in ev))
+                folder_ev = [e for e in s.events if e["event"] in ("turn.start", "tool.start", "approval.request")]
+                self.assertTrue(all(e.get("session") == fid for e in folder_ev), folder_ev)
+                self.assertNotIn("bot.status", [e["event"] for e in s.events if e.get("session")])
+                r = await s.req("approval.respond", bot="kami", session=fid, request_id="ap9", choice="once")
+                self.assertTrue(r["ok"], r)
+                self.assertEqual(c.find("approval.respond")[-1], {"session_id": "rt-folder-0", "prompt_id": "ap9", "choice": "once",
+                                                                  "execution_generation": 2})
+                await s.req("chat.interrupt", bot="kami", session=fid)
+                self.assertEqual(c.find("session.interrupt")[-1]["session_id"], "rt-folder-0")
+                c.push("message.complete", {"text": "two files", "status": "complete"}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+                msg = [e for e in s.events if e["event"] == "message"][0]
+                self.assertEqual((msg["session"], msg["text"]), (fid, "two files"))
+
+                self.assertTrue((await s.req("folder.close", bot="kami", session=fid))["ok"])
+                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+                r = await s.req("chat.send", bot="kami", session=fid, text="again")
+                self.assertEqual(r["error"]["code"], "not_found")
+                self.assertEqual(len(c.find("prompt.submit")), 1)
+
+    async def test_refuses_bad_folders_and_foreign_ids(self):
+        async with Env() as env:
+            s = await self.open(env)
+            for cwd in (None, "", "relative/dir", "/no/such/folder/x9", 5):
+                r = await s.req("folder.open", bot="kami", cwd=cwd)
+                self.assertEqual(r["error"]["code"], "bad_request", cwd)
+            for op, kw in (("chat.send", {"text": "x"}), ("chat.interrupt", {}), ("folder.close", {}),
+                           ("approval.respond", {"request_id": "a", "choice": "deny"})):
+                for sid in ("20261108_235229_aaaf70c4", MAIN_RUNTIME, "rt-folder-0", 3):
+                    r = await s.req(op, bot="kami", session=sid, **kw)
+                    self.assertEqual(r["error"]["code"], "not_found", (op, sid))
+            c = env.clients["kami"]
+            self.assertEqual(c.find("prompt.submit"), [])
+            self.assertEqual(c.find("session.close"), [])
+            self.assertEqual(c.find("session.create"), [])
+
+    async def test_folder_chat_asks_share_the_needs_you_path(self):
+        """A folder chat's asks take the main chat's path: clarify_batch on submit, an interview answered by
+        clarify.lock per question, timeouts and expiry, all tagged with the folder chat and kept apart from
+        the main chat's."""
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env(caps={"canonical_clarify_batch": True}) as env:
+                t = [1000.0]
+                env.bridge.clock = lambda: t[0]
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                self.assertTrue((await s.req("chat.send", bot="kami", session=fid, text="plan it"))["ok"])
+                self.assertEqual([(p["session_id"], p.get("clarify_batch")) for p in c.find("prompt.submit")],
+                                 [("rt-folder-0", True)])
+                c.events.put_nowait({"jsonrpc": "2.0", "id": "srq-f", "method": "clarify",
+                                     "params": {"session_id": "rt-folder-0", "timeout_s": 120,
+                                                "questions": NeedsYou.QUESTIONS[:2]}})
+                c.push("approval.request", {"prompt_id": "apf", "command": "rm x", "choices": ["once", "deny"],
+                                            "timeout_s": 30}, sid="rt-folder-0", execution_generation=3)
+                await s.until(lambda ev: any(e["event"] == "approval.request" for e in ev))
+                await s.until(lambda ev: any(e["event"] == "clarify.request" for e in ev))
+                iv = [e for e in s.events if e["event"] == "clarify.request"][0]
+                self.assertEqual((iv["session"], iv["request_id"], iv["timeout_s"]), (fid, "srq-f", 120))
+                self.assertEqual([q["qid"] for q in iv["questions"]], ["q1", "q2"])
+                # answered without `session`, the id is the main chat's business: no lock, nothing reaches the folder chat
+                await s.req("clarify.respond", bot="kami", request_id="srq-f", answers={"q1": "x"})
+                self.assertEqual(c.find("clarify.lock"), [])
+                self.assertEqual({p["session_id"] for p in c.find("clarify.respond")}, {MAIN_RUNTIME})
+                r = await s.req("clarify.respond", bot="kami", session=fid, request_id="srq-f",
+                                answers={"q1": "Users", "q2": None})
+                self.assertTrue(r["ok"], r)
+                self.assertEqual(c.find("clarify.lock"), [
+                    {"request_id": "srq-f", "question_id": "q1", "answer": "Users"},
+                    {"request_id": "srq-f", "question_id": "q2", "answer": None}])
+                self.assertNotIn("rt-folder-0", {p["session_id"] for p in c.find("clarify.respond")})
+                # the approval goes unanswered past its 30 s: settled -> expired as a timeout, tagged
+                t[0] = 1031.0
+                c.push("approval.settled", {"prompt_id": "apf"}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "prompt.expired" for e in ev))
+                exp = [e for e in s.events if e["event"] == "prompt.expired"]
+                self.assertEqual([(e["request_id"], e["reason"], e.get("session")) for e in exp], [("apf", "timeout", fid)])
+
+    async def test_gateway_loss_closes_folder_chats(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                c.push("message.start", {}, sid="rt-folder-0")
+                await s.until(lambda ev: any(e["event"] == "turn.start" for e in ev))
+                c.events.put_nowait(GatewayClientError("gateway went away"))
+                await s.until(lambda ev: any(e["event"] == "folder.closed" for e in ev))
+                end = [e for e in s.events if e["event"] == "turn.end" and e.get("session") == fid]
+                self.assertEqual(end[0]["outcome"], "error")
+
+
 class Discovery(unittest.TestCase):
     def test_discover_bots_reads_files(self):
         with tempfile.TemporaryDirectory() as t:
@@ -674,6 +902,20 @@ class Discovery(unittest.TestCase):
             self.assertEqual(set(bots), {"default", "a"})
             self.assertEqual((bots["default"]["display_name"], bots["default"]["model"]), ("Hermes", "plain-model"))
             self.assertEqual((bots["a"]["display_name"], bots["a"]["description"], bots["a"]["provider"]), ("Alpha", "first", "p"))
+
+    def test_parsed_yaml_is_cached_until_the_file_changes(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "config.yaml"
+            path.write_text("model: one\n", encoding="utf-8")
+            first = ob._load_yaml(path)
+            self.assertEqual(first, {"model": "one"})
+            self.assertIs(ob._load_yaml(path), first)  # unchanged file: no second parse
+            st = path.stat()
+            path.write_text("model: two\n", encoding="utf-8")  # same size: only the mtime tells them apart
+            os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+            self.assertEqual(ob._load_yaml(path), {"model": "two"})
+            path.unlink()
+            self.assertEqual(ob._load_yaml(path), {})
 
 
 if __name__ == "__main__":
@@ -733,6 +975,62 @@ class HermesPath(unittest.TestCase):
         self.assertEqual(home({}, "win32"), Path.home() / "AppData" / "Local" / "hermes")
         self.assertEqual(home({"HERMES_HOME": "/srv/h", "LOCALAPPDATA": "C:/L"}, "win32"), Path("/srv/h"))
         self.assertEqual(home({"HERMES_HOME": "  "}, "darwin"), Path.home() / ".hermes")
+
+    def test_a_url_in_the_last_reply_stays_readable(self):
+        import omher_bridge
+        g = omher_bridge.reply_gist
+        self.assertEqual(g("배포가 끝나면 https://omher.app/docs/skills/ 에서 열립니다."),
+                         "배포가 끝나면 omher.app/docs/skills 에서 열립니다.")
+        long = "See https://github.com/rlaope/oh-my-hermes/pull/2705/files?diff=split&w=1 for the diff."
+        self.assertEqual(g(long), "See github.com for the diff.")
+        self.assertEqual(g("Link: [the PR](https://x.y/1) is up."), "Link: the PR is up.")
+
+    def test_a_url_stops_at_the_korean_particle_glued_to_it(self):
+        g = ob.reply_gist
+        self.assertEqual(g("자세한 건 https://github.com/rlaope/oh-my-hermes/pull/2695에서 확인하세요."),
+                         "자세한 건 github.com/rlaope/oh-my-hermes/pull/2695에서 확인하세요.")
+        # a path over 40 chars is cut to its host, and the particle still stays
+        self.assertEqual(g("자세한 건 https://github.com/rlaope/oh-my-hermes/pull/2695/files에서 확인하세요."),
+                         "자세한 건 github.com에서 확인하세요.")
+        self.assertEqual(g("https://omher.app/docs를 보세요"), "omher.app/docs를 보세요")
+
+    def test_markdown_strip_leaves_underscores_inside_urls(self):
+        g = ob.reply_gist
+        self.assertEqual(g("Repo: https://github.com/foo_bar/baz_qux is __new__."),
+                         "Repo: github.com/foo_bar/baz_qux is new.")
+        self.assertEqual(g("**https://x.y/a_b**"), "x.y/a_b")
+
+    def test_query_and_fragment_are_never_shown(self):
+        g = ob.reply_gist
+        self.assertEqual(g("Open https://example.com/p?token=abc123 now"), "Open example.com/p now")
+        self.assertEqual(g("Open https://example.com?token=abc123"), "Open example.com")
+        self.assertEqual(g("See https://x.y/doc#secret-part."), "See x.y/doc.")
+        self.assertNotIn("abc123", g("https://a.b/c?x=1&token=abc123#f"))
+
+    def test_trailing_punctuation_and_brackets_stay_outside_the_url(self):
+        g = ob.reply_gist
+        self.assertEqual(g("(see https://x.y/a)"), "(see x.y/a)")
+        self.assertEqual(g("Done: https://x.y/a."), "Done: x.y/a.")
+        self.assertEqual(g("Read https://en.wikipedia.org/wiki/Foo_(bar), then go."),
+                         "Read en.wikipedia.org/wiki/Foo_(bar), then go.")
+        self.assertEqual(g("끝 (https://x.y/a)."), "끝 (x.y/a).")
+
+    def test_a_profile_home_shows_every_bot(self):
+        # omher started from a profile-scoped shell (HERMES_HOME=<root>/profiles/kami) must still list the root
+        # Hermes and every profile, not only that one profile as "Hermes".
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / ".hermes"
+            (root / "profiles" / "kami").mkdir(parents=True)
+            (root / "config.yaml").write_text("model: a\n", encoding="utf-8")
+            (root / "profiles" / "kami" / "config.yaml").write_text("model: b\n", encoding="utf-8")
+            home = omher_bridge.default_hermes_home({"HERMES_HOME": str(root / "profiles" / "kami")}, "darwin")
+            self.assertEqual(home, root)
+            self.assertEqual([b["name"] for b in omher_bridge.discover_bots(home)], ["default", "kami"])
+            # a custom home that only looks like a profile (no root config) is kept as given
+            lone = Path(d) / "x" / "profiles" / "p"
+            lone.mkdir(parents=True)
+            self.assertEqual(omher_bridge.default_hermes_home({"HERMES_HOME": str(lone)}, "darwin"), lone)
 
     def test_signal_setup_survives_a_loop_without_signal_handlers(self):
         import omher_bridge
@@ -952,6 +1250,116 @@ class BotIdentity(BridgeCase):
             self.assertEqual((d / "state.db").stat().st_mtime_ns, before)
             r = (await s.req("bots.info", bot="default"))["result"]
             self.assertEqual(r["places"], {})
+
+
+class ReplyThere(BridgeCase):
+    """"Reply there": omher passes a thread reference to the bot as one context block; it posts nothing."""
+
+    SLACK = {"platform": "slack", "chat_id": "C0C7ABCDE12", "chat_name": "product-opengateway-ai-loop", "chat_type": "group",
+             "thread_id": "1794224935.556179", "guild_id": "T058XXXX"}
+    DISCORD = {"platform": "discord", "chat_id": "1569310397687791637", "thread_id": "1569310397687791637",
+               "chat_name": "Oh-My-Hermes Community / #cron / OMH 스킬 \"홍보\" 리스트업", "chat_type": "thread",
+               "guild_id": "1544", "parent_chat_id": "1544259371528232980"}
+    SESSIONS = [
+        {"id": "s-slack", "title": "loop", "source": "slack", "started_at": 3000.0},
+        {"id": "s-discord", "title": "promo", "source": "discord", "started_at": 2000.0},
+        {"id": "s-cron", "title": "nightly", "source": "cron", "started_at": 1000.0},
+        {"id": "s-bare", "title": "no origin", "source": "slack", "started_at": 500.0},
+    ]
+
+    def _db(self, profile: Path) -> None:
+        import sqlite3
+        con = sqlite3.connect(profile / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, origin_json TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp REAL)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?)", [
+            ("s-slack", json.dumps(self.SLACK)), ("s-discord", json.dumps(self.DISCORD)),
+            ("s-cron", json.dumps({"platform": "local", "chat_id": "local"})), ("s-bare", None)])
+        con.commit()
+        con.close()
+
+    def test_reply_target_for_slack_thread_discord_thread_and_channels(self):
+        self.assertEqual(ob.reply_target(self.SLACK),
+                         ("slack:C0C7ABCDE12:1794224935.556179", "#product-opengateway-ai-loop"))
+        self.assertEqual(ob.reply_target(self.DISCORD),
+                         ("discord:1569310397687791637:1569310397687791637", "#cron / OMH 스킬 '홍보' 리스트업"))
+        self.assertEqual(ob.reply_target({"platform": "discord", "chat_id": "42", "chat_name": "G / #ops"}),
+                         ("discord:42", "#ops"))
+        self.assertEqual(ob.reply_target({"platform": "slack", "chat_id": "D0CB1", "chat_type": "dm",
+                                          "chat_name": "김희망 (Khope)", "thread_id": "1793.5"}),
+                         ("slack:D0CB1:1793.5", "김희망 (Khope)"))
+        # no messenger thread -> no chip
+        for origin in ({}, {"platform": "local", "chat_id": "local"}, {"platform": "slack"},
+                       {"platform": "slack", "chat_id": "C1 ; rm -rf"}, {"platform": "discord", "chat_id": "1", "thread_id": "a:b"},
+                       {"platform": "cron", "chat_id": "x"}):
+            self.assertIsNone(ob.reply_target(origin), origin)
+
+    def test_block_is_one_line_naming_the_target_and_round_trips(self):
+        block = ob.reply_block("slack:C1:1794.5", "#og-dev")
+        self.assertEqual(block, '[omher] Reply target: slack:C1:1794.5 (thread "#og-dev"). Post there only if the user '
+                                'asked; use your own messaging tool or `hermes send --to slack:C1:1794.5`.')
+        self.assertNotIn("\n", block)
+        self.assertIn('(channel "#ops")', ob.reply_block("discord:42", "#ops"))
+        typed, ref = ob.split_reply_block(f"결과 요약해서 남겨줘\n\n{block}")
+        self.assertEqual((typed, ref), ("결과 요약해서 남겨줘", {"target": "slack:C1:1794.5", "label": "#og-dev"}))
+        self.assertEqual(ob.split_reply_block("plain"), ("plain", None))
+        rows = ob.chat_messages([{"role": "user", "text": f"post it\n\n{block}", "row_id": 9},
+                                 {"role": "assistant", "text": block, "row_id": 10}])
+        self.assertEqual(rows[0]["text"], "post it")
+        self.assertEqual(rows[0]["reply_to"], {"target": "slack:C1:1794.5", "label": "#og-dev"})
+        self.assertNotIn("reply_to", rows[1])  # only the person's own rows carry a reference
+
+    async def test_elsewhere_list_carries_the_target_only_for_threads(self):
+        async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
+            self._db(env.home / "profiles" / "kami")
+            s = await self.open(env)
+            rows = {a["id"]: a for a in (await s.req("elsewhere.list", bot="kami"))["result"]["sessions"]}
+            self.assertEqual(rows["s-slack"]["reply_target"], "slack:C0C7ABCDE12:1794224935.556179")
+            self.assertEqual(rows["s-discord"]["reply_target"], "discord:1569310397687791637:1569310397687791637")
+            self.assertIsNone(rows["s-cron"]["reply_target"])
+            self.assertIsNone(rows["s-bare"]["reply_target"])
+
+    async def test_send_with_reply_to_submits_once_to_the_main_chat_with_one_block(self):
+        async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
+            self._db(env.home / "profiles" / "kami")
+            s = await self.open(env)
+            r = await s.req("chat.send", bot="kami", text="결과 요약해서 남겨줘  ", reply_to="s-slack")
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            sub = c.find("prompt.submit")
+            self.assertEqual(len(sub), 1)
+            self.assertEqual(sub[0]["session_id"], MAIN_RUNTIME)
+            text = sub[0]["text"]
+            self.assertEqual(text, "결과 요약해서 남겨줘\n\n" + ob.reply_block("slack:C0C7ABCDE12:1794224935.556179",
+                                                                         "#product-opengateway-ai-loop"))
+            self.assertEqual(text.count("[omher] Reply target:"), 1)
+            # the referenced thread is never resumed, created or written
+            for m, p in c.calls:
+                self.assertNotIn("s-slack", json.dumps(p), m)
+            # Discord thread
+            await s.req("chat.send", bot="kami", text="there", reply_to="s-discord")
+            self.assertIn("discord:1569310397687791637:1569310397687791637", c.find("prompt.submit")[-1]["text"])
+            # no thread to reply in -> refused, nothing submitted
+            for sid in ("s-cron", "s-bare", "nope"):
+                r = await s.req("chat.send", bot="kami", text="post", reply_to=sid)
+                self.assertEqual(r["error"]["code"], "bad_request", sid)
+            for bad in ("", 5, ["s-slack"]):
+                r = await s.req("chat.send", bot="kami", text="post", reply_to=bad)
+                self.assertEqual(r["error"]["code"], "bad_request", bad)
+            r = await s.req("chat.send", bot="kami", text="post", reply_to=MAIN_STORED)
+            self.assertEqual(r["error"]["code"], "bad_request")
+            self.assertEqual(len(c.find("prompt.submit")), 2)
+
+    async def test_there_without_a_chip_adds_nothing(self):
+        """'거기'/'there' with no chip is an ordinary turn: the bridge never guesses a target."""
+        async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
+            self._db(env.home / "profiles" / "kami")
+            s = await self.open(env)
+            await s.req("elsewhere.list", bot="kami")
+            for text in ("거기 슬랙에 남겨줘", "leave it there"):
+                await s.req("chat.send", bot="kami", text=text)
+            self.assertEqual([p["text"] for p in env.clients["kami"].find("prompt.submit")],
+                             ["거기 슬랙에 남겨줘", "leave it there"])
 
 
 class SidePanel(unittest.TestCase):

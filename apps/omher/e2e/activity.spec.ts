@@ -110,7 +110,7 @@ test("live line slides through steps with a skill chip, then collapses with deta
 
   // no per-tool rows anywhere in the timeline outside the activity element
   const kinds = await tl.locator(":scope > .row").evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
-  expect(kinds.every((k) => ["user", "assistant", "activity", "away", "routine", "streaming"].includes(k ?? "")))
+  expect(kinds.every((k) => ["user", "assistant", "activity", "away", "routine", "streaming", "typing"].includes(k ?? "")))
     .toBe(true);
   expect(kinds.filter((k) => k === "activity")).toHaveLength(1);
   const outside = await tl.evaluate((el) => {

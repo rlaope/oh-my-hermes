@@ -64,7 +64,7 @@
 .side-sh {
   font-size: 10.5px;
   font-weight: 500;
-  color: var(--quiet);
+  color: var(--muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0 var(--side-x) 6px;
@@ -118,20 +118,6 @@
 .bot.active {
   background: var(--active-row);
 }
-.bot .live-dot {
-  position: absolute;
-  left: 34px;
-  top: 32px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--spin);
-  border: 2px solid var(--side);
-  animation: pulse 1.4s infinite;
-}
-.bot.active .live-dot {
-  border-color: var(--active-row);
-}
 .bot-m {
   flex: 1;
   min-width: 0;
@@ -159,6 +145,13 @@
   font-variant-numeric: tabular-nums;
   flex: none;
 }
+/* a busy row's time slot is its elapsed time; an open ask's is "waiting" in amber */
+.bot-t.busy {
+  color: var(--muted);
+}
+.bot-t.wait {
+  color: var(--needs-text);
+}
 .bot-r2 {
   display: flex;
   align-items: center;
@@ -178,6 +171,32 @@
 }
 .bot-p.live {
   color: var(--muted);
+}
+/* the live step slides up in place, one line high */
+.bot-p.live .ui-tick,
+.bot-p.live .ui-tick-t {
+  height: 17px;
+  line-height: 17px;
+}
+/* the typing dots end the preview text (not the row): the live preview only takes the width it needs */
+.bot-p.live {
+  flex: 0 1 auto;
+}
+.bot-r2 .ui-typing {
+  margin-left: 7px;
+  /* sit on the x-height middle of the 12px preview, not the line box middle */
+  transform: translateY(1.5px);
+}
+/* --muted at near full strength: at 3px a dimmed dot disappears */
+.bot-r2 .ui-typing i {
+  --dot-rest: 0.85;
+  background: var(--muted);
+}
+/* the live step's command or path in mono, as the activity line shows it */
+.bot-p.live code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--body);
 }
 .badge {
   margin-left: 6px;
@@ -264,4 +283,331 @@
   font-size: 9.5px;
   color: var(--muted);
   flex: none;
+}
+
+/* ---- Needs you: approvals and questions waiting on the person ------------------------------------
+   Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. */
+.side {
+  --needs: #e9a23b;
+  --needs-ink: #1b1204;
+  --needs-soft: rgba(233, 162, 59, 0.12);
+  --needs-text: #e9a23b;
+}
+[data-theme="light"] .side {
+  --needs: #e39a2a;
+  --needs-ink: #1b1204;
+  --needs-soft: rgba(227, 154, 42, 0.14);
+  /* amber text on the light sidebar: a deeper shade, so 11px stays readable */
+  --needs-text: #a8640a;
+}
+/* per row: a plain dot, never a number (a number reads as unread; the strip above carries the count) */
+.needs-dot {
+  align-self: flex-start;
+  margin-top: 4.5px;
+  margin-left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--needs);
+  box-shadow: 0 0 0 3px var(--needs-soft);
+  flex: none;
+}
+/* the ask gets two lines in the row, so it is not cut mid-word after a few characters */
+.bot-p.ask {
+  color: var(--body);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+/* The strip expands in place: the list opens inside the same box and pushes BOTS down, so it never covers
+   (or clips) the bot rows and the open bot stays in view. */
+.needs-w {
+  position: relative;
+  flex: none;
+  margin: -6px 0 10px;
+  border-radius: var(--r);
+}
+.needs-w.open {
+  background: var(--raise);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+[data-theme="light"] .needs-w.open {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 1px 2px rgba(40, 20, 40, 0.06);
+}
+.needs-strip {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--side-x);
+  border-radius: var(--r);
+  background: var(--needs-soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.needs-strip:hover {
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.needs-w.open .needs-strip {
+  background: none;
+  box-shadow: none;
+}
+.needs-ic {
+  width: 8px;
+  height: 8px;
+  margin: 0 5px;
+  border-radius: 50%;
+  background: var(--needs);
+  flex: none;
+}
+.needs-t {
+  flex: 1;
+  min-width: 0;
+}
+.needs-k {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.needs-chev {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: transform 0.12s;
+}
+.needs-w.open .needs-chev {
+  transform: rotate(180deg);
+}
+.bot-p.ask code,
+.needs-q code {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 0 2px;
+  margin-right: 1px;
+  border-radius: 3px;
+  background: var(--raise2);
+  color: var(--ink);
+}
+.needs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px 4px;
+  border-top: 1px solid var(--line);
+  max-height: 232px;
+  overflow-y: auto;
+}
+.needs-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  width: 100%;
+}
+.needs-item .ui-av {
+  margin-top: 1px;
+}
+.needs-item:hover,
+.needs-item:focus-visible {
+  background: var(--raise2);
+}
+.needs-m {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.needs-r1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.needs-b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* what kind of ask: a small neutral tag (amber stays on the dots) */
+.needs-tag {
+  flex: none;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--r-sm);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.needs-q {
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--body);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.hidden-n {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.needs-age {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.hidden-list {
+  position: relative;
+  z-index: 30;
+  margin-top: 4px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px;
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.16s ease both;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ---- row menu (right-click / ⋯) ------------------------------------------------------------------ */
+.bot-w {
+  position: relative;
+  flex: none;
+}
+.bot-more {
+  position: absolute;
+  right: 4px;
+  top: 6px;
+  width: 22px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--raise2);
+  opacity: 0;
+}
+.bot-w:hover .bot-more,
+.bot-more:focus-visible,
+.bot-w.menu-open .bot-more {
+  opacity: 1;
+}
+.bot-w.menu-open .bot:not(.active) {
+  background: var(--hover);
+}
+.bot-more:hover {
+  color: var(--ink);
+  background: var(--line-strong);
+}
+.bot-w:hover .bot-r1 .bot-t,
+.bot-w.menu-open .bot-r1 .bot-t {
+  visibility: hidden;
+}
+.row-menu {
+  position: fixed;
+  z-index: 40;
+  width: 168px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 4px;
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.14s ease both;
+  display: flex;
+  flex-direction: column;
+}
+.row-mi {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--body);
+  text-align: left;
+}
+.row-mi:hover,
+.row-mi:focus-visible {
+  background: var(--raise2);
+  color: var(--ink);
+  outline: 0;
+}
+.row-mi.sep {
+  margin-top: 4px;
+  position: relative;
+}
+.row-mi.sep::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -3px;
+  border-top: 1px solid var(--line);
+}
+.bot-pin {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 0 2px 6px;
+  border-radius: 50%;
+  background: var(--quiet);
+  vertical-align: middle;
+}
+.hidden-h {
+  font-size: 10.5px;
+  color: var(--quiet);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 6px 2px;
+}
+.hidden-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+}
+.hidden-n {
+  flex: 1;
+  min-width: 0;
+  color: var(--body);
+}
+.hidden-show {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.hidden-show:hover {
+  background: var(--raise2);
+}
+.bot-unhide {
+  text-align: left;
+  text-decoration: underline;
 }

@@ -5,7 +5,8 @@
 //   node e2e/mock-bridge.mjs --port 5308 [--token T]
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
-// Test-control ops (not part of the protocol): mock.calls, mock.emit {events}, mock.reset.
+// Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset,
+// mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
 import http from "node:http";
 import crypto from "node:crypto";
 
@@ -46,9 +47,9 @@ const HISTORY_SEED = {
 // Away sessions are stored as offsets from "now" so the timeline always looks fresh.
 const AWAY_SEED = {
   kami: [
-    { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", reply: "Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.", started: 4 * MIN, last: 20, count: 14, running: true },
-    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
-    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
+    { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", target: "slack:C0123ABCD:1794186944.520669", reply: "Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.", started: 4 * MIN, last: 20, count: 14, running: true },
+    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", target: "discord:1569310397687791637:1569310397687791637", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
+    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", target: "discord:1544259371528232981", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
   ],
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
@@ -146,7 +147,9 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 // ---- mutable state ---------------------------------------------------------------------------
 
 let calls = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars;
+// What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
+let submits = [];
+let bots, history, models, turns, pending, idSeq, queues, avatars, folders;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -168,9 +171,11 @@ function reset() {
   turns = {};
   queues = {};
   avatars = {};
+  folders = new Map(); // folder chat id -> { bot, cwd, open }
   pending = new Map();
   idSeq = 0;
   calls = [];
+  submits = [];
 }
 reset();
 
@@ -301,6 +306,13 @@ function needBot(p) {
   if (b.status === "offline") throw new OpError("bot_offline", `${p.bot} is offline`);
   return b;
 }
+function needFolder(p, b) {
+  const f = typeof p.session === "string" ? folders.get(p.session) : undefined;
+  if (!f || !f.open || f.bot !== b.name) throw new OpError("not_found", "no such folder chat");
+  return f;
+}
+// A folder chat's scripted turn runs under its own key; its events go out as the bot's, tagged `session`.
+const folderTurnKey = (bot, session) => `${bot}\u0000${session}`;
 function needStr(p, k) {
   if (typeof p[k] !== "string" || !p[k]) throw new OpError("bad_request", `missing ${k}`);
   return p[k];
@@ -321,6 +333,7 @@ const awayFor = (bot) =>
       place: a.place ?? null,
       last_reply: a.reply ?? null,
       last_reply_at: a.reply ? now() - a.last : null,
+      reply_target: a.target ?? null,
     }))
     .sort((x, y) => y.last_active - x.last_active)
     .slice(0, 20);
@@ -340,17 +353,63 @@ const OPS = {
       reasoning: m.reasoning,
     };
   },
+  "folder.open": (p) => {
+    const b = needBot(p);
+    const cwd = needStr(p, "cwd");
+    if (!cwd.startsWith("/") && !/^[A-Za-z]:\\/.test(cwd)) throw new OpError("bad_request", "cwd must be an existing folder");
+    const session = nextId("f");
+    folders.set(session, { bot: b.name, cwd, open: true });
+    const m = models[b.name];
+    return { session, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
+  "folder.close": (p) => {
+    needBot(p);
+    const f = folders.get(p.session);
+    if (!f || !f.open) throw new OpError("not_found", "no such folder chat");
+    f.open = false;
+    const key = folderTurnKey(f.bot, p.session);
+    if (turns[key]) endTurn(key, "interrupted", { drop: true });
+    return {};
+  },
   "chat.send": (p) => {
     const b = needBot(p);
     const text = needStr(p, "text");
+    // Same as the real bridge: a reply_to session adds one context block for the bot. Nothing is posted.
+    let submitted = text;
+    let reply_to = null;
+    if (p.reply_to !== undefined) {
+      if (typeof p.reply_to !== "string" || !p.reply_to) throw new OpError("bad_request", "reply_to must be a session id");
+      const seed = (AWAY_SEED[b.name] ?? []).find((a) => a.id === p.reply_to);
+      if (!seed?.target) throw new OpError("bad_request", "that session has no thread to reply in");
+      const label = seed.place || seed.source;
+      const kind = seed.target.split(":").length >= 3 ? "thread" : "channel";
+      reply_to = { target: seed.target, label };
+      submitted =
+        `${text.trimEnd()}\n\n[omher] Reply target: ${seed.target} (${kind} "${label}"). Post there only if the user asked; ` +
+        `use your own messaging tool or \`hermes send --to ${seed.target}\`.`;
+    }
+    submits.push({ bot: b.name, session_id: `main-${b.name}`, text: submitted });
     const input_id = nextId("input");
-    history[b.name].push({ id: nextId("u"), role: "user", text, ts: now() });
+    if (p.session !== undefined) {
+      const f = needFolder(p, b);
+      const key = folderTurnKey(b.name, p.session);
+      if (turns[key]) throw new OpError("busy", "a turn is running");
+      startTurn(key, text, f);
+      return { input_id };
+    }
+    history[b.name].push({ id: nextId("u"), role: "user", text, ts: now(), ...(reply_to ? { reply_to } : {}) });
     if (turns[b.name]) (queues[b.name] ??= []).push(text);
     else startTurn(b.name, text);
     return { input_id };
   },
   "chat.interrupt": (p) => {
     const b = needBot(p);
+    if (p.session !== undefined) {
+      needFolder(p, b);
+      const key = folderTurnKey(b.name, p.session);
+      if (turns[key]) endTurn(key, "interrupted", { drop: true });
+      return {};
+    }
     if (turns[b.name]) endTurn(b.name, "interrupted", { drop: true });
     return {};
   },
@@ -359,20 +418,31 @@ const OPS = {
     const id = needStr(p, "request_id");
     const choice = needStr(p, "choice");
     if (!["once", "session", "always", "deny"].includes(choice)) throw new OpError("bad_request", "bad choice");
+    const target = p.session !== undefined ? (needFolder(p, b), folderTurnKey(b.name, p.session)) : b.name;
     const wait = pending.get(id);
-    if (!wait || wait.bot !== b.name || wait.kind !== "approval") throw new OpError("not_found", `no pending approval ${id}`);
+    if (!wait || wait.bot !== target || wait.kind !== "approval") throw new OpError("not_found", `no pending approval ${id}`);
     pending.delete(id);
-    resumeApproval(b.name, choice);
+    clearTimeout(wait.timer);
+    resumeApproval(target, choice);
     return {};
   },
   "clarify.respond": (p) => {
     const b = needBot(p);
     const id = needStr(p, "request_id");
-    if (typeof p.answer !== "string") throw new OpError("bad_request", "missing answer");
+    const answers = p.answers;
+    if (answers !== undefined) {
+      if (!answers || typeof answers !== "object" || Array.isArray(answers) ||
+          !Object.values(answers).every((v) => v === null || typeof v === "string"))
+        throw new OpError("bad_request", "answers must map question ids to text or null");
+    } else if (typeof p.answer !== "string") throw new OpError("bad_request", "missing answer");
     const wait = pending.get(id);
     if (!wait || wait.bot !== b.name || wait.kind !== "clarify") throw new OpError("not_found", `no pending clarification ${id}`);
     pending.delete(id);
-    resumeClarify(b.name, p.answer);
+    clearTimeout(wait.timer);
+    if (wait.qids) {
+      const given = wait.qids.filter((q) => answers?.[q] != null).length;
+      resumeClarify(b.name, `${given} of ${wait.qids.length} answers`);
+    } else resumeClarify(b.name, p.answer ?? Object.values(answers).find((v) => v !== null) ?? "");
     return {};
   },
   "elsewhere.list": (p) => ({ sessions: awayFor(needBot(p).name) }),
@@ -456,6 +526,11 @@ const OPS = {
   },
   "chat.set_model": (p) => {
     const b = needBot(p);
+    if (p.session !== undefined) {
+      needFolder(p, b); // a folder chat's model changes for that chat only
+      if (typeof p.model !== "string") throw new OpError("bad_request", "need model");
+      return { model: p.model, provider: p.provider ?? models[b.name].provider, reasoning: models[b.name].reasoning };
+    }
     const cur = models[b.name];
     if (p.provider !== undefined && !PROVIDERS.some((x) => x.slug === p.provider)) throw new OpError("bad_request", `unknown provider ${p.provider}`);
     if (p.reasoning !== undefined && !REASONING_LEVELS.includes(p.reasoning)) throw new OpError("bad_request", `unknown reasoning level ${p.reasoning}`);
@@ -469,6 +544,7 @@ const OPS = {
   },
   // ---- test control (not part of the protocol)
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
+  "mock.submits": () => ({ submits: submits.map((x) => ({ ...x })) }),
   "mock.emit": (p) => {
     if (!Array.isArray(p.events)) throw new OpError("bad_request", "events must be an array");
     for (const ev of p.events) broadcast(ev);
@@ -477,6 +553,19 @@ const OPS = {
   "mock.reset": () => {
     reset();
     return {};
+  },
+  "mock.ask": (p) => {
+    const b = needBot(p);
+    const kind = p.kind ?? "approval";
+    if (!["approval", "clarify", "interview"].includes(kind)) throw new OpError("bad_request", "kind is approval, clarify or interview");
+    if (turns[b.name]) throw new OpError("bad_request", `${b.name} is busy`);
+    turns[b.name] = { timers: [], text: `(${kind})` };
+    bots[b.name].running = true;
+    ev(b.name, "bot.status", { status: bots[b.name].status, running: true });
+    ev(b.name, "turn.start");
+    const timeout = Number.isInteger(p.timeout_ms) && p.timeout_ms > 0 ? p.timeout_ms : 0;
+    const request_id = kind === "approval" ? raiseApproval(b.name, timeout) : kind === "clarify" ? raiseClarify(b.name, timeout) : raiseInterview(b.name, timeout);
+    return { request_id };
   },
 };
 
@@ -507,7 +596,11 @@ function handleFrame(sock, text) {
 
 // ---- scripted turns --------------------------------------------------------------------------
 
-const ev = (bot, event, fields = {}) => broadcast({ event, bot, ...fields });
+const ev = (bot, event, fields = {}) => {
+  const [b, session] = bot.split("\u0000");
+  if (session !== undefined && event === "bot.status") return; // a folder chat never moves the bot's status
+  broadcast(session !== undefined ? { event, bot: b, session, ...fields } : { event, bot, ...fields });
+};
 const hangul = /[\u3131-\u318e\uac00-\ud7a3]/;
 
 function schedule(bot, steps) {
@@ -526,17 +619,17 @@ function endTurn(bot, outcome, { drop = false } = {}) {
   t.timers.forEach(clearTimeout);
   for (const [id, w] of pending) if (w.bot === bot) pending.delete(id);
   delete turns[bot];
-  bots[bot].running = false;
+  if (bots[bot]) bots[bot].running = false;
   if (drop) queues[bot] = [];
   ev(bot, "turn.end", { outcome });
-  ev(bot, "bot.status", { status: bots[bot].status, running: false });
+  ev(bot, "bot.status", { status: bots[bot]?.status, running: false });
   const next = queues[bot]?.shift();
   if (next !== undefined) setTimeout(() => startTurn(bot, next), 50);
 }
 
 function say(bot, text) {
   const id = nextId("a");
-  history[bot].push({ id, role: "assistant", text, ts: now() });
+  if (history[bot]) history[bot].push({ id, role: "assistant", text, ts: now() });
   ev(bot, "message", { id, text });
 }
 
@@ -547,13 +640,23 @@ function tool(bot, tool_id, name, detail, startMs, endMs, extra = []) {
   ];
 }
 
-function startTurn(bot, text) {
+function startTurn(bot, text, folder) {
   turns[bot] = { timers: [], text };
-  bots[bot].running = true;
-  ev(bot, "bot.status", { status: bots[bot].status, running: true });
+  if (bots[bot]) bots[bot].running = true;
+  ev(bot, "bot.status", { status: bots[bot]?.status, running: true });
+  if (folder) {
+    ev(bot, "turn.start");
+    if (text.startsWith("/approve")) return scriptApproval(bot);
+    return schedule(bot, [
+      ...tool(bot, "f-tool-1", "terminal", `ls ${folder.cwd}`, 80, 300),
+      [360, () => say(bot, `(mock oh-my-hermes) Working in ${folder.cwd}: ${text}`)],
+      [460, () => endTurn(bot, "done")],
+    ]);
+  }
   ev(bot, "turn.start");
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
+  if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   scriptNormal(bot, text);
 }
 
@@ -613,6 +716,66 @@ function scriptClarify(bot) {
       ev(bot, "clarify.request", { request_id, question: "Which environment should I deploy to?", choices: ["staging", "production"] });
     }],
   ]);
+}
+
+// An ask the gateway gives up on: after `timeout` ms it stops waiting (prompt.expired) and the turn goes on.
+function expireLater(bot, request_id, timeout) {
+  if (!timeout) return undefined;
+  const t = turns[bot];
+  const h = setTimeout(() => {
+    if (!pending.has(request_id) || turns[bot] !== t) return;
+    pending.delete(request_id);
+    ev(bot, "prompt.expired", { request_id, reason: "timeout" });
+    say(bot, "No answer, so I left it as it was.");
+    endTurn(bot, "done");
+  }, timeout);
+  t.timers.push(h);
+  return h;
+}
+
+function raiseApproval(bot, timeout) {
+  const request_id = nextId("approval");
+  pending.set(request_id, { bot, kind: "approval", timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "status", { text: "Preparing to clean the build folder…" });
+  ev(bot, "approval.request", {
+    request_id,
+    title: "Run shell command",
+    command: "rm -rf build/",
+    choices: ["once", "session", "always", "deny"],
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
+}
+
+function raiseClarify(bot, timeout) {
+  const request_id = nextId("clarify");
+  pending.set(request_id, { bot, kind: "clarify", timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "clarify.request", {
+    request_id,
+    question: "Which environment should I deploy to?",
+    choices: ["staging", "production"],
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
+}
+
+// Hermes' clarify tool asking several questions at once: one interview card.
+const INTERVIEW = [
+  { qid: "q1", question: "Who is the release note for?", choices: ["Users", "Developers", "Both"] },
+  { qid: "q2", question: "Which sections should it have?", choices: ["Highlights", "Fixes", "Breaking changes", "Thanks"], multi_select: true },
+  { qid: "q3", question: "Anything to leave out?" },
+];
+function raiseInterview(bot, timeout) {
+  const request_id = nextId("interview");
+  pending.set(request_id, { bot, kind: "clarify", qids: INTERVIEW.map((q) => q.qid), timer: expireLater(bot, request_id, timeout) });
+  ev(bot, "status", { text: "Planning the release note…" });
+  ev(bot, "clarify.request", {
+    request_id,
+    question: INTERVIEW[0].question,
+    questions: INTERVIEW,
+    ...(timeout ? { timeout_s: timeout / 1000 } : {}),
+  });
+  return request_id;
 }
 
 function resumeClarify(bot, answer) {

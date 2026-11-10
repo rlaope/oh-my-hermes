@@ -51,6 +51,102 @@ OMH_LANG_WAS_SET=0
 if [ -n "$OMH_LANG_RAW" ]; then
   OMH_LANG_WAS_SET=1
 fi
+# `sh -s -- omher@beta` opts into the desktop path: Hermes when it is missing
+# (its official installer, non-interactive), OMH, `omh setup` when this machine
+# had no OMH or no Hermes, then the omher desktop app. With no argument this
+# installer does exactly what it did before the argument existed.
+OMH_WITH_HERMES="${OMH_WITH_HERMES:-1}"
+OMH_WITH_DESKTOP="${OMH_WITH_DESKTOP:-1}"
+OMH_APP_DIR="${OMH_APP_DIR:-}"
+OMH_OMHER_BETA=0
+for omh_arg in "$@"; do
+  case "$omh_arg" in
+    omher@beta) OMH_OMHER_BETA=1 ;;
+    *)
+      printf "omh installer: unknown argument '%s'. The only argument is omher@beta, which adds Hermes (when missing) and the omher desktop app:\n" "$omh_arg" >&2
+      printf '  curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta\n' >&2
+      exit 2
+      ;;
+  esac
+done
+OMH_HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
+OMH_OMHER_RELEASES_URL="https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10"
+OMH_OMHER_RELEASE_PAGES=5
+OMH_OMHER_SITE_URL="https://omher.app/"
+
+# Hermes runs a profile with HERMES_HOME=<root>/profiles/<name>, and its venv
+# lives under <root>. A home whose parent is `profiles` and whose root holds its
+# own config.yaml resolves to that root, the rule the omher bridge uses
+# (hermes_root_of). Without it a profile shell looked for Hermes inside the
+# profile folder and installed a second Hermes there.
+hermes_root_of() {
+  omh_root_home="${1%/}"
+  omh_root_parent="${omh_root_home%/*}"
+  case "$omh_root_parent" in
+    */profiles)
+      omh_root_dir="${omh_root_parent%/profiles}"
+      if [ -n "$omh_root_dir" ] && [ -f "$omh_root_dir/config.yaml" ]; then
+        printf '%s\n' "$omh_root_dir"
+        return 0
+      fi
+      ;;
+  esac
+  printf '%s\n' "$1"
+}
+
+OMH_HERMES_DIR="${HERMES_HOME:-}"
+if [ -n "$OMH_HERMES_DIR" ]; then
+  OMH_HERMES_DIR="$(hermes_root_of "$OMH_HERMES_DIR")"
+elif [ -n "$OMH_HOME_DIR" ]; then
+  OMH_HERMES_DIR="$OMH_HOME_DIR/.hermes"
+fi
+
+# Hermes' own Python, where Hermes' installer puts it. The same places the
+# omher app looks (apps/omher/src-tauri/src/bridge.rs).
+hermes_python() {
+  [ -n "$OMH_HERMES_DIR" ] || return 1
+  for omh_hermes_venv in venv .venv; do
+    if [ -x "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python" ]; then
+      printf '%s\n' "$OMH_HERMES_DIR/hermes-agent/$omh_hermes_venv/bin/python"
+      return 0
+    fi
+  done
+  return 1
+}
+
+hermes_present() {
+  command -v hermes >/dev/null 2>&1 || hermes_python >/dev/null
+}
+
+omh_present() {
+  if [ -n "$OMH_VENV_DIR" ] && [ -x "$OMH_VENV_DIR/bin/omh" ]; then
+    return 0
+  fi
+  command -v omh >/dev/null 2>&1
+}
+
+OMH_HAD_OMH=0
+OMH_HAD_HERMES=0
+OMH_INSTALL_HERMES=0
+OMH_OMHER_APP_PATH=""
+if [ "$OMH_OMHER_BETA" = "1" ]; then
+  if omh_present; then
+    OMH_HAD_OMH=1
+  fi
+  if hermes_present; then
+    OMH_HAD_HERMES=1
+  elif [ "$OMH_WITH_HERMES" != "0" ]; then
+    OMH_INSTALL_HERMES=1
+  fi
+  # Connect OMH to Hermes when either side is new here. An existing OMH on an
+  # existing Hermes is only upgraded, the way a plain install upgrades it.
+  if [ "$OMH_HAD_OMH" = "0" ] || [ "$OMH_INSTALL_HERMES" = "1" ]; then
+    if [ "$OMH_HAD_HERMES" = "1" ] || [ "$OMH_INSTALL_HERMES" = "1" ]; then
+      OMH_RUN_SETUP=1
+    fi
+  fi
+fi
+
 OMH_RUNTIME_PYTHON="$OMH_PYTHON"
 OMH_COMMAND_HINT=""
 OMH_INSTALL_STEP_COUNT=2
@@ -419,6 +515,11 @@ python_candidates() {
     uv python list --managed-python --only-installed 2>/dev/null |
       sed -n 's/^[^[:space:]][^[:space:]]*[[:space:]][[:space:]]*//p'
   fi
+  # omher@beta only: Hermes' own interpreter, last. On a machine that had no
+  # Python 3.11+ until Hermes' installer brought one, it is the only candidate.
+  if [ "$OMH_OMHER_BETA" = "1" ]; then
+    hermes_python || true
+  fi
 }
 
 select_python() {
@@ -515,7 +616,243 @@ resolve_python() {
 }
 
 
+omher_beta_plan() {
+  if [ "$OMH_HAD_OMH" = "1" ] && [ "$OMH_HAD_HERMES" = "1" ]; then
+    say_note "omher@beta: found Hermes and OMH. Upgrading OMH, then adding the omher app."
+  elif [ "$OMH_HAD_HERMES" = "1" ]; then
+    say_note "omher@beta: found Hermes without OMH. Installing OMH, connecting it with 'omh setup', then adding the omher app."
+  elif [ "$OMH_INSTALL_HERMES" = "1" ] && [ "$OMH_HAD_OMH" = "1" ]; then
+    say_note "omher@beta: found OMH without Hermes. Installing Hermes, upgrading OMH, connecting them with 'omh setup', then adding the omher app."
+  elif [ "$OMH_INSTALL_HERMES" = "1" ]; then
+    say_note "omher@beta: found neither Hermes nor OMH. Installing Hermes first, then OMH, 'omh setup', and the omher app."
+  else
+    say_note "omher@beta: Hermes is not installed and OMH_WITH_HERMES=0 skips it. Install Hermes yourself, then run 'omh setup'."
+  fi
+  if [ "$OMH_WITH_DESKTOP" = "0" ]; then
+    say_note "omher@beta: OMH_WITH_DESKTOP=0, so the omher app is not installed."
+  fi
+}
+
+omh_temp_dir() {
+  mktemp -d "${TMPDIR:-/tmp}/omh-install.XXXXXX"
+}
+
+install_hermes() {
+  say_step "[hermes]" "Install Hermes Agent with its official installer (non-interactive)"
+  if ! command -v curl >/dev/null 2>&1 || ! command -v bash >/dev/null 2>&1; then
+    say_fail "Installing Hermes needs curl and bash. Install Hermes from https://hermes-agent.nousresearch.com/ and run this again."
+    exit 1
+  fi
+  OMH_HERMES_TMP="$(omh_temp_dir)"
+  # Downloaded first rather than piped: a failed download piped into bash is
+  # an empty script that exits 0, and Hermes would be reported as installed.
+  if ! curl -fsSL -o "$OMH_HERMES_TMP/install.sh" "$OMH_HERMES_INSTALL_URL"; then
+    rm -rf "$OMH_HERMES_TMP"
+    say_fail "Could not download $OMH_HERMES_INSTALL_URL"
+    exit 1
+  fi
+  if ! bash "$OMH_HERMES_TMP/install.sh" --non-interactive </dev/null; then
+    rm -rf "$OMH_HERMES_TMP"
+    say_fail "Hermes' installer failed (its output is above)."
+    exit 1
+  fi
+  rm -rf "$OMH_HERMES_TMP"
+  if ! hermes_present; then
+    say_fail "Hermes' installer finished, but no Hermes was found under $OMH_HERMES_DIR."
+    exit 1
+  fi
+  say_ok "Hermes Agent"
+}
+
+# The download URL of the newest omher release's asset whose name ends in $1.
+# Pages through /releases ten at a time (newest first) and stops at the first
+# omher-v* release that has the asset, so one install normally reads one small
+# page. Never /releases/latest: that is the Python package's release, and omher
+# releases are published with --latest=false. GITHUB_TOKEN, when set, is sent
+# through curl's config on stdin, never on the command line.
+# Status: 0 found (URL printed), 1 no omher release, 2 rate limited, 3 the API
+# did not answer.
+omher_release_asset_url() {
+  omh_asset_suffix="$1"
+  omh_page=1
+  while [ "$omh_page" -le "$OMH_OMHER_RELEASE_PAGES" ]; do
+    omh_page_file="$OMH_OMHER_TMP/releases-$omh_page.json"
+    omh_http="$(
+      if [ -n "${GITHUB_TOKEN:-}" ]; then
+        printf 'header = "Authorization: Bearer %s"\n' "$GITHUB_TOKEN"
+      fi | curl -sS --compressed --config - -o "$omh_page_file" -w '%{http_code}' \
+        -H 'Accept: application/vnd.github+json' "$OMH_OMHER_RELEASES_URL&page=$omh_page" 2>/dev/null
+    )" || omh_http="000"
+    case "$omh_http" in
+      200) ;;
+      403|429) return 2 ;;
+      *) return 3 ;;
+    esac
+    omh_url="$(tr -d '\r' <"$omh_page_file" |
+      grep -o "\"browser_download_url\": *\"https://[^\"]*/releases/download/omher-v[^\"/]*/omher-[^\"/]*-$omh_asset_suffix\"" |
+      head -n 1 |
+      sed 's/.*"\(https:[^"]*\)"$/\1/')" || omh_url=""
+    if [ -n "$omh_url" ]; then
+      printf '%s\n' "$omh_url"
+      return 0
+    fi
+    # A short page is the last one.
+    if [ "$(grep -o '"tag_name"' "$omh_page_file" | grep -c .)" -lt 10 ]; then
+      return 1
+    fi
+    omh_page=$((omh_page + 1))
+  done
+  return 1
+}
+
+# The SHA-256 of $1, with whichever tool this system has.
+omh_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | sed 's/[[:space:]].*//'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | sed 's/[[:space:]].*//'
+  else
+    return 1
+  fi
+}
+
+omher_app_failed() {
+  say_fail "$1"
+  say_note "Hermes and OMH are installed; only the app step failed. Download omher from $OMH_OMHER_SITE_URL"
+  exit 1
+}
+
+install_omher_app() {
+  case "$(uname -s 2>/dev/null || printf 'unknown')" in
+    Darwin) ;;
+    *)
+      say_step "[omher]" "Install the omher desktop app"
+      say_note "omher has no build for $(uname -s 2>/dev/null || printf 'this system') yet (macOS and Windows only), so Hermes and OMH are set up without it."
+      return 0
+      ;;
+  esac
+  OMH_OMHER_ARCH="x64"
+  # `uname -a` rather than the machine flag alone: the installer's isolation
+  # test reads every `-m` as a Python module flag. sysctl catches a shell that
+  # runs under Rosetta on Apple Silicon, where uname reports x86_64.
+  case "$(uname -a 2>/dev/null)" in
+    *arm64*) OMH_OMHER_ARCH="arm64" ;;
+  esac
+  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+    OMH_OMHER_ARCH="arm64"
+  fi
+  say_step "[omher]" "Install the omher desktop app (macOS $OMH_OMHER_ARCH)"
+  OMH_OMHER_TMP="$(omh_temp_dir)"
+  OMH_OMHER_LOOKUP=0
+  OMH_OMHER_DMG_URL="$(omher_release_asset_url "macos-$OMH_OMHER_ARCH\\.dmg")" || OMH_OMHER_LOOKUP=$?
+  case "$OMH_OMHER_LOOKUP" in
+    0) ;;
+    1)
+      rm -rf "$OMH_OMHER_TMP"
+      say_note "No omher release was found on GitHub yet."
+      say_note "Hermes and OMH are installed. Get the app from $OMH_OMHER_SITE_URL when it is out."
+      return 0
+      ;;
+    2)
+      rm -rf "$OMH_OMHER_TMP"
+      omher_app_failed "GitHub's API rate limit was reached (60 requests an hour per network without a token). Wait an hour, or set GITHUB_TOKEN, and run this again."
+      ;;
+    *)
+      rm -rf "$OMH_OMHER_TMP"
+      omher_app_failed "GitHub's API did not answer, so the omher release could not be looked up."
+      ;;
+  esac
+  say_note "omher image: $OMH_OMHER_DMG_URL"
+  if ! curl -fsSL -o "$OMH_OMHER_TMP/omher.dmg" "$OMH_OMHER_DMG_URL"; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not download $OMH_OMHER_DMG_URL"
+  fi
+  # Checked against the release's SHA256SUMS.txt before anything is mounted.
+  OMH_OMHER_SUMS_URL="${OMH_OMHER_DMG_URL%/*}/SHA256SUMS.txt"
+  if ! curl -fsSL -o "$OMH_OMHER_TMP/SHA256SUMS.txt" "$OMH_OMHER_SUMS_URL"; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not download $OMH_OMHER_SUMS_URL to check the image."
+  fi
+  OMH_OMHER_DMG_NAME="${OMH_OMHER_DMG_URL##*/}"
+  OMH_OMHER_WANT="$(tr -d '\r' <"$OMH_OMHER_TMP/SHA256SUMS.txt" |
+    awk -v name="$OMH_OMHER_DMG_NAME" '$2 == name || $2 == "*" name { print $1; exit }')"
+  OMH_OMHER_GOT="$(omh_sha256 "$OMH_OMHER_TMP/omher.dmg")" || OMH_OMHER_GOT=""
+  if [ -z "$OMH_OMHER_WANT" ] || [ -z "$OMH_OMHER_GOT" ] || [ "$OMH_OMHER_WANT" != "$OMH_OMHER_GOT" ]; then
+    rm -rf "$OMH_OMHER_TMP"
+    [ -n "$OMH_OMHER_WANT" ] || OMH_OMHER_WANT="no entry for $OMH_OMHER_DMG_NAME"
+    [ -n "$OMH_OMHER_GOT" ] || OMH_OMHER_GOT="no checksum tool"
+    omher_app_failed "The downloaded image does not match SHA256SUMS.txt (expected $OMH_OMHER_WANT, got $OMH_OMHER_GOT)."
+  fi
+  say_ok "SHA-256 matches SHA256SUMS.txt ($OMH_OMHER_DMG_NAME)"
+  mkdir -p "$OMH_OMHER_TMP/mnt"
+  if ! hdiutil attach -nobrowse -readonly -noautoopen -quiet -mountpoint "$OMH_OMHER_TMP/mnt" "$OMH_OMHER_TMP/omher.dmg" </dev/null; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not open the downloaded disk image."
+  fi
+  if [ ! -d "$OMH_OMHER_TMP/mnt/omher.app" ]; then
+    hdiutil detach -quiet "$OMH_OMHER_TMP/mnt" </dev/null || true
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "The disk image has no omher.app."
+  fi
+  if [ -n "$OMH_APP_DIR" ]; then
+    OMH_OMHER_DEST="$OMH_APP_DIR"
+  elif [ -w /Applications ]; then
+    OMH_OMHER_DEST="/Applications"
+  else
+    OMH_OMHER_DEST="$OMH_HOME_DIR/Applications"
+  fi
+  if ! mkdir -p "$OMH_OMHER_DEST"; then
+    hdiutil detach -quiet "$OMH_OMHER_TMP/mnt" </dev/null || true
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not create $OMH_OMHER_DEST."
+  fi
+  # Copied under a hidden temporary name in the same folder first, and swapped
+  # in only once the copy is whole: a failed copy (disk full, permissions, the
+  # image going away) leaves an existing omher.app as it was.
+  OMH_OMHER_NEW="$OMH_OMHER_DEST/.omher.app.new.$$"
+  OMH_OMHER_OLD="$OMH_OMHER_DEST/.omher.app.old.$$"
+  rm -rf "$OMH_OMHER_NEW" "$OMH_OMHER_OLD"
+  OMH_OMHER_COPY_OK=0
+  if command -v ditto >/dev/null 2>&1; then
+    ditto "$OMH_OMHER_TMP/mnt/omher.app" "$OMH_OMHER_NEW" && OMH_OMHER_COPY_OK=1
+  else
+    cp -R "$OMH_OMHER_TMP/mnt/omher.app" "$OMH_OMHER_NEW" && OMH_OMHER_COPY_OK=1
+  fi
+  hdiutil detach -quiet "$OMH_OMHER_TMP/mnt" </dev/null || true
+  rm -rf "$OMH_OMHER_TMP"
+  if [ "$OMH_OMHER_COPY_OK" != "1" ]; then
+    rm -rf "$OMH_OMHER_NEW"
+    omher_app_failed "Could not copy omher.app into $OMH_OMHER_DEST."
+  fi
+  if [ -e "$OMH_OMHER_DEST/omher.app" ]; then
+    if ! mv "$OMH_OMHER_DEST/omher.app" "$OMH_OMHER_OLD"; then
+      rm -rf "$OMH_OMHER_NEW"
+      omher_app_failed "Could not move the existing omher.app in $OMH_OMHER_DEST aside."
+    fi
+    say_note "Replacing the omher.app that was already in $OMH_OMHER_DEST."
+  fi
+  if ! mv "$OMH_OMHER_NEW" "$OMH_OMHER_DEST/omher.app"; then
+    if [ -e "$OMH_OMHER_OLD" ]; then
+      mv "$OMH_OMHER_OLD" "$OMH_OMHER_DEST/omher.app" || true
+    fi
+    rm -rf "$OMH_OMHER_NEW"
+    omher_app_failed "Could not move the new omher.app into $OMH_OMHER_DEST."
+  fi
+  rm -rf "$OMH_OMHER_OLD"
+  # curl sets no quarantine flag, so Gatekeeper should not ask; cleared anyway
+  # in case a browser download of the same image left one behind.
+  xattr -dr com.apple.quarantine "$OMH_OMHER_DEST/omher.app" 2>/dev/null || true
+  OMH_OMHER_APP_PATH="$OMH_OMHER_DEST/omher.app"
+  say_ok "$OMH_OMHER_APP_PATH"
+}
+
 say_header "$(msg installer_title)" "$(msg installer_subtitle)"
+if [ "$OMH_OMHER_BETA" = "1" ]; then
+  omher_beta_plan
+  if [ "$OMH_INSTALL_HERMES" = "1" ]; then
+    install_hermes
+  fi
+fi
 # The interpreter first, and before any network work. Resolving the release
 # used to run ahead of it, so a machine with no usable Python and an
 # unreachable GitHub reported the release failure -- burying the very
@@ -689,15 +1026,33 @@ if [ "$OMH_RUN_SETUP" = "1" ]; then
     say_note "Skipped doctor check because OMH_RUN_DOCTOR=0."
   else
     say_step "$(step_label "$OMH_DOCTOR_STEP")" "$(msg step_doctor)"
+    OMH_DOCTOR_STATUS=0
     if [ -n "$OMH_SCOPE" ]; then
-      run_omh --scope "$OMH_SCOPE" doctor
+      run_omh --scope "$OMH_SCOPE" doctor || OMH_DOCTOR_STATUS=$?
     else
-      run_omh doctor
+      run_omh doctor || OMH_DOCTOR_STATUS=$?
+    fi
+    if [ "$OMH_DOCTOR_STATUS" != "0" ]; then
+      if [ "$OMH_OMHER_BETA" != "1" ]; then
+        exit "$OMH_DOCTOR_STATUS"
+      fi
+      # A Hermes installed a minute ago has no model chosen yet, and doctor
+      # says so. That is the next step for the person, not a reason to stop
+      # before the app.
+      say_note "omh doctor reported problems (above). Fix them after the install; continuing with the omher app."
     fi
   fi
 elif [ "$OMH_AUTO_APPLY" = "0" ] || [ "$OMH_WITH_PLUGIN" = "1" ] || [ "$OMH_WITH_MCP" = "1" ] || [ -n "$OMH_SCOPE" ] || [ -n "$OMH_PROFILE_PACKS" ] || [ -n "$OMH_SETUP_PROFILES" ] || [ -n "$OMH_DEFAULT_EXECUTOR" ] || [ -n "$OMH_SETUP_ARGS" ] || [ "$OMH_RUN_DOCTOR" = "0" ]; then
   say_note "Setup options were not applied because install.sh now installs the command only by default."
   say_note "Run 'omh setup' with those choices explicitly, or set OMH_RUN_SETUP=1 for advanced one-shot bootstrap."
+fi
+
+if [ "$OMH_OMHER_BETA" = "1" ]; then
+  if [ "$OMH_WITH_DESKTOP" = "0" ]; then
+    say_note "Skipped the omher app because OMH_WITH_DESKTOP=0."
+  else
+    install_omher_app
+  fi
 fi
 
 printf '\n'
@@ -708,4 +1063,18 @@ elif [ -n "$OMH_COMMAND_PATH" ]; then
   say "$(msg next_command_path "$OMH_COMMAND_PATH")"
 else
   say "Next: run '$OMH_PYTHON -P -E -m omh.cli setup' to connect OMH to Hermes, then '$OMH_PYTHON -P -E -m omh.cli doctor' to verify."
+fi
+if [ "$OMH_OMHER_BETA" = "1" ]; then
+  if [ "$OMH_INSTALL_HERMES" = "1" ]; then
+    # With the app (installed now, or the app that runs this with
+    # OMH_WITH_DESKTOP=0), the model is picked in the app, not in a terminal.
+    if [ -n "$OMH_OMHER_APP_PATH" ] || [ "$OMH_WITH_DESKTOP" = "0" ]; then
+      say "Hermes was installed without its setup wizard. Open omher and pick a model from the model menu at the top of the chat."
+    else
+      say "Hermes was installed without its setup wizard: run 'hermes setup' to choose a model."
+    fi
+  fi
+  if [ -n "$OMH_OMHER_APP_PATH" ]; then
+    say "omher is in $OMH_OMHER_APP_PATH. Open it from there or from Launchpad."
+  fi
 fi
