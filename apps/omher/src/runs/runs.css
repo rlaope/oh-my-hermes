@@ -1973,35 +1973,192 @@
   color: var(--ink);
 }
 
-/* ---------------------------------------------------------------- panel: compact cards, the clipped-side cue, zoom */
-.rg-panel.compact .rg-card {
-  gap: 3px;
-  padding: 6px 5px 5px;
-  justify-content: space-between;
+/* ---------------------------------------------------------------- panel: the floor (132px cards, 11px titles),
+   grid cards for a one-layer run, group cards for a folded layer, the clipped-side cue, zoom */
+.rg-panel .rg-t,
+.rg-panel .rg-card.k-lead .rg-t,
+.rg-panel .rg-card.k-leaf .rg-t {
+  font-size: 11px;
+  line-height: 15px;
+  max-height: 30px;
 }
-.rg-panel.compact .rg-card.s-failed,
-.rg-panel.compact .rg-card.s-blocked,
-.rg-panel.compact .rg-card.s-parked {
-  padding-left: 3px;
+/* a grid card: logo, a title of up to two lines, time, state, on one row */
+.rg-panel .rg-card.row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
 }
-.rg-panel.compact .rg-t,
-.rg-panel.compact .rg-card.k-lead .rg-t,
-.rg-panel.compact .rg-card.k-leaf .rg-t {
+.rg-panel .rg-card.row .rg-t {
+  line-height: 14px;
+  max-height: 28px;
+}
+.rg-panel .rg-card.row.s-failed,
+.rg-panel .rg-card.row.s-blocked,
+.rg-panel .rg-card.row.s-parked {
+  padding-left: 6px;
+}
+.rg-panel .rg-card.row .rg-t {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rg-panel .rg-card.row .rg-mt {
   flex: none;
-  overflow-wrap: normal;
-  word-break: normal;
-  font-size: 10px;
-  font-weight: 550;
-  line-height: 13px;
-  max-height: 78px;
+  font-size: 10.5px;
+  line-height: 14px;
+  text-align: right;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
 }
-.rg-panel.compact .rg-meta {
+.rg-panel .rg-card.row .rg-st {
+  margin-left: 0;
+}
+.rg-gridhead {
+  position: absolute;
+  height: 20px;
+  font-size: 11.5px;
+  line-height: 20px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.rg-gridhead b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.rg-gridhead .t-running {
+  color: var(--ink);
+}
+.rg-gridhead .t-failed {
+  color: rgb(var(--rn-red));
+}
+.rg-gridall {
+  position: absolute;
+  height: 28px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--body);
+}
+.rg-gridall:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+/* a folded layer: stacked logos, "9 parallel" and its state; its counts and "Show all 9 ›" under them. A second
+   card edge peeks out under it, so it reads as a pile of cards */
+.rg-panel .rg-card.rg-group {
+  justify-content: center;
   gap: 4px;
-  padding-left: 0;
+  padding: 6px 8px;
+  overflow: visible;
+  box-shadow:
+    0 3px 0 -1px var(--rn-surface),
+    0 3px 0 0 var(--line),
+    var(--rn-shadow);
 }
-.rg-panel.compact .rg-mk {
-  width: 12px;
-  height: 12px;
+.rg-gt,
+.rg-gc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.rg-gn {
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 16px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rg-gc .rg-mt {
+  margin-left: auto;
+  color: var(--body);
+}
+.rg-gc .rg-st {
+  margin-left: 0;
+}
+.rg-glogos {
+  display: inline-flex;
+  flex: none;
+}
+.rg-glogos > .rg-mk {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: var(--raise2);
+  box-shadow: 0 0 0 1.5px var(--rn-surface);
+}
+.rg-glogos > .rg-mk:first-child {
+  margin-left: 0;
+}
+.rg-gc {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rg-gc .t-done {
+  color: var(--ok);
+}
+.rg-gc .t-failed {
+  color: rgb(var(--rn-red));
+}
+.rg-gopen {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--body);
+}
+.rg-group:hover .rg-gopen {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+[data-theme="light"] .rg-gc .t-failed,
+[data-theme="light"] .rg-gridhead .t-failed {
+  color: #c0392b;
+}
+.rg-refold {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--muted);
+  pointer-events: auto;
+}
+.rg-refold:hover {
+  color: var(--ink);
+}
+/* a stacked layer's name: one line over its band of cards */
+.rg-panel .rg-col.band {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  font-size: 11px;
+  line-height: 18px;
+}
+.rg-panel .rg-col.band .rg-colc {
+  font-weight: 400;
+  color: var(--muted);
+  white-space: pre;
+}
+.rg-panel.k-stack .rg-card.dim,
+.rg-panel.k-grid .rg-card.dim {
+  opacity: 0.45;
 }
 .rg-panel .rg-col {
   font-size: 10px;

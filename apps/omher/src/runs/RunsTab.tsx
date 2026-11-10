@@ -297,6 +297,7 @@ function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRu
   const [ref, width] = useWidth<HTMLDivElement>();
   const [over, setOver] = useState(false);
   const [hidden, setHidden] = useState(0);
+  const [drawnAs, setDrawnAs] = useState<string>("graph");
   const onOverflow = useCallback((o: boolean, h: number) => {
     setOver(o);
     setHidden(h);
@@ -331,16 +332,18 @@ function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRu
           <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>
         ) : (
           <>
-            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={onOverflow} maxH={room - 2} zoom={zoom} />
+            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={onOverflow} onMode={setDrawnAs} maxH={room - 2} zoom={zoom} />
           </>
         )}
       </div>
       {run && (
         <Legend
           run={run}
+          lines={drawnAs === "graph"}
           extra={
-            over ? (
-              <button type="button" className="rn-full-hint" data-testid="run-full-hint" onClick={() => s.setRunsFull(true)} title="Open the whole run over the chat">
+            // past the box, or stacked (the panel draws no links then): the full view has them
+            over || drawnAs === "stack" ? (
+              <button type="button" className="rn-full-hint" data-testid="run-full-hint" onClick={() => s.setRunsFull(true)} title="Open the whole run over the chat, with its links">
                 {hidden > 0 && (
                   <span className="rn-hidden" data-testid="run-hidden">
                     {hidden} more ·
