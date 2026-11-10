@@ -51,6 +51,15 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFGMTRFOUQyNjMxNjQyNDUKUldSRlFoWmowdWtVSDZ1YTQ4VS9VcVZsNm9UcW03MUJKWU8zREw0cWlBTzA3TGw5K0RhdUpYR3gK",
+      "endpoints": [
+        "https://github.com/rlaope/oh-my-hermes/releases/download/omher-latest/latest.json"
+      ]
     }
   }
 }

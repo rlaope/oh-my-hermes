@@ -14,6 +14,13 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher updates itself.** When a new omher release is out, an "Update to
+  0.1.x" button appears at the bottom left of the sidebar; one click
+  downloads it, checks its signature and restarts omher on the new version.
+  The app looks once at launch and every 6 hours. People on omher 0.1.1 or
+  earlier have no button yet: install the next version once from the
+  Releases page (or the `omher@beta` one-liner), and every release after
+  that arrives through the button.
 
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their
