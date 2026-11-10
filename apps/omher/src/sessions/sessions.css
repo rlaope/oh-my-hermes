@@ -198,77 +198,49 @@
 }
 
 /* rows */
-/* empty section: one row-sized button and one muted line of installed agents (BOTS and SESSIONS stay balanced) */
+/* empty section: one "New session" row in the nav rows' look (Automations, Settings): the + in their icon column,
+   the label at their text column. No border, no fill at rest, nothing centred. */
 .ss-none {
   flex: none;
-  padding-top: 2px;
+  padding-top: 2px; /* the header's + menu (top: 100%) then covers the row's top edge */
 }
 .ss-start-w {
-  position: relative; /* the + menu opens right under the button, at the section's width */
+  position: relative; /* the + menu opens right under the row, at the section's width */
 }
-/* a centred, raised button: the search field and the selected row are flat gray fills, so it uses
-   neither look (a fill one step lighter than the sidebar, and an edge) */
 .ss-start {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
   height: 30px;
   padding: 0 var(--side-x);
-  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--side)); /* 3:1 on the sidebar, both themes */
   border-radius: var(--r);
-  background: var(--pop);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: left;
   transition: background 0.12s;
 }
-/* the same + as the header's, in the same --muted */
+/* the + in the nav icons' 18px column, so "New session" starts where "Settings" does */
 .ss-start > svg {
   flex: none;
-  color: var(--muted);
+  width: 18px;
+  height: 16px;
+  color: var(--quiet);
+}
+.ss-start:hover,
+.ss-start[aria-expanded="true"] {
+  color: var(--ink);
 }
 .ss-start:hover > svg,
 .ss-start[aria-expanded="true"] > svg {
   color: var(--ink);
 }
-.ss-start:hover,
+.ss-start:hover {
+  background: var(--hover);
+}
 .ss-start[aria-expanded="true"] {
   background: var(--raise2);
 }
-/* the installed agents' official marks (up to 4) with their names */
-.ss-start-ag {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 17px;
-  margin-top: 8px;
-  padding: 0 var(--side-x);
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.ss-start-a {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.ss-start-a .ag-mark,
-.ss-start-dot {
-  flex: none;
-}
-.ss-start-dot {
-  margin: 0 2px 0 6px; /* even space either side once the mark's own gap is added */
-  font-weight: 700;
-}
-.ss-start-n {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .ss-row.bot {
   padding: 0;
   gap: 0;

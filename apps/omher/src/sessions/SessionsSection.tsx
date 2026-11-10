@@ -9,7 +9,6 @@ import { ChevronRight, CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
-import { FirstRunHint } from "../onboarding/FirstRun";
 import { AgentMark } from "./AgentMark";
 import { agentDef, folderName, missingNote, parentPath, recentFolders, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
@@ -69,37 +68,31 @@ export function SessionsHeader() {
   );
 }
 
-/** The empty section: one row-sized "New session" button (opens the + menu), the installed agents under it. */
+/** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
+const CODING: AgentId[] = ["claude", "codex", "pi", "omp", "grok"];
+
+/** The empty section: one "New session" row built like the sidebar's nav rows, opening the + menu. What it does and
+ *  the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */
 function SessionStart() {
   const ss = useSessions();
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const installed = (ss.agents ?? []).filter((a) => a.path).slice(0, 4);
-  const names = installed.map((a) => agentDef(a.id).label).join(" · ");
+  const names = (ss.agents ?? [])
+    .filter((a) => a.path && CODING.includes(a.id))
+    .map((a) => agentDef(a.id).label)
+    .join(", ");
+  const tip = names ? `${t("onb.sessionsHint")} ${names}` : t("onb.sessionsHint");
   return (
     <div className="ss-none" data-testid="session-none">
       <div className="ss-start-w">
-        <button type="button" className="ss-start" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="session-start">
-          <PlusIcon size={14} />
+        <button type="button" className="ss-start" title={tip} aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="session-start">
+          <PlusIcon size={16} />
           New session
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} />}
       </div>
-      <FirstRunHint text={t("onb.sessionsHint")} testId="onb-hint-sessions" />
-      {installed.length > 0 && (
-        // each mark next to its name; past two agents the rest show their mark only (all names in the tooltip)
-        <div className="ss-start-ag" data-testid="session-start-agents" title={names}>
-          {installed.map((a, i) => (
-            <span key={a.id} className="ss-start-a">
-              {i > 0 && <span className="ss-start-dot">·</span>}
-              <AgentMark agent={a.id} size={12} />
-              {i < 2 && <span className="ss-start-n">{agentDef(a.id).label}</span>}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 // First run (no `omher.onboarded` in localStorage): two cards in one container over a chat with no messages yet,
-// each with one quiet button, one muted line under the empty Sessions section, one × that dismisses both for good.
+// each with one quiet button of the same look, one × that dismisses both for good. The empty Sessions section stays
+// one New session row (its hint is the row's tooltip, not a line under it).
 // A chat with history never shows them. Every other spec starts past this
 // (playwright.config.ts sets `omher.onboarded`).
 import { expect, test } from "@playwright/test";
@@ -30,10 +31,12 @@ test("first run: the cards sit over an empty chat only, their quiet buttons work
   await mock("mock.clearHistory", { bot: "friren" });
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-  // Kami's chat has history: no cards above it, but the empty Sessions section has its line
+  // Kami's chat has history: no cards above it; the empty Sessions section is one row, its hint only in the tooltip
   await expect(page.getByTestId("timeline")).toContainText("Ping me when the retry fix is up.");
   await expect(page.getByTestId("onboarding")).toHaveCount(0);
-  await expect(page.getByTestId("onb-hint-sessions")).toHaveText("Run a coding agent in a folder, as a chat.");
+  await expect(page.getByTestId("onb-hint-sessions")).toHaveCount(0);
+  await expect(page.getByTestId("session-none")).toHaveText("New session");
+  await expect(page.getByTestId("session-start")).toHaveAttribute("title", /^Run a coding agent in a folder, as a chat\./);
 
   // Friren's chat has no messages: the cards show there
   await page.getByTestId("bot-friren").click();
@@ -57,21 +60,34 @@ test("first run: the cards sit over an empty chat only, their quiet buttons work
   const x = (await page.getByTestId("onb-dismiss").boundingBox())!;
   expect(box.x + box.width - (x.x + x.width)).toBeLessThanOrEqual(10);
   expect(x.y - box.y).toBeLessThanOrEqual(10);
-  // quiet outlined buttons (the sidebar's New session look), not an ink fill
+  // two quiet outlined buttons of one look (no fill, same edge, height, type, no icon on either), never a solid fill
+  const looks = [];
   for (const id of ["onb-message", "onb-session"]) {
-    const btn = await page.getByTestId(id).evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { bg: cs.backgroundColor, border: parseFloat(cs.borderTopWidth) };
-    });
-    expect(btn.bg).toBe("rgba(0, 0, 0, 0)");
-    expect(btn.border).toBeGreaterThan(0);
+    looks.push(
+      await page.getByTestId(id).evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          bg: cs.backgroundColor,
+          border: cs.borderTopWidth,
+          edge: cs.borderTopColor,
+          h: el.getBoundingClientRect().height,
+          font: `${cs.fontSize} ${cs.fontWeight}`,
+          color: cs.color,
+          icons: el.querySelectorAll("svg").length,
+        };
+      }),
+    );
   }
+  expect(looks[0].bg).toBe("rgba(0, 0, 0, 0)");
+  expect(parseFloat(looks[0].border)).toBeGreaterThan(0);
+  expect(looks[1]).toEqual(looks[0]);
+  expect(looks[0].icons).toBe(0);
 
   // "Message a bot" focuses the composer of the empty chat it sits over
   await page.getByTestId("onb-message").click();
   await expect(page.getByTestId("composer")).toBeFocused();
 
-  // "New session" opens the same SESSIONS + menu as the sidebar's own New session button
+  // "New session" opens the same SESSIONS + menu as the sidebar's own New session row
   await page.getByTestId("onb-session").click();
   await expect(page.getByTestId("session-menu")).toBeVisible();
   await expect(page.getByTestId("session-agent-claude")).toBeVisible();
@@ -79,7 +95,7 @@ test("first run: the cards sit over an empty chat only, their quiet buttons work
   await expect(page.getByTestId("session-menu")).toHaveCount(0);
   await expect(page.getByTestId("session-start")).toBeVisible();
 
-  // × dismisses both cards and the line, and they stay gone after a reload
+  // × dismisses both cards, and they stay gone after a reload
   await page.getByTestId("onb-dismiss").click();
   await expect(onb).toHaveCount(0);
   await expect(page.getByTestId("onb-hint-sessions")).toHaveCount(0);

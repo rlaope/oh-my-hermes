@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: an empty SESSIONS section is one quiet New session row.** It is
+  built like the Automations and Settings rows: a 16px `+` in their icon
+  column, a left-aligned muted label, no border and no fill until hover.
+  The centred hint and the agent strip under it are gone. The hint and the
+  installed coding agents (Claude Code, Codex, pi, oh-my-pi, Grok, never
+  oh-my-hermes) are in the row's tooltip, and omh stays in the `+` menu. The
+  first-run card's Message a bot and New session buttons now share one
+  outlined look with no icon.
+
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
