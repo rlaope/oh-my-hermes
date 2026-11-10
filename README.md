@@ -47,15 +47,6 @@ It never patches or replaces Hermes, and it never reports planned work as done.
 
 </div>
 
-> **Built on**
->
-> <table>
-> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
-> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> by <a href="https://nousresearch.com">Nous Research</a><br>The agent OMH runs on. OMH is an independent, unofficial layer on top.</td></tr>
-> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
-> <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> by <a href="https://github.com/code-yeongyu">@code-yeongyu</a><br>Where the ultrawork concept comes from. OMH brings it to Hermes.</td></tr>
-> </table>
-
 ## Install
 
 ```sh
@@ -116,6 +107,15 @@ A separate node verifies the goal before you get the report.
 <p align="center">
   <img src="assets/omh-dag-ulw-tui.gif" alt="The OMH TUI running /dag-ulw: the prompt is typed, the box graph of seven lanes is defined, the lanes run layer by layer on Claude Opus 5.5, GPT-6.1 Sol, DeepSeek V4.1 Flash, GLM 5.3 and Kimi K3.1 Pro, and every lane ends accepted" width="900">
 </p>
+
+> **Built on**
+>
+> <table>
+> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> by <a href="https://nousresearch.com">Nous Research</a><br>The agent OMH runs on. OMH is an independent, unofficial layer on top.</td></tr>
+> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
+> <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> by <a href="https://github.com/code-yeongyu">@code-yeongyu</a><br>Where the ultrawork concept comes from. OMH brings it to Hermes.</td></tr>
+> </table>
 
 > [!TIP]
 > Be with us!
