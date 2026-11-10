@@ -783,11 +783,9 @@ class AgentActionTests(unittest.TestCase):
         self.assertIsNone(app.agent_steer)
         self.assertEqual(app.composer.text, "never mind")  # an ordinary draft now
         self.assertEqual(client.calls, [])
-        app._on_input(Key(ESCAPE))  # as for any draft: the first Esc arms the clear
-        self.assertEqual((app.composer.text, app.escape_armed[0]), ("never mind", "clear"))  # type: ignore[index]
-        app._on_input(Key(ESCAPE))
-        self.assertEqual(app.composer.text, "")
-        self.assertEqual(client.calls, [])
+        app._on_input(Key(ESCAPE))  # as with any draft during a turn: the next Esc interrupts it, the draft stays
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
+        self.assertEqual(app.composer.text, "never mind")
 
     def test_a_narrow_list_keeps_its_keys_and_the_way_back(self) -> None:
         for cols, said in ((100, AGENT_LIST_HINT), (42, "⏎ log · x interrupt · s steer · esc back"),  # and the inset

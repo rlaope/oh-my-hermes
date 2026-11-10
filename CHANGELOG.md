@@ -13,7 +13,9 @@ All notable changes will be documented here.
   goes once Hermes has answered it); only `/stop`, `/steer`, `/queue`, `/btw`,
   `/bg`, `/gateway`, `/quit` and the commands about this terminal run at once.
   Interrupting is Esc or `/stop`, never Enter, and the send-now key never sends
-  a queued command into the turn.
+  a queued command into the turn. One Esc now stops a running turn even with a
+  draft typed, as in Claude Code, and the draft stays in the composer (vim
+  mode keeps Esc Esc; Ctrl+C still clears the draft first).
 
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their

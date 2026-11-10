@@ -1222,7 +1222,8 @@ HELP_KEYS = "Keys: ? on an empty composer, or /keys, lists every key."
 # What Enter does while a turn runs, whatever Hermes' `display.busy_input_mode` says (`App._run_slash`).
 BUSY_HELP = (
     "During a turn, Enter queues what you send, a command too, for the turn's end; /stop, /steer, /queue, /btw, /bg "
-    "and the commands about this terminal run at once. Esc or /stop interrupts the turn."
+    "and the commands about this terminal run at once. Esc (with a draft too, which stays) or /stop interrupts the "
+    "turn."
 )
 SKILL_COMMANDS_NOTE = "{count} skill commands available: type / and part of a skill's name to find one."
 # Hermes 6c61c3e27d's note for a skill whose name a built-in command takes (`agent/skill_commands.py`,
@@ -5025,12 +5026,13 @@ class App(ModesMixin, AgentViewMixin):
 
     def _escape(self, event: Key | Paste) -> bool:
         """Esc: closes the `/` or the `@` menu, cancels a picked agent steer (what was typed stays, a draft like any other),
-        cancels a rewind, interrupts a running turn on an empty composer.
+        cancels a rewind, interrupts a running turn, as Claude Code's Esc does, with a draft in the composer too, which
+        stays as it is.
 
         Otherwise it arms a second press within `DOUBLE_ESCAPE_SECONDS`: with
-        text, the second clears it into this session's history (a draft is no
-        line sent, so it stays out of Hermes' history file); on an empty
-        composer between turns, the second opens the rewind picker.
+        text between turns, the second clears it into this session's history (a
+        draft is no line sent, so it stays out of Hermes' history file); on an
+        empty composer between turns, the second opens the rewind picker.
 
         In vim mode Esc in INSERT goes to NORMAL and closes the `/` or the
         `@` menu (neither opens in NORMAL), and in NORMAL it first drops a
@@ -5038,7 +5040,8 @@ class App(ModesMixin, AgentViewMixin):
         second Esc would have done. Only then does it do any of the above, so a
         second Esc arms what a first does without vim mode, except that on an
         empty composer during a turn it too only arms: the interrupt is the
-        second press, as Esc is easily pressed twice to leave INSERT.
+        second press, as Esc is easily pressed twice to leave INSERT. With text
+        during a turn, vim mode's Esc Esc clears it, as between turns.
         """
         if not isinstance(event, Key) or event.name != ESCAPE:
             return False
@@ -5070,7 +5073,7 @@ class App(ModesMixin, AgentViewMixin):
             return True
         if not self.composer.text and self._give_back_held():
             return True  # what was held for its paste comes back, unsent
-        if not self.composer.text and self._busy() and not self.composer.vim:
+        if self._busy() and not self.composer.vim:  # the draft stays: Enter queues it, so Esc is the one-key stop
             self._interrupt()
             return True
         if not self.composer.text and self._busy():
@@ -9274,12 +9277,13 @@ class App(ModesMixin, AgentViewMixin):
         taking it (`_escape`, and what has the keys), and no interrupt is on its way yet.
 
         So the screen gives Esc one meaning: a question, a picker, the search, the agent list, a picked steer or
-        rewind, the `@` menu and a draft each take it. While `interrupting…` shows, Esc still asks again.
+        rewind, the `/` and `@` menus and, in vim mode, a draft each take it. While `interrupting…` shows, Esc still
+        asks again.
         """
         return (
             self._busy() and self._composer_open() and self.list_selected is None and not self.path_items
-            and self.agent_steer is None and self.rewind is None and self.tell_draft is None
-            and not self.composer.text and not self.interrupting
+            and not self._menu_entries() and self.agent_steer is None and self.rewind is None
+            and self.tell_draft is None and not (self.composer.vim and self.composer.text) and not self.interrupting
         )
 
     # ── subagents ──

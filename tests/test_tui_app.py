@@ -2696,27 +2696,23 @@ class KeyTests(AppTestCase):
     def running(self, run: Run) -> Callable[[], bool]:
         return run.terminal.running
 
-    def test_esc_on_an_empty_composer_interrupts_and_with_text_keeps_the_draft(self) -> None:
+    def test_esc_with_a_draft_interrupts_the_turn_and_keeps_the_draft(self) -> None:
+        # Enter queues during a turn, so Esc is the one-key stop, as in Claude Code: with a draft typed too.
         run = self.interrupted_run()
         terminal = run.terminal
         terminal.script(
             self.submit(run, "Write the numbers from 1 to 300, one per line, nothing else."),
             Step(b"draft", when=self.running(run), capture="running", label="running"),
             Step(b"\x1b", when=terminal.shows("❯ draft"), label="the draft"),
-            # The replay holds the turn open until it sees session.interrupt, so a turn still running
-            # well after that Esc proves the Esc sent nothing.
-            Step(b"\x15", when=lambda: terminal.shows("❯ draft")() and time.monotonic() - terminal.fired["the draft"] > 0.4,
-                 capture="after the first esc", label="the draft after Esc"),
-            Step(b"\x1b", when=lambda: not terminal.shows("❯ draft")(), label="the empty composer"),
-            Step(b"\x04", when=lambda: "Interrupted." in terminal.history() and terminal.idle(), label="end"),
+            Step(b"\x15", when=lambda: "Interrupted." in terminal.history() and terminal.shows("❯ draft")(),
+                 capture="stopped", label="the turn stopped"),
+            Step(b"\x04", when=terminal.idle, label="end"),
         )
         self.run_main(run)
         self.assert_clean_run(run)
         (interrupt,) = run.calls("session.interrupt")
         self.assertEqual(interrupt["params"], {"session_id": LIVE_ID})
-        after = terminal.captures["after the first esc"]
-        self.assertNotIn("Interrupted.", "\n".join(after))  # the turn still runs
-        self.assertIn("esc again to", info_row_of(after))  # and the info line says what a second Esc does
+        self.assertIn("❯ draft", "\n".join(terminal.captures["stopped"]))  # the draft stayed, untouched
         activity = [line for line in terminal.captures["running"] if INTERRUPT_ROW.search(line)]
         self.assertEqual(len(activity), 1, terminal.captures["running"])
 

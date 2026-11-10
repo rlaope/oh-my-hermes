@@ -60,12 +60,12 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+U / Ctrl+K", "Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead"),
     ("Ctrl+_ / Ctrl+Y", "Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); "
                         "a run of typed characters is one edit"),
-    ("Esc", "Closes the / or @ menu; on an empty composer, interrupts a running turn "
-            "(the activity row shows how long it has run, then interrupting…, and what you queued comes back to the "
-            "composer unsent); cancels a rewind you picked; "
+    ("Esc", "Closes the / or @ menu; else interrupts a running turn, with a draft typed too, which stays in the "
+            "composer (the activity row shows how long it has run, then interrupting…, and what you queued comes back "
+            "to an empty composer unsent, or waits); cancels a rewind you picked; "
             "cancels an agent steer you picked and keeps what you typed; after an approval's tell row, "
             "sends nothing more and brings your draft back"),
-    ("Esc Esc", "With text, clears it and keeps it in this session's history; on an empty composer between turns, "
+    ("Esc Esc", "Between turns, with text, clears it and keeps it in this session's history; on an empty composer, "
                 "lists your prompts to rewind to (/rewind does too)"),
     ("Esc (vim mode)", "With display.vim_mode on in Hermes' config, the composer starts in INSERT and Esc goes to "
                        "NORMAL and does nothing else; in NORMAL, h l 0 ^ $ w b e j k gg G move, f F t T and a character "
@@ -77,7 +77,8 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                        "object (i or a with (, ), [, ], {, }; closing aliases identical; inner and around count selects enclosing ancestor; "
                        "empty inner y keeps register and moves to interior, d keeps register and caret, and c enters INSERT at interior), p P, u and "
                        "Ctrl+R edit, a motion or edit count scales or repeats, and Esc "
-                       "does what it does without vim mode, except that during a turn it takes two to interrupt. "
+                       "does what it does without vim mode, except that during a turn it takes two to interrupt on an "
+                       "empty composer, and two clear a draft as between turns. "
                        "In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the "
                        "plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps "
                        "reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued "
