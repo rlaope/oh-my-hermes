@@ -2245,3 +2245,61 @@
 .rg-card.k-gate.s-failed {
   border-left-width: 3px;
 }
+
+/* ================================================================ flat nodes (owner, 2026-11-10)
+   No fill, no gradient, no glow, no shimmer on a node. A node is a 1px outline on the page with
+   one thin state line on its left edge; the state colour lives on that line, the border and the
+   status word. Overrides every earlier node look in this file. */
+.rg-card,
+.rg-card.s-done,
+.rg-card.s-running,
+.rg-card.s-failed,
+.rg-card.s-waiting,
+.rg-card.s-retry,
+.rg-card.s-blocked,
+.rg-card.s-parked {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding-left: 10px;
+}
+.rg-card::before,
+.rg-card.s-done::before,
+.rg-card.s-running::before,
+.rg-card.s-failed::before,
+.rg-card.s-retry::before,
+.rg-card.s-failed.repaired::before,
+[data-theme="light"] .rg-card.s-done::before,
+[data-theme="light"] .rg-card.s-running::before,
+[data-theme="light"] .rg-card.s-failed::before {
+  content: "";
+  position: absolute;
+  inset: 6px auto 6px 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
+  animation: none;
+}
+.rg-card::after,
+.rg-card.s-running::after {
+  content: none;
+  animation: none;
+}
+.rg-card.s-done { border-color: rgba(var(--rn-green), 0.35); }
+.rg-card.s-done::before { background: rgb(var(--rn-green)); }
+.rg-card.s-running { border-color: rgba(var(--rn-pink), 0.55); }
+.rg-card.s-running::before { background: rgb(var(--rn-pink)); }
+.rg-card.s-failed { border-color: rgba(var(--rn-red), 0.5); }
+.rg-card.s-failed::before { background: var(--danger); }
+.rg-card.s-retry,
+.rg-card.s-blocked,
+.rg-card.s-parked { border-color: color-mix(in srgb, var(--rn-amber) 50%, transparent); }
+.rg-card.s-retry::before,
+.rg-card.s-blocked::before,
+.rg-card.s-parked::before { background: var(--rn-amber); }
+.rg-card.s-waiting { border-style: dashed; border-color: var(--line-strong); }
+.rg-card.s-waiting::before { background: transparent; }
+.rg-card:hover { border-color: var(--line-strong); }
+.rg-legend .t-done i { background: rgb(var(--rn-green)); }
+.rg-legend .t-running i { background: rgb(var(--rn-pink)); }
