@@ -1245,7 +1245,8 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 node("check", depends_on=("api", "diff"), role="verify"),
             ])
         self.assertEqual(result["status"], "ok", result)
-        self.assertEqual(result["lint"], ["review_not_review_category:diff"])
+        # Defined without goal criteria: the define reply adds that advice, and the stored record does not.
+        self.assertEqual(result["lint"], ["review_not_review_category:diff", "no_goal_criteria"])
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("api", scope=("src/api.py",)),
             node("diff", category="unspecified-high", depends_on=("api",), role="review"),

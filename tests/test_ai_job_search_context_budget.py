@@ -472,9 +472,24 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Merged with the plain-words branch: build-failure-triage, code-review, commit-pr-authoring and
         # release-cut read verdicts and labels in plain words; that branch's pin was d76164cd...91a7, and
         # main's was 4713baa9...5447.
+        # dag-ulw's goal criteria: First Steps passes each checkable outcome as `criteria`, the verify and completion
+        # bars name the CRITERION line and the plain-words count, and run-loop gains a Goal criteria section; only
+        # dag-ulw moves. Merged with main after #2697: main's pin was 60cd6ed2...a81b, and this branch's was
+        # cc3217f7...8447.
+        # dag-ulw's criteria then keep the request's own condition (First Steps, run-loop), the completion bar states
+        # the result in plain words with the record words named, and run-loop says a failed or blocked check still
+        # counts the criteria; only dag-ulw moves, and the pin before it was f04f3355...5f6b.
+        # Its settle step then says when a verify node with criteria is accepted, failed or blocked, and run-loop
+        # reads ids in lower case and tells unmet from unobserved; only dag-ulw moves, and the pin before it was
+        # 4bae7a24...46bb.
+        # A criterion then names the state the person asked for, not that a check ran or was reported (First Steps,
+        # run-loop), and the completion bar names a criterion by what it says, not its id; only dag-ulw moves, and the
+        # pin before it was 823b8374...bc51.
         # model-setup's chain sentence then names Fable 5.2 in every Fable 5.1 slot and lists Fable 5.1 among
         # the superseded generations; only model-setup moves, and the pin before it was 60cd6ed2...a81b (main after the plain-words merge).
-        self.assertEqual(_digest(legacy_hashes), '36307b126217a856458766a33b9e875b51ad7ba4a1b7e912dd530537266569c2')
+        # Merged with main after #2718 (Fable 5.2): main's pin was 36307b12...69c2, and this branch's was
+        # 9f18a8fc...c7db.
+        self.assertEqual(_digest(legacy_hashes), '1f3c01fa681ce440db5ba45ed0ee3a9ec7970d9d31c1fbc8a8c3aef51232fbf4')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -524,7 +539,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72566,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5).
+            'plugin_tool_schema_chars': 72895,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226), then the criteria parameter's keep-the-condition description (+95), said in the positive form (+8).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

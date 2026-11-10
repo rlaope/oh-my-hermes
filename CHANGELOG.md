@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw checks each part of the goal, not only the goal as a whole.** The
+  model splits the goal into the outcomes it can check separately (you type
+  nothing new), and the verify node marks each one met, not met or not
+  checked, with what it ran. A check that leaves one not met or not checked
+  is not accepted, and the run counts as verified only when every outcome was
+  met; the status line, the end of the run and the TUI say how many were met
+  (`2/3 criteria met`). A run defined without them works as before.
+
 - **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
   HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,
   `TYPESAFE_BASE_URL` may be a plain-HTTP root on `localhost` or a loopback,

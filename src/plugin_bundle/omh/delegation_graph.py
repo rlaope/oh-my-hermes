@@ -72,6 +72,8 @@ from .dag_run import (
     FINISHED_STATES,
     HANDOFF_NOT_CHECKED,
     bound_children,
+    criteria_count,
+    criteria_view,
     derive,
     goal_verdict,
     handoff_unchecked,
@@ -1138,6 +1140,9 @@ def _build(
         if dag["state"] in FINISHED_STATES:
             # A finished run's goal verdict, as `omh_dag` and `omh_run_summary` give it (the same states).
             graph["dag_verdict"] = goal_verdict(dag["record"], dag["derived"])[0]
+            criteria = criteria_view(dag["record"], dag["derived"])
+            if criteria is not None:
+                graph["dag_criteria"] = criteria_count(criteria)  # `2/3 criteria met`, shown beside the verdict
     return graph
 
 

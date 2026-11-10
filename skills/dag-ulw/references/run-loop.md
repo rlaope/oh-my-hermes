@@ -2,7 +2,8 @@
 
 ## The calls, in order
 
-1. `omh_dag action=define run=<id> name=<short name> goal=<criteria> nodes=[...]`. A refusal names what to fix:
+1. `omh_dag action=define run=<id> name=<short name> goal=<one line> criteria=[...] nodes=[...]` (criteria: see
+   Goal criteria below). A refusal names what to fix:
    a cycle, an unknown or self dependency, two nodes writing one path with no edge between them, more than
    48 nodes, an empty graph, a node whose prompt names none of TASK / DELIVERABLE / SCOPE / VERIFY /
    STOP WHEN, and in a finite one-shot session (`hermes chat -q`) more nodes than the budget REMAINING in
@@ -78,6 +79,56 @@ At the deadline call `ready`: the same node gets a fresh attempt naming the hand
 work. OMH starts no timer or poll. After three parks per node, another park is refused with
 `park_limit_reached`; settle accepted, failed or blocked instead. Cancel turns parked nodes cancelled.
 
+## Goal criteria
+
+Split the goal into the outcomes that can each be checked on their own, from what the request names, and
+pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short id and one line. Keep
+`goal` to one short line of what the request is for; its conditions go into criteria, not the goal. A
+criterion names the state the person asked for, "it works on staging", not that a check was run or its
+result reported ("staging check reported", "staging checked"): that state is what the verify node
+confirms. Never ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
+refused as `invalid_criteria`; an empty list is the same as none. Leaving them out is allowed (lint
+`no_goal_criteria`), and the run then works as it did before criteria existed. Criteria are part of the run:
+the same run id defined with other criteria is refused as `run_exists`. `extend` takes new `criteria` too
+(new ids only, 12 in all); nothing rewrites or removes one, and `repair` takes none.
+
+Each verify node's task lists the criteria and asks for one handoff line per criterion, marked with its
+attempt's own random token, which the task prints (a re-run, a provider-error retry and a resumed park get a
+new one; the same attempt offered again keeps it):
+
+    CRITERION <id> #<token>: met | unmet | unobserved - <the command it ran and what it showed>
+
+OMH reads only those lines, at a line's start (spaces, `-`, `*` or backticks before it are fine), for the
+ids the run declares and this attempt's token, so no line written for another attempt ever counts. After the
+status comes nothing or a separator (`-`, `:`, a dash) and the evidence; anything else (`?`, `(`, `/`, `|`)
+makes it no criterion line. `met` needs evidence with a letter or digit, not the `<...>` placeholder. A read
+on a Docker or SSH terminal that timed out, failed or came back without its end mark is unread, like one
+OMH cannot reach. The last line per id wins, and a criterion with
+no line counts as `unobserved`. Ids read in lower case (`C1` is `c1`). `unmet` means the check ran and the
+outcome is not there; `unobserved` means the check could not run here. Read those lines before settling: settle
+the verify node accepted only when every one says met, failed when one is unmet, blocked when one could not be
+checked here. It keeps the status word only. Settling that verify node:
+
+- `accepted` with a criterion `unmet` is refused as `criteria_unmet`: settle it failed, then repair it with
+  nodes that fix the work. The say names what checks again: the node itself, the verify node it repairs, or,
+  for a verify node inside another node's repair group (which does not run again), the verify nodes after
+  that node, else a role=verify node you add to the new group.
+- `accepted` with one `unobserved` is refused as `criteria_unobserved`: settle it failed and repair it so they
+  are checked, or settle it blocked when they cannot be checked here.
+- A handoff on this host that exists but cannot be opened refuses `accepted` as `handoff_unreadable`.
+- `failed` and `blocked` record what the handoff marks; a missing handoff does not refuse them, but an
+  interrupted read on a Docker or SSH terminal refuses them as `settle_interrupted` (settle again). A handoff
+  OMH could not read records nothing. The result still carries `criteria`, and its `say` counts them, so the
+  report says how far the goal got (11 of 12 confirmed, one could not be checked here, and why).
+
+Each verify node counts with its last attempt only. `verified` also needs every criterion `met` by an
+accepted verify node whose handoff was read (the newest per criterion); otherwise the run is `unverified` with `criteria_unmet:<ids>` or `criteria_unobserved:<ids>`,
+so criteria an extend round added need a verify node that checks them. The result carries `criteria`
+(`total`, `met`, the `unmet` and `unobserved` ids, and each item with its status, `unchecked` before any
+read), and the status line and the done `say` add `2/3 criteria met`; `status` shows the same after
+compaction. In the report, say how many were met and which were not met or could not be checked, in plain
+words: the status words are the tool's, not the person's.
+
 ## When the path is unknown
 
 Define a first run of two or three cheap scout nodes testing different hypotheses: read-only probes,
@@ -101,9 +152,10 @@ Verify, repair, extend, verify. The verification node runs the real command. Whe
   more children than the remaining one-shot budget; the record is not changed by a refused call.
 
 When every node passed (`state: done`), the result also carries `verdict`, from the record alone:
-`verified` only when every producer is under a `verify` node that was accepted with its handoff checked;
-otherwise `unverified`, with `verdict_reasons` (`no_verification_node`, `verification_misses:<ids>`,
-`handoff_not_checked:<id>`: a checked later verify node clears it). A stopped run whose verify node failed
+`verified` only when every producer is under a `verify` node that was accepted with its handoff checked
+(and, with criteria, each one met: see Goal criteria); otherwise `unverified`, with `verdict_reasons`
+(`no_verification_node`, `verification_misses:<ids>`, `handoff_not_checked:<id>`: a checked later verify
+node clears it). A stopped run whose verify node failed
 is `verify_failed`. Report the goal met only on `verified`. An `unverified` done run gets a `role: verify`
 node through `extend`, depending on every producer, while rounds are left; after that, report the goal as
 unverified. A run of verify nodes alone is judged by those checks. A run where no node wrote files and no

@@ -30,6 +30,9 @@ Hermes' own live environment for the child (`backend_handoff`), under the
 host check's rule; when that cannot be read, the node is accepted with
 ``handoff_checked: false``, and an interrupted read settles nothing. A
 local backend, or one this does not read, keeps the host check alone.
+A verify node of a run with goal criteria is read for its ``CRITERION``
+lines as well, the same two ways (`read_handoff_criteria`); the record keeps
+only each criterion's status word.
 
 With Hermes' `delegation.worktree_isolation` on and a local terminal, each
 child would work in a worktree of its own made from the parent's HEAD,
@@ -39,6 +42,8 @@ without the earlier nodes' edits. `define` is then refused
 """
 from __future__ import annotations
 
+import base64
+import binascii
 from collections.abc import Mapping
 import hashlib
 import json
@@ -48,6 +53,7 @@ import posixpath
 import re
 import shlex
 import sqlite3
+import stat
 import time
 from typing import Any
 
@@ -96,6 +102,30 @@ BACKEND_READ_SECONDS = 10  # the one `test` a settle runs there; a backend that 
 # One line per verdict, as Hermes' own probe echoes them (`ShellFileOperations._probe_regular_file`): a shell that did
 # not run prints none of them, so it is never taken for a missing file.
 _HANDOFF_FILE, _HANDOFF_LINK, _HANDOFF_NONE = "OMH_HANDOFF_FILE", "OMH_HANDOFF_LINK", "OMH_HANDOFF_NONE"
+# A verify node's criterion lines as a Docker or SSH terminal takes them: `dag_run.criterion_lines` in shell (NUL made
+# SOH so grep reads text, the lines naming the marker, cut, the last kept), in the C locale so invalid UTF-8 is just
+# bytes, with flags BusyBox, GNU and BSD share. The result comes back base64, so no byte of the file (an escape, a CR,
+# invalid UTF-8) is changed or stripped by the terminal on its way: this host decodes the very bytes it would have read.
+# POSIX sh has no pipefail, so each stage reports its own exit status on fd 3, and `_CRITERION_END` is printed only when
+# every stage succeeded (grep's 1 is no matching line, a successful empty read). A read without it, one Hermes timed out,
+# or one that exited non-zero is unread: a cut-short read could have lost the line that overrides an earlier one.
+_CRITERION_END = "OMH_CRITERIA_END"
+_CRITERION_STAGES = (
+    ("h", f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} PATH"), ("t", "LC_ALL=C tr '\\000' '\\001'"),
+    ("g", "LC_ALL=C grep -F CRITERION"), ("c", f"LC_ALL=C cut -c 1-{dag_run.CRITERION_LINE_BYTES}"),
+    ("l", f"tail -n {dag_run.CRITERION_LINES_KEPT}"), ("b", "base64"),
+)
+_BASE64_LINE = re.compile(r"[A-Za-z0-9+/=]+")
+
+
+def criterion_pipe(quoted: str) -> str:
+    """The shell that prints a handoff's criterion lines base64, then `_CRITERION_END` when every stage succeeded."""
+    stages = " | ".join(f"{{ {command.replace('PATH', quoted)}; echo {name}$? >&3; }}"
+                        for name, command in _CRITERION_STAGES)
+    passed = " ".join(f"{name}0" for name, _command in _CRITERION_STAGES if name != "g")
+    return ("( exec 4>&1; omh_s=$( { " + stages + " >&4; } 3>&1 ); omh_s=\" $(echo $omh_s) \"; "
+            f"for omh_x in {passed}; do case $omh_s in *\" $omh_x \"*) ;; *) exit 1 ;; esac; done; "
+            f"case $omh_s in *\" g0 \"*|*\" g1 \"*) echo {_CRITERION_END} ;; *) exit 1 ;; esac ); ")
 # What a run on a Docker or SSH terminal says, each time, while no environment is up to find its handoff root in.
 # Same turn: on a session-isolated Docker terminal a later turn may get another task id, and so another environment.
 TERMINAL_FIRST = ("No node was handed out: the children write their handoff files in the {backend} terminal, and "
@@ -144,7 +174,8 @@ OMH_DAG_SCHEMA = {
         "handle and wake_at (future UTC ISO-8601 or epoch, within 24h); ready reoffers it then, at most three parks. "
         "settle returns what is next. repair adds nodes for a failed "
         "node, at most two cycles. extend adds nodes to an all-passed run when the goal check finds work "
-        "missing, at most two rounds. Past either limit, report what is open. Relay any `say` once."
+        "missing, at most two rounds. Past either limit, report what is open. criteria (define, extend): the "
+        "goal's checkable outcomes, each met only by a verify node's handoff line. Relay any `say` once."
     ),
     "parameters": {
         "type": "object",
@@ -152,7 +183,10 @@ OMH_DAG_SCHEMA = {
             "action": {"type": "string", "enum": list(_ACTIONS)},
             "run": {"type": "string", "description": "Short lowercase run id (a-z, 0-9, -)."},
             "name": {"type": "string"},
-            "goal": {"type": "string", "description": "define: the run's goal criteria, one line."},
+            "goal": {"type": "string", "description": "define: the run's goal, one line."},
+            "criteria": {"type": "array", "items": {"type": "object", "properties": {
+                "id": {"type": "string"}, "text": {"type": "string"}}},
+                "description": "define/extend: the state the person asked for, not that a check ran or was reported."},
             "nodes": {
                 "type": "array",
                 "items": {
@@ -283,9 +317,15 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                     child = derived[node].get("child") or {}
                     return read_handoff(record, omh_home, node, str(child.get("subagent_id") or task))
 
+                def read_criteria() -> tuple[bool, str, list[str]]:
+                    # A verify node of a run with criteria: the same read, with the handoff's CRITERION lines.
+                    child = derived[node].get("child") or {}
+                    return read_handoff_criteria(record, omh_home, node, str(child.get("subagent_id") or task))
+
                 happened = dag_run.settle(
                     record, derived, node, args.get("outcome"), args.get("reason"), _flag(args.get("provider_error")),
                     read_handoff=read, now=now, handle=args.get("handle"), wake_at=args.get("wake_at"),
+                    read_criteria=read_criteria,
                 )
                 record["updated_at"] = now
                 dag_run.write_run(path, record)
@@ -315,7 +355,8 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                               ignored=ignored, note=replan)
             if action == "extend":
                 added = dag_run.extend(record, derived, args.get("nodes"), args.get("node"), now,
-                                       oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits))
+                                       oneshot_remaining=_wave_budget(record, derived, budget, now, limits=limits),
+                                       criteria=args.get("criteria"))
                 dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
                 return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
@@ -422,7 +463,8 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
     budget = oneshot_budget(hermes_home, segments)
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
                                 oneshot_limit=budget["limit"] if budget else None,
-                                oneshot_spent=budget["spent"] if budget else 0, named_roles=False)
+                                oneshot_spent=budget["spent"] if budget else 0, named_roles=False,
+                                criteria=args.get("criteria"))
     found = _find(omh_home, segments, run)
     if found is not None:
         existing, path = found
@@ -431,6 +473,12 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
             raise dag_run.DagRefusal(
                 "run_cancelled", f"Run {run} was cancelled; define the work again under a new run id.")
         if existing.get("digest") != record["digest"]:
+            if "criteria" in existing or "criteria" in record:
+                raise dag_run.DagRefusal(
+                    "run_exists",
+                    f"Run {run} already exists with other nodes or criteria. Its criteria never change: extend adds "
+                    "nodes and new criteria once every node passed, repair adds nodes for a failed one, and other "
+                    "criteria need a new run id.")
             raise dag_run.DagRefusal(
                 "run_exists",
                 f"Run {run} already exists with other nodes; use repair or extend to add nodes, or a new run id.")
@@ -643,6 +691,44 @@ def read_handoff(record: Mapping[str, Any], omh_home: Path, node: str, task_id: 
     return backend_handoff(str(path), task_id)
 
 
+def read_handoff_criteria(record: Mapping[str, Any], omh_home: Path, node: str,
+                          task_id: str) -> tuple[bool, str, list[str]]:
+    """A verify node's handoff, (found, unread, its lines split on ``\\n``), where `read_handoff` would look.
+
+    On this host the file is opened without following a link and read up to
+    `dag_run.MAX_HANDOFF_READ_BYTES`, the rest ignored. A link counts as
+    missing, as in `read_handoff`; a file that cannot be opened, or is no
+    regular file once opened, is ``dag_run.HANDOFF_UNREADABLE`` (`settle`
+    refuses ``accepted`` for it, with its own say). Inside a Docker or SSH
+    terminal the lines come back through `backend_criterion_lines`. Either
+    way `dag_run.criterion_status` reads each line.
+    """
+    if record.get("handoff_root"):
+        return backend_criterion_lines(dag_run.node_handoff(record, omh_home, node), task_id)
+    path = dag_run.handoff_path(omh_home, str(record["session_id"]), str(record["run"]), node)
+    if path.is_file() and not path.is_symlink():
+        head = _host_head(path)
+        return (False, dag_run.HANDOFF_UNREADABLE, []) if head is None else (True, "", dag_run.criterion_lines(head))
+    if record.get("backend") not in REMOTE_BACKENDS:
+        return False, "", []
+    return backend_criterion_lines(str(path), task_id)
+
+
+def _host_head(path: Path) -> bytes | None:
+    """The first `dag_run.MAX_HANDOFF_READ_BYTES` of a regular file, never through a link; None when it cannot be."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+    except OSError:
+        return None
+    try:
+        with os.fdopen(descriptor, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                return None
+            return handle.read(dag_run.MAX_HANDOFF_READ_BYTES)
+    except OSError:
+        return None
+
+
 def backend_handoff(path: str, task_id: str) -> tuple[bool, str]:
     """Whether a handoff is a regular file and no link inside the terminal backend a child wrote it in: (found, unread).
 
@@ -650,20 +736,47 @@ def backend_handoff(path: str, task_id: str) -> tuple[bool, str]:
     is then False. A read the parent's interrupt stopped refuses the settle
     and records nothing, so the parent settles again.
     """
+    found, unread, _lines = _backend_probe(path, task_id, criteria=False)
+    return found, unread
+
+
+def backend_criterion_lines(path: str, task_id: str) -> tuple[bool, str, list[str]]:
+    """`backend_handoff` for a verify node of a run with criteria, with its ``CRITERION`` lines: (found, unread, lines).
+
+    The one command that tests the file also takes its criterion lines as
+    `dag_run.criterion_lines` does (`_CRITERION_PIPE`) and sends them back
+    base64. Output that does not decode is ``backend_unanswered``.
+    """
+    return _backend_probe(path, task_id, criteria=True)
+
+
+def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, str, list[str]]:
     quoted = shlex.quote(path)
+    grep = criterion_pipe(quoted) if criteria else ""
     lines, unread = _backend_lines(task_id, f"if [ -L {quoted} ]; then echo {_HANDOFF_LINK}; elif [ -f {quoted} ]; "
-                                            f"then echo {_HANDOFF_FILE}; else echo {_HANDOFF_NONE}; fi")
+                                            f"then echo {_HANDOFF_FILE}; {grep}else echo {_HANDOFF_NONE}; fi",
+                                   whole=criteria)
     if unread == "interrupted":
         raise dag_run.DagRefusal("settle_interrupted", "The handoff check was interrupted, so nothing was settled; "
                                                        "settle the node again.")
     if unread:
-        return False, unread
+        return False, unread, []
     verdicts = {line.strip() for line in lines}
+    if _HANDOFF_FILE in verdicts and criteria:
+        if _CRITERION_END not in verdicts:
+            return False, "backend_unanswered", []
+        body = [line.strip() for line in lines[:[line.strip() for line in lines].index(_CRITERION_END)]]
+        encoded = "".join(line for line in body if _BASE64_LINE.fullmatch(line))
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError):
+            return False, "backend_unanswered", []
+        return True, "", data.decode("utf-8", errors="replace").split("\n")
     if _HANDOFF_FILE in verdicts:
-        return True, ""
+        return True, "", []
     if _HANDOFF_LINK in verdicts or _HANDOFF_NONE in verdicts:
-        return False, ""
-    return False, "backend_unanswered"
+        return False, "", []
+    return False, "backend_unanswered", []
 
 
 def backend_root(task_id: str) -> tuple[str | None, str]:
@@ -704,11 +817,14 @@ def backend_root(task_id: str) -> tuple[str | None, str]:
     return (f"{home}/.omh/dag" if usable else ""), ""
 
 
-def _backend_lines(task_id: str, command: str) -> tuple[list[str], str]:
+def _backend_lines(task_id: str, command: str, *, whole: bool = False) -> tuple[list[str], str]:
     """The output lines of one command in Hermes' live environment for ``task_id``, terminal escapes stripped.
 
     A line keeps its own spaces: a caller that compares a verdict strips it,
-    and one that reads a value takes it as it was printed.
+    and one that reads a value takes it as it was printed. ``whole``: the
+    caller needs all of the output, so a command Hermes timed out
+    (``hermes_timed_out``, partial output) or one that exited non-zero is
+    ``backend_unanswered``.
 
     The environment is the one `get_active_env` returns, which follows a
     delegated child to its parent's environment, the one the child's
@@ -747,6 +863,9 @@ def _backend_lines(task_id: str, command: str) -> tuple[list[str], str]:
         return [], "backend_unanswered"
     if isinstance(answer, Mapping) and answer.get("hermes_interrupted"):
         return [], "interrupted"
+    if whole and (not isinstance(answer, Mapping) or answer.get("hermes_timed_out")
+                  or str(answer.get("returncode", "")).strip() != "0"):
+        return [], "backend_unanswered"
     output = answer.get("output") if isinstance(answer, Mapping) else None
     output = output if isinstance(output, str) else ""
     return [_TERMINAL_ESCAPES.sub("", line) for line in output.splitlines()], ""
@@ -789,7 +908,8 @@ def _ready(
     if spent_out and not calls and not any(info["state"] in dag_run.LIVE for info in derived.values()):
         mine = list(held)
         for node_id in mine:
-            attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now)
+            attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now,
+                                       token=dag_run.wants_token(record, nodes[node_id]))
             attempt["lane"] = "parent"
         held = []
     if calls or pinned or mine:
@@ -814,6 +934,9 @@ def _ready(
     if action in ("define", "repair", "extend"):
         extra["topology"] = record["topology"]
         extra["lint"] = served_lint(record["lint"], omh_home, hermes_home)
+        if action == "define" and not dag_run.run_criteria(record):
+            # Advice on the define reply alone: the stored record stays as a run without criteria always was.
+            extra["lint"] = [*extra["lint"], "no_goal_criteria"]
     if mine:
         say = " ".join(part for part in (say, (
             f"The one-shot child budget is spent (delegation.oneshot_max_children is {budget['limit']}, "
@@ -822,6 +945,12 @@ def _ready(
             f"{'its handoff' if len(mine) == 1 else 'each handoff'} ("
             + "; ".join(f"{node_id}: {dag_run.node_handoff(record, omh_home, node_id)}" for node_id in mine)
             + "), and settle it; do not call delegate_task for it.")) if part)
+        criteria = [str(item["id"]) for item in dag_run.run_criteria(record)]
+        for node_id in (node_id for node_id in mine if criteria and dag_run.is_verification(nodes[node_id])):
+            # A verify node the parent does itself writes the criterion lines its child would have been told.
+            say = (f"{say} In {node_id}'s handoff write one line per criterion ({', '.join(criteria)}): "
+                   f"`CRITERION <id> #{dag_run.attempt_token(nodes[node_id])}: met | unmet | unobserved - "
+                   "<the command you ran and what it showed>`.")
     elif spent_out:
         # Added to whatever else the reply says (a provider-error retry's offer, for one): no child takes these.
         say = " ".join(part for part in (say, (
@@ -980,6 +1109,9 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         "exports": [],
         "claim_boundary": dag_run.DAG_CLAIM_BOUNDARY,
     }
+    criteria = dag_run.criteria_view(record, derived)
+    if criteria is not None:
+        payload["criteria"] = criteria
     if state == "needs_repair":
         payload["open"] = dag_run.open_failures(record, derived)
         say = say or ("A node failed: repair it (two cycles per node at most), or report what is open and cancel "
@@ -987,6 +1119,10 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     elif state == "stopped":
         payload["open"] = dag_run.open_failures(record, derived)
         say = say or "The repair cycles are spent: report what is still open, and do not repair again."
+    if state in ("needs_repair", "stopped") and criteria is not None and any(
+            item["status"] != "unchecked" for item in criteria["items"]):
+        # A failed or blocked check read some criteria: the parent reports how far the goal got, not only the state.
+        say = " ".join(part for part in (say, _criteria_say(criteria)) if part)
     verdict, reasons = "", []
     if state in dag_run.FINISHED_STATES:
         # Whether a passing verify node covers the work (`dag_run.goal_verdict`): a done run may still be unverified.
@@ -1026,6 +1162,8 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
             say = say or (
                 f"Every node is accepted, but the goal is unverified ({'; '.join(reasons)}) and the extend rounds "
                 "are spent. Report the goal as unverified, with what is still open; do not report it met.")
+        if criteria is not None:
+            say = " ".join(part for part in (say, _criteria_say(criteria)) if part)
     lost = dag_run.lost_for_good(record, derived, limits=limits)
     if lost:
         # Added to whatever else the reply says, on every action: nothing offers these nodes again.
@@ -1049,6 +1187,20 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     if say:
         payload["say"] = say
     return json.dumps(payload, sort_keys=True)
+
+
+def _criteria_say(view: Mapping[str, Any]) -> str:
+    """``Goal criteria: 2/4 criteria met; not met: c2; could not be checked: c3; not checked yet: c4.``, in plain
+    words: for a done run, and for a run whose failed or blocked check read some of them."""
+    unchecked = [item["id"] for item in view["items"] if item["status"] == "unchecked"]
+    parts = [f"Goal criteria: {dag_run.criteria_count(view)}"]
+    if view["unmet"]:
+        parts.append(f"not met: {', '.join(view['unmet'])}")
+    if view["unobserved"]:
+        parts.append(f"could not be checked: {', '.join(view['unobserved'])}")
+    if unchecked:
+        parts.append(f"not checked yet: {', '.join(unchecked)}")
+    return "; ".join(parts) + "."
 
 
 def usage_line(record: Mapping[str, Any], usage: Mapping[str, Any]) -> str:
