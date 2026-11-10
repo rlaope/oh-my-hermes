@@ -72,6 +72,8 @@ export const en = {
 
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "Choose folder…",
+  "sessions.recent": "Recent",
+  "sessions.back": "Back",
 
   // sounds (Settings › General)
   "sounds.title": "Sounds",

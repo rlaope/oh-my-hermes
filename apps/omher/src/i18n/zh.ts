@@ -72,6 +72,8 @@ export const zh: Record<Key, string> = {
 
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "选择文件夹…",
+  "sessions.recent": "最近",
+  "sessions.back": "返回",
 
   // sounds (Settings › General)
   "sounds.title": "声音",

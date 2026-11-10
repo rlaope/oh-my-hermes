@@ -49,6 +49,7 @@ const calls = (page: Page) =>
 async function startSession(page: Page, agent: string) {
   await page.getByTestId("session-new").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await page.getByTestId("session-choose").click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
 }
@@ -312,8 +313,10 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
   await expect(rows.first()).toContainText("Grok");
   await expect(page.getByTestId("session-title")).toHaveText("Grok");
 
-  // the + menu opens inside the sidebar, and offers the recent agent+folder pairs
+  // the + menu opens inside the sidebar; after the agent it offers the recent folders
   await page.getByTestId("session-new").click();
+  await expect(page.getByTestId("session-recent")).toHaveCount(0);
+  await page.getByTestId("session-agent-grok").click();
   await expect(page.getByTestId("session-recent")).toHaveCount(2);
   const pop = (await page.getByTestId("session-menu").locator("..").boundingBox())!;
   const side = (await page.getByTestId("sidebar").boundingBox())!;

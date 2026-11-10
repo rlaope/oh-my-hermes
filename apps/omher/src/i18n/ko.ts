@@ -72,6 +72,8 @@ export const ko: Record<Key, string> = {
 
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "폴더 선택…",
+  "sessions.recent": "최근",
+  "sessions.back": "뒤로",
 
   // sounds (Settings › General)
   "sounds.title": "소리",

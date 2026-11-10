@@ -41,6 +41,7 @@ async function open(page: Page, folder = "/Users/you/code/omher") {
 async function start(page: Page, agent: string) {
   await page.getByTestId("session-new").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await page.getByTestId("session-choose").click();
   await expect(page.getByTestId("session-chat")).toBeVisible();
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
 }
@@ -113,6 +114,7 @@ test("the empty section's New session button starts a chat session, then gives w
   await expect(page.getByTestId("session-start-agents")).toContainText("Claude Code");
   await page.getByTestId("session-start").click();
   await page.getByTestId("session-agent-claude").click();
+  await page.getByTestId("session-choose").click();
   await expect(page.getByTestId("session-chat")).toBeVisible();
   await expect(page.getByTestId("session-none")).toHaveCount(0);
   await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);

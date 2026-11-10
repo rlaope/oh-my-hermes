@@ -72,6 +72,8 @@ export const ja: Record<Key, string> = {
 
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "フォルダを選択…",
+  "sessions.recent": "最近",
+  "sessions.back": "戻る",
 
   // sounds (Settings › General)
   "sounds.title": "サウンド",

@@ -5,11 +5,12 @@
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
 import { useEffect, useState } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
-import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
+import { ChevronRight, CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
+import { t } from "../i18n";
 import { AgentMark } from "./AgentMark";
-import { agentDef, folderName, parentPath, rowModel, tildePath, type AgentId, type ChatLive, type SessionRec } from "./agents";
+import { agentDef, folderName, parentPath, recentFolders, rowModel, tildePath, type AgentId, type ChatLive, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
@@ -88,19 +89,71 @@ function SessionStart() {
   );
 }
 
+/** The menu spans the section, 8px inside both sidebar edges. */
+const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
+
+/** The + menu in two steps: pick an agent, then its folder ("Choose folder…" or one of the recent folders). */
 function NewSessionMenu({ onClose }: { onClose: () => void }) {
   const ss = useSessions();
   const accounts = useAccounts();
+  /** step 2: the agent picked, asking for its folder */
+  const [agent, setAgent] = useState<AgentId | null>(null);
+  /** the agent ← came back from, which takes the focus again */
+  const [from, setFrom] = useState<AgentId | null>(null);
   useEffect(() => {
     void getSessions().loadAgents();
   }, []);
-  const go = (agent: AgentId, cwd?: string) => {
-    onClose();
-    void getSessions().launch(agent, cwd);
-  };
-  const installed = new Set((ss.agents ?? []).filter((a) => a.path).map((a) => a.id));
+  if (agent) {
+    const back = () => {
+      setFrom(agent);
+      setAgent(null);
+    };
+    // the native folder dialog; cancelling it keeps this step open and starts nothing
+    const choose = async () => {
+      if (await getSessions().launch(agent)) onClose();
+    };
+    const start = (cwd: string) => {
+      onClose();
+      void getSessions().launch(agent, cwd);
+    };
+    const folders = recentFolders(ss.recent);
+    return (
+      <Popover open onClose={onClose} align="left" width={MENU_W} label="New session" className="ss-pop">
+        <div data-testid="session-menu" data-step="folder">
+          <div className="ss-agent" data-testid="session-folder-agent">
+            <button type="button" className="ss-back" aria-label={t("sessions.back")} title={t("sessions.back")} onClick={back} data-testid="session-back">
+              <ChevronRight size={12} />
+            </button>
+            <AgentMark agent={agent} size={14} />
+            <span className="ss-n">{agentDef(agent).label}</span>
+          </div>
+          <button type="button" className="ss-item" onClick={() => void choose()} autoFocus data-testid="session-choose">
+            <span className="ss-ic">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.4l2 2h8.6A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+              </svg>
+            </span>
+            <span className="ss-n">{t("sessions.choose")}</span>
+          </button>
+          {folders.length > 0 && (
+            <>
+              <div className="ss-sep" />
+              <div className="ss-h">{t("sessions.recent")}</div>
+              {folders.map((cwd) => (
+                <button key={cwd} type="button" className="ss-item" title={cwd} onClick={() => start(cwd)} data-testid="session-recent">
+                  <span className="ss-ic" />
+                  <span className="ss-n">{folderName(cwd)}</span>
+                  <span className="ss-path">{parentPath(tildePath(cwd, ss.home))}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      </Popover>
+    );
+  }
   return (
-    <Popover open onClose={onClose} align="left" width="min(240px, calc(var(--side-w) - 16px))" label="New session" className="ss-pop">
+    <Popover open onClose={onClose} align="left" width={MENU_W} label="New session" className="ss-pop">
       <div data-testid="session-menu">
         <div className="ss-h">New session</div>
         {ss.agents === null && <div className="ss-empty">Looking for agents…</div>}
@@ -114,7 +167,8 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
               className="ss-item"
               disabled={!a.path}
               title={a.path ?? `${def.program} was not found on this computer`}
-              onClick={() => go(a.id)}
+              onClick={() => setAgent(a.id)}
+              autoFocus={a.id === from}
               data-testid={`session-agent-${a.id}`}
             >
               <span className="ss-ic">
@@ -132,30 +186,6 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
             </button>
           );
         })}
-        {ss.recent.some((r) => installed.has(r.agent)) && (
-          <>
-            <div className="ss-sep" />
-            <div className="ss-h">Recent</div>
-            {ss.recent
-              .filter((r) => installed.has(r.agent))
-              .map((r) => (
-                <button
-                  key={`${r.agent}:${r.cwd}`}
-                  type="button"
-                  className="ss-item"
-                  title={`${agentDef(r.agent).label} in ${r.cwd}`}
-                  onClick={() => go(r.agent, r.cwd)}
-                  data-testid="session-recent"
-                >
-                  <span className="ss-ic">
-                    <AgentMark agent={r.agent} />
-                  </span>
-                  <span className="ss-n">{folderName(r.cwd)}</span>
-                  <span className="ss-path">{parentPath(tildePath(r.cwd, ss.home))}</span>
-                </button>
-              ))}
-          </>
-        )}
       </div>
     </Popover>
   );

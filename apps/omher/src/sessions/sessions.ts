@@ -6,7 +6,8 @@
 // composer draw them. Grok has no verifiable chat mode, so it stays a terminal (xterm on a pseudo-terminal),
 // and every chat can switch to its agent's terminal view.
 //
-// Sessions live only while the app runs; the last few agent+folder pairs are remembered on this computer.
+// Sessions live only while the app runs; the last few folders (with the agent that used each) are remembered on
+// this computer.
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";

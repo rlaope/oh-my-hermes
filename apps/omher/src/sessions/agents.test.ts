@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { AGENTS, folderName, isAgentId, parentPath, parseRecent, pushRecent, RECENT_MAX, rowModel, terminalNote, tildePath, type SessionRec } from "./agents";
+import {
+  AGENTS,
+  folderName,
+  isAgentId,
+  parentPath,
+  parseRecent,
+  pushRecent,
+  RECENT_MAX,
+  recentFolders,
+  rowModel,
+  terminalNote,
+  tildePath,
+  type Recent,
+  type SessionRec,
+} from "./agents";
 import { MockHost } from "./host";
 
 describe("session agents", () => {
@@ -63,19 +77,29 @@ describe("session agents", () => {
     expect(rowModel({ ...chat, status: "exited", exitCode: 0 }, { turn: true, needsYou: true })).toMatchObject({ live: false, needsYou: false, sub: "Codex · Ended" });
   });
 
-  it("recent launches: newest first, deduped, capped, malformed entries dropped", () => {
+  it("recent launches: newest first, one entry per folder, capped, malformed entries dropped", () => {
     let r = pushRecent([], { agent: "claude", cwd: "/a", at: 1 });
-    r = pushRecent(r, { agent: "codex", cwd: "/a", at: 2 });
-    r = pushRecent(r, { agent: "claude", cwd: "/a", at: 3 });
-    expect(r.map((x) => `${x.agent}:${x.cwd}:${x.at}`)).toEqual(["claude:/a:3", "codex:/a:2"]);
+    r = pushRecent(r, { agent: "codex", cwd: "/b", at: 2 });
+    r = pushRecent(r, { agent: "codex", cwd: "/a", at: 3 });
+    expect(r.map((x) => `${x.agent}:${x.cwd}:${x.at}`)).toEqual(["codex:/a:3", "codex:/b:2"]);
     for (let i = 0; i < 10; i += 1) r = pushRecent(r, { agent: "omh", cwd: `/f${i}`, at: 10 + i });
     expect(r).toHaveLength(RECENT_MAX);
+    expect(RECENT_MAX).toBe(5);
     expect(parseRecent(JSON.stringify(r))).toEqual(r);
     expect(parseRecent("not json")).toEqual([]);
     expect(parseRecent(JSON.stringify({ agent: "claude" }))).toEqual([]);
     expect(parseRecent(JSON.stringify([{ agent: "sh", cwd: "/", at: 1 }, { agent: "pi", cwd: "", at: 1 }, { agent: "pi", cwd: "/x", at: 2 }]))).toEqual([
       { agent: "pi", cwd: "/x", at: 2 },
     ]);
+  });
+
+  it("recent folders for the menu: distinct, newest first, at most 5, whichever agent used them", () => {
+    const at = (cwd: string, t: number, agent: Recent["agent"] = "claude"): Recent => ({ agent, cwd, at: t });
+    expect(recentFolders([])).toEqual([]);
+    // a list saved by an older build: the same folder under two agents, not in time order
+    expect(recentFolders([at("/a", 1), at("/b", 3, "codex"), at("/a", 2, "grok")])).toEqual(["/b", "/a"]);
+    const many = Array.from({ length: 8 }, (_, i) => at(`/f${i}`, i));
+    expect(recentFolders(many)).toEqual(["/f7", "/f6", "/f5", "/f4", "/f3"]);
   });
 });
 

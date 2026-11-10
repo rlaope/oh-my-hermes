@@ -145,6 +145,34 @@
   background: var(--line);
   margin: 6px 0 4px;
 }
+/* step 2 of the menu: ← and the agent picked, over its folder choices */
+.ss-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px 0 2px;
+  margin-bottom: 2px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.ss-back {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex: none;
+}
+.ss-back svg {
+  transform: scaleX(-1);
+}
+.ss-back:hover {
+  background: var(--raise2);
+  color: var(--ink);
+}
 
 /* agent marks */
 .ag-mark {
