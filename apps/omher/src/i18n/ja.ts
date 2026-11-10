@@ -84,6 +84,18 @@ export const ja: Record<Key, string> = {
   "sessions.recent": "最近",
   "sessions.back": "戻る",
 
+  // onboarding (the first-run cards and the empty sections' lines)
+  "onb.label": "omher について",
+  "onb.bots.title": "ボット",
+  "onb.bots.body": "Hermes の同僚です。メッセージで仕事を渡すと、計画して実行します。",
+  "onb.bots.action": "ボットにメッセージ",
+  "onb.sessions.title": "セッション",
+  "onb.sessions.body": "フォルダで Claude Code、Codex、pi、omp を開いて一緒に作業します。",
+  "onb.sessions.action": "新しいセッション",
+  "onb.dismiss": "閉じる",
+  "onb.botsHint": "ボットは Hermes プロファイルです。上の + で追加します。",
+  "onb.sessionsHint": "フォルダでコーディングエージェントをチャットとして実行します。",
+
   // sounds (Settings › General)
   "sounds.title": "サウンド",
   "sounds.hint": "送信、ボットの回答や質問、エラーのときに小さな音",

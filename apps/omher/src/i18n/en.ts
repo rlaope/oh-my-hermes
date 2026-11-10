@@ -84,6 +84,18 @@ export const en = {
   "sessions.recent": "Recent",
   "sessions.back": "Back",
 
+  // onboarding (the first-run cards and the empty sections' lines)
+  "onb.label": "What omher does",
+  "onb.bots.title": "Bots",
+  "onb.bots.body": "Your Hermes coworkers. Message one to hand it work; it plans and runs it.",
+  "onb.bots.action": "Message a bot",
+  "onb.sessions.title": "Sessions",
+  "onb.sessions.body": "Open Claude Code, Codex, pi or omp in a folder and work alongside it.",
+  "onb.sessions.action": "New session",
+  "onb.dismiss": "Dismiss",
+  "onb.botsHint": "Each bot is a Hermes profile. Add one with + above.",
+  "onb.sessionsHint": "Run a coding agent in a folder, as a chat.",
+
   // sounds (Settings › General)
   "sounds.title": "Sounds",
   "sounds.hint": "Quiet sounds when you send, a bot answers or asks, or a turn fails",

@@ -84,6 +84,18 @@ export const ko: Record<Key, string> = {
   "sessions.recent": "최근",
   "sessions.back": "뒤로",
 
+  // onboarding (the first-run cards and the empty sections' lines)
+  "onb.label": "omher 소개",
+  "onb.bots.title": "봇",
+  "onb.bots.body": "Hermes 동료예요. 메시지로 일을 맡기면 계획하고 실행해요.",
+  "onb.bots.action": "봇에게 메시지",
+  "onb.sessions.title": "세션",
+  "onb.sessions.body": "폴더에서 Claude Code, Codex, pi, omp를 열고 함께 작업해요.",
+  "onb.sessions.action": "새 세션",
+  "onb.dismiss": "닫기",
+  "onb.botsHint": "봇 하나가 Hermes 프로필 하나예요. 위의 +로 추가해요.",
+  "onb.sessionsHint": "폴더에서 코딩 에이전트를 채팅으로 실행해요.",
+
   // sounds (Settings › General)
   "sounds.title": "소리",
   "sounds.hint": "보낼 때, 봇이 답하거나 물을 때, 오류가 날 때 작은 소리",

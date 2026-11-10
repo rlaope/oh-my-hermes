@@ -84,6 +84,18 @@ export const zh: Record<Key, string> = {
   "sessions.recent": "最近",
   "sessions.back": "返回",
 
+  // onboarding (the first-run cards and the empty sections' lines)
+  "onb.label": "omher 简介",
+  "onb.bots.title": "机器人",
+  "onb.bots.body": "你的 Hermes 同事。发消息交给它工作，它会规划并执行。",
+  "onb.bots.action": "给机器人发消息",
+  "onb.sessions.title": "会话",
+  "onb.sessions.body": "在文件夹中打开 Claude Code、Codex、pi 或 omp，与它一起工作。",
+  "onb.sessions.action": "新建会话",
+  "onb.dismiss": "关闭",
+  "onb.botsHint": "每个机器人是一个 Hermes 配置。用上方的 + 添加。",
+  "onb.sessionsHint": "在文件夹中以聊天方式运行编程代理。",
+
   // sounds (Settings › General)
   "sounds.title": "声音",
   "sounds.hint": "发送、机器人回答或提问、出错时的轻声提示",

@@ -8,7 +8,12 @@ export default defineConfig({
   timeout: 30_000,
   // One mock bridge holds shared state (calls log, running turn): spec files must not run against it at once.
   workers: 1,
-  use: { baseURL: `http://127.0.0.1:${port}`, viewport: { width: 1280, height: 820 } },
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    viewport: { width: 1280, height: 820 },
+    // past the first-run cards: specs see the app as a returning person does (onboarding.spec.ts clears it)
+    storageState: { cookies: [], origins: [{ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: "omher.onboarded", value: "1" }] }] },
+  },
   webServer: [
     { command: `node e2e/mock-bridge.mjs --port ${mock}`, port: mock, reuseExistingServer: false },
     { command: `pnpm exec vite --host 127.0.0.1 --port ${port} --strictPort`, port, reuseExistingServer: false,
