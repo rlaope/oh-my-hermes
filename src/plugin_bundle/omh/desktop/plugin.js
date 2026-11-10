@@ -1619,6 +1619,8 @@ export function usageBoard(input) {
     output: positive(saved.output)
   }
   const hasMain = exceeds(allTokens(recorded), 0)
+  // The chat counted tokens, on its row or on the stream: an unpriced chat makes any sum with its subagents a floor.
+  const mainCounted = hasMain || exceeds(positive(live.prompt) || positive(live.input) || positive(live.output), 0)
   // With the subagents: their lanes' figures join the chat's own (the stream's counts stand in where the chat has no row).
   if (subs) {
     if (!hasMain) {
@@ -1641,7 +1643,7 @@ export function usageBoard(input) {
   const costAll = subs && (cost !== null || subs.cost !== null) ? (cost || 0) + (subs.cost || 0) : cost
   const costGuess = streamedCost || saved.cost_estimated === true || !!(subs && subs.estimated)
   const costFloor =
-    (recordedCost && saved.cost_partial === true) || !!(subs && (subs.partial || exceeds(subs.lanes, subs.priced) || (cost === null && hasMain)))
+    (recordedCost && saved.cost_partial === true) || !!(subs && (subs.partial || exceeds(subs.lanes, subs.priced) || (cost === null && mainCounted)))
   const counted = prompt + output
   const used = positive(live.context_used) || positive(crumbs.context_used)
   const max = positive(live.context_max) || positive(crumbs.context_max)

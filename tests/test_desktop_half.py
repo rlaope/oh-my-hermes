@@ -991,6 +991,10 @@ FORMATTER_CASES = {
         [{"stored": "c1", "saved": {"session_id": "c1", "input": 1000, "cache_read": 500, "output": 100, "cost_usd": 0.5},
           "withSubs": False, "subs": {"lanes": 2, "priced": 1, "input": 200, "read": 300, "write": 0, "output": 50, "cost": 0.25,
                                       "estimated": False, "partial": False}}],
+        # A chat with no row yet (the stream's counts) and no cost, beside a priced lane: the sum is the lane's, a floor.
+        [{"live": {"prompt": 4000, "output": 300}, "withSubs": True,
+          "subs": {"lanes": 1, "priced": 1, "input": 200, "read": 0, "write": 0, "output": 50, "cost": 0.25,
+                   "estimated": False, "partial": False}}],
     ],
     "elapsedText": [[12], [242], [7260], [None]],
     "costSegmentText": [
@@ -2176,7 +2180,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: take the stream over the recorded row, drop the `~` from a cost the stream does not vouch for, or
         show a recorded zero read as a dash."""
         (streamed, recorded, zero_read, empty, calls_only, guessed, window, ragged,
-         other_chat, unnamed, failed, free, floor, with_subs, without_subs) = self._drive()["formatters"]["usageBoard"]
+         other_chat, unnamed, failed, free, floor, with_subs, without_subs, unpriced_chat) = self._drive()["formatters"]["usageBoard"]
 
         def cells(model: dict) -> dict:
             return {cell["label"]: (cell["value"], cell["sub"]) for cell in model["cells"]}
@@ -2209,6 +2213,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(cells(with_subs)["Cost"][0], "≥$0.7500")
         self.assertEqual(without_subs["dial"]["total"], 1600)
         self.assertEqual(cells(without_subs)["Cost"][0], "$0.5000")
+        # Mutation: price a chat Hermes never priced at zero, so its subagents' cost reads as the exact total.
+        self.assertEqual(cells(unpriced_chat)["Cost"][0], "≥$0.2500")
         self.assertEqual([(part["label"], part["share"]) for part in ragged["parts"]], [("A", 1.0)])
         self.assertEqual(ragged["sum"], 600)
         # A row for another chat, for no named chat, or a failed read: the stream's figures, the row's left out.
