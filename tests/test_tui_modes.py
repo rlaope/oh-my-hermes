@@ -1277,6 +1277,7 @@ class BusyQueueTests(unittest.TestCase):
         self.assertEqual(RUNS_DURING_TURN, frozenset({
             "stop", "steer", "queue", "btw", "bg", "help", "keys", "whats-new", "redraw", "history", "todos",
             "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
+            "yolo", "effort",
         }))
         # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
         for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse", "worktree",
@@ -1290,6 +1291,30 @@ class BusyQueueTests(unittest.TestCase):
                 (call,) = ran.call_args_list
                 self.assertEqual(call.args[0].name, name)
 
+    def test_yolo_effort_and_a_reasoning_level_set_the_session_at_once_during_a_turn_and_when_idle(self) -> None:
+        # The typed forms of Shift+Tab's and Ctrl+T's calls: one `config.set` each, which never touches the turn.
+        for typed, call in (("/yolo", YOLO_ON_CALL), ("/effort high", effort_call("high")),
+                            ("/reasoning high", effort_call("high")), ("/Reasoning HIGH", effort_call("high"))):
+            for busy in (True, False):
+                with self.subTest(typed=typed, busy=busy):
+                    app, client = make_app(busy=busy)
+                    type_text(app, typed)
+                    app._on_input(Key(ENTER))
+                    self.assertEqual(app.queued, deque())
+                    self.assertEqual(client.calls, [call])
+                    self.assertEqual(self.turn_calls(client), [])
+
+    def test_reasoning_without_a_level_waits_for_the_turn_as_hermes_own_command(self) -> None:
+        for typed in ("/reasoning", "/reasoning hide", "/reasoning show", "/reasoning high --global"):
+            with self.subTest(typed=typed):
+                app, client = make_app(busy=True)
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual([line.text for line in app.queued], [typed])
+                self.assertEqual(client.calls, [])
+                self.end_turn(app)
+                self.assertEqual(client.named("slash.exec"), [{"command": typed[1:], "session_id": SID}])
+
     def test_stop_btw_and_bg_reach_hermes_during_the_turn(self) -> None:
         for typed in ("/stop", "/btw what was that file", "/bg write the changelog"):
             with self.subTest(typed=typed):
@@ -1302,7 +1327,7 @@ class BusyQueueTests(unittest.TestCase):
 
     def test_every_other_command_queues_during_a_turn_and_runs_at_once_when_idle(self) -> None:
         typed = ("/compress", "/compact here 4", "/new", "/clear", "/undo", "/retry", "/resume", "/sessions s-2",
-                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/yolo", "/effort high", "/usage", "/cost",
+                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/reasoning", "/reasoning hide", "/usage", "/cost",
                  "/status", "/omh-model", "/reload-skills", "/export", "/frobnicate",
                  "/omh-codebase-uml map it", "/Compress")
         for text in typed:

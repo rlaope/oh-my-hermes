@@ -154,7 +154,9 @@ All notable changes will be documented here.
   kept asking, then left a flag that turned them off at the next resume. Both
   now go through the TUI's own per-session calls (Ctrl+T's and Shift+Tab's),
   and say the outcome under the command; `/reasoning` with anything but a
-  level still goes to Hermes as typed. Shift+Tab presses made while Hermes
+  level still goes to Hermes as typed. Typed during a turn, `/yolo`,
+  `/effort` and `/reasoning <level>` run at once, as Shift+Tab and Ctrl+T do;
+  bare `/reasoning` and its other forms wait for the turn's end. Shift+Tab presses made while Hermes
   has not answered the last one are kept and shown at once, dimmed with `…`,
   so two quick presses end in plan mode instead of in accept all; Ctrl+T's
   level shows the same way until Hermes confirms it. `/model <name>` and the

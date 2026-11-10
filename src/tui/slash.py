@@ -51,6 +51,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 import re
 
+from .gateway_contract import REASONING_LEVELS
 from .style import Span, Style
 
 LOCAL = "local"
@@ -268,7 +269,12 @@ RUNS_DURING_TURN = frozenset({
     "paste",  # attaches the clipboard image to the draft, as Ctrl+V does
     "gateway",  # `/gateway restart` asks first, and Hermes' restart lets running turns, this one too, finish first
     "quit",  # leaves the TUI, as Ctrl+C twice does during a turn: waiting would keep the person in it
+    "yolo",  # Shift+Tab's per-session approvals switch, typed: one `config.set`, which never starts or alters the turn
+    "effort",  # Ctrl+T's per-session reasoning effort, typed: one `config.set`, which never starts or alters the turn
 })
+# `/reasoning` runs at once only with a level, which sets the effort as `/effort` does (`App._reasoning_command`); bare,
+# or with anything else (`hide`, `show`, `--global`, ...), it is Hermes' own `/reasoning` and waits as Hermes' commands do.
+REASONING = "reasoning"
 
 
 def runs_during_turn(invocation: SlashInvocation) -> bool:
@@ -278,12 +284,14 @@ def runs_during_turn(invocation: SlashInvocation) -> bool:
     dropped here, runs at once too: all it does is print a notice saying so
     (Hermes' own pointer, for a classic one). An alias goes by the
     command it names; a name the TUI does not know is Hermes' and queues
-    unless the list names it.
+    unless the list names it. `/reasoning` runs at once only with a level.
     """
     command = invocation.command
     if command is not None and command.route in (HERMES, DROPPED, CLASSIC):
         return True
     name = command.name if command is not None else invocation.name.lower()
+    if name == REASONING:
+        return invocation.arg.strip().lower() in REASONING_LEVELS
     return name in RUNS_DURING_TURN
 
 

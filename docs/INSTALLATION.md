@@ -1351,7 +1351,7 @@ Esc closes it):
 
 | Key | Does |
 | --- | --- |
-| Enter | Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (`/stop`, `/steer`, `/queue`, `/btw`, `/bg` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
+| Enter | Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (`/stop`, `/steer`, `/queue`, `/btw`, `/bg`, `/yolo`, `/effort`, `/reasoning <level>` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
 | `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
 | Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
 | Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, slash command, skill prompt or plan prompt waits its turn |
@@ -1632,7 +1632,9 @@ never sends one into the turn. Only these run at once during a turn: `/stop` and
 running turn, `/queue`, `/btw` and `/bg`, which Hermes runs beside it, the commands about this terminal (`/help`,
 `/keys`, `/whats-new`, `/redraw`, `/history`, `/todos`, `/details`, `/logs`, `/dag`, `/bots`, `/copy`, `/theme`,
 `/wallpaper`, `/image`, `/paste`), `/gateway restart`, which asks first and lets running turns finish, `/quit`,
-and the ones that only say where they run. Interrupting is Esc or
+`/yolo`, `/effort <level>` and `/reasoning <level>`, the typed forms of Shift+Tab and Ctrl+T, which set the session
+and leave the turn as it is, and the ones that only say where they run. Bare `/reasoning`, or with anything but a
+level, is Hermes' own and waits. Interrupting is Esc or
 `/stop`, never Enter. The echo and output of a command run during a turn wait under what is running and are
 written after it, as a steer is, so a command never cuts off a running tool call or splits a reply; one Hermes has not finished
 answering when the turn ends is written above that turn's done line with what it printed so far, and
