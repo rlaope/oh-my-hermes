@@ -359,8 +359,11 @@ test("a node is its title, what ran it and its status, in monospace: a neutral 1
     ),
   );
   // line 1: the title, whole words on at most two lines; a longer one ends in "…", none is cut in its middle
-  expect(by["t3-doctor"].title).toEqual(["Doctor check for", "the Codex pack"]);
-  expect(by["t1-discovery"].title).toEqual(["Codex skill", "discovery reads…"]);
+  // where a line breaks follows the platform's monospace font (Windows' differs), so check the words, not the break
+  expect(by["t3-doctor"].title.join(" ")).toBe("Doctor check for the Codex pack");
+  expect(by["t3-doctor"].title).toHaveLength(2);
+  expect(by["t1-discovery"].title).toHaveLength(2);
+  expect(by["t1-discovery"].title.join(" ")).toMatch(/^Codex skill discovery( \S+)*…$/);
   for (const n of Object.values(by)) {
     expect(n.title.length).toBeLessThanOrEqual(2);
     expect(n.title.join(" ")).not.toContain(" … ");
