@@ -3,9 +3,10 @@
 The Shift+Tab yolo toggle lives only in the host process's
 ``tools.approval`` session state, so the HUD reports what the plugin's
 ``pre_llm_call`` and ``pre_tool_call`` hooks last observed in-process.
-The ledger stores one boolean and a timestamp — never a session key,
-command, or prompt — and an unobserved or stale ledger projects idle so
-the widget renders nothing rather than a guess.
+The ledger stores one boolean and a timestamp, at the top and per session
+under a truncated sha256 of the session id (pseudonymous), never a command
+or prompt; an unobserved or stale ledger projects idle so the widget renders
+nothing rather than a guess.
 """
 
 import sys
@@ -18,11 +19,14 @@ from pathlib import Path
 from omh.plugin_bundle.omh.approval_bypass import (
     APPROVAL_BYPASS_FRESH_SECONDS,
     APPROVAL_BYPASS_REFRESH_SECONDS,
+    APPROVAL_BYPASS_SESSION_LIMIT,
     approval_bypass_path,
     effective_approval_bypass,
     latest_approval_bypass,
     record_approval_bypass,
+    session_digest,
 )
+from omh.plugin_bundle.omh import approval_bypass
 from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
 
 NOW = 1_787_040_000.0
@@ -91,8 +95,196 @@ class ApprovalBypassLedgerTest(unittest.TestCase):
         record_approval_bypass(omh_home=self.home, now=NOW)
         record = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))
         self.assertEqual(
-            sorted(record), ["claim_boundary", "enabled", "observed_ts", "schema_version"]
+            sorted(record), ["claim_boundary", "enabled", "observed_ts", "on_observed_ts", "schema_version", "sessions"]
         )
+
+    def test_a_session_entry_is_keyed_by_digest_and_holds_only_the_flag(self):
+        import json
+
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="local-secret-session", now=NOW)
+        raw = approval_bypass_path(self.home).read_text(encoding="utf-8")
+        self.assertNotIn("local-secret-session", raw)
+        sessions = json.loads(raw)["sessions"]
+        self.assertEqual(list(sessions), [session_digest("local-secret-session")])
+        self.assertEqual(sessions[session_digest("local-secret-session")], {"enabled": True, "observed_ts": NOW})
+
+    def test_another_sessions_tick_does_not_answer_for_the_named_session(self):
+        # One gateway runs many sessions; a subagent with yolo off ticking last must not turn the pane's chip off.
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="main", now=NOW)
+        self._install_host_approval(False)
+        record_approval_bypass(omh_home=self.home, session_id="child", now=NOW + 1)
+        self.assertTrue(latest_approval_bypass(self.home, session_id="main", now=NOW + 2)["enabled"])
+        self.assertFalse(latest_approval_bypass(self.home, session_id="child", now=NOW + 2)["enabled"])
+        # A reader naming no session keeps the newest tick, as before.
+        self.assertFalse(latest_approval_bypass(self.home, now=NOW + 2)["enabled"])
+        # A session that never ticked reads the gateway's newest ON (main's, 2 s ago), marked as the gateway's: a
+        # wrong ON over a wrong OFF.
+        unseen = latest_approval_bypass(self.home, session_id="unseen", now=NOW + 2)
+        self.assertEqual((unseen["enabled"], unseen["scope"]), (True, "gateway"))
+        hermes = str(Path(self._tmp.name) / "hermes")
+        self.assertTrue(effective_approval_bypass(self.home, hermes, session_id="main", now=NOW + 2)["enabled"])
+
+    def test_the_ledger_keeps_a_bounded_number_of_sessions(self):
+        import json
+
+        self._install_host_approval(True)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT + 5):
+            record_approval_bypass(omh_home=self.home, session_id=f"s{index}", now=NOW + index)
+        sessions = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))["sessions"]
+        self.assertEqual(len(sessions), APPROVAL_BYPASS_SESSION_LIMIT)
+        self.assertNotIn(session_digest("s0"), sessions)
+        self.assertIn(session_digest(f"s{APPROVAL_BYPASS_SESSION_LIMIT + 4}"), sessions)
+
+    def test_an_on_session_outlives_a_crowd_of_off_sessions_ticking_after_it(self):
+        """Mutation: evict by stamp alone, so 64 children of a fanout push the bypassed parent out and it reads idle."""
+        import json
+
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="parent", now=NOW)
+        # The parent keeps working: unchanged, its entry is not rewritten until the refresh is due.
+        record_approval_bypass(omh_home=self.home, session_id="parent", now=NOW + 1)
+        self._install_host_approval(False)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT + 5):
+            record_approval_bypass(omh_home=self.home, session_id=f"child-{index}", now=NOW + 2 + index)
+        sessions = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))["sessions"]
+        self.assertEqual(len(sessions), APPROVAL_BYPASS_SESSION_LIMIT)
+        self.assertIn(session_digest("parent"), sessions)
+        state = latest_approval_bypass(self.home, session_id="parent", now=NOW + 100)
+        self.assertEqual((state["status"], state["enabled"]), ("observed", True))
+        self.assertNotIn("scope", state, "the parent's own entry answered")
+        # Among the OFF entries the oldest went first.
+        self.assertNotIn(session_digest("child-0"), sessions)
+        self.assertIn(session_digest(f"child-{APPROVAL_BYPASS_SESSION_LIMIT + 4}"), sessions)
+
+    def test_a_session_the_ledger_lost_reads_the_gateways_fresh_on_never_idle(self):
+        """Mutation: answer idle on a scoped miss, so a bypassed session pushed out by 64 others shows no chip."""
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="parent", now=NOW)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT):
+            record_approval_bypass(omh_home=self.home, session_id=f"cron-{index}", now=NOW + 1 + index)
+        state = latest_approval_bypass(self.home, session_id="parent", now=NOW + 100)
+        self.assertEqual((state["status"], state["enabled"], state["scope"]), ("observed", True, "gateway"))
+        hermes = str(Path(self._tmp.name) / "hermes")
+        self.assertTrue(effective_approval_bypass(self.home, hermes, session_id="parent", now=NOW + 100)["enabled"])
+        # Right after an install, before the named session ticks: the record has no entries yet.
+        self._install_host_approval(True)
+        other = str(Path(self._tmp.name) / "fresh")
+        record_approval_bypass(omh_home=other, now=NOW)
+        self.assertTrue(latest_approval_bypass(other, session_id="not-yet", now=NOW + 5)["enabled"])
+        # An OFF written after it does not hide that ON: the newest ON any session was seen in answers, whoever
+        # wrote last, until it is older than the freshness window.
+        self._install_host_approval(False)
+        record_approval_bypass(omh_home=other, session_id="off-writer", now=NOW + 6)
+        self.assertTrue(latest_approval_bypass(other, session_id="not-yet", now=NOW + 7)["enabled"])
+        self.assertFalse(latest_approval_bypass(other, now=NOW + 7)["enabled"], "unscoped: the newest observation")
+        self.assertEqual(
+            latest_approval_bypass(other, session_id="not-yet", now=NOW + APPROVAL_BYPASS_FRESH_SECONDS + 1)["status"],
+            "idle",
+        )
+        self.assertEqual(
+            latest_approval_bypass(self.home, session_id="parent", now=NOW + APPROVAL_BYPASS_FRESH_SECONDS + 200)["status"],
+            "idle",
+        )
+        # A home where no session was ever seen ON: nothing speaks for the session, idle.
+        never = str(Path(self._tmp.name) / "never")
+        record_approval_bypass(omh_home=never, session_id="off-only", now=NOW)
+        self.assertEqual(latest_approval_bypass(never, session_id="not-yet", now=NOW + 1)["status"], "idle")
+
+    def test_an_evicted_on_session_reads_on_although_an_off_session_wrote_last(self):
+        """Mutation: answer a scoped miss from the last writer, so 65 ON sessions then one OFF tick read `idle`."""
+        import json
+
+        self._install_host_approval(True)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT + 1):
+            record_approval_bypass(omh_home=self.home, session_id=f"on-{index}", now=NOW + index)
+        self._install_host_approval(False)
+        record_approval_bypass(omh_home=self.home, session_id="off-x", now=NOW + 70)
+        record = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))
+        self.assertNotIn(session_digest("on-0"), record["sessions"])
+        self.assertIs(record["enabled"], False)
+        state = latest_approval_bypass(self.home, session_id="on-0", now=NOW + 72)
+        self.assertEqual((state["status"], state["enabled"], state["scope"]), ("observed", True, "gateway"))
+
+    def test_a_week_old_on_entry_never_pushes_out_a_session_ticking_now(self):
+        """Mutation: rank stale entries with the fresh ones, so 64 week-old ONs evict a fresh OFF on every tick (a
+        lock and a rewrite per hook call) and leave it reading whichever session wrote last."""
+        import json
+        from unittest import mock
+
+        from omh.plugin_bundle.omh import approval_bypass
+
+        self._install_host_approval(True)
+        week_ago = NOW - 7 * 86400
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT):
+            record_approval_bypass(omh_home=self.home, session_id=f"old-{index}", now=week_ago + index)
+        self._install_host_approval(False)
+        with mock.patch.object(approval_bypass, "_write_delivery_record",
+                               wraps=approval_bypass._write_delivery_record) as writes:
+            for tick in range(10):
+                record_approval_bypass(omh_home=self.home, session_id="fresh-off", now=NOW + tick)
+        self.assertEqual(writes.call_count, 1, "unchanged ticks after the first write nothing")
+        sessions = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))["sessions"]
+        self.assertEqual(list(sessions), [session_digest("fresh-off")], "the stale entries were dropped")
+        # An ON session writing last does not speak for it: its own OFF answers.
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="on-new", now=NOW + 20)
+        state = latest_approval_bypass(self.home, session_id="fresh-off", now=NOW + 21)
+        self.assertEqual((state["status"], state["enabled"]), ("observed", False))
+        self.assertNotIn("scope", state)
+
+    def test_a_ledger_written_before_the_on_stamp_reads_as_it_did(self):
+        """An older ledger has no `on_observed_ts`: a fresh ON at its top still answers a scoped miss, an OFF does
+        not, nothing raises, and the next write carries that ON forward."""
+        import json
+
+        path = approval_bypass_path(self.home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for enabled, expected in ((True, ("observed", True)), (False, ("idle", None))):
+            with self.subTest(enabled=enabled):
+                path.write_text(json.dumps({
+                    "schema_version": "omh_approval_bypass/v1", "enabled": enabled, "observed_ts": NOW,
+                    "claim_boundary": approval_bypass.APPROVAL_BYPASS_CLAIM_BOUNDARY,
+                }), encoding="utf-8")
+                state = latest_approval_bypass(self.home, session_id="named", now=NOW + 1)
+                self.assertEqual((state["status"], state.get("enabled")), expected)
+        path.write_text(json.dumps({
+            "schema_version": "omh_approval_bypass/v1", "enabled": True, "observed_ts": NOW,
+            "claim_boundary": approval_bypass.APPROVAL_BYPASS_CLAIM_BOUNDARY, "sessions": {},
+        }), encoding="utf-8")
+        self._install_host_approval(False)
+        record_approval_bypass(omh_home=self.home, session_id="off-writer", now=NOW + 2)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["on_observed_ts"], NOW)
+        self.assertTrue(latest_approval_bypass(self.home, session_id="named", now=NOW + 3)["enabled"])
+
+    def test_a_hostile_session_id_or_record_never_raises_out_of_the_hook(self):
+        """Mutation: encode the id strictly, or read a stamp with a bare ``float``; Hermes blocks a call whose
+        ``pre_tool_call`` raises, so every tool call of the session would fail closed."""
+        import json
+
+        self._install_host_approval(True)
+        self.assertIsNone(record_approval_bypass(omh_home=self.home, session_id="x\ud800", now=NOW))
+        for odd in (5, b"x", ["a"]):
+            self.assertIsNone(record_approval_bypass(omh_home=self.home, session_id=odd, now=NOW))
+            self.assertEqual(latest_approval_bypass(self.home, session_id=odd, now=NOW)["status"], "observed")
+        self.assertTrue(latest_approval_bypass(self.home, session_id="x\ud800", now=NOW + 1)["enabled"])
+        path = approval_bypass_path(self.home)
+        huge = "1" + "0" * 400
+        for text in (
+            "[" * 100_000 + "]" * 100_000,
+            '{"schema_version": "omh_approval_bypass/v1", "enabled": true, "observed_ts": %s, "sessions": {}}' % huge,
+            '{"schema_version": "omh_approval_bypass/v1", "enabled": true, "observed_ts": 1e300, "sessions": {}}',
+            json.dumps({"schema_version": "omh_approval_bypass/v1", "enabled": True, "observed_ts": NOW,
+                        "sessions": {session_digest("s"): {"enabled": True, "observed_ts": 0}}}).replace(
+                '"observed_ts": 0', f'"observed_ts": {huge}'),
+        ):
+            with self.subTest(text=text[:60]):
+                path.write_text(text, encoding="utf-8")
+                self.assertEqual(latest_approval_bypass(self.home, session_id="s", now=NOW)["status"] in
+                                 ("idle", "observed"), True)
+                self.assertIsNone(record_approval_bypass(omh_home=self.home, session_id="s", now=NOW))
+                self.assertTrue(latest_approval_bypass(self.home, session_id="s", now=NOW + 1)["enabled"])
 
     def test_the_hud_payload_carries_the_state(self):
         self._install_host_approval(True)
@@ -113,6 +305,15 @@ class ApprovalBypassLedgerTest(unittest.TestCase):
         approval_bypass_path(self.home).unlink()
         pre_llm_call(user_message="hello", omh_home=self.home, include_omh_awareness=False)
         self.assertTrue(approval_bypass_path(self.home).exists())
+
+    def test_tool_hook_falls_back_to_task_id_for_the_session_ledger(self):
+        from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
+
+        self._install_host_approval(True)
+        pre_tool_call(tool_name="terminal", task_id="task-session", omh_home=self.home)
+        state = latest_approval_bypass(self.home, session_id="task-session", now=time.time())
+        self.assertEqual(state["status"], "observed")
+        self.assertTrue(state["enabled"])
 
 
 class ApprovalBypassWriteEconomyTest(unittest.TestCase):
@@ -276,6 +477,22 @@ class HostStateYoloTest(unittest.TestCase):
         self.assertEqual(state["status"], "observed")
         self.assertTrue(state["enabled"])
         self.assertEqual(state["source"], "host_state")
+
+    def test_a_named_session_requires_a_fresh_live_tui_row(self):
+        self._build_db([("stale", {"yolo_mode": True}, NOW - 7 * 3600)])
+        self._write_ledger(False, observed_ts=NOW - 30)
+        state = effective_approval_bypass(
+            self.omh_home, str(self.hermes_home), session_id="stale", now=NOW
+        )
+        self.assertEqual(state["status"], "idle")
+        # With the gateway's newest tick a fresh ON, the stale row still does not answer; the gateway's ON does,
+        # marked as the gateway's, since the ledger holds no entry for this session.
+        self._write_ledger(True, observed_ts=NOW - 30)
+        state = effective_approval_bypass(
+            self.omh_home, str(self.hermes_home), session_id="stale", now=NOW
+        )
+        self.assertNotIn("source", state)
+        self.assertEqual((state["enabled"], state["scope"]), (True, "gateway"))
 
     def test_a_toggle_off_beats_a_stale_hook_observation(self):
         # The reported bug: the ledger observed ON at the last turn, the

@@ -197,12 +197,34 @@ def _segment(segment: Any, cells: Any) -> dict[str, Any]:
     return drawn
 
 
+# ponytail: a pane holds a handful of layers open; past this many the rest are drawn from the usual bound.
+OPEN_LAYER_LIMIT = 64
+
+
+def open_layers(text: str) -> tuple[int, ...]:
+    """The layer indexes a ``dag_open`` query names: ASCII digits only, each once, at most `OPEN_LAYER_LIMIT`.
+
+    ``str.isdigit`` alone takes other scripts' digits (``int`` reads them) and superscripts (``int`` raises on
+    them, which would turn the whole HUD into an error record), so a part must be ASCII too. The scan stops at
+    the limit rather than reading the rest of a long query.
+    """
+    picked: list[int] = []
+    for part in str(text or "").split(","):
+        if len(picked) >= OPEN_LAYER_LIMIT:
+            break
+        part = part.strip()
+        if part.isascii() and part.isdigit() and len(part) <= 5 and int(part) not in picked:
+            picked.append(int(part))
+    return tuple(picked)
+
+
 def hud_payload(
     hermes_home: str | Path,
     session: str = "",
     *,
     cols: int = 0,
     dag_run: str = "",
+    dag_open: str = "",
     bundle_root: str | Path = BUNDLE_ROOT,
 ) -> dict[str, Any]:
     """The HUD the pane renders, or the error record it shows instead.
@@ -220,7 +242,8 @@ def hud_payload(
     come under ``session_usage``, where Hermes counted any; a failed read is a
     record there with ``error`` naming the exception, beside a HUD that still reads.
     ``dag_run`` is the dag run the person switched to (empty: the newest, which the pane follows); the payload's
-    ``dag_runs`` lists the session's runs to switch between.
+    ``dag_runs`` lists the session's runs to switch between. ``dag_open`` is the comma-separated layer indexes the
+    pane holds open; their lanes come whole, past the graph's usual bound.
     """
     session_ref = str(session or "").strip()
     try:
@@ -233,6 +256,7 @@ def hud_payload(
             session_scoped=True,
             tui_identity_expected=bool(session_ref),
             dag_run=str(dag_run or "").strip(),
+            dag_open=open_layers(dag_open),
         )
     except Exception as exc:  # the failure becomes the record the pane shows
         return {
@@ -270,9 +294,9 @@ if APIRouter is not None:
     router = APIRouter()
 
     @router.get("/hud")
-    async def hud(session: str = "", cols: int = 0, dag_run: str = "") -> dict[str, Any]:
+    async def hud(session: str = "", cols: int = 0, dag_run: str = "", dag_open: str = "") -> dict[str, Any]:
         # The reader's file and sqlite reads run off the loop so a slow home
         # never stalls the stream. The home is the gateway's own; the
         # ``profile`` query is not read (see the module docstring).
         home = resolve_hermes_home()
-        return await run_in_threadpool(lambda: hud_payload(home, session, cols=cols, dag_run=dag_run))
+        return await run_in_threadpool(lambda: hud_payload(home, session, cols=cols, dag_run=dag_run, dag_open=dag_open))

@@ -16,13 +16,19 @@ from contextlib import ExitStack
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, Sequence
 
 from .pi_family_names import canonical_progress_record
 from .approval_bypass import effective_approval_bypass
 from .awareness_delivery import _awareness_delivery_lock
 from .catch_log import read_catches
-from .delegation_graph import GRAPH_LINGER_SECONDS, build_delegation_graph, dag_run_choices, inactive_graph
+from .delegation_graph import (
+    GRAPH_LINGER_SECONDS,
+    build_delegation_graph,
+    dag_run_choices,
+    graph_segments,
+    inactive_graph,
+)
 from .delegation_ledger import LEDGER_MAX_AGE_SECONDS, newest_ledger_session
 from .hermes_delegation import _CHILD_SELECT_LIMIT, read_hermes_native_subagents
 from .kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
@@ -983,11 +989,13 @@ def read_omh_hud(
     tui_identity_expected: bool = False,
     delegation_graph: bool = True,
     dag_run: str | None = None,
+    dag_open: Sequence[int] = (),
 ) -> dict[str, Any]:
     """The HUD payload for one reading session.
 
     ``dag_run`` is for a pane that lets the person switch between the session's dag runs: a string (empty for the
-    newest) draws that run and adds ``dag_runs``, the runs to choose from; ``None`` leaves both out.
+    newest) draws that run and adds ``dag_runs``, the runs to choose from; ``None`` leaves both out. ``dag_open`` are
+    the graph's layers that pane holds open, sent whole (`delegation_graph._bounded`).
 
     Without ``delegation_graph`` the payload's graph is left inactive
     (``not_requested``) unread: a reader that only wants the status line, or
@@ -1083,7 +1091,7 @@ def read_omh_hud(
         # toggle between turns shows on the next widget poll; the hook
         # ledger answers only when neither surface speaks. The [OMH] status
         # line renders it as "yolo mode: on/off".
-        "yolo": effective_approval_bypass(str(home), str(hermes)),
+        "yolo": effective_approval_bypass(str(home), str(hermes), session_id=reading[0] if scoped else ""),
         "evidence_boundary": (
             "HUD is metadata-only. Prepared handoffs are not execution, review, CI, merge, or token-usage evidence. "
             "Todo items are plan declarations, not execution evidence."
@@ -1201,15 +1209,28 @@ def read_omh_hud(
         payload["delegation_graph"] = inactive_graph("explicit_off", scope="session" if scoped else "global")
     else:
         graph_session = reading[0] if scoped else newest_ledger_session(home, now=time.time())
+        # The fanout record is the home's. A pane that names its chat (`dag_run` set, a session named) is not offered
+        # a fanout whose dispatch names another chat as its origin; one that names this chat is drawn as this chat's,
+        # and one that names none (still running, or recorded before origins were) is drawn as the home's, as before.
+        pane_named = dag_run is not None and bool(reference)
+        fanout = _hud_verified_fanout(fanout_record)
+        origin = _hud_fanout_origin(fanout)
+        own_fanout = pane_named and bool(origin) and origin in {graph_session, *graph_segments(hermes, graph_session)}
+        if pane_named and origin and not own_fanout:
+            fanout = None
         payload["delegation_graph"] = build_delegation_graph(
             home,
             hermes,
             graph_session,
-            fanout=_hud_verified_fanout(fanout_record),
+            fanout=fanout,
             scope="session" if scoped else "global",
             dag_run=dag_run or "",
             keep_dag=dag_run is not None,
+            open_layers=dag_open,
+            layered=dag_run is not None,
         )
+        if own_fanout and payload["delegation_graph"].get("source") == "fanout":
+            payload["delegation_graph"]["scope"] = "session"
         if dag_run is not None and scoped:
             payload["dag_runs"] = dag_run_choices(home, hermes, graph_session)
     payload["subagents"]["hidden_in_graph"] = _hidden_graph_lanes(unlisted, payload["delegation_graph"])
@@ -1257,6 +1278,22 @@ def _hud_current_fanout_record(home: Path, record: object, *, now: float) -> obj
     window = LEDGER_MAX_AGE_SECONDS if open_unit else GRAPH_LINGER_SECONDS
     updated_at = _hud_fanout_candidate_score(home / "coding" / "fanout" / fanout_id)[0]
     return record if now - updated_at <= window else None
+
+
+# The id shape `omh coding fanout dispatch` accepts for the originating Hermes session
+# (`coding.fanout_dispatch._ORIGIN_SESSION_ID_RE`), vendored: the bundle may run without `omh`.
+_FANOUT_ORIGIN_RE = re.compile(r"[A-Za-z0-9_.:@-]{1,160}")
+
+
+def _hud_fanout_origin(fanout: Mapping[str, Any] | None) -> str:
+    """The chat a verified fanout's dispatch names as its origin, or "" where it names none.
+
+    The dispatch writes `origin_session_id` into its summary when it ends, so a running fanout names none, and so
+    does one dispatched outside Hermes or recorded before the field existed: the record cannot tell these apart.
+    """
+    roster = fanout.get("roster") if isinstance(fanout, Mapping) else None
+    origin = roster.get("origin_session_id") if isinstance(roster, Mapping) else None
+    return origin if isinstance(origin, str) and _FANOUT_ORIGIN_RE.fullmatch(origin) else ""
 
 
 def _hud_verified_fanout(record: object) -> dict[str, Any] | None:
@@ -1689,6 +1726,7 @@ def _hud_fanout_roster(
         summary_present = False
     except OSError:
         return _hud_graph_roster(fanout_id, units_by_id), "unreadable_fanout_status"
+    origin = ""
     if summary_present:
         summary = _read_hud_json(summary_path, root=home)
         if not summary:
@@ -1721,6 +1759,11 @@ def _hud_fanout_roster(
             _hud_roster_model(units_by_id[unit_id], entry)
         if seen_summary_units != set(units_by_id):
             return _hud_graph_roster(fanout_id, units_by_id), "invalid_fanout_status"
+        # The chat that dispatched it: on the summary, else on its units (`fanout_dispatch` stamps both).
+        for candidate in [summary.get("origin_session_id")] + [entry.get("origin_session_id") for entry in raw_summary_units]:
+            if isinstance(candidate, str) and _FANOUT_ORIGIN_RE.fullmatch(candidate):
+                origin = candidate
+                break
     inflight_dir = fanout_dir / "inflight"
     try:
         inflight_dir.lstat()
@@ -1764,7 +1807,10 @@ def _hud_fanout_roster(
                 value = marker.get(field)
                 if isinstance(value, (str, int)) and not isinstance(value, bool) and str(value).strip():
                     units_by_id[unit_id][field] = _hud_text(str(value), limit=limit)
-    return _hud_graph_roster(fanout_id, units_by_id), ""
+    roster = _hud_graph_roster(fanout_id, units_by_id)
+    if origin:
+        roster["origin_session_id"] = origin
+    return roster, ""
 
 
 def _hud_roster_model(unit: dict[str, Any], source: dict[str, Any]) -> None:

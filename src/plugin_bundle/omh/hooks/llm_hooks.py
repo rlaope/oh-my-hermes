@@ -689,7 +689,7 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
     # Turn start is the freshest in-process view of the Shift+Tab yolo flag:
     # a toggle shows on the HUD at the user's next message, not only at the
     # next tool call.
-    record_approval_bypass(omh_home=omh_home)
+    record_approval_bypass(omh_home=omh_home, session_id=str(kwargs.get("session_id") or ""))
     context_parts: list[str] = []
     payload: dict[str, object] = {}
     user_message = "" if _tracker_event_is_present(kwargs) else str(kwargs.get("user_message", "") or "")

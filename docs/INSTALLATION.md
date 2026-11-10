@@ -2147,21 +2147,46 @@ the bundle carries its files, and `plugin_enabled` for local Hermes config;
 neither check proves Desktop copied, enabled or mounted the half. Rescan in
 Desktop (Capabilities -> Plugins -> Rescan, or restart the app), inspect the
 Plugins page, and verify the pane/backend in that runtime before reporting
-it ready. The pane shows OMH catches, the plan checklist, the active delegation
-graph, board or route summaries, and the active fanout DAG as they become
-available. It reads idle when nothing is running, keeps the plan and status bar
-in agreement, and leaves individual subagent rows to Desktop's Agents panel.
-A failed lane reads as failed (red), apart from blocked (yellow).
+it ready. The pane always draws the same five sections in the same order, each
+with an empty line when it has nothing to say: USAGE (the focused chat's
+figures: what Hermes recorded for the chat, or the gateway's live
+`session.stats` counters where they count more, or the status bar's stream
+where neither has any), CATCHES (what OMH caught earlier in the session), PLAN
+(the plan as it stands), DAG (the session's one graph, a dag-ulw run, the
+native delegation tree or a fanout, drawn as cards) and AGENTS (one summary
+line for the subagents Desktop's Agents panel lists, beside the routes OMH
+dispatched). Each section folds, and the folds are kept in the app's local
+storage. The DAG section follows the focused chat: a pane that names its chat
+does not draw a fanout whose record names another chat as its origin, draws
+one that names this chat as this chat's, and draws one with no recorded origin
+as the home's, as before; that includes any fanout still running, whichever
+chat started it, since the origin is recorded when the dispatch ends.
+The yolo chip follows the focused chat too. Where OMH holds no observation of
+that chat (it has not ticked yet, or other sessions pushed it out of the
+ledger) and some session of the gateway was observed ON within the ledger's
+freshness window, the chip still shows, whichever session ticked last, since a wrong ON
+is the safer error. The pane reads idle when nothing is
+running and keeps the plan and status bar in agreement. A failed lane reads as
+failed (red), apart from blocked (yellow), and done DAG work is green.
 The pane keeps Desktop's own look (its sans, components and theme tokens) with the
 OMH TUI's colour character: a rose brand, warm section labels and muted violet
-frames. While a delegation graph runs, the pane shows it as the box drawing the
-TUI prints into its transcript, made by the same renderer at the pane's width,
-in a card: boxes for a run of up to 12 lanes, the tree for a bigger run or a
-pane too narrow for boxes. The drawing scrolls sideways rather than wrap, and a
-settled run reads as one summary line. Without a drawing (an older backend, or
-one that failed to draw), a delegation row stacks its model under the title at the
-default pane width. It uses calmer colours and follows Desktop's language when
-Korean is selected; the drawing's own words are the TUI's, in English.
+frames. The DAG's cards fold by layer. A bar over the cards picks Auto (from
+nine lanes on, finished layers and those more than two past the work in hand
+fold), Focus (the running layers and the layers either side), Unfold all, or
+Fold all (the work in hand stays open); a layer's chip or tag opens or folds
+that layer by hand. The View menu turns the figures, the stats, implied edges
+and compact cards on or off, and the fold mode and those choices are kept in
+the app's local storage. A settled run keeps its cards under its run line;
+under Auto, one of nine lanes or more shows them as folded layer chips. A
+graph too large for the pane's payload comes as a bounded layer view: lanes in
+hand (running, or returned to be checked) and lanes that stopped short
+(failed, blocked, stuck) first, then the layers nearest the work in hand. Each
+layer that lost lanes counts them by state, an edge that skips cut lanes is
+drawn dotted, and the layers drawn open are asked for again within the larger
+open-view bound: a layer bigger than that comes back cut, with its hidden
+count. A run too deep for
+even its layer rows reads as its counts by state. The pane follows Desktop's
+language when Korean is selected.
 `omh uninstall --registration-only` does not disable the plugin or
 change `plugins.enabled`. Desktop mounting must be observed separately.
 
@@ -4171,16 +4196,16 @@ is how a session leaves one for unrelated work (a recorded `deferred_reason`
 only pauses it), and the session's next turn is told once when a `todo_list`
 write was not mirrored and the plan is still held and not deferred. Hermes
 Desktop draws a `todo_list` itself (the composer's status stack), so for a
-plan `todo_list` holds the Desktop pane does not repeat its items: it shows a
-compact "in todo_list" plan summary only when OMH knows something Hermes
-does not show — an item waiting on a recorded reason, or a checklist
-unchanged past the stall threshold. The OMH TUI's plan panel draws the items
-whichever tool holds them: the done ones quiet (a `✓` in the done colour,
-their words muted) and, when they do not all fit, folded into one `✓ N done`
-row before any item still to do is cut. Ctrl+P folds the plan to its header
-and the item it is on (`[Plan] │ 6/7 ▸ <item>`), or expands it again, for the
-rest of the session; the header says `ctrl+p fold` or `ctrl+p expand` on its
-right where there is room.
+plan `todo_list` holds the Desktop pane does not repeat its items: its PLAN
+block lists only what OMH knows and Hermes does not show — an item waiting on
+a recorded reason, or a checklist unchanged past the stall threshold — and
+otherwise says the steps are in the Hermes todos above the composer. The OMH
+TUI's plan panel draws the items whichever tool holds them: the done ones
+quiet (a `✓` in the done colour, their words muted) and, when they do not all
+fit, folded into one `✓ N done` row before any item still to do is cut. Ctrl+P
+folds the plan to its header and the item it is on (`[Plan] │ 6/7 ▸ <item>`),
+or expands it again, for the rest of the session; the header says
+`ctrl+p fold` or `ctrl+p expand` on its right where there is room.
 
 A plan may be declared from a named phase template instead of from phases the
 model writes out itself. `omh_todo` with `action=set` and

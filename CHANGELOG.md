@@ -4,6 +4,33 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The Desktop pane stays on the focused chat and folds large DAGs by
+  layer.** The yolo chip follows the focused chat instead of whichever
+  session's hook ticked last (a subagent or a cron run); where OMH holds no
+  observation of that chat while some session of the gateway was observed ON
+  within the ledger's freshness window, the chip still shows. In its DAG section, a pane that names its chat no
+  longer draws a fanout whose record names another chat as its origin; one
+  with no recorded origin, which includes any fanout still running, is drawn
+  as before.
+  The pane always draws the same five sections in one order, USAGE, CATCHES,
+  PLAN, DAG and AGENTS, each with an empty line when it has nothing to say;
+  the subagent list and the routes are one AGENTS section, and a plan that
+  Hermes' `todo_list` holds gets a short PLAN block saying where its steps
+  are. DAG cards fold by layer,
+  with Auto, Focus, Unfold all and Fold all on a bar over the cards and a
+  layer's chip to open or fold it by hand; the fold mode and the View menu's
+  choices are kept in the app's local storage. A graph too large for the
+  pane comes as a bounded layer view that counts what each layer left out by
+  state: running and returned lanes are kept first, then failed, blocked and
+  stuck ones, so neither is cut while a finished lane is shown, and a lane
+  whose parent was cut hangs from its nearest shown ancestor by a dotted
+  edge. A run too deep for even its layer rows reads as its counts by state
+  instead of "No DAG". Layers held open are asked for again within a larger
+  bound, and a layer bigger than that still comes back cut. USAGE reads the
+  gateway's `session.stats` counters where they count more than the chat's
+  recorded row, and done DAG work is drawn green. The TUI's DAG block and the chat's end
+  post get the same graph as before. Thanks @yqm-307. (#2745)
+
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
@@ -210,11 +237,13 @@ All notable changes will be documented here.
   conversation's DAGs.** With two or more dag runs in one chat, a menu in the
   DAG header picks which one to draw (the newest by default); a picked run is
   drawn alone, without another run's children. A finished run keeps its
-  cards, node summaries and figures under a folding summary line instead of
-  collapsing to one line; the chat end post and the TUI keep their linger.
+  cards, node summaries and figures under its run line instead of
+  collapsing to one line (under the pane's Auto fold, a run of nine lanes or
+  more shows them as folded layer chips); the chat end post and the TUI keep their linger.
   Edges are routed by the rows the cards actually wrap to, implied
-  dependency edges are hidden behind a toggle, and repair/extend edges are
-  drawn faint. USAGE is a token ring with cache in its middle, and can add
+  dependency edges are hidden unless Implied edges is on in the DAG's View
+  menu, and repair/extend edges are drawn faint. USAGE is a token ring with
+  the total and the cache hit as a percent in its middle, and can add
   the drawn graph's subagent lanes; a sum with any unpriced part, the chat
   included, shows as a lower bound (`≥$`). Thanks @yqm-307. (#2690)
 - **A short install command: `curl -fsSL https://omher.app/install | sh`.** omher.app now serves
