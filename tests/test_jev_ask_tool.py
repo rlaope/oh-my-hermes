@@ -1060,6 +1060,152 @@ class TransportSafetyTests(unittest.TestCase):
                 client.route_url("typesafe", {"TYPESAFE_BASE_URL": value})
 
 
+class LocalEndpointTests(_ConsentedCase):
+    """`local_http_endpoint` and `typesafe_model`: a self-hosted Jev-compatible server, and nothing wider."""
+
+    LOCAL_REPLY = {"model": "clef-flash:latest"}
+
+    def _home(self, tmp: str, base_url: str, settings: object) -> _Home:
+        home = _Home(tmp, {"TYPESAFE_API_KEY": SENTINEL, "TYPESAFE_BASE_URL": base_url})
+        if settings is not None:
+            path = home.omh / "jev" / "settings.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(settings), encoding="utf-8")
+        return home
+
+    def test_a_private_http_endpoint_with_its_model_is_answered(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = self._home(
+                tmp,
+                "http://10.0.2.2:11434",
+                {"local_http_endpoint": True, "typesafe_model": "clef-flash:latest"},
+            )
+            transport = _Recorder(TransportReply(200, {}, _answered_body(**self.LOCAL_REPLY)))
+            result = home.call({"state": STATE, "questions": QUESTION}, transport)
+            self.assertEqual(result["status"], "answered")
+            request = transport.requests[0]
+            self.assertEqual(request.full_url, "http://10.0.2.2:11434/v1/systemone")
+            self.assertEqual(json.loads(request.data)["model"], "clef-flash:latest")
+            self.assertEqual(result["model_requested"], "clef-flash:latest")
+            self.assertEqual(result["served_model"], "clef-flash:latest")
+            self.assertEqual(result["contract_resolution"], "unresolved")
+            self.assertEqual(result["usage"]["cost_source"], "unknown")
+            self.assertNotIn(SENTINEL, home.every_written_byte())
+
+    def test_a_preset_on_a_local_endpoint_sends_the_operator_model_and_stays_unresolved(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = self._home(
+                tmp,
+                "http://localhost:11434/v1",
+                {"local_http_endpoint": True, "typesafe_model": "clef-flash:latest"},
+            )
+            transport = _Recorder(TransportReply(500, {}, b""))
+            result = home.call({"state": {"goal": "ship it"}, "preset": "done_check/v1"}, transport)
+            self.assertEqual(json.loads(transport.requests[0].data)["model"], "clef-flash:latest")
+            self.assertEqual(result["contract_resolution"], "unresolved")
+
+    def test_http_without_the_setting_is_refused_before_a_socket(self) -> None:
+        for settings in (None, {}, {"local_http_endpoint": "true"}, {"local_http_endpoint": 1}):
+            with self.subTest(settings=settings), TemporaryDirectory() as tmp:
+                home = self._home(tmp, "http://10.0.2.2:11434", settings)
+                transport = _Recorder(TransportReply(200, {}, _answered_body()))
+                result = home.call({"state": STATE, "questions": QUESTION}, transport)
+                self.assertEqual(result["status"], "invalid_request")
+                self.assertEqual(transport.requests, [])
+
+    def test_http_to_a_public_or_named_host_is_refused_even_with_the_setting(self) -> None:
+        for base_url in (
+            "http://gateway.example/v1",
+            "http://8.8.8.8:11434",
+            "http://100.64.0.7:11434",
+            "http://ollama.local:11434",
+            "http://user:pass@10.0.2.2:11434",
+            "http://10.0.2.2:11434/v1?token=x",
+        ):
+            with self.subTest(base_url=base_url), TemporaryDirectory() as tmp:
+                home = self._home(tmp, base_url, {"local_http_endpoint": True})
+                transport = _Recorder(TransportReply(200, {}, _answered_body()))
+                result = home.call({"state": STATE, "questions": QUESTION}, transport)
+                self.assertEqual(result["status"], "invalid_request")
+                self.assertIn("TYPESAFE_BASE_URL", str(result.get("error", "")))
+                self.assertEqual(transport.requests, [])
+
+    def test_the_operator_model_never_applies_to_typesafe_itself(self) -> None:
+        for base_url in ("", "https://api.typesafe.ai"):
+            with self.subTest(base_url=base_url), TemporaryDirectory() as tmp:
+                home = self._home(tmp, base_url, {"typesafe_model": "clef-flash:latest"})
+                transport = _Recorder(TransportReply(200, {}, _answered_body()))
+                result = home.call({"state": STATE, "questions": QUESTION}, transport)
+                self.assertEqual(result["status"], "answered")
+                self.assertEqual(json.loads(transport.requests[0].data)["model"], "jev-latest")
+                refused = home.call(
+                    {"state": STATE, "questions": QUESTION, "model": "clef-flash:latest"}, transport
+                )
+                self.assertEqual(refused["status"], "invalid_request")
+
+    def test_an_https_gateway_may_name_its_model_and_still_accepts_jev_ids(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = self._home(tmp, "https://gateway.example", {"typesafe_model": "org/jev-mirror@2"})
+            transport = _Recorder(TransportReply(200, {}, _answered_body()))
+            home.call({"state": STATE, "questions": QUESTION}, transport)
+            home.call({"state": STATE, "questions": QUESTION, "model": "jev-1.13.0"}, transport)
+            sent = [json.loads(request.data)["model"] for request in transport.requests]
+            self.assertEqual(sent, ["org/jev-mirror@2", "jev-1.13.0"])
+
+    def test_a_model_setting_that_is_not_a_plain_id_is_ignored(self) -> None:
+        for value in ("clef flash", "", "-x", "a" * 129, 7, "x\nAuthorization: y"):
+            with self.subTest(value=value), TemporaryDirectory() as tmp:
+                home = self._home(tmp, "https://gateway.example", {"typesafe_model": value})
+                transport = _Recorder(TransportReply(200, {}, _answered_body()))
+                home.call({"state": STATE, "questions": QUESTION}, transport)
+                self.assertEqual(json.loads(transport.requests[0].data)["model"], "jev-latest")
+
+    def test_send_ask_itself_refuses_http_without_the_allowance(self) -> None:
+        transport = _Recorder(TransportReply(200, {}, _answered_body()))
+        with patch.dict(os.environ, {"TYPESAFE_BASE_URL": "http://127.0.0.1:11434"}):
+            with self.assertRaises(client.AskRequestError):
+                client.send_ask(route="typesafe", key=SENTINEL, body=b"{}", user_agent="t", transport=transport)
+            sent = client.send_ask(
+                route="typesafe", key=SENTINEL, body=b"{}", user_agent="t", transport=transport,
+                allow_local_http=True,
+            )
+        self.assertEqual(sent["status"], "answered")
+        self.assertEqual(len(transport.requests), 1)
+
+    def test_a_local_http_attempt_may_use_the_whole_deadline(self) -> None:
+        timeouts: list[float] = []
+
+        def transport(request, timeout):
+            timeouts.append(timeout)
+            return TransportReply(200, {}, _answered_body())
+
+        with patch.dict(os.environ, {"TYPESAFE_BASE_URL": "http://127.0.0.1:11434"}):
+            client.send_ask(
+                route="typesafe", key=SENTINEL, body=b"{}", user_agent="t", transport=transport,
+                allow_local_http=True,
+            )
+        with patch.dict(os.environ, {"TYPESAFE_BASE_URL": "https://127.0.0.1:11434"}):
+            client.send_ask(
+                route="typesafe", key=SENTINEL, body=b"{}", user_agent="t", transport=transport,
+                allow_local_http=True,
+            )
+        self.assertGreater(timeouts[0], client.ATTEMPT_TIMEOUT_SECONDS)
+        self.assertLessEqual(timeouts[0], client.TOTAL_DEADLINE_SECONDS)
+        self.assertLessEqual(timeouts[1], client.ATTEMPT_TIMEOUT_SECONDS)
+
+    def test_is_local_host_reads_literals_only(self) -> None:
+        local = ("localhost", "LOCALHOST.", "127.0.0.1", "10.0.2.2", "172.16.4.1", "192.168.1.20",
+                 "169.254.1.1", "::1", "fe80::1", "fd12::1", "::ffff:10.0.0.1")
+        public = ("8.8.8.8", "100.64.0.7", "0.0.0.0", "::", "gateway.example", "localhost.example",
+                  "ollama.local", "2001:4860::8888", "")
+        for host in local:
+            with self.subTest(host=host):
+                self.assertTrue(client.is_local_host(host))
+        for host in public:
+            with self.subTest(host=host):
+                self.assertFalse(client.is_local_host(host))
+
+
 class ValidationTests(_ConsentedCase):
     def _call(self, args, reply=None):
         with TemporaryDirectory() as tmp:

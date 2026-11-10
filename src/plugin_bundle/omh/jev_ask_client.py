@@ -11,7 +11,11 @@ single explicit, user-requested call narrow:
   variable TypeSafe's own SDKs read, may name an operator-configured HTTPS
   root instead (`route_url`). The OpenRouter route remains fixed. The request
   never accepts a URL argument.
-* HTTPS only, default certificate verification, and every 3xx refused.
+* HTTPS only, default certificate verification, and every 3xx refused. The
+  one exception is the operator's `local_http_endpoint` setting, which lets
+  `TYPESAFE_BASE_URL` be plain HTTP for `localhost` or a loopback, private,
+  or link-local IP literal (`is_local_host`) -- a self-hosted server on this
+  machine or the local network, never a public host.
   CPython's redirect handler copies `Authorization` onto the redirected
   request, including to another host, so a redirect is a non-answer here.
 * Bounded both ways: a request body above `MAX_REQUEST_BYTES` is refused
@@ -52,6 +56,7 @@ interpreter.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import math
 import os
@@ -112,6 +117,10 @@ MAX_SERVED_MODEL_CHARS: Final = 128
 MIN_KEY_FRAGMENT_CHARS: Final = 8
 READ_CHUNK_BYTES: Final = 64 * 1024
 ATTEMPT_TIMEOUT_SECONDS: Final = 10.0
+# A self-hosted server (the `local_http_endpoint` case) may have to load the
+# model from disk first, which can take longer than a hosted API's whole
+# answer; one attempt may then use the whole deadline.
+LOCAL_ATTEMPT_TIMEOUT_SECONDS: Final = 30.0
 TOTAL_DEADLINE_SECONDS: Final = 30.0
 MAX_RETRIES: Final = 2
 BACKOFF_START_SECONDS: Final = 0.5
@@ -268,7 +277,12 @@ def _header_view(headers: object) -> dict[str, str]:
     return view
 
 
-def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
+def route_url(
+    route: str,
+    environ: Mapping[str, str] | None = None,
+    *,
+    allow_local_http: bool = False,
+) -> str:
     """Resolve a route endpoint; the TypeSafe one may come from `TYPESAFE_BASE_URL`.
 
     TypeSafe's Python and JavaScript SDKs read `TYPESAFE_BASE_URL` as the API
@@ -277,6 +291,13 @@ def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
     ends in `/v1` gets `/systemone`, and one that already ends in `/systemone`
     is used as is. Anything but an HTTPS URL with a host and no userinfo,
     query or fragment is refused before a socket opens.
+
+    `allow_local_http` is the operator's `local_http_endpoint` setting. With
+    it, and only for a host that is `localhost` or a loopback, private, or
+    link-local IP literal (`is_local_host`), the root may also be plain HTTP:
+    a self-hosted Jev-compatible server such as Ollama. A public host stays
+    HTTPS-only, and a hostname other than `localhost` is never resolved to
+    decide, so DNS cannot turn a public name into a local one.
     """
     if route not in ROUTES:
         raise AskRequestError(f"route must be one of {', '.join(ROUTES)}")
@@ -294,8 +315,15 @@ def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
         _ = parsed.port
     except ValueError as error:
         raise AskRequestError(f"{TYPESAFE_BASE_URL_ENV} must be an HTTPS base URL") from error
+    scheme = parsed.scheme.lower()
+    if scheme == "http" and allow_local_http and not is_local_host(parsed.hostname or ""):
+        raise AskRequestError(
+            f"{TYPESAFE_BASE_URL_ENV} may be plain HTTP only for localhost or a loopback, private, "
+            "or link-local IP address"
+        )
+    scheme_allowed = scheme == "https" or (scheme == "http" and allow_local_http)
     if (
-        parsed.scheme.lower() != "https"
+        not scheme_allowed
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
@@ -312,7 +340,26 @@ def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
         endpoint_path = f"{base_path}{TYPESAFE_ENDPOINT_PATH}"
     else:
         endpoint_path = f"{base_path}{TYPESAFE_VERSION_PATH}{TYPESAFE_ENDPOINT_PATH}"
-    return urlunsplit(("https", parsed.netloc, endpoint_path, "", ""))
+    return urlunsplit((scheme, parsed.netloc, endpoint_path, "", ""))
+
+
+def is_local_host(hostname: str) -> bool:
+    """Whether `hostname` is `localhost` or a loopback, private, or link-local IP literal.
+
+    Only a literal is read: a name is not resolved, so what DNS answers can
+    never widen the plain-HTTP allowance. The CGNAT range (100.64.0.0/10) is
+    not private here, because an ISP shares it between customers.
+    """
+    name = hostname.strip().lower().rstrip(".")
+    if name == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(name.strip("[]"))
+    except ValueError:
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return address.is_loopback or address.is_link_local or (address.is_private and not address.is_unspecified)
 
 
 def build_request_body(model: str, state: object, questions: Mapping[str, Any]) -> bytes:
@@ -334,6 +381,7 @@ def send_ask(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     jitter: Callable[[], float] = random.random,
+    allow_local_http: bool = False,
 ) -> dict[str, Any]:
     """POST one ask and classify the outcome. Never raises for a network outcome.
 
@@ -344,9 +392,11 @@ def send_ask(
     """
     if route not in ROUTES:
         raise AskRequestError(f"route must be one of {', '.join(ROUTES)}")
-    url = route_url(route)
-    if not url.startswith("https://"):
+    url = route_url(route, allow_local_http=allow_local_http)
+    local_http = allow_local_http and url.startswith("http://") and is_local_host(urlsplit(url).hostname or "")
+    if not url.startswith("https://") and not local_http:
         raise AskRequestError("only HTTPS routes are sent")
+    attempt_timeout = LOCAL_ATTEMPT_TIMEOUT_SECONDS if local_http else ATTEMPT_TIMEOUT_SECONDS
     send = transport or _default_transport
     started = clock()
     deadline = started + TOTAL_DEADLINE_SECONDS
@@ -369,7 +419,7 @@ def send_ask(
         )
         attempts += 1
         try:
-            reply = send(request, min(ATTEMPT_TIMEOUT_SECONDS, remaining))
+            reply = send(request, min(attempt_timeout, remaining))
         except (TimeoutError, URLError, OSError, ValueError) as error:
             return _outcome(_transport_failure_status(error), attempts, started, clock)
         except Exception:  # noqa: BLE001 - classified: a transport failure OMH does not name is a network_error, never an answer

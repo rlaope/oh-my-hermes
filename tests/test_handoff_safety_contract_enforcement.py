@@ -909,7 +909,9 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "omh_jev_ask -- the one opt-in bridge that POSTs typed questions to Jev with the user's own "
         "key; reached only from an explicit tool call, after the user named Jev in that turn and a "
         "route resolved; fixed route identities, TypeSafe host optionally configured through "
-        "TYPESAFE_BASE_URL as an HTTPS base URL without credentials/query/fragment, OpenRouter host fixed; "
+        "TYPESAFE_BASE_URL as an HTTPS base URL without credentials/query/fragment (plain HTTP only to a "
+        "loopback/private/link-local IP literal or localhost, behind the operator's local_http_endpoint "
+        "setting), OpenRouter host fixed; "
         "redirects refused, bounded both ways; "
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
