@@ -66,7 +66,7 @@ async function setup(page: Page, folders: string[] = []) {
 
 /** A New session chat on `agent` in the picker's next folder, started: a chat agent by its first message
  *  (`first`), Grok by Start. */
-async function start(page: Page, agent: string, first = "hi") {
+async function start(page: Page, agent: string, first = "/status") {
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();

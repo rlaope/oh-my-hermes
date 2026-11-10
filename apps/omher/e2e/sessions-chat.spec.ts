@@ -49,7 +49,7 @@ async function draft(page: Page, agent: string) {
 }
 
 /** `agent` started by its first message (`first`), its answer done. */
-async function start(page: Page, agent: string, first = "hi") {
+async function start(page: Page, agent: string, first = "/status") {
   await draft(page, agent);
   await page.getByTestId("composer").fill(first);
   await page.keyboard.press("Enter");
@@ -76,8 +76,8 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   await page.getByTestId("composer").fill("explain the sessions feature");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("terminal")).toHaveCount(0);
-  // before any message the session's name is its folder; the agent and the full path sit next to it
-  await expect(page.getByTestId("session-title")).toHaveText("omher");
+  // the first message names the session; the agent and the full path sit next to it
+  await expect(page.getByTestId("session-title")).toHaveText("explain the sessions feature");
   await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/omher");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");

@@ -38,7 +38,7 @@ async function start(page: Page, agent: string, folder: string) {
   await page.getByTestId(`session-agent-${agent}`).click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await page.getByTestId("composer").fill("hi");
+  await page.getByTestId("composer").fill("/status");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-chat")).not.toHaveAttribute("data-draft", "true");
   await expect(page.getByTestId("session-status")).toHaveText("Ready");

@@ -77,7 +77,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByTestId("composer")).toBeFocused();
     await expect(page.getByTestId("session-title")).toHaveText("New session");
     const row = rows(page).first();
-    await expect(row.locator(".bot-n")).toHaveText("New session");
+    await expect(row.getByTestId("session-name")).toHaveText("New session");
     await expect(row.getByTestId("session-sub")).toHaveText("~/code/web-app");
     // the last agent (Codex) in the composer row, the last folder under the composer, its path in the tooltip
     await expect(page.getByTestId("session-agent-pick")).toHaveText("Codex");
@@ -146,9 +146,11 @@ for (const theme of ["dark", "light"] as const) {
     expect(await page.getByTestId("session-folder").evaluate((e) => e.tagName)).toBe("SPAN");
     await expect(page.getByTestId("session-agent-pick")).toHaveCount(0);
     await expect(page.getByTestId("session-agent-fixed")).toHaveText("Claude Code");
-    await expect(page.getByTestId("session-title")).toHaveText("Claude Code");
-    await expect(row.locator(".bot-n")).toHaveText("api-server");
-    await expect(row.getByTestId("session-sub")).toHaveText("Claude Code");
+    // the first message names the session (SESSIONS titles); the folder and agent move to line 2 and the header
+    await expect(page.getByTestId("session-title")).toHaveText("run the tests");
+    await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
+    await expect(row.getByTestId("session-name")).toHaveText("run the tests");
+    await expect(row.getByTestId("session-sub")).toHaveText("api-server · Claude Code");
     if (SHOTS) {
       await settle(page);
       await page.screenshot({ path: join(SHOTS, `new-session-started-${theme}.png`) });
