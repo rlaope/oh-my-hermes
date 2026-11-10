@@ -98,11 +98,11 @@ CRITERION_FIELDS: Final = frozenset({"id", "text"})
 CRITERION_STATUSES: Final = ("met", "unmet", "unobserved")
 # How much of a verify node's handoff is read for its criterion lines; the rest is ignored.
 MAX_HANDOFF_READ_BYTES: Final = 262_144
-# What a goal over `MAX_GOAL_CHARS` (or not text) is told: the conditions go into criteria, as the request says them.
+# What a goal over `MAX_GOAL_CHARS` (or not text) is told: the conditions go into criteria, each the state asked for.
 GOAL_REFUSED: Final = (
     f"The goal is one short line of at most {MAX_GOAL_CHARS} characters: keep `goal` to what the request is for, and "
-    "put each checkable outcome in `criteria` ({id, text}, one line each), keeping the request's own condition (the "
-    "outcome asked for, never only that it was checked or reported)."
+    "put each checkable outcome in `criteria` ({id, text}, one line each), each naming the state the person asked "
+    "for, not that a check was run or its result reported."
 )
 # The verify node's producer scope map and a repair node's `git diff` paths are cut at these lengths (per node turn).
 SCOPE_MAP_CHARS: Final = 600

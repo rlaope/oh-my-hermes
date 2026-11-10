@@ -171,7 +171,7 @@ OMH_DAG_SCHEMA = {
             "goal": {"type": "string", "description": "define: the run's goal, one line."},
             "criteria": {"type": "array", "items": {"type": "object", "properties": {
                 "id": {"type": "string"}, "text": {"type": "string"}}},
-                "description": "define/extend: in the request's own condition, never weakened to 'reported'."},
+                "description": "define/extend: the state the person asked for, not that a check ran or was reported."},
             "nodes": {
                 "type": "array",
                 "items": {

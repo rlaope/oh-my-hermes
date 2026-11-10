@@ -84,9 +84,9 @@ work. OMH starts no timer or poll. After three parks per node, another park is r
 Split the goal into the outcomes that can each be checked on their own, from what the request names, and
 pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short id and one line. Keep
 `goal` to one short line of what the request is for; its conditions go into criteria, not the goal. A
-criterion keeps the request's own condition: "it works on staging" stays that, never "staging check
-reported" or "staging checked", since the outcome asked for is what the verify node must confirm. Never
-ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
+criterion names the state the person asked for, "it works on staging", not that a check was run or its
+result reported ("staging check reported", "staging checked"): that state is what the verify node
+confirms. Never ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
 refused as `invalid_criteria`; an empty list is the same as none. Leaving them out is allowed (lint
 `no_goal_criteria`), and the run then works as it did before criteria existed. Criteria are part of the run:
 the same run id defined with other criteria is refused as `run_exists`. `extend` takes new `criteria` too

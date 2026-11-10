@@ -100,8 +100,8 @@ DEFINITION = SkillDefinition(
         "Completion is a claim: report the goal met only when `omh_dag` says `verdict: verified`, and first check "
         "each node against its SCOPE in both directions, nothing owed missing and nothing beyond it done. The reply "
         "states the result in plain words (the goal is confirmed; part is not, and which; a check could not run "
-        "here, and why; how many criteria were met); verified, unverified, needs_repair, blocked, settle and node "
-        "ids are record words, not reply wording.",
+        "here, and why; how many criteria were met; name a criterion by what it says, not its id); verified, "
+        "unverified, needs_repair, blocked, settle and node ids are record words, not reply wording.",
         "Goal loop: verify, repair, extend, verify. A failed check gets repair nodes (`omh_dag action=repair`, two "
         "cycles per node, the last re-plans); when every node passed but the goal check finds work missing, add it to the same run "
         "(`omh_dag action=extend`, two rounds per run). Past either limit, report what is still open.",
@@ -122,8 +122,8 @@ DEFINITION = SkillDefinition(
     ),
     opening_steps=(
         "Start at once; there is no plan approval. Write the goal in one line, and pass each separately checkable "
-        "outcome the request names as `criteria` (id and one line) in the request's own condition, never weakened "
-        "to 'reported' or 'checked'; never ask the person to list them.",
+        "outcome the request names as `criteria` (id and one line); a criterion names the state the person asked for "
+        "(it works on staging), not that a check was run or its result reported; never ask the person to list them.",
         "When the conversation holds a plan the user accepted (from `plan`, `ralplan` or `refactor-plan`), build the graph "
         "from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check "
         "goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what "
@@ -284,9 +284,9 @@ work. OMH starts no timer or poll. After three parks per node, another park is r
 Split the goal into the outcomes that can each be checked on their own, from what the request names, and
 pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short id and one line. Keep
 `goal` to one short line of what the request is for; its conditions go into criteria, not the goal. A
-criterion keeps the request's own condition: "it works on staging" stays that, never "staging check
-reported" or "staging checked", since the outcome asked for is what the verify node must confirm. Never
-ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
+criterion names the state the person asked for, "it works on staging", not that a check was run or its
+result reported ("staging check reported", "staging checked"): that state is what the verify node
+confirms. Never ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
 refused as `invalid_criteria`; an empty list is the same as none. Leaving them out is allowed (lint
 `no_goal_criteria`), and the run then works as it did before criteria existed. Criteria are part of the run:
 the same run id defined with other criteria is refused as `run_exists`. `extend` takes new `criteria` too

@@ -242,11 +242,11 @@ class DefineTests(unittest.TestCase):
             self.assertFalse(dag_run.record_path(home.omh, PARENT, "feat").exists())
         self.assertEqual((refused["status"], refused["reason"]), ("refused", "invalid_goal"), refused)
         self.assertEqual(refused["say"], dag_run.GOAL_REFUSED)
-        for words in ("one short line", "put each checkable outcome in `criteria`", "the request's own condition",
-                      "never only that it was checked or reported"):
+        for words in ("one short line", "put each checkable outcome in `criteria`", "the state the person asked for",
+                      "not that a check was run or its result reported"):
             self.assertIn(words, refused["say"])
         schema = dag_tool.OMH_DAG_SCHEMA["parameters"]["properties"]["criteria"]["description"]
-        self.assertIn("request's own condition", schema)
+        self.assertIn("the state the person asked for, not that a check ran or was reported", schema)
 
     def test_criteria_are_part_of_the_definition(self) -> None:
         """Mutation: leave criteria out of the digest, so other criteria reuse the run."""
@@ -290,8 +290,11 @@ class SkillTextTests(unittest.TestCase):
         completion = next(line for line in DEFINITION.quality_bar if line.startswith("Completion is a claim"))
         self.assertIn("The reply states the result in plain words", completion)
         self.assertIn("verified, unverified, needs_repair, blocked, settle and node ids are record words", completion)
-        self.assertIn("in the request's own condition, never weakened", DEFINITION.opening_steps[0])
-        self.assertIn('never "staging check reported"', " ".join(run_loop_reference().split()))
+        self.assertIn("a criterion names the state the person asked for (it works on staging), not that a check was "
+                      "run or its result reported", DEFINITION.opening_steps[0])
+        self.assertIn("name a criterion by what it says, not its id", completion)
+        self.assertIn('"it works on staging", not that a check was run or its result reported',
+                      " ".join(run_loop_reference().split()))
         settle = next(step for step in DEFINITION.opening_steps if step.startswith("On each completion"))
         self.assertIn("a verify node with criteria is accepted only when every `CRITERION` line says met, failed when "
                       "one is unmet, blocked when one could not be checked here", settle)
