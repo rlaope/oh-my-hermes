@@ -745,8 +745,11 @@ def backend_handoff(path: str, task_id: str) -> tuple[bool, str]:
     """Whether a handoff is a regular file and no link inside the terminal backend a child wrote it in: (found, unread).
 
     ``unread`` names why there is no answer (`_backend_lines`), and ``found``
-    is then False: a probe Hermes timed out or one that exited non-zero is
-    ``backend_unanswered`` whatever verdict line it printed. A read the
+    is then False. The probe prints one verdict line once its test has run,
+    and nothing follows it, so a printed line is a whole answer even when
+    Hermes then timed the command out or it exited non-zero; only a probe
+    that printed none is ``backend_unanswered``. (The criteria read differs:
+    its pipe follows the verdict line, so it must be whole.) A read the
     parent's interrupt stopped refuses the settle and records nothing, so the
     parent settles again.
     """
@@ -767,11 +770,14 @@ def backend_criterion_lines(path: str, task_id: str) -> tuple[bool, str, list[st
 def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, str, list[str]]:
     quoted = shlex.quote(path)
     grep = criterion_pipe(quoted) if criteria else ""
-    # Whole for every read: a verdict line printed before Hermes timed the probe out, or before it exited non-zero,
-    # is no answer either (`backend_unanswered`, so an accepted node keeps `handoff_checked: false`).
-    lines, unread = _backend_lines(task_id, f"if [ -L {quoted} ]; then echo {_HANDOFF_LINK}; elif [ -f {quoted} ]; "
-                                            f"then echo {_HANDOFF_FILE}; {grep}else echo {_HANDOFF_NONE}; fi",
-                                   whole=True)
+    # `[` and `echo` run as `command`, as the criteria pipe's tools do: Hermes sources the login shell's functions
+    # and aliases before each command. Whole only with criteria: the existence probe's one verdict line comes after
+    # its test and nothing follows it, so a line printed before a timeout or a non-zero exit is still the answer,
+    # while the criteria pipe after that line can be cut short (`backend_handoff`).
+    lines, unread = _backend_lines(task_id, f"if command [ -L {quoted} ]; then command echo {_HANDOFF_LINK}; "
+                                            f"elif command [ -f {quoted} ]; then command echo {_HANDOFF_FILE}; "
+                                            f"{grep}else command echo {_HANDOFF_NONE}; fi",
+                                   whole=criteria)
     if unread == "interrupted":
         raise dag_run.DagRefusal("settle_interrupted", "The handoff check was interrupted, so nothing was settled; "
                                                        "settle the node again.")

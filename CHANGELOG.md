@@ -12,12 +12,13 @@ All notable changes will be documented here.
   met; the status line, the end of the run and the TUI say how many were met
   (`2/3 criteria met`). A run defined without them works as before.
 
-- **dag-ulw on a Docker or SSH terminal no longer counts a cut-short check as
-  read.** When the terminal times out or the check exits with an error, the
-  node's handoff is reported as not checked and the goal stays unverified,
-  even if the check printed part of its answer; a run with goal criteria
-  already worked this way, and now a run without them does too. The read
-  also ignores shell aliases and functions that share a tool's name.
+- **dag-ulw's handoff checks on a Docker or SSH terminal ignore shell aliases
+  and functions.** The commands that check a node's handoff file and read its
+  goal-criteria lines now run past any alias or function in your shell that
+  shares a tool's name (an `alias grep='grep --color=always'`, a function
+  named `echo` or `[`), so they read the file as it is. When the criteria
+  search finds no line, that is a read with nothing in it; any other failed
+  step leaves the handoff not checked.
 
 - **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
   HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,

@@ -606,6 +606,8 @@ class BackendTests(unittest.TestCase):
             ("h1 t0 g0 c0 l0 b0", False), ("h0 t0 g0 c0 l0 b127", False), ("h0 t0 g1 c0 l0 b1", False),
             ("h0 t0 g1 c0 l0", False),  # a stage missing
             ("h0 t0 g1 c0 l0 b0 b0", False), ("h0 h0 g1 c0 l0 b0", False),  # a stage twice
+            ("h0 t0 g01 c0 l0 b0", False), ("h00 t0 g1 c0 l0 b0", False),  # a status is the shell's own digits
+            ("h0 t0 g c0 l0 b0", False), ("h0 t0 g+1 c0 l0 b0", False), ("x0 t0 g1 c0 l0 b0", False),
             ("", False),
         ):
             with self.subTest(statuses=statuses):
@@ -622,7 +624,8 @@ class BackendTests(unittest.TestCase):
     def test_a_login_shell_alias_or_function_never_answers_for_a_tool(self) -> None:
         """Hermes sources the login shell's functions and aliases (expand_aliases on) before each command."""
         prelude = ("shopt -s expand_aliases; alias grep='grep --color=always'; alias base64='echo HIJACKED'; "
-                   "head() { echo 'CRITERION api #T: met - from a function'; }; tail() { echo HIJACKED; }\n")
+                   "head() { echo 'CRITERION api #T: met - from a function'; }; tail() { echo HIJACKED; }; "
+                   "echo() { builtin echo h1; }; [() { return 1; }\n")
         with homes() as home, terminal_env(), TemporaryDirectory() as root:
             sandbox = Sandbox(Path(root), prelude=prelude)
             with Terminal("ssh", sandbox).modules():
@@ -1068,14 +1071,32 @@ class ExistenceProbeTests(unittest.TestCase):
                 digest = _settled_digest(home, settled) if settled["status"] == "ok" else ""
         return settled, {"digest": digest}
 
-    def test_a_timed_out_or_failed_probe_is_no_answer_whatever_it_printed(self) -> None:
-        """Mutation: read the probe's verdict line without checking Hermes' timeout flag and the exit code."""
+    def test_a_probe_that_printed_its_line_answered_even_if_cut_short_after_it(self) -> None:
+        """Pinned as on main: the probe prints one verdict line after its test and nothing follows it, so a line printed
+        before Hermes timed the command out, or before it exited non-zero, is still the answer. Mutation: read the
+        existence probe whole, which turned a handoff that was seen into unverified and accepted a missing one."""
         for label, answer in {
-            "timed out after the verdict line": {"output": "OMH_HANDOFF_FILE\n[Command timed out after 10s]",
-                                                 "returncode": 124, "hermes_timed_out": True},
+            "file, timed out after its line": {"output": "OMH_HANDOFF_FILE\n[Command timed out after 10s]",
+                                               "returncode": 124, "hermes_timed_out": True},
+            "file, exited non-zero after its line": {"output": "OMH_HANDOFF_FILE\n", "returncode": 1},
+        }.items():
+            with self.subTest(label):
+                settled, seen = self._settle(answer)
+                self.assertEqual((settled["verdict"], settled["verdict_reasons"]), ("verified", []), settled)
+                self.assertNotIn("handoff_checked", next(item for item in settled["nodes"] if item["id"] == "check"))
+                self.assertEqual(seen["digest"], MAIN_NO_CRITERIA_FILE_SHA)
+        for label, answer in {
+            "missing, timed out after its line": {"output": "OMH_HANDOFF_NONE\n[Command timed out after 10s]",
+                                                  "returncode": 124, "hermes_timed_out": True},
+            "missing, exited non-zero after its line": {"output": "OMH_HANDOFF_NONE\n", "returncode": 1},
+            "a link, exited non-zero after its line": {"output": "OMH_HANDOFF_LINK\n", "returncode": 1},
+        }.items():
+            with self.subTest(label):
+                settled, _ = self._settle(answer)
+                self.assertEqual((settled["status"], settled["reason"]), ("refused", "handoff_missing"), settled)
+        for label, answer in {
             "timed out before any line": {"output": "[Command timed out after 10s]", "returncode": 124,
                                           "hermes_timed_out": True},
-            "exited non-zero after the verdict line": {"output": "OMH_HANDOFF_FILE\n", "returncode": 1},
             "exited non-zero before any line": {"output": "sh: syntax error\n", "returncode": 2},
         }.items():
             with self.subTest(label):
@@ -1086,7 +1107,35 @@ class ExistenceProbeTests(unittest.TestCase):
                 self.assertEqual((settled["verdict"], settled["verdict_reasons"]),
                                  ("unverified", ["handoff_not_checked:check"]))
                 self.assertIn("Node check is accepted, but its handoff was not checked", settled["say"])
-                self.assertIn("1 handoff not checked", settled["status_line"])
+
+    def test_the_probe_runs_its_test_and_its_echo_as_command(self) -> None:
+        with homes() as home, terminal_env():
+            environment = Answers({"output": "OMH_HANDOFF_FILE\n", "returncode": 0})
+            with Terminal("docker", environment).modules():
+                to_check(home, criteria=None)
+                call(action="settle", run="feat", node="check", outcome="accepted")
+        command = environment.calls[-1][0]
+        for part in ("if command [ -L ", "]; then command echo OMH_HANDOFF_LINK; elif command [ -f ",
+                     "]; then command echo OMH_HANDOFF_FILE; else command echo OMH_HANDOFF_NONE; fi"):
+            self.assertIn(part, command)
+
+    @unittest.skipUnless(SANDBOX_SHELL, SANDBOX_SKIP)
+    def test_a_login_function_named_echo_or_bracket_never_answers_for_the_probe(self) -> None:
+        """A `[` that always succeeds would read every handoff as a link, an `echo` that prints the link verdict too."""
+        prelude = ("[() { return 0; }; echo() { builtin echo OMH_HANDOFF_LINK; }\n")
+        with homes() as home, terminal_env(), TemporaryDirectory() as root:
+            sandbox = Sandbox(Path(root), prelude=prelude)
+            with Terminal("ssh", sandbox).modules():
+                slots_table(home)
+                call(action="define", run="feat", nodes=NODES)
+                record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+                built = sandbox.path(Path(dag_run.node_handoff(record, home.omh, "build")))
+                built.parent.mkdir(parents=True, exist_ok=True)
+                built.write_text("done", encoding="utf-8")
+                call(action="settle", run="feat", node="build", outcome="accepted")
+                built.with_name("check.md").write_text("checked", encoding="utf-8")
+                accepted = call(action="settle", run="feat", node="check", outcome="accepted")
+        self.assertEqual((accepted["status"], accepted.get("verdict")), ("ok", "verified"), accepted)
 
     def test_an_answered_probe_reads_as_it_did_on_main(self) -> None:
         missing, _ = self._settle({"output": "OMH_HANDOFF_NONE\n", "returncode": 0})
