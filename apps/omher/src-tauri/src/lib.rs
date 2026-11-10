@@ -184,7 +184,8 @@ async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
 
 /// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
 /// agent id crosses from the UI: no program path, command line or argument; `resume` is a Claude Code
-/// session id that the shell checks is one (so the terminal view continues a chat). Terminal output goes
+/// session id that the shell checks is one (so the terminal view continues a chat); `account` is the account a
+/// session restarted after an app restart ran with (checked by `accounts::session_env_for`). Terminal output goes
 /// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
 async fn session_start(
@@ -192,6 +193,7 @@ async fn session_start(
     agent: String,
     cwd: String,
     resume: Option<String>,
+    account: Option<String>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -199,9 +201,10 @@ async fn session_start(
 ) -> Result<u32, String> {
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // The account Settings › Accounts picked for new sessions of this agent's CLI: its home variable, or
-        // nothing ("This computer"). chat_start passes the same.
-        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        // The account Settings › Accounts picked for new sessions of this agent's CLI (or, for a session started
+        // again after a restart, the one it ran with): its home variable, or nothing ("This computer").
+        // chat_start passes the same.
+        let account_env = user_home().map(|h| accounts::session_env_for(&h, &agent, account.as_deref())).unwrap_or_default();
         sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
@@ -243,13 +246,14 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
 
 /// Start allow-listed agent `agent` in folder `cwd` as a chat: its structured mode (the fixed arguments in
 /// the allow-list), with events for the chat view on `on_event` and, once, `{event:"exit", code, error}`.
-/// Only an agent id, a folder and optionally a Claude Code session id cross from the UI.
+/// Only an agent id, a folder, optionally a Claude Code session id or Codex thread id, and optionally the account a
+/// restarted session ran with cross from the UI.
 #[tauri::command]
-async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
+async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, account: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     let chats = shell.chats.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // The same account as a terminal session of this agent: its home variable, or nothing ("This computer").
-        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        let account_env = user_home().map(|h| accounts::session_env_for(&h, &agent, account.as_deref())).unwrap_or_default();
         chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, move |out| {
             let _ = on_event.send(match out {
                 ChatOut::Event(e) => e,

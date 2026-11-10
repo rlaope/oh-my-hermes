@@ -85,6 +85,9 @@ async function autoSwitch(groups: AccountGroup[]): Promise<void> {
   }
 }
 
+/** The accounts as last read (null before the first read); SESSIONS notes which one a new session runs as. */
+export const accountGroups = (): AccountGroup[] | null => snap.groups;
+
 export function useAccounts(): Snap {
   return useSyncExternalStore(
     (f) => {

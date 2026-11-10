@@ -27,7 +27,9 @@ export interface SessionHost {
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
   /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
-   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is one. */
+   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is one. `account`
+   *  names the Settings › Accounts login it runs as (the one it ran with, after a restart); none = the one picked
+   *  for new sessions. */
   start(
     agent: AgentId,
     cwd: string,
@@ -36,12 +38,14 @@ export interface SessionHost {
     onData: (data: Uint8Array | string) => void,
     onExit: (code: number | null) => void,
     resume?: string,
+    account?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
-  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code session id or a Codex thread id to continue). */
-  chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string): Promise<number>;
+  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code session id or a Codex thread id to continue;
+   *  `account`: as for `start`). */
+  chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string): Promise<number>;
   chatInput(id: number, input: ChatInput): Promise<void>;
   chatClose(id: number): Promise<void>;
 }
@@ -70,19 +74,19 @@ export class TauriHost implements SessionHost {
     const r = await open({ directory: true, multiple: false, defaultPath, title: "Choose a folder for the session" });
     return typeof r === "string" ? r : null;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
-    return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, cols, rows, onData: data, onExit: exit });
+    return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
   }
-  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string) {
+  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string) {
     const { invoke, Channel } = await this.core();
     const ch = new Channel<ChatEvent>();
     ch.onmessage = (ev) => onEvent(ev);
-    return invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, onEvent: ch });
+    return invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, account: account ?? null, onEvent: ch });
   }
   async chatInput(id: number, input: ChatInput) {
     const { invoke } = await this.core();
@@ -117,6 +121,7 @@ export interface MockCall {
   cols?: number;
   rows?: number;
   resume?: string;
+  account?: string;
   input?: ChatInput;
 }
 
@@ -159,9 +164,9 @@ export class MockHost implements SessionHost {
     const v = this.g.__omherPickFolder;
     return v === undefined ? defaultPath : v;
   }
-  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string) {
+  async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
     const id = ++this.next;
-    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}) });
+    this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
     this.live.set(id, { line: "", out: onData, exit: onExit });
     setTimeout(() => {
       onData(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
@@ -211,9 +216,9 @@ export class MockHost implements SessionHost {
 
   // ---- chat: a scripted agent with the same events the Rust adapters emit -------------------
   private chats = new Map<number, MockChat>();
-  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string) {
+  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string) {
     const id = ++this.next;
-    this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}) });
+    this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
     const c = new MockChat(agent, onEvent, resume, cwd);
     this.chats.set(id, c);
     c.boot();

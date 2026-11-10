@@ -6,15 +6,30 @@
 // composer draw them. Grok has no verifiable chat mode, so it stays a terminal (xterm on a pseudo-terminal),
 // and every chat can switch to its agent's terminal view.
 //
-// Sessions live only while the app runs; the last few folders (with the agent that used each) are remembered on
-// this computer.
+// A session's program lives only while the app runs. The list itself comes back after a restart (resume.ts saves
+// it): a Claude Code or Codex chat that was running continues its conversation in the same folder and account,
+// the others come back paused with a Resume button, and ended ones stay ended. The last few folders (with the
+// agent that used each) are remembered on this computer.
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { agentDef, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
 import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type Store } from "../state/store";
-import type { ApprovalChoice, BridgeEvent, ClarifyAnswers } from "../lib/protocol";
+import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
+import { continuesItself, type SavedSession } from "../app/resume";
+import { accountGroups } from "../settings/accounts/useAccounts";
+
+/** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
+const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
+
+/** The account a new session of `agent` runs as, from the Accounts list when it is loaded (none = unknown or the
+ *  agent has no accounts; the shell then uses the one picked for new sessions). */
+export function accountFor(groups: AccountGroup[] | null, agent: AgentId): string | undefined {
+  const cli = ACCOUNT_CLI[agent];
+  const g = cli ? groups?.find((x) => x.cli === cli) : undefined;
+  return g ? (g.active ?? "default") : undefined;
+}
 
 export interface ModelOption {
   id: string;
@@ -86,7 +101,7 @@ const errText = (e: unknown) =>
 /** How an agent opens, from the shell's list (or the UI list for an older shell). */
 const modeOf = (agents: AgentInfo[] | null, id: AgentId) => agents?.find((a) => a.id === id)?.mode ?? agentDef(id).mode;
 
-export function createSessions(host: SessionHost, store: () => Store = getStore) {
+export function createSessions(host: SessionHost, store: () => Store = getStore, accounts: () => AccountGroup[] | null = () => null) {
   let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {} };
   const listeners = new Set<() => void>();
   const terms = new Map<string, Term>();
@@ -96,6 +111,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
   let seq = 0;
   let localSeq = 0;
   let resetDone: Promise<void> | null = null;
+  let restored = false;
+  /** Sessions put back after a restart: when started again they name the account they ran with (a new session
+   *  sends no account; the shell uses the one picked for new sessions). */
+  const fromBefore = new Set<string>();
+  const accountOf = (r: SessionRec) => (fromBefore.has(r.id) ? r.account : undefined);
   let notify: ((ev: BridgeEvent) => void) | null = null;
 
   const set = (patch: Partial<SessionsState>) => {
@@ -162,14 +182,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     }
   };
 
-  /** Mark the session's chat loaded and empty in the store, so the timeline says hi instead of loading. */
-  const openChat = (id: string, model = "") => {
+  /** Mark the session's chat loaded in the store (empty, or with the messages saved before a restart), so the
+   *  timeline says hi instead of loading. */
+  const openChat = (id: string, model = "", messages: Msg[] = []) => {
     const key = keys.get(id)!;
     if (store().getState().chats[key]?.loaded) return;
     store().dispatch({
       type: "chat.opened",
       bot: key,
-      res: { session_id: key, messages: [], running: false, model, provider: "", reasoning: "" },
+      res: { session_id: key, messages, running: false, model, provider: "", reasoning: "" },
       now: Date.now(),
     });
   };
@@ -179,7 +200,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     const proc: ChatProc = { kind: "agent" };
     procs.set(id, proc);
     try {
-      proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume);
+      proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r));
       if (procs.get(id) !== proc) {
         // closed while starting
         void host.chatClose(proc.hostId).catch(() => undefined);
@@ -295,6 +316,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     const id = `s${++seq}`;
     const mode = modeOf(state.agents, agent);
     const app = store().getState();
+    const account = accountFor(accounts(), agent);
     const r: SessionRec = {
       id,
       agent,
@@ -302,6 +324,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
       startedAt: Date.now(),
       status: "starting",
       view: mode === "terminal" ? "terminal" : "chat",
+      ...(account ? { account } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     };
@@ -344,6 +367,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
           t.term.write(`\r\n\x1b[2m[${agentDef(r.agent).label} ended${code ? ` with exit ${code}` : ""}]\x1b[0m\r\n`);
         },
         resume,
+        accountOf(r),
       );
       t.hostId = hostId;
       if (t.closed) {
@@ -477,9 +501,82 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     const r = rec(id);
     if (!r || procs.has(id) || modeOf(state.agents, r.agent) !== "chat" || (r.status !== "exited" && r.status !== "failed")) return;
     const resume = (r.agent === "claude" || r.agent === "codex") && r.agentSession ? r.agentSession : undefined;
-    patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat" });
+    patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
     note(id, null);
     await startAgentChat(id, resume);
+  };
+
+  /**
+   * Start a session that was running when omher closed and did not continue by itself (pi, oh-my-pi, Grok,
+   * oh-my-hermes, a chat whose conversation id was never reported), in the same folder and account. Once only.
+   */
+  const resume = async (id: string) => {
+    const r = rec(id);
+    if (!r?.paused || procs.has(id) || terms.has(id)) return;
+    const mode = modeOf(state.agents, r.agent);
+    if (mode === "chat") return restart(id);
+    if (mode === "terminal") {
+      // the terminal view starts the program when it mounts
+      patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
+      return;
+    }
+    // oh-my-hermes: a new Hermes chat in the folder; the saved one was only a picture of the old chat
+    const old = keys.get(id);
+    patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
+    if (old) {
+      keys.delete(id);
+      setChatRoute(old, null);
+      store().dispatch({ type: "chat.forget", bot: old });
+    }
+    await startFolderChat(id);
+  };
+
+  /**
+   * Put back the sessions saved before omher restarted (once per page load; a second call does nothing, so no
+   * program starts twice). Each keeps its id, folder, account and chat. A Claude Code or Codex chat that was
+   * running continues its conversation; any other running one comes back paused; ended ones stay ended.
+   */
+  const restore = (saved: SavedSession[]) => {
+    if (restored || state.list.length > 0) return;
+    restored = true;
+    if (!saved.length) return;
+    const list: SessionRec[] = [];
+    const again: { id: string; resume: string }[] = [];
+    for (const s of saved) {
+      const mode = modeOf(state.agents, s.agent);
+      const auto = s.running && mode === "chat" && continuesItself(s);
+      const r: SessionRec = {
+        id: s.id,
+        agent: s.agent,
+        cwd: s.cwd,
+        startedAt: s.startedAt,
+        // a chat agent comes back as its chat (its terminal view would start the program on sight)
+        view: mode === "terminal" ? "terminal" : "chat",
+        status: auto ? "starting" : s.failed ? "failed" : "exited",
+        exitCode: s.running ? null : (s.exitCode ?? null),
+        ...(s.error && !s.running ? { error: s.error } : {}),
+        ...(s.agentSession ? { agentSession: s.agentSession } : {}),
+        ...(s.account ? { account: s.account } : {}),
+        ...(s.bot ? { bot: s.bot } : {}),
+        ...(s.model ? { model: s.model } : {}),
+        ...(s.running && !auto ? { paused: true } : {}),
+      };
+      list.push(r);
+      fromBefore.add(s.id);
+      seq = Math.max(seq, Number(s.id.slice(1)) || 0);
+      if (mode !== "terminal") {
+        keys.set(s.id, `agent:${s.id}`);
+        // fresh ids: the agent's own message ids start over in its new process
+        const msgs: Msg[] = (s.messages ?? []).map((m) => ({ id: `r-${m.id}`, role: m.role, text: m.text, ts: m.ts }));
+        openChat(s.id, s.model ?? "", msgs);
+      }
+      if (auto) again.push({ id: s.id, resume: s.agentSession! });
+    }
+    set({ list: [...list, ...state.list] });
+    for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
+    // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them
+    void loadAgents();
+    if (again.length) void ready().then(() => Promise.all(again.map(({ id, resume: rid }) => (procs.has(id) ? undefined : startAgentChat(id, rid)))));
   };
 
   /** Stop the program(s) and remove the session. */
@@ -543,9 +640,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     setView,
     setModel,
     restart,
+    resume,
+    restore,
     send,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
+    /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
+    hasTerm: (id: string) => terms.has(id),
     /** The session whose chat has app-store key `key`. */
     byKey: (key: string) => {
       for (const [id, k] of keys) if (k === key) return rec(id) ?? null;
@@ -565,7 +666,7 @@ export type SessionsStore = ReturnType<typeof createSessions>;
 let singleton: SessionsStore | null = null;
 export function getSessions(): SessionsStore {
   if (!singleton) {
-    const s = createSessions(getHost());
+    const s = createSessions(getHost(), getStore, accountGroups);
     singleton = s;
     setSessionKeyLookup((id) => s.chatKey(id));
     s.setNotify((ev) => notifySessionEvent(ev, getStore().getState()));

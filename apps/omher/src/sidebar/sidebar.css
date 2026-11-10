@@ -328,6 +328,94 @@ button.upd:hover {
   background: var(--raise2);
   font-variant-numeric: tabular-nums;
 }
+.upd:focus-visible {
+  outline: 2px solid var(--line-strong);
+  outline-offset: 2px;
+}
+/* The update confirm: a small calm card over a dimmed app, the popovers' look (8px radius, --pop, one line). */
+.upd-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 3, 6, 0.7);
+  animation: upd-fade 0.12s ease both;
+}
+[data-theme="light"] .upd-veil {
+  background: rgba(20, 16, 22, 0.32);
+}
+.upd-dlg {
+  width: min(380px, calc(100vw - 48px));
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--pop);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--pop-shadow);
+  color: var(--body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  animation: pop 0.16s ease both;
+}
+.upd-dlg-t {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.upd-dlg-b p {
+  margin: 0 0 6px;
+}
+.upd-dlg-b p + p {
+  color: var(--muted);
+}
+.upd-dlg-f {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.upd-dlg-btn {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--r);
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--body);
+  background: var(--seg-on);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+[data-theme="light"] .upd-dlg-btn {
+  background: var(--raise2);
+}
+.upd-dlg-btn:hover {
+  color: var(--ink);
+}
+/* the one primary action: the neutral ink fill, never the accent */
+.upd-dlg-btn.primary {
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: none;
+}
+.upd-dlg-btn.primary:hover {
+  background: var(--body);
+  color: var(--bg);
+}
+.upd-dlg-btn:focus-visible {
+  outline: 2px solid var(--line-strong);
+  outline-offset: 2px;
+}
+@keyframes upd-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upd-veil,
+  .upd-dlg {
+    animation: none;
+  }
+}
 .upd-err {
   flex-basis: 100%;
   padding-left: 30px;

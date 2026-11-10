@@ -92,6 +92,7 @@ test("update available: button with the version, bottom-left in the user row", a
   }
 
   await btn.click();
+  await page.getByTestId("update-go").click();
   const prog = page.getByTestId("update-progress");
   await expect(prog).toHaveText("Updating 42%");
   await expect(page.getByTestId("update-btn")).toHaveCount(0);
@@ -105,11 +106,15 @@ test("a failed install says why and offers a retry", async ({ page }) => {
   await stub(page, { version: "0.1.2", installFails: "signature mismatch\nstack…" });
   await page.goto("/");
   await page.getByTestId("update-btn").click();
+  await page.getByTestId("update-go").click();
   await expect(page.getByTestId("update-error")).toHaveText("signature mismatch");
   await expect(page.getByTestId("update-btn")).toHaveText("Retry update");
   expect(await calls(page)).toEqual(["check", "install"]);
   // the app stays usable: the composer and the bot list still respond
   await expect(page.getByTestId("side-bots")).toBeVisible();
+  // a retry asks again
   await page.getByTestId("update-btn").click();
+  await expect(page.getByTestId("update-confirm")).toBeVisible();
+  await page.getByTestId("update-go").click();
   await expect.poll(() => calls(page)).toEqual(["check", "install", "install"]);
 });

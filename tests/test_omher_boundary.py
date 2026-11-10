@@ -67,13 +67,16 @@ RULES = (
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
+    "a Claude Code or Codex chat that was running starts again by itself in the same folder, continuing its own conversation,",
+    "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
+    "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
     "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
     "omher updates itself only through Tauri's updater, and only from one fixed address:",
     "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
-    " and only after the person presses the update button; then it restarts omher.",
+    " and only after the person presses the update button and confirms the restart; then it restarts omher.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -158,9 +161,12 @@ class SignedSelfUpdateFromOneAddress(unittest.TestCase):
         )
         self.assertEqual(users, ["sidebar/updater.ts"])
         button = (UI_SRC / "sidebar" / "UpdateButton.tsx").read_text(encoding="utf-8")
-        # install runs from the click handler only; the timer only checks
+        # install runs only from the confirm's "Update and restart"; the button only opens the confirm, the timer
+        # only checks
         self.assertEqual(button.count("update.install("), 1)
-        self.assertIn("onClick={() => void install(", button)
+        self.assertEqual(button.count("void install("), 1)
+        self.assertIn("onConfirm={() => {\n            setAsking(false);\n            void install(update);", button)
+        self.assertIn("onClick={() => setAsking(true)}", button)
 
 
 class TheOneInstaller(unittest.TestCase):
@@ -528,7 +534,8 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         sig = re.search(r"async fn chat_start\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
-        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "on_event"})
+        # `account` names the account a session restarted after an app restart ran with (session_env_for checks it)
+        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "on_event"})
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("chats.start_agent(&agent", body)
         self.assertNotIn(".spawn(", body)
@@ -555,19 +562,20 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
         # `resume` is the only extra: a Claude Code session id that resume_args checks is a UUID
-        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "cols", "rows", "on_data", "on_exit"})
+        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "cols", "rows", "on_data", "on_exit"})
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref()", body)
         self.assertNotIn(".spawn(", body)
 
     def test_a_session_gets_only_the_chosen_account_home(self) -> None:
-        """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env` and nothing else;
+        """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env_for` (the saved
+        account of a restarted session when its folder exists, else `session_env`) and nothing else;
         that reads only omher's `active.json` and yields at most the CLI's home variable; the PTY and the chat's
         pipes add it as env only."""
         for command in ("session_start", "chat_start"):
             sig = re.search(rf"async fn {command}\((.*?)\) -> ", self.lib, re.S)
             body = self.lib[sig.end():].split("\n}\n", 1)[0]
-            self.assertEqual(body.count("accounts::session_env(&h, &agent)"), 1, command)
+            self.assertEqual(body.count("accounts::session_env_for(&h, &agent, account.as_deref())"), 1, command)
             self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env,", body)
         accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
         cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
@@ -576,7 +584,13 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         active = accounts.split("pub fn active_account", 1)[1].split("\n}\n", 1)[0]
         self.assertEqual(re.findall(r'join\("([^"]+)"\)', active), [".omher", "accounts", "active.json"])
         self.assertEqual(active.count("read_to_string("), 1)
-        env = accounts.split("pub fn session_env", 1)[1].split("\n}\n", 1)[0]
+        env = accounts.split("pub fn session_env(", 1)[1].split("\n}\n", 1)[0]
+        # the restarted session's account: `default`, or a valid id whose folder exists, else the one above
+        again = accounts.split("pub fn session_env_for(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("account_dir(home, cli, id).map(|d| d.is_dir() && !d.is_symlink())", again)
+        self.assertIn("_ => session_env(home, agent)", again)
+        for word in ("read", "token", "auth", "Command"):
+            self.assertNotIn(word, again)
         self.assertIn("account_env(home, cli, &active_account(home, cli))", env)
         for word in ("read", "token", "auth", "Command"):
             self.assertNotIn(word, env)

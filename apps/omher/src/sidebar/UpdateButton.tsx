@@ -1,9 +1,14 @@
 // The update control in the sidebar's user row. Hidden until a newer signed release exists; then one
-// small button ("Update to 0.1.2") downloads and installs it, shows the progress, and restarts omher.
+// small button ("Update to 0.1.2") asks first (omher will restart; chats, panels and sessions pick up where they
+// were), then downloads and installs it, shows the progress, saves what is open and restarts omher.
 // A failed check stays quiet (the next one runs in 6 hours); a failed install says why in one line.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Spinner } from "../ui";
 import { percent, shortError, updateHost, type PendingUpdate } from "./updater";
+import { runningLine, UpdateConfirm } from "./UpdateConfirm";
+import { getSessions } from "../sessions/sessions";
+import { agentDef } from "../sessions/agents";
+import { saveResumeNow } from "../app/resumeBoot";
 
 const EVERY_MS = 6 * 60 * 60 * 1000;
 
@@ -16,7 +21,16 @@ type State =
 
 export function UpdateButton() {
   const [st, setSt] = useState<State>({ kind: "none" });
+  const [asking, setAsking] = useState(false);
   const busy = useRef(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  /** Cancel / Esc give the focus back to the button once the dialog (and its focus trap) is gone. */
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (asking || !refocus.current) return;
+    refocus.current = false;
+    btn.current?.focus();
+  }, [asking]);
 
   useEffect(() => {
     const host = updateHost();
@@ -47,6 +61,8 @@ export function UpdateButton() {
     try {
       await update.install((p) => setSt({ kind: "installing", update, pct: percent(p) }));
       setSt({ kind: "restarting" });
+      // what is open right now, so the new version opens it again
+      saveResumeNow();
       await host.relaunch();
     } catch (e) {
       busy.current = false;
@@ -64,14 +80,23 @@ export function UpdateButton() {
       </span>
     );
   }
+  const update = st.update;
+  const close = () => {
+    refocus.current = true;
+    setAsking(false);
+  };
+  const ss = asking ? getSessions().getState() : null;
   return (
     <>
       <button
+        ref={btn}
         type="button"
         className="upd"
         data-testid="update-btn"
-        title={st.kind === "failed" ? st.error : `Install omher ${st.update.version} and restart`}
-        onClick={() => void install(st.update)}
+        aria-haspopup="dialog"
+        aria-expanded={asking}
+        title={st.kind === "failed" ? st.error : `Install omher ${update.version} and restart`}
+        onClick={() => setAsking(true)}
       >
         {st.kind === "failed" ? "Retry update" : `Update to ${st.update.version}`}
       </button>
@@ -79,6 +104,17 @@ export function UpdateButton() {
         <span className="upd-err" role="alert" data-testid="update-error">
           {st.error}
         </span>
+      )}
+      {asking && ss && (
+        <UpdateConfirm
+          version={update.version}
+          running={runningLine(ss.list, (r) => ss.agents?.find((a) => a.id === r.agent)?.mode ?? agentDef(r.agent).mode)}
+          onCancel={close}
+          onConfirm={() => {
+            setAsking(false);
+            void install(update);
+          }}
+        />
       )}
     </>
   );

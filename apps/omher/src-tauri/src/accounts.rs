@@ -108,6 +108,19 @@ pub fn session_env(home: &Path, agent: &str) -> Vec<(String, String)> {
     account_env(home, cli, &active_account(home, cli)).unwrap_or_default()
 }
 
+/// The env a session omher starts again after a restart gets: the account it ran with (`account`, from the UI's
+/// saved list) when that is `default` or a valid id whose folder still exists, else [`session_env`]'s choice.
+pub fn session_env_for(home: &Path, agent: &str, account: Option<&str>) -> Vec<(String, String)> {
+    let Some(cli) = session_cli(agent) else {
+        return Vec::new();
+    };
+    match account {
+        Some("default") => Vec::new(),
+        Some(id) if account_dir(home, cli, id).map(|d| d.is_dir() && !d.is_symlink()).unwrap_or(false) => account_env(home, cli, id).unwrap_or_default(),
+        _ => session_env(home, agent),
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // The fixed commands
 // ---------------------------------------------------------------------------------------------
@@ -595,6 +608,25 @@ mod tests {
             let h = session_home("sess-bad", active, &[("claude", "work")]);
             assert_eq!(session_env(&h, "claude"), vec![], "{active}");
             let _ = std::fs::remove_dir_all(h);
+        }
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn a_restarted_session_keeps_its_account_while_it_exists() {
+        let home = session_home("again", r#"{"claude":"work","codex":"work"}"#, &[("claude", "work"), ("claude", "old"), ("codex", "work")]);
+        let dir = |cli: &str, id: &str| home.join(".omher").join("accounts").join(cli).join(id).to_string_lossy().into_owned();
+        // the account it ran with, even when another one is picked for new sessions now
+        assert_eq!(session_env_for(&home, "claude", Some("old")), vec![("CLAUDE_CONFIG_DIR".to_string(), dir("claude", "old"))]);
+        // it ran as "This computer": still nothing, whatever is picked now
+        assert_eq!(session_env_for(&home, "codex", Some("default")), vec![]);
+        // no account saved, a folder that is gone, or an id that is not ours to trust: the one picked for new sessions
+        for acct in [None, Some("gone"), Some("../work"), Some("Work"), Some("")] {
+            assert_eq!(session_env_for(&home, "claude", acct), vec![("CLAUDE_CONFIG_DIR".to_string(), dir("claude", "work"))], "{acct:?}");
+        }
+        // agents without accounts never get one
+        for agent in ["pi", "omp", "omh", "bash"] {
+            assert_eq!(session_env_for(&home, agent, Some("work")), vec![], "{agent}");
         }
         let _ = std::fs::remove_dir_all(home);
     }
