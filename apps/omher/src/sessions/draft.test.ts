@@ -6,6 +6,7 @@ import { AGENTS, draftAgent, draftFolder, folderChoices, lastAgent, rowModel, ty
 import { MockHost, type MockCall } from "./host";
 import { createSessions } from "./sessions";
 import { createStore, type BridgeLike } from "../state/store";
+import { getDraft, setDraft as setUnsent } from "../app/drafts";
 
 const info = (installed: string[]): AgentInfo[] => AGENTS.map((a) => ({ id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/bin/${a.id}` : null }));
 const rec = (agent: Recent["agent"], cwd: string, at: number): Recent => ({ agent, cwd, at });
@@ -111,7 +112,9 @@ describe("a New session chat", () => {
     await ss.loadAgents();
     const id = ss.draft();
     ss.setDraft(id, { agent: "codex", cwd: "/w/api" });
+    setUnsent(`agent:${id}`, "  run the tests ");
     expect(await ss.start(id, "  run the tests ")).toBe(true);
+    expect(getDraft(`agent:${id}`)).toBe(""); // sent, so no longer unsent text
     const start = calls().find((c) => c.op === "chat.start")!;
     expect(start).toMatchObject({ agent: "codex", cwd: "/w/api" });
     const send = calls().find((c) => c.op === "chat.input")!;

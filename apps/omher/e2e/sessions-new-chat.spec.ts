@@ -133,6 +133,8 @@ for (const theme of ["dark", "light"] as const) {
     await page.keyboard.press("Enter");
     await expect(chat).not.toHaveAttribute("data-draft", "true");
     await expect(page.getByTestId("bubble-user")).toHaveText("run the tests");
+    // the sent text leaves the composer (it is not kept as unsent text)
+    await expect(page.getByTestId("composer")).toHaveValue("");
     await expect(page.getByTestId("bubble-bot")).toHaveText("(mock Claude Code) You said: run the tests");
     const all = await calls(page);
     const st = all.find((x) => x.op === "chat.start")!;
