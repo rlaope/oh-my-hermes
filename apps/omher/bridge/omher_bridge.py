@@ -2528,13 +2528,31 @@ def _short_url(url: str) -> str:
     return u if len(u) <= 40 else u.split("/", 1)[0]
 
 
+def _media_names(text: str) -> tuple[str, list[str]]:
+    """The answer without its whole `MEDIA:` lines (read as `media_paths` reads them), and "📎 name" for each."""
+    keep, names, fence = [], [], False
+    for line in text.splitlines():
+        if _MEDIA_FENCE.match(line):
+            fence = not fence
+        path = None if fence else media_paths(line)
+        if path:
+            names.append("\U0001f4ce " + re.split(r"[\\/]", path[0])[-1])
+        else:
+            keep.append(line)
+    return "\n".join(keep), names
+
+
 def reply_gist(text: str, n: int = 220) -> str:
     """The first paragraph of an answer as plain text: markdown marks and mentions removed, bare URLs
-    shortened, clipped at a sentence end when one is near."""
-    para = next((p for p in re.split(r"\n\s*\n", text or "") if p.strip()), "")
+    shortened, clipped at a sentence end when one is near. Files the bot sent (`MEDIA:` lines) follow as
+    "📎 name", never as a path."""
+    text, names = _media_names(text or "")
+    para = next((p for p in re.split(r"\n\s*\n", text) if p.strip()), "")
     t = _MD_LINK.sub(r"\1", para)
     t = _MENTION.sub("", t)
-    urls: list[str] = []
+    # file names sit behind placeholders too, so the markdown strip keeps their underscores
+    urls: list[str] = list(names)
+    t = " ".join([t, *(f"\x00{i}\x00" for i in range(len(names)))])
 
     def hold(m: "re.Match[str]") -> str:
         # URLs sit behind placeholders while markdown marks are stripped, so `foo_bar` keeps its underscore

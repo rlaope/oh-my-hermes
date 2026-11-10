@@ -7,7 +7,8 @@ import { splitMedia } from "./mediaLines";
 import { SentFiles } from "./Attach";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
- * sent (`MEDIA:` lines) leave the text and show below it, in order; while streaming the lines are only hidden.
+ * sent (`MEDIA:` lines) leave the text and show under it in the same column as the bubble, in order; while
+ * streaming the lines are only hidden. Files the person sent sit under their own bubble, on the right.
  * Memoized: a store change elsewhere (a streamed token) must not re-render every bubble and its face. */
 export const Bubble = memo(function Bubble({
   item,
@@ -27,8 +28,8 @@ export const Bubble = memo(function Bubble({
   if (item.kind === "user") {
     return (
       <div className="msg u" data-testid="bubble-user">
-        {item.files?.length ? <SentFiles files={item.files} /> : null}
         {(item.text || !item.files?.length) && <div className="b">{item.text}</div>}
+        {item.files?.length ? <SentFiles files={item.files} /> : null}
         {item.reply && (
           <div className="msg-reply" data-testid="bubble-reply">
             Reply target <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
@@ -47,12 +48,15 @@ export const Bubble = memo(function Bubble({
         ) : (
           <Avatar bot={bot} size={28} className={`msg-face${face === false ? " blank" : ""}`} />
         ))}
-      {(text || streaming || paths.length === 0) && (
-        <div className="b md">
-          <Markdown text={text} />
-        </div>
-      )}
-      {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}
+      {/* one column beside the face: the caption, then the files under it, both on the bubble's left edge */}
+      <div className="msg-col">
+        {(text || streaming || paths.length === 0) && (
+          <div className="b md">
+            <Markdown text={text} />
+          </div>
+        )}
+        {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}
+      </div>
     </div>
   );
 });

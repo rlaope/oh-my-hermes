@@ -1048,6 +1048,15 @@ class HermesPath(unittest.TestCase):
                          "Repo: github.com/foo_bar/baz_qux is new.")
         self.assertEqual(g("**https://x.y/a_b**"), "x.y/a_b")
 
+    def test_files_the_bot_sent_show_as_clip_and_name_never_a_path(self):
+        g = ob.reply_gist
+        self.assertEqual(g("Here is the chart.\n\nMEDIA:/Users/k/media/chart_v2.png\nMEDIA:/Users/k/report.zip"),
+                         "Here is the chart. \U0001f4ce chart_v2.png \U0001f4ce report.zip")
+        self.assertEqual(g("MEDIA:C:\\Users\\k\\shot.png"), "\U0001f4ce shot.png")
+        self.assertNotIn("/Users/k", g("Done:\nMEDIA:/Users/k/media/a.png"))
+        # a MEDIA line inside fenced code is text, as the UI and media.read read it
+        self.assertEqual(g("```\nMEDIA:/a/b.png\n```"), "MEDIA:/a/b.png")
+
     def test_query_and_fragment_are_never_shown(self):
         g = ob.reply_gist
         self.assertEqual(g("Open https://example.com/p?token=abc123 now"), "Open example.com/p now")

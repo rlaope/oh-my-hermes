@@ -48,6 +48,10 @@ const HISTORY_SEED = {
     ["assistant", "Hi, I'm Hermes. Ask me anything.", 24 * 3600],
     ["user", "Send me the chart, the clip and the report.", 2 * 3600],
     ["assistant", "Here they are.\n\nMEDIA:/w/media/chart.png\nMEDIA:/w/media/clip.mp4\nMEDIA:/w/media/report.zip", 2 * 3600 - 20],
+    ["user", "Now the new chart, and both side by side.", 2 * 3600 - 60],
+    // files only, no caption: still gets the face, on the bubble column
+    ["assistant", "MEDIA:/w/media/chart-after.png", 2 * 3600 - 80],
+    ["assistant", "Before and after:\nMEDIA:/w/media/chart.png\nMEDIA:/w/media/chart-after.png", 2 * 3600 - 81],
   ],
 };
 

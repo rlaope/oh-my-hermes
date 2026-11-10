@@ -89,6 +89,25 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   expect((await bridgeCalls()).filter((c) => c.op === "chat.send")).toHaveLength(0);
 });
 
+test("a file in a session's answer sits under its bubble in the same column, one face per run", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  await start(page, "claude");
+  // the mock agent echoes the text: a MEDIA line in it comes back as a file under the answer
+  await page.getByTestId("composer").fill("here\nMEDIA:/w/media/report.zip");
+  await page.getByTestId("composer").press("Enter");
+  const chat = page.getByTestId("session-chat");
+  const msg = chat.getByTestId("bubble-bot").filter({ has: page.getByTestId("media") });
+  await expect(msg).toHaveCount(1);
+  await expect(msg).not.toContainText("MEDIA:");
+  const [bub, tile] = await Promise.all(
+    [msg.locator(".b"), msg.getByTestId("media").locator(":scope > *").first()].map((l) => l.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect)),
+  );
+  expect(Math.abs(tile.left - bub.left)).toBeLessThanOrEqual(1);
+  expect(tile.top).toBeGreaterThan(bub.bottom);
+  await expect(msg.locator(".msg-face:not(.blank)")).toHaveCount(1);
+});
+
 test("the empty section's New session button starts a chat session, then gives way to the session row", async ({ page }) => {
   await open(page);
   await expect(page.getByTestId("session-start-agents")).toContainText("Claude Code");
