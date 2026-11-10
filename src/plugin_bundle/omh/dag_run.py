@@ -69,6 +69,7 @@ import secrets
 import shlex
 import shutil
 from typing import Any, Final
+import unicodedata
 
 from . import dag_core
 from .awareness_delivery import _awareness_delivery_lock
@@ -175,9 +176,20 @@ _DOUBLE_CHECK: Final = re.compile(r"(?<![a-z])double[- ]check")
 DOC_SUFFIXES: Final = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
 # A write scope entry named exactly one of these (casefolded, no suffix) is docs, not code (`writes_code`).
 DOC_NAMES: Final = frozenset({"readme", "changelog", "license", "notice", "authors", "contributing", "copying"})
-# `CRITERION <id>: met|unmet|unobserved` at a line's start (after spaces, list bullets or backticks), then the rest.
+# `CRITERION <id> #<attempt>: met|unmet|unobserved` at a line's start (after spaces, list bullets or backticks), then
+# the rest (`criterion_statuses`): nothing, or a separator and the evidence.
 _CRITERION_LINE: Final = re.compile(
-    r"[ \t*`-]*CRITERION[ \t]+([a-z0-9][a-z0-9-]{0,31})[ \t]*:[ \t]*(?i:(met|unmet|unobserved))(?![A-Za-z0-9_-])(.*)")
+    r"[ \t*`-]*CRITERION[ \t]+([a-z0-9][a-z0-9-]{0,31})[ \t]+#([0-9]{1,6})[ \t]*:[ \t]*"
+    r"(?i:(met|unmet|unobserved))(.*)")
+_CRITERION_EVIDENCE: Final = re.compile("[ \t]*[-:\u2013\u2014](.*)")
+# Evidence made only of whitespace and these marks is no evidence (`criterion_status`).
+_EVIDENCE_MARKS: Final = "-:*`.\u2013\u2014"
+# Of a verify node's handoff head only the last lines naming the marker are read, each cut at a byte count, the same
+# way on this host and in a Docker or SSH terminal (`criterion_lines`, `dag_tool.backend_criterion_lines`).
+CRITERION_LINE_BYTES: Final = 400
+CRITERION_LINES_KEPT: Final = 64
+# The unread reason for a handoff that is on this host but cannot be opened (`dag_tool.read_handoff_criteria`).
+HANDOFF_UNREADABLE: Final = "handoff_unreadable"
 _MARKER_PATTERNS: Final = {
     marker: re.compile(r"(?<![A-Za-z])" + r"\s+".join(marker.split()) + r"\s*:", re.IGNORECASE)
     for marker in PROMPT_MARKERS
@@ -456,9 +468,9 @@ def _validated_criteria(raw: object, taken: Sequence[str] = ()) -> list[dict[str
     only; nothing rewrites or removes a criterion, and a run holds at most
     `MAX_CRITERIA` in all.
     """
-    if not isinstance(raw, list) or not raw:
+    if not isinstance(raw, list):
         raise DagRefusal("invalid_criteria",
-                         f"criteria lists 1 to {MAX_CRITERIA} outcomes, each {{id, text}}; leave it out when the goal "
+                         f"criteria lists up to {MAX_CRITERIA} outcomes, each {{id, text}}; leave it out when the goal "
                          "has no separately checkable outcome.")
     if len(taken) + len(raw) > MAX_CRITERIA:
         raise DagRefusal("invalid_criteria",
@@ -490,28 +502,73 @@ def run_criteria(record: Mapping[str, Any]) -> list[dict[str, str]]:
     return list(record.get("criteria") or [])
 
 
-def criterion_lines(text: str) -> list[str]:
-    """The lines of a handoff that carry a ``CRITERION`` marker at their start, in order."""
-    return [line for line in text.splitlines() if _CRITERION_LINE.match(line)]
+def criterion_lines(data: bytes) -> list[str]:
+    """The lines of a handoff's head that a criterion can be read from, as every reader takes them.
+
+    The first `MAX_HANDOFF_READ_BYTES` bytes, NUL made SOH, the lines (split
+    on ``\\n``) holding ``CRITERION``, each cut at `CRITERION_LINE_BYTES`, the
+    last `CRITERION_LINES_KEPT` kept, decoded as UTF-8 with replacement. A
+    Docker or SSH terminal runs the same steps in its shell
+    (`dag_tool.backend_criterion_lines`), so both sides hand
+    `criterion_status` the same lines.
+    """
+    head = data[:MAX_HANDOFF_READ_BYTES].replace(b"\x00", b"\x01")
+    kept = [line[:CRITERION_LINE_BYTES] for line in head.split(b"\n") if b"CRITERION" in line][-CRITERION_LINES_KEPT:]
+    return b"\n".join(kept).decode("utf-8", errors="replace").split("\n")
 
 
-def criterion_statuses(lines: Iterable[str], ids: Sequence[str]) -> dict[str, str]:
-    """Each of ``ids`` as a verify node's handoff marks it: ``met``, ``unmet`` or ``unobserved``.
+def criterion_status(line: str, ids: Iterable[str], attempt: int) -> tuple[str, str] | None:
+    """``(id, status)`` when ``line`` is a criterion line of attempt ``attempt`` for one of ``ids``, else None.
 
-    Only a line opening with ``CRITERION <id>: <status>`` counts, for an id
-    the run declares; the last line per id wins. ``met`` with nothing after
-    the status is ``unobserved``, and so is an id with no line. Only the
-    status word is kept, never the evidence text.
+    Every reader takes its lines through `criterion_lines` and hands each one
+    here, so the host and a Docker or SSH terminal read them the same way.
+    A trailing CR and a leading BOM are dropped; a line holding any other
+    control or line-separator character is no criterion line. The line opens
+    with ``CRITERION <id> #<attempt>: <status>`` (spaces, ``-``, ``*`` or
+    backticks before it are fine), and after the status comes nothing or a
+    separator (``-``, ``:``, an en or em dash) and the evidence. ``met``
+    needs evidence that is more than whitespace and marks; a bare ``unmet``
+    or ``unobserved`` stands, since it can only hold the run back. Anything
+    else after the status (``?``, ``(``, ``/``, ``|``, another word) makes
+    it no criterion line.
+    """
+    line = line.removesuffix("\r").removeprefix("\ufeff")
+    if any(char != "\t" and unicodedata.category(char) in ("Cc", "Zl", "Zp") for char in line):
+        return None
+    match = _CRITERION_LINE.match(line)
+    if match is None or match[1] not in ids or int(match[2]) != attempt:
+        return None
+    status, rest = match[3].casefold(), match[4]
+    if not rest.strip(" \t"):
+        return None if status == "met" else (match[1], status)
+    separated = _CRITERION_EVIDENCE.fullmatch(rest)
+    if separated is None:
+        return None
+    if status == "met" and not any(not char.isspace() and char not in _EVIDENCE_MARKS for char in separated[1]):
+        return None
+    return match[1], status
+
+
+def criterion_statuses(lines: Iterable[str], ids: Sequence[str], attempt: int) -> dict[str, str]:
+    """Each of ``ids`` as a verify node's handoff marks it for attempt ``attempt``: ``met``, ``unmet`` or
+    ``unobserved`` (`criterion_status` reads each line). The last line per id wins, and an id with no line, or only
+    lines of another attempt, is ``unobserved``. Only the status word is kept, never the evidence text.
     """
     statuses = dict.fromkeys(ids, "unobserved")
     for line in lines:
-        match = _CRITERION_LINE.match(line)
-        if match is None or match[1] not in statuses:
-            continue
-        status = match[2].casefold()
-        evidence = match[3].strip(" \t-:*`.\u2013\u2014")
-        statuses[match[1]] = "unobserved" if status == "met" and not evidence else status
+        found = criterion_status(line, statuses, attempt)
+        if found is not None:
+            statuses[found[0]] = found[1]
     return statuses
+
+
+def attempt_number(node: Mapping[str, Any]) -> int:
+    """The number of the node's latest attempt: the ``#<n>`` its verify child writes on each criterion line."""
+    attempts = node.get("attempts") or []
+    if not attempts:
+        return 1
+    number = attempts[-1].get("n") if isinstance(attempts[-1], Mapping) else None
+    return number if isinstance(number, int) and not isinstance(number, bool) and number > 0 else len(attempts)
 
 
 def leading_check_role(label: str) -> str:
@@ -837,7 +894,8 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
     _require_graph(nodes)
     title = _plain(name, MAX_NAME_CHARS, "invalid_name", "The run needs a short name.") if name else run
     stated = _plain(goal, MAX_GOAL_CHARS, "invalid_goal", GOAL_REFUSED) if goal else ""
-    checks = _validated_criteria(criteria) if criteria is not None else []
+    # An empty list is no criteria: the run is as one defined without them.
+    checks = _validated_criteria(criteria) if criteria is not None and criteria != [] else []
     record = {
         "schema_version": DAG_SCHEMA_VERSION,
         "session_id": session_id,
@@ -1047,10 +1105,13 @@ def _criterion_reads(record: Mapping[str, Any], derived: Mapping[str, Mapping[st
                      accepted_only: bool) -> dict[str, str]:
     """Each criterion's status as the newest verify read naming it says (by ``settled_at``, then record order).
 
-    ``accepted_only``: the last attempt of each accepted verify node whose
-    handoff was read, as the verdict counts them; otherwise every settled
-    attempt of every verify node still in the run, as the views show them.
-    A criterion no read names is left out.
+    Only each verify node's last attempt counts, and only when it recorded a
+    read: an earlier attempt's read is never shown or counted, and a last
+    attempt whose handoff was not read leaves its criteria to other nodes.
+    ``accepted_only``: accepted verify nodes whose handoff was read, as the
+    verdict counts them; otherwise any outcome, as the views show them, so a
+    failed or blocked check still gives its count. A criterion no read names
+    is left out.
     """
     ids = [item["id"] for item in run_criteria(record)]
     reads: list[tuple[float, int, Mapping[str, Any]]] = []
@@ -1058,13 +1119,11 @@ def _criterion_reads(record: Mapping[str, Any], derived: Mapping[str, Mapping[st
         node_id = str(node["id"])
         if not is_verification(node) or derived[node_id]["state"] == "superseded":
             continue
-        attempts = [attempt for attempt in node.get("attempts") or [] if isinstance(attempt, Mapping)]
-        if accepted_only:
-            if derived[node_id]["state"] != "accepted" or handoff_unchecked(node):
-                continue
-            attempts = attempts[-1:]
-        reads += [(_number(attempt.get("settled_at")) or 0.0, order, attempt["criteria"]) for attempt in attempts
-                  if isinstance(attempt.get("criteria"), Mapping)]
+        if accepted_only and (derived[node_id]["state"] != "accepted" or handoff_unchecked(node)):
+            continue
+        last = (node.get("attempts") or [None])[-1]
+        if isinstance(last, Mapping) and isinstance(last.get("criteria"), Mapping):
+            reads.append((_number(last.get("settled_at")) or 0.0, order, last["criteria"]))
     found: dict[str, str] = {}
     for _settled, _order, statuses in sorted(reads, key=lambda read: (read[0], read[1])):
         found.update({key: str(statuses[key]) for key in ids if statuses.get(key) in CRITERION_STATUSES})
@@ -1468,13 +1527,15 @@ def task_for(
         criteria = run_criteria(record)
         if criteria:
             # The engine reads these lines from the handoff (`criterion_statuses`); a criterion without one is unobserved.
+            number = attempt_number(node)
             lines.extend([
                 "Goal criteria:",
                 *(f"- {item['id']}: {item['text']}" for item in criteria),
-                "In the handoff, write one line per criterion, each at the start of a line:",
-                "CRITERION <id>: met | unmet | unobserved - <the command you ran and what it showed>",
-                "`met` needs that evidence after the dash; `unobserved` means it could not be checked here, with the "
-                "reason. Every criterion gets a line; one without a line counts as unobserved.",
+                "In the handoff, write one line per criterion, each at the start of a line, with one status word:",
+                f"CRITERION <id> #{number}: met | unmet | unobserved - <the command you ran and what it showed>",
+                f"`#{number}` is this attempt: a line without it, or with another number, does not count. `met` needs "
+                "that evidence after the dash; `unobserved` means it could not be checked here, with the reason. "
+                "Every criterion gets a line; one without a line counts as unobserved.",
             ])
         scopes = _producer_scopes(record, node, preceding)
         if scopes:
@@ -1697,23 +1758,32 @@ def settle(
                 f"Node {node_id} has no handoff file, and the nodes after it read one. Write it from the child's "
                 "result, or settle the node failed.",
             )
+        if outcome == "accepted" and unread == HANDOFF_UNREADABLE:
+            raise DagRefusal(
+                HANDOFF_UNREADABLE,
+                f"Node {node_id}'s handoff file is there but could not be opened as a plain file, so its criteria "
+                "cannot be read. Fix the file (its permissions, or what replaced it) and settle again, or settle "
+                "the node failed or blocked.",
+            )
         if ids and found and not unread:
-            statuses = criterion_statuses(lines, ids)
+            statuses = criterion_statuses(lines, ids, attempt_number(nodes[node_id]))
     if outcome == "accepted" and statuses is not None:
         unmet = [key for key in ids if statuses[key] == "unmet"]
         unseen = [key for key in ids if statuses[key] == "unobserved"]
+        again = _checked_again(nodes, nodes[node_id])
         if unmet:
             raise DagRefusal(
                 "criteria_unmet",
                 f"Node {node_id}'s handoff marks criteria {', '.join(unmet)} unmet, so it is not accepted. Settle it "
-                "failed, then repair it with nodes that fix the work; the check runs again once they pass.",
+                f"failed, then repair it with nodes that fix the work; {again}.",
             )
         if unseen:
             raise DagRefusal(
                 "criteria_unobserved",
-                f"Node {node_id}'s handoff has no checked result for criteria {', '.join(unseen)} (no CRITERION "
-                "line, or met with no evidence), so it is not accepted. Have the check run them: settle it failed "
-                "and repair it so it runs again, or settle it blocked when they cannot be checked here.",
+                f"Node {node_id}'s handoff has no checked result of this attempt for criteria {', '.join(unseen)} (no "
+                f"CRITERION line marked #{attempt_number(nodes[node_id])}, or met with no evidence), so it is not "
+                f"accepted. Settle it failed and repair it so they are checked ({again}), or settle it blocked when "
+                "they cannot be checked here.",
             )
     attempt = nodes[node_id]["attempts"][-1]
     note = _plain(reason, MAX_REASON_CHARS, "invalid_reason", "The reason is one short line.") if reason else ""
@@ -1729,6 +1799,23 @@ def settle(
     if statuses is not None:
         attempt["criteria"] = statuses  # the status words only: no evidence text, no handoff content
     return str(outcome)
+
+
+def _checked_again(nodes: Mapping[str, Mapping[str, Any]], node: Mapping[str, Any]) -> str:
+    """What runs the check again once a failed verify node's repair group passes, as `derive` decides it."""
+    root = str(node.get("repairs") or "")
+    if not root:
+        return "this check runs again once they pass"
+    if root in nodes and (is_verification(nodes[root]) or nodes[root].get("role_guess") == "verify"):
+        return f"{root} runs again once they pass"
+    parents = {key: item["depends_on"] for key, item in nodes.items()}
+    later = sorted(key for key, item in nodes.items()
+                   if is_verification(item) and item is not node and root in ancestors(key, parents))
+    if later:
+        return (f"this node is part of {root}'s repair group and does not run again; {', '.join(later)} "
+                f"{'checks' if len(later) == 1 else 'check'} the work once they pass")
+    return (f"this node is part of {root}'s repair group and does not run again, so put a role=verify node in the "
+            "new group to check the work")
 
 
 def handoff_unchecked(node: Mapping[str, Any]) -> bool:
@@ -1871,7 +1958,7 @@ def extend(
         node.update(origin=f"extend:{len(rounds) + 1}", found_by=origin)
     _require_oneshot_room(added, oneshot_remaining, "extend round")
     more = (_validated_criteria(criteria, [item["id"] for item in run_criteria(record)])
-            if criteria is not None else [])
+            if criteria is not None and criteria != [] else [])
     record["nodes"].extend(added)
     rounds.append([str(node["id"]) for node in added])
     if more:

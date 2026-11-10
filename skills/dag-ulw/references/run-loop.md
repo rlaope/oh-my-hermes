@@ -87,29 +87,36 @@ pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short lower
 criterion keeps the request's own condition: "it works on staging" stays that, never "staging check
 reported" or "staging checked", since the outcome asked for is what the verify node must confirm. Never
 ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
-refused as `invalid_criteria`. Leaving them out is allowed (lint `no_goal_criteria`), and the run then works
-as it did before criteria existed. Criteria are part of the run: the same run id defined with other criteria
-is refused as `run_exists`. `extend` takes new `criteria` too (new ids only, 12 in all); nothing rewrites or
-removes one.
+refused as `invalid_criteria`; an empty list is the same as none. Leaving them out is allowed (lint
+`no_goal_criteria`), and the run then works as it did before criteria existed. Criteria are part of the run:
+the same run id defined with other criteria is refused as `run_exists`. `extend` takes new `criteria` too
+(new ids only, 12 in all); nothing rewrites or removes one, and `repair` takes none.
 
-Each verify node's task lists the criteria and asks for one handoff line per criterion:
+Each verify node's task lists the criteria and asks for one handoff line per criterion, marked with the
+attempt it was handed out as (`#2` on a re-run, after a provider-error retry, or after a park):
 
-    CRITERION <id>: met | unmet | unobserved - <the command it ran and what it showed>
+    CRITERION <id> #<attempt>: met | unmet | unobserved - <the command it ran and what it showed>
 
 OMH reads only those lines, at a line's start (spaces, `-`, `*` or backticks before it are fine), for the
-ids the run declares; the last line per id wins, `met` with nothing after it counts as `unobserved`, and so
-does a criterion with no line. It keeps the status word only. Settling that verify node:
+ids the run declares and this attempt's number, so an earlier attempt's lines left in the file never count.
+After the status comes nothing or a separator (`-`, `:`, a dash) and the evidence; anything else (`?`, `(`,
+`/`, `|`) makes it no criterion line. `met` needs evidence. The last line per id wins, and a criterion with
+no line counts as `unobserved`. It keeps the status word only. Settling that verify node:
 
 - `accepted` with a criterion `unmet` is refused as `criteria_unmet`: settle it failed, then repair it with
-  nodes that fix the work; it runs again once they pass.
-- `accepted` with one `unobserved` is refused as `criteria_unobserved`: settle it failed and repair it so it
-  checks them, or settle it blocked when they cannot be checked here.
-- `failed` and `blocked` record what the handoff marks; a missing handoff does not refuse them. A handoff
+  nodes that fix the work. The say names what checks again: the node itself, the verify node it repairs, or,
+  for a verify node inside another node's repair group (which does not run again), the verify nodes after
+  that node, else a role=verify node you add to the new group.
+- `accepted` with one `unobserved` is refused as `criteria_unobserved`: settle it failed and repair it so they
+  are checked, or settle it blocked when they cannot be checked here.
+- A handoff on this host that exists but cannot be opened refuses `accepted` as `handoff_unreadable`.
+- `failed` and `blocked` record what the handoff marks; a missing handoff does not refuse them, but an
+  interrupted read on a Docker or SSH terminal refuses them as `settle_interrupted` (settle again). A handoff
   OMH could not read records nothing. The result still carries `criteria`, and its `say` counts them, so the
   report says how far the goal got (11 of 12 confirmed, one could not be checked here, and why).
 
-`verified` also needs every criterion `met` by an accepted verify node whose handoff was read (the newest
-per criterion); otherwise the run is `unverified` with `criteria_unmet:<ids>` or `criteria_unobserved:<ids>`,
+Each verify node counts with its last attempt only. `verified` also needs every criterion `met` by an
+accepted verify node whose handoff was read (the newest per criterion); otherwise the run is `unverified` with `criteria_unmet:<ids>` or `criteria_unobserved:<ids>`,
 so criteria an extend round added need a verify node that checks them. The result carries `criteria`
 (`total`, `met`, the `unmet` and `unobserved` ids, and each item with its status, `unchecked` before any
 read), and the status line and the done `say` add `2/3 criteria met`; `status` shows the same after

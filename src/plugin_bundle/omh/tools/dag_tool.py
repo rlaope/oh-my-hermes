@@ -42,6 +42,8 @@ without the earlier nodes' edits. `define` is then refused
 """
 from __future__ import annotations
 
+import base64
+import binascii
 from collections.abc import Mapping
 import hashlib
 import json
@@ -100,11 +102,15 @@ BACKEND_READ_SECONDS = 10  # the one `test` a settle runs there; a backend that 
 # One line per verdict, as Hermes' own probe echoes them (`ShellFileOperations._probe_regular_file`): a shell that did
 # not run prints none of them, so it is never taken for a missing file.
 _HANDOFF_FILE, _HANDOFF_LINK, _HANDOFF_NONE = "OMH_HANDOFF_FILE", "OMH_HANDOFF_LINK", "OMH_HANDOFF_NONE"
-# A verify node's criterion lines as a Docker or SSH terminal greps them: the head of the file, lines cut, the last kept
-# (the last line per criterion wins, `dag_run.criterion_statuses`).
-_CRITERION_GREP = "^[[:space:]*`-]*CRITERION[[:space:]]"
-CRITERION_LINE_CHARS = 1_000
-CRITERION_LINES_KEPT = 200
+# A verify node's criterion lines as a Docker or SSH terminal takes them: `dag_run.criterion_lines` in shell (NUL made
+# SOH so grep reads text, the lines naming the marker, cut, the last kept), in the C locale so invalid UTF-8 is just
+# bytes, with flags BusyBox, GNU and BSD share. The result comes back base64, so no byte of the file (an escape, a CR,
+# invalid UTF-8) is changed or stripped by the terminal on its way: this host decodes the very bytes it would have read.
+_CRITERION_PIPE = (
+    f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} {{path}} | LC_ALL=C tr '\\000' '\\001' | LC_ALL=C grep -F CRITERION "
+    f"| LC_ALL=C cut -c 1-{dag_run.CRITERION_LINE_BYTES} | tail -n {dag_run.CRITERION_LINES_KEPT} | base64; "
+)
+_BASE64_LINE = re.compile(r"[A-Za-z0-9+/=]+")
 # What a run on a Docker or SSH terminal says, each time, while no environment is up to find its handoff root in.
 # Same turn: on a session-isolated Docker terminal a later turn may get another task id, and so another environment.
 TERMINAL_FIRST = ("No node was handed out: the children write their handoff files in the {backend} terminal, and "
@@ -452,10 +458,15 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
             raise dag_run.DagRefusal(
                 "run_cancelled", f"Run {run} was cancelled; define the work again under a new run id.")
         if existing.get("digest") != record["digest"]:
-            other = "other nodes or criteria" if "criteria" in existing or "criteria" in record else "other nodes"
+            if "criteria" in existing or "criteria" in record:
+                raise dag_run.DagRefusal(
+                    "run_exists",
+                    f"Run {run} already exists with other nodes or criteria. Its criteria never change: extend adds "
+                    "nodes and new criteria once every node passed, repair adds nodes for a failed one, and other "
+                    "criteria need a new run id.")
             raise dag_run.DagRefusal(
                 "run_exists",
-                f"Run {run} already exists with {other}; use repair or extend to add nodes, or a new run id.")
+                f"Run {run} already exists with other nodes; use repair or extend to add nodes, or a new run id.")
         children = _children(omh_home, segments, hermes_home)
         derived = dag_run.derive(existing, children, now)
         return _result("define", existing, derived, shown, say="This run was already defined; nothing changed.",
@@ -667,26 +678,28 @@ def read_handoff(record: Mapping[str, Any], omh_home: Path, node: str, task_id: 
 
 def read_handoff_criteria(record: Mapping[str, Any], omh_home: Path, node: str,
                           task_id: str) -> tuple[bool, str, list[str]]:
-    """A verify node's handoff, (found, unread, its ``CRITERION`` lines), where `read_handoff` would look.
+    """A verify node's handoff, (found, unread, its lines split on ``\\n``), where `read_handoff` would look.
 
     On this host the file is opened without following a link and read up to
-    `dag_run.MAX_HANDOFF_READ_BYTES`, the rest ignored; one that is not a
-    regular file when opened, or cannot be opened, counts as missing. Inside
-    a Docker or SSH terminal the same lines come back through
-    `backend_criterion_lines`.
+    `dag_run.MAX_HANDOFF_READ_BYTES`, the rest ignored. A link counts as
+    missing, as in `read_handoff`; a file that cannot be opened, or is no
+    regular file once opened, is ``dag_run.HANDOFF_UNREADABLE`` (`settle`
+    refuses ``accepted`` for it, with its own say). Inside a Docker or SSH
+    terminal the lines come back through `backend_criterion_lines`. Either
+    way `dag_run.criterion_status` reads each line.
     """
     if record.get("handoff_root"):
         return backend_criterion_lines(dag_run.node_handoff(record, omh_home, node), task_id)
     path = dag_run.handoff_path(omh_home, str(record["session_id"]), str(record["run"]), node)
     if path.is_file() and not path.is_symlink():
-        text = _host_head(path)
-        return (False, "", []) if text is None else (True, "", dag_run.criterion_lines(text))
+        head = _host_head(path)
+        return (False, dag_run.HANDOFF_UNREADABLE, []) if head is None else (True, "", dag_run.criterion_lines(head))
     if record.get("backend") not in REMOTE_BACKENDS:
         return False, "", []
     return backend_criterion_lines(str(path), task_id)
 
 
-def _host_head(path: Path) -> str | None:
+def _host_head(path: Path) -> bytes | None:
     """The first `dag_run.MAX_HANDOFF_READ_BYTES` of a regular file, never through a link; None when it cannot be."""
     try:
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
@@ -696,10 +709,9 @@ def _host_head(path: Path) -> str | None:
         with os.fdopen(descriptor, "rb") as handle:
             if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
                 return None
-            data = handle.read(dag_run.MAX_HANDOFF_READ_BYTES)
+            return handle.read(dag_run.MAX_HANDOFF_READ_BYTES)
     except OSError:
         return None
-    return data.decode("utf-8", errors="replace")
 
 
 def backend_handoff(path: str, task_id: str) -> tuple[bool, str]:
@@ -716,17 +728,16 @@ def backend_handoff(path: str, task_id: str) -> tuple[bool, str]:
 def backend_criterion_lines(path: str, task_id: str) -> tuple[bool, str, list[str]]:
     """`backend_handoff` for a verify node of a run with criteria, with its ``CRITERION`` lines: (found, unread, lines).
 
-    The one command that tests the file also greps the head of it
-    (`dag_run.MAX_HANDOFF_READ_BYTES`) for lines opening with the marker,
-    each cut at `CRITERION_LINE_CHARS`, the last `CRITERION_LINES_KEPT` kept.
+    The one command that tests the file also takes its criterion lines as
+    `dag_run.criterion_lines` does (`_CRITERION_PIPE`) and sends them back
+    base64. Output that does not decode is ``backend_unanswered``.
     """
     return _backend_probe(path, task_id, criteria=True)
 
 
 def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, str, list[str]]:
     quoted = shlex.quote(path)
-    grep = (f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} {quoted} | grep -E {shlex.quote(_CRITERION_GREP)} "
-            f"| cut -c 1-{CRITERION_LINE_CHARS} | tail -n {CRITERION_LINES_KEPT}; " if criteria else "")
+    grep = _CRITERION_PIPE.format(path=quoted) if criteria else ""
     lines, unread = _backend_lines(task_id, f"if [ -L {quoted} ]; then echo {_HANDOFF_LINK}; elif [ -f {quoted} ]; "
                                             f"then echo {_HANDOFF_FILE}; {grep}else echo {_HANDOFF_NONE}; fi")
     if unread == "interrupted":
@@ -735,8 +746,15 @@ def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, st
     if unread:
         return False, unread, []
     verdicts = {line.strip() for line in lines}
+    if _HANDOFF_FILE in verdicts and criteria:
+        encoded = "".join(line.strip() for line in lines if _BASE64_LINE.fullmatch(line.strip()))
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError):
+            return False, "backend_unanswered", []
+        return True, "", data.decode("utf-8", errors="replace").split("\n")
     if _HANDOFF_FILE in verdicts:
-        return True, "", dag_run.criterion_lines("\n".join(lines)) if criteria else []
+        return True, "", []
     if _HANDOFF_LINK in verdicts or _HANDOFF_NONE in verdicts:
         return False, "", []
     return False, "backend_unanswered", []
@@ -901,6 +919,12 @@ def _ready(
             f"{'its handoff' if len(mine) == 1 else 'each handoff'} ("
             + "; ".join(f"{node_id}: {dag_run.node_handoff(record, omh_home, node_id)}" for node_id in mine)
             + "), and settle it; do not call delegate_task for it.")) if part)
+        criteria = [str(item["id"]) for item in dag_run.run_criteria(record)]
+        for node_id in (node_id for node_id in mine if criteria and dag_run.is_verification(nodes[node_id])):
+            # A verify node the parent does itself writes the criterion lines its child would have been told.
+            say = (f"{say} In {node_id}'s handoff write one line per criterion ({', '.join(criteria)}): "
+                   f"`CRITERION <id> #{dag_run.attempt_number(nodes[node_id])}: met | unmet | unobserved - "
+                   "<the command you ran and what it showed>`.")
     elif spent_out:
         # Added to whatever else the reply says (a provider-error retry's offer, for one): no child takes these.
         say = " ".join(part for part in (say, (
