@@ -1,0 +1,25 @@
+{"type":"system","subtype":"init","cwd":"/w/proj","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57","model":"claude-haiku-5-5","permissionMode":"default"}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"thinking_delta"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"thinking_delta"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"thinking_delta"}}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"id":"msg_011CgtdcdXepAVW4BqvtKf6t","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"thinking","thinking":"","signature":"sig"}]}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"`"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"notes.txt`, which"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" I created"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" with the"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" Write tool in the work-"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"claude directory."}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" I also made"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" the direct"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"ories `d2`, `d"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"3`, and `d4`"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":", but those"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":" are not files."}}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"id":"msg_011CgtdcdXepAVW4BqvtKf6t","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"`notes.txt`, which I created with the Write tool in the work-claude directory. I also made the directories `d2`, `d3`, and `d4`, but those are not files."}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"terminal_reason":"completed","stop_reason":"end_turn","result":"`notes.txt`, which I created with the Write tool in the work-claude directory. I also made the directories `d2`, `d3`, and `d4`, but those are not files.","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57"}
+{"type":"system","subtype":"init","cwd":"/w/proj","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57","model":"claude-haiku-5-5","permissionMode":"default"}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"thinking_delta"}}}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"thinking_delta"}}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"id":"msg_011CgtdcqYDjYFJPDwZEGS4T","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"thinking","thinking":"","signature":"sig"}]}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"id":"msg_011CgtdcqYDjYFJPDwZEGS4T","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"tool_use","id":"toolu_01TUSFsTgYsLmoVcDovAoqsx","name":"Bash","input":{"command":"python3 -c \"import time; time.sleep(30); print('finished')\"","description":"Run python sleep 30 then print finished","timeout":120000},"caller":{"type":"direct"}}]}}
+{"type":"control_request","request_id":"127b0367-255c-4f44-a902-f84ea6e3cd71","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"python3 -c \"import time; time.sleep(30); print('finished')\"","timeout":120000,"description":"Run python sleep 30 then print finished"},"description":"Run python sleep 30 then print finished","permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"python3 -c \"import time; time.sleep(30); print('finished')\""}],"behavior":"allow","destination":"localSettings"}],"decision_reason":"This command requires approval","decision_reason_type":"other","tool_use_id":"toolu_01TUSFsTgYsLmoVcDovAoqsx"}}

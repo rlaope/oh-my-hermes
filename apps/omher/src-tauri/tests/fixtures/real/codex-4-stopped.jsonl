@@ -1,0 +1,3 @@
+{"id":8,"result":{}}
+{"method":"turn/completed","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turn":{"id":"01a1c3b9-b24d-78b2-846b-34b0c66736c7","rootTurnId":"01a1c3b9-b24d-78b2-846b-34b0c66736c7","items":[],"itemsView":"notLoaded","status":"interrupted","error":null,"startedAt":1794285089,"completedAt":1794285096,"durationMs":6690}},"emittedAtMs":1794285096103}
+{"method":"serverRequest/resolved","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","requestId":5},"emittedAtMs":1794285096103}

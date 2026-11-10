@@ -1,0 +1,32 @@
+{"id":"omher-11","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run a bad command"}]},"messageId":"msg-25"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"definitely-"},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"not-a-comman"},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"d-xyz --flag"},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"}"},"messageId":"msg-26"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"definitely-not-a-command-xyz --flag"},"partialArgs":"{\"command\": \"definitely-not-a-command-xyz --flag\"}","streamIndex":0}},"messageId":"msg-26"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"definitely-not-a-command-xyz --flag"},"partialArgs":"{\"command\": \"definitely-not-a-command-xyz --flag\"}","streamIndex":0}],"stopReason":"toolUse","model":"stub-b"},"messageId":"msg-26"}
+{"type":"tool_execution_start","toolCallId":"call_bash_0","toolName":"bash","args":{"command":"definitely-not-a-command-xyz --flag"}}
+{"type":"tool_execution_end","toolCallId":"call_bash_0","toolName":"bash","result":{"content":[{"type":"text","text":"bash: line 1: definitely-not-a-command-xyz: command not found\n\n\nCommand exited with code 127"}],"isError":true},"isError":true}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"bash: line 1: definitely-not-a-command-xyz: command not found\n\n\nCommand exited with code 127"}],"toolCallId":"call_bash_0","toolName":"bash","isError":true},"messageId":"msg-27"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"exit "},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"code "},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"127 "},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"(command "},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"not "},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"found)"},"messageId":"msg-28"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"exit code 127 (command not found)"},"messageId":"msg-28"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"exit code 127 (command not found)"}],"stopReason":"stop","model":"stub-b"},"messageId":"msg-28"}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"extension_ui_request","id":"15c83d60c7f4cc36","method":"setWidget","widgetKey":"autoresearch"}
+{"type":"agent_end"}
+{"type":"prompt_result","id":"omher-11","agentInvoked":true,"status":"completed","sessionSettled":true}
+{"type":"session_settled"}

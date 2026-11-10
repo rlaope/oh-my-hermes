@@ -1,0 +1,13 @@
+{"id":"omher-6","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run sleep 30 then tell me"}]},"messageId":"msg-17"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-18"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-18"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "},"messageId":"msg-18"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"sleep 30; e"},"messageId":"msg-18"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"cho finished"},"messageId":"msg-18"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"}"},"messageId":"msg-18"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"sleep 30; echo finished"},"partialArgs":"{\"command\": \"sleep 30; echo finished\"}","streamIndex":0}},"messageId":"msg-18"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"sleep 30; echo finished"},"partialArgs":"{\"command\": \"sleep 30; echo finished\"}","streamIndex":0}],"stopReason":"toolUse","model":"stub-a"},"messageId":"msg-18"}
+{"type":"tool_execution_start","toolCallId":"call_bash_0","toolName":"bash","args":{"command":"sleep 30; echo finished"}}

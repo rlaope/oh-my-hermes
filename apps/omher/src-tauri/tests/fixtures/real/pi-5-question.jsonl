@@ -1,0 +1,18 @@
+{"id":"omher-8","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"ask me which greeting to use"}]}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Which "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"greeting "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"should "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"go "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"in "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"greet.txt: "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"hello "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"or "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"hi?"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"Which greeting should go in greet.txt: hello or hi?"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Which greeting should go in greet.txt: hello or hi?"}],"stopReason":"stop","model":"stub-a"}}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"agent_end"}

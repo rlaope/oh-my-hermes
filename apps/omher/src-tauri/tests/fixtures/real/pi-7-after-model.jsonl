@@ -1,0 +1,12 @@
+{"id":"omher-10","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"In one short sentence: what is 2+2?"}]}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"4. "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"(model "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"stub-b)"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"4. (model stub-b)"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"4. (model stub-b)"}],"stopReason":"stop","model":"stub-b"}}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"agent_end"}

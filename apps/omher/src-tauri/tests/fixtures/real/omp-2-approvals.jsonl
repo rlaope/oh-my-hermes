@@ -1,0 +1,48 @@
+{"id":"omher-4","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run `ls -la` and `echo hi` and `pwd`"}]},"messageId":"msg-3"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-4"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-4"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "},"messageId":"msg-4"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"ls -la\"}"},"messageId":"msg-4"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"ls -la"},"partialArgs":"{\"command\": \"ls -la\"}","streamIndex":0}},"messageId":"msg-4"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"ls -la"},"partialArgs":"{\"command\": \"ls -la\"}","streamIndex":0}],"stopReason":"toolUse","model":"stub-a"},"messageId":"msg-4"}
+{"type":"tool_execution_start","toolCallId":"call_bash_0","toolName":"bash","args":{"command":"ls -la"}}
+{"type":"extension_ui_request","id":"15c83d5cc8f4cc2c","method":"select","title":"Allow tool: bash\nCommand: ls -la","options":["Approve","Approve bash for this session","Deny"]}
+{"type":"tool_execution_end","toolCallId":"call_bash_0","toolName":"bash","result":{"content":[{"type":"text","text":"Tool call denied by user: bash"}]},"isError":true}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"Tool call denied by user: bash"}],"toolCallId":"call_bash_0","toolName":"bash","isError":true},"messageId":"msg-5"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-6"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-6"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "},"messageId":"msg-6"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"echo hi\"}"},"messageId":"msg-6"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_1","name":"bash","arguments":{"command":"echo hi"},"partialArgs":"{\"command\": \"echo hi\"}","streamIndex":0}},"messageId":"msg-6"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_1","name":"bash","arguments":{"command":"echo hi"},"partialArgs":"{\"command\": \"echo hi\"}","streamIndex":0}],"stopReason":"toolUse","model":"stub-a"},"messageId":"msg-6"}
+{"type":"tool_execution_start","toolCallId":"call_bash_1","toolName":"bash","args":{"command":"echo hi"}}
+{"type":"extension_ui_request","id":"15c83d5ccab4cc2d","method":"select","title":"Allow tool: bash\nCommand: echo hi","options":["Approve","Approve bash for this session","Deny"]}
+{"type":"tool_execution_end","toolCallId":"call_bash_1","toolName":"bash","result":{"content":[{"type":"text","text":"hi\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"hi\n"}],"toolCallId":"call_bash_1","toolName":"bash","isError":false},"messageId":"msg-7"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-8"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-8"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "},"messageId":"msg-8"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"pwd\"}"},"messageId":"msg-8"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_2","name":"bash","arguments":{"command":"pwd"},"partialArgs":"{\"command\": \"pwd\"}","streamIndex":0}},"messageId":"msg-8"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_2","name":"bash","arguments":{"command":"pwd"},"partialArgs":"{\"command\": \"pwd\"}","streamIndex":0}],"stopReason":"toolUse","model":"stub-a"},"messageId":"msg-8"}
+{"type":"tool_execution_start","toolCallId":"call_bash_2","toolName":"bash","args":{"command":"pwd"}}
+{"type":"extension_ui_request","id":"15c83d5cdb74cc2e","method":"select","title":"Allow tool: bash\nCommand: pwd","options":["Approve","Approve bash for this session","Deny"]}
+{"type":"tool_execution_end","toolCallId":"call_bash_2","toolName":"bash","result":{"content":[{"type":"text","text":"/w/proj\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"/w/proj\n"}],"toolCallId":"call_bash_2","toolName":"bash","isError":false},"messageId":"msg-9"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0},"messageId":"msg-10"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"done"},"messageId":"msg-10"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"done"},"messageId":"msg-10"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"stopReason":"stop","model":"stub-a"},"messageId":"msg-10"}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"extension_ui_request","id":"15c83d5cf1b4cc2f","method":"setWidget","widgetKey":"autoresearch"}
+{"type":"agent_end"}
+{"type":"prompt_result","id":"omher-4","agentInvoked":true,"status":"completed","sessionSettled":true}
