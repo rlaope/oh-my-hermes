@@ -4,15 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: an empty SESSIONS section is one quiet New session row.** It is
-  built like the Automations and Settings rows: a 16px `+` in their icon
-  column, a left-aligned muted label, no border and no fill until hover.
-  The centred hint and the agent strip under it are gone. The hint and the
-  installed coding agents (Claude Code, Codex, pi, oh-my-pi, Grok, never
-  oh-my-hermes) are in the row's tooltip, and omh stays in the `+` menu. The
-  first-run card's Message a bot and New session buttons now share one
-  outlined look with no icon.
-
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
@@ -88,6 +79,16 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.2.** Codex from the ChatGPT app counts as installed, and an
+  empty SESSIONS section is one quiet row.
+  - **Codex.** On macOS, the Codex CLI inside the ChatGPT or Codex desktop app
+    (under `/Applications` or `~/Applications`) is found after PATH and every
+    install folder, so a Mac whose only Codex is the app's copy no longer shows
+    it as not installed. An npm or Homebrew install still wins.
+  - **New session.** An empty SESSIONS section is one muted New session row
+    with a `+`, like the Automations and Settings rows; the hint and the
+    installed agents are in its tooltip. The first-run card's two buttons share
+    one outlined look.
 - **omher 0.2.1.** The plan graph looks like part of a desktop app, and the
   first launch says what bots and sessions are.
   - **Plans.** Each part shows its model's logo and name (`Opus 5.5 · high`)
@@ -294,14 +295,6 @@ All notable changes will be documented here.
   it starts, so the bridge no longer stops on `No module named 'websockets'`.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
-
-- **omher finds the Codex CLI that ships inside the ChatGPT app.** On macOS
-  the ChatGPT and Codex desktop apps carry a signed-in Codex CLI at
-  `<app>/Contents/Resources/codex-cli/bin/codex`, under `/Applications` or
-  `~/Applications`. omher's account and session lookups now search those
-  folders after PATH and every install folder, so a Mac whose only Codex is
-  the app's copy no longer shows it as not installed, and an npm or Homebrew
-  install still wins. The "Not installed" tooltip for Codex says so.
 
 ## 4.0.7 - 2026-11-09
 
