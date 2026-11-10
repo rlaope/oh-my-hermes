@@ -1,0 +1,55 @@
+// The omher.app preview: runs before any app module. Nothing may leave the page, so storage goes to
+// sessionStorage, notifications, sounds and the Tauri paths stay off, and the bridge is an in-page host
+// (preview/host.ts) behind a stand-in WebSocket.
+import { FakeSocket } from "./host";
+
+const w = window as unknown as Record<string, unknown>;
+// The app keeps its look, pins and recent folders in localStorage; the preview keeps them for this tab only.
+try {
+  const ss = window.sessionStorage;
+  Object.defineProperty(window, "localStorage", { configurable: true, get: () => ss });
+  if (!ss.getItem("omher.theme")) ss.setItem("omher.theme", "dark");
+  ss.setItem("omher.notify", "off");
+  ss.setItem("omher.sounds", "off");
+} catch {
+  /* storage blocked: the app falls back to its defaults */
+}
+// No system notifications and no audio from a web page someone is only looking at.
+try {
+  Object.defineProperty(window, "Notification", { configurable: true, value: undefined });
+} catch {
+  /* read-only in this browser */
+}
+// The SESSIONS mock host lists these as installed (official marks in the + menu).
+w.__omherMockAgents = ["claude", "codex", "pi", "omp"];
+// Every BridgeClient the app makes (the store's and the add-bot popover's) talks to the in-page host.
+w.WebSocket = FakeSocket;
+document.documentElement.dataset.preview = "1";
+
+// Inside omher.app the preview is a window on someone else's page: it must never scroll that page or take its focus.
+// - scrollIntoView (the app brings an open plan node or an ask into view) only scrolls panes inside this document;
+//   the browser's own version would scroll the visitor's page too.
+// - focus() (the app focuses its composer when a chat opens) only happens once the visitor is in the preview, and
+//   never scrolls.
+if (window.parent !== window) {
+  Element.prototype.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
+    const block = typeof arg === "object" ? (arg.block ?? "start") : arg === false ? "end" : "start";
+    for (let p = this.parentElement; p; p = p.parentElement) {
+      if (p.scrollHeight <= p.clientHeight + 1 || !/(auto|scroll|hidden)/.test(getComputedStyle(p).overflowY)) continue;
+      const r = this.getBoundingClientRect();
+      const pr = p.getBoundingClientRect();
+      let d = 0;
+      if (block === "start") d = r.top - pr.top;
+      else if (block === "end") d = r.bottom - pr.bottom;
+      else if (block === "center") d = (r.top + r.bottom) / 2 - (pr.top + pr.bottom) / 2;
+      else if (r.top < pr.top) d = r.top - pr.top;
+      else if (r.bottom > pr.bottom) d = Math.min(r.bottom - pr.bottom, r.top - pr.top);
+      p.scrollTop += d;
+    }
+  };
+  const focus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function (this: HTMLElement, opts?: FocusOptions) {
+    if (!document.hasFocus()) return;
+    focus.call(this, { ...opts, preventScroll: true });
+  };
+}
