@@ -1,12 +1,15 @@
-/* First-run cards: two small flat cards over the thread, at the thread's width. No gradients; the one action per
-   card is the neutral ink fill (as .gate-primary). */
+/* First-run cards: one flat container over an empty chat, at the thread's width, holding the two cards side by
+   side and one × in its top-right corner. No gradients; the buttons are quiet outlined ones, the sidebar's
+   "New session" look, so they are never the loudest thing on screen. */
 .onb {
   position: relative;
   width: min(var(--thread-w), calc(100% - 48px));
   margin: 18px auto 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--side);
   flex: none;
 }
 .onb-card {
@@ -14,14 +17,14 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding: 11px 12px 12px;
-  border-radius: var(--r);
-  border: 1px solid var(--line);
-  background: var(--side);
+  padding: 12px 14px 13px;
 }
-/* the × sits in the last card's corner and closes both: its title clears it */
-.onb-card:last-of-type .onb-t {
-  padding-right: 22px;
+.onb-card + .onb-card {
+  border-left: 1px solid var(--line);
+}
+/* the × sits in the container's corner: the last card's title clears it */
+.onb-card:last-of-type {
+  padding-right: 38px;
 }
 .onb-t {
   font-size: 12.5px;
@@ -29,24 +32,36 @@
   color: var(--ink);
 }
 .onb-p {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
   text-wrap: pretty;
 }
 .onb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 26px;
   margin-top: auto;
-  padding: 0 11px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--side)); /* the sidebar's New session edge */
   border-radius: var(--r-sm);
+  background: transparent;
   font-size: 12px;
-  font-weight: 600;
-  background: var(--ink);
-  color: var(--bg);
+  font-weight: 500;
+  color: var(--ink);
+  transition: background 0.12s;
+}
+.onb-btn > svg {
+  flex: none;
+  color: var(--muted);
 }
 .onb-btn:hover:not(:disabled) {
-  background: var(--body);
+  background: var(--raise);
+}
+.onb-btn:hover:not(:disabled) > svg {
+  color: var(--ink);
 }
 .onb-btn:disabled {
   opacity: 0.5;

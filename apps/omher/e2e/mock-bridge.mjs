@@ -905,6 +905,11 @@ const OPS = {
     reset();
     return {};
   },
+  // a bot whose main chat has no messages yet (first run)
+  "mock.clearHistory": (p) => {
+    history[needBot(p).name] = [];
+    return {};
+  },
   "mock.ask": (p) => {
     const b = needBot(p);
     const kind = p.kind ?? "approval";

@@ -1,12 +1,14 @@
-// First run: until the person dismisses it (`omher.onboarded=1` in localStorage), two small cards above the chat
-// say what Bots and Sessions are, each with one button ("Message a bot" focuses the first bot's composer, "New
-// session" opens the SESSIONS + menu), and the empty Bots and Sessions sections carry one muted line each.
+// First run: until the person dismisses it (`omher.onboarded=1` in localStorage), two small cards say what Bots
+// and Sessions are, each with one quiet button ("Message a bot" focuses the first bot's composer, "New session"
+// opens the SESSIONS + menu), and the empty Bots and Sessions sections carry one muted line each. The cards show
+// only where there is no conversation yet (the empty main area, a chat with no messages), never above a chat's
+// history; one × closes both.
 import { useSyncExternalStore } from "react";
 import "./firstrun.css";
 import { t } from "../i18n";
 import { selectSidebarBots, useStore } from "../state/store";
 import { openNewSessionMenu } from "../sessions/SessionsSection";
-import { CloseIcon, IconButton } from "../ui";
+import { CloseIcon, IconButton, PlusIcon } from "../ui";
 
 export const ONBOARDED_KEY = "omher.onboarded";
 
@@ -42,12 +44,13 @@ export function dismissOnboarding(): void {
   for (const f of [...fns]) f();
 }
 
-/** The two first-run cards, or nothing once dismissed. */
+/** The two first-run cards, or nothing once dismissed. Callers render it only where no conversation is shown. */
 export function FirstRun() {
   const s = useStore();
   const onboarded = useOnboarded();
   if (onboarded) return null;
-  const first = selectSidebarBots(s)[0];
+  // the bot whose empty chat holds the cards, else the first bot in the sidebar
+  const first = s.bots.find((b) => b.name === s.selectedBot) ?? selectSidebarBots(s)[0];
   const messageBot = async () => {
     if (!first) return;
     if (s.selectedBot !== first.name || s.ui.view !== "chat") await s.selectBot(first.name);
@@ -67,6 +70,7 @@ export function FirstRun() {
         <b className="onb-t">{t("onb.sessions.title")}</b>
         <p className="onb-p">{t("onb.sessions.body")}</p>
         <button type="button" className="onb-btn" onClick={openNewSessionMenu} data-testid="onb-session">
+          <PlusIcon size={13} />
           {t("onb.sessions.action")}
         </button>
       </div>

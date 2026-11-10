@@ -87,10 +87,10 @@ export const ja: Record<Key, string> = {
   // onboarding (the first-run cards and the empty sections' lines)
   "onb.label": "omher について",
   "onb.bots.title": "ボット",
-  "onb.bots.body": "Hermes の同僚です。メッセージで仕事を渡すと、計画して実行します。",
+  "onb.bots.body": "仕事を任せる同僚です。計画して実行し、結果を報告します。",
   "onb.bots.action": "ボットにメッセージ",
   "onb.sessions.title": "セッション",
-  "onb.sessions.body": "フォルダで Claude Code、Codex、pi、omp を開いて一緒に作業します。",
+  "onb.sessions.body": "コーディングエージェント（Claude Code、Codex、pi、omp）が一つのフォルダであなたと作業します。",
   "onb.sessions.action": "新しいセッション",
   "onb.dismiss": "閉じる",
   "onb.botsHint": "ボットは Hermes プロファイルです。上の + で追加します。",

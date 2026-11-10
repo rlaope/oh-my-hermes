@@ -87,10 +87,10 @@ export const en = {
   // onboarding (the first-run cards and the empty sections' lines)
   "onb.label": "What omher does",
   "onb.bots.title": "Bots",
-  "onb.bots.body": "Your Hermes coworkers. Message one to hand it work; it plans and runs it.",
+  "onb.bots.body": "Coworkers you hand work to. They plan it, run it and report back.",
   "onb.bots.action": "Message a bot",
   "onb.sessions.title": "Sessions",
-  "onb.sessions.body": "Open Claude Code, Codex, pi or omp in a folder and work alongside it.",
+  "onb.sessions.body": "A coding agent (Claude Code, Codex, pi, omp) working with you in one folder.",
   "onb.sessions.action": "New session",
   "onb.dismiss": "Dismiss",
   "onb.botsHint": "Each bot is a Hermes profile. Add one with + above.",

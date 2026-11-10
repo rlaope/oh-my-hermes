@@ -33,6 +33,8 @@ export function Chat() {
     );
   }
   const chat = s.chats[bot.name];
+  // first-run cards only over a chat with no conversation yet, never above its history
+  const blank = !!chat?.loaded && !chat.openError && chat.items.length === 0;
   const asking = selectAsks(s).some((a) => a.bot === bot.name);
   // the bridge is away (it reconnects by itself): the composer says so and waits, like a bot that is offline
   const away = s.conn !== "open";
@@ -40,7 +42,7 @@ export function Chat() {
     <>
       <Header bot={bot} chat={chat} />
       <div className={`pane${s.ui.runsFull ? " has-full" : ""}`} data-pane={bot.name}>
-        <FirstRun />
+        {blank && <FirstRun />}
         <Timeline bot={bot} />
         {s.ui.runsFull && <RunsFull bot={bot} />}
         <Composer
