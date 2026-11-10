@@ -129,16 +129,33 @@ for (const theme of ["dark", "light"] as const) {
     // the status line still fits: nothing is cut by the browser
     const cut = await box.locator("[data-testid=node-status]").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 0.5).map((e) => e.textContent));
     expect(cut).toEqual([]);
-    // the PR sits on the status line's own baseline row, at its right end, inside the box
-    for (const id of ["color-tokens", "page-styles", "code-colors"]) {
-      const [line, pr, node] = await Promise.all([
-        nodeOf(box, id).getByTestId("node-status").boundingBox(),
-        nodeOf(box, id).getByTestId("node-pr").boundingBox(),
-        nodeOf(box, id).boundingBox(),
-      ]);
-      expect(Math.abs(pr!.y + pr!.height / 2 - (line!.y + line!.height / 2))).toBeLessThanOrEqual(1.5);
-      expect(pr!.x + pr!.width).toBeLessThanOrEqual(node!.x + node!.width - 11);
-      expect(Math.abs(pr!.x + pr!.width - (line!.x + line!.width))).toBeLessThanOrEqual(1);
+    // the PR sits on the status line's own baseline row, at its right end, inside the box. Measured in one frame
+    // once the panel and the boxes have stopped moving (two reads 80ms apart agree)
+    const rects = () =>
+      box.locator("[data-testid=run-node]:has([data-testid=node-pr])").evaluateAll((els) =>
+        els.map((e) => {
+          const r = (x: Element) => {
+            const b = x.getBoundingClientRect();
+            return [b.x, b.y, b.width, b.height].map((v) => Math.round(v * 10) / 10);
+          };
+          return { node: r(e), line: r(e.querySelector("[data-testid=node-status]")!), pr: r(e.querySelector("[data-testid=node-pr]")!) };
+        }),
+      );
+    let last = await rects();
+    await expect
+      .poll(async () => {
+        await page.waitForTimeout(80);
+        const now = await rects();
+        const same = JSON.stringify(now) === JSON.stringify(last);
+        last = now;
+        return same;
+      })
+      .toBe(true);
+    expect(last.length).toBe(4);
+    for (const { node, line, pr } of last) {
+      expect(Math.abs(pr[1] + pr[3] / 2 - (line[1] + line[3] / 2))).toBeLessThanOrEqual(1.5);
+      expect(pr[0] + pr[2]).toBeLessThanOrEqual(node[0] + node[2] - 11);
+      expect(Math.abs(pr[0] + pr[2] - (line[0] + line[2]))).toBeLessThanOrEqual(1);
     }
   });
 }
