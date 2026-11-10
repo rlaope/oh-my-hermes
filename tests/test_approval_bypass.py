@@ -3,9 +3,10 @@
 The Shift+Tab yolo toggle lives only in the host process's
 ``tools.approval`` session state, so the HUD reports what the plugin's
 ``pre_llm_call`` and ``pre_tool_call`` hooks last observed in-process.
-The ledger stores one boolean and a timestamp — never a session key,
-command, or prompt — and an unobserved or stale ledger projects idle so
-the widget renders nothing rather than a guess.
+The ledger stores one boolean and a timestamp, at the top and per session
+under a truncated sha256 of the session id (pseudonymous), never a command
+or prompt; an unobserved or stale ledger projects idle so the widget renders
+nothing rather than a guess.
 """
 
 import sys
@@ -132,6 +133,76 @@ class ApprovalBypassLedgerTest(unittest.TestCase):
         self.assertEqual(len(sessions), APPROVAL_BYPASS_SESSION_LIMIT)
         self.assertNotIn(session_digest("s0"), sessions)
         self.assertIn(session_digest(f"s{APPROVAL_BYPASS_SESSION_LIMIT + 4}"), sessions)
+
+    def test_an_on_session_outlives_a_crowd_of_off_sessions_ticking_after_it(self):
+        """Mutation: evict by stamp alone, so 64 children of a fanout push the bypassed parent out and it reads idle."""
+        import json
+
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="parent", now=NOW)
+        # The parent keeps working: unchanged, its entry is not rewritten until the refresh is due.
+        record_approval_bypass(omh_home=self.home, session_id="parent", now=NOW + 1)
+        self._install_host_approval(False)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT + 5):
+            record_approval_bypass(omh_home=self.home, session_id=f"child-{index}", now=NOW + 2 + index)
+        sessions = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))["sessions"]
+        self.assertEqual(len(sessions), APPROVAL_BYPASS_SESSION_LIMIT)
+        self.assertIn(session_digest("parent"), sessions)
+        state = latest_approval_bypass(self.home, session_id="parent", now=NOW + 100)
+        self.assertEqual((state["status"], state["enabled"]), ("observed", True))
+        self.assertNotIn("scope", state, "the parent's own entry answered")
+        # Among the OFF entries the oldest went first.
+        self.assertNotIn(session_digest("child-0"), sessions)
+        self.assertIn(session_digest(f"child-{APPROVAL_BYPASS_SESSION_LIMIT + 4}"), sessions)
+
+    def test_a_session_the_ledger_lost_reads_the_gateways_fresh_on_never_idle(self):
+        """Mutation: answer idle on a scoped miss, so a bypassed session pushed out by 64 others shows no chip."""
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="parent", now=NOW)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT):
+            record_approval_bypass(omh_home=self.home, session_id=f"cron-{index}", now=NOW + 1 + index)
+        state = latest_approval_bypass(self.home, session_id="parent", now=NOW + 100)
+        self.assertEqual((state["status"], state["enabled"], state["scope"]), ("observed", True, "gateway"))
+        hermes = str(Path(self._tmp.name) / "hermes")
+        self.assertTrue(effective_approval_bypass(self.home, hermes, session_id="parent", now=NOW + 100)["enabled"])
+        # Right after an install, before the named session ticks: the record has no entries yet.
+        self._install_host_approval(True)
+        other = str(Path(self._tmp.name) / "fresh")
+        record_approval_bypass(omh_home=other, now=NOW)
+        self.assertTrue(latest_approval_bypass(other, session_id="not-yet", now=NOW + 5)["enabled"])
+        # The gateway's newest tick an OFF, or a stale ON: nothing speaks for the session, idle.
+        self._install_host_approval(False)
+        record_approval_bypass(omh_home=other, now=NOW + 6)
+        self.assertEqual(latest_approval_bypass(other, session_id="not-yet", now=NOW + 7)["status"], "idle")
+        self.assertEqual(
+            latest_approval_bypass(self.home, session_id="parent", now=NOW + APPROVAL_BYPASS_FRESH_SECONDS + 200)["status"],
+            "idle",
+        )
+
+    def test_a_hostile_session_id_or_record_never_raises_out_of_the_hook(self):
+        """Mutation: encode the id strictly, or read a stamp with a bare ``float``; Hermes blocks a call whose
+        ``pre_tool_call`` raises, so every tool call of the session would fail closed."""
+        import json
+
+        self._install_host_approval(True)
+        self.assertIsNone(record_approval_bypass(omh_home=self.home, session_id="x\ud800", now=NOW))
+        self.assertTrue(latest_approval_bypass(self.home, session_id="x\ud800", now=NOW + 1)["enabled"])
+        path = approval_bypass_path(self.home)
+        huge = "1" + "0" * 400
+        for text in (
+            "[" * 100_000 + "]" * 100_000,
+            '{"schema_version": "omh_approval_bypass/v1", "enabled": true, "observed_ts": %s, "sessions": {}}' % huge,
+            '{"schema_version": "omh_approval_bypass/v1", "enabled": true, "observed_ts": 1e300, "sessions": {}}',
+            json.dumps({"schema_version": "omh_approval_bypass/v1", "enabled": True, "observed_ts": NOW,
+                        "sessions": {session_digest("s"): {"enabled": True, "observed_ts": 0}}}).replace(
+                '"observed_ts": 0', f'"observed_ts": {huge}'),
+        ):
+            with self.subTest(text=text[:60]):
+                path.write_text(text, encoding="utf-8")
+                self.assertEqual(latest_approval_bypass(self.home, session_id="s", now=NOW)["status"] in
+                                 ("idle", "observed"), True)
+                self.assertIsNone(record_approval_bypass(omh_home=self.home, session_id="s", now=NOW))
+                self.assertTrue(latest_approval_bypass(self.home, session_id="s", now=NOW + 1)["enabled"])
 
     def test_the_hud_payload_carries_the_state(self):
         self._install_host_approval(True)
@@ -327,11 +398,19 @@ class HostStateYoloTest(unittest.TestCase):
 
     def test_a_named_session_requires_a_fresh_live_tui_row(self):
         self._build_db([("stale", {"yolo_mode": True}, NOW - 7 * 3600)])
-        self._write_ledger(True, observed_ts=NOW - 30)
+        self._write_ledger(False, observed_ts=NOW - 30)
         state = effective_approval_bypass(
             self.omh_home, str(self.hermes_home), session_id="stale", now=NOW
         )
         self.assertEqual(state["status"], "idle")
+        # With the gateway's newest tick a fresh ON, the stale row still does not answer; the gateway's ON does,
+        # marked as the gateway's, since the ledger holds no entry for this session.
+        self._write_ledger(True, observed_ts=NOW - 30)
+        state = effective_approval_bypass(
+            self.omh_home, str(self.hermes_home), session_id="stale", now=NOW
+        )
+        self.assertNotIn("source", state)
+        self.assertEqual((state["enabled"], state["scope"]), (True, "gateway"))
 
     def test_a_toggle_off_beats_a_stale_hook_observation(self):
         # The reported bug: the ledger observed ON at the last turn, the

@@ -18,20 +18,27 @@ toggle before the session's first turn (Hermes creates the row lazily),
 a host that does not persist the flag, or a stale row. Both
 ``pre_llm_call`` and ``pre_tool_call`` tick it with the effective-bypass
 answer the host's own status surfaces report. Only the boolean and its
-timestamp are recorded — never a session key, command, or prompt.
+timestamp are recorded, never a command or prompt.
 
 The flag is per session, and one gateway runs many sessions (subagents
 and cron runs included) whose hooks all tick the same file. So each
-observation is also kept under a digest of the session it came from
-(``sessions``), and a reader naming its session reads only that one: the
-newest tick of whichever session ran last says nothing about the session
-a pane shows.
+observation is also kept under a key for the session it came from
+(``sessions``): the first 16 hex digits of the unsalted sha256 of the
+session id. That key is pseudonymous, not anonymous: anyone holding a
+session id can compute it and find that session's entry. A reader naming
+its session reads only that entry: the newest tick of whichever session
+ran last says nothing about the session a pane shows. Where the ledger
+holds no entry for that session yet (it has not ticked since the install,
+or other sessions pushed it out) while the gateway's newest observation
+is a fresh ON, the reader answers ON for the gateway: a wrong ON only
+shows a chip, a wrong OFF hides that approvals are bypassed.
 """
 from __future__ import annotations
 
 from . import runtime_paths
 
 import hashlib
+import math
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,8 +75,14 @@ APPROVAL_BYPASS_FRESH_SECONDS = 6 * 3600.0
 # leaves eleven twelfths of the window as margin and turns "one write per
 # hook call" into "at most twice an hour, plus one per actual toggle".
 APPROVAL_BYPASS_REFRESH_SECONDS = APPROVAL_BYPASS_FRESH_SECONDS / 12
-# How many sessions' observations the ledger keeps; the oldest goes first.
+# How many sessions' observations the ledger keeps. Entries that say OFF go
+# first, then the oldest: losing an OFF costs nothing, losing an ON would
+# hide the chip of a session whose approvals are bypassed.
 APPROVAL_BYPASS_SESSION_LIMIT = 64
+# The latest stamp read as a time: 1 January 3000, the last moment Windows'
+# gmtime converts. A larger one, or one that is no finite number, is
+# unreadable rather than a moment to compare with.
+APPROVAL_BYPASS_STAMP_LIMIT = 32_503_680_000.0
 APPROVAL_BYPASS_CLAIM_BOUNDARY = (
     "Hook-observed effective approval-bypass state; it can lag Shift+Tab "
     "toggles and host restarts until the next turn or tool call, and is "
@@ -93,8 +106,11 @@ def approval_bypass_path(omh_home: str = "") -> Path:
 
 
 def session_digest(session_id: str) -> str:
-    """The key a session's observation is kept under: never the session id itself."""
-    return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
+    """The key a session's observation is kept under: a truncated unsalted sha256 of the id, pseudonymous.
+
+    ``surrogatepass`` so an id carrying a lone surrogate still has a key instead of raising in the hook.
+    """
+    return hashlib.sha256(session_id.encode("utf-8", "surrogatepass")).hexdigest()[:16]
 
 
 def record_approval_bypass(*, omh_home: str = "", session_id: str = "", now: float | None = None) -> None:
@@ -131,8 +147,12 @@ def record_approval_bypass(*, omh_home: str = "", session_id: str = "", now: flo
             sessions = _sessions(_read_record(path))
             if digest:
                 sessions[digest] = {"enabled": enabled, "observed_ts": tick}
-            # The record is written key-sorted, so age is the stamp, not the order.
-            newest = sorted(sessions.items(), key=lambda item: _stamp(item[1]), reverse=True)
+            # The record is written key-sorted, so age is the stamp, not the order. An ON outranks every OFF.
+            newest = sorted(
+                sessions.items(),
+                key=lambda item: (isinstance(item[1], dict) and item[1].get("enabled") is True, _stamp(item[1])),
+                reverse=True,
+            )
             kept = dict(newest[:APPROVAL_BYPASS_SESSION_LIMIT])
             _write_delivery_record(path, {
                 "schema_version": APPROVAL_BYPASS_SCHEMA_VERSION,
@@ -152,7 +172,8 @@ def _read_record(path: Path, *, strict: bool = True) -> dict[str, Any] | None:
 
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
+        # RecursionError: a record nested deeper than the parser's stack.
         return None
     if not isinstance(record, dict):
         return None
@@ -162,9 +183,23 @@ def _read_record(path: Path, *, strict: bool = True) -> dict[str, Any] | None:
     return record
 
 
+def _tick(value: object) -> float | None:
+    """A recorded stamp as seconds, or None where it is no number, not finite, or past `APPROVAL_BYPASS_STAMP_LIMIT`.
+
+    An integer too large for a float raises OverflowError in ``float``; it is unreadable here, not an error.
+    """
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    try:
+        tick = float(value)
+    except OverflowError:
+        return None
+    return tick if math.isfinite(tick) and abs(tick) <= APPROVAL_BYPASS_STAMP_LIMIT else None
+
+
 def _stamp(entry: object) -> float:
-    tick = entry.get("observed_ts") if isinstance(entry, dict) else None
-    return float(tick) if isinstance(tick, (int, float)) and not isinstance(tick, bool) else 0.0
+    tick = _tick(entry.get("observed_ts")) if isinstance(entry, dict) else None
+    return 0.0 if tick is None else tick
 
 
 def _sessions(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -180,10 +215,10 @@ def _still_current(entry: object, *, enabled: bool, now: float) -> bool:
     """
     if not isinstance(entry, dict) or entry.get("enabled") is not enabled:
         return False
-    tick = entry.get("observed_ts")
-    if not isinstance(tick, (int, float)) or isinstance(tick, bool):
+    tick = _tick(entry.get("observed_ts"))
+    if tick is None:
         return False
-    age = now - float(tick)
+    age = now - tick
     return 0.0 <= age <= APPROVAL_BYPASS_REFRESH_SECONDS
 
 
@@ -330,30 +365,40 @@ def _named_session_yolo_row(
 
 
 def latest_approval_bypass(omh_home: str = "", *, session_id: str = "", now: float | None = None) -> dict[str, Any]:
-    """Project the last observed bypass state, or an idle marker; with ``session_id``, that session's own."""
+    """Project the last observed bypass state, or an idle marker; with ``session_id``, that session's own.
+
+    A named session the ledger holds no entry for reads the gateway's newest observation when that one is a fresh
+    ON, marked ``scope: gateway``: it may be another session's, and a wrong ON is the error to make, not a wrong OFF.
+    """
     current = float(now if now is not None else time.time())
     idle: dict[str, Any] = {"status": "idle"}
     record = _read_record(approval_bypass_path(omh_home), strict=False)
     if record is None:
         return idle
+    scope = ""
     if session_id:
-        record = _sessions(record).get(session_digest(session_id))
-        if not isinstance(record, dict):
+        own = _sessions(record).get(session_digest(session_id))
+        if isinstance(own, dict):
+            record = own
+        elif record.get("enabled") is True:
+            scope = "gateway"
+        else:
             return idle
-    tick = record.get("observed_ts")
+    tick = _tick(record.get("observed_ts"))
     enabled = record.get("enabled")
-    if not isinstance(tick, (int, float)) or isinstance(tick, bool) or not isinstance(enabled, bool):
+    if tick is None or not isinstance(enabled, bool):
         return idle
-    if current - float(tick) > APPROVAL_BYPASS_FRESH_SECONDS:
+    if current - tick > APPROVAL_BYPASS_FRESH_SECONDS:
         return idle
     observed_at = (
-        datetime.fromtimestamp(float(tick), tz=timezone.utc)
+        datetime.fromtimestamp(max(0.0, tick), tz=timezone.utc)
         .isoformat()
         .replace("+00:00", "Z")
     )
-    return {
+    observed = {
         "status": "observed",
         "enabled": enabled,
         "observed_at": observed_at,
         "claim_boundary": APPROVAL_BYPASS_CLAIM_BOUNDARY,
     }
+    return {**observed, "scope": scope} if scope else observed
