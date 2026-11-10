@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .._governance_safety import contains_credential_like_material
 from ..host_observation import (
@@ -247,6 +248,16 @@ def _plugin_version() -> str:
     return match.group(1) if match else "unknown"
 
 
+def _names_typesafe_host(endpoint_url: str) -> bool:
+    """Whether `endpoint_url` is on TypeSafe's own host, however the operator spelled it.
+
+    `API.TYPESAFE.AI`, `api.typesafe.ai:443` and `api.typesafe.ai.` all reach
+    the first-party API, where the pinned `jev-*` versions must stay in force.
+    """
+    host = (urlsplit(endpoint_url).hostname or "").rstrip(".")
+    return host == urlsplit(ROUTES[ROUTE_TYPESAFE][0]).hostname
+
+
 def _withheld(values: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key not in _WITHHELD_FROM_OBSERVATION}
 
@@ -379,7 +390,7 @@ class _Ask:
 
     def _operator_model(self) -> str:
         """The settings' `typesafe_model`, only for a TypeSafe ask to an endpoint other than TypeSafe's own."""
-        if self.route != ROUTE_TYPESAFE or self.endpoint_url == ROUTES[ROUTE_TYPESAFE][0]:
+        if self.route != ROUTE_TYPESAFE or _names_typesafe_host(self.endpoint_url):
             return ""
         return operator_typesafe_model(self.home)
 

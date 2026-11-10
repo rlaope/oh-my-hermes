@@ -48,7 +48,8 @@ single explicit, user-requested call narrow:
 Wire facts are `documented_not_observed` (docs.typesafe.ai/api.md and
 openrouter.ai/docs/guides/community/typesafe-sdk.md, read 2026-09-23). Proxy
 variables such as `HTTPS_PROXY` are honored by urllib, so a configured proxy
-sees the destination host; `omh doctor` says so.
+sees the destination host; `omh doctor` says so. A plain-HTTP ask to the
+operator's local endpoint never uses a proxy (`_default_transport`).
 
 Stdlib and intra-bundle imports only: Hermes loads this directory with its own
 interpreter.
@@ -68,7 +69,7 @@ from dataclasses import dataclass
 from typing import Any, Final
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 ROUTE_TYPESAFE: Final = "typesafe"
 ROUTE_OPENROUTER: Final = "openrouter"
@@ -207,11 +208,17 @@ def _default_transport(request: Request, timeout: float) -> TransportReply:
 
     `build_opener` still installs the default proxy handler, so `HTTPS_PROXY`
     is honored; the redirect refusal is what keeps the key on the first host.
-    An `HTTPError` is a reply the server sent, so it is returned as one
-    rather than raised.
+    A plain-HTTP request (only the operator's local endpoint gets this far)
+    goes direct: through an `HTTP_PROXY` the proxy would read the
+    `Authorization` header in clear, and a key would reach a host other than
+    the local one. An `HTTPError` is a reply the server sent, so it is
+    returned as one rather than raised.
     """
     deadline = time.monotonic() + timeout
-    opener = build_opener(_RefuseRedirects(), HTTPSHandler())
+    if request.type == "http":
+        opener = build_opener(_RefuseRedirects(), ProxyHandler({}))
+    else:
+        opener = build_opener(_RefuseRedirects(), HTTPSHandler())
     try:
         with opener.open(request, timeout=timeout) as response:
             body = _read_bounded(response, deadline)
@@ -349,9 +356,15 @@ def is_local_host(hostname: str) -> bool:
     Only a literal is read: a name is not resolved, so what DNS answers can
     never widen the plain-HTTP allowance. The CGNAT range (100.64.0.0/10) is
     not private here, because an ISP shares it between customers.
+
+    The ranges are named (`_LOCAL_NETWORKS`) rather than taken from
+    `ipaddress`'s `is_private`, which also holds documentation, benchmark and
+    reserved blocks and the Teredo, 6to4 and NAT64 prefixes that carry a
+    packet to a public IPv4 host. An IP spelling with a trailing dot is a name
+    to the resolver, so only `localhost` may carry one.
     """
-    name = hostname.strip().lower().rstrip(".")
-    if name == "localhost":
+    name = hostname.strip().lower()
+    if name.rstrip(".") == "localhost":
         return True
     try:
         address = ipaddress.ip_address(name.strip("[]"))
@@ -359,7 +372,23 @@ def is_local_host(hostname: str) -> bool:
         return False
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
-    return address.is_loopback or address.is_link_local or (address.is_private and not address.is_unspecified)
+    return any(address.version == network.version and address in network for network in _LOCAL_NETWORKS)
+
+
+# Loopback, RFC 1918, IPv4 link-local, IPv6 loopback, ULA, IPv6 link-local.
+_LOCAL_NETWORKS: Final = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in (
+        "127.0.0.0/8",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "::1/128",
+        "fc00::/7",
+        "fe80::/10",
+    )
+)
 
 
 def build_request_body(model: str, state: object, questions: Mapping[str, Any]) -> bytes:
