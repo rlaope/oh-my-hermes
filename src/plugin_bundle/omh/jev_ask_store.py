@@ -12,7 +12,11 @@ Three things live here, all local:
   host model: anything with write access to `<omh_home>` -- the operator, and
   a model with a file tool -- can write it. It chooses which of the person's
   own keys an ask may use; it cannot send an ask, which still needs this
-  turn's consent (`jev_consent`).
+  turn's consent (`jev_consent`). Two more keys serve a self-hosted
+  Jev-compatible server: `{"local_http_endpoint": true}` lets
+  `TYPESAFE_BASE_URL` name a plain-HTTP root on a loopback, private, or
+  link-local host, and `"typesafe_model"` names the model id such an
+  operator endpoint serves.
 * Route availability. The key VALUE is read only at call time, through the
   host's profile-scoped reader (`agent.secret_scope.get_secret`) when Hermes
   is present and `os.environ` only when that import does not exist. A host
@@ -33,6 +37,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import stat
 import tempfile
@@ -48,6 +53,11 @@ JEV_DIRNAME: Final = "jev"
 SETTINGS_FILENAME: Final = "settings.json"
 LEDGER_FILENAME: Final = "asks.jsonl"
 OPENROUTER_SETTING_KEY: Final = "openrouter_route"
+LOCAL_HTTP_SETTING_KEY: Final = "local_http_endpoint"
+TYPESAFE_MODEL_SETTING_KEY: Final = "typesafe_model"
+# A served model id as Ollama, vLLM, or llama.cpp spell one
+# (`clef-flash:latest`, `org/model@rev`), never free text.
+_OPERATOR_MODEL_ID: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}")
 LEDGER_SCHEMA_VERSION: Final = "omh_jev_ask_record/v1"
 MAX_SETTINGS_BYTES: Final = 4096
 MAX_LEDGER_BYTES: Final = 512 * 1024
@@ -83,23 +93,51 @@ def ledger_path(omh_home: Path) -> Path:
     return Path(omh_home) / JEV_DIRNAME / LEDGER_FILENAME
 
 
-def openrouter_route_enabled(omh_home: Path) -> bool:
-    """True only for a readable settings file whose `openrouter_route` is the literal `true`."""
+def _read_settings(omh_home: Path) -> dict[str, Any]:
+    """The operator settings object, or {} for a missing, symlinked, oversized, or unreadable file."""
     path = settings_path(omh_home)
     try:
         if path.is_symlink():
-            return False
+            return {}
         with path.open("rb") as handle:
             raw = handle.read(MAX_SETTINGS_BYTES + 1)
     except OSError:
-        return False
+        return {}
     if len(raw) > MAX_SETTINGS_BYTES:
-        return False
+        return {}
     try:
         data = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
-        return False
-    return isinstance(data, dict) and data.get(OPENROUTER_SETTING_KEY) is True
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def openrouter_route_enabled(omh_home: Path) -> bool:
+    """True only for a readable settings file whose `openrouter_route` is the literal `true`."""
+    return _read_settings(omh_home).get(OPENROUTER_SETTING_KEY) is True
+
+
+def local_http_endpoint_enabled(omh_home: Path) -> bool:
+    """True only for a readable settings file whose `local_http_endpoint` is the literal `true`.
+
+    It lets `TYPESAFE_BASE_URL` name a plain-HTTP root, and only one whose
+    host is `localhost` or a loopback, private, or link-local IP literal
+    (`jev_ask_client.route_url`): a Jev-compatible server on this machine or
+    the local network. It widens nothing for a public host.
+    """
+    return _read_settings(omh_home).get(LOCAL_HTTP_SETTING_KEY) is True
+
+
+def operator_typesafe_model(omh_home: Path) -> str:
+    """The `typesafe_model` id the operator named, or "" when unset or not a plain model id.
+
+    The tool applies it only when `TYPESAFE_BASE_URL` names an endpoint other
+    than TypeSafe's own, so the first-party route keeps its pinned versions.
+    """
+    value = _read_settings(omh_home).get(TYPESAFE_MODEL_SETTING_KEY)
+    if not isinstance(value, str) or not _OPERATOR_MODEL_ID.fullmatch(value):
+        return ""
+    return value
 
 
 def read_key(name: str) -> str:
@@ -382,17 +420,21 @@ def _ledger_text_lines(raw: bytes) -> list[str]:
 __all__ = [
     "KeyUnresolvable",
     "LEDGER_SCHEMA_VERSION",
+    "LOCAL_HTTP_SETTING_KEY",
     "OPENROUTER_SETTING_KEY",
     "ROUTE_KEY_NAMES",
     "ROUTE_NONE",
     "ROUTE_OPENROUTER",
     "ROUTE_TYPESAFE",
+    "TYPESAFE_MODEL_SETTING_KEY",
     "answered_ask",
     "append_ledger_record",
     "forget_answered_asks",
     "ledger_path",
     "ledger_summary",
+    "local_http_endpoint_enabled",
     "openrouter_route_enabled",
+    "operator_typesafe_model",
     "read_key",
     "read_ledger_records",
     "remember_answered_ask",

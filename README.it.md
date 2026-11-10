@@ -102,6 +102,15 @@ Un nodo separato verifica l'obiettivo prima che tu riceva il report.
   <img src="assets/omh-dag-ulw-tui.gif" alt="La TUI di OMH che esegue /dag-ulw: il prompt viene digitato, il grafo a riquadri di sette lane viene definito, le lane girano strato per strato su Claude Opus 5.5, GPT-6.1 Sol, DeepSeek V4.1 Flash, GLM 5.3 e Kimi K3.1 Pro, e ogni lane termina accettata" width="900">
 </p>
 
+> **Costruito su**
+>
+> <table>
+> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> di <a href="https://nousresearch.com">Nous Research</a><br>L'agente su cui gira OMH. OMH è un livello indipendente non ufficiale.</td></tr>
+> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
+> <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> di <a href="https://github.com/code-yeongyu">@code-yeongyu</a><br>L'origine del concetto di ultrawork. OMH lo porta in Hermes.</td></tr>
+> </table>
+
 > [!TIP]
 > Unisciti a noi!
 >

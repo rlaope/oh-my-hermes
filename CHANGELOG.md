@@ -12,6 +12,17 @@ All notable changes will be documented here.
   met; the status line, the end of the run and the TUI say how many were met
   (`2/3 criteria met`). A run defined without them works as before.
 
+- **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
+  HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,
+  `TYPESAFE_BASE_URL` may be a plain-HTTP root on `localhost` or a loopback,
+  RFC 1918, ULA, or link-local IP literal, and `"typesafe_model"` names the
+  model that endpoint serves (an Ollama, vLLM or llama.cpp server exposing
+  `/v1/systemone`). The local ranges are named exactly, so documentation,
+  reserved, Teredo, 6to4 and NAT64 addresses and an IP with a trailing dot are
+  refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
+  sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
+  own host however it is spelled. Thanks @brentkearney. (#2716)
+
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their
   questions and approvals join the bots' asks in a "needs you" strip that ⌘J

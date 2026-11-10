@@ -1,7 +1,7 @@
 {
   "name": "Oh My Hermes",
   "short_name": "OMH",
-  "description": "The coding harness with Hermes Agent wired into IDE.",
+  "description": "The ultrawork agent with AI coworkers wired into you.",
   "start_url": "/",
   "scope": "/",
   "display": "browser",
