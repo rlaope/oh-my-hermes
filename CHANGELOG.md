@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher updates itself.** When a new omher release is out, an "Update to
+  0.1.x" button appears at the bottom left of the sidebar; one click
+  downloads it, checks its signature and restarts omher on the new version.
+  The app looks once at launch and every 6 hours. People on omher 0.1.1 or
+  earlier have no button yet: install the next version once from the
+  Releases page (or the `omher@beta` one-liner), and every release after
+  that arrives through the button.
+
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their
   questions and approvals join the bots' asks in a "needs you" strip that ⌘J
