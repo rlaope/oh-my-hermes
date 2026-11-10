@@ -4,6 +4,63 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
+  HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,
+  `TYPESAFE_BASE_URL` may be a plain-HTTP root on `localhost` or a loopback,
+  RFC 1918, ULA, or link-local IP literal, and `"typesafe_model"` names the
+  model that endpoint serves (an Ollama, vLLM or llama.cpp server exposing
+  `/v1/systemone`). The local ranges are named exactly, so documentation,
+  reserved, Teredo, 6to4 and NAT64 addresses and an IP with a trailing dot are
+  refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
+  sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
+  own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher updates itself.** When a new omher release is out, an "Update to
+  0.1.x" button appears at the bottom left of the sidebar; one click
+  downloads it, checks its signature and restarts omher on the new version.
+  The app looks once at launch and every 6 hours. People on omher 0.1.1 or
+  earlier have no button yet: install the next version once from the
+  Releases page (or the `omher@beta` one-liner), and every release after
+  that arrives through the button.
+
+- **The OMH TUI queues what you send during a turn, commands too.** Enter
+  during a turn now always waits for the turn's end, whatever Hermes'
+  `display.busy_input_mode` says, so a config set to `interrupt` no longer
+  stops the turn and the `ctrl+enter to send now · ↑ to edit` row shows
+  under a queued prompt. A slash command typed during a turn waits in the same
+  queue and runs in order when the turn ends (a prompt after a `/compress`
+  goes once Hermes has answered it); only `/stop`, `/steer`, `/queue`, `/btw`,
+  `/bg`, `/gateway`, `/quit` and the commands about this terminal run at once.
+  Interrupting is Esc or `/stop`, never Enter, and the send-now key never sends
+  a queued command into the turn. One Esc now stops a running turn even with a
+  draft typed, as in Claude Code, and the draft stays in the composer (vim
+  mode keeps Esc Esc; Ctrl+C still clears the draft first).
+
+- **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
+  Grok open as chats in a folder you pick (or as a terminal), and their
+  questions and approvals join the bots' asks in a "needs you" strip that ⌘J
+  walks. A bot row rings while it answers and shows how long it has been at
+  it. A message from Slack, Discord or cron gets "Reply there", which asks the
+  bot to answer in that thread with its own tools; omher never posts there
+  itself. The side panel has tabs, the model picker has search, and the chat
+  keeps one face per run of bot bubbles. (#2695, #2702, #2704, #2706, #2708,
+  #2709, #2710)
+- **Claude Fable 5.2 takes every Claude Fable 5.1 slot, and heads
+  `ultrabrain`** (owner decision, 2026-11-10). The `ultrabrain` chain is now
+  Claude Fable 5.2, GPT-6 Astra, then Claude Opus 5.5, all at `xhigh`. Fable
+  5.2 also replaces Fable 5.1 in `architect`, `visual-engineering`,
+  `artistry`, `capable`, the Hermes `main` suggestion, and the Claude Code
+  chain (`claude-opus-5-5` -> `claude-fable-5-2` -> `opus`), each at the effort
+  5.1 had. Claude Code needs version 2.1.290 or newer to run Fable 5.2 (seen on
+  one machine, not stated by Anthropic). `omh coding model-contract --model
+  claude-fable-5-2` prints its record from Anthropic's pages: thinking is always
+  on, so a request for `off` or `minimal` is raised to `low`. It lists at $8 /
+  $40 per million tokens, against $10 / $50 for Fable 5.1, and cost estimates
+  use that price. Fable 5.1 left the shipped chains but stays recognized,
+  priced and routable, so a chain you set yourself can still name it. Claude
+  Mythos 5.2, the same model for organizations Anthropic has verified, is
+  recognized and priced but in no shipped chain. The calibration text a
+  Claude model receives is unchanged.
+
 - **One command installs Hermes, OMH and the omher desktop app (beta).**
   `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
   (and the PowerShell script-block form with the same argument) installs Hermes with its official
@@ -16,6 +73,17 @@ All notable changes will be documented here.
   read as success); the app image is checked against the release's `SHA256SUMS.txt` and swapped in
   only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
   one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
+- **Skill replies say verdicts and labels in plain words.** Live replies
+  copied skill vocabulary to people: release-cut's "version surface",
+  build-failure-triage's handoff and its `FIX_READY` / `NEEDS_MORE_LOGS`
+  verdicts, code-review's `no_ship`, `not_assessed`, `spec_axis` and
+  `verification_gaps`, and "run record" inside commit text. The
+  build-failure-triage, code-review and commit-pr-authoring checklists now
+  give each verdict a plain reading (the review verdict makes no merge
+  claim) and keep the tokens in the record or structured return, which a
+  dispatched reviewer still returns in full; release-cut says "every file
+  that carries the version". No schema, tool contract or record field
+  changes, and routing is unchanged.
 
 - **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
   Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
@@ -58,6 +126,26 @@ All notable changes will be documented here.
   when no node decides the run). Repair and extend rounds do not raise it,
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
+- **omher.app shows the real GitHub star count.** The header used to show a
+  `4.9k` baked into the page on 2026-10-31 whenever the visitor's own,
+  unauthenticated GitHub API call was rate-limited. The Pages deploy now
+  stamps the current count into the page (`tools/stamp_site_counts.py`, with
+  the workflow's token; a failed call keeps the committed value and never
+  fails the deploy), and a schedule rebuilds the site every 6 hours so it
+  stays current without a merge. In the browser, one code path in `app.js`
+  updates the count, and a cached or fetched count can only raise the baked
+  one, never lower it.
+- **The Desktop pane keeps a finished DAG and lets you switch between a
+  conversation's DAGs.** With two or more dag runs in one chat, a menu in the
+  DAG header picks which one to draw (the newest by default); a picked run is
+  drawn alone, without another run's children. A finished run keeps its
+  cards, node summaries and figures under a folding summary line instead of
+  collapsing to one line; the chat end post and the TUI keep their linger.
+  Edges are routed by the rows the cards actually wrap to, implied
+  dependency edges are hidden behind a toggle, and repair/extend edges are
+  drawn faint. USAGE is a token ring with cache in its middle, and can add
+  the drawn graph's subagent lanes; a sum with any unpriced part, the chat
+  included, shows as a lower bound (`≥$`). Thanks @yqm-307. (#2690)
 
 ## 4.0.7 - 2026-11-09
 

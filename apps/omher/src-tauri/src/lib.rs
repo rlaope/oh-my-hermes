@@ -317,6 +317,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        // In-app updates: the UI checks the fixed GitHub endpoint in tauri.conf.json and installs only a
+        // build signed with the key whose public half is pinned there; process restarts into it.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             bridge_url,
             bridge_status,

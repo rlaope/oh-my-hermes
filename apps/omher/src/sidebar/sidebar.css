@@ -267,6 +267,8 @@
 }
 .me {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 4px;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -277,11 +279,63 @@
   font-size: 12.5px;
   text-align: left;
 }
+/* The user row holds two controls side by side: the Accounts button (avatar and name) and the update pill. */
+.me-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.me-btn:focus-visible {
+  outline: 2px solid var(--focus, var(--line));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .me:hover {
   background: var(--hover);
 }
 .me.on {
   background: var(--raise2);
+}
+/* Update: a quiet pill at the right end of the user row, shown only when a newer release exists. */
+.upd {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--on-accent);
+  background: var(--g-accent);
+}
+button.upd:hover {
+  filter: brightness(1.08);
+}
+.upd-busy {
+  color: var(--muted);
+  background: var(--raise2);
+  font-variant-numeric: tabular-nums;
+}
+.upd-err {
+  flex-basis: 100%;
+  padding-left: 30px;
+  font-size: 11px;
+  color: var(--danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .me-i {
   width: 20px;

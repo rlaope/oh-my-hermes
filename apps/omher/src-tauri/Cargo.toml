@@ -1,6 +1,6 @@
 [package]
 name = "omher"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [lib]
@@ -19,6 +19,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 portable-pty = "0.9"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

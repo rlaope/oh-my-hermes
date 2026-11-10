@@ -2202,5 +2202,120 @@ class GrokBuildPriceTests(unittest.TestCase):
                 self.assertAlmostEqual(APPROX_CACHE_READ_RATIO[model_id] * 1.0, 0.20)
 
 
+class FableTwoContractTests(unittest.TestCase):
+    """Claude Fable 5.2 (2026-11-09) got its own exact contract on 2026-11-10,
+    read from its own pages; Claude Mythos 5.2 gets none, as Mythos 5.1 got
+    none, and stays out of every shipped chain."""
+
+    def test_contract_fields_come_from_the_fable_52_pages(self) -> None:
+        contract = model_contract("claude-fable-5-2")
+        assert contract is not None
+        self.assertEqual(contract["model_id"], "claude-fable-5-2")
+        self.assertEqual(contract["family"], "claude")
+        self.assertEqual(contract["reasoning_efforts"], ("low", "medium", "high", "xhigh", "max"))
+        self.assertEqual((contract["effort_floor"], contract["effort_default"]), ("low", "high"))
+        self.assertEqual(set(contract["unsupported_efforts"]), {"off", "minimal"})
+        self.assertEqual(contract["served_ids"], {
+            "first_party": "claude-fable-5-2", "bedrock": "anthropic.claude-fable-5-2",
+        })
+        self.assertEqual(contract["released"], "2026-11-09")
+        self.assertEqual(contract["retirement"], "not sooner than 2027-11-09")
+        self.assertEqual((contract["context_window_tokens"], contract["max_output_tokens"]), (1_000_000, 128_000))
+        self.assertEqual(contract["sources_read"], "2026-11-10")
+        self.assertTrue(all("/fable-5-2/" in source or source.endswith("/effort") for source in contract["sources"]))
+        pricing = contract["pricing_usd_per_mtok"]
+        self.assertEqual(
+            (pricing["input"], pricing["output"], pricing["cached_input"],
+             pricing["cache_write_5m"], pricing["cache_write_1h"]),
+            (8.0, 40.0, 0.20, 10.0, 16.0),
+        )
+        # The Claude Code version requirement is an observation, kept apart
+        # from the API record.
+        self.assertIn("2.1.290", contract["surface_notes"]["claude_code"])
+        self.assertIn("not a vendor statement", contract["surface_notes"]["claude_code"])
+
+    def test_a_no_thinking_rung_is_raised_to_low_on_every_spelling(self) -> None:
+        for form in ("claude-fable-5-2", "claude-fable-5.2", "anthropic/claude-fable-5.2"):
+            for effort in ("off", "minimal"):
+                with self.subTest(form=form, effort=effort):
+                    route = resolve_model_route("hermes", requested_model=form, requested_effort=effort)
+                    self.assertEqual(route["effort_change"]["kind"], "floor_raised")
+                    self.assertEqual(route["selected_reasoning_effort"], "low")
+
+    def test_the_dotted_spelling_is_a_declared_projection_of_its_own_contract(self) -> None:
+        for form in ("claude-fable-5-2", "claude-fable-5.2", "anthropic/claude-fable-5.2"):
+            with self.subTest(form=form):
+                self.assertEqual(contract_model_id(form), "claude-fable-5-2")
+        projection = model_contract_projection("anthropic/claude-fable-5.2")
+        assert projection is not None
+        self.assertEqual(projection["provenance"], "declared_inheritance")
+        self.assertEqual((projection["reasoning_mode"], projection["service_tier"]), ("thinking", "standard"))
+        # Fable 5.1 keeps its own record; neither generation borrows the other's.
+        self.assertEqual(contract_model_id("claude-fable-5.1"), "claude-fable-5-1")
+
+    def test_price_rows_mirror_the_contract_and_mythos_shares_them(self) -> None:
+        from omh.plugin_bundle.omh.hermes_delegation import APPROX_CACHE_READ_RATIO
+
+        contract = model_contract("claude-fable-5-2")
+        assert contract is not None
+        pricing = contract["pricing_usd_per_mtok"]
+        for model_id in ("claude-fable-5-2", "claude-mythos-5-2"):
+            with self.subTest(model_id=model_id):
+                self.assertEqual(APPROX_PRICE_PER_MTOK[model_id], (pricing["input"], pricing["output"]))
+                self.assertAlmostEqual(APPROX_CACHE_READ_RATIO[model_id] * pricing["input"], pricing["cached_input"])
+        # The retired generation keeps its own price row.
+        self.assertEqual(APPROX_PRICE_PER_MTOK["claude-fable-5-1"], (10.0, 50.0))
+
+    def test_mythos_52_has_no_contract_and_no_shipped_chain_but_stays_routable(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+        from omh.coding.model_routing import BUILTIN_CATEGORY_MODELS
+
+        self.assertIsNone(model_contract("claude-mythos-5-2"))
+        hermes = {
+            candidate["model_alias"]
+            for section in ("categories", "role_suggestions", "domain_affinities", "last_resort")
+            for chain in SHIPPED_MODEL_RECOMMENDATIONS[section].values()
+            for candidate in chain
+        }
+        maestro = {
+            entry["model_id"] for categories in BUILTIN_CATEGORY_MODELS.values()
+            for chain in categories.values() for entry in chain
+        }
+        for model_id in ("claude-mythos-5-2", "claude-fable-5-1"):
+            with self.subTest(model_id=model_id):
+                self.assertNotIn(model_id, hermes)
+                self.assertNotIn(model_id, maestro)
+        route = resolve_model_route("claude-code", requested_model="claude-mythos-5-2", requested_effort="xhigh")
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["selected_model"], "claude-mythos-5-2")
+        self.assertEqual(route["model_family"], "claude")
+
+    def test_fable_52_heads_ultrabrain_and_takes_every_fable_51_slot(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+        from omh.coding.model_routing import CLAUDE_FRONTIER_CHAIN_MODELS
+
+        ultrabrain = SHIPPED_MODEL_RECOMMENDATIONS["categories"]["ultrabrain"]
+        self.assertEqual(
+            [(entry["model_alias"], entry["reasoning_effort"]) for entry in ultrabrain],
+            [("claude-fable-5-2", "xhigh"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")],
+        )
+        self.assertEqual(CLAUDE_FRONTIER_CHAIN_MODELS, ("claude-opus-5-5", "claude-fable-5-2", "opus"))
+        for category, chain in SHIPPED_MODEL_RECOMMENDATIONS["categories"].items():
+            for entry in chain:
+                if entry["model_alias"] == "claude-fable-5-2":
+                    contract = model_contract("claude-fable-5-2")
+                    assert contract is not None
+                    with self.subTest(category=category):
+                        self.assertIn(entry["reasoning_effort"], contract["reasoning_efforts"])
+
+    def test_the_cli_prints_the_contract(self) -> None:
+        code, stdout, stderr = run_cli(
+            ["coding", "model-contract", "--model", "claude-fable-5-2"], output_json=False
+        )
+        self.assertEqual(code, 0, stderr)
+        self.assertIn("Documented contract for `claude-fable-5-2` (claude family)", stdout)
+        self.assertIn("reasoning efforts: low, medium, high, xhigh, max (floor `low`)", stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

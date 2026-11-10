@@ -1191,6 +1191,120 @@ _CLAUDE_FABLE_5_1: Final[dict[str, object]] = {
     "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
 }
 
+# Claude Fable 5.2 (2026-11-09), on the Fable 5.1 terms: the same request
+# contract (always-on adaptive thinking, no prefill, no sampling parameters,
+# no forced tool choice) at a lower price. Read from its own pages, not
+# copied from 5.1: the ladder, default, and limits match, and the four
+# breaking changes are the prefix check on every account, thinking blocks
+# only Fable 5.2 and Mythos 5.2 read, `computer_20251124` refused outside
+# Bedrock, and a Fable 5.2 executor needing a Fable 5.2 or Mythos 5.2
+# advisor. Claude Mythos 5.2 shares the specifications and price but is
+# served only to organizations verified through Anthropic's verification
+# programs; it gets no row here, as Mythos 5.1 got none.
+_CLAUDE_FABLE_5_2: Final[dict[str, object]] = {
+    "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
+    "model_id": "claude-fable-5-2",
+    "reasoning_mode": "thinking",
+    "service_tier": "standard",
+    "family": "claude",
+    "generation": "claude-fable-5.2",
+    "released": "2026-11-09",
+    "rollout": (
+        "available on the Claude API, Amazon Bedrock, Google Cloud, Microsoft Foundry, and Claude "
+        "Platform on AWS; a released id is not account-level readiness evidence"
+    ),
+    # A fixed id with no date suffix: the dateless id is the pinned snapshot.
+    "served_ids": {
+        "first_party": "claude-fable-5-2",
+        "bedrock": "anthropic.claude-fable-5-2",
+    },
+    "retirement": "not sooner than 2027-11-09",
+    "knowledge_cutoff": "2026-06",
+    "context_window_tokens": 1_000_000,
+    "max_input_tokens": 1_000_000,
+    "max_output_tokens": 128_000,
+    "limits_note": (
+        "1M context (default and maximum) and 128K max output per request are documented; no "
+        "separate max-input figure is published; its rate limit is its own, separate from the one "
+        "Fable 5.1 and Fable 5 share"
+    ),
+    "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+    "effort_floor": "low",
+    "effort_default": "high",
+    "unsupported_efforts": {
+        "off": (
+            "adaptive thinking is always on; `thinking.type=disabled` or `enabled` with "
+            "`budget_tokens` returns HTTP 400"
+        ),
+        "minimal": "not in the documented ladder",
+    },
+    "tool_calling": {
+        "api": "messages",
+        "note": (
+            "forced `tool_choice` of type `any` or `tool` returns HTTP 400; `auto` and `none` are "
+            "supported, so say in the prompt when a tool applies; the earlier `computer_20251124` "
+            "tool returns HTTP 400 on every platform except Amazon Bedrock"
+        ),
+    },
+    "unsupported_parameters": ("thinking.budget_tokens", "temperature", "top_p", "top_k"),
+    "unsupported_parameters_note": (
+        "setting `temperature`, `top_p`, or `top_k` returns HTTP 400, and so does an assistant "
+        "prefill"
+    ),
+    "runtime_mechanisms": {
+        "preserved_thinking_blocks": "documented_not_observed",
+        "per_message_effort": "documented_not_observed",
+        "fast_mode": "documented_not_observed",
+    },
+    "surface_notes": {
+        "claude_code": (
+            "a Claude Code OAuth route rejected `claude-fable-5-2` with \"Claude Code 2.1.280 does "
+            "not support this model; version 2.1.290 or newer is required\", so the Maestro-lane "
+            "Claude Code chain needs Claude Code 2.1.290 or newer for this id; observed on one "
+            "machine on 2026-11-10, not a vendor statement"
+        ),
+        "hermes": (
+            "Hermes Agent at 2bd378ed1b lists no `claude-fable-5-2` in its static model catalog; "
+            "its `claude-fable` substring rows treat the id as always thinking with 128K output "
+            "and a 1M context; observed in the Hermes source, not a vendor statement"
+        ),
+    },
+    "documented_traits": (
+        "adaptive thinking is always on; a request that disables it returns HTTP 400",
+        "supports all five effort levels and `high` is the API default",
+        "at `high` and above it thinks before almost every reply, and a prompt line asking it to "
+        "answer directly does not stop it thinking at `medium` and above",
+        "on long multistep tasks it sometimes ends a turn before the work is done, more often at "
+        "`low` and `medium`",
+        "long runs of tool calls can pass with little user-facing text",
+        "at `xhigh` and `max` it can start subagents to review its own work",
+        "follows cautious instructions, approval rules, and style rules closely",
+        "what the prompt says about code ownership changes whether it restructures or only adds",
+        "only Claude Fable 5.2 and Claude Mythos 5.2 read its thinking blocks, which stay with the "
+        "producing account, and editing an earlier turn invalidates them on every account",
+    ),
+    # Anthropic list price (the Fable 5.2 what's-new page, read 2026-11-10).
+    # Cache reads are 0.025x input, the Fable 5.1 multiplier.
+    "pricing_usd_per_mtok": {
+        "input": 8.0,
+        "cached_input": 0.20,
+        "cache_write_5m": 10.0,
+        "cache_write_1h": 16.0,
+        "output": 40.0,
+        "batch": "input 4.00, output 20.00 on Message Batches",
+        "fast_mode": "input 16.00, output 80.00 with `speed: \"fast\"`",
+    },
+    "data_handling": _DATA_HANDLING_NOT_READ,
+    "sources": (
+        "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+        "https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2",
+        "https://platform.claude.com/docs/en/models/fable-5-2/migration-guide",
+        "https://platform.claude.com/docs/en/build-with-claude/effort",
+    ),
+    "sources_read": "2026-11-10",
+    "claim_boundary": MODEL_CONTRACT_CLAIM_BOUNDARY,
+}
+
 # DeepSeek V4.1 Flash. OMH's alias is the versioned gateway spelling; the
 # first-party API names the current Flash generation `deepseek-flash` and
 # that pointer is a declared projection below, not a second contract.
@@ -1794,6 +1908,7 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "claude-sonnet-5-5": _CLAUDE_SONNET_5_5,
     "claude-haiku-5-5": _CLAUDE_HAIKU_5_5,
     "claude-fable-5-1": _CLAUDE_FABLE_5_1,
+    "claude-fable-5-2": _CLAUDE_FABLE_5_2,
     "deepseek-v4.1-flash": _DEEPSEEK_V41_FLASH,
     "kimi-k3.1-pro": _KIMI_K3_1_PRO,
     "kimi-k3.1-pro-highspeed": _KIMI_K3_1_PRO_HIGHSPEED,
@@ -1927,6 +2042,15 @@ DECLARED_MODEL_CONTRACT_PROJECTIONS: Final[dict[str, Mapping[str, str]]] = {
     # contract's `served_ids`.
     "claude-fable-5.1": {
         "contract_model_id": "claude-fable-5-1",
+        "reasoning_mode": "thinking",
+        "service_tier": "standard",
+    },
+    # Claude Fable 5.2's dotted spelling, on the Fable 5.1 row's terms: the
+    # gateway form of the same model (Hermes' static catalog spells 5.1
+    # this way; it lists no 5.2 id yet at 2bd378ed1b, read 2026-11-10). The
+    # Bedrock id stays in the contract's `served_ids`.
+    "claude-fable-5.2": {
+        "contract_model_id": "claude-fable-5-2",
         "reasoning_mode": "thinking",
         "service_tier": "standard",
     },

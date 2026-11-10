@@ -10,6 +10,7 @@ import { AccountsWatcher } from "../settings/accounts/useAccounts";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { HiddenList, NeedsStrip } from "./Needs";
+import { UpdateButton } from "./UpdateButton";
 
 export function Sidebar() {
   const s = useStore();
@@ -112,18 +113,15 @@ export function Sidebar() {
         </button>
         <Usage />
         <AccountsWatcher />
-        <button
-          type="button"
-          className={`me${inSettings && s.ui.settingsPage === "accounts" ? " on" : ""}`}
-          onClick={() => s.openSettings("accounts")}
-          title="Accounts"
-          data-testid="me"
-        >
-          <span className="me-i" aria-hidden="true">
-            Y
-          </span>
-          <span>You</span>
-        </button>
+        <div className={`me${inSettings && s.ui.settingsPage === "accounts" ? " on" : ""}`} data-testid="me">
+          <button type="button" className="me-btn" onClick={() => s.openSettings("accounts")} title="Accounts">
+            <span className="me-i" aria-hidden="true">
+              Y
+            </span>
+            <span>You</span>
+          </button>
+          <UpdateButton />
+        </div>
       </div>
     </aside>
   );

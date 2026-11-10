@@ -178,10 +178,8 @@ class SlashInvocation:
     """One slash command: `name` as typed (no slash), the rest as `arg`.
 
     `for_plan_mode` says the TUI wrote the command around a prompt the person
-    typed in plan mode, instead of the person typing the command. `held` says
-    a prompt the command sends waits for a running turn to end whatever the
-    busy mode: it is a steer Hermes did not take. `rewind` is the rewind the
-    person had picked when they sent it (the app's `Rewind`), or None: a
+    typed in plan mode, instead of the person typing the command. `rewind` is
+    the rewind the person had picked when they sent it (the app's `Rewind`), or None: a
     prompt it sends goes in place of the picked one while that very rewind is
     still picked. It is matched by identity, so it takes no part in `==` or
     `hash()`. `images` are the images typed with the command, which the
@@ -192,7 +190,6 @@ class SlashInvocation:
     arg: str
     command: SlashCommand | None
     for_plan_mode: bool = False
-    held: bool = False
     rewind: object | None = field(default=None, compare=False)
     images: tuple[object, ...] = field(default=(), compare=False)  # the app's images a prompt it sends goes with
 
@@ -232,6 +229,51 @@ def parse_slash(text: str) -> SlashInvocation | None:
     if not head or "/" in head:
         return None
     return SlashInvocation(head, arg.strip(), _BY_NAME.get(head.lower()))
+
+
+# The commands that run at once while a turn runs. Every other one (a skill's, Hermes' own, one Hermes adds later)
+# waits in the TUI's queue for the turn's end and runs then, in order, as a queued prompt goes (`App._run_slash`).
+# Closed: each name is here for the reason beside it, measured from what the command does.
+RUNS_DURING_TURN = frozenset({
+    "stop",  # Hermes' /stop: interrupts the running turn, which is what it is for
+    "steer",  # puts text into the running turn (Ctrl+Enter's command)
+    "queue",  # lists what waits for the running turn
+    "btw",  # Hermes' side question over a snapshot of the conversation (`prompt.btw`): its history stays untouched
+    "bg",  # Hermes' background prompt, run in a session of its own (`prompt.background`), not this one
+    "help",  # prints the command list
+    "keys",  # opens the key list in the pager
+    "whats-new",  # prints this version's What's new
+    "redraw",  # repaints this terminal
+    "history",  # pages through this transcript, in memory
+    "todos",  # prints the plan the panel already shows
+    "details",  # shows or hides thinking and tool detail on the screen
+    "logs",  # pages through the gateway's stderr, kept in memory
+    "dag",  # pages through the delegation graph the HUD already read
+    "bots",  # the read-only bot board
+    "copy",  # copies the last reply to the clipboard
+    "theme",  # this terminal's look
+    "wallpaper",  # this terminal's background and scene
+    "image",  # attaches an image to the draft, as a paste does during a turn; the turn gets nothing
+    "paste",  # attaches the clipboard image to the draft, as Ctrl+V does
+    "gateway",  # `/gateway restart` asks first, and Hermes' restart lets running turns, this one too, finish first
+    "quit",  # leaves the TUI, as Ctrl+C twice does during a turn: waiting would keep the person in it
+})
+
+
+def runs_during_turn(invocation: SlashInvocation) -> bool:
+    """Whether `invocation` runs at once while a turn runs (`RUNS_DURING_TURN`), instead of waiting for its end.
+
+    A command only Hermes' own terminal or its classic CLI runs, or one
+    dropped here, runs at once too: all it does is print a notice saying so
+    (Hermes' own pointer, for a classic one). An alias goes by the
+    command it names; a name the TUI does not know is Hermes' and queues
+    unless the list names it.
+    """
+    command = invocation.command
+    if command is not None and command.route in (HERMES, DROPPED, CLASSIC):
+        return True
+    name = command.name if command is not None else invocation.name.lower()
+    return name in RUNS_DURING_TURN
 
 
 def plan_invocation(text: str) -> SlashInvocation:

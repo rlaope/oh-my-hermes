@@ -2856,7 +2856,12 @@ over two route identities: TypeSafe defaults to `api.typesafe.ai` with
 `TYPESAFE_API_KEY` and may use `TYPESAFE_BASE_URL`, the API-root variable
 TypeSafe's SDKs read, as an HTTPS root with a host and no credentials, query, or
 fragment; OMH appends `/v1/systemone` (`/systemone` to a root already ending in
-`/v1`). OpenRouter
+`/v1`). For a self-hosted Jev-compatible server, `{"local_http_endpoint": true}`
+in `<omh_home>/jev/settings.json` also accepts a plain-HTTP root whose host is
+`localhost` or a loopback, private, or link-local IP literal (a name is never
+resolved to decide), and `"typesafe_model"` in that file names the model such a
+non-TypeSafe endpoint serves; it replaces the default and the presets' pinned
+version there, so those answers carry no resolved contract. OpenRouter
 uses `openrouter.ai` only when the operator also set `openrouter_route` in
 `<omh_home>/jev/settings.json`. It refuses every redirect, bounds both bodies and
 the whole call by a deadline, and retries only 429, 503, and 529. It opens no

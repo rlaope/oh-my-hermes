@@ -470,8 +470,8 @@ class StartupRefusalTests(AppTestCase):
         self.assertEqual((run.terminal.screen.lines()[:5], run.terminal.screen.scrollback), (shell, []))
         self.assertEqual(run.clients[0].close(grace=FAST_GRACE), 0)
 
-    def test_drift_on_the_busy_mode_call_is_a_notice_and_the_session_goes_on(self) -> None:
-        # config.get is answered after the first frame, and the busy mode has a default: its drift costs nothing.
+    def test_drift_on_the_settings_call_is_a_notice_and_the_session_goes_on(self) -> None:
+        # config.get is answered after the first frame, and what it sets has defaults: its drift costs nothing.
         drift = recorded_answer("session", "drift_reply")
         answers = (
             ("config.get", drift),
@@ -1760,7 +1760,7 @@ class ModelChainPickerTests(unittest.TestCase):
         self.assertIn("! deep: xhigh is not on gemini-4-argon's list; −/+ or d", written[-2])
         self.assertTrue(message.startswith("Saved 2 categories"), message)
         categories = json.loads((root / "omh" / "routing" / "model-chains.json").read_text(encoding="utf-8"))["categories"]
-        self.assertEqual(categories["ultrabrain"][0], {"model": "claude-fable-5-1", "reasoning_effort": "max"})
+        self.assertEqual(categories["ultrabrain"][0], {"model": "claude-fable-5-2", "reasoning_effort": "max"})
         self.assertEqual(categories["deep"][0], {"model": "gemini-4-argon", "reasoning_effort": "high"})
 
 
@@ -2075,7 +2075,10 @@ class LocalCommandTests(AppTestCase):
     def after_reply(self, run: Run) -> Callable[[], bool]:
         return lambda: "later." in run.terminal.history() and run.terminal.idle()
 
-    def test_new_declines_open_requests_and_opens_a_fresh_session(self) -> None:
+    def test_new_typed_while_an_approval_waits_never_leaves_the_turn_and_runs_once_it_ends(self) -> None:
+        # Typed during the turn, `/fresh` (Hermes' alias of /new) waits in the queue: the approval stays the
+        # person's, who denies it; the deny stops the turn, the queue comes back to the composer as after any
+        # interrupt, and sent again between turns it opens the fresh session.
         create = recorded_answer("approval", "create")
         fresh = {
             "result": {
@@ -2089,29 +2092,35 @@ class LocalCommandTests(AppTestCase):
         answers = (
             *startup_answers(),
             ("session.create", create),
+            INTERRUPTED,
             ("session.create", fresh),
             ("session.close", {"result": {"closed": True}}),
-            # An alias answered while the approval is open: the one way /new runs with a request pending.
             ("slash.exec", {"result": {"type": "alias", "target": "new"}}),
         )
         startup, turn = spans("approval", "startup", "approval_turn")
         run = self.prepare(Scenario("approval", (startup, turn), answers=answers))
-        run.terminal.script(
-            Step(TYPED_AHEAD + b"Run rm -rf ./omh-m0-probe-dir\r/fresh\r", when=run.terminal.idle, label="idle"),
-            Step(b"\x04", when=run.terminal.shows(f"New session {FRESH_STORED_ID}."), label="the new session"),
+        terminal = run.terminal
+        terminal.script(
+            Step(TYPED_AHEAD + b"Run rm -rf ./omh-m0-probe-dir\r/fresh\r", when=terminal.idle, label="idle"),
+            Step(when=terminal.shows("Hermes asks to run"), label="the approval slot"),
+            Step(b"d", when=lambda: time.monotonic() - terminal.fired["the approval slot"] > SLOT_ARM_SECONDS + 0.05,
+                 label="armed"),
+            Step(b"\r", when=lambda: "what you queued is back in the composer" in terminal.history(),
+                 label="the turn ended"),
+            Step(b"\x04", when=terminal.shows(f"New session {FRESH_STORED_ID}."), label="the new session"),
         )
         self.run_main(run)
         self.assert_clean_run(run)
         denied = [frame for frame in run.frames if frame.get("id") == "srq-52e9720342b6"]
         self.assertEqual(denied, [{"jsonrpc": "2.0", "id": "srq-52e9720342b6", "result": {"choice": "deny"}}])
+        (interrupt,) = run.calls("session.interrupt")
+        (slash,) = run.calls("slash.exec")
+        self.assertLess(run.frames.index(interrupt), run.frames.index(slash))  # /fresh ran only after the turn
+        self.assertEqual(slash["params"], {"command": "fresh", "session_id": "f05e2691"})
         (closed,) = run.calls("session.close")
         self.assertEqual(closed["params"], {"session_id": "f05e2691"})
         self.assertEqual(len(run.calls("session.create")), 2)
-        self.assertEqual(run.calls("slash.exec")[0]["params"], {"command": "fresh", "session_id": "f05e2691"})
-        # The closed session's remaining events never reach the fresh transcript.
-        self.assertNotIn("It was blocked", run.terminal.history())
-        # The decline was the TUI's, not the person's: the fresh transcript says so.
-        self.assertIn("Declined 1 open request from the session you left.", run.terminal.history())
+        self.assertNotIn("Declined 1 open request", run.terminal.history())  # nothing was open to decline
         self.assertEqual(run.poller.sessions, [APPROVAL_STORED_ID, FRESH_STORED_ID])
         self.assertEqual(json.loads(run.active_session_file.read_text(encoding="utf-8")), {"session_id": FRESH_STORED_ID})
 
@@ -2352,8 +2361,10 @@ class LocalCommandTests(AppTestCase):
         self.assertIn("┃ ❯ second prompt  ⧗ from queue", history[listed:])  # the queue sent it once the turn ended
         self.assertLess(history.index("┃ ❯ first prompt"), listed)
 
-    def test_steer_and_interrupt_modes_send_input_during_a_turn_at_once(self) -> None:
-        for mode in ("steer", "interrupt"):
+    def test_input_during_a_turn_queues_whatever_the_busy_mode(self) -> None:
+        # Hermes' `display.busy_input_mode` is Hermes' and its bots' business: here Enter during a turn always
+        # queues, so a `steer` or `interrupt` there never redirects or stops the turn from the OMH TUI.
+        for mode in ("queue", "steer", "interrupt"):
             with self.subTest(mode=mode):
                 run = self.prepare(
                     Scenario(
@@ -2364,11 +2375,10 @@ class LocalCommandTests(AppTestCase):
                 )
                 terminal = run.terminal
                 terminal.script(
-                    # The busy mode is read without holding up the first frame, and input sent while a turn runs
-                    # before its answer queues (Hermes' default). The replay answers in the order it was asked,
-                    # config.get before the catalog, so once the menu offers Hermes' /undo the mode has arrived.
+                    # The replay answers in the order it was asked, config.get before the catalog, so once the
+                    # menu offers Hermes' /undo the settings have arrived.
                     Step(b"/und", when=terminal.idle, label="idle"),
-                    Step(b"\x15first prompt\rsecond prompt\r", when=terminal.shows("/undo"), label="the mode read"),
+                    Step(b"\x15first prompt\rsecond prompt\r", when=terminal.shows("/undo"), label="the settings read"),
                     Step(b"\x04", when=lambda terminal=terminal: "cleanly)." in terminal.history() and terminal.idle(),
                          label="turn 2"),
                 )
@@ -2376,9 +2386,11 @@ class LocalCommandTests(AppTestCase):
                 self.assert_clean_run(run)
                 first, second = run.calls("prompt.submit")
                 self.assertEqual(first["params"], {"session_id": LIVE_ID, "text": "first prompt"})
-                # Sent while the first turn was pending, with no `queued`: Hermes applies its own mode.
-                self.assertEqual(second["params"], {"session_id": LIVE_ID, "text": "second prompt"})
-                self.assertNotIn("queued", terminal.history())
+                # Held until the first turn ended, and sent as the queue's: Hermes applies no busy mode to it.
+                self.assertEqual(second["params"], {"session_id": LIVE_ID, "text": "second prompt", "queued": True})
+                self.assertIn("⧗ from queue", terminal.history())
+                self.assertEqual(run.calls("session.interrupt") + run.calls("session.redirect"), [])
+
 
 SHOT = {
     "attached": True,
@@ -2684,27 +2696,23 @@ class KeyTests(AppTestCase):
     def running(self, run: Run) -> Callable[[], bool]:
         return run.terminal.running
 
-    def test_esc_on_an_empty_composer_interrupts_and_with_text_keeps_the_draft(self) -> None:
+    def test_esc_with_a_draft_interrupts_the_turn_and_keeps_the_draft(self) -> None:
+        # Enter queues during a turn, so Esc is the one-key stop, as in Claude Code: with a draft typed too.
         run = self.interrupted_run()
         terminal = run.terminal
         terminal.script(
             self.submit(run, "Write the numbers from 1 to 300, one per line, nothing else."),
             Step(b"draft", when=self.running(run), capture="running", label="running"),
             Step(b"\x1b", when=terminal.shows("❯ draft"), label="the draft"),
-            # The replay holds the turn open until it sees session.interrupt, so a turn still running
-            # well after that Esc proves the Esc sent nothing.
-            Step(b"\x15", when=lambda: terminal.shows("❯ draft")() and time.monotonic() - terminal.fired["the draft"] > 0.4,
-                 capture="after the first esc", label="the draft after Esc"),
-            Step(b"\x1b", when=lambda: not terminal.shows("❯ draft")(), label="the empty composer"),
-            Step(b"\x04", when=lambda: "Interrupted." in terminal.history() and terminal.idle(), label="end"),
+            Step(b"\x15", when=lambda: "Interrupted." in terminal.history() and terminal.shows("❯ draft")(),
+                 capture="stopped", label="the turn stopped"),
+            Step(b"\x04", when=terminal.idle, label="end"),
         )
         self.run_main(run)
         self.assert_clean_run(run)
         (interrupt,) = run.calls("session.interrupt")
         self.assertEqual(interrupt["params"], {"session_id": LIVE_ID})
-        after = terminal.captures["after the first esc"]
-        self.assertNotIn("Interrupted.", "\n".join(after))  # the turn still runs
-        self.assertIn("esc again to", info_row_of(after))  # and the info line says what a second Esc does
+        self.assertIn("❯ draft", "\n".join(terminal.captures["stopped"]))  # the draft stayed, untouched
         activity = [line for line in terminal.captures["running"] if INTERRUPT_ROW.search(line)]
         self.assertEqual(len(activity), 1, terminal.captures["running"])
 

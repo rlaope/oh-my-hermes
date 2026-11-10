@@ -52,7 +52,8 @@ class EchoTests(unittest.TestCase):
 
     def test_what_a_quiet_command_says_during_a_turn_waits_under_what_runs(self) -> None:
         # With no echo to hold it, a notice from /rewind, /logs or /sessions must not close the streaming reply;
-        # it is written once the turn's next boundary comes.
+        # it is written once the turn's next boundary comes. /rewind and /sessions wait for a running turn's end, so
+        # theirs comes when a turn started while their list was out.
         said = {
             "rewind": REWIND_BUSY_NOTICE,
             "logs": "The gateway has written nothing to stderr.",
@@ -60,12 +61,17 @@ class EchoTests(unittest.TestCase):
         }
         for name, notice in said.items():
             with self.subTest(name=name):
-                app, client = make_app(busy=True)
+                listed = name in ("rewind", "sessions")
+                app, client = make_app(busy=not listed)
                 client.stderr_tail = lambda: []  # type: ignore[attr-defined]
+                if listed:
+                    send(app, f"/{name}")
+                    app.turn_pending = True
                 app.transcript.blocks.append(AssistantBlock("streaming", done=False))
-                send(app, f"/{name}")
-                if name == "sessions":
-                    answer(app, client, {"sessions": []})
+                if listed:
+                    answer(app, client, {"sessions": [], "messages": [{"role": "user", "content": "a prompt"}]})
+                else:
+                    send(app, f"/{name}")
                 self.assertFalse(app.transcript.blocks[0].done)  # the live reply is still open
                 self.assertNotIn(notice, notices(app))
                 app.transcript.blocks[0].done = True

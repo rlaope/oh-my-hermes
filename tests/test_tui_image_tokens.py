@@ -299,9 +299,8 @@ class SendTests(ImageTestCase):
                       notices(self.app, NOTICE_WARN))
 
     def test_a_prompt_sent_before_the_last_turn_was_admitted_never_lends_it_its_images(self) -> None:
-        # Hermes still builds the agent for A: B, sent into the running turn, stages nothing until A is admitted, and
-        # nor does a Ctrl+V meanwhile.
-        self.app.busy_mode = "steer"
+        # Hermes still builds the agent for A: a Ctrl+V meanwhile stages nothing until A is admitted, and B, sent
+        # while A's turn runs, waits in the queue with its image for that turn's end.
         first = self.paste_image()
         self.type("A")
         self.press(Key(ENTER))
@@ -314,6 +313,8 @@ class SendTests(ImageTestCase):
         self.assertEqual(self.shown(), "[Image #2] ")
         self.type("B")
         self.press(Key(ENTER))
+        self.assertEqual(self.hermes.waiting, [])  # queued behind A's turn: nothing staged or sent
+        self.hermes.complete()
         self.hermes.admit()
         self.assertEqual(self.hermes.turns[1], ("[Image #2] B", [second]))
 
@@ -654,8 +655,7 @@ class GateTests(ImageTestCase):
         self.assertNotEqual(self.client.calls[-1][0], "clipboard.paste")
 
     def test_a_queued_answer_takes_the_images_so_the_next_paste_goes_at_once(self) -> None:
-        self.app.busy_mode = "steer"
-        self.app.transcript.running = True  # a turn runs: the prompt goes into it, and Hermes queues it
+        # Sent between turns, the prompt reaches Hermes after a turn of its own started, so Hermes queues it.
         self.paste_image()
         self.type("also this")
         self.app._on_input(Key(ENTER))
@@ -709,13 +709,10 @@ class GateTests(ImageTestCase):
         self.assertEqual(self.client.calls[before:], [])  # the staging prompt still holds the gate
 
     def test_a_turn_that_ends_while_the_next_prompt_stages_leaves_the_gate_closed(self) -> None:
-        self.app.busy_mode = "steer"
-        self.app.transcript.running = True  # a turn runs: the prompt goes into it
         self.paste_image()
         self.app._on_input(Key(ENTER))  # staging out, unanswered
         self.hermes.answered = len(self.client.calls)
-        self.app.transcript.running = False
-        self.app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.app._on_event(Event("message.complete", SID, {"text": "done"}))  # a turn of Hermes' own ends
         before = len(self.client.calls)
         self.app._on_input(CTRL_V)
         self.assertEqual(self.client.calls[before:], [])

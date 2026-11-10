@@ -149,10 +149,10 @@ class OverlayLinesTests(unittest.TestCase):
 
     def test_a_wide_terminal_puts_the_description_beside_the_keys_and_a_narrow_one_under_them(self) -> None:
         wide = [line_text(line) for line in shortcut_lines(120, DEFAULT_THEME)]
-        self.assertIn("Enter" + " " * 41 + "Sends the composer", wide)
+        self.assertTrue(any(line.startswith("Enter" + " " * 41 + "Sends the composer;") for line in wide))
         narrow = [line_text(line) for line in shortcut_lines(40, DEFAULT_THEME)]
         at = narrow.index("Enter")
-        self.assertEqual(narrow[at + 1], "  Sends the composer")
+        self.assertTrue(narrow[at + 1].startswith("  Sends the composer;"))
 
     def test_the_keys_are_bold_and_the_text_is_text(self) -> None:
         line = next(line for line in shortcut_lines(120, DEFAULT_THEME) if line_text(line).startswith("Ctrl+T"))
@@ -1029,6 +1029,30 @@ class LeaderShortcutTests(unittest.TestCase):
                     self.assertEqual(client.calls, [])
                     self.assertIsNone(app.rewind_picker)
 
+    def test_modified_escape_cancels_leader_before_modifier_filtering(self) -> None:
+        from test_tui_rewind import Clock
+
+        for modifier in ("ctrl", "alt", "shift", "reported_shift"):
+            for text, busy, kind in (("draft", False, "clear"), ("", True, "interrupt"), ("", False, "rewind")):
+                with self.subTest(modifier=modifier, kind=kind):
+                    clock = Clock()
+                    app, client = make_app(busy=busy, clock=clock)
+                    app.composer.set_vim(True)
+                    type_text(app, text)
+                    app._on_input(Key(ESCAPE))
+                    app._on_input(Key(ESCAPE))
+                    self.assertEqual(app.escape_armed, (kind, clock.now))
+                    before = (app.composer.text, app.composer.caret, app.composer.normal, list(app.composer.history))
+                    self.arm(app)
+                    app._on_input(Key(ESCAPE, **{modifier: True}))
+                    self.assertIsNone(app.escape_armed)
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual(
+                        (app.composer.text, app.composer.caret, app.composer.normal, app.composer.history), before,
+                    )
+                    self.assertEqual(client.calls, [])
+                    self.assertIsNone(app.rewind_picker)
+
     def test_non_escape_leader_followers_preserve_confirmation(self) -> None:
         for event in (Key(CHAR, "?"), Key(CHAR, "m", ctrl=True), Key(DOWN)):
             with self.subTest(event=event):
@@ -1368,6 +1392,63 @@ class LeaderShortcutTests(unittest.TestCase):
             app._on_input(Key(CHAR, "m"))
             self.assertEqual(client.named("config.set"), [])
         self.assert_fresh_mode_chord(app, client)
+
+    def test_picker_dismissal_preserves_insert_and_non_vim_drafts(self) -> None:
+        for vim in (False, True):
+            for kind in ("launch_picker", "picker", "search", "rewind_picker", "model_picker"):
+                with self.subTest(vim=vim, kind=kind):
+                    app, client = make_app()
+                    app.composer.set_vim(vim)
+                    type_text(app, " sbpr/mt")
+                    before = (app.composer.text, app.composer.caret, app.composer.normal)
+                    self.picker_fixture(app, kind)
+                    app._on_input(Key(ESCAPE))
+                    self.assertIsNone(getattr(app, kind))
+                    self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
+                    type_text(app, " more")
+                    self.assertEqual(app.composer.text, " sbpr/mt more")
+                    self.assertFalse(app.composer.pending)
+                    self.assertEqual(client.calls, [])
+
+    def test_late_list_answer_preserves_higher_priority_picker(self) -> None:
+        from omh.tui.app import LIST_TAKEN_NOTICE
+        from test_tui_modes import notices
+
+        for kind in ("launch_picker", "search"):
+            with self.subTest(kind=kind):
+                app, client = self.normal_app()
+                self.arm(app)
+                app._on_input(Key(CHAR, "s"))
+                request_id = len(client.calls)
+                self.arm(app)
+                owner = self.picker_fixture(app, kind)
+                self.sessions_answer(app, request_id)
+                self.assertIsNone(app.picker)
+                self.assertIs(app._front_picker(), owner)
+                self.assertIn(LIST_TAKEN_NOTICE.format(command="/resume"), notices(app))
+                app._on_input(Key(ESCAPE))
+                self.assertFalse(app.composer.pending)
+                self.assert_fresh_mode_chord(app, client)
+
+    def test_front_picker_priority_delivers_enter_once(self) -> None:
+        kinds = ("launch_picker", "picker", "search", "rewind_picker", "model_picker")
+        handlers = ("_launch_picker_key", "_picker_key", "_search_key", "_rewind_picker_key", "_model_picker_key")
+        for offset, kind in enumerate(kinds):
+            with self.subTest(kind=kind):
+                app, client = self.normal_app()
+                self.arm(app)
+                owners = [self.picker_fixture(app, candidate) for candidate in kinds[offset:]]
+                self.assertIs(app._front_picker(), owners[0])
+                original = getattr(app, handlers[offset])
+
+                def receive(event: Key | Paste) -> None:
+                    self.assertFalse(app.composer.pending)
+                    original(event)
+
+                with patch.object(app, handlers[offset], side_effect=receive) as owned:
+                    app._on_input(Key(ENTER))
+                    owned.assert_called_once_with(Key(ENTER))
+                self.assertEqual(client.named("prompt.submit"), [])
 
     def test_prompt_slot_preempts_leader_shortcuts(self) -> None:
         app, client = self.normal_app()

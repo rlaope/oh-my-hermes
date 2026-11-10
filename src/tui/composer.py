@@ -410,6 +410,9 @@ def _first_blank_free(units: Sequence[str], start: int, end: int) -> int:
 
 
 _QUOTE_CHARS = ('"', "'", "`")
+_BRACKET_PAIRS = {"(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{"}
+_BRACKET_OPENERS = {"(": "(", ")": "(", "[": "[", "]": "[", "{": "{", "}": "{"}
+_BRACKET_CLOSERS = {"(": ")", "[": "]", "{": "}"}
 
 
 def _backslashes_before(units: Sequence[str], line_start: int, index: int) -> int:
@@ -907,6 +910,8 @@ class Composer:
                 self._operate_span(operator, self._text_object_span(prefix, count))
             elif char in _QUOTE_CHARS and operator:
                 self._operate_span(operator, self._quote_object_span(prefix, count, char))
+            elif char in _BRACKET_PAIRS and operator:
+                self._operate_span(operator, self._bracket_object_span(prefix, count, char))
             return NOTHING
         if prefix == "r":
             self._replace_chars(char, self._take_count() or 1)
@@ -1206,6 +1211,72 @@ class Composer:
         while leading_start > line_start and units[leading_start - 1] in _BLANKS:
             leading_start -= 1
         return leading_start, end
+
+    def _bracket_object_span(self, descriptor: str, times: int, target: str) -> tuple[int, int] | None:
+        """Balanced bracket text object (`i` or `a` with `()`, `[]`, `{}`) using atom indexes."""
+        if descriptor not in ("i", "a") or target not in _BRACKET_PAIRS or times < 1:
+            return None
+        open_char = _BRACKET_OPENERS[target]
+        close_char = _BRACKET_CLOSERS[open_char]
+        units, _bounds, index = self._atoms()
+
+        # Plain stack/parent scan over full composer units:
+        # Each entry tracks its parent index in open_stack, open atom index, and matched close atom index.
+        open_stack: list[int] = []  # indices into records
+        # record: [parent_rec_idx, open_idx, close_idx]
+        records: list[list[int | None]] = []
+        active_at_caret: int | None = None
+        caret_record: int | None = None
+
+        for idx, u in enumerate(units):
+            if u == open_char:
+                parent = open_stack[-1] if open_stack else None
+                rec_idx = len(records)
+                records.append([parent, idx, None])
+                open_stack.append(rec_idx)
+                if idx == index:
+                    caret_record = rec_idx
+            elif u == close_char and open_stack:
+                rec_idx = open_stack.pop()
+                records[rec_idx][2] = idx
+                if idx == index and caret_record is None:
+                    caret_record = rec_idx
+
+            if idx == index and caret_record is None:
+                active_at_caret = open_stack[-1] if open_stack else None
+
+        # Determine starting candidate record:
+        cand_rec = caret_record if caret_record is not None else active_at_caret
+
+        if cand_rec is None:
+            # No active opener at caret; select first opener strictly forward across composer.
+            # An unmatched forward opener must be chosen (and will fail), blocking child substitution.
+            for rec_idx, rec in enumerate(records):
+                if rec[1] is not None and rec[1] > index:
+                    cand_rec = rec_idx
+                    break
+
+        if cand_rec is None:
+            return None
+
+        # Effective count N selects the Nth same-family ancestor (candidate is level 1)
+        cur: int | None = cand_rec
+        depth = 1
+        while cur is not None and depth < times:
+            cur = records[cur][0]
+            depth += 1
+
+        if cur is None or depth < times:
+            return None
+
+        rec = records[cur]
+        open_idx, close_idx = rec[1], rec[2]
+        if open_idx is None or close_idx is None:
+            return None
+
+        if descriptor == "i":
+            return open_idx + 1, close_idx
+        return open_idx, close_idx + 1
 
     def _operate(self, operator: str, motion: str, times: int) -> None:
         """`d`, `c` or `y` over `motion` (`times` of it), or over `times` whole lines when `motion` is the operator."""

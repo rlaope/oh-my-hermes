@@ -934,6 +934,27 @@ class DoctorCheckTests(unittest.TestCase):
             self.assertEqual(check.detail["omh_jev_ask"]["route_available"], "typesafe")
             self.assertEqual(check.detail["credential_names_present"], [])
 
+    def test_the_local_endpoint_settings_are_named_in_the_same_check(self) -> None:
+        sentinel = "sk-omh...5b4a"
+        with TemporaryDirectory() as tmp:
+            paths = _paths(Path(tmp))
+            setting = paths.omh_home / "jev" / "settings.json"
+            setting.parent.mkdir(parents=True, exist_ok=True)
+            setting.write_text(
+                json.dumps({"local_http_endpoint": True, "typesafe_model": "clef-flash:latest"}), encoding="utf-8"
+            )
+            with patch.dict(os.environ, {"TYPESAFE_API_KEY": sentinel, "TYPESAFE_BASE_URL": "http://10.0.2.2:11434"}):
+                _checks, check = _doctor_check(paths)
+            self.assertIn(
+                "route typesafe (custom base URL configured) (local HTTP allowed) (model clef-flash:latest)",
+                check.message,
+            )
+            block = check.detail["omh_jev_ask"]
+            self.assertTrue(block["local_http_endpoint_setting"])
+            self.assertEqual(block["typesafe_model_setting"], "clef-flash:latest")
+            self.assertNotIn(sentinel, check.message)
+            self.assertNotIn(sentinel, json.dumps(check.detail))
+
     def test_an_openrouter_key_alone_is_not_an_omh_jev_ask_route(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _paths(Path(tmp))

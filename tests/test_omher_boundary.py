@@ -71,7 +71,14 @@ RULES = (
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
+    "omher updates itself only through Tauri's updater, and only from one fixed address:",
+    "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
+    " and only after the person presses the update button; then it restarts omher.",
 )
+TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
+CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
+UI_SRC = ROOT / "apps" / "omher" / "src"
+UPDATE_ENDPOINT = "https://github.com/rlaope/oh-my-hermes/releases/download/omher-latest/latest.json"
 SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
 SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
 # The shell's fixed run: the documented one-liner, downloaded to a temp file first so a failed download
@@ -103,14 +110,14 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_nineteen_numbered_rules(self) -> None:
-        # 19: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
-        # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Runs: dag records, delegation and
-        # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts) and rule 19
-        # (skills.list for the ./ picker) each widened the boundary on purpose; the rules stay numbered 1..n
-        # with no gap or repeat.
+    def test_boundary_is_between_six_and_twenty_numbered_rules(self) -> None:
+        # 20: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+        # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
+        # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
+        # (skills.list for the ./ picker) and rule 20 (the signed self-update) each widened the boundary on
+        # purpose; the rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 19, len(rules))
+        self.assertTrue(6 <= len(rules) <= 20, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -119,6 +126,41 @@ class DocPins(unittest.TestCase):
         self.assertIn("**Elsewhere**:", context)
         self.assertIn("docs/OMHER-BOUNDARY.md", context)
         self.assertIn("(OMHER-BOUNDARY.md)", DOCS_INDEX.read_text(encoding="utf-8"))
+
+
+class SignedSelfUpdateFromOneAddress(unittest.TestCase):
+    """Rule 20: the updater reads one fixed endpoint, verifies against a pinned key, and is driven from one
+    UI module after a click."""
+
+    def test_the_updater_has_one_fixed_endpoint_and_a_pinned_key(self) -> None:
+        import base64
+        import json
+
+        conf = json.loads(TAURI_CONF.read_text(encoding="utf-8"))
+        updater = conf["plugins"]["updater"]
+        self.assertEqual(updater["endpoints"], [UPDATE_ENDPOINT])
+        self.assertNotIn("dangerousInsecureTransportProtocol", updater)
+        self.assertIn("minisign public key", base64.b64decode(updater["pubkey"]).decode("utf-8"))
+        self.assertIs(conf["bundle"]["createUpdaterArtifacts"], True)
+        self.assertIn(f"`{UPDATE_ENDPOINT}`", DOC.read_text(encoding="utf-8"))
+
+    def test_capabilities_add_only_the_updater_and_restart(self) -> None:
+        import json
+
+        perms = json.loads(CAPABILITIES.read_text(encoding="utf-8"))["permissions"]
+        self.assertEqual(perms, ["core:default", "notification:default", "dialog:allow-open",
+                                 "updater:default", "process:allow-restart"])
+
+    def test_only_the_sidebar_updater_module_imports_the_updater(self) -> None:
+        users = sorted(
+            p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
+            if re.search(r"@tauri-apps/plugin-(updater|process)", p.read_text(encoding="utf-8"))
+        )
+        self.assertEqual(users, ["sidebar/updater.ts"])
+        button = (UI_SRC / "sidebar" / "UpdateButton.tsx").read_text(encoding="utf-8")
+        # install runs from the click handler only; the timer only checks
+        self.assertEqual(button.count("update.install("), 1)
+        self.assertIn("onClick={() => void install(", button)
 
 
 class TheOneInstaller(unittest.TestCase):
