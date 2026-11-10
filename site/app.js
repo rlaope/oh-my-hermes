@@ -330,8 +330,10 @@
 
   // The header shows the repository's stars and the npm package's all-time
   // downloads. Both come from public JSON APIs, are cached for an hour, and
-  // fail quietly: the star button stays without a number and the install
-  // count stays hidden.
+  // fail quietly. The deploy bakes the real star count into every
+  // [data-stars] / [data-star-count] element (tools/stamp_site_counts.py
+  // writes data-stars="5311" and the compact text), so the number shows
+  // before any request and a cached or fetched count only ever raises it.
   var COUNTS_KEY = "omh.counts";
   var COUNTS_TTL = 60 * 60 * 1000;
   // First npm publish of oh-my-hermes; the all-time range starts here.
@@ -345,7 +347,34 @@
     return String(n);
   }
 
+  var STAR_SLOTS = "[data-stars], [data-star-count]";
+
+  // The highest count the deploy baked into the page, or null.
+  function bakedStars() {
+    var best = null;
+    Array.prototype.forEach.call(document.querySelectorAll(STAR_SLOTS), function (el) {
+      var raw = el.getAttribute("data-stars") || el.getAttribute("data-star-count") || "";
+      var n = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+      if (!isNaN(n) && (best === null || n > best)) best = n;
+    });
+    return best;
+  }
+
+  // Raise the shown star count; a lower figure (an old cache, a lagging
+  // API answer) never replaces a higher one.
+  function raiseStars(n) {
+    if (typeof n !== "number" || isNaN(n)) return false;
+    if (typeof counts.stars === "number" && n < counts.stars) return false;
+    counts.stars = n;
+    return true;
+  }
+
   function renderCounts() {
+    if (typeof counts.stars === "number") {
+      Array.prototype.forEach.call(document.querySelectorAll("[data-stars]"), function (el) {
+        el.textContent = compact(counts.stars);
+      });
+    }
     var star = document.querySelector("[data-gh-star]");
     var starCount = document.querySelector("[data-star-count]");
     if (star && starCount && typeof counts.stars === "number") {
@@ -389,7 +418,10 @@
   }
 
   function initCounts() {
-    if (!document.querySelector("[data-gh-star]") || typeof window.fetch !== "function") return;
+    var wantStars = !!document.querySelector(STAR_SLOTS);
+    var wantInstalls = !!document.querySelector("[data-installs]");
+    if (!wantStars && !wantInstalls) return;
+    raiseStars(bakedStars());
     var cached = null;
     try {
       cached = JSON.parse(readStore(COUNTS_KEY) || "null");
@@ -397,29 +429,36 @@
       cached = null;
     }
     if (cached) {
-      counts.stars = typeof cached.stars === "number" ? cached.stars : null;
+      if (typeof cached.stars === "number") raiseStars(cached.stars);
       counts.installs = typeof cached.installs === "number" ? cached.installs : null;
-      renderCounts();
-      if (Date.now() - cached.t < COUNTS_TTL && counts.stars !== null && counts.installs !== null) return;
     }
+    renderCounts();
+    var fresh = cached && Date.now() - cached.t < COUNTS_TTL;
+    var needStars = wantStars && !(fresh && typeof cached.stars === "number");
+    var needInstalls = wantInstalls && !(fresh && typeof cached.installs === "number");
+    if ((!needStars && !needInstalls) || typeof window.fetch !== "function") return;
     function save() {
       writeStore(COUNTS_KEY, JSON.stringify({ t: Date.now(), stars: counts.stars, installs: counts.installs }));
     }
-    getJSON("https://api.github.com/repos/rlaope/oh-my-hermes")
-      .then(function (repo) {
-        if (typeof repo.stargazers_count !== "number") return;
-        counts.stars = repo.stargazers_count;
-        renderCounts();
-        save();
-      })
-      .catch(function () { /* keep the star button without a number */ });
-    npmDownloads()
-      .then(function (downloads) {
-        counts.installs = downloads;
-        renderCounts();
-        save();
-      })
-      .catch(function () { /* keep the install count hidden */ });
+    if (needStars) {
+      getJSON("https://api.github.com/repos/rlaope/oh-my-hermes")
+        .then(function (repo) {
+          if (typeof repo.stargazers_count !== "number") return;
+          raiseStars(repo.stargazers_count);
+          renderCounts();
+          save();
+        })
+        .catch(function () { /* keep the baked or cached number */ });
+    }
+    if (needInstalls) {
+      npmDownloads()
+        .then(function (downloads) {
+          counts.installs = downloads;
+          renderCounts();
+          save();
+        })
+        .catch(function () { /* keep the install count hidden */ });
+    }
   }
 
   /* =============================================================== aura */

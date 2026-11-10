@@ -90,9 +90,11 @@ QUALIFICATION_HOLDS: Final[dict[str, dict[str, object]]] = {
 # forensics, synthesize) were added on 2026-10-28 from the owner's published
 # recipe; every slot they add is editorial and unmeasured.
 # ultrabrain gained Claude Fable 5.1 (head) and Claude Opus 5.5 (third) on
-# 2026-11-09 (owner decision), editorial and unmeasured.
+# 2026-11-09 (owner decision), editorial and unmeasured. Claude Fable 5.2
+# took every Fable 5.1 slot at the same effort on 2026-11-10 (owner
+# decision), editorial and unmeasured.
 RECOMMENDATION_DECISIONS: Final[dict[str, tuple[str, ...]]] = {
-    "claude-fable-5-1": (
+    "claude-fable-5-2": (
         "categories:architect", "categories:artistry", "categories:capable",
         "categories:ultrabrain", "categories:visual-engineering", "role_suggestions:main",
     ),
@@ -165,6 +167,9 @@ RETIREMENT_DECISIONS: Final[dict[str, dict[str, object]]] = {
         ("kimi-k3", "kimi-k3.1-pro", "all_shipped_chains", "2026-10-24"),
         # Google made Gemini 4 Argon generally available on 2026-10-13.
         ("gemini-3.1-pro", "gemini-4-argon", "all_shipped_chains", "2026-10-28"),
+        # Anthropic released Claude Fable 5.2 on 2026-11-09; it took every
+        # Fable 5.1 slot, the ultrabrain head included.
+        ("claude-fable-5-1", "claude-fable-5-2", "all_shipped_chains", "2026-11-10"),
     )
 } | {
     # Qwen3-Coder (2025) left its only slot on 2026-10-13 and no Qwen-line

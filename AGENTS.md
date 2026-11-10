@@ -138,7 +138,11 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   API root for the TypeSafe endpoint, or `OPENROUTER_API_KEY` plus
   `{"openrouter_route": true}` in `<omh_home>/jev/settings.json`, which OMH
   never writes. Stdlib only, HTTPS only, two route identities, no redirects,
-  bounded bodies, no retry after a sent request times out. It
+  bounded bodies, no retry after a sent request times out. The one plain-HTTP
+  case is the same file's `{"local_http_endpoint": true}`, which lets
+  `TYPESAFE_BASE_URL` name `localhost` or a loopback, private, or link-local
+  IP literal (a self-hosted Jev-compatible server); its `typesafe_model` names
+  the model such a non-TypeSafe endpoint serves. It
   persists no key, `state`, question text, or reply; one metadata-only ledger
   row per ask. `src/plugin_bundle/omh/jev_ask_client.py` is one of the two
   in-process network clients in `src/`, and only `tools/jev_ask_tool.py` may

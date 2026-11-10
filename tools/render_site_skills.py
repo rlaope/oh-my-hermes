@@ -220,12 +220,12 @@ HEAD = """<!doctype html>
     <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Oh My Hermes: the coding harness with Hermes Agent wired into IDE.">
+    <meta property="og:image:alt" content="Oh My Hermes: the ultrawork agent with AI coworkers wired into you.">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="OMH skills · What each skill does">
     <meta name="twitter:description" content="{description}">
     <meta name="twitter:image" content="https://omher.app/assets/og/omh-share.png">
-    <meta name="twitter:image:alt" content="Oh My Hermes: the coding harness with Hermes Agent wired into IDE.">
+    <meta name="twitter:image:alt" content="Oh My Hermes: the ultrawork agent with AI coworkers wired into you.">
     <meta name="twitter:site" content="@rlaope">
     <meta name="twitter:creator" content="@rlaope">
     <link rel="icon" href="../../favicon.ico" sizes="48x48">
