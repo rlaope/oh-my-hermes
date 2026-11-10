@@ -82,12 +82,12 @@ class ModelRoutingJourneyTests(unittest.TestCase):
 
         self.assertEqual(missing["status"], "owner_default")
         self.assertTrue(missing["setup_can_continue"])
-        # ultrabrain is Fable 5.1 -> Astra -> Opus 5.5 (owner decision,
-        # 2026-11-09); the shared last resort Opus 5.5 -> GPT-6.1 Sol follows,
+        # ultrabrain is Fable 5.2 -> Astra -> Opus 5.5 (owner decision,
+        # 2026-11-09, Fable 5.2 since 2026-11-10); the shared last resort Opus 5.5 -> GPT-6.1 Sol follows,
         # and the Opus 5.5 it repeats is listed once.
         self.assertEqual(
             missing["inactive_candidates"],
-            ["claude-fable-5-1", "gpt-6-astra", "claude-opus-5-5", "gpt-6.1-sol"],
+            ["claude-fable-5-2", "gpt-6-astra", "claude-opus-5-5", "gpt-6.1-sol"],
         )
         self.assertEqual(unavailable["status"], "choice_required")
         self.assertTrue(unavailable["setup_can_continue"])

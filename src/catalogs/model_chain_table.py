@@ -14,8 +14,8 @@ table out of human hands the same way the ULW regions are.
 Two things the table shows do not exist as catalog data, so they live here and
 only here:
 
-- The display label for a model alias (`claude-fable-5-1` -> `Claude Fable
-  5.1`). The alias is what routing uses; the label is what a reader needs.
+- The display label for a model alias (`claude-fable-5-2` -> `Claude Fable
+  5.2`). The alias is what routing uses; the label is what a reader needs.
 - The "What it is for" phrase per surface. This is editorial one-line prose,
   and the same strings are already duplicated into `site/i18n.js` under the
   `chain.*` keys; source is the better home for them.
@@ -67,6 +67,7 @@ _REGEN_COMMAND: Final[str] = "uv run python -m omh.cli docs chain-table"
 # stays the pointer because the endpoint rejects `deepseek-v4.1-flash`.
 MODEL_DISPLAY_LABELS: Final[dict[str, str]] = {
     "claude-fable-5-1": "Claude Fable 5.1",
+    "claude-fable-5-2": "Claude Fable 5.2",
     "claude-haiku-4-5": "Claude Haiku 4.5",
     "claude-haiku-5-5": "Claude Haiku 5.5",
     "claude-opus-5": "Claude Opus 5",

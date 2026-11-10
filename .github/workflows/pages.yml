@@ -8,9 +8,15 @@ on:
       - "site/**"
       - "skills/**"
       - "tools/render_site_skills.py"
+      - "tools/stamp_site_counts.py"
       - "README.md"
       - "docs/**"
   workflow_dispatch:
+  # Rebake the GitHub star count every 6 hours without a merge. A scheduled
+  # run builds the default branch head, so it deploys the same content as
+  # the latest push to main, plus the fresh count.
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
@@ -18,7 +24,9 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  # A scheduled refresh queues behind a running deploy instead of cancelling
+  # it; a push still supersedes whatever is running.
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   build:
@@ -47,6 +55,13 @@ jobs:
           # site/assets is self-contained: the DAG-ULW capture (webm/mp4 and
           # poster), the logo, and the wordmark are tracked under site/.
           cp -R site/. _site/
+      - name: Bake the GitHub star count into the site
+        # Fills every [data-stars] / [data-star-count] placeholder in _site.
+        # The token only lifts the API rate limit and is never printed; a
+        # failed call keeps the committed value and does not fail the deploy.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/stamp_site_counts.py _site
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:

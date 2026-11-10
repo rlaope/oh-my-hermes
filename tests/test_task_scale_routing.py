@@ -118,7 +118,7 @@ class TaskScaleResolutionTests(unittest.TestCase):
         # heads it, and the next-candidate advice still ends on the alias.
         self.assertEqual(
             [entry["model_id"] for entry in large["chain"]][:3],
-            ["claude-opus-5-5", "claude-fable-5-1", "opus"],
+            ["claude-opus-5-5", "claude-fable-5-2", "opus"],
         )
         self.assertEqual(large["selected_reasoning_effort"], "xhigh")
 
