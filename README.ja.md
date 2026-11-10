@@ -24,8 +24,7 @@ Hermes にパッチを当てたり置き換えたりせず、計画しただけ�
 
 </div>
 
-> **ベースにしたプロジェクト**<br>
-> スポンサーではありませんが、OMH の土台になっているプロジェクトです。
+> **ベースにしたプロジェクト**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>

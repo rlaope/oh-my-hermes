@@ -29,8 +29,7 @@ Hermes를 패치하거나 대체하지 않고, 계획만 된 일을 완료로 �
 
 </div>
 
-> **기반 프로젝트**<br>
-> 스폰서는 아니지만, OMH가 딛고 선 프로젝트입니다.
+> **기반 프로젝트**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>

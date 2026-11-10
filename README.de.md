@@ -29,8 +29,7 @@ Es patcht oder ersetzt Hermes nie und meldet geplante Arbeit nie als erledigt.
 
 </div>
 
-> **Aufgebaut auf**<br>
-> Keine Sponsoren, sondern die Projekte, auf denen OMH steht.
+> **Aufgebaut auf**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>

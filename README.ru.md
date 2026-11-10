@@ -29,8 +29,7 @@
 
 </div>
 
-> **Основа**<br>
-> Это не спонсоры, а проекты, на которых стоит OMH.
+> **Основа**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>

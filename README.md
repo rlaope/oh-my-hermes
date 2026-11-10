@@ -47,8 +47,7 @@ It never patches or replaces Hermes, and it never reports planned work as done.
 
 </div>
 
-> **Built on**<br>
-> Not sponsors. These are the projects OMH stands on.
+> **Built on**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>

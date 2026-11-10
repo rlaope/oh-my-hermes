@@ -29,8 +29,7 @@ Ele nunca altera nem substitui o Hermes, e nunca relata trabalho planejado como 
 
 </div>
 
-> **Construído sobre**<br>
-> Não são patrocinadores. São os projetos em que o OMH se apoia.
+> **Construído sobre**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>

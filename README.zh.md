@@ -24,8 +24,7 @@
 
 </div>
 
-> **基于这些项目**<br>
-> 它们不是赞助方，而是 OMH 所依托的项目。
+> **基于这些项目**
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
