@@ -782,7 +782,20 @@ class KeptPathTests(unittest.TestCase):
             home = Path(root) / "home"
             self.assertEqual(self.kept(home, home / ".omh"), "Launch look violet, kept in ~/.omh/tui/theme.json.")
             elsewhere = Path(root) / "elsewhere"
-            self.assertEqual(self.kept(home, elsewhere), f"Launch look violet, kept in {elsewhere}/tui/theme.json.")
+            self.assertEqual(self.kept(home, elsewhere),
+                             f"Launch look violet, kept in {elsewhere / 'tui' / 'theme.json'}.")
+
+    def test_a_home_spelled_another_way_still_reads_as_a_tilde(self) -> None:
+        # Windows CI names the same temp home `RUNNER~1` on one side and `runneradmin` on the other; a link stands in.
+        with tempfile.TemporaryDirectory() as root:
+            home = Path(root) / "home"
+            home.mkdir()
+            alias = Path(root) / "alias"
+            try:
+                alias.symlink_to(home, target_is_directory=True)
+            except OSError:
+                self.skipTest("this platform cannot make a directory link here")
+            self.assertEqual(self.kept(home, alias / ".omh"), "Launch look violet, kept in ~/.omh/tui/theme.json.")
 
 
 if __name__ == "__main__":

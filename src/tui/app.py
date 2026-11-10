@@ -8291,8 +8291,19 @@ class App(ModesMixin, AgentViewMixin):
         self._redraw_launch()
 
     def _shown_path(self, path: object) -> str:
-        """A file the TUI wrote, as a notice names it: under the home directory as `~/…`, so it fits a row."""
-        return short_path(str(path), self.environ.get("HOME", ""))
+        """A file the TUI wrote, as a notice names it: under the home directory as `~/…`, so it fits a row.
+
+        Both sides are resolved before they are compared, so a home spelled another way (Windows' `RUNNER~1` short
+        name, a symlink) still matches, and the part under it is written with `/` on every platform."""
+        home = self.environ.get("HOME", "")
+        if home:
+            try:
+                under = Path(str(path)).resolve().relative_to(Path(home).resolve())
+            except ValueError:
+                pass
+            else:
+                return "~/" + under.as_posix() if under.parts else "~"
+        return str(path)
 
     def _preview_launch(self) -> None:
         """Draw the shown look where it shows: on the launch screen, the logo by a full redraw and the live card in
