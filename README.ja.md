@@ -24,6 +24,16 @@ Hermes にパッチを当てたり置き換えたりせず、計画しただけ�
 
 </div>
 
+> **ベースにしたプロジェクト**<br>
+> スポンサーではありませんが、OMH の土台になっているプロジェクトです。
+>
+> <table>
+> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
+> <td><a href="https://nousresearch.com">Nous Research</a> の <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH が動くエージェントです。OMH は独立したレイヤーで、Nous Research の公式プロジェクトではありません。</td></tr>
+> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
+> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a> の <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b><br>ultrawork コンセプトの出発点です。OMH はそれを Hermes に持ち込みました。</td></tr>
+> </table>
+
 ## インストール
 
 ```sh
@@ -32,18 +42,6 @@ omh setup
 ```
 
 [Windows とその他の方法 →](docs/INSTALLATION.md)
-
-<br>
-
-> **ベースにしたプロジェクト**<br>
-> スポンサーではありませんが、OMH の土台になっているプロジェクトです。
->
-> <table>
-> <tr><td width="96" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="64"></a></td>
-> <td><a href="https://nousresearch.com">Nous Research</a> の <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> は OMH が動くエージェントです。話す相手は Hermes のままで、OMH はその上に載る独立したレイヤーです。Nous Research の公式プロジェクトではありません。</td></tr>
-> <tr><td width="96" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="78"></a></td>
-> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a> の <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> は ultrawork コンセプトの出発点です。<code>ulw</code> キーワードとグラフ型の <code>dag-ulw</code> 実行はここで生まれ、OMH はそれを Hermes に持ち込みました。オープンに作ってくれたことに感謝します。</td></tr>
-> </table>
 
 <br>
 

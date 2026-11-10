@@ -24,6 +24,16 @@
 
 </div>
 
+> **基于这些项目**<br>
+> 它们不是赞助方，而是 OMH 所依托的项目。
+>
+> <table>
+> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
+> <td><a href="https://nousresearch.com">Nous Research</a> 的 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH 运行所在的智能体。OMH 是独立的一层，不是 Nous Research 的官方项目。</td></tr>
+> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
+> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a> 的 <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b><br>ultrawork 概念的出处。OMH 把它带到了 Hermes。</td></tr>
+> </table>
+
 ## 安装
 
 ```sh
@@ -32,18 +42,6 @@ omh setup
 ```
 
 [Windows 及其他安装方式 →](docs/INSTALLATION.md)
-
-<br>
-
-> **基于这些项目**<br>
-> 它们不是赞助方，而是 OMH 所依托的项目。
->
-> <table>
-> <tr><td width="96" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="64"></a></td>
-> <td><a href="https://nousresearch.com">Nous Research</a> 的 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> 是 OMH 运行所在的智能体。你仍然和 Hermes 对话；OMH 是叠加在其上的独立层，不是 Nous Research 的官方项目。</td></tr>
-> <tr><td width="96" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="78"></a></td>
-> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a> 的 <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> 是 ultrawork 概念的出处。<code>ulw</code> 关键词和图式的 <code>dag-ulw</code> 运行都从这里开始，OMH 把它们带到了 Hermes。感谢以开源方式构建它。</td></tr>
-> </table>
 
 <br>
 

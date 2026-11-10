@@ -29,6 +29,16 @@ Hermes를 패치하거나 대체하지 않고, 계획만 된 일을 완료로 �
 
 </div>
 
+> **기반 프로젝트**<br>
+> 스폰서는 아니지만, OMH가 딛고 선 프로젝트입니다.
+>
+> <table>
+> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
+> <td><a href="https://nousresearch.com">Nous Research</a>의 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH가 돌아가는 에이전트입니다. OMH는 독립 레이어이고 Nous Research 공식 프로젝트가 아닙니다.</td></tr>
+> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
+> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a>의 <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b><br>ultrawork 컨셉의 출발점입니다. OMH는 이 컨셉을 Hermes로 가져왔습니다.</td></tr>
+> </table>
+
 ## 설치
 
 ```sh
@@ -37,18 +47,6 @@ omh setup
 ```
 
 [Windows와 다른 설치 방법 →](docs/INSTALLATION.md)
-
-<br>
-
-> **기반 프로젝트**<br>
-> 스폰서는 아니지만, OMH가 딛고 선 프로젝트입니다.
->
-> <table>
-> <tr><td width="96" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="64"></a></td>
-> <td><a href="https://nousresearch.com">Nous Research</a>의 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b>는 OMH가 돌아가는 에이전트입니다. 대화는 계속 Hermes와 하고, OMH는 그 위에 얹는 독립 레이어로 Nous Research 공식 프로젝트가 아닙니다.</td></tr>
-> <tr><td width="96" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="78"></a></td>
-> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a>의 <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b>는 ultrawork 컨셉의 출발점입니다. <code>ulw</code> 키워드와 그래프형 <code>dag-ulw</code> 실행이 여기서 시작됐고, OMH는 이를 Hermes로 가져왔습니다. 오픈소스로 만들어 주셔서 감사합니다.</td></tr>
-> </table>
 
 <br>
 
