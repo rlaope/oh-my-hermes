@@ -66,6 +66,12 @@ export const zh: Record<Key, string> = {
   "plans.open": "打开计划 {name}",
   "plans.graph": "计划图",
 
+  // chat (the chat column's own words)
+  "chat.noBots": "还没有机器人",
+  "chat.noBotsHint": "机器人就是一个 Hermes 配置档。用左上角的 + 添加，或新建一个：",
+  "chat.pick": "选择一个机器人",
+  "chat.connecting": "正在连接 Hermes…",
+
   // skills (the composer's ./ picker)
   "skills.label": "技能",
   "skills.none": "没有匹配的技能",

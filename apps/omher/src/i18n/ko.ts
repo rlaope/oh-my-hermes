@@ -66,6 +66,12 @@ export const ko: Record<Key, string> = {
   "plans.open": "계획 {name} 열기",
   "plans.graph": "계획 그래프",
 
+  // chat (the chat column's own words)
+  "chat.noBots": "아직 봇이 없습니다",
+  "chat.noBotsHint": "봇은 Hermes 프로필입니다. 왼쪽 위 +로 추가하거나 새로 만드세요:",
+  "chat.pick": "봇을 선택하세요",
+  "chat.connecting": "Hermes에 연결하는 중…",
+
   // skills (the composer's ./ picker)
   "skills.label": "스킬",
   "skills.none": "일치하는 스킬 없음",

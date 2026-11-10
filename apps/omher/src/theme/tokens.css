@@ -87,6 +87,7 @@
 }
 
 [data-theme="light"] {
+  --spin: var(--accent); /* the wordmark pink is 3:1 on white: a spinner that thin needs more */
   color-scheme: light;
 
   --page: #e8e5ea;

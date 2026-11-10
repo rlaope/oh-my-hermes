@@ -3,8 +3,23 @@
   flex: 1;
   display: grid;
   place-items: center;
-  color: var(--quiet);
-  font-size: 12px;
+  align-content: center;
+  gap: 6px;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.chat-empty b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.chat-empty code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--body);
 }
 /* The name keeps its natural width and ellipsizes only below ~120px of button: `width` sets that floor
    through the flex item's automatic minimum (min(width, content)), `flex-basis` keeps short names short. */
@@ -153,13 +168,15 @@
 .msg.u .b {
   background: var(--bub-me);
   color: var(--ink);
-  max-width: min(70%, 640px);
+  /* 70% of the column, up to 640px; in a narrow column (a side panel open) it may use all but 40px of it */
+  max-width: min(100% - 40px, max(70%, 380px), 640px);
   white-space: pre-wrap;
 }
 .msg.a .b {
   background: var(--bub-bot);
   color: var(--body);
-  max-width: 80%;
+  /* 80% of the column; in a narrow column the whole of it, so a sentence is not five lines beside empty room */
+  max-width: min(100%, max(80%, 440px));
 }
 
 /* bubble styles (Settings > Appearance) */
@@ -225,10 +242,10 @@
   line-height: 1.35;
 }
 .md h1 {
-  font-size: calc(var(--fs-msg) + 6px);
+  font-size: calc(var(--fs-msg) + 3px);
 }
 .md h2 {
-  font-size: calc(var(--fs-msg) + 4px);
+  font-size: calc(var(--fs-msg) + 2px);
 }
 .md h3 {
   font-size: calc(var(--fs-msg) + 1px);
@@ -294,6 +311,8 @@
 /* tables: scroll inside the bubble when wide; numbers and short cells stay on one line */
 .md table {
   display: block;
+  /* as wide as its cells need before any cell breaks a word; past the bubble it scrolls sideways */
+  width: max-content;
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;

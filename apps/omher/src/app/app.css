@@ -55,7 +55,7 @@
   flex-direction: column;
 }
 .details-h {
-  height: 48px;
+  height: 52px; /* the chat header's height: the two dividers meet in one line */
   display: flex;
   align-items: center;
   justify-content: space-between;

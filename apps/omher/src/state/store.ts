@@ -316,7 +316,7 @@ function saveList(key: string, v: string[]): void {
   }
 }
 
-function readTheme(): Theme {
+export function readTheme(): Theme {
   try {
     const v = typeof localStorage !== "undefined" ? localStorage.getItem("omher.theme") : null;
     if (v === "dark" || v === "light" || v === "system") return v;

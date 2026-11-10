@@ -66,6 +66,12 @@ export const ja: Record<Key, string> = {
   "plans.open": "計画 {name} を開く",
   "plans.graph": "計画グラフ",
 
+  // chat (the chat column's own words)
+  "chat.noBots": "ボットはまだありません",
+  "chat.noBotsHint": "ボットは Hermes のプロファイルです。左上の + で追加するか、新しく作成します:",
+  "chat.pick": "ボットを選択してください",
+  "chat.connecting": "Hermes に接続中…",
+
   // skills (the composer's ./ picker)
   "skills.label": "スキル",
   "skills.none": "一致するスキルなし",

@@ -1,9 +1,11 @@
 /* SESSIONS: sidebar section, + menu, terminal view. */
 
-/* BOTS and SESSIONS share the sidebar height half and half; each list scrolls on its own. */
+/* BOTS and SESSIONS each take the room their rows need and share what is left; when both are long, each gives
+   way in proportion and scrolls on its own. Neither is squeezed under its header and a row or two: twelve bots
+   beside an empty SESSIONS no longer stop at five with a blank half under them. */
 .side-sec {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 96px;
   display: flex;
   flex-direction: column;
 }

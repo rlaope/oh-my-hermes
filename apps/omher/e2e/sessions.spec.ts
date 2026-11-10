@@ -58,22 +58,74 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("bots and sessions split the sidebar about half and half", async ({ page }) => {
+test("bots and sessions each take the room their rows need and share what is left", async ({ page }) => {
   await open(page);
   const bots = await page.getByTestId("side-bots").boundingBox();
   const sess = await page.getByTestId("side-sessions").boundingBox();
   expect(bots && sess).toBeTruthy();
   expect(sess!.y).toBeGreaterThan(bots!.y + bots!.height - 1); // SESSIONS sits under BOTS
-  const ratio = bots!.height / sess!.height;
-  expect(ratio).toBeGreaterThan(0.85);
-  expect(ratio).toBeLessThan(1.18);
+  // three bots and no session: neither list needs to scroll, and the spare room is shared equally between them
+  const need = await page.evaluate(() => {
+    const h = (id: string, list: string) => {
+      const sec = document.querySelector(`[data-testid=${id}]`)!;
+      const l = sec.querySelector(list) as HTMLElement | null;
+      return { box: sec.getBoundingClientRect().height, spare: l ? l.clientHeight - l.scrollHeight : 0, scrolls: l ? l.scrollHeight > l.clientHeight + 1 : false };
+    };
+    return { bots: h("side-bots", ".bot-list"), sess: h("side-sessions", ".ss-none") };
+  });
+  expect(need.bots.scrolls).toBe(false);
+  expect(bots!.height).toBeGreaterThan(sess!.height); // three rows need more than the empty SESSIONS
   await expect(page.getByTestId("side-sessions")).toContainText("Sessions");
   await expect(page.getByTestId("session-none")).toBeVisible();
   // the top + is still "Add a bot"; the sessions + is its own button
   await expect(page.getByRole("button", { name: "Add a bot" })).toBeVisible();
   await expect(page.getByTestId("session-new")).toHaveAttribute("aria-label", "New session");
-  // each half scrolls on its own
+  // each list scrolls on its own
   expect(await page.locator("[data-testid=side-bots] .bot-list").evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
+});
+
+test("twelve bots beside an empty SESSIONS use the room: the list does not stop at five with a blank half under it", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // the mock's three bots plus nine more
+  await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
+    const server = ws.connectToServer();
+    const ops = new Map<string, string>();
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      ops.set(msg.id, msg.op);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const msg = JSON.parse(String(raw));
+      if (ops.get(msg.id) === "bots.list" && msg.ok) {
+        const base = msg.result.bots[msg.result.bots.length - 1];
+        for (let i = 0; i < 9; i++) msg.result.bots.push({ ...base, name: `extra${i}`, display_name: `Extra bot number ${i} with a long name`, is_default: false, running: false });
+        ws.send(JSON.stringify(msg));
+        return;
+      }
+      ws.send(raw);
+    });
+  });
+  await open(page);
+  await expect(page.locator("[data-testid=side-bots] .bot")).toHaveCount(12);
+  const geo = await page.evaluate(() => {
+    const list = document.querySelector("[data-testid=side-bots] .bot-list")!.getBoundingClientRect();
+    const rows = [...document.querySelectorAll("[data-testid=side-bots] .bot")].map((e) => e.getBoundingClientRect());
+    const none = document.querySelector("[data-testid=session-none]")!.getBoundingClientRect();
+    const sess = document.querySelector("[data-testid=side-sessions]")!.getBoundingClientRect();
+    const foot = document.querySelector(".side-foot")!.getBoundingClientRect();
+    return { whole: rows.filter((r) => r.top >= list.top - 0.5 && r.bottom <= list.bottom + 0.5).length, noneBottom: none.bottom, sessBottom: sess.bottom, footTop: foot.top, sessH: sess.height };
+  });
+  expect(geo.whole).toBeGreaterThanOrEqual(8); // it was 5
+  // SESSIONS keeps its header, its button and its line of agents, whole, and no more than that
+  expect(geo.noneBottom).toBeLessThanOrEqual(geo.sessBottom + 0.5);
+  expect(geo.sessBottom).toBeLessThanOrEqual(geo.footTop + 0.5);
+  expect(geo.sessH).toBeLessThan(140);
+  // a name too long for the row is cut with an ellipsis, on one line
+  const name = await page.locator('[data-testid="bot-extra0"] .bot-n').evaluate((e) => [getComputedStyle(e).textOverflow, e.scrollWidth > e.clientWidth, Math.round(e.getBoundingClientRect().height)]);
+  expect(name[0]).toBe("ellipsis");
+  expect(name[1]).toBe(true);
+  expect(name[2]).toBeLessThanOrEqual(20);
 });
 
 test("+ lists the agent CLIs with their marks; missing ones are disabled", async ({ page }) => {

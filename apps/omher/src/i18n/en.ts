@@ -66,6 +66,12 @@ export const en = {
   "plans.open": "Open plan {name}",
   "plans.graph": "Plan graph",
 
+  // chat (the chat column's own words)
+  "chat.noBots": "No bots yet",
+  "chat.noBotsHint": "A bot is a Hermes profile. Add one with + at the top left, or create one:",
+  "chat.pick": "Pick a bot",
+  "chat.connecting": "Connecting to Hermes…",
+
   // skills (the composer's ./ picker)
   "skills.label": "Skills",
   "skills.none": "No skill matches",
