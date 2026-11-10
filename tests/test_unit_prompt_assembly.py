@@ -54,7 +54,7 @@ MODELS = (
     ("gpt-6.1-sol-pro", "gpt"),
     ("deepseek-v4.1-flash", "deepseek"),
     ("claude-sonnet-5-5", "claude"),
-    ("claude-fable-5-1", "claude"),
+    ("claude-fable-5-2", "claude"),
 )
 # The live variants `_dispatch_unit` can produce, plus the two it never pairs
 # (repair without a sidecar contract, and repair with a parent decision) so a
@@ -219,7 +219,7 @@ class BlockNameGoldenTests(unittest.TestCase):
     """What each path sends, as a readable list rather than a digest."""
 
     GOLDEN_NAMES = {
-        "recovery|claude-code|review|max|claude-fable-5-1": (
+        "recovery|claude-code|review|max|claude-fable-5-2": (
             *_HEAD, *_FRAME, *_CRITERIA, "unit.review_role", "unit.calibration[claude]",
             "unit.domain_bundle", "tail.commit",
         ),
@@ -389,7 +389,7 @@ class PromptCeilingTests(unittest.TestCase):
         )
 
     def test_each_redispatch_section_stays_under_its_derived_ceiling(self) -> None:
-        unit = _worst_case_unit("claude-fable-5-1", "claude")
+        unit = _worst_case_unit("claude-fable-5-2", "claude")
         route = unit["handoff"]["model_route"]  # type: ignore[index]
         base = assemble_unit_prompt(unit, GOAL * 3, route=route, binding=_WORST_BINDING, discovery=_WORST_DISCOVERY)
         for name, extra in (

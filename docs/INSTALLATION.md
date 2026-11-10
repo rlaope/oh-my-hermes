@@ -2479,17 +2479,17 @@ The shipped catalog is editorial policy, not benchmark output:
 <!-- omh:model-chain-table:begin (generated: uv run python -m omh.cli docs chain-table; source: src/coding/model_recommendations.py) -->
 | Surface | What it is for | Shipped editable order |
 | --- | --- | --- |
-| Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.1, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
-| `ultrabrain` | Deepest reasoning | Claude Fable 5.1 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
+| Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
+| `ultrabrain` | Deepest reasoning | Claude Fable 5.2 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
 | `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.1 Sol (`high`), Kimi K3.1 Pro (`high`) |
-| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.1 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
+| `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.2 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
 | `unspecified-high` | Default working model | GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
 | `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.1 Sol (`low`), Claude Sonnet 5.5 (`low`) |
 | `quick` | Short tasks | GLM 5.3 Flash (`low`), GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), Kimi K3.1 Pro (`low`) |
 | `writing` | Prose and docs | Claude Opus 5.5 (`medium`), Claude Sonnet 5.5 (`medium`), Kimi K3.1 Pro (`medium`), Gemini 4 Argon (`medium`) |
-| `visual-engineering` | Frontend and visual | Claude Opus 5.5 (`high`), Claude Fable 5.1 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
-| `artistry` | Unconventional work | Gemini 4 Argon (`high`), Claude Opus 5.5 (`high`), Claude Fable 5.1 (`high`), Kimi K3.1 Pro (`high`) |
-| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`), Claude Fable 5.1 (`medium`), Kimi K3.1 Pro (`medium`) |
+| `visual-engineering` | Frontend and visual | Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
+| `artistry` | Unconventional work | Gemini 4 Argon (`high`), Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Kimi K3.1 Pro (`high`) |
+| `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
 | `simple-work` | Small everyday tasks | GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), DeepSeek V4.1 Flash (`low`) |
 | `deep-work` | Long tasks at frontier depth | Claude Opus 5.5 (`max`), GPT-6.1 Sol (`max`) |
 | `google-search` | Research grounded in Google Search | Gemini 4 Argon (`medium`), GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`) |

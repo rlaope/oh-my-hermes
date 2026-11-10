@@ -472,7 +472,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Merged with the plain-words branch: build-failure-triage, code-review, commit-pr-authoring and
         # release-cut read verdicts and labels in plain words; that branch's pin was d76164cd...91a7, and
         # main's was 4713baa9...5447.
-        self.assertEqual(_digest(legacy_hashes), '60cd6ed24438d8f549e70755eb063feb4198c476e1109cc01d4b03afc328a81b')
+        # model-setup's chain sentence then names Fable 5.2 in every Fable 5.1 slot and lists Fable 5.1 among
+        # the superseded generations; only model-setup moves, and the pin before it was 60cd6ed2...a81b (main after the plain-words merge).
+        self.assertEqual(_digest(legacy_hashes), '36307b126217a856458766a33b9e875b51ad7ba4a1b7e912dd530537266569c2')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

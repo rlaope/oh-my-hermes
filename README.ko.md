@@ -85,6 +85,15 @@ omh setup
   <img src="assets/omh-dag-ulw-tui.gif" alt="/dag-ulw를 실행하는 OMH TUI: 프롬프트를 입력하면 레인 7개의 박스 그래프가 정의되고, 레인이 Claude Opus 5.5, GPT-6.1 Sol, DeepSeek V4.1 Flash, GLM 5.3, Kimi K3.1 Pro로 레이어마다 실행된 뒤 모두 accepted로 끝납니다" width="900">
 </p>
 
+> **기반 프로젝트**
+>
+> <table>
+> <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
+> <td><a href="https://nousresearch.com">Nous Research</a>의 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH가 돌아가는 에이전트입니다. OMH는 그 위의 비공식 독립 레이어입니다.</td></tr>
+> <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
+> <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a>의 <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b><br>ultrawork 컨셉의 출발점입니다. OMH는 이 컨셉을 Hermes로 가져왔습니다.</td></tr>
+> </table>
+
 > [!TIP]
 > 함께해요!
 >

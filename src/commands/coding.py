@@ -4088,7 +4088,7 @@ def _add_coding_commands(sub) -> None:
     composition_guide.add_argument(
         "--model",
         default=None,
-        help="The main agent's own model id (for example claude-fable-5-1, gpt-5.6-sol, kimi-k3); omit to list all families.",
+        help="The main agent's own model id (for example claude-fable-5-2, gpt-5.6-sol, kimi-k3); omit to list all families.",
     )
     composition_guide.add_argument(
         "--executor",

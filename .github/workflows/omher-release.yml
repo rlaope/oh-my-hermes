@@ -5,6 +5,11 @@ name: omher release
 # (`signingIdentity: "-"`), Windows installers are unsigned. The README tells people how to open them
 # the first time (right-click > Open on macOS, "More info > Run anyway" on Windows SmartScreen).
 #
+# In-app updates: each build also makes the updater bundle (macOS `.app.tar.gz`, the Windows NSIS setup exe)
+# and its `.sig`, signed with the TAURI_SIGNING_PRIVATE_KEY secret whose public half is pinned in
+# tauri.conf.json. The release job writes latest.json and keeps it on a rolling `omher-latest` prerelease,
+# the one fixed URL the app checks (omher releases are not the repo's "latest", which stays OMH's package).
+#
 # Cut a release by pushing a tag `omher-vX.Y.Z` whose version matches apps/omher/src-tauri/tauri.conf.json,
 # or run this workflow by hand on an existing tag.
 
@@ -71,6 +76,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         working-directory: apps/omher
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
       - name: Collect the installers
         run: |
@@ -78,9 +86,15 @@ jobs:
           b="apps/omher/src-tauri/target/${{ matrix.target }}/release/bundle"
           v="${TAG#omher-v}"
           case "${{ matrix.label }}" in
-            macos-*) cp "$b"/dmg/*.dmg "$out/omher-$v-${{ matrix.label }}.dmg" ;;
+            macos-*)
+              cp "$b"/dmg/*.dmg "$out/omher-$v-${{ matrix.label }}.dmg"
+              # the in-app updater's bundle and its signature
+              cp "$b"/macos/*.app.tar.gz "$out/omher-$v-${{ matrix.label }}.app.tar.gz"
+              cp "$b"/macos/*.app.tar.gz.sig "$out/omher-$v-${{ matrix.label }}.app.tar.gz.sig" ;;
             windows-*)
               cp "$b"/nsis/*.exe "$out/omher-$v-${{ matrix.label }}-setup.exe"
+              # the updater installs the NSIS setup exe itself, verified against this signature
+              cp "$b"/nsis/*.exe.sig "$out/omher-$v-${{ matrix.label }}-setup.exe.sig"
               cp "$b"/msi/*.msi "$out/omher-$v-${{ matrix.label }}.msi" ;;
           esac
           ls -la "$out"
@@ -111,9 +125,37 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Updater manifest (latest.json)
+        working-directory: dist
+        run: |
+          v="${TAG#omher-v}"
+          python3 - "$v" "$TAG" "$GH_REPO" <<'PY'
+          import datetime, json, pathlib, sys
+          v, tag, repo = sys.argv[1:]
+          base = f"https://github.com/{repo}/releases/download/{tag}"
+          files = {
+              "darwin-aarch64": f"omher-{v}-macos-arm64.app.tar.gz",
+              "darwin-x86_64": f"omher-{v}-macos-x64.app.tar.gz",
+              "windows-x86_64": f"omher-{v}-windows-x64-setup.exe",
+          }
+          platforms = {}
+          for key, name in files.items():
+              assert pathlib.Path(name).is_file(), name
+              sig = pathlib.Path(name + ".sig").read_text(encoding="utf-8").strip()
+              assert sig, name + ".sig is empty"
+              platforms[key] = {"signature": sig, "url": f"{base}/{name}"}
+          manifest = {
+              "version": v,
+              "notes": f"omher {v}",
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": platforms,
+          }
+          pathlib.Path("latest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          PY
+          cat latest.json
       - name: Checksums
         working-directory: dist
-        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+        run: sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Create or update the release
         run: |
           v="${TAG#omher-v}"
@@ -132,4 +174,16 @@ jobs:
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* --title "omher $v" --notes-file notes.md --latest=false
+          fi
+      - name: Point the in-app updater at this release
+        run: |
+          # The app checks releases/download/omher-latest/latest.json. Keep that one asset current; the
+          # pointer is a prerelease so it never becomes the repo's latest release.
+          if gh release view omher-latest >/dev/null 2>&1; then
+            gh release upload omher-latest dist/latest.json --clobber
+          else
+            sha=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
+            gh release create omher-latest dist/latest.json --target "$sha" --prerelease --latest=false \
+              --title "omher (latest pointer)" \
+              --notes "Holds latest.json for omher's in-app updater. Download omher from the omher-v* releases."
           fi
