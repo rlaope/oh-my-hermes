@@ -11,9 +11,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPE, type ReactNode } from "react";
 import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
-import { AgentIcon, ModelIcon } from "../ui";
+import { AgentIcon, ModelIcon, PrIcon } from "../ui";
 import { boxText, durationOf, estimate, factsOf, GEOMETRY, layoutBoxes, movedLines, statusOf, titleOf, titleParts, type BoxLayout, type Mark, type Measure, type Rect, type StatusIcon } from "./boxView";
 import { reducedMotion } from "./format";
+import { openPr, prLabel, prLink, prState, prText } from "./pr";
+import type { NodePr } from "../lib/runs";
 
 export type GraphMode = "panel" | "full";
 export interface BotModel {
@@ -105,6 +107,34 @@ export function NodeMark({ mark }: { mark: Mark | null }) {
   return (
     <span className="bx-mk" data-testid="node-mark" data-mark={mark.id} data-kind={mark.kind}>
       {mark.kind === "model" ? <ModelIcon model={mark.model} provider={mark.provider} size={GEOMETRY.mark} /> : <AgentIcon id={mark.id} size={GEOMETRY.mark} />}
+    </span>
+  );
+}
+
+/** The PR a node opened, at the end of its status line: GitHub's state mark in GitHub's colour, then "#2746" in the
+ *  muted text colour. A click opens the PR's page in the browser and never selects the node or starts a drag. */
+export function NodePrMark({ pr }: { pr: NodePr }) {
+  const url = prLink(pr);
+  const state = prState(pr);
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+  return (
+    <span
+      className={`bx-pr${url ? " link" : ""}`}
+      data-testid="node-pr"
+      data-state={state}
+      data-number={pr.number}
+      role={url ? "link" : undefined}
+      title={url ? `${prText(pr)} · ${t("pr.onGithub", { pr: prLabel(pr) })}` : prText(pr)}
+      onPointerDown={stop}
+      onPointerUp={stop}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        openPr(pr);
+      }}
+    >
+      <PrIcon state={state} size={GEOMETRY.icon} />
+      <span className="bx-prn">{prLabel(pr)}</span>
     </span>
   );
 }
@@ -441,7 +471,7 @@ export function RunGraph({
             data-tone={tx.tone}
             data-appear={b.index}
             aria-pressed={n.id === open}
-            aria-label={[tx.title, tx.factsText, status].filter(Boolean).join(", ")}
+            aria-label={[tx.title, tx.factsText, status, n.pr ? `PR ${prText(n.pr)}` : ""].filter(Boolean).join(", ")}
             title={tx.title}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -482,6 +512,7 @@ export function RunGraph({
                   {x}
                 </span>
               ))}
+              {tx.pr && <NodePrMark pr={tx.pr} />}
             </span>
           </button>
         );

@@ -37,7 +37,8 @@ async fn bridge_status(shell: State<'_, Shell>) -> Result<BridgeStatus, String> 
     Ok(shell.bridge.status())
 }
 
-/// Open a thread in its own app. Only Slack / Discord / Telegram links: omher never opens arbitrary URLs.
+/// Open a thread in its own app. Only Slack / Discord / Telegram links, and a plan node's GitHub pull request:
+/// omher never opens arbitrary URLs.
 /// The system opener (`open` on macOS, the shell's URL handler on Windows, `xdg-open` on Linux) hands the
 /// link to the person's own Slack / Discord / browser.
 #[tauri::command]
@@ -89,7 +90,28 @@ pub(crate) fn allowed_external(url: &str) -> bool {
         "https://t.me/",
     ];
     !url.chars().any(|c| c.is_whitespace() || c.is_control())
-        && PREFIXES.iter().any(|p| url.starts_with(p))
+        && (PREFIXES.iter().any(|p| url.starts_with(p)) || github_pr_url(url))
+}
+
+/// `https://github.com/<owner>/<repo>/pull/<n>` and nothing after it: the pull request a plan node opened (the
+/// Plans graph's `#2746`), shown in the browser when the person clicks it.
+pub(crate) fn github_pr_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://github.com/") else { return false };
+    let parts: Vec<&str> = rest.split('/').collect();
+    let name = |s: &str, first: bool| {
+        !s.is_empty()
+            && s.len() <= 100
+            && s != "."
+            && s != ".."
+            && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || (!first && (c == '_' || c == '.')))
+    };
+    parts.len() == 4
+        && name(parts[0], true)
+        && name(parts[1], false)
+        && parts[2] == "pull"
+        && !parts[3].is_empty()
+        && parts[3].len() <= 7
+        && parts[3].bytes().all(|b| b.is_ascii_digit())
 }
 
 /// The line the first-run screen shows as what Install will run.
@@ -390,6 +412,27 @@ mod tests {
         assert!(!allowed_external("file:///etc/passwd"));
         assert!(!allowed_external("https://discord.com/channels/1 --args"));
         assert!(!allowed_external("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn opens_a_github_pull_request_and_nothing_else_on_github() {
+        assert!(allowed_external("https://github.com/rlaope/oh-my-hermes/pull/2746"));
+        assert!(allowed_external("https://github.com/o-1/r_e.po/pull/1"));
+        for bad in [
+            "https://github.com/rlaope/oh-my-hermes/pull/2746/files",
+            "https://github.com/rlaope/oh-my-hermes/pull/2746?x=1",
+            "https://github.com/rlaope/oh-my-hermes/issues/2746",
+            "https://github.com/rlaope/oh-my-hermes/pull/",
+            "https://github.com/rlaope/oh-my-hermes/pull/27x",
+            "https://github.com/rlaope/../pull/1",
+            "https://github.com/_x/r/pull/1",
+            "https://github.com.evil.example/o/r/pull/1",
+            "http://github.com/o/r/pull/1",
+            "https://github.com/o/r/pull/1 --args",
+            "https://github.com/settings/tokens",
+        ] {
+            assert!(!allowed_external(bad), "{bad}");
+        }
     }
 
     #[test]

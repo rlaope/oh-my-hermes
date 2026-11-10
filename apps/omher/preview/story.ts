@@ -8,7 +8,7 @@
 import { getStore } from "../src/state/store";
 import { getSessions } from "../src/sessions/sessions";
 import type { AgentId } from "../src/sessions/agents";
-import { away, history, hooks, kamiSeed, nowS, runs } from "./host";
+import { away, history, hooks, kamiSeed, nowS, PR_REPO, runs } from "./host";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -36,6 +36,8 @@ const NODES: [string, string, string[], string, string, string, string, string?]
   ["contrast", "Contrast check", ["page-styles", "code-colors"], "DeepSeek V4.1", "deepseek", "high", "review"],
   ["verify-pr", "Verify and open PR", ["contrast"], "Sonnet 5.5", "claude-proxy", "high", "", "omp"],
 ];
+// the pull request each part opens, once it has started (GitHub's state for it: host.ts PR_STATES)
+const PR: Record<string, number> = { "color-tokens": 2353, "theme-toggle": 2352, "page-styles": 2359, "code-colors": 2360 };
 const SUMMARY: Record<string, string> = {
   "color-tokens": "12 light/dark token pairs in theme.css.",
   "theme-toggle": "A toggle in the header; it remembers the choice and follows the system theme.",
@@ -76,6 +78,7 @@ function pushRun(state = "running") {
       ...(s.started ? { started: s.started, attempts: [{ n: 1, outcome: s.state === "done" ? "accepted" : "open", started: s.started, ...(s.ended ? { ended: s.ended } : {}) }] } : { attempts: [] }),
       ...(s.ended ? { ended: s.ended } : {}),
       ...(s.state === "done" ? { summary: SUMMARY[id] } : {}),
+      ...(s.started && PR[id] ? { pr: { number: PR[id], repo: PR_REPO, url: `https://github.com/${PR_REPO}/pull/${PR[id]}` } } : {}),
     };
   });
   runs.live = { id: RUN, kind: "dag", owner: { type: "bot", id: "kami" }, title: "Docs dark mode", goal: "Add dark mode to the docs site and open a PR.", state, started: runStarted, updated: t, nodes, ...(state === "done" ? { ended: t } : {}) };

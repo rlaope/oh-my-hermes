@@ -34,7 +34,7 @@ import type {
   AccountGroup,
   Skill,
 } from "../lib/protocol";
-import type { AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
+import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
 
 export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
@@ -1023,6 +1023,8 @@ export interface Actions {
   /** Runs tab reads (read-only: nothing here retries or cancels a run). */
   runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
   runsGet(bot: string, run: string): Promise<RunDetail>;
+  /** The GitHub state of the PRs a run's nodes name (the bridge asks `gh`, apart from `runsGet`). */
+  runsPrs(bot: string, run: string): Promise<{ prs: Record<string, NodePr> }>;
   runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
   /** Subscription usage meters (sidebar); the meter keeps its own copy. */
   usage(): Promise<{ providers: UsageProvider[] }>;
@@ -1442,6 +1444,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     readMedia: (bot, path, info) => bridge.request("media.read", info ? { bot, path, info } : { bot, path }),
     runsList: (bot) => bridge.request("runs.list", { bot }),
     runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
+    runsPrs: (bot, run) => bridge.request("runs.prs", { bot, run }),
     runsCli: (params = {}) => bridge.request("runs.cli", params),
     usage: () => bridge.request("usage.read", {}),
     accounts: () => bridge.request("accounts.list", {}),

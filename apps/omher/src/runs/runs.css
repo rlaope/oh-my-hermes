@@ -507,6 +507,29 @@
 .bx-t {
   color: var(--muted);
 }
+/* the PR the node opened, at the end of the status line: GitHub's state mark in its colour (ui.css .pr-ic), the
+   number in the muted text colour. Plain text, no chip; underlined under the pointer when it opens the PR */
+.bx-status:has(.bx-pr) {
+  display: flex;
+  align-items: center;
+}
+.bx-pr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* GEOMETRY.prIconGap */
+  margin-left: auto;
+  padding-left: 10px; /* GEOMETRY.prGap */
+  color: var(--muted);
+}
+.bx-pr.link {
+  cursor: pointer;
+}
+.bx-pr.link:hover .bx-prn {
+  color: var(--body);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .bx-dim {
   color: var(--quiet);
 }
@@ -921,6 +944,21 @@
   font-weight: 600;
 }
 /* what ran the node, as its box says it: the model's mark, then model · effort · category */
+.rn-pr,
+.rn-pr a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.rn-pr a {
+  text-decoration: none;
+}
+.rn-pr a:hover {
+  color: var(--body);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .rn-ran {
   display: inline-flex;
   align-items: center;

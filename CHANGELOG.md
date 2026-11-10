@@ -87,6 +87,16 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher: each plan part shows the pull request it opened.** A node's
+  status line ends with GitHub's own pull request mark in GitHub's colour
+  (open green, merged purple, closed red, draft gray) and the number, `#2746`,
+  in the muted text colour; the part's detail says `#2746 · Merged`. A click on
+  the number opens the PR in the browser and does not select the node. omher
+  finds the number in the part's reasons, summary or handoff, and asks the
+  person's own GitHub CLI for the state (`gh pr view`, kept 5 minutes, 3 s at
+  most), apart from the plan, so the graph never waits on GitHub. Without
+  `gh`, a login or the network the number shows with no state colour.
+  BOUNDARY rule 21 states this one read.
 - **omher 0.2.2.** Codex from the ChatGPT app counts as installed, and an
   empty SESSIONS section is one quiet row.
   - **Codex.** On macOS, the Codex CLI inside the ChatGPT or Codex desktop app
