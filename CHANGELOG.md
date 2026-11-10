@@ -22,6 +22,19 @@ All notable changes will be documented here.
   Releases page (or the `omher@beta` one-liner), and every release after
   that arrives through the button.
 
+- **The OMH TUI queues what you send during a turn, commands too.** Enter
+  during a turn now always waits for the turn's end, whatever Hermes'
+  `display.busy_input_mode` says, so a config set to `interrupt` no longer
+  stops the turn and the `ctrl+enter to send now · ↑ to edit` row shows
+  under a queued prompt. A slash command typed during a turn waits in the same
+  queue and runs in order when the turn ends (a prompt after a `/compress`
+  goes once Hermes has answered it); only `/stop`, `/steer`, `/queue`, `/btw`,
+  `/bg`, `/gateway`, `/quit` and the commands about this terminal run at once.
+  Interrupting is Esc or `/stop`, never Enter, and the send-now key never sends
+  a queued command into the turn. One Esc now stops a running turn even with a
+  draft typed, as in Claude Code, and the draft stays in the composer (vim
+  mode keeps Esc Esc; Ctrl+C still clears the draft first).
+
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their
   questions and approvals join the bots' asks in a "needs you" strip that ⌘J

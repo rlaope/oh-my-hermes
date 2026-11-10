@@ -18,7 +18,7 @@ from test_tui_app import info_row_of
 from test_tui_choice_ui import armed, press
 from test_tui_modes import SID, answer, drawn, make_app, notices, type_text
 from test_tui_questions import COLOUR, TELL_APPROVAL
-from omh.tui.app import EXIT_CONFIRM_SECONDS, EXIT_HINT, INTERRUPTING, QUEUE_HELD_HINT, QueuedLine, Rewind, queue_lines
+from omh.tui.app import EXIT_CONFIRM_SECONDS, UnsentPrompt, EXIT_HINT, INTERRUPTING, QUEUE_HELD_HINT, QueuedLine, Rewind, queue_lines
 from omh.tui.gateway import Event
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
 from omh.tui.theme import DEFAULT_THEME
@@ -36,6 +36,76 @@ def running(*queued: QueuedLine):
 
 def submitted(client) -> list[str]:
     return [params["text"] for params in client.named("prompt.submit")]
+
+
+class EscWithADraftTests(unittest.TestCase):
+    """Enter queues during a turn, so Esc is the one-key stop, as in Claude Code: with a draft too, which stays."""
+
+    def test_esc_with_a_draft_during_a_turn_interrupts_and_keeps_the_draft(self) -> None:
+        app, client = running(QueuedLine("queued"))
+        type_text(app, "half a thought")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
+        self.assertEqual(app.composer.text, "half a thought")
+        self.assertIsNone(app.escape_armed)  # nothing armed: a second Esc does not clear the draft
+        app._on_event(INTERRUPTED)
+        self.assertEqual(app.composer.text, "half a thought")  # what was queued waits instead of joining it
+        self.assertEqual([line.text for line in app.queued], ["queued"])
+
+    def test_esc_over_a_draft_while_a_prompt_is_unsent_leaves_the_draft_and_queues_the_prompt(self) -> None:
+        # #2726 review: the unsent prompt (its images still staging) used to come back after the draft.
+        app, client = make_app()
+        app.unsent.append(UnsentPrompt("the staging prompt", ()))
+        app.turn_pending = True  # it started the turn; nothing reached Hermes yet
+        type_text(app, "my draft")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(app.composer.text, "my draft")
+        self.assertEqual([line.text for line in app.queued], ["the staging prompt"])
+        self.assertTrue(app.queue_held)  # no turn ends to send it: it waits for the person, Up takes it back
+        self.assertEqual(client.named("prompt.submit"), [])
+
+    def test_esc_with_a_draft_between_turns_interrupts_nothing_and_still_clears_on_the_second(self) -> None:
+        app, client = make_app()
+        type_text(app, "a draft")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(client.calls, [])
+        self.assertEqual(app.composer.text, "a draft")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual((client.calls, app.composer.text), ([], ""))
+
+    def test_esc_with_the_slash_menu_open_only_closes_it(self) -> None:
+        app, client = running()
+        type_text(app, "/he")
+        self.assertTrue(app._menu_entries())
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(client.named("session.interrupt"), [])
+        self.assertEqual(app.composer.text, "/he")
+        self.assertFalse(app._menu_entries())
+        app._on_input(Key(ESCAPE))  # the menu is closed: Esc is the interrupt again
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
+
+    def test_in_vim_mode_esc_still_takes_two_on_an_empty_composer_and_never_stops_a_turn_over_a_draft(self) -> None:
+        app, client = running()
+        app.composer.set_vim(True)
+        app._on_input(Key(ESCAPE))  # INSERT to NORMAL
+        app._on_input(Key(ESCAPE))  # arms
+        self.assertEqual(client.named("session.interrupt"), [])
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
+        drafted, drafted_client = running()
+        drafted.composer.set_vim(True)
+        type_text(drafted, "a draft")
+        for _ in range(3):
+            drafted._on_input(Key(ESCAPE))
+        self.assertEqual(drafted_client.named("session.interrupt"), [])
+
+    def test_ctrl_c_with_a_draft_during_a_turn_still_clears_it_first(self) -> None:
+        app, client = running()
+        type_text(app, "a draft")
+        app._on_input(CTRL_C)
+        self.assertEqual((client.named("session.interrupt"), app.composer.text), ([], ""))
+        app._on_input(CTRL_C)
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
 
 
 class InterruptingRowTests(unittest.TestCase):
