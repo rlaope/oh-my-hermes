@@ -479,12 +479,20 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 @property --reveal{syntax:"<number>";inherits:true;initial-value:1}
 @property --lit{syntax:"<number>";inherits:true;initial-value:0}
 .dlbeam{position:fixed;inset:0;width:100%;height:100%;z-index:51;pointer-events:none}
-.omher{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:calc(100svh - 8px);padding:112px var(--gut) clamp(160px,22vh,240px);text-align:center;overflow:hidden}
+.omher{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:calc(100svh - 8px);padding:var(--pt) var(--gut) clamp(160px,22vh,240px);text-align:center;overflow:hidden;overflow:clip;
+  /* the composition is sized by the viewport's height as well as its width: the title block on top, then the window with its centre
+     at ~60% of the screen on load and never taller than the screen allows; --top is where the window starts on load */
+  --pt:clamp(84px,11svh,112px);--tf:clamp(40px,min(6.4vw,8.5svh),96px);--gt:clamp(28px,5svh,56px);
+  --top:calc(var(--pt) + var(--tf) * .98 + 14px + clamp(17px,1.5vw,22px) * 1.35 + var(--gt));
+  --ww:max(320px,min(1180px,92vw,calc((119svh - 2 * var(--top)) * 1817 / 1109),calc((100svh - 230px) * 1817 / 1109)))}
 /* desktop: a tall block, so the window has room to rise into place as the page scrolls (beam.js) */
-@media (min-width:761px){.omher{min-height:165svh}}
+@media (min-width:761px){.omher{min-height:195svh}}
+/* the window and the download row ride together: they rise from the load position and settle with the window centred on the
+   screen, held there while the block scrolls (sticky), then leave with the block */
+.omher__stage{position:sticky;top:calc(50svh - var(--ww) * 1109 / 1817 / 2);z-index:2;order:1;width:100%;display:flex;flex-direction:column;align-items:center;margin-top:var(--gt)}
 .omher::before{content:"";position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px,linear-gradient(90deg,rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px;
-  -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
+  -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);opacity:.6}
 /* the seam into the OMH hero: one soft spectrum hairline */
 /* the seam into the OMH hero: no line; the light fades out above the breathing room and the page background carries on */
 /* The window slot. .omher__win[data-app-win] is the app window itself: beam.js lands the light on its box and draws the rim
@@ -492,15 +500,15 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
    media) say where the window sits inside the media, so the slot crops a composition down to the window alone; a clip that is
    only the window sets them to 0 0 1 1. --win-ar is the window's aspect ratio. Today's still is 2400x1239 with the window at
    14.167% 5.246% 75.708% x 89.508% (1817x1109); a new still at the same layout, or a video, is a markup and variable swap. */
-.omher__shot{position:relative;z-index:2;order:1;flex:none;width:var(--ww);max-width:100%;margin:clamp(96px,13svh,170px) auto 0;
-  --ww:min(1180px,90vw);--win-l:.14167;--win-t:.05246;--win-w:.75708;--win-h:.89508;--win-ar:1817 / 1109;--win-dy:0;--win-rot:0deg;
+.omher__shot{position:relative;z-index:2;flex:none;width:var(--ww);max-width:100%;margin:0 auto;
+  --win-l:.14167;--win-t:.05246;--win-w:.75708;--win-h:.89508;--win-ar:1817 / 1109;--win-dy:0;--win-rot:0deg;
   --reveal:1;--lit:0;--bx:80%;--gx:600px;--gy:300px;--glare:0;--hit:0;
   /* the one-time reveal under the light is a CSS transition, off the frame loop */
   transition:--reveal 1.3s cubic-bezier(.2,.7,.2,1),--lit 1.2s ease;
-  /* the scroll-rise: beam.js writes transform and opacity from scrollY in rAF; origin at the bottom centre */
-  transform-origin:50% 100%;will-change:transform,opacity}
+  /* the scroll-rise: beam.js writes transform and opacity from scrollY in rAF; origin at the window's centre */
+  transform-origin:50% 50%;will-change:transform,opacity}
 .omher__shot::before{content:"";position:absolute;left:-6%;right:-6%;top:-10%;bottom:-12%;z-index:-1;pointer-events:none;
-  background:radial-gradient(closest-side,rgba(164,108,245,.13),rgba(242,123,182,.05) 60%,transparent)}
+  background:radial-gradient(closest-side,rgba(255,95,162,.07),rgba(224,76,224,.03) 60%,transparent)}
 .omher__win{position:relative;display:block;width:100%;aspect-ratio:var(--win-ar);overflow:hidden;border-radius:7px;background:#0e0d12;
   box-shadow:0 0 0 1px rgba(255,255,255,.08),0 28px 70px -12px rgba(0,0,0,.7),0 10px 24px -8px rgba(0,0,0,.5)}
 .omher__win > picture img,.omher__win > img,.omher__win > video{position:absolute;display:block;max-width:none;object-fit:cover;
@@ -515,11 +523,9 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 @media (prefers-reduced-motion:reduce){.omher__win > video{display:none}}
 .omher__glow{position:absolute;inset:0;overflow:hidden;pointer-events:none;transform-origin:100% 0;transform:rotate(var(--win-rot));
   -webkit-mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%));mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%))}
-/* the window's top border lit in the spectrum where the light lands (beam.js draws the rim; this keeps it in the 2D/still paths) */
-.omher__glow::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:calc(var(--lit) * .22 + var(--hit) * .2);
-  background:radial-gradient(closest-side,rgba(255,255,255,.7),rgba(255,255,255,0)) var(--bx) 0/90px 2px no-repeat,linear-gradient(90deg,#b06bff,#e04ce0,#ff5fa2,#e04ce0,#b06bff) calc(var(--bx) - 240px) 0/480px 100% no-repeat;
-  -webkit-mask-image:radial-gradient(120px 400% at var(--bx) 0,#000 15%,transparent);mask-image:radial-gradient(120px 400% at var(--bx) 0,#000 15%,transparent);
-  box-shadow:0 0 10px rgba(255,255,255,.2)}
+/* the window's top edge: one crisp 1px highlight where the backlight catches it, brightest in the middle (no contact glow) */
+.omher__glow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;opacity:calc(var(--lit) * .85);
+  background:linear-gradient(90deg,rgba(186,160,240,0),rgba(214,170,232,.7) 20%,rgba(255,230,245,.95) 50%,rgba(214,170,232,.7) 80%,rgba(186,160,240,0))}
 /* glass: a faint spectrum sheen that sweeps across now and then, and a glare that follows the cursor */
 .omher__sheen{position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:screen;border-radius:6px;opacity:max(var(--glare),calc(var(--lit) * .9))}
 .omher__sheen::before{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:38%;transform:skewX(-18deg) translateX(0);
@@ -533,12 +539,12 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
   -webkit-mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent);mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent)}
 .omher__meta{position:relative;z-index:2;order:0;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:14px}
 /* the block's title: large, in the site's own type; the light pours past it onto the window */
-.omher__t{margin:0;min-height:0;font:650 clamp(44px,6.4vw,96px)/.98 var(--sans);letter-spacing:-.045em;color:var(--ink);text-shadow:0 2px 24px rgba(12,10,18,.55)}
+.omher__t{margin:0;min-height:0;font:650 var(--tf)/.98 var(--sans);letter-spacing:-.045em;color:var(--ink);text-shadow:0 2px 24px rgba(12,10,18,.55)}
 .omher__t span{color:var(--ink-2);font-weight:500}
-.omher__d{margin:0;font:450 clamp(17px,1.5vw,22px)/1.35 var(--sans);letter-spacing:-.005em;color:var(--ink-3)}
-.omher__act{position:relative;z-index:2;order:2;width:100%;display:flex;flex-direction:column;align-items:center}
-.omher__get{position:relative;z-index:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:24px auto 16px}
-@media (min-width:1100px){.omher__act{flex-direction:row;justify-content:center;gap:12px;margin-top:56px}.omher__act .omher__get,.omher__act .omher__cmd{margin:0}}
+.omher__d{margin:0;font:450 clamp(17px,1.5vw,22px)/1.35 var(--sans);letter-spacing:-.005em;color:var(--ink-2)}
+.omher__act{position:relative;z-index:2;width:100%;display:flex;flex-direction:column;align-items:center;margin-top:76px;opacity:var(--rise,1)}
+.omher__get{position:relative;z-index:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:0 auto 16px}
+@media (min-width:1100px){.omher__act{flex-direction:row;justify-content:center;gap:12px}.omher__act .omher__get,.omher__act .omher__cmd{margin:0}}
 .osbtn{display:inline-flex;align-items:center;gap:9px;height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--line-2);color:var(--ink);font:500 14px var(--sans);transition:border-color var(--fast),background var(--fast),transform var(--fast)}
 .osbtn:hover{border-color:var(--ink-3);background:rgba(255,255,255,.03)}
 .osbtn svg{width:16px;height:16px;fill:currentColor;flex:none}
@@ -557,7 +563,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
 .omher + .hero{align-items:flex-start;padding-top:88px}
 .omher + .hero::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;z-index:1;pointer-events:none;background:linear-gradient(var(--bg),rgba(12,10,18,0))}
 @media (max-width:600px){.omher__shot{--win-l:.03611;--win-t:.01625;--win-w:.92917;--win-h:.9675;--win-ar:669 / 774}}
-@media (max-width:760px){.omher{min-height:0;padding:96px 20px 40px}.omher__shot{--ww:min(350px,100%);margin:150px auto 0;transform:none!important;opacity:1!important;will-change:auto}.omher__meta{gap:10px}.omher__win{border-radius:6px}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__d{font-size:16px;max-width:330px}.osbtn{height:42px;justify-content:center}.omher + .hero{padding-top:72px}.omher__get{flex-direction:column;align-items:stretch;gap:10px;width:min(350px,100%);max-width:none;margin:28px auto 12px}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
+@media (max-width:760px){.omher{min-height:0;padding:96px 20px 40px;--ww:min(350px,100%)}.omher__stage{position:static;margin-top:150px}.omher__act{margin-top:0}.omher__shot{margin:0 auto;transform:none!important;opacity:1!important;will-change:auto}.omher__meta{gap:10px}.omher__win{border-radius:6px}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__d{font-size:16px;max-width:330px}.osbtn{height:42px;justify-content:center}.omher + .hero{padding-top:72px}.omher__get{flex-direction:column;align-items:stretch;gap:10px;width:min(350px,100%);max-width:none;margin:28px auto 12px}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
 </style>
 <script type="application/ld+json">
 {
@@ -644,7 +650,8 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
     <p class="omher__d" data-i18n="omher.desc">Your Hermes bots and coding agents, in one window.</p>
   </div>
   <!-- the window slot: the promo still today; a video element with a poster drops in here (set --win-l/t/w/h to 0 0 1 1 and --win-ar to the clip's ratio) -->
-  <figure class="omher__shot" data-app-shot><div class="omher__win" data-app-win data-app-slot><video data-app-film autoplay muted loop playsinline preload="metadata" poster="assets/omher-app.webp" width="2536" height="1310" aria-label="omher: the bots Kami, Friren, Juno and Pip; coding sessions web-app in Claude Code, api-server in Codex, mobile in pi, docs in oh-my-pi and infra in Grok; Kami's chat with replies from Slack and Discord and the ask to add dark mode to the docs; and the Plans tab with the dag-ulw graph of that work."><source src="assets/omher-app.webm" type="video/webm"><source src="assets/omher-app.mp4" type="video/mp4"></video><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: the bots Kami, Friren, Juno and Pip; coding sessions web-app in Claude Code, api-server in Codex, mobile in pi, docs in oh-my-pi and infra in Grok; Kami's chat with replies from Slack and Discord and the ask to add dark mode to the docs; and the Plans tab with the dag-ulw graph of that work." width="2400" height="1239" fetchpriority="high" decoding="async"></picture><span class="omher__sheen" aria-hidden="true"></span><span class="omher__glow" aria-hidden="true"></span></div></figure>
+  <div class="omher__stage" data-omher-stage>
+  <figure class="omher__shot" data-app-shot><div class="omher__win" data-app-win data-app-slot><video data-app-film autoplay muted loop playsinline preload="metadata" poster="assets/omher-app.webp" width="2536" height="1310" aria-label="omher: the bots Kami, Friren, Juno and Pip; coding sessions web-app in Claude Code, api-server in Codex, mobile in pi, docs in oh-my-pi and infra in Grok; Kami's chat with the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts, each a Hermes subagent; and the Plans panel drawing that plan as connected boxes, each part with the Hermes mark and its model, effort and category, the Codex and Claude Code lanes with a second mark."><source src="assets/omher-app.webm" type="video/webm"><source src="assets/omher-app.mp4" type="video/mp4"></video><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: the bots Kami, Friren, Juno and Pip; coding sessions web-app in Claude Code, api-server in Codex, mobile in pi, docs in oh-my-pi and infra in Grok; Kami's chat with the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts, each a Hermes subagent; and the Plans panel drawing that plan as connected boxes, each part with the Hermes mark and its model, effort and category, the Codex and Claude Code lanes with a second mark." width="2400" height="1239" fetchpriority="high" decoding="async"></picture><span class="omher__sheen" aria-hidden="true"></span><span class="omher__glow" aria-hidden="true"></span></div></figure>
   <div class="omher__act">
   <div class="omher__get" data-dl>
     <a class="osbtn osbtn--main" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="mac-arm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c.02 2.4 2.1 3.2 2.13 3.21-.02.06-.33 1.14-1.1 2.26-.66.97-1.35 1.93-2.43 1.95-1.06.02-1.4-.63-2.62-.63s-1.6.61-2.6.65c-1.04.04-1.84-1.05-2.5-2.01-1.36-1.97-2.4-5.57-1-8 .69-1.21 1.93-1.97 3.28-1.99 1.02-.02 1.99.69 2.62.69.62 0 1.8-.85 3.04-.73.52.02 1.98.21 2.92 1.58-.08.05-1.74 1.02-1.74 3.02M14.37 4.68c.56-.68.93-1.62.83-2.56-.8.03-1.77.53-2.35 1.21-.51.6-.97 1.56-.85 2.48.9.07 1.81-.46 2.37-1.13"/></svg>macOS (Apple silicon)</a>
@@ -652,6 +659,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
     <a class="osbtn" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="win-exe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.1 10.4 4v7.1H3zm0 13.8 7.4 1.1v-7H3zm8.3 1.2L21 21.5V13H11.3zm0-16.2V11.1H21V2.5z"/></svg>Windows</a>
   </div>
   <div class="omher__cmd" data-omher-cmd><div><span class="p">$</span><code>curl -fsSL https://omher.app/omher | sh</code></div><button class="copy" data-copy-text="curl -fsSL https://omher.app/omher | sh">Copy</button></div>
+  </div>
   </div>
 </section>
 
