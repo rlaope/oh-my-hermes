@@ -1070,15 +1070,16 @@ describe("the layout", () => {
     }
   }, 30_000);
 
-  it("gives every passing line a place of its own in runs up to 60 nodes at the panel's widths (an independent check's generator)", () => {
-    // the generator of the check that found two lines on one place in 54-60-node runs at 428px and 460px (its
-    // runs 11, 13, 27 and 47): one column of boxes at the comfortable width left the lines too little room beside
-    // them. Seeded: 10 to 60 nodes, some with many roots, some with one node that waits on most of the others
+  // the generator of the check that found two lines on one place in 54-60-node runs at 428px and 460px (its runs
+  // 11, 13, 27 and 47): one column of boxes at the comfortable width left the lines too little room beside them.
+  // Seeded: 10 to 60 nodes, some with many roots, some with one node that waits on most of the others. Its 80 runs
+  // are laid out in four tests of 20: one test of all 80 keeps the worker busy past vitest's RPC timeout on a slow
+  // CI runner (it took 73 s on windows-latest), which fails the run though every test passed
+  const checkRuns = (() => {
     let seed = 12345;
-    let shared = 0; // the layouts in which lines share a place
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const states: RunNode["state"][] = ["done", "running", "failed", "waiting", "done", "cancelled", "parked", "blocked"];
-    for (let k = 0; k < 80; k++) {
+    return Array.from({ length: 80 }, () => {
       const n = 10 + Math.floor(rnd() * 51);
       const p = 0.05 + rnd() * 0.25;
       const roots = rnd() < 0.4 ? 2 + Math.floor(rnd() * 14) : 1;
@@ -1099,23 +1100,33 @@ describe("the layout", () => {
           }),
         );
       }
-      // the two panel widths for every run; the full view for every fourth
-      for (const [width, stretch] of [
-        [428, 1],
-        [460, 1],
-        ...(k % 4 ? [] : [[1136, 1.25]]),
-      ]) {
-        const l = lay(dag(nodes), width, { stretch });
-        const what = `run ${k} (${n} nodes${hub ? ", one waits on most" : ""}) at ${width}px`;
-        expect(l.crowded - l.shared, what).toBe(l.heads.filter((h) => l.tight.includes(h.to)).length); // what is crowded besides is the lines into a tight child
-        if (width > 600) expect(l.shared, what).toBe(0);
-        sharesOnlyAtTwoToARow(l, what);
-        shared += l.shared ? 1 : 0;
+      return { n, hub, nodes };
+    });
+  })();
+  let checkShared = 0; // the panel layouts of this generator in which lines share a place
+  for (let part = 0; part < 4; part++)
+    it(`gives every passing line a place of its own in runs up to 60 nodes at the panel's widths (an independent check's generator, runs ${part * 20}-${part * 20 + 19})`, () => {
+      for (let k = part * 20; k < part * 20 + 20; k++) {
+        const { n, hub, nodes } = checkRuns[k];
+        // the two panel widths for every run; the full view for every fourth
+        for (const [width, stretch] of [
+          [428, 1],
+          [460, 1],
+          ...(k % 4 ? [] : [[1136, 1.25]]),
+        ]) {
+          const l = lay(dag(nodes), width, { stretch });
+          const what = `run ${k} (${n} nodes${hub ? ", one waits on most" : ""}) at ${width}px`;
+          expect(l.crowded - l.shared, what).toBe(l.heads.filter((h) => l.tight.includes(h.to)).length); // what is crowded besides is the lines into a tight child
+          if (width > 600) expect(l.shared, what).toBe(0);
+          sharesOnlyAtTwoToARow(l, what);
+          checkShared += l.shared ? 1 : 0;
+        }
       }
-    }
-    // of the 160 panel layouts of this generator (its densest runs, 48 nodes and up at two boxes to a row)
-    expect(shared).toBeLessThanOrEqual(18);
-  }, 120_000);
+    }, 120_000);
+  it("shares a place in few of that generator's panel layouts: its densest runs, 48 nodes and up at two boxes to a row", () => {
+    // of its 160 panel layouts (the four tests above ran first: vitest runs a file's tests in order)
+    expect(checkShared).toBeLessThanOrEqual(18);
+  });
 
   it("calls a child tight when more lines lead into it than its top edge holds an arrowhead apart, and only then", () => {
     // each parent has a child of its own too, so each is a net of its own into z. A 120px box holds 92px of points
