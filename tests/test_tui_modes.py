@@ -3383,6 +3383,11 @@ class ShiftTabWhileYoloCallOutTests(unittest.TestCase):
         self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
         self.assertEqual(app.mode, MODE_ACCEPT)  # approvals may be off: shown, and nothing more is sent
         self.assertNotIn("…", info_of(app))
+        # The press made during it (to accept all) is gone: a fresh press goes from accept to plan, and nothing after.
+        app._on_input(SHIFT_TAB)
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_PLAN)
 
     def test_a_single_press_still_waits_for_hermes_before_the_mode_changes(self) -> None:
         app, client = make_app()
