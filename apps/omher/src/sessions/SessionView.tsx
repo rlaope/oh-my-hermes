@@ -15,6 +15,7 @@ import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
 import { agentDef, terminalNote, tildePath, type SessionRec } from "./agents";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
+import { t } from "../i18n";
 
 // Matched to omher's tokens (--bg, --body, --ink) so the terminal reads as part of the page.
 const DARK: ITheme = {
@@ -106,15 +107,22 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
     running: !!chat?.turn,
   };
   const ended = rec.status === "exited" || rec.status === "failed";
-  const offlineText =
-    rec.status === "failed" ? `${label} could not start` : rec.status === "starting" ? `Starting ${label}…` : `${label} has ended`;
+  const offlineText = rec.paused
+    ? `${label} is paused`
+    : rec.status === "failed"
+      ? `${label} could not start`
+      : rec.status === "starting"
+        ? `Starting ${label}…`
+        : `${label} has ended`;
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   // one element per chat: the bubbles are memoized on it
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
       <Timeline bot={bot} face={face} />
-      {ended && (
+      {rec.paused ? (
+        <Paused rec={rec} />
+      ) : ended && (
         <div className="ss-ended" role="status" data-testid="session-ended">
           <span className="ss-ended-t" title={why || undefined}>
             {rec.status === "failed" ? "Could not start" : "Ended"}
@@ -141,6 +149,37 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         onSend={(t) => void getSessions().send(rec.id, t)}
         onStop={() => void getSessions().interrupt(rec.id)}
       />
+    </div>
+  );
+}
+
+/** A session that was running when omher restarted and does not continue by itself: one line and Resume, which
+ *  starts it again in the same folder (and account). */
+function Paused({ rec }: { rec: SessionRec }) {
+  const label = agentDef(rec.agent).label;
+  return (
+    <div className="ss-ended" role="status" data-testid="session-paused">
+      <span className="ss-ended-t">{t("resume.paused")}</span>
+      <button
+        type="button"
+        className="ss-restart"
+        onClick={() => void getSessions().resume(rec.id)}
+        title={t("resume.resumeTip", { agent: label })}
+        data-testid="session-resume"
+      >
+        {t("resume.resume")}
+      </button>
+    </div>
+  );
+}
+
+/** A restored terminal session that is not running: no terminal is started until the person asks. */
+function TerminalIdle({ rec }: { rec: SessionRec }) {
+  const label = agentDef(rec.agent).label;
+  return (
+    <div className="pane ss-chat ss-idle" data-testid="session-idle">
+      <div className="chat-empty">{rec.paused ? null : `${label} ended`}</div>
+      {rec.paused && <Paused rec={rec} />}
     </div>
   );
 }
@@ -237,8 +276,9 @@ export function SessionView() {
   const turn = !!c?.turn;
   // an approval or question of this chat is still open (the Needs-you model: answered, expired or its turn over closes it)
   const needs = !!chatKey && selectAsks(s).some((a) => a.bot === chatKey);
-  const status =
-    rec.view === "terminal" && canToggle
+  const status = rec.paused
+    ? t("resume.pausedShort")
+    : rec.view === "terminal" && canToggle
       ? "Terminal view"
       : rec.status === "exited" && rec.exitCode
         ? `Ended · exit ${rec.exitCode}`
@@ -285,7 +325,13 @@ export function SessionView() {
           </div>
         )}
       </header>
-      {showChat ? <ChatPane rec={rec} chatKey={chatKey!} /> : <TerminalPane key={`${rec.id}-term`} rec={rec} />}
+      {showChat ? (
+        <ChatPane rec={rec} chatKey={chatKey!} />
+      ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
+        <TerminalIdle rec={rec} />
+      ) : (
+        <TerminalPane key={`${rec.id}-term`} rec={rec} />
+      )}
     </>
   );
 }

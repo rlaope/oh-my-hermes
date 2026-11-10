@@ -6,6 +6,7 @@ import { noteFor, showNote, windowWatched } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { toWire } from "../chat/parts/skillTokens";
+import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import type {
   Away,
   ApprovalChoice,
@@ -515,6 +516,8 @@ export type Action =
   | { type: "ui.hide"; bot: string; on: boolean }
   | { type: "ui.focusAsk"; bot: string; id: string }
   | { type: "ui.session"; id: string | null }
+  /** After a restart: the panel, Plans view and open session as they were (resume.ts). */
+  | { type: "ui.restore"; ui: Pick<Ui, "panelOpen" | "panelTab" | "runsFull" | "runId"> & { session: string | null } }
   /** Drop a chat that is gone for good (a closed SESSIONS chat): its open asks go with it. */
   | { type: "chat.forget"; bot: string };
 
@@ -830,6 +833,10 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) =>
         withItems(c, [...c.items, { kind: "system", id: `system-${a.now}-${c.items.length}`, ts: a.now / 1000, text: a.text }]),
       );
+    case "ui.restore": {
+      const { session, ...rest } = a.ui;
+      return { ...state, ui: { ...state.ui, ...rest, ...(session ? { view: "session" as const, session } : {}) } };
+    }
     case "ui.session":
       return a.id
         ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
@@ -1038,6 +1045,8 @@ export interface Actions {
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
 
 export interface Store {
+  /** Settles once init has put back what was saved before a restart (or found nothing to put back). */
+  resumed: Promise<void>;
   getState(): AppState;
   /** State plus actions, one stable object per state version (for useSyncExternalStore). */
   getSnapshot(): AppState & Actions;
@@ -1066,6 +1075,8 @@ export interface StoreOptions {
    *  loaded; the app uses them for sounds. */
   onAction?: (a: Action, state: AppState) => void;
   onSettled?: () => void;
+  /** The snapshot saved before omher last closed (resume.ts), read once the bot list is known. */
+  resume?: () => ResumeSnap | null;
 }
 
 /** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
@@ -1082,6 +1093,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   let localSeq = 0;
   let snapshot: (AppState & Actions) | null = null;
   let started = false;
+  let markResumed: () => void = () => {};
+  const resumed = new Promise<void>((r) => (markResumed = r));
   const eventFns = new Set<(ev: BridgeEvent) => void>();
   // skills.list per bot: the promise (asked once) and the names, for hoisting tokens when a message is sent
   const skillLists = new Map<string, Promise<Skill[]>>();
@@ -1198,8 +1211,17 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         dispatch({ type: "hello", hello: await bridge.request("hello", {}) });
         const { bots } = await bridge.request("bots.list", {});
         dispatch({ type: "bots", bots });
-        const first = state.selectedBot && bots.some((b) => b.name === state.selectedBot) ? state.selectedBot : bots[0]?.name;
+        // pick up where the person left off: the bot, panel and Plans view saved before a restart (a bot that
+        // is gone takes them with it)
+        const saved = opts.resume?.();
+        const back = saved ? forBots(saved, bots.map((b) => b.name)) : null;
+        const first =
+          state.selectedBot && bots.some((b) => b.name === state.selectedBot) ? state.selectedBot : (back?.bot ?? bots[0]?.name);
         if (first) await selectBot(first);
+        if (back?.bot) {
+          const { panelOpen, panelTab, runsFull, runId, session } = back;
+          dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
+        } else if (back?.session) dispatch({ type: "ui.session", id: back.session });
         // Load the other chats too, so the sidebar can show previews and unread counts.
         await Promise.allSettled(
           bots.filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
@@ -1207,6 +1229,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       } catch (e) {
         fail(e);
       }
+      markResumed();
       opts.onSettled?.();
     },
     selectBot,
@@ -1449,6 +1472,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   };
 
   return {
+    resumed,
     getState: () => state,
     getSnapshot: () => (snapshot ??= { ...state, ...actions }),
     subscribe(fn) {
@@ -1487,6 +1511,13 @@ export function getStore(): Store {
     },
     onAction: (a, state) => soundOf(a, state, appSounds()),
     onSettled: () => appSounds().settle(),
+    resume: () => {
+      try {
+        return parseResume(typeof localStorage !== "undefined" ? localStorage.getItem(RESUME_KEY) : null);
+      } catch {
+        return null;
+      }
+    },
   }));
 }
 

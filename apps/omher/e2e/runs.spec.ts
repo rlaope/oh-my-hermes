@@ -52,7 +52,11 @@ async function openRuns(page: Page, bot = "kami") {
   if (bot !== "kami") {
     await page.getByTestId(`bot-${bot}`).click();
     await page.keyboard.press(`${await mod(page)}+Period`);
-  } else await page.getByTestId("places").click();
+  } else if (!/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "")) {
+    // a second load in the same test reopens the panel as it was left (resume): open it only when closed
+    await page.getByTestId("places").click();
+  }
+  await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
   await page.getByTestId("panel-tab-runs").click();
   await expect(page.getByTestId("panel-runs")).toBeVisible();
 }

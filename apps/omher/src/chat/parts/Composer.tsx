@@ -6,6 +6,7 @@ import { AttachButton, Chips, chipsFor, useDropZone, type Chip } from "./Attach"
 import "./attach.css";
 import { SkillPicker, mirrorText } from "./Skills";
 import { findTokens, fragmentAt, matchSkills } from "./skillTokens";
+import { getDraft, setDraft } from "../../app/drafts";
 
 const MAX_H = 200;
 
@@ -44,7 +45,9 @@ export function Composer({
   /** Offer the bot's skills on `./` (a bot's main chat). */
   skills?: boolean;
 }) {
-  const [text, setText] = useState("");
+  // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
+  const [text, setText] = useState(() => getDraft(bot.name));
+  useEffect(() => setDraft(bot.name, text), [bot.name, text]);
   const [chips, setChips] = useState<Chip[]>([]);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);

@@ -108,6 +108,10 @@ export interface SessionRec {
   model?: string;
   /** Hermes profile a folder chat (oh-my-hermes) runs on. */
   bot?: string;
+  /** The Settings › Accounts login it started with (claude, codex, grok); none = the CLI's own. */
+  account?: string;
+  /** omher restarted while it ran and it does not continue by itself: it starts again on Resume. */
+  paused?: boolean;
 }
 
 /** Live state of a session's chat that the row needs (from the store). */
@@ -139,7 +143,9 @@ export function rowModel(
   const state =
     needsYou || s.status === "running"
       ? ""
-      : s.status === "starting"
+      : s.paused
+        ? "Paused"
+        : s.status === "starting"
         ? "Starting…"
         : s.status === "failed"
           ? "Could not start"

@@ -314,6 +314,21 @@ All notable changes will be documented here.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
 
+- **omher asks before it updates, and picks up where you left off after a
+  restart.** The sidebar's Update button opens a small confirm first:
+  "Update to 0.2.3?", one line saying omher will restart and your chats,
+  panels and sessions come back, and, when sessions are running, which ones
+  and how they come back. Cancel or Esc leaves everything as it was; install
+  starts only on "Update and restart". After any restart (the update, a quit
+  and reopen, a crash) omher reopens the bot or session you had open, the side
+  panel and its tab, the Plans full view, and every composer's unsent text,
+  from one `omher.resume` snapshot saved as you go. The SESSIONS list comes
+  back too: a Claude Code or Codex chat that was running continues its own
+  conversation in the same folder and with the same account, pi, oh-my-pi,
+  Grok and oh-my-hermes sessions come back paused with a one-click Resume, and
+  ended ones stay ended. A snapshot that is malformed, from another version or
+  names a bot that is gone is ignored, and nothing starts twice.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
