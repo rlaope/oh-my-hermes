@@ -1,26 +1,18 @@
-// Runs tab: the bot's runs (OMH dag runs, Hermes delegate fan-outs) as a list and a compact read-only graph,
-// plus the full-size view over the chat column (⌘⇧G / Expand). Below the bot's own runs, the CLI agents' runs on
-// this machine (Claude Code subagents, Codex sub-agents) in the same list style. Nothing here retries, settles or
-// cancels.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+// Runs tab: the bot's runs (OMH dag runs, Hermes delegate fan-outs) as a list, and the selected run as plain text
+// and a read-only box graph (the OMH TUI's box view), plus the same drawing at full size over the chat column
+// (⌘⇧G). Below the bot's own runs, the CLI agents' runs on this machine (Claude Code subagents, Codex sub-agents)
+// in the same list style. Nothing here retries, settles or cancels.
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
-import { Legend, PANEL_ZOOM, RunGraph } from "./RunGraph";
+import { t } from "../i18n";
+import { RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
-import { PlanCard } from "./PlanCard";
-import { columnLabel } from "./layout";
-import type { AgentRun } from "../lib/runs";
-
-/** Each layer's name, the same words as the graph's column labels ("Plan + Build"). */
-const layerNames = (run: AgentRun) => {
-  const by: AgentRun["nodes"][] = [];
-  for (const n of run.nodes) (by[n.layer] ??= []).push(n);
-  return [...by].map((ns, l) => (ns ? columnLabel(ns, l).replace(/ · \d+$/, "") : ""));
-};
+import { PlanHeader } from "./PlanHeader";
 import { runName } from "./format";
 import "./runs.css";
 
@@ -55,35 +47,6 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
     return () => ro.disconnect();
   }, []);
   return [ref, w];
-}
-
-const MIN_GRAPH_H = 320;
-const LEGEND_H = 40;
-
-/** The panel graph box's height cap: the rest of the side panel under the run's header and plan card, less the
- *  pinned legend, and at least MIN_GRAPH_H. The box is as tall as the run up to this; a larger run is fitted or
- *  scrolls inside it. With the run list collapsed everything above the graph counts, so the box ends
- *  at the panel's bottom with nothing to scroll; with the list open the list scrolls away and only the run's own
- *  header and plan card count. */
-function useRoom(ref: React.RefObject<HTMLElement | null>, ready: boolean, listOpen: boolean): number {
-  const [h, setH] = useState(MIN_GRAPH_H);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const sc = el?.closest(".pn-scroll") as HTMLElement | null;
-    const sec = el?.closest(".rn-run") as HTMLElement | null;
-    if (!el || !sc || !sec) return;
-    const read = () => {
-      const top = listOpen ? sec.getBoundingClientRect().top : sc.getBoundingClientRect().top - sc.scrollTop;
-      const above = el.getBoundingClientRect().top - top;
-      setH(Math.max(MIN_GRAPH_H, Math.floor(sc.clientHeight - above - LEGEND_H - 12)));
-    };
-    read();
-    const ro = new ResizeObserver(read);
-    ro.observe(sc);
-    if (sc.firstElementChild) ro.observe(sc.firstElementChild);
-    return () => ro.disconnect();
-  }, [ref, ready, listOpen]);
-  return h;
 }
 
 function useRuns(bot: string, n = 0) {
@@ -171,49 +134,9 @@ function useDetail(bot: string, summary: AgentRunSummary | null) {
   return { detail: detail && detail.run.id === summary?.id ? detail : null, error };
 }
 
-const STATE_LABEL = { running: "Running", done: "Done", failed: "Failed", cancelled: "Cancelled" } as const;
-
-/** "● Running ▬▬▬▭▭ 3/6": the run's state with a slim progress bar. */
-function StatusBadge({ run, time }: { run: Pick<AgentRunSummary, "state" | "counts">; time?: string }) {
-  const { done, nodes, failed } = run.counts;
-  return (
-    <span className={`rn-badge ${run.state}${failed > 0 && run.state === "done" ? " mixed" : ""}`} data-testid="run-state">
-      {run.state === "running" && <i className="rn-live" aria-hidden />}
-      <span className="rn-badge-t">{STATE_LABEL[run.state]}</span>
-      <span className="rn-bar" aria-hidden>
-        <i style={{ width: `${nodes ? (100 * done) / nodes : 0}%` }} />
-        {run.counts.running > 0 && (
-          <i className="run" style={{ left: `calc(${(100 * done) / nodes}% + 1px)`, width: `calc(${(100 * run.counts.running) / nodes}% - 1px)` }} />
-        )}
-        {(run.counts.repaired ?? 0) > 0 && (
-          <i className="fix" style={{ left: `calc(${(100 * (done + run.counts.running)) / nodes}% + 1px)`, width: `calc(${(100 * run.counts.repaired!) / nodes}% - 1px)` }} />
-        )}
-        {failed > 0 && (
-          <i
-            className="bad"
-            style={{ left: `calc(${(100 * (done + run.counts.running + (run.counts.repaired ?? 0))) / nodes}% + 1px)`, width: `calc(${(100 * failed) / nodes}% - 1px)` }}
-          />
-        )}
-      </span>
-      <span className="rn-badge-n" data-testid="run-progress">
-        {done}/{nodes}
-      </span>
-      {failed > 0 && run.state !== "failed" && <span className="rn-badge-bad">· {failed} failed</span>}
-      {(run.counts.repaired ?? 0) > 0 && <span className="rn-badge-fix">· {run.counts.repaired} repaired</span>}
-      {time && <span className="rn-badge-n">· {time}</span>}
-    </span>
-  );
-}
-
 const Chevron = ({ up }: { up: boolean }) => (
   <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d={up ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} />
-  </svg>
-);
-
-const ExpandIcon = () => (
-  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
   </svg>
 );
 
@@ -285,90 +208,59 @@ export function RunsTab({ bot }: { bot: Bot }) {
           )}
         </>
       )}
-      {selected && <PanelRun key={selected.id} bot={bot} summary={selected} nowS={nowS} listOpen={lists} />}
+      {selected && <PanelRun key={selected.id} bot={bot} summary={selected} nowS={nowS} />}
     </div>
   );
 }
 
-function PanelRun({ bot, summary, nowS, listOpen }: { bot: Bot; summary: AgentRunSummary; nowS: number; listOpen: boolean }) {
+function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; nowS: number }) {
   const s = useStore();
   const { detail, error } = useDetail(bot.name, summary);
   const [open, setOpen] = useState<string | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
-  const [over, setOver] = useState(false);
-  const [hidden, setHidden] = useState(0);
-  const [drawnAs, setDrawnAs] = useState<string>("graph");
-  const onOverflow = useCallback((o: boolean, h: number) => {
-    setOver(o);
-    setHidden(h);
-  }, []);
   const run = detail?.run;
-  const room = useRoom(ref, !!run, listOpen);
-  // the person's zoom over the fitted scale (1 = Fit)
-  const [zoom, setZoom] = useState(1);
-  // a box taller than what the panel shows: bring the run's box into view once, so its focus node is on screen
-  useEffect(() => {
-    const el = ref.current;
-    const sc = el?.closest(".pn-scroll") as HTMLElement | null;
-    if (!run || !el || !sc) return;
-    const below = el.getBoundingClientRect().bottom + LEGEND_H - sc.getBoundingClientRect().bottom;
-    if (below > 1) sc.scrollTop += below;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.id]);
   const node = run?.nodes.find((x) => x.id === open) ?? null;
+  // the open node's detail sits under the graph: bring it into view
+  const drawer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) drawer.current?.scrollIntoView({ block: "nearest" });
+  }, [open]);
   const fullKey = isMac() ? "⌘⇧G" : "Ctrl+Shift+G";
   return (
     <div className="rn-run" data-testid="run-graph-box" data-run={summary.id} data-state={summary.state}>
-      <div className="rn-head">
-        <b title={summary.title}>{summary.title}</b>
-        <StatusBadge run={summary} />
-        <button type="button" className="pn-ref" onClick={() => s.setRunsFull(true)} data-testid="graph-expand" title="Expand (⌘⇧G)" aria-label="Expand">
-          <ExpandIcon />
-        </button>
-      </div>
-      {run && <PlanCard run={run} mode="panel" nowS={nowS} names={layerNames(run)} />}
-      <div className="rn-gwrap" ref={ref} style={{ maxHeight: room }}>
+      <PlanHeader
+        summary={summary}
+        run={run}
+        bot={bot}
+        nowS={nowS}
+        action={
+          <button type="button" className="ph-full" onClick={() => s.setRunsFull(true)} data-testid="graph-expand" title={`${t("graph.full")} (${fullKey})`}>
+            {t("graph.full")} <kbd>{fullKey}</kbd>
+          </button>
+        }
+      />
+      <div className="rn-gwrap" ref={ref}>
         {!run || !width ? (
           <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>
         ) : (
-          <>
-            <RunGraph run={run} handoffs={detail!.handoffs} mode="panel" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} onOverflow={onOverflow} onMode={setDrawnAs} maxH={room - 2} zoom={zoom} />
-          </>
+          <RunGraph
+            run={run}
+            mode="panel"
+            width={width}
+            open={open}
+            onOpen={setOpen}
+            nowS={nowS}
+            bot={bot}
+            detail={
+              node && (
+                <div ref={drawer}>
+                  <NodeDrawer runId={run.id} node={node} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
+                </div>
+              )
+            }
+          />
         )}
       </div>
-      {run && (
-        <Legend
-          run={run}
-          lines={drawnAs === "graph"}
-          extra={
-            // past the box, or stacked (the panel draws no links then): the full view has them
-            over || drawnAs === "stack" ? (
-              <button type="button" className="rn-full-hint" data-testid="run-full-hint" onClick={() => s.setRunsFull(true)} title="Open the whole run over the chat, with its links">
-                {hidden > 0 && (
-                  <span className="rn-hidden" data-testid="run-hidden">
-                    {hidden} more ·
-                  </span>
-                )}
-                Open full view <kbd>{fullKey}</kbd>
-              </button>
-            ) : null
-          }
-          tools={
-            <span className="rn-zoom" role="group" aria-label="Zoom" data-testid="run-zoom">
-              <button type="button" onClick={() => setZoom((z) => Math.max(PANEL_ZOOM.min / 2, z / PANEL_ZOOM.step))} aria-label="Zoom out" title="Zoom out" data-testid="run-zoom-out">
-                −
-              </button>
-              <button type="button" onClick={() => setZoom(1)} className={zoom === 1 ? "on" : ""} title="Fit the run to the panel" data-testid="run-zoom-fit">
-                Fit
-              </button>
-              <button type="button" onClick={() => setZoom((z) => Math.min(PANEL_ZOOM.max * 2, z * PANEL_ZOOM.step))} aria-label="Zoom in" title="Zoom in" data-testid="run-zoom-in">
-                +
-              </button>
-            </span>
-          }
-        />
-      )}
-      {run && node && <NodeDrawer runId={run.id} node={node} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -389,20 +281,12 @@ export function RunsFull({ bot }: { bot: Bot }) {
   return (
     <div className="rf" data-testid="runs-full" role="dialog" aria-label="Run graph">
       <div className="rf-head">
-        {selected ? (
-          <>
-            <b title={selected.title}>{selected.title}</b>
-            <StatusBadge run={selected} time={span((selected.ended ?? nowS) - selected.started)} />
-          </>
-        ) : (
-          <b>{bot.display_name}'s runs</b>
-        )}
-        <span className="rf-hint">View only · drag cards to rearrange · Esc closes</span>
-        <IconButton label="Close graph" onClick={() => s.setRunsFull(false)}>
+        {selected ? <PlanHeader summary={selected} run={run} bot={bot} nowS={nowS} /> : <b>{bot.display_name}'s runs</b>}
+        <span className="rf-hint">{t("graph.hint")}</span>
+        <IconButton label={t("graph.close")} onClick={() => s.setRunsFull(false)}>
           <CloseIcon />
         </IconButton>
       </div>
-      {run && <PlanCard run={run} mode="full" nowS={nowS} names={layerNames(run)} />}
       <div className="rf-body" ref={ref}>
         {!runs ? (
           <div className="pn-empty">{error ?? <Spinner size={12} label="Loading" />}</div>
@@ -413,7 +297,7 @@ export function RunsFull({ bot }: { bot: Bot }) {
             <Spinner size={12} label="Loading" />
           </div>
         ) : (
-          <RunGraph key={run.id} run={run} handoffs={detail!.handoffs} mode="full" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} />
+          <RunGraph key={run.id} run={run} mode="full" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} />
         )}
         {run && node && (
           <div className="rf-drawer">
