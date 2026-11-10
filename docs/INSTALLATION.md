@@ -270,7 +270,8 @@ install the same `omh` command from the published release.
 ### Universal installer (macOS/Linux)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://omher.app/install | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
 OMH needs Python 3.11+, and the installer finds one itself: it probes `python3`
@@ -320,7 +321,8 @@ leaves its exit code in `$LASTEXITCODE`.
 ### Windows (PowerShell 5.1+)
 
 ```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+irm https://omher.app/install.ps1 | iex
+# same as: irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 ```
 
 Windows npm/Bun launcher support is gated by the Windows CI suite and is still
@@ -3329,7 +3331,8 @@ answer, and the capability boundary.
 ### Install
 
 ```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+irm https://omher.app/install.ps1 | iex
+# same as: irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 omh setup
 omh doctor
 ```

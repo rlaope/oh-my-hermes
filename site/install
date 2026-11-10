@@ -1,0 +1,21 @@
+#!/bin/sh
+# omher.app/install - the short form of
+#   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+# It downloads that installer and runs it with only the arguments you pass, so
+# the plain one-liner installs the OMH command exactly as install.sh does.
+# Usage: curl -fsSL https://omher.app/install | sh
+# Everything sits in one function called on the last line, so the shell has read
+# the whole file before the installer starts reading the same stdin.
+omh_install_main() {
+  omh_install_f="$(mktemp "${TMPDIR:-/tmp}/omh-install.XXXXXX")" || exit 1
+  if ! curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh -o "$omh_install_f"; then
+    rm -f "$omh_install_f"
+    printf 'omh: could not download the OMH installer\n' >&2
+    exit 1
+  fi
+  sh "$omh_install_f" "$@"
+  omh_install_rc=$?
+  rm -f "$omh_install_f"
+  exit "$omh_install_rc"
+}
+omh_install_main "$@"

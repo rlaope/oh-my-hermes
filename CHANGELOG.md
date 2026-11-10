@@ -146,6 +146,12 @@ All notable changes will be documented here.
   drawn faint. USAGE is a token ring with cache in its middle, and can add
   the drawn graph's subagent lanes; a sum with any unpriced part, the chat
   included, shows as a lower bound (`≥$`). Thanks @yqm-307. (#2690)
+- **A short install command: `curl -fsSL https://omher.app/install | sh`.** omher.app now serves
+  `install` and `install.ps1`, small wrappers that download `install.sh` (or `install.ps1`) from main and
+  run it with only the arguments you pass, so the short form installs exactly what the long
+  `raw.githubusercontent.com/.../install.sh | sh` one-liner does; on Windows,
+  `irm https://omher.app/install.ps1 | iex`. The README, its translations, the website and
+  docs/INSTALLATION.md show the short form; the install guide keeps the long one as "same as".
 
 ## 4.0.7 - 2026-11-09
 
