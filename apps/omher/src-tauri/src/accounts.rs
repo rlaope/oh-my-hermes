@@ -229,7 +229,8 @@ pub fn codex_has_login(help: &str) -> bool {
 // ---------------------------------------------------------------------------------------------
 
 /// PATH first, then the folders CLI installers use: `~/.local/bin` (Claude Code), Homebrew, npm/pnpm/bun/
-/// cargo/volta globals; on Windows the npm and WinGet folders.
+/// cargo/volta globals, then on macOS the CLI folders inside app bundles (the ChatGPT app's Codex); on Windows
+/// the npm and WinGet folders.
 pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> {
     let sep = if os == Os::Windows { ';' } else { ':' };
     let mut dirs: Vec<PathBuf> =
@@ -244,6 +245,7 @@ pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBu
             }
             dirs.push(PathBuf::from("/opt/homebrew/bin"));
             dirs.push(PathBuf::from("/usr/local/bin"));
+            dirs.extend(crate::sessions::app_bundle_cli_dirs(env("HOME").as_deref()));
         }
         Os::Windows => {
             if let Some(app) = env("APPDATA").filter(|h| !h.is_empty()) {
@@ -721,6 +723,13 @@ mod tests {
         assert_eq!(dirs.iter().filter(|d| **d == PathBuf::from("/opt/homebrew/bin")).count(), 1);
         let claude = PathBuf::from("/Users/k/.local/bin/claude");
         assert_eq!(resolve("claude", &dirs, |p| p == claude, Os::Unix), Some(claude.clone()));
+        // the ChatGPT app's bundled Codex comes after every install folder, so it counts only when it is the one
+        let tail: Vec<PathBuf> = dirs[dirs.len() - 4..].to_vec();
+        assert_eq!(tail, crate::sessions::app_bundle_cli_dirs(Some("/Users/k")));
+        assert_eq!(tail[0], PathBuf::from("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin"));
+        assert_eq!(dirs[dirs.len() - 5], PathBuf::from("/usr/local/bin"));
+        let bundled = tail[0].join("codex");
+        assert_eq!(resolve("codex", &dirs, |p| p == bundled, Os::Unix), Some(bundled.clone()));
         let wenv = |k: &str| match k {
             "PATH" => Some(r"C:\Windows".to_string()),
             "APPDATA" => Some(r"C:\Users\k\AppData\Roaming".to_string()),

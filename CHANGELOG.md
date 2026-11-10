@@ -286,6 +286,14 @@ All notable changes will be documented here.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
 
+- **omher finds the Codex CLI that ships inside the ChatGPT app.** On macOS
+  the ChatGPT and Codex desktop apps carry a signed-in Codex CLI at
+  `<app>/Contents/Resources/codex-cli/bin/codex`, under `/Applications` or
+  `~/Applications`. omher's account and session lookups now search those
+  folders after PATH and every install folder, so a Mac whose only Codex is
+  the app's copy no longer shows it as not installed, and an npm or Homebrew
+  install still wins. The "Not installed" tooltip for Codex says so.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
