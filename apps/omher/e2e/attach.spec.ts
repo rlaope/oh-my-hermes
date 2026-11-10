@@ -161,6 +161,25 @@ test("send attaches each chip in order, then sends; the bubble shows the files",
   await expect(mine.getByTestId("media-image")).toHaveCount(2);
   await expect(mine.getByTestId("sent-file")).toHaveCount(2);
   await expect.poll(() => mine.getByTestId("media-image").first().locator("img").evaluate((e: HTMLImageElement) => e.naturalWidth)).toBe(480);
+
+  // the files sit under the person's bubble (6px), on its right edge: two pictures side by side, then one
+  // compact row per file (icon, name, size)
+  const box = (l: import("@playwright/test").Locator) => l.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
+  const bub = await box(mine.locator(".b"));
+  const files = mine.getByTestId("sent-files");
+  await expect(files).toHaveAttribute("data-grid", "2");
+  const [a, b] = await Promise.all((await mine.getByTestId("media-image").all()).map(box));
+  expect(Math.round(a.top - bub.bottom)).toBe(6);
+  expect(Math.abs(a.top - b.top)).toBeLessThanOrEqual(1);
+  expect(Math.abs(b.right - bub.right)).toBeLessThanOrEqual(1);
+  for (const row of await mine.getByTestId("sent-file").all()) {
+    const r = await box(row);
+    expect(r.top).toBeGreaterThan(b.bottom);
+    expect(Math.abs(r.right - bub.right)).toBeLessThanOrEqual(1);
+    expect(r.height).toBeLessThanOrEqual(40);
+    await expect(row.locator("svg.media-ic")).toHaveCount(1);
+  }
+  await expect(mine.getByTestId("sent-file").first().getByTestId("media-file-name")).toHaveText("report.pdf");
 });
 
 test("over-limit files show a red chip and are not sent; a failed attach sends nothing", async ({ page }) => {

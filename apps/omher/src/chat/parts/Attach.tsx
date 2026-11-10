@@ -7,7 +7,7 @@ import { isMac } from "../../app/shortcuts";
 import { PlusIcon } from "../../ui";
 import { attachKind, badgeFor, limitReason, previewKind } from "./attachFiles";
 import { fileSize } from "./mediaLines";
-import { ImageTile } from "./Media";
+import { FileRow, gridOf, ImageTile } from "./Media";
 
 export interface Chip extends OutFile {
   id: string;
@@ -263,20 +263,14 @@ export function useDropZone(anchor: React.RefObject<HTMLElement | null>, enabled
 /** Files in the person's own bubble, from the local copies made when they were picked. */
 export function SentFiles({ files }: { files: SentFile[] }) {
   return (
-    <div className="media att-sent" data-testid="sent-files">
+    <div className="media att-sent" data-testid="sent-files" data-grid={gridOf(files.map((f) => (f.url ? f.kind : "file")))}>
       {files.map((f, i) =>
         f.url && f.kind === "image" ? (
           <ImageTile key={i} url={f.url} name={f.name} />
         ) : f.url && f.kind === "video" ? (
           <video key={i} className="media-video" src={f.url} controls preload="metadata" />
         ) : (
-          <div key={i} className="media-file" data-testid="sent-file" title={f.name}>
-            <span className="media-ext">{badgeFor(f.name)}</span>
-            <div className="media-meta">
-              <span className="media-name">{f.name}</span>
-              <span className="media-size">{fileSize(f.size)}</span>
-            </div>
-          </div>
+          <FileRow key={i} name={f.name} size={f.size} title={f.name} testId="sent-file" />
         ),
       )}
     </div>

@@ -1,9 +1,9 @@
-import { useEffect, useState, type WheelEvent } from "react";
+import { useEffect, useState, type ReactNode, type WheelEvent } from "react";
 import { createPortal } from "react-dom";
 import type { MediaFile } from "../../lib/protocol";
 import { canOpenFiles, openMedia, revealLabel } from "../../lib/openMedia";
 import { useStore } from "../../state/store";
-import { extOf, fileName, fileSize, mediaKind, type MediaKind } from "./mediaLines";
+import { fileName, fileSize, mediaKind, type MediaKind } from "./mediaLines";
 import "./media.css";
 
 type Loaded =
@@ -38,10 +38,14 @@ function useMedia(bot: string, path: string, kind: MediaKind): Loaded {
   return loaded;
 }
 
-/** Files the bot sent (`MEDIA:` lines), shown under its answer in order. */
+/** How a set of files lays out: one picture keeps its own shape (up to 420px); two or more pictures go in a
+ *  grid of at most 2 per row. A video, an audio player and a file row always take a whole row. */
+export const gridOf = (kinds: MediaKind[]) => (kinds.filter((k) => k === "image").length > 1 ? 2 : 1);
+
+/** Files the bot sent (`MEDIA:` lines), shown under its answer in order, in the bubble's column. */
 export function MediaList({ bot, paths }: { bot: string; paths: string[] }) {
   return (
-    <div className="media" data-testid="media">
+    <div className="media" data-testid="media" data-grid={gridOf(paths.map(mediaKind))}>
       {paths.map((p, i) => (
         <MediaItem key={`${i}:${p}`} bot={bot} path={p} />
       ))}
@@ -101,29 +105,42 @@ function Lightbox({ url, name, onClose }: { url: string; name: string; onClose: 
   );
 }
 
-function FileCard({ file }: { file: MediaFile }) {
-  const ext = extOf(file.name);
+const FileIcon = () => (
+  <svg className="media-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+  </svg>
+);
+
+/** One compact row for a file that is not a picture: icon, name, size, then its actions (`children`). */
+export function FileRow({ name, size, title, testId, children }: { name: string; size: number; title: string; testId: string; children?: ReactNode }) {
   return (
-    <div className="media-file" data-testid="media-file" title={file.path}>
-      <span className="media-ext">{(ext || "file").slice(0, 4).toUpperCase()}</span>
-      <div className="media-meta">
-        <span className="media-name" data-testid="media-file-name">
-          {file.name}
-        </span>
-        <span className="media-size" data-testid="media-file-size">
-          {fileSize(file.size)}
-        </span>
-        <span className="media-acts">
-          <button type="button" data-testid="media-open" onClick={() => void openMedia(file.path).catch(() => {})}>
-            Open
-          </button>
-          {canOpenFiles() && (
-            <button type="button" data-testid="media-reveal" onClick={() => void openMedia(file.path, true).catch(() => {})}>
-              {revealLabel()}
-            </button>
-          )}
-        </span>
-      </div>
+    <div className="media-file" data-testid={testId} title={title}>
+      <FileIcon />
+      <span className="media-name" data-testid="media-file-name">
+        {name}
+      </span>
+      <span className="media-size" data-testid="media-file-size">
+        {fileSize(size)}
+      </span>
+      {children}
     </div>
+  );
+}
+
+function FileCard({ file }: { file: MediaFile }) {
+  return (
+    <FileRow name={file.name} size={file.size} title={file.path} testId="media-file">
+      <span className="media-acts">
+        <button type="button" data-testid="media-open" onClick={() => void openMedia(file.path).catch(() => {})}>
+          Open
+        </button>
+        {canOpenFiles() && (
+          <button type="button" data-testid="media-reveal" onClick={() => void openMedia(file.path, true).catch(() => {})}>
+            {revealLabel()}
+          </button>
+        )}
+      </span>
+    </FileRow>
   );
 }

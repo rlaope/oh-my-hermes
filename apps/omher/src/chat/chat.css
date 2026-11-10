@@ -121,8 +121,21 @@
 .msg.a.face > .msg-face.blank {
   visibility: hidden;
 }
-.msg.a.face > .b {
-  max-width: min(80%, 760px);
+/* the bubble column beside the face: the caption, then the files the bot sent under it (6px), all on the
+   bubble's left edge. A definite width so a picture can size against it; the bubble still hugs its text. */
+.msg-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: min(80%, 760px);
+  min-width: 0;
+}
+.msg.a .msg-col > .b {
+  max-width: 100%;
+}
+[data-bubbles="open"] .msg-col {
+  width: 100%;
 }
 .msg .b {
   border-radius: var(--r-bubble);

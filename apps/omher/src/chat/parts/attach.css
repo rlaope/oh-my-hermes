@@ -178,7 +178,11 @@
 }
 
 /* files in the person's own bubble */
+/* the person's files: under their bubble (6px), on its right edge */
 .msg.u .att-sent {
+  --media-edge: end;
   align-items: flex-end;
-  margin: 0 0 4px;
+}
+.msg.u > .b + .att-sent {
+  margin-top: 6px;
 }
