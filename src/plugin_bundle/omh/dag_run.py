@@ -726,7 +726,8 @@ def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[s
         builds, chain = build_chain(nodes)
         if builds > 1 and chain >= SERIAL_GRAPH_SHARE * builds:
             findings.append(f"serial_graph:{builds} build nodes, {chain} of them in one chain; most of the build work "
-                            "is one chain, so split it into parallel lanes where the work allows.")
+                            "is one chain, so split it into parallel lanes where the work allows, or fold a small step "
+                            "that only follows another into the node it follows.")
     findings += [f"role_guess:{node['id']}={node['role_guess']}" for node in nodes if node.get("role_guess")]
     verifiers = [node for node in nodes if is_verification(node)]
     if len(nodes) > 1 and not verifiers:

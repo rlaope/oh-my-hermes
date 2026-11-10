@@ -31,7 +31,7 @@
    (`no_judgement_node`: when one node's judgement decides the run, give it `ultrabrain`; otherwise go
    on), and a graph of 5+ nodes where at least 80% of its two or more build nodes sit on one chain
    (`serial_graph`; baseline, review and verify nodes do not count: split the build work into parallel
-   lanes where it allows).
+   lanes where it allows, or fold a small step that only follows another into the node it follows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
    `delegate_task` with its `tasks` unchanged. The goal ends with `[dag:<run>/<node>]`; that marker is how
