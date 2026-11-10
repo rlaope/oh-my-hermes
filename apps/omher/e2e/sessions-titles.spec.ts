@@ -32,12 +32,20 @@ async function open(page: Page, saved: Record<string, string> = {}) {
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
 }
 
-async function start(page: Page, agent: string, folder: string) {
+/** A New session chat on `agent` in `folder`, started by its first message `first` (default: a slash command,
+ *  which names nothing, so the session starts unnamed). */
+async function start(page: Page, agent: string, folder: string, first = "/status") {
   await page.evaluate((f) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = f), folder);
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await expect(page.getByTestId("session-chat")).toBeVisible();
+  // a draft is "New session" until it starts, and cannot be renamed yet
+  await expect(rows(page).first().getByTestId("session-name")).toHaveText("New session");
+  await page.getByTestId("composer").fill(first);
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-chat")).not.toHaveAttribute("data-draft", "true");
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
 }
 
@@ -51,6 +59,16 @@ const rows = (page: Page) => page.locator("[data-testid=session-list] .ss-row");
 
 test.beforeEach(async () => {
   await mock("mock.reset");
+});
+
+test("a first message names the session as it starts it (a draft is New session until then)", async ({ page }) => {
+  await open(page);
+  await start(page, "codex", "/Users/you/work/api-server", "Add pagination to the users endpoint");
+  const row = rows(page).first();
+  await expect(row.getByTestId("session-name")).toHaveText("Add pagination to the users endpoint");
+  await expect(row.getByTestId("session-name")).toHaveAttribute("data-source", "prompt");
+  await expect(row.getByTestId("session-sub")).toHaveText("api-server · Codex");
+  await expect(page.getByTestId("session-title")).toHaveText("Add pagination to the users endpoint");
 });
 
 test("a row shows a summary of the first message, and the folder moves to line 2", async ({ page }) => {

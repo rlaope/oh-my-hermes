@@ -87,13 +87,15 @@ test("first run: the cards sit over an empty chat only, their quiet buttons work
   await page.getByTestId("onb-message").click();
   await expect(page.getByTestId("composer")).toBeFocused();
 
-  // "New session" opens the same SESSIONS + menu as the sidebar's own New session row
+  // "New session" opens the same New session chat as the sidebar's own New session row; closing it starts nothing
   await page.getByTestId("onb-session").click();
-  await expect(page.getByTestId("session-menu")).toBeVisible();
-  await expect(page.getByTestId("session-agent-claude")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("session-menu")).toHaveCount(0);
+  await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
+  await expect(page.getByTestId("session-agent-pick")).toBeVisible();
+  const draft = page.locator("[data-testid=session-list] .ss-row").first();
+  await draft.hover();
+  await draft.getByTestId("session-close").click();
   await expect(page.getByTestId("session-start")).toBeVisible();
+  await page.getByTestId("bot-friren").click();
 
   // × dismisses both cards, and they stay gone after a reload
   await page.getByTestId("onb-dismiss").click();

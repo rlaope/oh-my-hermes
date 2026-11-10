@@ -12,6 +12,16 @@ All notable changes will be documented here.
   unknown names, code, links, emails and `@file:` refs stay text, and the open
   chat's own bot is not a link. It works in bot bubbles, your own bubbles and a
   run node's handoff.
+- **omher: New session opens the chat at once.** SESSIONS `+` (and the empty
+  section's New session row) opens a New session chat in the main column, like
+  the Codex app, instead of a two-step agent-then-folder menu. The agent is
+  picked in the composer row (official marks; agents not installed are
+  disabled with their install line) and defaults to the last one used; the
+  folder is a chip under the composer that defaults to the last folder used,
+  else home, and offers the recent folders, Choose folder… and home. Nothing
+  runs until the first message, which becomes the agent's first prompt (a
+  terminal agent such as Grok starts on Start and is sent nothing); then the
+  agent and folder are shown read-only. Closing a draft starts nothing.
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no

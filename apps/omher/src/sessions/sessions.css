@@ -534,3 +534,129 @@
 .ss-row.menu-open .ss-x {
   display: none;
 }
+
+/* New session (draft) and a session's composer: the agent in the composer row, the folder under the box (Codex's
+   context line, in omher's own small gray terms: no fills at rest, 4-6px corners) */
+/* their menus open from the composer (.cw), above the box: the folder menu at its left edge, the agents at its
+   right, so neither covers the text being typed */
+.ss-pick-w,
+.ss-chip-w {
+  position: static;
+  display: inline-flex;
+  min-width: 0;
+}
+.ss-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  max-width: 180px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: 12px;
+  flex: none;
+  white-space: nowrap;
+}
+.ss-pick-n,
+.ss-chip-n {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-pick:not(.ro):hover,
+.ss-pick[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+/* started: the agent stays where the picker was, quieter, with no chevron and no hover */
+.ss-pick.ro {
+  cursor: default;
+  color: var(--quiet);
+}
+.ss-ctx {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 1px 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ss-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  max-width: 320px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.ss-chip > svg {
+  flex: none;
+}
+.ss-chip:not(.ro):not(:disabled):hover,
+.ss-chip[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ss-chip.ro {
+  cursor: default;
+}
+.ss-acct {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ss-dpop {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.ss-dpop .ss-h {
+  padding-left: 32px; /* over the names, past the icon column */
+}
+.ss-dpop .ss-path {
+  max-width: 140px;
+}
+.ss-ck {
+  width: 14px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+/* the draft's one line sits over the composer it is about, not at the top of an empty column; it steps aside while
+   the agent or folder menu is open over the same strip */
+.ss-draft > .thread > .day:first-child {
+  margin-top: auto;
+  margin-bottom: -6px;
+}
+.ss-draft:has(.ss-dpop) > .thread > .day {
+  visibility: hidden;
+}
+/* Start, for an agent that opens in its terminal: the send button with its word */
+.ss-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r);
+  background: var(--g-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 560;
+  flex: none;
+}
+.ss-go:disabled {
+  background: var(--raise2);
+  color: var(--quiet);
+}
+.ss-go:not(:disabled):hover {
+  filter: brightness(1.08);
+}

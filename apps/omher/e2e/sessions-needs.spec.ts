@@ -45,12 +45,14 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
   await expect(page.getByTestId("bot-friren").getByTestId("bot-sub")).toContainText("updater");
 }
 
+/** A New session chat on Claude Code in the dialog's folder; its first message (`ask`) starts it. */
 async function startClaude(page: Page) {
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId("session-agent-claude").click();
+  await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await expect(page.getByTestId("session-chat")).toBeVisible();
-  await expect(page.getByTestId("session-status")).toHaveText("Ready");
+  await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
   return page.locator("[data-testid=session-list] .ss-row").first();
 }
 
@@ -174,9 +176,10 @@ for (const theme of ["dark", "light"] as const) {
     const row = page.locator("[data-testid=session-list] .ss-row", { hasText: "web-app" });
     await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
     await page.getByTestId("session-new").click();
+    await page.getByTestId("session-agent-pick").click();
     await page.getByTestId("session-agent-codex").click();
+    await page.getByTestId("session-folder").click();
     await page.getByTestId("session-choose").click();
-    await expect(page.getByTestId("session-status")).toHaveText("Ready");
     await page.getByTestId("composer").fill("/slow");
     await page.keyboard.press("Enter");
     await expect(page.locator("[data-testid=session-list] .ss-row").first().getByTestId("live-ring")).toBeVisible();

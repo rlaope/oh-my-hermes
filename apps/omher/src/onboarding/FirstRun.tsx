@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react";
 import "./firstrun.css";
 import { t } from "../i18n";
 import { selectSidebarBots, useStore } from "../state/store";
-import { openNewSessionMenu } from "../sessions/SessionsSection";
+import { openNewSession } from "../sessions/SessionsSection";
 import { CloseIcon, IconButton } from "../ui";
 
 export const ONBOARDED_KEY = "omher.onboarded";
@@ -69,7 +69,7 @@ export function FirstRun() {
       <div className="onb-card" data-testid="onb-sessions">
         <b className="onb-t">{t("onb.sessions.title")}</b>
         <p className="onb-p">{t("onb.sessions.body")}</p>
-        <button type="button" className="onb-btn" onClick={openNewSessionMenu} data-testid="onb-session">
+        <button type="button" className="onb-btn" onClick={openNewSession} data-testid="onb-session">
           {t("onb.sessions.action")}
         </button>
       </div>

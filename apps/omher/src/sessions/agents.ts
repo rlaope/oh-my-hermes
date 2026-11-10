@@ -90,7 +90,9 @@ export function tildePath(path: string, home: string | null): string {
   return path;
 }
 
-export type SessionStatus = "starting" | "running" | "exited" | "failed";
+/** `draft` = a New session chat whose agent and folder can still change: nothing runs until its first message
+ *  (or Start, for an agent that opens in its terminal). */
+export type SessionStatus = "draft" | "starting" | "running" | "exited" | "failed";
 
 export interface SessionRec {
   id: string;
@@ -120,6 +122,9 @@ export interface SessionRec {
   agentTitle?: string;
   /** A short summary of the person's first real message, made here (no model is asked). */
   promptTitle?: string;
+  /** How the account it started with reads (`as work@…`), when Settings › Accounts picked one other than This
+   *  computer: shown under its composer. Display only; `account` is what the shell gets. */
+  startedAs?: string;
 }
 
 /** Live state of a session's chat that the row needs (from the store). */
@@ -156,6 +161,17 @@ export function rowModel(
   ts: number;
 } {
   const label = agentDef(s.agent).label;
+  // a draft: "New session" over the folder it will start in; it has no name yet and nothing runs, so nothing is live
+  if (s.status === "draft")
+    return {
+      title: "New session",
+      titleSource: "folder",
+      folder: folderName(s.cwd),
+      sub: s.cwd ? tildePath(s.cwd, ctx?.home ?? null) : label,
+      live: false,
+      needsYou: false,
+      ts: s.startedAt / 1000,
+    };
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
@@ -228,4 +244,35 @@ export function recentFolders(list: Recent[]): string[] {
   const out: string[] = [];
   for (const r of [...list].sort((a, b) => b.at - a.at)) if (!out.includes(r.cwd)) out.push(r.cwd);
   return out.slice(0, RECENT_MAX);
+}
+
+// ---- a New session chat (draft) ---------------------------------------------------------------
+
+/** The agent a person used last (newest recent), if any. */
+export function lastAgent(list: Recent[]): AgentId | null {
+  let best: Recent | null = null;
+  for (const r of list) if (!best || r.at > best.at) best = r;
+  return best ? best.agent : null;
+}
+
+/** The agent a New session chat starts on: the last one used if it is installed, else the first installed (menu
+ *  order), else the last one used or Claude Code. Before the look-up (`agents` null) the last one used stands. */
+export function draftAgent(list: Recent[], agents: AgentInfo[] | null): AgentId {
+  const last = lastAgent(list);
+  if (!agents) return last ?? AGENTS[0].id;
+  const installed = (id: AgentId) => agents.some((a) => a.id === id && !!a.path);
+  if (last && installed(last)) return last;
+  const first = AGENTS.find((a) => installed(a.id));
+  return first ? first.id : (last ?? AGENTS[0].id);
+}
+
+/** The folder a New session chat starts in: the last folder used, else the home folder ("" until it is known). */
+export function draftFolder(list: Recent[], home: string | null): string {
+  return recentFolders(list)[0] ?? home ?? "";
+}
+
+/** The folder chip's menu: the recent folders (newest first), then the home folder unless it is one of them. */
+export function folderChoices(list: Recent[], home: string | null): { recent: string[]; home: string | null } {
+  const recent = recentFolders(list);
+  return { recent, home: home && !recent.includes(home) ? home : null };
 }

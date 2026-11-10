@@ -354,8 +354,11 @@ test("a running terminal session's dot: 6px, solid, inside its tile, readable on
     );
     await open(page);
     await page.getByTestId("session-new").click();
+    await page.getByTestId("session-agent-pick").click();
     await page.getByTestId("session-agent-grok").click();
+    await page.getByTestId("session-folder").click();
     await page.getByTestId("session-choose").click();
+    await page.getByTestId("session-go").click();
     const dot = page.locator("[data-testid=session-list] [data-testid=live-dot]").first();
     await expect(dot).toBeVisible();
     await page.getByTestId("bot-kami").click(); // the row unselected, as in the list
@@ -385,21 +388,6 @@ test("side panel tabs: a hovered tab never looks selected (no fill), only the se
   const bg = (id: string) => page.getByTestId(id).evaluate((e) => getComputedStyle(e).backgroundColor);
   expect(await bg("panel-tab-diff")).toBe("rgba(0, 0, 0, 0)");
   expect(await bg("panel-tab-terminal")).not.toBe("rgba(0, 0, 0, 0)");
-});
-
-test("the SESSIONS + menu covers the New session row under it: no second edge above the menu", async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as unknown as Record<string, unknown>).__omherMockAgents = ["claude", "codex", "omh"];
-  });
-  await open(page);
-  await expect(page.getByTestId("session-start")).toBeVisible();
-  await page.getByTestId("session-new").click();
-  await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState === "finished"));
-  const [pop, button] = await page.evaluate(() => [".ss-pop", ".ss-start"].map((s) => document.querySelector(s)!.getBoundingClientRect().toJSON()));
-  // the menu starts above the button and spans it, so its border and rounded corners are inside the menu
-  expect(pop.top).toBeLessThanOrEqual(button.top - 2);
-  expect(pop.left).toBeLessThanOrEqual(button.left);
-  expect(pop.right).toBeGreaterThanOrEqual(button.right);
 });
 
 test("while an answer streams, its caret ends the last line of text, not a line of its own", async ({ page }) => {

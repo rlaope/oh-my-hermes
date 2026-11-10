@@ -6,15 +6,21 @@
 // composer draw them. Grok has no verifiable chat mode, so it stays a terminal (xterm on a pseudo-terminal),
 // and every chat can switch to its agent's terminal view.
 //
+// SESSIONS + opens a New session chat at once (a draft): the agent is picked in its composer and the folder in the
+// chip under it (the last folder used, else home). Nothing starts until the first message, which becomes the
+// agent's first prompt (a terminal agent starts on Start and is sent nothing); then agent and folder are fixed.
+// Closing a draft starts nothing.
+//
 // A session's program lives only while the app runs. The list itself comes back after a restart (resume.ts saves
 // it): a Claude Code or Codex chat that was running continues its conversation in the same folder and account,
-// the others come back paused with a Resume button, and ended ones stay ended. The last few folders (with the
-// agent that used each) are remembered on this computer.
+// the others come back paused with a Resume button, ended ones stay ended, and a draft comes back as a draft
+// (never started). The last few folders (with the agent that used each) are remembered on this computer.
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { agentDef, draftAgent, draftFolder, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
+import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
 import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type Store } from "../state/store";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
@@ -130,6 +136,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  sends no account; the shell uses the one picked for new sessions). */
   const fromBefore = new Set<string>();
   const accountOf = (r: SessionRec) => (fromBefore.has(r.id) ? r.account : undefined);
+  /** drafts whose agent / folder the person picked: a late agent or home look-up no longer moves them */
+  const picked = new Map<string, { agent?: boolean; cwd?: boolean }>();
   let notify: ((ev: BridgeEvent) => void) | null = null;
 
   const set = (patch: Partial<SessionsState>) => {
@@ -181,8 +189,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     try {
       const [agents, home] = await Promise.all([host.agents(), state.home ? Promise.resolve(state.home) : host.home()]);
       set({ agents, home });
+      refreshDrafts();
     } catch {
       set({ agents: state.agents ?? [] });
+    }
+  };
+
+  /** Drafts the person has not set yet follow what is now known: the installed agents, the home folder. */
+  const refreshDrafts = () => {
+    for (const r of state.list) {
+      if (r.status !== "draft") continue;
+      const p = picked.get(r.id) ?? {};
+      const patch: Partial<SessionRec> = {};
+      if (!p.agent) {
+        const agent = draftAgent(state.recent, state.agents);
+        if (agent !== r.agent) patch.agent = agent;
+      }
+      if (!p.cwd && !r.cwd) {
+        const cwd = draftFolder(state.recent, state.home);
+        if (cwd) patch.cwd = cwd;
+      }
+      if (Object.keys(patch).length) patchRec(r.id, patch);
     }
   };
 
@@ -372,44 +399,113 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   // ---- sessions -----------------------------------------------------------------------------
 
-  /** Ask for a folder (default: the last one used, else home) and start `agent` there. */
-  const launch = async (agent: AgentId, cwd?: string): Promise<string | null> => {
-    await ready();
-    const home = state.home ?? (await host.home().catch(() => ""));
-    const folder = cwd ?? (await host.pickFolder(state.recent[0]?.cwd || home));
-    if (!folder) return null;
+  /**
+   * Open a New session chat: a draft on the last agent used (else the first installed) in the last folder used
+   * (else home). An open draft is reused rather than stacking a second one. Nothing starts here.
+   */
+  const draft = (): string => {
+    const open = state.list.find((r) => r.status === "draft");
+    if (open) {
+      store().actions.openSession(open.id);
+      return open.id;
+    }
     const id = `s${++seq}`;
-    const mode = modeOf(state.agents, agent);
-    const app = store().getState();
-    const account = accountFor(accounts(), agent);
     const r: SessionRec = {
       id,
-      agent,
-      cwd: folder,
+      agent: draftAgent(state.recent, state.agents),
+      cwd: draftFolder(state.recent, state.home),
       startedAt: Date.now(),
-      status: "starting",
-      view: mode === "terminal" ? "terminal" : "chat",
-      ...(account ? { account } : {}),
-      // oh-my-hermes runs on the bot you were looking at (else the first bot)
-      ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
+      status: "draft",
+      view: "chat",
     };
-    const recent = pushRecent(state.recent, { agent, cwd: folder, at: r.startedAt });
+    set({ list: [r, ...state.list] });
+    store().actions.openSession(id);
+    if (state.agents === null || state.home === null) void loadAgents();
+    return id;
+  };
+
+  /** Change a draft's agent or folder (refused once it has started). */
+  const setDraft = (id: string, p: { agent?: AgentId; cwd?: string }) => {
+    const r = rec(id);
+    if (!r || r.status !== "draft") return;
+    const patch: Partial<SessionRec> = {};
+    if (p.agent) patch.agent = p.agent;
+    if (p.cwd) patch.cwd = p.cwd;
+    picked.set(id, { ...picked.get(id), ...(p.agent ? { agent: true } : {}), ...(p.cwd ? { cwd: true } : {}) });
+    patchRec(id, patch);
+  };
+
+  /** The native folder dialog for a draft, opening at its folder; cancelling it changes nothing. */
+  const chooseFolder = async (id: string): Promise<string | null> => {
+    const r = rec(id);
+    if (!r || r.status !== "draft") return null;
+    const folder = await host.pickFolder(r.cwd || state.home || "");
+    if (folder) setDraft(id, { cwd: folder });
+    return folder;
+  };
+
+  /**
+   * Start a draft: its agent in its folder, `first` as the agent's first prompt (a chat agent; the bubble shows at
+   * once). A terminal agent starts in the folder and is sent nothing. From here the agent and folder are fixed.
+   */
+  const start = async (id: string, first?: string, startedAs?: string): Promise<boolean> => {
+    const r0 = rec(id);
+    if (!r0 || r0.status !== "draft" || !r0.cwd) return false;
+    await ready();
+    const r = rec(id);
+    if (!r || r.status !== "draft") return false; // closed or started meanwhile
+    picked.delete(id);
+    const mode = modeOf(state.agents, r.agent);
+    const app = store().getState();
+    const startedAt = Date.now();
+    // the account it runs as is the one picked for new sessions now (recorded so a restart continues as it)
+    const account = accountFor(accounts(), r.agent);
+    const recent = pushRecent(state.recent, { agent: r.agent, cwd: r.cwd, at: startedAt });
     try {
       localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
     } catch {
       /* no storage */
     }
-    set({ list: [r, ...state.list], recent, home: state.home ?? home });
+    set({ recent });
+    patchRec(id, {
+      startedAt,
+      status: "starting",
+      view: mode === "terminal" ? "terminal" : "chat",
+      ...(account ? { account } : {}),
+      ...(startedAs ? { startedAs } : {}),
+      // oh-my-hermes runs on the bot you were looking at (else the first bot)
+      ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
+    });
+    const text = first?.trim() ?? "";
+    // the message is sent: the draft view goes before its composer clears its own unsent text, so clear it here
+    if (text) setUnsent(`agent:${id}`, "");
+    // the first message names the session (as a later one would in send) until the agent or the person does
+    const pt = text ? promptTitle(text) : "";
+    if (pt) patchRec(id, { promptTitle: pt });
     if (mode === "chat") {
       keys.set(id, `agent:${id}`);
       registerRoute(id);
       openChat(id);
-      void startAgentChat(id);
+      if (!text) {
+        await startAgentChat(id);
+        return true;
+      }
+      // the first prompt shows at once and goes to the agent as soon as it runs
+      const st = store();
+      const key = keys.get(id)!;
+      const lid = `local-s${++localSeq}`;
+      st.dispatch({ type: "local.user", bot: key, id: lid, text, now: Date.now() });
+      await startAgentChat(id);
+      try {
+        await input(id, { kind: "send", text });
+      } catch (e) {
+        st.dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
+      }
     } else if (mode === "hermes") {
-      void startFolderChat(id);
+      await startFolderChat(id);
+      if (text && rec(id)?.status === "running") await send(id, text);
     }
-    store().actions.openSession(id);
-    return id;
+    return true;
   };
 
   const startTerm = async (id: string, t: Term) => {
@@ -610,6 +706,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const list: SessionRec[] = [];
     const again: { id: string; resume: string }[] = [];
     for (const s of saved) {
+      if (s.draft) {
+        // a New session chat that never started: a draft again, with its agent and folder fixed by the person
+        list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "draft" });
+        picked.set(s.id, { agent: true, cwd: true });
+        seq = Math.max(seq, Number(s.id.slice(1)) || 0);
+        continue;
+      }
       const mode = modeOf(state.agents, s.agent);
       const auto = s.running && mode === "chat" && continuesItself(s);
       const r: SessionRec = {
@@ -652,6 +755,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /** Stop the program(s) and remove the session. */
   const close = (id: string) => {
+    picked.delete(id);
     disposeTerm(id);
     void stopChat(id);
     const key = keys.get(id);
@@ -678,7 +782,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  own conversation id, so the name follows the conversation when it is resumed. */
   const rename = (id: string, title: string | null) => {
     const r = rec(id);
-    if (!r) return;
+    if (!r || r.status === "draft") return; // a draft is named once it starts
     const t = (title ?? "").replace(/\s+/g, " ").trim().slice(0, NAME_MAX);
     patchRec(id, { title: t || undefined });
     const k = titleKey(r);
@@ -715,7 +819,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     /** Stop whatever an earlier load of this page left running (called once at startup). */
     reset: ready,
     loadAgents,
-    launch,
+    draft,
+    setDraft,
+    chooseFolder,
+    start,
     attach,
     close,
     setTheme,

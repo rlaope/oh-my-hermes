@@ -1,7 +1,9 @@
 // Main column for a SESSIONS entry: a header (agent mark, the session's name, the agent and folder, status, the
-// Terminal toggle and the model button) above either the chat (the bot chat's own Timeline and Composer, fed by the agent's structured
-// mode) or the agent's terminal.
-import { useEffect, useMemo, useRef, useState } from "react";
+// Terminal toggle and the model button) above either the chat (the bot chat's own Timeline and Composer, fed by
+// the agent's structured mode) or the agent's terminal. A New session (draft) is a chat that has not started: its
+// composer holds the agent picker and, under it, the folder chip; the first message starts the agent there (Start,
+// for an agent that opens in its terminal). After that both show read-only in the same places.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ITheme } from "@xterm/xterm";
 import { selectAsks, useStore } from "../state/store";
 import { resolveTheme } from "../app/theme";
@@ -9,13 +11,15 @@ import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
 import "../chat/model/model.css";
-import { ChatIcon, ChevronDown, ModelIcon, Popover, TerminalIcon } from "../ui";
+import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, TerminalIcon } from "../ui";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, folderName, terminalNote, tildePath, type SessionRec } from "./agents";
+import { agentDef, folderChoices, folderName, missingNote, parentPath, terminalNote, tildePath, type AgentId, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
+import { sessionAccountSuffix } from "./SessionsSection";
+import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 
 // Matched to omher's tokens (--bg, --body, --ink) so the terminal reads as part of the page.
@@ -149,6 +153,229 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         offlineText={offlineText}
         onSend={(t) => void getSessions().send(rec.id, t)}
         onStop={() => void getSessions().interrupt(rec.id)}
+        tools={<AgentFixed agent={rec.agent} />}
+        foot={<Context rec={rec} />}
+      />
+    </div>
+  );
+}
+
+const HomeIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" />
+  </svg>
+);
+
+const FolderIcon = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.4l2 2h8.6A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+  </svg>
+);
+
+/** A started session's agent in the composer row, where the draft's picker was: read-only. */
+function AgentFixed({ agent }: { agent: AgentId }) {
+  return (
+    <span className="ss-pick ro" title={agentDef(agent).label} data-testid="session-agent-fixed">
+      <AgentMark agent={agent} size={14} />
+      <span className="ss-pick-n">{agentDef(agent).label}</span>
+    </span>
+  );
+}
+
+/** The line under a session's composer: the folder (and the account it runs as). A draft's folder is a menu:
+ *  the recent folders, Choose folder… (the native dialog) and the home folder. Started, it is read-only. */
+function Context({ rec, account }: { rec: SessionRec; account?: string }) {
+  const ss = useSessions();
+  const [open, setOpen] = useState(false);
+  const draft = rec.status === "draft";
+  const name = rec.cwd ? folderName(rec.cwd) : t("sessions.findingHome");
+  const as = draft ? account : rec.startedAs;
+  const pick = (cwd: string) => {
+    setOpen(false);
+    getSessions().setDraft(rec.id, { cwd });
+  };
+  const choose = async () => {
+    setOpen(false);
+    await getSessions().chooseFolder(rec.id);
+  };
+  const { recent, home } = folderChoices(ss.recent, ss.home);
+  const row = (cwd: string, label: string, testid: string, icon?: ReactNode, path = true) => {
+    const on = cwd === rec.cwd;
+    return (
+      <button key={`${testid}:${cwd}`} type="button" className={`ss-item${on ? " on" : ""}`} title={cwd} aria-pressed={on} onClick={() => pick(cwd)} data-testid={testid}>
+        <span className="ss-ic">{icon}</span>
+        <span className="ss-n">{label}</span>
+        {path && <span className="ss-path">{parentPath(tildePath(cwd, ss.home)) || tildePath(cwd, ss.home)}</span>}
+        <span className="ss-ck">{on && <CheckIcon />}</span>
+      </button>
+    );
+  };
+  return (
+    <div className="ss-ctx" data-testid="session-context">
+      {draft ? (
+        <span className="ss-chip-w">
+          <button
+            type="button"
+            className="ss-chip"
+            title={rec.cwd || undefined}
+            aria-label={`${t("sessions.folder")}: ${name}`}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            disabled={!rec.cwd}
+            onClick={() => setOpen((v) => !v)}
+            data-testid="session-folder"
+          >
+            <FolderIcon />
+            <span className="ss-chip-n">{name}</span>
+            <ChevronDown />
+          </button>
+          <Popover open={open} onClose={() => setOpen(false)} side="top" align="left" width={280} label={t("sessions.folder")} className="ss-dpop">
+            <div data-testid="session-folder-menu">
+              {recent.length > 0 && <div className="ss-h">{t("sessions.recent")}</div>}
+              {recent.map((cwd) => row(cwd, folderName(cwd), "session-recent"))}
+              {recent.length > 0 && <div className="ss-sep" />}
+              <button type="button" className="ss-item" onClick={() => void choose()} data-testid="session-choose">
+                <span className="ss-ic">
+                  <FolderIcon size={14} />
+                </span>
+                <span className="ss-n">{t("sessions.choose")}</span>
+              </button>
+              {home && row(home, t("sessions.home"), "session-home", <HomeIcon />, false)}
+            </div>
+          </Popover>
+        </span>
+      ) : (
+        <span className="ss-chip ro" title={rec.cwd} data-testid="session-folder">
+          <FolderIcon />
+          <span className="ss-chip-n">{name}</span>
+        </span>
+      )}
+      {as && (
+        <span className="ss-acct" data-testid="session-account">
+          {as}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The draft's agent picker in the composer row: every allow-listed agent with its mark; one that is not installed
+ *  is disabled and says how to install it. */
+function AgentPick({ rec }: { rec: SessionRec }) {
+  const ss = useSessions();
+  const accounts = useAccounts();
+  const [open, setOpen] = useState(false);
+  const def = agentDef(rec.agent);
+  return (
+    <span className="ss-pick-w">
+      <button
+        type="button"
+        className="ss-pick"
+        aria-label={`${t("sessions.agent")}: ${def.label}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={def.label}
+        onClick={() => setOpen((v) => !v)}
+        data-testid="session-agent-pick"
+      >
+        <AgentMark agent={rec.agent} size={14} />
+        <span className="ss-pick-n">{def.label}</span>
+        <ChevronDown />
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)} side="top" align="right" width={248} label={t("sessions.agent")} className="ss-dpop">
+        <div data-testid="session-menu">
+          {ss.agents === null && <div className="ss-empty">Looking for agents…</div>}
+          {(ss.agents ?? []).map((a) => {
+            const d = agentDef(a.id);
+            const account = sessionAccountSuffix(accounts.groups, a.id);
+            const on = a.id === rec.agent;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                className={`ss-item${on ? " on" : ""}`}
+                disabled={!a.path}
+                aria-pressed={on}
+                title={a.path ?? missingNote(a.id)}
+                onClick={() => {
+                  setOpen(false);
+                  getSessions().setDraft(rec.id, { agent: a.id });
+                }}
+                data-testid={`session-agent-${a.id}`}
+              >
+                <span className="ss-ic">
+                  <AgentMark agent={a.id} />
+                </span>
+                <span className="ss-n ss-n-as" title={account ? `${d.label} ${account}` : d.label}>
+                  <span className="ss-l">{d.label}</span>
+                  {account && (
+                    <span className="ss-as" data-testid={`session-account-${a.id}`}>
+                      {account}
+                    </span>
+                  )}
+                </span>
+                {a.path ? <code className="ss-cmd">{d.program}</code> : <span className="ss-missing">{t("sessions.notInstalled")}</span>}
+                <span className="ss-ck">{on && <CheckIcon />}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Popover>
+    </span>
+  );
+}
+
+/** A New session: the chat before its agent runs. */
+function DraftPane({ rec }: { rec: SessionRec }) {
+  const ss = useSessions();
+  const accounts = useAccounts();
+  const def = agentDef(rec.agent);
+  const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
+  const terminal = mode === "terminal";
+  // until the look-up answers, the agent counts as there (a flash of "not found" would be wrong more often)
+  const installed = ss.agents === null || !!ss.agents.find((a) => a.id === rec.agent)?.path;
+  const account = sessionAccountSuffix(accounts.groups, rec.agent);
+  const ready = installed && !!rec.cwd;
+  const folder = rec.cwd ? folderName(rec.cwd) : "";
+  // the session chat's own key: unsent text is kept under it (the resume snapshot saves it) and is still there
+  // in the chat once it starts
+  const key = `agent:${rec.id}`;
+  const bot: Bot = { name: key, display_name: def.label, is_default: false, model: "", provider: "", description: "", status: "online", running: false };
+  const start = (text?: string) => void getSessions().start(rec.id, text, account || undefined);
+  // the composer takes the focus once it can be typed in (the folder or the agent list may arrive after it shows)
+  const live = ready && !terminal;
+  useEffect(() => {
+    if (live) document.querySelector<HTMLTextAreaElement>(`[data-pane="${key}"] [data-testid=composer]`)?.focus();
+  }, [live, key]);
+  return (
+    <div className="pane ss-chat ss-draft" data-pane={key} data-testid="session-chat" data-draft="true">
+      <div className="thread" data-testid="timeline">
+        <div className="day" data-testid="draft-note">
+          {!rec.cwd
+            ? t("sessions.findingHome")
+            : !installed
+              ? missingNote(rec.agent)
+              : t(terminal ? "sessions.firstStart" : "sessions.firstSend", { agent: def.label, folder })}
+        </div>
+      </div>
+      <Composer
+        key={key}
+        bot={bot}
+        running={false}
+        offline={!ready || terminal}
+        offlineText={!ready ? (!rec.cwd ? t("sessions.findingHome") : missingNote(rec.agent)) : t("sessions.pressStart", { agent: def.label })}
+        onSend={(text) => start(text)}
+        onStop={() => undefined}
+        tools={<AgentPick rec={rec} />}
+        action={
+          terminal ? (
+            <button type="button" className="ss-go" disabled={!ready} onClick={() => start()} data-testid="session-go">
+              {t("sessions.start")}
+              <ArrowUp />
+            </button>
+          ) : undefined
+        }
+        foot={<Context rec={rec} account={account} />}
       />
     </div>
   );
@@ -269,6 +496,21 @@ export function SessionView() {
     );
   }
   const def = agentDef(rec.agent);
+  if (rec.status === "draft") {
+    return (
+      <>
+        <header className="head" data-testid="header">
+          <span className="ss-head-mark">
+            <AgentMark agent={rec.agent} size={18} />
+          </span>
+          <span className="head-title" data-testid="session-title">
+            {t("sessions.new")}
+          </span>
+        </header>
+        <DraftPane key={rec.id} rec={rec} />
+      </>
+    );
+  }
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   const chatKey = getSessions().chatKey(rec.id);
   const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
@@ -334,6 +576,13 @@ export function SessionView() {
         <ChatPane rec={rec} chatKey={chatKey!} />
       ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
         <TerminalIdle rec={rec} />
+      ) : rec.view === "chat" && canToggle ? (
+        // a Hermes folder chat between its first message and the bridge's chat id: not a reason to start a terminal
+        <div className="pane ss-chat" data-testid="session-chat">
+          <div className="thread" data-testid="timeline">
+            <div className="day">{rec.status === "failed" ? `${def.label} could not start${rec.error ? ` · ${rec.error}` : ""}` : `Starting ${def.label}…`}</div>
+          </div>
+        </div>
       ) : (
         <TerminalPane key={`${rec.id}-term`} rec={rec} />
       )}

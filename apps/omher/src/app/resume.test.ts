@@ -180,8 +180,50 @@ describe("sessions restore", () => {
     expect(pi).toHaveLength(1);
     expect(by("s4").paused).toBeUndefined();
     // new sessions get the next id, never a restored one's
-    const id = await ss.launch("claude", "/w/new");
+    const id = ss.draft();
     expect(id).toBe("s7");
+  });
+
+  it("a New session chat that never started comes back as a draft and is never started; its unsent text too", async () => {
+    const g: Record<string, unknown> = {};
+    const store = createStore(quietBridge());
+    const ss = createSessions(new MockHost(g), () => store);
+    const id = ss.draft();
+    ss.setDraft(id, { agent: "codex", cwd: "/w/api" });
+    setDraft(`agent:${id}`, "half a thought");
+    const r = ss.getState().list[0];
+    const snap = buildResume(
+      {
+        bot: "kami",
+        bots: ["kami"],
+        view: "session",
+        session: id,
+        panelOpen: false,
+        panelTab: "details",
+        runsFull: false,
+        runId: null,
+        drafts: allDrafts(),
+        sessions: [{ id: r.id, agent: r.agent, cwd: r.cwd, startedAt: r.startedAt, view: r.view, running: false, draft: true }],
+        messages: () => undefined,
+      },
+      T,
+    );
+    const back = parseResume(JSON.stringify(snap))!;
+    expect(back.sessions).toEqual([{ id, agent: "codex", cwd: "/w/api", startedAt: r.startedAt, view: "chat", running: false, draft: true }]);
+    expect(back.view).toBe("session");
+    expect(back.drafts[`agent:${id}`]).toBe("half a thought");
+    // a hand-edited snapshot cannot make a draft run
+    expect(parseResume(JSON.stringify({ ...snap, sessions: [{ ...snap.sessions[0], running: true }] }))!.sessions[0].running).toBe(false);
+
+    const g2: Record<string, unknown> = {};
+    const ss2 = createSessions(new MockHost(g2), () => createStore(quietBridge()));
+    ss2.restore(back.sessions);
+    await ss2.loadAgents();
+    await new Promise((res) => setTimeout(res, 30));
+    expect(ss2.getState().list).toEqual([expect.objectContaining({ id, status: "draft", agent: "codex", cwd: "/w/api" })]);
+    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset")).toEqual([]);
+    // + reuses it rather than opening a second one
+    expect(ss2.draft()).toBe(id);
   });
 
   it("an empty saved list leaves nothing, and a later restore does nothing", async () => {

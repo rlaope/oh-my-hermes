@@ -34,9 +34,13 @@ async function open(page: Page, installed = ["claude", "codex", "omh"]) {
 async function start(page: Page, agent: string, folder: string) {
   await page.evaluate((f) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = f), folder);
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await expect(page.getByTestId("session-chat")).toBeVisible();
+  await page.getByTestId("composer").fill("/status");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-chat")).not.toHaveAttribute("data-draft", "true");
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
 }
 
@@ -126,6 +130,7 @@ test("U13: an agent that exits with code 0 reads Ended in grey, never Failed", a
 test("U14: a missing agent's Not installed tooltip carries its install line, as text only", async ({ page }) => {
   await open(page, ["claude"]);
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   const lines: Record<string, string> = {
     codex: "npm i -g @openai/codex",
     pi: "npm i -g @mariozechner/pi-coding-agent",
