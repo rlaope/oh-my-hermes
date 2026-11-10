@@ -90,6 +90,15 @@ All notable changes will be documented here.
   when no node decides the run). Repair and extend rounds do not raise it,
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
+- **omher.app shows the real GitHub star count.** The header used to show a
+  `4.9k` baked into the page on 2026-10-31 whenever the visitor's own,
+  unauthenticated GitHub API call was rate-limited. The Pages deploy now
+  stamps the current count into the page (`tools/stamp_site_counts.py`, with
+  the workflow's token; a failed call keeps the committed value and never
+  fails the deploy), and a schedule rebuilds the site every 6 hours so it
+  stays current without a merge. In the browser, one code path in `app.js`
+  updates the count, and a cached or fetched count can only raise the baked
+  one, never lower it.
 
 ## 4.0.7 - 2026-11-09
 
