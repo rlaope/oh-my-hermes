@@ -9,11 +9,13 @@ All notable changes will be documented here.
   session's hook ticked last (a subagent or a cron run); where OMH has not yet
   observed that chat while the gateway's newest observation is a fresh ON,
   the chip still shows. A pane that names its chat no longer draws another
-  chat's graph or the home's fanout in its DAG section. The pane always draws
-  the same five sections in one order, USAGE, CATCHES, PLAN, DAG and AGENTS,
-  each with an empty line when it has nothing to say; the subagent list and
-  the routes are one AGENTS section, and a plan that Hermes' `todo_list` holds
-  gets a short PLAN block saying where its steps are. DAG cards fold by layer,
+  chat's graph, or a fanout another chat dispatched, in its DAG section; a
+  fanout that names no origin yet (one still running) is drawn as before.
+  The pane always draws the same five sections in one order, USAGE, CATCHES,
+  PLAN, DAG and AGENTS, each with an empty line when it has nothing to say;
+  the subagent list and the routes are one AGENTS section, and a plan that
+  Hermes' `todo_list` holds gets a short PLAN block saying where its steps
+  are. DAG cards fold by layer,
   with Auto, Focus, Unfold all and Fold all on a bar over the cards and a
   layer's chip to open or fold it by hand; the fold mode and the View menu's
   choices are kept in the app's local storage. A graph too large for the

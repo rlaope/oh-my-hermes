@@ -1116,45 +1116,76 @@ class MainReaderCutTests(unittest.TestCase):
 
 
 class PaneSessionBindingTests(unittest.TestCase):
-    """The fanout record is the home's, not a conversation's: a pane naming its chat draws that chat's work alone."""
+    """The fanout record is the home's: a pane naming its chat is never drawn a fanout another chat dispatched.
 
-    FANOUT = {"contract": {"fanout_id": "fanout-0123456789ab", "units": [
-        {"unit_id": "core", "title": "Core", "owner": "codex", "depends_on": []}]},
-        "roster": {"units": [{"unit_id": "core", "status": "running"}]}}
+    The fanouts here are real records (`write_fanout_contract`), read the way the HUD reads them, with or without
+    the dispatch summary that names the origin chat when the dispatch ends.
+    """
 
-    def _graphs(self) -> dict[str, tuple[str, str]]:
+    QUIET = "20261110_000000_quiet"
+    OTHER = "20261110_000000_other"
+    READS = {
+        "pane, named chat without a graph": dict(session_ref=QUIET, session_scoped=True, tui_identity_expected=True,
+                                                 dag_run=""),
+        "pane, named chat with its own graph": dict(session_ref=PARENT, session_scoped=True,
+                                                    tui_identity_expected=True, dag_run=""),
+        "pane, no chat named": dict(session_ref="", session_scoped=True, dag_run=""),
+        "tui block, named": dict(session_ref=QUIET, session_scoped=True, tui_identity_expected=True),
+        "omh hud": {},
+    }
+
+    def _graphs(self, origin: str | None, *, fanout: bool = True) -> dict[str, tuple[str, str, str]]:
+        """Each reader's (status, source, scope), with another chat's native graph in the home; ``origin`` None is a
+        fanout whose dispatch has not ended (no summary), "" one whose summary names no origin."""
+        from omh.coding.fanout import build_fanout_contract
+        from omh.coding.fanout_artifacts import fanout_dispatch_summary_path, write_fanout_contract
         from omh.plugin_bundle.omh import runtime_reader
+        from omh.system.paths import OmhPaths
 
-        record = ("contract", "provenance", {}, "fanout-0123456789ab", "")
-        reads = {
-            "pane, named chat without a graph": dict(session_ref="20261110_000000_quiet", session_scoped=True,
-                                                     tui_identity_expected=True, dag_run=""),
-            "pane, named chat with its own graph": dict(session_ref=PARENT, session_scoped=True,
-                                                        tui_identity_expected=True, dag_run=""),
-            "pane, no chat named": dict(session_ref="", session_scoped=True, dag_run=""),
-            "tui block, named": dict(session_ref="20261110_000000_quiet", session_scoped=True,
-                                     tui_identity_expected=True),
-            "omh hud": {},
-        }
         out = {}
-        with homes() as home, patch.object(runtime_reader, "_hud_current_fanout_record", return_value=record), \
-                patch.object(runtime_reader, "_hud_verified_fanout", return_value=self.FANOUT):
+        with homes() as home:
             start(home, "child-0", "sa-0", "Another chat's lane", now=time.time())
-            for name, kwargs in reads.items():
+            if fanout:
+                paths = OmhPaths(omh_home=home.omh, hermes_home=home.hermes)
+                recorded = write_fanout_contract(paths, build_fanout_contract("Shared fanout", [
+                    {"unit_id": "api", "file_scope": ["src/api/"], "depends_on": []}]))
+                if origin is not None:
+                    unit = {"unit_id": "api", "status": "completed", **({"origin_session_id": origin} if origin else {})}
+                    summary = {"schema_version": "fanout_dispatch_summary/v1", "fanout_id": recorded["fanout_id"],
+                               "units": [unit], **({"origin_session_id": origin} if origin else {})}
+                    fanout_dispatch_summary_path(paths, str(recorded["fanout_id"])).write_text(
+                        json.dumps(summary), encoding="utf-8")
+            for name, kwargs in self.READS.items():
                 graph = runtime_reader.read_omh_hud(home.omh, home.hermes, **kwargs)["delegation_graph"]
-                out[name] = (graph["status"], graph.get("source", ""))
+                out[name] = (graph["status"], graph.get("source", ""), graph.get("scope", ""))
         return out
 
-    def test_a_named_chat_without_a_graph_is_never_drawn_the_homes_fanout(self) -> None:
-        """Mutation: offer the home's fanout to every reader, so a quiet chat's pane draws whoever dispatched last."""
-        self.assertEqual(self._graphs(), {
-            "pane, named chat without a graph": ("inactive", ""),
-            "pane, named chat with its own graph": ("active", "native"),
-            # Unchanged from main where no chat is named, and for the TUI and `omh hud`.
-            "pane, no chat named": ("active", "fanout"),
-            "tui block, named": ("active", "fanout"),
-            "omh hud": ("active", "native"),
-        })
+    def test_a_named_chat_is_drawn_only_a_fanout_no_other_chat_dispatched(self) -> None:
+        """Mutation: offer every fanout to a named chat (another chat's run shows), or none (its own running one goes
+        blank until the dispatch ends)."""
+        fanout_home = ("active", "fanout", "global")
+        unchanged = {
+            "pane, named chat with its own graph": ("active", "native", "session"),
+            "pane, no chat named": fanout_home,
+            "tui block, named": fanout_home,
+            "omh hud": ("active", "native", "global"),
+        }
+        cases = {
+            # Still running: no summary yet, so no origin. Drawn, marked as the home's.
+            "running, no origin": (None, True, fanout_home),
+            # Ended, its summary naming no origin (dispatched outside Hermes, or before origins were recorded).
+            "ended, no origin": ("", True, fanout_home),
+            "ended, this chat's origin": (self.QUIET, True, ("active", "fanout", "session")),
+            "ended, another chat's origin": (self.OTHER, True, ("inactive", "", "session")),
+            "no fanout, another chat's native graph": (None, False, ("inactive", "", "session")),
+        }
+        for name, (origin, fanout, named) in cases.items():
+            with self.subTest(name=name):
+                expected = {"pane, named chat without a graph": named, **unchanged}
+                if not fanout:
+                    expected.update({"pane, no chat named": ("inactive", "", "session"),
+                                     "tui block, named": ("inactive", "", "session")})
+                self.assertEqual(self._graphs(origin, fanout=fanout), expected)
 
 
 class LayerBoundTests(unittest.TestCase):

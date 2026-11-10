@@ -2156,7 +2156,10 @@ native delegation tree or a fanout, drawn as cards) and AGENTS (one summary
 line for the subagents Desktop's Agents panel lists, beside the routes OMH
 dispatched). Each section folds, and the folds are kept in the app's local
 storage. The DAG section follows the focused chat: a pane that names its chat
-never draws another chat's graph, nor the home's fanout, which no chat owns.
+never draws another chat's graph. A fanout whose dispatch names another chat as
+its origin is left out, one that names this chat is drawn as this chat's, and
+one that names none (still running, since the origin is recorded when the
+dispatch ends, or dispatched outside Hermes) is drawn as the home's, as before.
 The yolo chip follows the focused chat too; where OMH has not yet observed that
 chat while the gateway's newest observation is a fresh ON, the chip still
 shows, since a wrong ON is the safer error. The pane reads idle when nothing is
