@@ -107,7 +107,9 @@ fn hermes_homes<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> 
 
 /// Where Hermes' Python lives, in the order the person would expect: `OMHER_HERMES_PYTHON`, then each
 /// Hermes home's `hermes-agent/venv`, then `hermes-agent/.venv` (`bin/python`, or `Scripts\python.exe`
-/// on Windows). `env` and `exists` are injected so tests never touch the real machine.
+/// on Windows), then the interpreter named by the PM-managed launcher `hermes-agent/.hermes/bin/hermes`
+/// (installs since the unified package manager have no venv). `env` and `exists` are injected so tests
+/// never touch the real machine.
 pub fn discover_python<E, X>(env: E, exists: X) -> Result<PathBuf, String>
 where
     E: Fn(&str) -> Option<String>,
@@ -120,6 +122,24 @@ pub fn discover_python_for<E, X>(env: E, exists: X, os: Os) -> Result<PathBuf, S
 where
     E: Fn(&str) -> Option<String>,
     X: Fn(&Path) -> bool,
+{
+    discover_python_in(env, exists, |p| std::fs::read_to_string(p).ok(), os)
+}
+
+/// The interpreter a PM launcher script `exec`s: `exec /abs/python3 -I -c '...'`.
+fn launcher_python(script: &str) -> Option<PathBuf> {
+    script.lines().find_map(|l| {
+        let rest = l.trim_start().strip_prefix("exec ")?;
+        let exe = rest.split_whitespace().next()?.trim_matches(|c| c == '"' || c == '\'');
+        Some(PathBuf::from(exe)).filter(|p| p.is_absolute())
+    })
+}
+
+pub fn discover_python_in<E, X, R>(env: E, exists: X, read: R, os: Os) -> Result<PathBuf, String>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+    R: Fn(&Path) -> Option<String>,
 {
     if let Some(p) = env("OMHER_HERMES_PYTHON").filter(|p| !p.trim().is_empty()) {
         let p = PathBuf::from(p.trim());
@@ -137,6 +157,16 @@ where
             let p = exe.iter().fold(agent.join(dir), |p, part| p.join(part));
             if exists(&p) {
                 return Ok(p);
+            }
+        }
+    }
+    if os == Os::Unix {
+        for home in hermes_homes(&env, os) {
+            let launcher = home.join("hermes-agent").join(".hermes").join("bin").join("hermes");
+            if let Some(p) = exists(&launcher).then(|| read(&launcher)).flatten().as_deref().and_then(launcher_python) {
+                if exists(&p) {
+                    return Ok(p);
+                }
             }
         }
     }
@@ -562,6 +592,26 @@ mod tests {
         assert_eq!(discover_python(env, fs_of(&[DOTVENV])), Ok(PathBuf::from(DOTVENV)));
         let blank = env_of(&[("OMHER_HERMES_PYTHON", "  "), ("HOME", "/h")]);
         assert_eq!(discover_python(blank, fs_of(&[VENV])), Ok(PathBuf::from(VENV)));
+    }
+
+    #[test]
+    fn python_falls_back_to_the_pm_launcher_interpreter() {
+        const LAUNCHER: &str = "/h/.hermes/hermes-agent/.hermes/bin/hermes";
+        const PM_PY: &str = "/h/.hermes/tools/python-3.14.9/bin/python3";
+        let script = format!("#!/bin/sh\nexec {PM_PY} -I -c 'import os'\n");
+        let read = |p: &Path| (p == Path::new(LAUNCHER)).then(|| script.clone());
+        let env = env_of(&[("HOME", "/h")]);
+        assert_eq!(discover_python_in(&env, fs_of(&[LAUNCHER, PM_PY]), read, Os::Unix), Ok(PathBuf::from(PM_PY)));
+        assert_eq!(discover_python_in(&env, fs_of(&[LAUNCHER, PM_PY, VENV]), read, Os::Unix), Ok(PathBuf::from(VENV)));
+        let gone = discover_python_in(&env, fs_of(&[LAUNCHER]), read, Os::Unix).unwrap_err();
+        assert_eq!(gone, HERMES_NOT_FOUND);
+    }
+
+    #[test]
+    fn launcher_python_needs_an_absolute_exec_target() {
+        assert_eq!(launcher_python("#!/bin/sh\nexec \"/p/py\" -I\n"), Some(PathBuf::from("/p/py")));
+        assert_eq!(launcher_python("#!/bin/sh\nexec python3 -I\n"), None);
+        assert_eq!(launcher_python("echo hi\n"), None);
     }
 
     #[test]
