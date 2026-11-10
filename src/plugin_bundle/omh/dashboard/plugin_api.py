@@ -202,13 +202,20 @@ OPEN_LAYER_LIMIT = 64
 
 
 def open_layers(text: str) -> tuple[int, ...]:
-    """The layer indexes a ``dag_open`` query names: digits only, each once, at most `OPEN_LAYER_LIMIT`."""
+    """The layer indexes a ``dag_open`` query names: ASCII digits only, each once, at most `OPEN_LAYER_LIMIT`.
+
+    ``str.isdigit`` alone takes other scripts' digits (``int`` reads them) and superscripts (``int`` raises on
+    them, which would turn the whole HUD into an error record), so a part must be ASCII too. The scan stops at
+    the limit rather than reading the rest of a long query.
+    """
     picked: list[int] = []
     for part in str(text or "").split(","):
+        if len(picked) >= OPEN_LAYER_LIMIT:
+            break
         part = part.strip()
-        if part.isdigit() and len(part) <= 5 and int(part) not in picked:
+        if part.isascii() and part.isdigit() and len(part) <= 5 and int(part) not in picked:
             picked.append(int(part))
-    return tuple(picked[:OPEN_LAYER_LIMIT])
+    return tuple(picked)
 
 
 def hud_payload(

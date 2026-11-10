@@ -1203,15 +1203,19 @@ def read_omh_hud(
         payload["delegation_graph"] = inactive_graph("explicit_off", scope="session" if scoped else "global")
     else:
         graph_session = reading[0] if scoped else newest_ledger_session(home, now=time.time())
+        # The fanout record is the home's, not any one conversation's. A pane that names its chat (`dag_run` set,
+        # a session named) draws that chat's work alone, so it is not offered there; every other reader keeps it.
+        pane_named = dag_run is not None and bool(reference)
         payload["delegation_graph"] = build_delegation_graph(
             home,
             hermes,
             graph_session,
-            fanout=_hud_verified_fanout(fanout_record),
+            fanout=None if pane_named else _hud_verified_fanout(fanout_record),
             scope="session" if scoped else "global",
             dag_run=dag_run or "",
             keep_dag=dag_run is not None,
             open_layers=dag_open,
+            layered=dag_run is not None,
         )
         if dag_run is not None and scoped:
             payload["dag_runs"] = dag_run_choices(home, hermes, graph_session)

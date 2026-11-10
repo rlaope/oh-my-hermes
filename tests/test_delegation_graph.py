@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -269,16 +270,12 @@ class StructureTests(unittest.TestCase):
                  for order, (index, state, group) in enumerate(
                      [(index, "done", "layer 1") for index in range(10)]
                      + [(index, "waiting", "layer 2") for index in range(10)], start=1)]
-        layer_ids = [[lane["id"] for lane in lanes]]
-        cut = _cut({"nodes": [{"id": "root", "kind": "root"}, *lanes], "edges": []},
-                   {f"waiting-{index}" for index in range(5, 10)}, layer_ids, {lane["id"]: 0 for lane in lanes})
+        cut = _cut({"nodes": [{"id": "root", "kind": "root"}, *lanes], "edges": []}, 6)
         self.assertEqual(cut["hidden_by_group"], {"layer 1": 10, "layer 2": 5})
         self.assertEqual(cut["hidden_nodes"], 15)
         # Layer 1 lost every node: its place stays known, and so do the states the cut lanes ended in.
         self.assertEqual(cut["group_order"], ["layer 1", "layer 2"])
         self.assertEqual(cut["hidden_by_state"], {"done": 10, "waiting": 5})
-        self.assertEqual(cut["layer_hidden"], [{"count": 15, "states": {"done": 10, "waiting": 5}}])
-
 
     def test_a_settled_graph_goes_quiet_after_the_linger(self) -> None:
         with homes() as home:
@@ -1023,53 +1020,301 @@ def _layered_graph(states: list[str], width: int = 3, summary: int = 400) -> dic
     return _finish("run", [{"id": "root", "kind": "root"}, *lanes], edges, "session", source="dag")
 
 
-class LayerBoundTests(unittest.TestCase):
-    """The graph is cut by layer, outward from the frontier, and the pane's open layers come whole."""
+def _tree_lane(index: int, state: str) -> dict:
+    return {"id": f"n{index}", "kind": "lane", "title": f"N{index}", "category": "deep", "model": "m", "effort": "",
+            "state": state, "status": state, "elapsed_seconds": None, "order": index + 1, "group": ""}
 
-    def _bounded(self, graph: dict, open_layers=(), byte_limit: int = 6_000) -> dict:
+
+def _tree_graph(parents: int, children: int) -> dict:
+    """A native tree: `parents` lanes under the root, `children` more spread across them."""
+    from omh.plugin_bundle.omh.delegation_graph import _finish
+
+    nodes = [{"id": "root", "kind": "root", "title": "main", "state": "root", "order": 0, "group": ""}]
+    edges = []
+    for index in range(parents + children):
+        nodes.append(_tree_lane(index, "done"))
+        edges.append({"from": "root" if index < parents else f"n{index % parents}", "to": f"n{index}", "kind": "dispatch"})
+    return _finish("tree", nodes, edges, "session")
+
+
+def _dag_ulw_graph() -> dict:
+    """A dag-ulw run at its 48-node cap, six layers of eight, long titles: the byte limit cuts it."""
+    from omh.plugin_bundle.omh.delegation_graph import _finish
+
+    nodes = [{"id": "root", "kind": "root", "title": "main", "state": "running", "order": 0, "group": ""}]
+    edges = []
+    for at in range(6):
+        for index in range(8):
+            node = f"n{at}{index}"
+            state = "done" if at < 2 else "running" if at == 2 and index < 3 else "dispatched" if at == 2 else "waiting"
+            nodes.append({"id": f"d:run:{node}", "kind": "lane", "title": f"Step {at}.{index} " + "t" * 100,
+                          "category": "quick", "model": "glm-5.3-flash", "effort": "low", "state": state,
+                          "status": state, "order": at * 8 + index + 1, "group": f"layer {at + 1}", "dag_node": node,
+                          "dag_origin": "define", "role": "build", "summary": "s" * 80, "waits_on": 2 if at else 0})
+            edges += ([{"from": "root", "to": f"d:run:{node}", "kind": "dispatch"}] if not at else
+                      [{"from": f"d:run:n{at - 1}{up}", "to": f"d:run:{node}", "kind": "depends_on"}
+                       for up in (index, (index + 1) % 8)])
+    graph = _finish("Export feature", nodes, edges, "session", source="dag")
+    graph["dag_open"] = True
+    graph["dag_topology"] = {"critical_path": [f"Step {at}.0 " + "t" * 100 for at in range(6)],
+                             "bottlenecks": [["Step 0.0 " + "t" * 100, 40]]}
+    return graph
+
+
+def _graph_of(nodes: list[dict], edges: list[tuple[str, str]]) -> dict:
+    from omh.plugin_bundle.omh.delegation_graph import _finish
+
+    return _finish("g", [{"id": "root", "kind": "root", "state": "running", "order": 0}, *nodes],
+                   [{"from": tail, "to": head, "kind": "depends_on"} for tail, head in edges], "session", source="dag")
+
+
+def _size(graph: dict) -> int:
+    return len(json.dumps(graph, sort_keys=True, default=str).encode("utf-8"))
+
+
+class MainReaderCutTests(unittest.TestCase):
+    """Every reader but the Desktop pane (the TUI block, the chat end post, `omh hud`) gets the cut main gave it.
+
+    The digests and figures were measured on main at 8dda65417 (`_bounded` before #2745), from these same graphs.
+    """
+
+    # name: (sha256 of the sorted-key JSON, nodes, edges, hidden_nodes)
+    MAIN = {
+        "small": ("e1b3cdc1858dd249e8b969852606eff3fdb297ac292d29dc17b8ebca449ccbdb", 4, 3, 0),
+        "tree5x50": ("a8edc824626960e8dc0bf9c5e771154f894817870d9d532deefc568909845d92", 53, 52, 3),
+        "dag": ("ea418616bffafddfe39dd46cbbf9b2a9de79b8fd5823e6f075b21ad7a60b8730", 37, 64, 12),
+    }
+
+    def test_the_tui_and_chat_readers_get_mains_cut_byte_for_byte(self) -> None:
+        """Mutation: send every reader the pane's layered cut, which draws a 5x50 tree as 47 lanes under the root."""
+        import hashlib
+
+        from omh.plugin_bundle.omh import delegation_graph
+
+        for name, graph in (("small", _tree_graph(3, 0)), ("tree5x50", _tree_graph(5, 50)), ("dag", _dag_ulw_graph())):
+            with self.subTest(name=name), patch.object(delegation_graph, "_build", return_value=graph):
+                out = build_delegation_graph(Path("omh"), Path("hermes"), "", now=NOW)
+                digest = hashlib.sha256(json.dumps(out, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+                self.assertEqual((digest, len(out["nodes"]), len(out["edges"]), out["hidden_nodes"]), self.MAIN[name])
+                self.assertFalse(any("layer" in node for node in out["nodes"]))
+
+    def test_only_the_panes_read_asks_for_the_layered_cut(self) -> None:
+        from omh.plugin_bundle.omh import runtime_reader
+
+        asked: list[bool] = []
+
+        def record(*args, **kwargs):
+            asked.append(kwargs.get("layered", False))
+            return {"status": "inactive", "reason": "none", "nodes": [], "edges": []}
+
+        with homes() as home, patch.object(runtime_reader, "build_delegation_graph", side_effect=record):
+            runtime_reader.read_omh_hud(home.omh, home.hermes, session_ref=PARENT, session_scoped=True,
+                                        tui_identity_expected=True)
+            runtime_reader.read_omh_hud(home.omh, home.hermes)
+            runtime_reader.read_omh_hud(home.omh, home.hermes, session_ref=PARENT, session_scoped=True, dag_run="")
+        self.assertEqual(asked, [False, False, True])
+
+
+class PaneSessionBindingTests(unittest.TestCase):
+    """The fanout record is the home's, not a conversation's: a pane naming its chat draws that chat's work alone."""
+
+    FANOUT = {"contract": {"fanout_id": "fanout-0123456789ab", "units": [
+        {"unit_id": "core", "title": "Core", "owner": "codex", "depends_on": []}]},
+        "roster": {"units": [{"unit_id": "core", "status": "running"}]}}
+
+    def _graphs(self) -> dict[str, tuple[str, str]]:
+        from omh.plugin_bundle.omh import runtime_reader
+
+        record = ("contract", "provenance", {}, "fanout-0123456789ab", "")
+        reads = {
+            "pane, named chat without a graph": dict(session_ref="20261110_000000_quiet", session_scoped=True,
+                                                     tui_identity_expected=True, dag_run=""),
+            "pane, named chat with its own graph": dict(session_ref=PARENT, session_scoped=True,
+                                                        tui_identity_expected=True, dag_run=""),
+            "pane, no chat named": dict(session_ref="", session_scoped=True, dag_run=""),
+            "tui block, named": dict(session_ref="20261110_000000_quiet", session_scoped=True,
+                                     tui_identity_expected=True),
+            "omh hud": {},
+        }
+        out = {}
+        with homes() as home, patch.object(runtime_reader, "_hud_current_fanout_record", return_value=record), \
+                patch.object(runtime_reader, "_hud_verified_fanout", return_value=self.FANOUT):
+            start(home, "child-0", "sa-0", "Another chat's lane", now=time.time())
+            for name, kwargs in reads.items():
+                graph = runtime_reader.read_omh_hud(home.omh, home.hermes, **kwargs)["delegation_graph"]
+                out[name] = (graph["status"], graph.get("source", ""))
+        return out
+
+    def test_a_named_chat_without_a_graph_is_never_drawn_the_homes_fanout(self) -> None:
+        """Mutation: offer the home's fanout to every reader, so a quiet chat's pane draws whoever dispatched last."""
+        self.assertEqual(self._graphs(), {
+            "pane, named chat without a graph": ("inactive", ""),
+            "pane, named chat with its own graph": ("active", "native"),
+            # Unchanged from main where no chat is named, and for the TUI and `omh hud`.
+            "pane, no chat named": ("active", "fanout"),
+            "tui block, named": ("active", "fanout"),
+            "omh hud": ("active", "native"),
+        })
+
+
+class LayerBoundTests(unittest.TestCase):
+    """The pane's cut is by layer: work in hand and stopped lanes first, then outward from the frontier."""
+
+    def _layered(self, graph: dict, open_layers=(), byte_limit: int = 6_000) -> dict:
         from omh.plugin_bundle.omh import delegation_graph
 
         with patch.object(delegation_graph, "GRAPH_BYTE_LIMIT", byte_limit):
-            return delegation_graph._bounded(graph, open_layers)
+            return delegation_graph._layered(graph, open_layers)
 
     @staticmethod
     def _kept_layers(graph: dict) -> list[int]:
         return sorted({node["layer"] for node in graph["nodes"] if node.get("kind") != "root"})
 
+    def assertNoBetterLaneCut(self, graph: dict, cut: dict) -> None:
+        """No running/returned lane cut while a lane of a lower rank is kept, and no failed one cut while a done one is."""
+        kept = {node["id"] for node in cut["nodes"]}
+        lanes = [node for node in graph["nodes"] if node.get("kind") != "root"]
+        tier = {"running": 0, "dispatched": 0, "failed": 1, "stuck": 1, "interrupted": 1}
+        for wanted in (0, 1):
+            dropped = [node["id"] for node in lanes if tier.get(node["state"], 2) == wanted and node["id"] not in kept]
+            lower = [node["id"] for node in lanes if tier.get(node["state"], 2) > wanted and node["id"] in kept]
+            self.assertFalse(dropped and lower, f"tier {wanted} cut {dropped[:3]} while {lower[:3]} was kept")
+
     def test_a_deep_run_keeps_the_layers_around_its_frontier_not_the_root_alone(self) -> None:
         # Regression: every kept lane used to pull in all it waits on, so a deep run fell through to the root alone.
-        graph = self._bounded(_layered_graph(["done"] * 5 + ["running"] + ["waiting"] * 6))
+        graph = self._layered(_layered_graph(["done"] * 5 + ["running"] + ["waiting"] * 6))
         kept = self._kept_layers(graph)
         self.assertIn(5, kept)
         self.assertEqual(kept, list(range(kept[0], kept[-1] + 1)), "whole layers, outward from the frontier")
         ids = {node["id"] for node in graph["nodes"]}
         self.assertTrue(all(edge["from"] in ids and edge["to"] in ids for edge in graph["edges"]))
         self.assertEqual(sum(row["count"] for row in graph["layer_hidden"]), graph["hidden_nodes"])
-        self.assertEqual(len(graph["layer_hidden"]), 12)
-        self.assertLessEqual(len(json.dumps(graph, sort_keys=True, default=str)), 6_000)
+        self.assertEqual(graph["layer_count"], 12)
+        self.assertTrue(all(row["count"] for row in graph["layer_hidden"]), "a layer that lost nothing has no row")
+        self.assertLessEqual(_size(graph), 6_000)
 
     def test_an_open_layer_comes_whole_however_far_from_the_frontier(self) -> None:
-        graph = self._bounded(_layered_graph(["done"] * 5 + ["running"] + ["waiting"] * 6), open_layers=(0, 11))
+        graph = self._layered(_layered_graph(["done"] * 5 + ["running"] + ["waiting"] * 6), open_layers=(0, 11))
         kept = self._kept_layers(graph)
         self.assertIn(0, kept)
         self.assertIn(11, kept)
-        self.assertEqual((graph["layer_hidden"][0]["count"], graph["layer_hidden"][11]["count"]), (0, 0))
+        self.assertFalse({0, 11} & {row["layer"] for row in graph["layer_hidden"]})
 
     def test_a_graph_that_fits_is_unchanged_unless_the_pane_holds_layers_open(self) -> None:
         small = _layered_graph(["done", "running"], width=2, summary=10)
-        self.assertIs(self._bounded(small), small)
-        opened = self._bounded(small, open_layers=(1,))
+        self.assertIs(self._layered(small), small)
+        opened = self._layered(small, open_layers=(1,))
         # Named open layers: every lane carries its layer and nothing is counted lost, so the pane asks the same again.
         self.assertEqual([node.get("layer") for node in opened["nodes"]], [None, 0, 0, 1, 1])
-        self.assertEqual(opened["hidden_nodes"], 0)
-        self.assertEqual([row["count"] for row in opened["layer_hidden"]], [0, 0])
+        self.assertEqual((opened["hidden_nodes"], opened["layer_hidden"], opened["layer_count"]), (0, [], 2))
 
-    def test_open_layers_are_read_from_the_query_as_digits_only(self) -> None:
+    def test_a_kept_lane_under_a_cut_parent_hangs_from_its_nearest_kept_ancestor_marked_elided(self) -> None:
+        """Mutation: keep only edges between kept nodes, so a 5x50 tree draws 47 grandchildren with no parent at all."""
+        tree = _tree_graph(5, 50)
+        cut = self._layered(tree, byte_limit=24_576)
+        kept = {node["id"] for node in cut["nodes"]}
+        self.assertLessEqual(len(kept), 48)
+        parent_of = {edge["to"]: edge["from"] for edge in tree["edges"]}
+        lanes = [node_id for node_id in kept if node_id != "root"]
+        into = {edge["to"] for edge in cut["edges"]}
+        self.assertEqual([lane for lane in lanes if lane not in into], [], "every kept lane hangs from something")
+        for edge in cut["edges"]:
+            if edge.get("elided"):
+                # The real parent was cut; the edge comes from the nearest ancestor kept.
+                self.assertNotIn(parent_of[edge["to"]], kept)
+                ancestor = parent_of[edge["to"]]
+                while ancestor not in kept:
+                    ancestor = parent_of.get(ancestor, "root")
+                self.assertEqual(edge["from"], ancestor)
+            else:
+                self.assertEqual(parent_of[edge["to"]], edge["from"], "a plain edge is the lane's own parent")
+        # A chain with its middle cut: the edge skips the cut lanes, from the nearest kept one.
+        from omh.plugin_bundle.omh.delegation_graph import _layered_cut
+
+        chain = _graph_of([{"id": name, "kind": "lane", "state": "done", "order": at} for at, name in enumerate("abcd")],
+                          [("root", "a"), ("a", "b"), ("b", "c"), ("c", "d")])
+        layer_ids = [["a"], ["b"], ["c"], ["d"]]
+        layer_of = {"a": 0, "b": 1, "c": 2, "d": 3}
+        parents = {"a": [("root", "depends_on")], "b": [("a", "depends_on")], "c": [("b", "depends_on")],
+                   "d": [("c", "depends_on")]}
+        walk = ["root", "a", "b", "c", "d"]
+        drawn = _layered_cut(chain, {"a", "d"}, layer_ids, layer_of, parents, walk)["edges"]
+        self.assertEqual(sorted((edge["from"], edge["to"], bool(edge.get("elided"))) for edge in drawn),
+                         [("a", "d", True), ("root", "a", False)])
+        drawn = _layered_cut(chain, {"d"}, layer_ids, layer_of, parents, walk)["edges"]
+        self.assertEqual([(edge["from"], edge["to"], edge.get("elided")) for edge in drawn], [("root", "d", True)])
+
+    def test_a_running_lane_far_from_the_frontier_is_kept_before_any_finished_one(self) -> None:
+        """Mutation: rank by distance from the frontier before state, which cut a long-running layer-0 child."""
+        lane = _tree_lane
+        nodes, edges = [lane(0, "running")], [("root", "n0")]
+        firsts = [f"n{index}" for index in range(1, 11)]
+        nodes += [lane(index, "done") for index in range(1, 11)]
+        edges += [("root", first) for first in firsts]
+        seconds = [f"n{index}" for index in range(11, 41)]
+        nodes += [lane(index, "done") for index in range(11, 41)]
+        edges += [(firsts[k % 10], name) for k, name in enumerate(seconds)]
+        thirds = [f"n{index}" for index in range(41, 71)]
+        nodes += [lane(index, "running" if index < 51 else "waiting") for index in range(41, 71)]
+        edges += [(seconds[k % 30], name) for k, name in enumerate(thirds)]
+        nodes += [lane(index, "waiting") for index in range(71, 81)]
+        edges += [(thirds[k % 30], f"n{index}") for k, index in enumerate(range(71, 81))]
+        graph = _graph_of([{**node, "summary": "s" * 60} for node in nodes], edges)
+        cut = self._layered(graph, byte_limit=24_576)
+        self.assertIn("n0", {node["id"] for node in cut["nodes"]})
+        self.assertNoBetterLaneCut(graph, cut)
+        # A failed lane beside a done one in the first layer, sixty done lanes below it, one running at the bottom.
+        nodes = [{"id": "f0", "kind": "lane", "state": "failed", "order": 1},
+                 {"id": "d0", "kind": "lane", "state": "done", "order": 2}]
+        nodes += [{"id": f"x{index}", "kind": "lane", "state": "done", "order": 3 + index} for index in range(60)]
+        nodes.append({"id": "run", "kind": "lane", "state": "running", "order": 100})
+        graph = _graph_of(nodes, [("d0", f"x{index}") for index in range(60)] + [("x0", "run")])
+        cut = self._layered(graph, byte_limit=24_576)
+        self.assertTrue({"f0", "run"} <= {node["id"] for node in cut["nodes"]})
+        self.assertNoBetterLaneCut(graph, cut)
+
+    def test_the_bytes_hold_for_deep_and_wide_runs_open_or_not(self) -> None:
+        """Mutation: keep a zero row per layer and send the cut when nothing fits, which overran the limit 13 times."""
+        from omh.plugin_bundle.omh import delegation_graph
+
+        def lane(index: int, state: str) -> dict:
+            return {"id": f"n{index}", "kind": "lane", "title": f"Node {index} " + "t" * 40, "state": state,
+                    "status": state, "order": index + 1, "summary": "s" * 60}
+
+        def chain(depth: int) -> dict:
+            states = ["running" if at in (0, depth - 30) else "done" if at < depth - 30 else "waiting"
+                      for at in range(depth)]
+            return _graph_of([lane(at, state) for at, state in enumerate(states)],
+                             [("root", "n0")] + [(f"n{at - 1}", f"n{at}") for at in range(1, depth)])
+
+        def one_layer(width: int) -> dict:
+            return _graph_of([lane(at, "running" if at % 50 == 0 else "done") for at in range(width)],
+                             [("root", f"n{at}") for at in range(width)])
+
+        for name, graph in (("deep500", chain(500)), ("deep5000", chain(5000)), ("layer5000", one_layer(5000))):
+            lanes = [node for node in graph["nodes"] if node.get("kind") != "root"]
+            for opened in ((), (0, 1, 2)):
+                with self.subTest(name=name, opened=opened):
+                    cut = delegation_graph._layered(graph, opened)
+                    limit = delegation_graph.GRAPH_OPEN_BYTE_LIMIT if opened else delegation_graph.GRAPH_BYTE_LIMIT
+                    self.assertLessEqual(_size(cut), limit)
+                    shown = [node for node in cut["nodes"] if node.get("kind") != "root"]
+                    # Something the pane can draw: lanes, or the run's counts by state when even the rows overrun.
+                    self.assertTrue(shown or cut.get("counts_only"))
+                    self.assertEqual(len(shown) + cut["hidden_nodes"], len(lanes))
+                    self.assertEqual(sum(cut["hidden_by_state"].values()), cut["hidden_nodes"])
+                    self.assertEqual(cut["layer_count"], 1 if name == "layer5000" else len(lanes))
+                    self.assertNoBetterLaneCut(graph, cut)
+
+    def test_open_layers_are_read_from_the_query_as_ascii_digits_only(self) -> None:
+        """Mutation: take `str.isdigit` alone, so `٣` opens layer 3 and `²` turns the HUD into an error record."""
         from omh.plugin_bundle.omh.dashboard.plugin_api import OPEN_LAYER_LIMIT, open_layers
 
         self.assertEqual(open_layers("3, 1,3,x,-2,1e3,"), (3, 1))
         self.assertEqual(open_layers(""), ())
+        self.assertEqual(open_layers("٣,²,５,4"), (4,))
         self.assertEqual(len(open_layers(",".join(str(at) for at in range(OPEN_LAYER_LIMIT + 9)))), OPEN_LAYER_LIMIT)
+        self.assertEqual(open_layers(",".join(["1"] + ["²"] * 100_000 + ["2"])), (1, 2))
 
 
 if __name__ == "__main__":

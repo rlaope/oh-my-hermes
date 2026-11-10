@@ -402,6 +402,9 @@ export const EN = {
   dagEmptyTitle: 'No DAG in this session',
   dagEmptyDescription: 'A delegated workflow draws its graph here.',
   dagEmptyRuns: 'Earlier runs are in the menu.',
+  dagCountsOnly: function (vars) {
+    return `${plural(vars.total, 'node')} in ${plural(vars.layers, 'layer')}: too many to draw here`
+  },
   sectionPending: 'reading…',
   sectionUnavailable: 'Not available: the OMH backend did not answer',
   foldToggle: 'Fold or unfold',
@@ -638,6 +641,7 @@ export const KO = {
   dagEmptyTitle: '이 세션에 DAG 없음',
   dagEmptyDescription: '위임된 워크플로의 그래프가 여기에 표시됩니다.',
   dagEmptyRuns: '이전 실행은 메뉴에 있습니다.',
+  dagCountsOnly: '노드 {total}개, {layers}층: 여기 그리기에는 너무 많습니다',
   sectionPending: '읽는 중…',
   sectionUnavailable: '사용할 수 없음: OMH 백엔드가 응답하지 않았습니다',
   foldToggle: '접기 또는 펼치기',
@@ -1325,6 +1329,7 @@ export function laneMark(state) {
 export function delegationView(payload) {
   const graph = payload && payload.delegation_graph
   if (!graph || graph.status !== 'active') return null
+  if (graph.counts_only) return countsOnlyView(graph)
   const lanes = lanesOf(graph)
   if (!lanes.length) return null
   const settled = dagRunSummary(graph)
@@ -1350,6 +1355,27 @@ export function delegationView(payload) {
       return node.state === 'done'
     }),
     total: lanes.length
+  }
+}
+
+// A run too deep for the reader to send even its layers (`counts_only`): its name and its lanes counted by state.
+function countsOnlyView(graph) {
+  const states = graph.hidden_by_state && typeof graph.hidden_by_state === 'object' ? graph.hidden_by_state : {}
+  const count = function (state) {
+    return Object.keys(states).reduce(function (sum, raw) {
+      return (humanState(raw) || 'unknown') === state ? sum + (Number(states[raw]) || 0) : sum
+    }, 0)
+  }
+  const tally = LANE_STATE_ORDER.filter(count).map(function (state) {
+    return t('dagStateCount', { count: count(state), state: stateWord(state) })
+  })
+  const total = Number(graph.hidden_nodes) || 0
+  return {
+    summary: [safeText(graph.name) || t('dagDefaultName')].concat(tally).join(' · '),
+    settled: false,
+    done: count('done'),
+    total,
+    note: t('dagCountsOnly', { total, layers: Number(graph.layer_count) || 0 })
   }
 }
 
@@ -1843,13 +1869,20 @@ export function dagModel(graph) {
     const key = `${from}|${to}`
     if (!ids.has(from) || !ids.has(to) || from === to || taken.has(key)) continue
     taken.add(key)
-    edges.push({ from, to, kind: safeText(edge.kind) })
+    // `elided`: the reader cut the lanes between the two, so the edge stands for a path, drawn as implied.
+    edges.push(edge.elided === true ? { from, to, kind: safeText(edge.kind), elided: true } : { from, to, kind: safeText(edge.kind) })
     parents.set(to, (parents.get(to) || []).concat([from]))
     children.set(from, (children.get(from) || []).concat([to]))
   }
   const memo = new Map()
   // A graph the reader cut (`layer_hidden`) numbers each lane's layer itself: its parents may be among the cut.
+  // Only a layer that lost lanes has a row, named by its `layer`; `layer_count` is how many layers the run has.
   const hiddenAt = Array.isArray(graph.layer_hidden) ? rows(graph.layer_hidden) : null
+  const hiddenRow = {}
+  rows(graph.layer_hidden).forEach(function (row) {
+    if (Number.isInteger(row.layer) && reaches(row.layer, 0)) hiddenRow[row.layer] = row
+  })
+  const layerCount = hiddenAt && Number.isInteger(graph.layer_count) && exceeds(graph.layer_count, 0) ? graph.layer_count : 0
   const lanes = records.map(function (record) {
     const id = safeText(record.id)
     const state = humanState(record.state) || 'unknown'
@@ -1890,7 +1923,7 @@ export function dagModel(graph) {
     function (most, lane) {
       return Math.max(most, lane.layer)
     },
-    hiddenAt ? hiddenAt.length - 1 : 0
+    layerCount - 1
   )
   const layers = []
   for (let at = 0; reaches(depth, at); at += 1) {
@@ -1951,7 +1984,7 @@ export function dagModel(graph) {
     // Per layer, the lanes the reader left out and their states; null where it cut nothing by layer.
     hiddenAt: hiddenAt
       ? layers.map(function (ids, at) {
-          const row = hiddenAt[at] || {}
+          const row = hiddenRow[at] || {}
           return { count: Number(row.count) || 0, states: row.states && typeof row.states === 'object' ? row.states : {} }
         })
       : null
@@ -2003,11 +2036,13 @@ export function runtimeGraph(graph) {
 }
 
 // The graph the DAG section draws: the delegation graph while the reader calls
-// it active (a verified fanout is drawn inside it), else the runtime graph.
-export function sectionGraph(payload) {
+// it active (a verified fanout is drawn inside it), else the runtime graph. A
+// pane that `named` its chat draws that chat's work alone: the runtime graph is
+// the home's, whichever session or command started it.
+export function sectionGraph(payload, named) {
   const graph = payload && payload.delegation_graph
-  if (graph && graph.status === 'active' && lanesOf(graph).length) return graph
-  return runtimeGraph(payload && payload.graph)
+  if (graph && graph.status === 'active' && (lanesOf(graph).length || graph.counts_only)) return graph
+  return named ? null : runtimeGraph(payload && payload.graph)
 }
 
 // What the card line under a lane's route says: a waiting lane the lanes it waits on, any other its state, time and output.
@@ -2419,6 +2454,8 @@ export const PANE_CSS = `
 .omh-pane-dv-edge[data-hollow=true]{stroke-dasharray:4 3}
 .omh-pane-dv-edge[data-origin=true]{stroke-dasharray:2 3;opacity:.55}
 .omh-pane-dv-tip[data-origin=true]{opacity:.55}
+.omh-pane-dv-edge[data-elided=true]{stroke-dasharray:1 3;opacity:.55}
+.omh-pane-dv-tip[data-elided=true]{opacity:.55}
 .omh-pane-dv-edgebar{display:flex;justify-content:flex-end;padding:0 0 4px}
 .omh-pane-dv-tip[data-hollow=true]{fill:var(--background)}
 .omh-pane-dv-edge[data-dim=true],.omh-pane-dv-tip[data-dim=true]{opacity:.3}
@@ -2584,6 +2621,37 @@ function toneClass(tone) {
   return tone ? `omh-pane-${tone}` : ''
 }
 
+// The layers the DAG section holds open, for the session and dag run it drew them for. One record for the
+// module, not a state per hook: the status item and the pane both call `useHud`, and two answers would be two query
+// keys, so two full reads on every poll. The DAG clears it when it unmounts or a new run replaces it.
+const dagOpenStore = { key: '', layers: '' }
+const dagOpenListeners = new Set()
+
+export function setDagOpen(key, layers) {
+  if (dagOpenStore.key === key && dagOpenStore.layers === layers) return
+  dagOpenStore.key = key
+  dagOpenStore.layers = layers
+  dagOpenListeners.forEach(function (listen) {
+    listen()
+  })
+}
+
+function useDagOpen() {
+  const [, setSeen] = useState(0)
+  useEffect(function () {
+    const sync = function () {
+      setSeen(function (count) {
+        return count + 1
+      })
+    }
+    dagOpenListeners.add(sync)
+    return function () {
+      dagOpenListeners.delete(sync)
+    }
+  }, [])
+  return dagOpenStore
+}
+
 function useHud() {
   const gateway = useValue(host.state.gateway)
   const sessionId = useValue(host.state.focusedStoredSessionId)
@@ -2596,7 +2664,7 @@ function useHud() {
   const [pick, setPick] = useState({ session: '', run: '' })
   const dagRun = pick.run && pick.session === (sessionId || '') ? pick.run : ''
   // The layers the DAG section holds open, for the session and run it drew them for; a new set is asked for at once.
-  const [opened, setOpened] = useState({ key: '', layers: '' })
+  const opened = useDagOpen()
   const openKey = `${sessionId || ''}|${dagRun}`
   const dagOpen = opened.key === openKey ? opened.layers : ''
   const query = useQuery({
@@ -2622,7 +2690,7 @@ function useHud() {
       setPick({ session: sessionId || '', run })
     },
     openDagLayers: function (layers) {
-      if (layers !== dagOpen) setOpened({ key: openKey, layers })
+      setDagOpen(layers ? openKey : '', layers)
     },
     data: query.data,
     error: query.error,
@@ -2992,6 +3060,8 @@ function UsageStack({ usage, big }) {
 
 function DagKpis({ dag }) {
   const total = dag.total
+  // A share names the whole run, the lanes the reader cut included: `47/500 nodes priced`, not `47/47`.
+  const lanes = dag.lanes.length + dag.hidden
   const prompt = promptTokens(total)
   const cells = [
     {
@@ -3010,13 +3080,13 @@ function DagKpis({ dag }) {
     {
       label: t('dgCost'),
       value: sumCostText(total),
-      sub: total.lanes ? t('dgCostSub', { priced: total.priced, total: dag.lanes.length }) : t('dgCostNone'),
+      sub: total.lanes ? t('dgCostSub', { priced: total.priced, total: lanes }) : t('dgCostNone'),
       tip: t('dgCostTip')
     },
     {
       label: t('dgNodeTime'),
       value: dag.timed ? elapsedText(dag.seconds) : '—',
-      sub: dag.timed ? t('dgNodeTimeSub', { count: dag.timed, total: dag.lanes.length }) : '',
+      sub: dag.timed ? t('dgNodeTimeSub', { count: dag.timed, total: lanes }) : '',
       tip: t('dgNodeTimeTip')
     }
   ]
@@ -3310,6 +3380,8 @@ function edgeLines(canvas, dag, pick, lit) {
       d: roundedPath(pts, BEND_PX),
       points: pts,
       origin: edge.kind === 'repair' || edge.kind === 'extend',
+      // An edge over lanes the reader cut is drawn as implied: dotted and faint, a path rather than one step.
+      elided: edge.elided === true,
       tip: `M${r.x2 - 4} ${end} L${r.x2 + 4} ${end} L${r.x2} ${r.yt} Z`,
       tone: bad ? 'error' : moving ? 'accent' : settled ? 'done' : 'wait',
       hollow: !(moving || settled),
@@ -3431,7 +3503,14 @@ function DagCanvas({ dag, pick, lit, reduce, folded, compact, onPick, onLayer })
       'svg',
       { className: 'omh-pane-dv-edges', width: drawn.width, height: drawn.height, 'aria-hidden': 'true' },
       drawn.lines.flatMap(function (line, index) {
-        const flags = { 'data-tone': line.tone, 'data-hollow': line.hollow, 'data-origin': line.origin, 'data-hot': line.hot, 'data-dim': line.dim }
+        const flags = {
+          'data-tone': line.tone,
+          'data-hollow': line.hollow,
+          'data-origin': line.origin,
+          'data-elided': line.elided,
+          'data-hot': line.hot,
+          'data-dim': line.dim
+        }
         return [
           node('path', { className: 'omh-pane-dv-edge', d: line.d, ...flags }, [], `e${index}`),
           node('path', { className: 'omh-pane-dv-tip', d: line.tip, ...flags }, [], `a${index}`)
@@ -3862,6 +3941,12 @@ function DagView({ dag, options, onOptions, onOpen }) {
     },
     [ask]
   )
+  // Gone, or replaced by another run's view: its layers are not the next graph's, which may be small.
+  useEffect(function () {
+    return function () {
+      if (onOpen) onOpen('')
+    }
+  }, [])
   const onLayer = function (at, open) {
     setOverrides({ key: runKey, layers: { ...layers, [String(at)]: open } })
   }
@@ -3974,7 +4059,7 @@ function DagRunPicker({ choices, onPick }) {
 // a fanout, the native delegation tree, the runtime graph -- it is the same
 // view: the run's line, then its cards, folded by layer as the view options
 // say. With no graph it says so, and still offers the session's earlier runs.
-function DagSection({ payload, state, picked, onPick, onOpen }) {
+function DagSection({ payload, state, named, picked, onPick, onOpen }) {
   const [options, setOptionsState] = useState(function () {
     return dagViewOptions(readStore(DAG_VIEW_STORE))
   })
@@ -3984,7 +4069,9 @@ function DagSection({ payload, state, picked, onPick, onOpen }) {
     writeStore(DAG_VIEW_STORE, merged)
   }
   const choices = payload ? dagRunChoices(payload, picked) : null
-  const graph = payload ? sectionGraph(payload) : null
+  const graph = payload ? sectionGraph(payload, named) : null
+  // The run drawn: the one picked, else the newest the reader lists; a run that replaces it is a new view.
+  const run = picked || safeText((rows(payload && payload.dag_runs)[0] || {}).run)
   const view = graph ? delegationView({ delegation_graph: graph }) : null
   const dag = view ? dagModel(graph) : null
   const controls = [
@@ -3998,8 +4085,12 @@ function DagSection({ payload, state, picked, onPick, onOpen }) {
     countClass: 'omh-pane-mono',
     control: controls.length ? node('span', { className: 'omh-pane-controls' }, controls) : null,
     state,
-    empty: dag ? null : { title: t('dagEmptyTitle'), description: choices ? t('dagEmptyRuns') : t('dagEmptyDescription') },
-    children: dag ? [div('omh-pane-run', view.summary, 'run'), jsx(DagView, { dag, options, onOptions: setOptions, onOpen }, `dag-${dag.name}`)] : null
+    empty: dag || (view && view.note) ? null : { title: t('dagEmptyTitle'), description: choices ? t('dagEmptyRuns') : t('dagEmptyDescription') },
+    children: dag
+      ? [div('omh-pane-run', view.summary, 'run'), jsx(DagView, { dag, options, onOptions: setOptions, onOpen }, `dag-${run}|${dag.name}`)]
+      : view && view.note
+        ? [div('omh-pane-run', view.summary, 'run'), div('omh-pane-more', view.note, 'counts')]
+        : null
   })
 }
 
@@ -4278,7 +4369,7 @@ function HudPane() {
     jsx(UsageBoard, { saved: payload ? payload.session_usage : null, stored: hud.sessionId, graph: payload ? payload.delegation_graph : null }, 'usage'),
     jsx(CatchesSection, { payload, state }, 'catches'),
     jsx(PlanSection, { payload, state }, 'plan'),
-    jsx(DagSection, { payload, state, picked: hud.dagRun, onPick: hud.pickDagRun, onOpen: hud.openDagLayers }, 'dag'),
+    jsx(DagSection, { payload, state, named: !!hud.sessionId, picked: hud.dagRun, onPick: hud.pickDagRun, onOpen: hud.openDagLayers }, 'dag'),
     jsx(AgentsSection, { payload, state, receivedAt: hud.receivedAt }, 'agents')
   ]
   return div('omh-pane', [
@@ -4346,6 +4437,8 @@ export default {
       pluginI18n = null
       Object.assign(turnClock, newTurnClock())
       turnListeners.clear()
+      setDagOpen('', '')
+      dagOpenListeners.clear()
     })
     ctx.registerMany([
       {

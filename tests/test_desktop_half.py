@@ -219,7 +219,7 @@ const replay = scenario => {
     Date.now = realNow
   }
 }
-const koreanScenarios = ['catches_and_lanes', 'settled_lanes', 'maestro_and_board', 'gateway_closed', 'open_with_payload', 'failed_lane', 'dag_cards', 'fanout_cards', 'usage_board']
+const koreanScenarios = ['catches_and_lanes', 'settled_lanes', 'maestro_and_board', 'maestro_unnamed', 'gateway_closed', 'open_with_payload', 'failed_lane', 'dag_cards', 'fanout_cards', 'usage_board']
 const renders = {}
 for (const [name, scenario] of Object.entries(scenarios)) {
   globalThis.__omh.gateway = scenario.gateway
@@ -335,6 +335,17 @@ const local = {
       folds: [...mod.foldedLayers(dag, 'auto', {}, '')].sort((a, b) => a - b)
     }
   },
+  // The query key the status item and the pane each poll under once the DAG holds layers open: one key, one read.
+  sharedOpenKeys: (session, layers) => {
+    globalThis.__omh.gateway = 'open'
+    globalThis.__omh.stored = session
+    globalThis.__omh.query = { data: undefined, error: null }
+    mod.setDagOpen(`${session}|`, layers)
+    const keys = contributions.map(c => { c.render(); return [c.id, globalThis.__omh.lastQuery.queryKey] })
+    mod.setDagOpen('', '')
+    return keys
+  },
+  elidedEdges: graph => mod.dagModel(graph).edges,
   foldedEdges: (graph, folded) => {
     const dag = mod.dagModel(graph)
     return mod.foldedView(dag, new Set(folded), dag.edges, null).edges.map(edge => `${edge.from}>${edge.to}`)
@@ -744,22 +755,50 @@ DAG_GRAPH = _dag_graph(
     ["Write a.txt", "Sum", "Check"],
     [["Sum", 1]],
 )
-# What the reader sends for a run it cut (`delegation_graph._bounded`): kept lanes carry their layer, and every layer
-# counts the lanes it lost. Layer 0 lost all four of its own, layer 1 two of three.
+# What the reader sends for a run it cut (`delegation_graph._layered`): kept lanes carry their layer, `layer_count`
+# says how many layers the run has, and a layer that lost lanes counts them. Layer 0 lost all four of its own, layer 1
+# two of three; layers 2 and 3 lost none and have no row.
 CUT_DAG_GRAPH = {
     **_dag_graph(
-        [_dag_lane("b", "B", state="done", status="accepted"), _dag_lane("c", "C", state="running", status="running"),
+        [_dag_lane("b", "B", state="done", status="accepted",
+                   usage={"input": 900, "cache_read": 6200, "cache_write": 600, "cost_usd": 0.0123}),
+         _dag_lane("c", "C", state="running", status="running",
+                   usage={"input": 700, "cache_read": 3100, "cache_write": 500, "cost_usd": 0.0061}),
          _dag_lane("d", "D", waits_on=1)],
         [("b", "c"), ("c", "d")],
         [],
         [],
     ),
     "hidden_nodes": 6,
-    "layer_hidden": [{"count": 4, "states": {"done": 4}}, {"count": 2, "states": {"done": 2}}, {"count": 0, "states": {}},
-                     {"count": 0, "states": {}}],
+    "layer_count": 4,
+    "layer_hidden": [{"layer": 0, "count": 4, "states": {"done": 4}}, {"layer": 1, "count": 2, "states": {"done": 2}}],
 }
 for _lane, _at in zip((node for node in CUT_DAG_GRAPH["nodes"] if node.get("kind") != "root"), (1, 2, 3)):
     _lane["layer"] = _at
+# The same run with layer 2 cut too: the reader hangs D from B, its nearest kept ancestor, by an `elided` edge.
+ELIDED_DAG_GRAPH = {
+    **CUT_DAG_GRAPH,
+    "nodes": [node for node in CUT_DAG_GRAPH["nodes"] if node["id"] != "d:r:c"],
+    "edges": [*(edge for edge in CUT_DAG_GRAPH["edges"] if "d:r:c" not in (edge["from"], edge["to"])),
+              {"from": "d:r:b", "to": "d:r:d", "kind": "depends_on", "elided": True}],
+    "hidden_nodes": 7,
+    "layer_hidden": [*CUT_DAG_GRAPH["layer_hidden"], {"layer": 2, "count": 1, "states": {"running": 1}}],
+}
+# The same run with its last layer cut whole: the depth comes from `layer_count`, not from the lanes drawn.
+TAIL_CUT_DAG_GRAPH = {
+    **CUT_DAG_GRAPH,
+    "nodes": [node for node in CUT_DAG_GRAPH["nodes"] if node["id"] != "d:r:d"],
+    "edges": [edge for edge in CUT_DAG_GRAPH["edges"] if "d:r:d" not in (edge["from"], edge["to"])],
+    "hidden_nodes": 7,
+    "layer_hidden": [*CUT_DAG_GRAPH["layer_hidden"], {"layer": 3, "count": 1, "states": {"waiting": 1}}],
+}
+# A run too deep for the reader to send even its layer rows: its counts by state alone.
+COUNTS_ONLY_GRAPH = {
+    "status": "active", "source": "native", "name": "delegation", "scope": "session",
+    "nodes": [{"id": "root", "kind": "root", "title": "main", "state": "running"}], "edges": [],
+    "hidden_nodes": 500, "hidden_by_state": {"done": 497, "running": 2, "failed": 1}, "layer_count": 500,
+    "layer_hidden": [], "counts_only": True,
+}
 FANOUT_GRAPH = {
     **DAG_GRAPH,
     "source": "fanout",
@@ -822,9 +861,14 @@ for _name, _data in {
     "dag_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": DAG_GRAPH},
     "fanout_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": FANOUT_GRAPH},
     "dag_beyond_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": BEYOND_DAG_GRAPH, "delegation_drawing": DRAWING},
+    "dag_cut_cards": {**ESTABLISHED_PAYLOAD, "delegation_graph": CUT_DAG_GRAPH},
+    "dag_counts_only": {**ESTABLISHED_PAYLOAD, "delegation_graph": COUNTS_ONLY_GRAPH},
 }.items():
     SCENARIOS[_name] = {**SCENARIOS["open_with_payload"], "data": _data}
 SCENARIOS["busy"] = {**SCENARIOS["open_with_payload"], "busy": True}
+# The same board on a host that names no chat (an older Hermes Desktop): the home's runtime graph is drawn there; a
+# pane that names its chat draws that chat's work alone, and the runtime graph may be another session's.
+SCENARIOS["maestro_unnamed"] = {**SCENARIOS["maestro_and_board"], "stored": None}
 # The usage board: a chat whose row Hermes recorded, whose stream is live, whose context breakdown the host
 # answers, and which this window timed through two turns (1850 ms and 410 ms to the first token).
 SCENARIOS["usage_board"] = {
@@ -953,7 +997,9 @@ FORMATTER_CASES = {
         [DAG_GRAPH, "auto"], [BEYOND_DAG_GRAPH, "auto"],
     ],
     "foldedEdges": [[DAG_GRAPH, [0]], [DAG_GRAPH, [1]], [DAG_GRAPH, []]],
-    "cutLayers": [[CUT_DAG_GRAPH]],
+    "cutLayers": [[CUT_DAG_GRAPH], [TAIL_CUT_DAG_GRAPH]],
+    "elidedEdges": [[ELIDED_DAG_GRAPH]],
+    "sharedOpenKeys": [["s1", "1,2"]],
     "dagViewOptions": [[None], [{"fold": "closed", "figures": False, "implied": True}], [{"fold": "sideways", "compact": "yes"}]],
     "dagModel": [
         [DAG_GRAPH],
@@ -1641,8 +1687,10 @@ class DesktopPluginNodeTests(unittest.TestCase):
             "2", "⠋", "Refactor the router", "run-42", "(codex/maestro gpt-5.6)", "running", "30s",
             "▲", "Triage the flaky suite", "kb-7", "kanban/unassigned(gpt-5.6:medium)", "review", "1m 1s", "+2 more",
         ])
-        # The runtime graph is drawn as the same cards as a dag-ulw run, named for what it is, not a fanout.
-        dag = sections["DAG"]
+        # A pane naming its chat never draws the home's runtime graph: it may be another session's.
+        self.assertEqual(sections["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
+        # Where no chat is named, the runtime graph is drawn as the same cards as a dag-ulw run, named for what it is.
+        dag = self._sections("maestro_unnamed")["DAG"]
         self.assertEqual(dag[:3], ["1/3", "View", "runtime graph · 1 running · 1 waiting · 1 done"])
         self.assertEqual(dag[dag.index("▾ layer 1"):], [
             "▾ layer 1", "a", "—", "✓ done", "Start node", "b", "—", "● running", "Start node",
@@ -1885,7 +1933,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         a failed drawing; or send the pane's width for one."""
         renders = self._drive()["renders"]
         for name in ("drawn_graph", "wide_drawn", "drawing_error", "settled_lanes", "settled_drawn", "graph_and_other",
-                     "failed_lane", "catches_and_lanes", "dag_cards", "fanout_cards", "dag_beyond_cards", "maestro_and_board"):
+                     "failed_lane", "catches_and_lanes", "dag_cards", "fanout_cards", "dag_beyond_cards", "maestro_unnamed"):
             with self.subTest(name=name):
                 classes = {name for node in renders[name]["structure"] for name in node["className"].split()}
                 self.assertTrue({"omh-pane-dv-canvas", "omh-pane-dv-card"} <= classes)
@@ -1970,8 +2018,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(report["formatters"]["humanState"], ["waiting", "done", "planned"])
         self.assertEqual(report["formatters"]["t"][:2], ["layer 1 · 1 node", "layer 1 · 2 nodes"])
         # A card names what it waits on by the lane it follows, and never in the reader's state word.
-        self.assertIn("← b", self._sections("maestro_and_board")["DAG"])
-        self.assertNotIn("blocked_by_dependency", " ".join(self._pane("maestro_and_board")))
+        self.assertIn("← b", self._sections("maestro_unnamed")["DAG"])
+        self.assertNotIn("blocked_by_dependency", " ".join(self._pane("maestro_unnamed")))
         self.assertEqual(report["formatters"]["wordTone"], ["accent", "warn", "error", "muted", "tertiary"])
         for token in ("--ui-cyan", "--ui-success"):
             self.assertNotIn(token, report["style"]["css"])
@@ -2068,7 +2116,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
             self.assertNotIn(english, board)
         self.assertIn("검토", board)
         self.assertIn("실행 중", board)
-        self.assertIn("✓ 완료", board)
+        self.assertIn("✓ 완료", korean["maestro_unnamed"]["byId"]["hud"])
         self.assertIn("Pane refresh · 완료 1/2 · 1 실패", korean["settled_lanes"]["byId"]["hud"])
         self.assertEqual(korean["gateway_closed"]["byId"]["hud"][:2], ["OMH", "게이트웨이 연결 중"])
         tips = " ".join(korean["maestro_and_board"]["tips"])
@@ -2151,10 +2199,37 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_a_graph_cut_by_layer_keeps_its_layers_and_counts_what_they_lost(self) -> None:
         """Mutation: lay a cut graph out from its kept edges, or count a layer by its kept lanes only."""
-        (cut,) = self._drive()["formatters"]["cutLayers"]
+        cut, _ = self._drive()["formatters"]["cutLayers"]
         self.assertEqual(cut["layers"], [[], ["d:r:b"], ["d:r:c"], ["d:r:d"]], "a lane stays in the layer the reader numbered")
         self.assertEqual(cut["summaries"], [[4, 4, "done"], [3, 2, "done"], [1, 0, "running"], [1, 0, "waiting"]])
         self.assertEqual(cut["folds"], [0, 1], "nine lanes in all, so `auto` folds the settled layers")
+
+    def test_an_edge_over_lanes_the_reader_cut_is_kept_and_drawn_as_implied(self) -> None:
+        """Mutation: drop the reader's `elided` mark, so a path over cut lanes reads as one dependency step."""
+        (edges,) = self._drive()["formatters"]["elidedEdges"]
+        self.assertEqual(edges, [{"from": "d:r:b", "to": "d:r:d", "kind": "depends_on", "elided": True}])
+        css = self._drive()["style"]["css"]
+        self.assertIn(".omh-pane-dv-edge[data-elided=true]{stroke-dasharray:1 3;opacity:.55}", css)
+        _, tail = self._drive()["formatters"]["cutLayers"]
+        self.assertEqual(tail["layers"], [[], ["d:r:b"], ["d:r:c"], []], "`layer_count` sets the depth, not the lanes drawn")
+        self.assertEqual(tail["summaries"][3], [1, 1, "waiting"])
+
+    def test_the_status_item_and_the_pane_poll_under_one_key_with_layers_open(self) -> None:
+        """Mutation: keep the open layers in each `useHud`'s own state, so two keys make two full reads per poll."""
+        (keys,) = self._drive()["formatters"]["sharedOpenKeys"]
+        self.assertEqual(keys, [["status", ["omh", "hud", "s1", "", "1,2"]], ["hud", ["omh", "hud", "s1", "", "1,2"]]])
+
+    def test_a_run_too_deep_to_send_reads_as_its_counts_not_as_no_dag(self) -> None:
+        """Mutation: take a graph with no lanes as no graph, so an active 500-layer run reads `No DAG in this session`."""
+        dag = self._sections("dag_counts_only")["DAG"]
+        self.assertNotIn("No DAG in this session", dag)
+        self.assertIn("delegation · 2 running · 1 failed · 497 done", dag)
+        self.assertIn("500 nodes in 500 layers: too many to draw here", dag)
+
+    def test_a_cut_runs_shares_name_the_whole_run(self) -> None:
+        """Mutation: divide by the lanes shown, so a 9-lane run with 3 drawn reads `2/3 nodes priced`."""
+        render = self._drive()["renders"]["dag_cut_cards"]
+        self.assertIn("2/9 nodes priced", self._classed(render, "omh-pane-dv-kpi-sub"))
 
     def test_a_folded_layer_takes_its_lanes_edges_once(self) -> None:
         first, middle, none = self._drive()["formatters"]["foldedEdges"]

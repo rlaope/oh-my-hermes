@@ -833,12 +833,15 @@ def build_delegation_graph(
     dag_run: str = "",
     keep_dag: bool = False,
     open_layers: Sequence[int] = (),
+    layered: bool = False,
 ) -> dict[str, Any]:
     """The graph of one conversation's delegated work, or of the fanout passed in when it has none.
 
     ``dag_run`` names the dag run to draw instead of the newest. A named run that exists is drawn alone (no team,
     no plain delegations beside it) and does not lapse after ``linger``; one that does not is the newest, as ever.
-    ``open_layers`` are the layers the pane holds open, drawn whole before the rest (`_bounded`).
+    ``layered`` asks for the Desktop pane's cut (`_layered`): lanes kept by layer around the frontier, each carrying
+    its layer, with what each layer lost counted; ``open_layers`` are the layers that pane holds open, drawn whole
+    before the rest. Every other reader (the TUI block, the chat end post) gets `_bounded`'s cut, as before.
 
     A graph whose lanes have all settled is inactive once ``linger`` seconds
     have passed since its last change; ``None`` keeps it, and ``keep_dag`` keeps a dag run's (the Desktop pane, which
@@ -869,7 +872,7 @@ def build_delegation_graph(
             graph = fanout_graph(fanout)
         except (ValueError, TypeError, KeyError) as error:
             graph = inactive_graph(f"unreadable_fanout:{type(error).__name__}", scope="global")
-    return _bounded(graph, open_layers)
+    return _layered(graph, open_layers) if layered else _bounded(graph)
 
 
 def _build(
@@ -1547,8 +1550,11 @@ def _layers(nodes: Sequence[Mapping[str, Any]], edges: Sequence[Mapping[str, str
             incoming[edge["to"]] += 1
     layer = {node_id: 0 for node_id in ids}
     ready = [node_id for node_id in ids if incoming[node_id] == 0]
-    while ready:
-        current = ready.pop(0)
+    # Walked by index, not popped from the front, and bucketed in one pass: a 5000-deep chain stays linear.
+    at = 0
+    while at < len(ready):
+        current = ready[at]
+        at += 1
         for lower in successors[current]:
             layer[lower] = max(layer[lower], layer[current] + 1)
             incoming[lower] -= 1
@@ -1557,7 +1563,10 @@ def _layers(nodes: Sequence[Mapping[str, Any]], edges: Sequence[Mapping[str, str
     if any(count for count in incoming.values()):
         return []
     depth = max(layer.values(), default=-1) + 1
-    return [[node_id for node_id in ids if layer[node_id] == index] for index in range(depth)]
+    buckets: list[list[str]] = [[] for _ in range(depth)]
+    for node_id in ids:
+        buckets[layer[node_id]].append(node_id)
+    return buckets
 
 
 def _finish(
@@ -1581,73 +1590,48 @@ def _finish(
 _KEEP_ORDER: Final = {
     "running": 0, "stuck": 0, "failed": 1, "dispatched": 2, "waiting": 3, "interrupted": 4, "unknown": 5, "done": 6,
 }
-# The states a layer holds work in hand by; the pane's `ACTIVE_STATES` reads the same.
-_ACTIVE_STATES: Final = frozenset({"running", "stuck", "failed", "dispatched", "interrupted"})
 
 
-def _bounded(graph: dict[str, Any], open_layers: Sequence[int] = ()) -> dict[str, Any]:
-    """At most `GRAPH_NODE_LIMIT` nodes and `GRAPH_BYTE_LIMIT` bytes, kept by layer outward from the frontier.
-
-    ``open_layers`` are the layers the pane has open: they come first and are held to the larger
-    `GRAPH_OPEN_NODE_LIMIT` and `GRAPH_OPEN_BYTE_LIMIT`. What is left out is counted per layer, and with
-    ``open_layers`` named every lane carries its layer even when nothing was cut, so the pane's ask stays the same.
-    """
+def _bounded(graph: dict[str, Any]) -> dict[str, Any]:
+    """At most `GRAPH_NODE_LIMIT` nodes and `GRAPH_BYTE_LIMIT` bytes; what is left out is counted, edges kept whole."""
     nodes = graph.get("nodes") or []
     if graph.get("status") != "active":
         return graph
-    lanes = [node for node in nodes if node.get("kind") != "root"]
-    layer_ids = _layers(lanes, graph.get("edges") or []) or [[str(node["id"]) for node in lanes]]
-    layer_of = {node_id: at for at, ids in enumerate(layer_ids) for node_id in ids}
-    # The pane's frontier: the furthest layer with work in hand, else the first unsettled one, else the last.
-    states: list[set[str]] = [set() for _ in layer_ids]
-    for node in lanes:
-        states[layer_of[str(node["id"])]].add(str(node.get("state") or "unknown"))
-    active = [at for at, held in enumerate(states) if held & _ACTIVE_STATES]
-    unsettled = [at for at, held in enumerate(states) if held - {"done"}]
-    frontier = active[-1] if active else unsettled[0] if unsettled else len(layer_ids) - 1
-    wanted = {at for at in open_layers if 0 <= at < len(layer_ids)}
-    ranked = sorted(lanes, key=lambda node: (
-        layer_of[str(node["id"])] not in wanted,
-        abs(layer_of[str(node["id"])] - frontier),
-        layer_of[str(node["id"])] < frontier,
-        _KEEP_ORDER.get(node.get("state", ""), 5),
-        -int(node.get("order") or 0),
-    ))
-    node_limit, byte_limit = (GRAPH_OPEN_NODE_LIMIT, GRAPH_OPEN_BYTE_LIMIT) if wanted else (GRAPH_NODE_LIMIT, GRAPH_BYTE_LIMIT)
 
-    def cut(keep: int) -> dict[str, Any]:
-        return _cut(graph, {str(node["id"]) for node in ranked[:keep]}, layer_ids, layer_of)
+    def size(candidate: dict[str, Any]) -> int:
+        return len(json.dumps(candidate, sort_keys=True, default=str).encode("utf-8"))
 
-    roots = len(nodes) - len(lanes)
-
-    def fits(keep: int) -> bool:
-        return keep + roots <= node_limit and len(json.dumps(cut(keep), sort_keys=True, default=str).encode("utf-8")) <= byte_limit
-
-    if fits(len(ranked)):
-        return cut(len(ranked)) if open_layers else graph
-    # A kept lane adds bytes and never pulls another in, so what fits is a prefix of the ranking.
-    low, high = 0, max(0, min(len(ranked), node_limit - roots))
-    while low < high:
-        middle = (low + high + 1) // 2
-        low, high = (middle, high) if fits(middle) else (low, middle - 1)
-    return cut(low)
+    keep = len(nodes)
+    while keep > 1 and (keep > GRAPH_NODE_LIMIT or size(_cut(graph, keep)) > GRAPH_BYTE_LIMIT):
+        keep -= 1
+    return _cut(graph, keep) if keep < len(nodes) else graph
 
 
-def _cut(
-    graph: dict[str, Any], kept_lanes: set[str], layer_ids: list[list[str]], layer_of: Mapping[str, int]
-) -> dict[str, Any]:
+def _cut(graph: dict[str, Any], keep: int) -> dict[str, Any]:
     nodes = graph["nodes"]
-    kept_ids = kept_lanes | {str(node["id"]) for node in nodes if node.get("kind") == "root"}
-    kept = [node if node.get("kind") == "root" else {**node, "layer": layer_of[str(node["id"])]}
-            for node in nodes if str(node["id"]) in kept_ids]
-    # Only edges between kept nodes: a cut parent is counted in its layer, not drawn.
+    if keep >= len(nodes):
+        return graph
+    root = [node for node in nodes if node.get("kind") == "root"]
+    lanes = sorted(
+        (node for node in nodes if node.get("kind") != "root"),
+        key=lambda node: (_KEEP_ORDER.get(node.get("state", ""), 5), -int(node.get("order") or 0)),
+    )
+    kept_ids = {node["id"] for node in root + lanes[: max(0, keep - len(root))]}
+    # A kept node's parents are kept too, so no kept edge hangs from nothing.
+    changed = True
+    while changed:
+        changed = False
+        for edge in graph["edges"]:
+            if edge["to"] in kept_ids and edge["from"] not in kept_ids:
+                kept_ids.add(edge["from"])
+                changed = True
+    kept = [node for node in nodes if node["id"] in kept_ids]
     edges = [edge for edge in graph["edges"] if edge["from"] in kept_ids and edge["to"] in kept_ids]
     # What each group (a dag run's layer) lost, so its row reads `28 of 640 nodes`, not a total of 28; every group in
     # the run's order, so a layer the cut emptied still has its row; and what the cut lanes' states were, so a run's
-    # end tallies the whole run. `layer_hidden` is the same by layer index, which the pane folds and asks by.
+    # end tallies the whole run.
     hidden_by_group: dict[str, int] = {}
     hidden_by_state: dict[str, int] = {}
-    layer_hidden: list[dict[str, Any]] = [{"count": 0, "states": {}} for _ in layer_ids]
     group_order: list[str] = []
     for node in sorted(nodes, key=lambda node: int(node.get("order") or 0)):
         if node.get("kind") == "root":
@@ -1655,13 +1639,10 @@ def _cut(
         group = str(node.get("group") or "")
         if group not in group_order:
             group_order.append(group)
-        if str(node["id"]) not in kept_ids:
+        if node["id"] not in kept_ids:
             state = str(node.get("state") or "unknown")
             hidden_by_group[group] = hidden_by_group.get(group, 0) + 1
             hidden_by_state[state] = hidden_by_state.get(state, 0) + 1
-            row = layer_hidden[layer_of[str(node["id"])]]
-            row["count"] += 1
-            row["states"][state] = row["states"].get(state, 0) + 1
     return {
         **graph,
         "nodes": kept,
@@ -1671,5 +1652,163 @@ def _cut(
         "hidden_by_group": hidden_by_group,
         "hidden_by_state": hidden_by_state,
         "group_order": group_order,
-        "layer_hidden": layer_hidden,
+    }
+
+
+# The Desktop pane's cut. A lane in hand (running, or returned to be checked) is kept before any other, then a
+# lane that stopped short (failed, blocked, stuck, interrupted), then the rest by their layer's distance from the
+# frontier: a running or failed lane is never cut while a finished one is kept.
+_IN_HAND_STATES: Final = frozenset({"running", "dispatched"})
+_STOPPED_STATES: Final = frozenset({"failed", "stuck", "interrupted"})
+# The states a layer holds work in hand by; the pane's `ACTIVE_STATES` reads the same.
+_ACTIVE_STATES: Final = frozenset({"running", "stuck", "failed", "dispatched", "interrupted"})
+
+
+def _layered(graph: dict[str, Any], open_layers: Sequence[int] = ()) -> dict[str, Any]:
+    """The pane's cut: at most `GRAPH_NODE_LIMIT` nodes and `GRAPH_BYTE_LIMIT` bytes, kept by layer.
+
+    ``open_layers`` are the layers the pane has open: their lanes come after the lanes in hand and the stopped ones
+    and before the rest, under the larger `GRAPH_OPEN_NODE_LIMIT` and `GRAPH_OPEN_BYTE_LIMIT`. Every kept lane
+    carries its ``layer``; ``layer_count`` is how many the run has, and ``layer_hidden`` counts, for each layer that
+    lost any, the lanes it lost by state. A kept lane whose parent was cut hangs from its nearest kept ancestor by an
+    ``elided`` edge, so it is never drawn under the wrong parent. With ``open_layers`` named the cut is sent even
+    when nothing was left out, so the pane's ask stays the same. A run whose layer rows alone overrun the bytes is
+    sent as its counts by state (``counts_only``), which the pane draws as one line.
+    """
+    nodes = graph.get("nodes") or []
+    if graph.get("status") != "active":
+        return graph
+    lanes = [node for node in nodes if node.get("kind") != "root"]
+    edges = graph.get("edges") or []
+    layer_ids = _layers(lanes, edges) or [[str(node["id"]) for node in lanes]]
+    layer_of = {node_id: at for at, ids in enumerate(layer_ids) for node_id in ids}
+    # The pane's frontier: the furthest layer with work in hand, else the first unsettled one, else the last.
+    states: list[set[str]] = [set() for _ in layer_ids]
+    for node in lanes:
+        states[layer_of[str(node["id"])]].add(str(node.get("state") or "unknown"))
+    active = [at for at, held in enumerate(states) if held & _ACTIVE_STATES]
+    unsettled = [at for at, held in enumerate(states) if held - {"done"}]
+    frontier = active[-1] if active else unsettled[0] if unsettled else len(layer_ids) - 1
+    wanted = {at for at in open_layers if 0 <= at < len(layer_ids)}
+
+    def rank(node: Mapping[str, Any]) -> tuple[Any, ...]:
+        state = str(node.get("state") or "")
+        at = layer_of[str(node["id"])]
+        tier = 0 if state in _IN_HAND_STATES else 1 if state in _STOPPED_STATES else 2
+        return (tier, at not in wanted, abs(at - frontier), at < frontier, _KEEP_ORDER.get(state, 5),
+                -int(node.get("order") or 0))
+
+    ranked = sorted(lanes, key=rank)
+    node_limit, byte_limit = (GRAPH_OPEN_NODE_LIMIT, GRAPH_OPEN_BYTE_LIMIT) if wanted else (GRAPH_NODE_LIMIT, GRAPH_BYTE_LIMIT)
+    roots = len(nodes) - len(lanes)
+    # Each lane's parents, and the nodes in the order a parent comes before its child (roots first, then by layer).
+    parents: dict[str, list[tuple[str, str]]] = {}
+    for edge in edges:
+        parents.setdefault(str(edge["to"]), []).append((str(edge["from"]), str(edge.get("kind") or "")))
+    walk = [str(node["id"]) for node in nodes if node.get("kind") == "root"] + [i for ids in layer_ids for i in ids]
+
+    def cut(keep: int) -> dict[str, Any]:
+        return _layered_cut(graph, {str(node["id"]) for node in ranked[:keep]}, layer_ids, layer_of, parents, walk)
+
+    def size(candidate: Mapping[str, Any]) -> int:
+        return len(json.dumps(candidate, sort_keys=True, default=str).encode("utf-8"))
+
+    whole = cut(len(ranked))
+    if len(nodes) <= node_limit and size(whole) <= byte_limit:
+        return whole if open_layers else graph
+    # Every kept lane adds its bytes, so what fits is (near enough) a prefix of the ranking: search its length.
+    low, high = 0, max(0, min(len(ranked), node_limit - roots))
+    while low < high:
+        middle = (low + high + 1) // 2
+        low, high = (middle, high) if size(cut(middle)) <= byte_limit else (low, middle - 1)
+    best = cut(low)
+    return best if size(best) <= byte_limit else _counts_only(graph, lanes, len(layer_ids))
+
+
+def _layered_cut(
+    graph: dict[str, Any],
+    kept_lanes: set[str],
+    layer_ids: list[list[str]],
+    layer_of: Mapping[str, int],
+    parents: Mapping[str, Sequence[tuple[str, str]]],
+    walk: Sequence[str],
+) -> dict[str, Any]:
+    nodes = graph["nodes"]
+    kept_ids = kept_lanes | {str(node["id"]) for node in nodes if node.get("kind") == "root"}
+    kept = [node if node.get("kind") == "root" else {**node, "layer": layer_of[str(node["id"])]}
+            for node in nodes if str(node["id"]) in kept_ids]
+    drawn = [edge for edge in graph["edges"] if str(edge["from"]) in kept_ids and str(edge["to"]) in kept_ids]
+    # For every cut node, its nearest kept ancestors, walked parents first; a kept lane under a cut parent takes an
+    # `elided` edge from each of them, which the pane draws as implied.
+    above: dict[str, dict[str, str]] = {}
+    for node_id in walk:
+        if node_id in kept_ids:
+            continue
+        reach: dict[str, str] = {}
+        for parent, kind in parents.get(node_id, ()):
+            for ancestor, first in ({parent: kind} if parent in kept_ids else above.get(parent, {})).items():
+                reach.setdefault(ancestor, first)
+        above[node_id] = reach
+    taken = {(str(edge["from"]), str(edge["to"])) for edge in drawn}
+    for node_id in walk:
+        if node_id not in kept_lanes:
+            continue
+        for parent, kind in parents.get(node_id, ()):
+            if parent in kept_ids:
+                continue
+            for ancestor in above.get(parent, {}):
+                if (ancestor, node_id) not in taken:
+                    taken.add((ancestor, node_id))
+                    drawn.append({"from": ancestor, "to": node_id, "kind": kind, "elided": True})
+    # Only the layers that lost lanes have a row; `layer_count` says how many there are in all.
+    rows: dict[int, dict[str, Any]] = {}
+    hidden_by_state: dict[str, int] = {}
+    for node in nodes:
+        if node.get("kind") == "root" or str(node["id"]) in kept_ids:
+            continue
+        state = str(node.get("state") or "unknown")
+        hidden_by_state[state] = hidden_by_state.get(state, 0) + 1
+        at = layer_of[str(node["id"])]
+        row = rows.setdefault(at, {"layer": at, "count": 0, "states": {}})
+        row["count"] += 1
+        row["states"][state] = row["states"].get(state, 0) + 1
+    out = {key: value for key, value in graph.items() if key not in ("layers", "hidden_by_group", "group_order")}
+    topology = graph.get("dag_topology")
+    if isinstance(topology, Mapping):
+        # The path and the bottlenecks name lanes by title; only a kept lane's can be drawn.
+        titles = {str(node.get("title") or "") for node in kept}
+        out["dag_topology"] = {
+            **topology,
+            "critical_path": [title for title in topology.get("critical_path") or [] if str(title) in titles],
+            "bottlenecks": [row for row in topology.get("bottlenecks") or []
+                            if isinstance(row, Sequence) and row and str(row[0]) in titles],
+        }
+    return {
+        **out,
+        "nodes": kept,
+        "edges": drawn,
+        "hidden_nodes": len(nodes) - len(kept),
+        "hidden_by_state": hidden_by_state,
+        "layer_count": len(layer_ids),
+        "layer_hidden": [rows[at] for at in sorted(rows)],
+    }
+
+
+def _counts_only(graph: Mapping[str, Any], lanes: Sequence[Mapping[str, Any]], layer_count: int) -> dict[str, Any]:
+    """A run too deep for even its layer rows: no lanes, only what it holds by state."""
+    hidden_by_state: dict[str, int] = {}
+    for node in lanes:
+        state = str(node.get("state") or "unknown")
+        hidden_by_state[state] = hidden_by_state.get(state, 0) + 1
+    out = {key: value for key, value in graph.items()
+           if key not in ("layers", "hidden_by_group", "group_order", "dag_topology")}
+    return {
+        **out,
+        "nodes": [node for node in graph.get("nodes") or [] if node.get("kind") == "root"],
+        "edges": [],
+        "hidden_nodes": len(lanes),
+        "hidden_by_state": hidden_by_state,
+        "layer_count": layer_count,
+        "layer_hidden": [],
+        "counts_only": True,
     }
