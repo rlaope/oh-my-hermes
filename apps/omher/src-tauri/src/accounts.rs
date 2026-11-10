@@ -556,7 +556,8 @@ mod tests {
     #[test]
     fn env_per_cli_points_at_the_account_folder() {
         let home = Path::new("/h");
-        let dir = |cli: &str| Path::new("/h/.omher/accounts").join(cli).join("work").to_string_lossy().into_owned();
+        // joined part by part as the code does, so the separators match on Windows too
+        let dir = |cli: &str| home.join(".omher").join("accounts").join(cli).join("work").to_string_lossy().into_owned();
         assert_eq!(account_env(home, "claude", "work").unwrap(), vec![("CLAUDE_CONFIG_DIR".to_string(), dir("claude"))]);
         assert_eq!(account_env(home, "codex", "work").unwrap(), vec![("CODEX_HOME".to_string(), dir("codex"))]);
         assert_eq!(account_env(home, "pi", "work").unwrap(), vec![("PI_CODING_AGENT_DIR".to_string(), dir("pi"))]);
