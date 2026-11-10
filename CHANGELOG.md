@@ -233,6 +233,15 @@ All notable changes will be documented here.
   label at 120 columns (the context goes first), and the launch look's file
   is named as `~/…`.
 
+- **omher finds Hermes installed by its package manager.** Hermes installs
+  made with the unified package manager have no `venv`, so omher said Hermes
+  was not on the computer. omher now starts its bridge on the Python the
+  `hermes` command itself runs on (read from `hermes-agent/.hermes/bin/hermes`,
+  including paths with spaces) and loads Hermes' installed dependencies before
+  it starts, so the bridge no longer stops on `No module named 'websockets'`.
+  An install upgraded from a venv uses the same Python as `hermes`, not the old
+  venv. Thanks to @sykuang (#2740).
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

@@ -989,6 +989,21 @@ class HermesPath(unittest.TestCase):
         omher_bridge.ensure_hermes_on_path(Path("/nonexistent/hermes-agent"), path)
         self.assertEqual(path, [])
 
+    def test_pm_install_activates_its_committed_dependencies(self):
+        import types
+        import omher_bridge
+        calls: list = []
+        envs = types.ModuleType("pm.environments")
+        setattr(envs, "activate_dependencies", calls.append)
+        with mock.patch.dict(sys.modules, {"pm": types.ModuleType("pm"), "pm.environments": envs}):
+            omher_bridge.activate_hermes_dependencies(Path("/h/hermes-agent"))
+        self.assertEqual(calls, [Path("/h/hermes-agent")])
+
+    def test_install_without_pm_keeps_its_own_path(self):
+        import omher_bridge
+        with mock.patch.dict(sys.modules, {"pm": None, "pm.environments": None}):
+            omher_bridge.activate_hermes_dependencies(Path("/h/hermes-agent"))
+
     def test_read_only_uri_survives_odd_folder_names(self):
         import sqlite3
         import omher_bridge

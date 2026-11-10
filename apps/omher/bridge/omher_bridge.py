@@ -3906,6 +3906,7 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="omher-bridge %(levelname)s %(message)s")
     root = Path(args.hermes_root) if args.hermes_root else DEFAULT_HERMES_ROOT
     ensure_hermes_on_path(root)
+    activate_hermes_dependencies(root)
     return asyncio.run(amain(args))
 
 
@@ -3920,6 +3921,20 @@ def ensure_hermes_on_path(root: Path, path: list | None = None) -> None:
     path = sys.path if path is None else path
     if root.is_dir() and str(root) not in path:
         path.insert(0, str(root))
+
+
+def activate_hermes_dependencies(root: Path) -> None:
+    """Boot Hermes' PM-committed dependency environment, as Hermes' own entry points do.
+
+    A PM-managed install runs on its store Python, which owns no packages: the committed
+    generation's site-packages must be selected before any third-party import (`websockets`,
+    `yaml`). Installs without PM (a plain venv) have no `pm` package and keep their own path.
+    """
+    try:
+        from pm.environments import activate_dependencies
+    except ImportError:
+        return
+    activate_dependencies(root)
 
 
 if __name__ == "__main__":
