@@ -342,6 +342,22 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(lapsed["status"], "inactive")
         self.assertEqual((kept["status"], kept["name"]), ("active", "export feature"))
 
+    def test_a_kept_finished_run_yields_to_a_current_fanout_unless_it_is_picked(self) -> None:
+        """Mutation: keep the finished run over a fanout still running, or drop a run the person picked."""
+        fanout = {"contract": {"fanout_id": "fanout-0123456789ab",
+                               "units": [{"unit_id": "core", "title": "Core", "owner": "codex", "depends_on": []}]},
+                  "roster": {"units": [{"unit_id": "core", "status": "running"}]}}
+        with homes() as home:
+            defined(home)
+            now = time.time()
+            call(action="cancel", run="export")
+            later = now + 24 * 3600
+            kept = build_delegation_graph(home.omh, home.hermes, PARENT, now=later, keep_dag=True, fanout=fanout)
+            picked = build_delegation_graph(home.omh, home.hermes, PARENT, now=later, keep_dag=True, fanout=fanout,
+                                            dag_run="export")
+        self.assertEqual((kept["status"], kept["source"]), ("active", "fanout"))
+        self.assertEqual((picked["source"], picked["name"]), ("native", "export feature"))
+
     def test_a_node_whose_stop_hermes_filed_under_the_rotated_parent_has_returned(self) -> None:
         with homes() as home:
             defined(home)

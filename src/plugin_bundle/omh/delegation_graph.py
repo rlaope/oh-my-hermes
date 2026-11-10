@@ -848,8 +848,9 @@ def build_delegation_graph(
         connection = _connect(Path(hermes_home)) if session_id else None
         if session_id and not segments:
             segments = _segments(connection, session_id)
+        # A kept run past its linger yields to a current fanout: live work outranks a finished run nobody picked.
         graph = _build(omh_home, hermes_home, session_id, moment, root_model, titles, scope, linger, segments or [],
-                       connection, dag_run, keep_dag)
+                       connection, dag_run, keep_dag and not fanout)
     except (OSError, ValueError, TypeError, KeyError, sqlite3.Error) as error:
         graph = inactive_graph(f"unreadable:{type(error).__name__}", scope=scope)
     finally:
