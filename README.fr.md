@@ -34,7 +34,7 @@ Il ne modifie ni ne remplace jamais Hermes, et ne présente jamais un travail pr
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
-> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b>, de <a href="https://nousresearch.com">Nous Research</a><br>L'agent sur lequel tourne OMH. OMH est une couche indépendante non officielle.</td></tr>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b>, de <a href="https://nousresearch.com">Nous Research</a><br>L'agent sous OMH. OMH est une couche non officielle par-dessus.</td></tr>
 > <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
 > <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b>, de <a href="https://github.com/code-yeongyu">@code-yeongyu</a><br>L'origine du concept d'ultrawork. OMH l'apporte à Hermes.</td></tr>
 > </table>

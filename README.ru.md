@@ -34,7 +34,7 @@
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
-> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> от <a href="https://nousresearch.com">Nous Research</a><br>Агент, на котором работает OMH. OMH — неофициальный независимый слой.</td></tr>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> от <a href="https://nousresearch.com">Nous Research</a><br>Агент под OMH. OMH — неофициальный слой поверх него.</td></tr>
 > <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
 > <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> от <a href="https://github.com/code-yeongyu">@code-yeongyu</a><br>Источник концепции ultrawork. OMH переносит её в Hermes.</td></tr>
 > </table>
