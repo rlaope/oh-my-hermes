@@ -3306,14 +3306,19 @@ class App(ModesMixin, AgentViewMixin):
             if call.on_expiry is not None:
                 call.on_expiry(call.seconds)
             elif call.method not in QUIET_EXPIRY_METHODS:
-                notice = CALL_EXPIRED_NOTICE.format(method=call.method, seconds=call.seconds)
-                if call.command is None:
-                    self.transcript.add_aside(NoticeBlock(notice, NOTICE_WARN))  # never closes what runs
-                else:
-                    with self._for_command(call.command):  # under the echo of the command it was made for
-                        self.transcript.add_notice(notice, NOTICE_WARN)
+                self._say_unanswered(call.command, call.method, call.seconds)
             self._command_call_done(call)
         self._settle_switch_held()
+
+    def _say_unanswered(self, command: CommandBlock | None, method: str, seconds: float) -> None:
+        """CALL_EXPIRED_NOTICE for a `method` call unanswered in `seconds`: under the echo of the `command` it was made
+        for, else beside what runs."""
+        notice = CALL_EXPIRED_NOTICE.format(method=method, seconds=seconds)
+        if command is None:
+            self.transcript.add_aside(NoticeBlock(notice, NOTICE_WARN))  # never closes what runs
+        else:
+            with self._for_command(command):  # under the echo of the command it was made for
+                self.transcript.add_notice(notice, NOTICE_WARN)
 
     @contextmanager
     def _for_command(self, command: CommandBlock | None) -> Iterator[None]:

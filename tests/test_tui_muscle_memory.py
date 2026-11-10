@@ -681,6 +681,16 @@ class ModelSwitchFeedbackTests(unittest.TestCase):
             model="gpt-5.4",
             reason="Stayed on m-a: switching to gpt-5.4 needs confirmation. Pick it again to confirm."), said)
 
+    def test_a_drop_two_turns_after_the_deferral_does_not_name_that_old_switch(self) -> None:
+        app, client = make_app(busy=True)
+        send(app, "/model gpt-5.4")
+        answer(app, client, {"key": "model", "value": "gpt-5.4", "deferred": True, "scope": "session"})
+        app.turns_ended += 2  # the turn it was held for has come and gone
+        self.dropped(app)
+        said = [block.text for block in [*app.transcript.blocks, *app.transcript._held] if hasattr(block, "text")]
+        self.assertTrue(any(text.startswith("A model switch held for this turn did not happen") for text in said))
+        self.assertFalse(any(text.startswith("The switch to gpt-5.4") for text in said))
+
     def test_a_drop_with_no_deferred_switch_of_this_tui_still_lands_and_other_notifications_do_not(self) -> None:
         app, _client = make_app()
         self.dropped(app)

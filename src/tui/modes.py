@@ -608,15 +608,19 @@ class ModesMixin:
         normal shown with them off would hide that Hermes asks nothing.
         An answer for a session already left changes nothing and says
         nothing: leaving it counted the switch-back as possibly on and sent
-        an off of its own, whose answer reports for it.
+        an off of its own, whose answer reports for it. Shift+Tab presses made
+        while it was out (shown dimmed) are applied once it is confirmed, and
+        dropped when it is not.
         """
         if sid != self.sid:
             return True
         self.mode_request_open = False
-        self.mode_target = None  # the on before it confirmed nothing: presses made meanwhile are not acted on
         if problem:
+            self.mode_target = None  # approvals may be off: presses made meanwhile are not acted on
             self.transcript.add_notice(SWITCH_BACK_FAILED_NOTICE.format(problem), NOTICE_ERROR)
             self.approvals_off = self.yolo_by_tui = True
+        else:
+            self._settle_mode_target()  # presses made while it was out, shown dimmed, lead on from here
         return True
 
     def _on_yolo_unanswered(self, sid: str, seconds: float) -> None:
@@ -669,6 +673,7 @@ class ModesMixin:
             return
         sid = self.sid
         self.effort_asked = level
+        echo = self.transcript.command
         self._request(
             "config.set",
             {"key": "reasoning", "session_id": sid, "value": level},
@@ -676,7 +681,15 @@ class ModesMixin:
             lambda error: self._on_effort_answer(
                 sid, level, None, f"{error.get('code')}: {as_text(error.get('message')) or 'refused'}"
             ),
+            on_expiry=lambda seconds: self._on_effort_unanswered(sid, level, echo, seconds),
         )
+
+    def _on_effort_unanswered(self, sid: str, level: str, echo: object, seconds: float) -> None:
+        """An effort call Hermes did not answer: the level stops showing as asked for (the line shows the one Hermes
+        last confirmed), and the notice is any unanswered call's."""
+        if sid == self.sid and self.effort_asked == level:
+            self.effort_asked = ""
+        self._say_unanswered(echo, "config.set", seconds)
 
     def _on_effort_answer(self, sid: str, level: str, value: object, refusal: str = "", said: bool = False) -> bool:
         """Hermes answered an effort call: its `value` is the level it set, or `refusal` says why it set none."""

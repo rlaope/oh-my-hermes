@@ -3345,6 +3345,45 @@ class ShiftTabWhileYoloCallOutTests(unittest.TestCase):
         self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
         self.assertEqual(app.mode, MODE_NORMAL)
 
+    def test_presses_kept_for_an_unanswered_call_are_dropped(self) -> None:
+        # Three presses lead back to normal; were that target kept past the expiry, the fresh press's plan would be
+        # carried on to normal once its off is answered.
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        for _ in range(3):
+            app._on_input(SHIFT_TAB)
+        now[0] += 3600
+        app._expire_calls()
+        self.assertEqual(app.mode, MODE_ACCEPT)  # unanswered: approvals may be off, shown as the TUI's own
+        self.assertEqual(notices(app), [modes_module.YOLO_UNANSWERED_NOTICE.format(
+            seconds=app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS))])
+        app._on_input(SHIFT_TAB)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # exactly one call for the fresh press
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_presses_while_the_switch_back_is_out_are_applied_once_it_is_confirmed(self) -> None:
+        app, client = make_app(cols=120)
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})  # refused: the switch-back goes
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all on…", info_of(app))
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL, YOLO_ON_CALL])  # the press the label showed
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+
+    def test_presses_while_a_failed_switch_back_was_out_are_dropped(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        app._on_input(SHIFT_TAB)
+        answer(app, client, None, {"code": 5001, "message": "boom"})
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_ACCEPT)  # approvals may be off: shown, and nothing more is sent
+        self.assertNotIn("…", info_of(app))
+
     def test_a_single_press_still_waits_for_hermes_before_the_mode_changes(self) -> None:
         app, client = make_app()
         app._on_input(SHIFT_TAB)
@@ -3371,6 +3410,39 @@ class EffortFeedbackTests(unittest.TestCase):
         self.assertIn("effort xhigh…", info_of(app))
         answer(app, client, effort_set("xhigh"))
         self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+
+    def test_an_unanswered_effort_stops_showing_as_asked_for(self) -> None:
+        for typed in (True, False):
+            with self.subTest(typed=typed):
+                now = [100.0]
+                app, client = make_app(clock=lambda: now[0])
+                app.effort = "medium"
+                if typed:
+                    type_text(app, "/effort high")
+                    app._on_input(Key(ENTER))
+                else:
+                    app._on_input(CTRL_T)
+                asked = client.calls[-1][1]["value"]
+                self.assertIn(f"effort {asked}…", info_of(app))
+                now[0] += 3600
+                app._expire_calls()
+                self.assertEqual(app.effort_asked, "")
+                self.assertIn("effort medium", info_of(app))
+                self.assertNotIn("…", info_of(app))
+                seconds = app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS)
+                self.assertEqual(notices(app), [app_module.CALL_EXPIRED_NOTICE.format(method="config.set",
+                                                                                      seconds=seconds)])
+
+    def test_an_expiry_leaves_a_newer_level_asked_for(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        app.effort = "low"
+        app._on_input(CTRL_T)  # medium
+        now[0] += 3600
+        app._on_input(CTRL_T)  # high, asked after the first went out
+        app._expire_calls()  # only the first has run out
+        self.assertEqual(app.effort_asked, "high")
+        self.assertIn("effort high…", info_of(app))
 
     def test_a_refused_typed_effort_says_only_the_refusal(self) -> None:
         app, client = make_app()
