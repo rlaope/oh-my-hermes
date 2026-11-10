@@ -4,24 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: `@name` of a bot in a chat opens that bot's chat.** A bot that
-  writes `@hermes`, `@omh-tui` or `@kami` now draws the name in ink at medium
-  weight, and clicking it (or Enter or Space on it) switches to that bot's chat
-  with the sidebar selection; it never sends anything. Names resolve by profile
-  slug, by display name, or `hermes` for the default profile, case-insensitive;
-  unknown names, code, links, emails and `@file:` refs stay text, and the open
-  chat's own bot is not a link. It works in bot bubbles, your own bubbles and a
-  run node's handoff.
-- **omher: New session opens the chat at once.** SESSIONS `+` (and the empty
-  section's New session row) opens a New session chat in the main column, like
-  the Codex app, instead of a two-step agent-then-folder menu. The agent is
-  picked in the composer row (official marks; agents not installed are
-  disabled with their install line) and defaults to the last one used; the
-  folder is a chip under the composer that defaults to the last folder used,
-  else home, and offers the recent folders, Choose folder… and home. Nothing
-  runs until the first message, which becomes the agent's first prompt (a
-  terminal agent such as Grok starts on Start and is sent nothing); then the
-  agent and folder are shown read-only. Closing a draft starts nothing.
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
@@ -97,16 +79,25 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
-- **omher: each plan part shows the pull request it opened.** A node's
-  status line ends with GitHub's own pull request mark in GitHub's colour
-  (open green, merged purple, closed red, draft gray) and the number, `#2746`,
-  in the muted text colour; the part's detail says `#2746 · Merged`. A click on
-  the number opens the PR in the browser and does not select the node. omher
-  finds the number in the part's reasons, summary or handoff, and asks the
-  person's own GitHub CLI for the state (`gh pr view`, kept 5 minutes, 3 s at
-  most), apart from the plan, so the graph never waits on GitHub. Without
-  `gh`, a login or the network the number shows with no state colour.
-  BOUNDARY rule 21 states this one read.
+- **omher 0.2.3.** New sessions open a chat at once, sessions have names, and
+  an update asks first and brings you back where you were.
+  - **New session.** SESSIONS `+` opens a chat right away, like the Codex app:
+    the agent is picked in the composer and the folder in a chip under it, and
+    nothing runs until the first message. (#2759)
+  - **Session names.** A SESSIONS row shows the session's name (yours, the
+    agent's own title, or a short summary of your first message) above its
+    folder and agent; double-click to rename. (#2756)
+  - **Update and resume.** Update asks before it restarts. After any restart
+    omher reopens the chat, panel and unsent text you had, and a running Claude
+    Code or Codex session continues its conversation. (#2757)
+  - **Pull requests on plans.** Each plan part shows the pull request it opened
+    with GitHub's state mark and number; a click opens it. (#2755)
+  - **@bot names.** `@name` of a bot in a chat opens that bot's chat; it never
+    sends anything. (#2753)
+  - **Link chips.** A bare link reads as the service's mark and a short label
+    (GitHub, Slack with its channel, Google, X, YouTube, Notion, Linear, Figma,
+    npm); the full URL is in the tooltip and omher fetches nothing from it.
+    (#2758)
 - **omher 0.2.2.** Codex from the ChatGPT app counts as installed, and an
   empty SESSIONS section is one quiet row.
   - **Codex.** On macOS, the Codex CLI inside the ChatGPT or Codex desktop app
@@ -323,52 +314,6 @@ All notable changes will be documented here.
   it starts, so the bridge no longer stops on `No module named 'websockets'`.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
-- **omher shows links as small service chips.** A bare link in a chat bubble,
-  a session chat or a plan handoff now reads as the service's mark and a short
-  label instead of a long URL: `rlaope/oh-my-hermes#2657`, `#2604`, a commit,
-  release, CI run or file line on GitHub; a Slack or Discord thread named by
-  its channel (`#docs-harness`) when the bot has been in that channel, else
-  "Slack message"; Google Docs, Sheets, Slides, Drive, Calendar, Meet, Forms,
-  Gmail and Maps; X and Twitter posts and profiles; LinkedIn; YouTube with its
-  start time (`YouTube · video · 1:23`); Notion, Linear, Figma and npm. The full
-  URL is in the tooltip, and a click opens it in your browser or the app. A
-  link with its own words keeps them, with the mark in front; any other site,
-  and a lookalike such as `github.com.evil.io`, stays a plain link showing its
-  real address. A plan node's drawer lists its links as a Links block, its own
-  pull request with GitHub's state mark like the node's badge. omher
-  reads all of this from the address and the bot's own channel names; it
-  fetches nothing from the link.
-
-- **omher asks before it updates, and picks up where you left off after a
-  restart.** The sidebar's Update button opens a small confirm first:
-  "Update to 0.2.3?", one line saying omher will restart and your chats,
-  panels and sessions come back, and, when sessions are running, which ones
-  and how they come back. Cancel or Esc leaves everything as it was; install
-  starts only on "Update and restart". After any restart (the update, a quit
-  and reopen, a crash) omher reopens the bot or session you had open, the side
-  panel and its tab, the Plans full view, and every composer's unsent text,
-  from one `omher.resume` snapshot saved as you go. The SESSIONS list comes
-  back too: a Claude Code or Codex chat that was running continues its own
-  conversation in the same folder and with the same account, pi, oh-my-pi,
-  Grok and oh-my-hermes sessions come back paused with a one-click Resume, and
-  ended ones stay ended. A snapshot that is malformed, from another version or
-  names a bot that is gone is ignored, and nothing starts twice.
-
-- **omher names coding sessions by what they are about.** A SESSIONS row
-  used to show only its folder, so three sessions in `web-app` looked the
-  same. The first line is now the session's name and the second line is the
-  folder and the agent (`web-app · Claude Code`). The name is the one you
-  gave the session, else the title the agent gave the conversation (Claude
-  Code's own title, a Codex thread name, the title Hermes gives an
-  oh-my-hermes chat), else a short summary of your first message made on
-  this computer: no `/command`, `@file`, code block or link, the first
-  sentence, at most 40 characters cut at a word. omher asks no model for it.
-  The agent's title replaces the summary as soon as it arrives. To rename a
-  session, double-click its name or right-click › Rename: Enter saves, Esc
-  cancels, and an empty name goes back to the automatic one. The name is
-  kept on this computer with the agent's conversation and comes back when
-  you resume that conversation or omher restarts. The session header shows
-  the name too, with the folder and the agent after it.
 
 ## 4.0.7 - 2026-11-09
 
