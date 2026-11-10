@@ -131,6 +131,11 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
         </div>
       )}
       {item.command && <pre className="card-cmd">{item.command}</pre>}
+      {item.cwd && (
+        <div className="card-cwd" title={item.cwd} data-testid="card-cwd">
+          in {item.cwd}
+        </div>
+      )}
       <div className="card-acts">
         {shown.map((b) => (
           <button key={b.choice} type="button" className="card-btn soft" disabled={!!busy} onClick={() => void pick(b.choice)}>

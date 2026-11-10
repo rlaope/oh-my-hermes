@@ -458,11 +458,32 @@
   margin: 0 auto 8px;
   font-size: 11.5px;
   color: var(--quiet);
-  text-align: center;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ss-ended-t {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+.ss-restart {
+  flex: none;
+  font: inherit;
+  font-weight: 560;
+  color: var(--body);
+  background: var(--raise2);
+  border: 0;
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.ss-restart:hover {
+  color: var(--ink);
 }
 /* an approval or question waits: amber, the app's "needs attention" colour (never the brand gradient) */
 :root {

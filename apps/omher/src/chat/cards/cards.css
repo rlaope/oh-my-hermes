@@ -56,6 +56,15 @@
   max-height: 160px;
   overflow-y: auto;
 }
+.card-cwd {
+  margin-top: -2px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .card-acts {
   display: flex;
   flex-wrap: wrap;

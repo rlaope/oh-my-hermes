@@ -220,7 +220,7 @@ export function SessionList() {
             key={rec.id}
             className="ss-row ss-confirm"
             role="group"
-            aria-label={`Stop ${agentDef(rec.agent).label}?`}
+            aria-label={`Stop ${agentDef(rec.agent).label} in ${folderName(rec.cwd)}?`}
             data-testid={`session-confirm-${rec.id}`}
             onKeyDown={(e) => {
               if (e.key !== "Escape") return;
@@ -229,7 +229,9 @@ export function SessionList() {
               cancel(rec.id);
             }}
           >
-            <span className="ss-q">Stop {agentDef(rec.agent).label}?</span>
+            <span className="ss-q" title={rec.cwd}>
+              Stop {agentDef(rec.agent).label}?
+            </span>
             <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
               Cancel
             </button>
