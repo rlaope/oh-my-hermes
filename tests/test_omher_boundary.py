@@ -128,7 +128,7 @@ class SignedSelfUpdateFromOneAddress(unittest.TestCase):
 
     def test_only_the_sidebar_updater_module_imports_the_updater(self) -> None:
         users = sorted(
-            str(p.relative_to(UI_SRC)) for p in UI_SRC.rglob("*.ts*")
+            p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
             if re.search(r"@tauri-apps/plugin-(updater|process)", p.read_text(encoding="utf-8"))
         )
         self.assertEqual(users, ["sidebar/updater.ts"])
