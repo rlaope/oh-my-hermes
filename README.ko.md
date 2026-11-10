@@ -40,6 +40,16 @@ omh setup
 
 <br>
 
+<table>
+<tr>
+<td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
+<td><b>OMH의 ultrawork 컨셉은 <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a>에서 차용했습니다</b> (만든 사람 <a href="https://github.com/code-yeongyu">@code-yeongyu</a>).<br>
+<code>ulw</code> 키워드와 그래프형 <code>dag-ulw</code> 실행이 OmO에서 왔고, OMH는 이를 Hermes Agent로 가져온 별개 프로젝트입니다.</td>
+</tr>
+</table>
+
+<br>
+
 ## 얻는 것
 
 - **lane마다 맞는 모델.**<br>

@@ -35,6 +35,16 @@ omh setup
 
 <br>
 
+<table>
+<tr>
+<td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
+<td><b>OMH 的 ultrawork 概念借鉴自 <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b>（作者 <a href="https://github.com/code-yeongyu">@code-yeongyu</a>）。<br>
+<code>ulw</code> 关键词和图式的 <code>dag-ulw</code> 运行都来自 OmO。OMH 是把它们带到 Hermes Agent 的独立项目。</td>
+</tr>
+</table>
+
+<br>
+
 ## 你能得到什么
 
 - **每条 lane 用对的模型。**<br>

@@ -58,6 +58,16 @@ omh setup
 
 <br>
 
+<table>
+<tr>
+<td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
+<td><b>OMH borrows its ultrawork concept from <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b> by <a href="https://github.com/code-yeongyu">@code-yeongyu</a>.<br>
+The <code>ulw</code> keyword and graph-style <code>dag-ulw</code> runs come from OmO. OMH is a separate project that brings them to Hermes Agent.</td>
+</tr>
+</table>
+
+<br>
+
 ## What you get
 
 - **The right model for every lane.**<br>

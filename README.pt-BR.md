@@ -57,6 +57,16 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 <br>
 
+<table>
+<tr>
+<td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
+<td><b>O OMH pega emprestado o conceito de ultrawork do <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b>, criado por <a href="https://github.com/code-yeongyu">@code-yeongyu</a>.<br>
+A palavra-chave <code>ulw</code> e as execuções em grafo <code>dag-ulw</code> vêm do OmO. O OMH é um projeto separado que as leva ao Hermes Agent.</td>
+</tr>
+</table>
+
+<br>
+
 ## O que você ganha
 
 - **O modelo certo para cada lane.**<br>
