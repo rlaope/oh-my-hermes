@@ -78,7 +78,10 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
       <Avatar bot={bot} size={28} className={`msg-face${face === false ? " blank" : ""}`} />
       <div className="ew-row">
         <div className="b">
-          <span data-testid="away-text">{text}</span> {link}
+          <span className="ew-text" data-testid="away-text">
+            {text}
+          </span>{" "}
+          {link}
           {a.running && (
             <span className="ew-working" data-testid="away-time">
               working · {workingFor(a.started_at, now)}

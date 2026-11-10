@@ -368,7 +368,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
           </>
         ) : choices.length > 0 ? (
           choices.map((c) => (
-            <button key={c} type="button" className="card-btn soft" disabled={busy} onClick={() => void answer(c)}>
+            <button key={c} type="button" className="iv-chip" disabled={busy} onClick={() => void answer(c)}>
               {c}
             </button>
           ))

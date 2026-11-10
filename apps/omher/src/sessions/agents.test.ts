@@ -68,11 +68,11 @@ describe("session agents", () => {
     expect(rowModel({ ...base, agent: "omp", status: "failed" }).sub).toBe("oh-my-pi · Could not start");
   });
 
-  it("row model of a chat: live only while a turn runs, Needs you while an approval waits", () => {
+  it("row model of a chat: live only while a turn runs, needsYou while an approval waits (the line stays the agent)", () => {
     const chat: SessionRec = { id: "s2", agent: "codex", cwd: "/w/api", startedAt: 1, status: "running", view: "chat" };
     expect(rowModel(chat, { turn: false, needsYou: false })).toMatchObject({ live: false, needsYou: false, sub: "Codex" });
     expect(rowModel(chat, { turn: true, needsYou: false })).toMatchObject({ live: true, sub: "Codex" });
-    expect(rowModel(chat, { turn: true, needsYou: true })).toMatchObject({ live: true, needsYou: true, sub: "Codex · Needs you" });
+    expect(rowModel(chat, { turn: true, needsYou: true })).toMatchObject({ live: true, needsYou: true, sub: "Codex" });
     // an ended session never asks for anything
     expect(rowModel({ ...chat, status: "exited", exitCode: 0 }, { turn: true, needsYou: true })).toMatchObject({ live: false, needsYou: false, sub: "Codex · Ended" });
   });

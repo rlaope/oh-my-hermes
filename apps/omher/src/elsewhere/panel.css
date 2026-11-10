@@ -26,8 +26,9 @@
   height: 14px;
   flex: none;
 }
+/* hover lights the icon only: the fill is the selected tab's. Leaving Details widens the panel by 100px, which
+   slides another tab under the pointer that just clicked; with a fill it read as a second selected tab. */
 .pn-tab:hover {
-  background: var(--hover);
   color: var(--ink);
 }
 .pn-tab.on {

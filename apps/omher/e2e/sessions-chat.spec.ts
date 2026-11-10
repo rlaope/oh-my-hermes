@@ -121,7 +121,7 @@ test("the empty section's New session button starts a chat session, then gives w
   expect((await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
 });
 
-test("an approval card in a session: Deny first, answered with Allow for session, row says Needs you", async ({ page }) => {
+test("an approval card in a session: Deny first, answered with Allow for session, the row waits", async ({ page }) => {
   await open(page);
   await start(page, "claude");
   await page.getByTestId("composer").fill("/approve");
@@ -134,7 +134,8 @@ test("an approval card in a session: Deny first, answered with Allow for session
   expect(await card.locator(".card-btn").allInnerTexts()).toEqual(["Deny", "Allow once", "Allow for session"]);
   const row = page.locator("[data-testid=session-list] .ss-row").first();
   await expect(row).toHaveAttribute("data-needs-you", "true");
-  await expect(row.getByTestId("session-sub")).toHaveText("Claude Code · Needs you");
+  // one amber signal pair in the row ("waiting" and the dot): the line under the name stays the gray agent name
+  await expect(row.getByTestId("session-sub")).toHaveText("Claude Code");
   await expect(page.getByTestId("session-status")).toHaveText("Needs you");
   // the bot row's waiting state: amber dot and "waiting", the ring stops
   await expect(row.getByTestId("needs")).toBeVisible();

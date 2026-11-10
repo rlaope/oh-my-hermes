@@ -72,6 +72,9 @@ export const zh: Record<Key, string> = {
   "chat.pick": "选择一个机器人",
   "chat.connecting": "正在连接 Hermes…",
 
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n} 项",
+
   // skills (the composer's ./ picker)
   "skills.label": "技能",
   "skills.none": "没有匹配的技能",

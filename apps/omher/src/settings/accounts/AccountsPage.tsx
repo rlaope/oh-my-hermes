@@ -199,7 +199,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
     <section className="acc-g" data-testid={`accounts-${g.cli}`}>
       <div className="acc-gh">
         <span className="acc-gh-i">
-          <AgentIcon id={g.cli} size={15} />
+          <AgentIcon id={g.cli} size={16} />
         </span>
         <b>{CLI_NAME[g.cli]}</b>
       </div>
@@ -217,7 +217,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
             <div className="acc-row" key={r.id} data-testid="account-row" data-id={r.id} data-state={r.state} data-in-use={inUse}>
               <span className="acc-ring" title={lines.join("\n") || undefined} data-testid="account-usage">
                 {r.usage && <Ring p={r.usage} />}
-                <AgentIcon id={g.cli} size={13} />
+                <AgentIcon id={g.cli} size={16} />
               </span>
               {renaming === r.id ? (
                 <RenameField

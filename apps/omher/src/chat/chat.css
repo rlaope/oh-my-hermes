@@ -92,6 +92,12 @@
   font-size: 11px;
   letter-spacing: 0.01em;
 }
+/* a notice in the date dividers' place (the bot is not reachable, has no model): it carries information, so it
+   reads as text, not as a divider */
+.thread > .day.note {
+  color: var(--muted);
+  font-size: 12px;
+}
 /* consecutive messages from the same side sit close; a new turn gets air */
 .row-user + .row-user,
 .row-assistant + .row-assistant,
@@ -409,7 +415,12 @@
 [data-bubbles="open"] .msg.a.typing .b {
   padding: 0 2px;
 }
-.msg.streaming .b::after {
+/* the caret ends the last line of text: after the closing paragraph or heading, or the last item of a closing list
+   (on a line of its own at bullet indent it read as an empty bullet); after a code block or a table, or with no
+   text yet, it ends the bubble */
+.msg.streaming .b > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+.msg.streaming .b > :is(ul, ol):last-child > li:last-child::after,
+.msg.streaming .b:not(:has(> :is(p, h1, h2, h3, h4, h5, h6, ul, ol):last-child))::after {
   content: "";
   display: inline-block;
   width: 6px;

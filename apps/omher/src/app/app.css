@@ -8,6 +8,9 @@
   background: var(--bg);
   transition: grid-template-columns 0.25s ease;
   overflow: hidden;
+  /* clip, not just hide: the closed panel's 1px border (and, under 1100px, the panel parked off to the right) made
+     .window 1px wider than the screen, and a scroll into view could shift the whole app 1px left */
+  overflow: clip;
 }
 .window.panel-open {
   grid-template-columns: var(--side-w) minmax(0, 1fr) var(--panel-w);

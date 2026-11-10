@@ -72,6 +72,9 @@ export const en = {
   "chat.pick": "Pick a bot",
   "chat.connecting": "Connecting to Hermes…",
 
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n} more",
+
   // skills (the composer's ./ picker)
   "skills.label": "Skills",
   "skills.none": "No skill matches",

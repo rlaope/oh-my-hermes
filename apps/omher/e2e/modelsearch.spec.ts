@@ -201,9 +201,10 @@ test("long model id ellipsizes and stays inside the header at 900x700 with the p
   expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
 });
 
-// Keyboard focus in the picker shows a 2px ring at ink 40%, 2px off the edge, in dark and light; the small
-// gray labels in the popover meet 4.5:1 on the popover background in dark.
-test("focus ring on search, chips and rows; small labels readable in dark", async ({ page }) => {
+// Keyboard focus on the picker's chips and rows shows a 2px ring at ink 40%, 2px off the edge, in dark and light;
+// the search field, a text field, takes the app's calmer text-field focus instead: no ring, its 1px edge in --muted.
+// The small gray labels in the popover meet 4.5:1 on the popover background in dark.
+test("focus on search, chips and rows; small labels readable in dark", async ({ page }) => {
   const ring = (el: Element) => {
     const cs = getComputedStyle(el);
     return { style: cs.outlineStyle, width: cs.outlineWidth, offset: cs.outlineOffset, color: cs.outlineColor };
@@ -220,7 +221,18 @@ test("focus ring on search, chips and rows; small labels readable in dark", asyn
     await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
     const pop = await openPicker(page);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    expectRing(await pop.locator(".mp-search").evaluate(ring));
+    const search = await pop.locator(".mp-search").evaluate((el) => {
+      const probe = document.createElement("i");
+      probe.style.color = "var(--muted)";
+      el.appendChild(probe);
+      const muted = getComputedStyle(probe).color;
+      probe.remove();
+      const cs = getComputedStyle(el);
+      return { outline: cs.outlineStyle, edge: cs.borderTopColor, width: cs.borderTopWidth, muted };
+    });
+    expect(search.outline).toBe("none");
+    expect(search.width).toBe("1px");
+    expect(search.edge).toBe(search.muted);
     await page.keyboard.press("Tab");
     await expect(pop.getByTestId("model-chip-all")).toBeFocused();
     expectRing(await pop.getByTestId("model-chip-all").evaluate(ring));

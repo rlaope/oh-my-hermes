@@ -43,6 +43,11 @@
   background: var(--raise2);
   color: var(--ink);
 }
+/* the header's + menu opens on the row's own bottom edge, 2px above the "New session" button under it, so the
+   button's top edge and corners never show above the menu as a second edge */
+.side-sh-row .ss-pop {
+  top: 100%;
+}
 .ss-pop {
   left: calc(-1 * var(--side-x) + 8px);
   right: auto;
@@ -289,25 +294,17 @@
   place-items: center;
   flex: none;
 }
-/* SESSIONS owns its live dot: the bot row's dot styles may change (the answer ring replaced them) */
+/* SESSIONS owns its live dot: the bot row's dot styles may change (the answer ring replaced them). A terminal row
+   says "running" only with it, so it is solid and inside the tile's corner: a pulse fading to 30% or a dot astride
+   the tile's edge read as nothing. */
 .ss-row .live-dot {
   position: absolute;
-  left: 26px;
-  top: 26px;
-  width: 9px;
-  height: 9px;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--spin);
-  border: 2px solid var(--side);
-  animation: pulse 1.4s infinite;
-}
-.ss-row.active .live-dot {
-  border-color: var(--active-row);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ss-row .live-dot {
-    animation: none;
-  }
 }
 .ss-x {
   position: absolute;
@@ -472,10 +469,6 @@
 }
 [data-theme="light"] {
   --needs: #9a6200;
-}
-.bot-p.ss-needs {
-  color: var(--needs-text, var(--needs));
-  font-weight: 600;
 }
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {

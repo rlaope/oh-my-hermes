@@ -105,10 +105,10 @@ export function rowModel(s: SessionRec, chat?: ChatLive): { title: string; sub: 
   const label = agentDef(s.agent).label;
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
-  // While running the ring (chat) or the live dot (terminal) says it, so the line is just the agent.
-  const state = needsYou
-    ? "Needs you"
-    : s.status === "running"
+  // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
+  // the amber dot say it, so the line is just the agent.
+  const state =
+    needsYou || s.status === "running"
       ? ""
       : s.status === "starting"
         ? "Starting…"

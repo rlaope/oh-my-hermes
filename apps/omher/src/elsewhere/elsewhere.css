@@ -72,10 +72,19 @@
   flex: none;
   transition: transform 0.15s ease;
 }
-/* room for the live ring around the mark, kept whether or not it runs so nothing moves when it stops */
+/* Room for the live ring around the mark, kept whether or not it runs so nothing moves when it stops. The room
+   before the mark and before "working" sits on the end of what precedes them, so a link or a "working" that wraps
+   starts on the text's left edge, not 4px or 8px in. */
 .ew-link .ui-ring-w,
 .ew-where .ui-ring-w {
-  margin-inline: 4px 3px;
+  margin-right: 3px;
+}
+.ew-text {
+  margin-right: 4px;
+}
+.ew-link:has(+ .ew-working),
+.ew-where:has(+ .ew-working) {
+  margin-right: 8px;
 }
 /* an away session's ring is quieter than the bot's own: thinner and dimmed, so it never competes with the
    sidebar's live signal */
@@ -90,7 +99,6 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-left: 8px;
   font-size: 11px;
   color: var(--quiet);
   white-space: nowrap;

@@ -312,7 +312,7 @@ function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClo
             )}
           </span>
           <span className="bot-r2">
-            <span className={`bot-p${m.needsYou ? " ss-needs" : ring ? " live" : ""}`} data-testid="session-sub">
+            <span className={`bot-p${ring ? " live" : ""}`} data-testid="session-sub">
               {m.sub}
             </span>
             {ring && <TypingDots size={3} testId="bot-typing" />}

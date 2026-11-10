@@ -95,8 +95,11 @@
   color: var(--quiet);
   cursor: text;
 }
-/* keyboard focus ring for the search, chips and rows: 2px ink at 40%, 2px off the edge */
-.mp-search:focus-within,
+/* the search field takes the app's text-field focus (its edge turns --muted, as the sidebar search does) */
+.mp-search:focus-within {
+  border-color: var(--muted);
+}
+/* keyboard focus ring for the chips and rows: 2px ink at 40%, 2px off the edge */
 .mp-chip:focus-visible,
 .mp-opt:focus-visible,
 .mp-pop .mseg button:focus-visible,

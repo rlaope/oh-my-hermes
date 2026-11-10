@@ -72,6 +72,9 @@ export const ko: Record<Key, string> = {
   "chat.pick": "봇을 선택하세요",
   "chat.connecting": "Hermes에 연결하는 중…",
 
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n}개 더",
+
   // skills (the composer's ./ picker)
   "skills.label": "스킬",
   "skills.none": "일치하는 스킬 없음",

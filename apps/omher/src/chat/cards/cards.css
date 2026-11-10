@@ -148,8 +148,8 @@
 }
 .card-keys {
   margin-left: 4px;
-  font-size: 10.5px;
-  color: var(--quiet);
+  font-size: 12px;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   opacity: 0;
   transition: opacity 0.12s;

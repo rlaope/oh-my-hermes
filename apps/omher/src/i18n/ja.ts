@@ -72,6 +72,9 @@ export const ja: Record<Key, string> = {
   "chat.pick": "ボットを選択してください",
   "chat.connecting": "Hermes に接続中…",
 
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n} 件",
+
   // skills (the composer's ./ picker)
   "skills.label": "スキル",
   "skills.none": "一致するスキルなし",

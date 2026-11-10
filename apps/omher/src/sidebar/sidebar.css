@@ -89,8 +89,9 @@
 .search input::-webkit-search-cancel-button {
   display: none;
 }
+/* the app's text-field focus: a 1px edge in --muted (the model picker's search has the same) */
 .search:focus-within {
-  box-shadow: 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 0 0 1px var(--muted);
 }
 
 .bot-list {
@@ -616,8 +617,20 @@
   margin-top: 1px;
 }
 .needs-item:hover,
-.needs-item:focus-visible {
+.needs-item:focus-visible,
+.needs-more:hover,
+.needs-more:focus-visible {
   background: var(--raise2);
+}
+/* past three asks: one plain row that says how many more, on the asks' text column */
+.needs-more {
+  width: 100%;
+  padding: 4px 4px 4px 32px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  text-align: left;
 }
 .needs-m {
   flex: 1;
