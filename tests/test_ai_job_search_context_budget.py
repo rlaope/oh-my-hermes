@@ -182,8 +182,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # Merged with the plain-words branch: release-cut's required inputs say "every file that carries
             # the version" instead of a version surface (+14); 542186 -> 542200. That branch's pin was
             # 628aade6...6717, and main's was 8f6fb238...69fa8.
-            (skill_capabilities, 542200, FULL_ROW_DELTA_CAP,
-             '935a86d224a044e9eb6f03b93b39da7000fa97a15b275818e14e00bbab0ca5b7',
+            # 542200 -> 542510 and the digest re-derived: the dag-ulw row's split quality bar says to split for work
+            # that can run side by side and keep a small follow-on step in the node it follows (+310, at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was 935a86d2...a5b7.
+            (skill_capabilities, 542510, FULL_ROW_DELTA_CAP,
+             'd09dd42e0005c7d3db4f02e745284225b2030ada33466aac495cfd7901cd786f',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -489,7 +492,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the superseded generations; only model-setup moves, and the pin before it was 60cd6ed2...a81b (main after the plain-words merge).
         # Merged with main after #2718 (Fable 5.2): main's pin was 36307b12...69c2, and this branch's was
         # 9f18a8fc...c7db.
-        self.assertEqual(_digest(legacy_hashes), '1f3c01fa681ce440db5ba45ed0ee3a9ec7970d9d31c1fbc8a8c3aef51232fbf4')
+        # dag-ulw's split quality bar then splits for work that can run side by side and keeps a small follow-on step
+        # in the node it follows; only dag-ulw moves, and the pin before it was 1f3c01fa...fbf4.
+        self.assertEqual(_digest(legacy_hashes), '5518142e7a600e571ef0265c26ba8c25e6a0d472958e0ba468c399f7308668d0')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

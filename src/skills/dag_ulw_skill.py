@@ -78,7 +78,10 @@ DEFINITION = SkillDefinition(
     quality_tier="evidence-gated",
     quality_bar=(
         ADAPTATION_QUALITY_READ_RULE,
-        "Split first: many small nodes beat one big one, but never split one shared write scope or one judgement.",
+        "Split for work that can run side by side: every child pays a start, a read of the repo and a handoff "
+        "before its work counts, so a small step that only follows another (wiring, the docs for it) belongs in "
+        "the node it follows, and parts that share a write scope or a judgement are one node. Several parts with "
+        "nothing to run side by side are still a graph (baseline, one build node, verify), not a reason to skip it.",
         "Climb the difficulty ladder `quick` -> `unspecified-low` -> `unspecified-high` with a one-line reason per "
         "climb. When one build node's judgement decides the run (a design decision, a root cause, a contested "
         "trade-off), give it `ultrabrain` where your routes serve it, at most one; a graph whose every node is "
