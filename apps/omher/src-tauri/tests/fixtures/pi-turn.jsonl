@@ -1,5 +1,5 @@
 {"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"claude-sonnet-4-20250514","name":"Claude Sonnet 4","provider":"anthropic"},"thinkingLevel":"medium","isStreaming":false,"sessionId":"abc123","messageCount":0}}
-{"id":"omher-2","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"claude-sonnet-4-20250514","name":"Claude Sonnet 4","provider":"anthropic"},{"id":"gpt-5.5","name":"GPT-5.5","provider":"openai"}]}}
+{"id":"omher-2","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"claude-sonnet-4-20250514","name":"Claude Sonnet 4","provider":"anthropic"},{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","provider":"openai"}]}}
 {"id":"omher-3","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}
 {"type":"agent_start"}
 {"type":"turn_start"}

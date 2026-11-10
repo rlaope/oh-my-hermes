@@ -1950,7 +1950,7 @@ mod tests {
         assert_eq!(sent[3]["params"]["threadId"], "thr_1");
         assert_eq!(sent[3]["params"]["input"][0]["text"], "run the tests");
         assert_eq!(s(&st.events[0], "agent_session"), "thr_1");
-        assert_eq!(s(&st.events[0], "model"), "gpt-5.5-codex");
+        assert_eq!(s(&st.events[0], "model"), "gpt-6.1-sol");
 
         let at = lines.iter().position(|l| l.contains("requestApproval")).unwrap();
         let st = run(&mut x, &lines[2..=at]);

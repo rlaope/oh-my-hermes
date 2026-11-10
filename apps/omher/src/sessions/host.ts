@@ -239,8 +239,8 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
     { id: "haiku", label: "Haiku 5.5" },
   ],
   codex: [
-    { id: "gpt-5.5-codex", label: "GPT-5.5 Codex" },
-    { id: "gpt-5.5", label: "GPT-5.5" },
+    { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
+    { id: "gpt-6.1-terra", label: "GPT-6.1 Terra" },
   ],
   pi: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
   omp: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],

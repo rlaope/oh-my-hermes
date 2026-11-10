@@ -211,7 +211,7 @@ class ProtocolBasics(BridgeCase):
             r = await s.req("hello")
             self.assertTrue(r["ok"])
             self.assertEqual(r["result"]["bridge"], "real")
-            self.assertEqual(r["result"]["version"], "0.1.0")
+            self.assertEqual(r["result"]["version"], ob.VERSION)
             self.assertEqual(r["result"]["hermes"]["home"], str(env.home))
 
     async def test_wrong_token_is_refused(self):
