@@ -92,7 +92,9 @@ QUALIFICATION_HOLDS: Final[dict[str, dict[str, object]]] = {
 # ultrabrain gained Claude Fable 5.1 (head) and Claude Opus 5.5 (third) on
 # 2026-11-09 (owner decision), editorial and unmeasured. Claude Fable 5.2
 # took every Fable 5.1 slot at the same effort on 2026-11-10 (owner
-# decision), editorial and unmeasured.
+# decision), editorial and unmeasured. The same day Fable 5.2 moved ahead of
+# Opus 5.5 to head visual-engineering (owner decision); the slot set did not
+# change, editorial and unmeasured.
 RECOMMENDATION_DECISIONS: Final[dict[str, tuple[str, ...]]] = {
     "claude-fable-5-2": (
         "categories:architect", "categories:artistry", "categories:capable",

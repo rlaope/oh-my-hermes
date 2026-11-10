@@ -58,7 +58,7 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     #
     # Claude vendor order (owner decision, 2026-10-13): Opus 5.5 before Fable
     # inside any chain, reversing the 2026-09-06 Fable -> Opus rule.
-    # `ultrabrain` is the one exception (below). Fable 5.2 took every Fable
+    # `ultrabrain` and `visual-engineering` are the exceptions (below). Fable 5.2 took every Fable
     # 5.1 slot at the same effort on 2026-11-10 (owner decision), and Fable
     # 5.1 left the shipped chains under the superseded-generation rule.
     # Claude Mythos 5.1 and 5.2 are their Fable siblings served only to
@@ -67,9 +67,10 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     #
     # Two heads collide in `mixture_category_for`, which labels a child by the
     # first category in canonical order whose head matches (model, effort).
-    # The owner accepted both (2026-10-13):
-    #   (claude-opus-5-5, high)   heads deep and visual-engineering -> "deep"
-    #   (claude-opus-5-5, medium) heads writing and capable         -> "writing"
+    # The owner accepted the collision (2026-10-13):
+    #   (claude-opus-5-5, medium) heads writing and capable -> "writing"
+    # (claude-opus-5-5, high) headed deep and visual-engineering too, labelled
+    # "deep", until Fable 5.2 took visual-engineering's head on 2026-11-10.
     # Routing is unaffected, and so is a lane routed through
     # `omh_delegate_route`: its route-provenance record overrides the
     # projection (see the reader below), so that row keeps the lane's own
@@ -86,8 +87,9 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # alone, so a user without OpenAI access fell straight back to the parent
     # model, against the cross-ecosystem rule (2026-08-19, below). This is an
     # explicit choice for this category; it does not change the 2026-10-13
-    # Opus 5.5 -> Fable order anywhere else. Claude Mythos stays out of every
-    # shipped chain (above).
+    # Opus 5.5 -> Fable order elsewhere (visual-engineering is the other
+    # exception, 2026-11-10). Claude Mythos stays out of every shipped chain
+    # (above).
     # Over the shipped chains, (claude-fable-5-2, xhigh) heads ultrabrain and
     # labels "ultrabrain" (Fable at xhigh projected to architect, where it
     # sits third, before 2026-11-09); Astra at xhigh now heads only
@@ -105,7 +107,8 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     # DeepSeek V4.1 Flash left `deep`: a Flash budget model does not fit the
     # strong tier, and Opus 5.5 and Kimi K3.1 Pro now carry its cross-ecosystem
-    # fallback. visual-engineering children are labelled "deep" (above).
+    # fallback. (claude-opus-5-5, high), second in visual-engineering, labels
+    # "deep".
     "deep": (("claude-opus-5-5", "high"), ("gpt-6.1-sol", "high"), ("kimi-k3.1-pro", "high")),
     # Architecture/system-design lanes: full-depth effort across three
     # provider ecosystems. A fall-through child is labelled by the chain its
@@ -155,10 +158,14 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
         ("kimi-k3.1-pro", "medium"),
         ("gemini-4-argon", "medium"),
     ),
-    # Labelled "deep" by projection: its head is deep's (accepted collision).
+    # Fable 5.2 heads visual-engineering ahead of Opus 5.5 (owner decision,
+    # 2026-11-10), the second exception to the Opus 5.5 -> Fable order. No
+    # other chain heads (claude-fable-5-2, high), so it labels
+    # "visual-engineering" (it did before too, from second place); Opus 5.5
+    # at high, now second here, keeps deep's label.
     "visual-engineering": (
-        ("claude-opus-5-5", "high"),
         ("claude-fable-5-2", "high"),
+        ("claude-opus-5-5", "high"),
         ("gemini-4-argon", "high"),
         ("kimi-k3.1-pro", "high"),
     ),

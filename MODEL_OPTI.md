@@ -957,7 +957,9 @@ pairing so a benchmark claim can never mix in other prompt changes.
   Program), on the same terms.
 - **Fable 5.2 (2026-11-10): no new counter, family blocks byte-stable.**
   Claude Fable 5.2 takes every Fable 5.1 slot at the same effort, heads
-  `ultrabrain` at `xhigh`, and gets its own exact contract; the `claude`
+  `ultrabrain` at `xhigh` (and, by a separate owner decision the same day,
+  the Hermes-lane `visual-engineering` chain at `high`, ahead of Opus 5.5),
+  and gets its own exact contract; the `claude`
   family blocks above apply to it unchanged. Documented traits, all
   official (the Fable 5.2 what's-new page, migration guide, and prompting
   guide, read 2026-11-10): at `high` and above it thinks before almost

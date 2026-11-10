@@ -330,8 +330,9 @@ class RecommendationCatalogTests(unittest.TestCase):
             "writing": (
                 ["claude-opus-5-5", "claude-sonnet-5-5", "kimi-k3.1-pro", "gemini-4-argon"], "medium",
             ),
+            # Fable 5.2 heads visual-engineering (owner decision, 2026-11-10).
             "visual-engineering": (
-                ["claude-opus-5-5", "claude-fable-5-2", "gemini-4-argon", "kimi-k3.1-pro"], "high",
+                ["claude-fable-5-2", "claude-opus-5-5", "gemini-4-argon", "kimi-k3.1-pro"], "high",
             ),
             "artistry": (["gemini-4-argon", "claude-opus-5-5", "claude-fable-5-2", "kimi-k3.1-pro"], "high"),
             "capable": (["claude-opus-5-5", "gpt-6.1-sol", "claude-fable-5-2", "kimi-k3.1-pro"], "medium"),
