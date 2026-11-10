@@ -12,8 +12,10 @@ INSTALL_COMMANDS = (
     "brew install rlaope/tap/omh",
     "bun install -g oh-my-hermes",
     "npm install -g oh-my-hermes",
-    "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
-    "irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex",
+    # The short forms omher.app serves (site/install, site/install.ps1); each
+    # downloads the main-branch installer and runs it with no added argument.
+    "curl -fsSL https://omher.app/install | sh",
+    "irm https://omher.app/install.ps1 | iex",
 )
 SETUP_COMMAND = "omh setup"
 DOCTOR_COMMAND = "omh doctor"

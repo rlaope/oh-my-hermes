@@ -32,7 +32,7 @@ Hermes를 패치하거나 대체하지 않고, 계획만 된 일을 완료로 �
 ## 설치
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://omher.app/install | sh
 omh setup
 ```
 
@@ -132,13 +132,13 @@ omh setup
 **macOS / Linux:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://omher.app/install | sh
 ```
 
 **Windows (PowerShell 5.1+):**
 
 ```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+irm https://omher.app/install.ps1 | iex
 ```
 
 **또는 아래 내용을 AI 에이전트에 붙여 넣습니다:**

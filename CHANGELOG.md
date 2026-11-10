@@ -79,6 +79,12 @@ All notable changes will be documented here.
   when no node decides the run). Repair and extend rounds do not raise it,
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
+- **A short install command: `curl -fsSL https://omher.app/install | sh`.** omher.app now serves
+  `install` and `install.ps1`, small wrappers that download `install.sh` (or `install.ps1`) from main and
+  run it with only the arguments you pass, so the short form installs exactly what the long
+  `raw.githubusercontent.com/.../install.sh | sh` one-liner does; on Windows,
+  `irm https://omher.app/install.ps1 | iex`. The README, its translations, the website and
+  docs/INSTALLATION.md show the short form; the install guide keeps the long one as "same as".
 
 ## 4.0.7 - 2026-11-09
 

@@ -690,7 +690,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
         <span class="inst__ind" aria-hidden="true"></span>
       </div>
       <div class="inst__box">
-        <div class="inst__cmd"><span class="p">$</span><span data-cmd>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh</span><br><span class="p">$</span>omh setup</div>
+        <div class="inst__cmd"><span class="p">$</span><span data-cmd>curl -fsSL https://omher.app/install | sh</span><br><span class="p">$</span>omh setup</div>
         <button class="copy" data-cbtn>Copy</button>
       </div>
     </div>
@@ -982,7 +982,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
       <span class="inst__os" data-os>macOS · Linux</span>
       <span class="inst__ind" aria-hidden="true"></span>
     </div>
-    <div class="inst__box"><div class="inst__cmd"><span class="p">$</span><code id="cmd-unix" data-k="curl">curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh</code><code id="cmd-win" data-k="ps1" hidden>irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex</code><code class="install-method--package-manager" id="cmd-brew" data-k="brew" hidden>brew install rlaope/tap/omh</code><code class="install-method--package-manager" id="cmd-bun" data-k="bun" hidden>bun install -g oh-my-hermes</code><code class="install-method--package-manager" id="cmd-npm" data-k="npm" hidden>npm install -g oh-my-hermes</code></div><button class="copy" data-cbtn>Copy</button></div>
+    <div class="inst__box"><div class="inst__cmd"><span class="p">$</span><code id="cmd-unix" data-k="curl">curl -fsSL https://omher.app/install | sh</code><code id="cmd-win" data-k="ps1" hidden>irm https://omher.app/install.ps1 | iex</code><code class="install-method--package-manager" id="cmd-brew" data-k="brew" hidden>brew install rlaope/tap/omh</code><code class="install-method--package-manager" id="cmd-bun" data-k="bun" hidden>bun install -g oh-my-hermes</code><code class="install-method--package-manager" id="cmd-npm" data-k="npm" hidden>npm install -g oh-my-hermes</code></div><button class="copy" data-cbtn>Copy</button></div>
   </div>
   <div class="steps rv">
     <div class="step"><span class="caps">Step 01</span><h3 data-i18n="install.step1">Install the command</h3><p data-i18n="install.prereq.note">Use the macOS · Linux or Windows installer; it finds Python 3.11+ itself. Homebrew, Bun, and npm install the published release: Bun and npm also need Node 18+ and Python 3.11+ on PATH, and Homebrew brings its own Python.</p></div>
@@ -1265,11 +1265,11 @@ if (!RM) setInterval(() => {
 
 /* install tabs */
 const CMDS = {
-  curl:['curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh','macOS · Linux'],
+  curl:['curl -fsSL https://omher.app/install | sh','macOS · Linux'],
   brew:['brew install rlaope/tap/omh','macOS · Linux'],
   bun:['bun install -g oh-my-hermes','Node 18+ · Python 3.11+'],
   npm:['npm install -g oh-my-hermes','Node 18+ · Python 3.11+'],
-  ps1:['irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex','Windows · PowerShell 5.1+']
+  ps1:['irm https://omher.app/install.ps1 | iex','Windows · PowerShell 5.1+']
 };
 function copy(txt, btn){
   (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).catch(()=>{}).finally(() => {
