@@ -22,7 +22,7 @@ from .pi_family_names import canonical_progress_record
 from .approval_bypass import effective_approval_bypass
 from .awareness_delivery import _awareness_delivery_lock
 from .catch_log import read_catches
-from .delegation_graph import GRAPH_LINGER_SECONDS, build_delegation_graph, inactive_graph
+from .delegation_graph import GRAPH_LINGER_SECONDS, build_delegation_graph, dag_run_choices, inactive_graph
 from .delegation_ledger import LEDGER_MAX_AGE_SECONDS, newest_ledger_session
 from .hermes_delegation import _CHILD_SELECT_LIMIT, read_hermes_native_subagents
 from .kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
@@ -982,8 +982,12 @@ def read_omh_hud(
     session_scoped: bool = False,
     tui_identity_expected: bool = False,
     delegation_graph: bool = True,
+    dag_run: str | None = None,
 ) -> dict[str, Any]:
     """The HUD payload for one reading session.
+
+    ``dag_run`` is for a pane that lets the person switch between the session's dag runs: a string (empty for the
+    newest) draws that run and adds ``dag_runs``, the runs to choose from; ``None`` leaves both out.
 
     Without ``delegation_graph`` the payload's graph is left inactive
     (``not_requested``) unread: a reader that only wants the status line, or
@@ -1203,7 +1207,11 @@ def read_omh_hud(
             graph_session,
             fanout=_hud_verified_fanout(fanout_record),
             scope="session" if scoped else "global",
+            dag_run=dag_run or "",
+            keep_dag=dag_run is not None,
         )
+        if dag_run is not None and scoped:
+            payload["dag_runs"] = dag_run_choices(home, hermes, graph_session)
     payload["subagents"]["hidden_in_graph"] = _hidden_graph_lanes(unlisted, payload["delegation_graph"])
     payload["active"] = bool(
         (payload["runtime"]["recent"] and payload["runtime"]["workflow"] != "idle")

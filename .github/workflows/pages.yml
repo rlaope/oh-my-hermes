@@ -24,9 +24,11 @@ permissions:
 
 concurrency:
   group: "pages"
-  # A scheduled refresh queues behind a running deploy instead of cancelling
-  # it; a push still supersedes whatever is running.
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  # Never cancel a running deploy. A build takes 10-25 minutes while main
+  # often moves faster, and cancelling on every push left the live site on a
+  # build an hour old. GitHub keeps one run going and one pending (a newer
+  # pending run replaces an older one), so the latest main still deploys.
+  cancel-in-progress: false
 
 jobs:
   build:
