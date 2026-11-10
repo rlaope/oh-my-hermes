@@ -25,13 +25,16 @@ const runName = () => RUN.split("/").pop()!;
 const REQUEST = "Go ahead: add dark mode to the docs site and open a PR.";
 // [id, label, deps, model, provider, effort, category, executor]. The cast: three Hermes subagents on GLM, Kimi and
 // DeepSeek, and three lanes handed to agent CLIs (Claude Code on Opus, Codex on GPT-6.1 Sol, omp on Sonnet), side by side.
+// Two parts to a row, then the fan-in (contrast after both styles, then verify): the graph the promo film and the
+// stills draw, which fits the hero window's Plans panel whole with each box's model, effort and route on one line
+// (a lane says "via Claude" where a subagent names its category, as in the film).
 const NODES: [string, string, string[], string, string, string, string, string?][] = [
   ["color-tokens", "Color tokens", [], "GLM-5.3", "z-ai", "medium", "quick"],
   ["theme-toggle", "Theme toggle", [], "Kimi K3", "moonshot", "high", "visual-engineering"],
-  ["contrast", "Contrast check", ["color-tokens"], "DeepSeek V4.1", "deepseek", "high", "review"],
-  ["page-styles", "Page styles", ["color-tokens", "theme-toggle"], "Opus 5.5", "claude-proxy", "high", "visual-engineering", "claude"],
-  ["code-colors", "Code block colors", ["color-tokens", "theme-toggle"], "gpt-6.1-sol", "openai", "medium", "visual-engineering", "codex"],
-  ["verify-pr", "Verify and open PR", ["page-styles", "code-colors", "contrast"], "Sonnet 5.5", "claude-proxy", "high", "review", "omp"],
+  ["page-styles", "Page styles", ["color-tokens", "theme-toggle"], "Opus 5.5", "claude-proxy", "high", "", "claude"],
+  ["code-colors", "Code block colors", ["color-tokens", "theme-toggle"], "gpt-6.1-sol", "openai", "medium", "", "codex"],
+  ["contrast", "Contrast check", ["page-styles", "code-colors"], "DeepSeek V4.1", "deepseek", "high", "review"],
+  ["verify-pr", "Verify and open PR", ["contrast"], "Sonnet 5.5", "claude-proxy", "high", "", "omp"],
 ];
 const SUMMARY: Record<string, string> = {
   "color-tokens": "12 light/dark token pairs in theme.css.",
@@ -66,7 +69,8 @@ function pushRun(state = "running") {
   const nodes = NODES.map(([id, label, deps, model, provider, effort, route, executor]) => {
     const s = st[id] ?? { state: "waiting" };
     return {
-      id, label, deps, layer: 0, state: s.state, model, provider, effort, route,
+      id, label, deps, layer: 0, state: s.state, model, provider, effort,
+      ...(route ? { route } : {}),
       role: id === "verify-pr" ? "verify" : "build",
       ...(executor ? { executor } : {}),
       ...(s.started ? { started: s.started, attempts: [{ n: 1, outcome: s.state === "done" ? "accepted" : "open", started: s.started, ...(s.ended ? { ended: s.ended } : {}) }] } : { attempts: [] }),
@@ -191,9 +195,9 @@ function startLoop() {
   st["theme-toggle"].started = T / 1000 + 40;
   ev("kami", { event: "tool.end", tool_id: "k2", name: "delegate_task", ok: true, ms: 415_000 }, T + 455_000);
   const s3 = T / 1000 + 462;
-  ev("kami", { event: "tool.start", tool_id: "k3", name: "delegate_task", detail: "Page styles, Code block colors, Contrast check", dag: dag(["page-styles", "code-colors", "contrast"]) }, s3 * 1000);
-  for (const id of ["page-styles", "code-colors", "contrast"]) setNode(id, "running", s3 - rand(0, 20));
-  ev("kami", { event: "status", text: "Running 3 parts" });
+  ev("kami", { event: "tool.start", tool_id: "k3", name: "delegate_task", detail: "Page styles, Code block colors", dag: dag(["page-styles", "code-colors"]) }, s3 * 1000);
+  for (const id of ["page-styles", "code-colors"]) setNode(id, "running", s3 - rand(0, 20));
+  ev("kami", { event: "status", text: "Running 2 parts" });
   stream("page-styles", 1);
   pushRun();
 
@@ -208,10 +212,6 @@ function startLoop() {
     [k(0.2), () => openNode("page-styles")],
     [k(1.8), () => { stream("page-styles", 2); pushRun(); }],
     [k(2.6), () => ev("friren", { event: "status", text: "Reading the updater section" })],
-    [k(3.6), () => {
-      setNode("contrast", "done"); pushRun();
-      ev("kami", { event: "status", text: "Running 2 parts" });
-    }],
     [k(6), () => { stream("page-styles", 3); pushRun(); }],
     [k(8.5), () => landAway("discord")],
     [k(10.5), () => { stream("page-styles", 4); pushRun(); }],
@@ -220,14 +220,19 @@ function startLoop() {
       setNode("code-colors", "done"); pushRun();
       ev("kami", { event: "status", text: "Running 1 part" });
     }],
-    [k(16.5), () => { stream("page-styles", 5); pushRun(); }],
-    [k(19.5), () => {
-      setNode("page-styles", "done"); setNode("verify-pr", "running");
+    [k(16), () => { stream("page-styles", 5); pushRun(); }],
+    [k(17.5), () => {
+      setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
+      ev("kami", { event: "tool.end", tool_id: "k3", name: "delegate_task", ok: true, ms: 560_000 });
+      ev("kami", { event: "tool.start", tool_id: "kc", name: "delegate_task", detail: "Contrast check", dag: dag(["contrast"]) });
+      ev("kami", { event: "status", text: "Running 1 part" });
+    }],
+    [k(20.5), () => {
+      setNode("contrast", "done"); setNode("verify-pr", "running");
       runs.handoffs[RUN]["verify-pr"] = STREAM["verify-pr"][0];
       pushRun();
-      ev("kami", { event: "tool.end", tool_id: "k3", name: "delegate_task", ok: true, ms: 560_000 });
+      ev("kami", { event: "tool.end", tool_id: "kc", name: "delegate_task", ok: true, ms: 3_000 });
       ev("kami", { event: "tool.start", tool_id: "k4", name: "delegate_task", detail: "Verify and open PR", dag: dag(["verify-pr"]) });
-      ev("kami", { event: "status", text: "Running 1 part" });
       openNode("verify-pr");
     }],
     [k(22.5), () => {
@@ -346,16 +351,20 @@ function planFromScratch() {
     }],
     [4.6, () => { setNode("color-tokens", "done"); pushRun(); ev("kami", { event: "status", text: "Running 1 part" }); }],
     [5.6, () => {
-      setNode("theme-toggle", "done"); for (const id of ["page-styles", "code-colors", "contrast"]) setNode(id, "running"); pushRun();
+      setNode("theme-toggle", "done"); for (const id of ["page-styles", "code-colors"]) setNode(id, "running"); pushRun();
       ev("kami", { event: "tool.end", tool_id: "p2", name: "delegate_task", ok: true, ms: 2800 });
-      ev("kami", { event: "tool.start", tool_id: "p3", name: "delegate_task", detail: "Page styles, Code block colors, Contrast check", dag: dag(["page-styles", "code-colors", "contrast"]) });
-      ev("kami", { event: "status", text: "Running 3 parts" });
+      ev("kami", { event: "tool.start", tool_id: "p3", name: "delegate_task", detail: "Page styles, Code block colors", dag: dag(["page-styles", "code-colors"]) });
+      ev("kami", { event: "status", text: "Running 2 parts" });
     }],
-    [7.2, () => { setNode("contrast", "done"); pushRun(); ev("kami", { event: "status", text: "Running 2 parts" }); }],
-    [8.4, () => { setNode("code-colors", "done"); pushRun(); ev("kami", { event: "status", text: "Running 1 part" }); }],
+    [7.4, () => { setNode("code-colors", "done"); pushRun(); ev("kami", { event: "status", text: "Running 1 part" }); }],
+    [8.4, () => {
+      setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
+      ev("kami", { event: "tool.end", tool_id: "p3", name: "delegate_task", ok: true, ms: 2800 });
+      ev("kami", { event: "tool.start", tool_id: "pc", name: "delegate_task", detail: "Contrast check", dag: dag(["contrast"]) });
+    }],
     [9.6, () => {
-      setNode("page-styles", "done"); setNode("verify-pr", "running"); pushRun();
-      ev("kami", { event: "tool.end", tool_id: "p3", name: "delegate_task", ok: true, ms: 4000 });
+      setNode("contrast", "done"); setNode("verify-pr", "running"); pushRun();
+      ev("kami", { event: "tool.end", tool_id: "pc", name: "delegate_task", ok: true, ms: 1200 });
       ev("kami", { event: "tool.start", tool_id: "p4", name: "delegate_task", detail: "Verify and open PR", dag: dag(["verify-pr"]) });
     }],
     [12, () => { setNode("verify-pr", "done"); pushRun("done"); ev("kami", { event: "tool.end", tool_id: "p4", name: "delegate_task", ok: true, ms: 2400 }); }],
