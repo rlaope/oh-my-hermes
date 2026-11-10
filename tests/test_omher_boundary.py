@@ -83,6 +83,10 @@ RULES = (
     " reads none and changes nothing on GitHub.",
     "An answer is kept 5 minutes, a call is stopped after 3 seconds,",
     "The app opens such a pull request's page in the browser only when the person clicks its number.",
+    "omher draws a link in a message as a link chip from its address alone: it fetches nothing from a link"
+    " (no preview, title or oEmbed request).",
+    "of the bot's own messenger sessions in its `state.db` (`links.places`), never a message.",
+    "A link opens only when the person clicks it, through the system opener:",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -119,15 +123,15 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twenty_one_numbered_rules(self) -> None:
-        # 21: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+    def test_boundary_is_between_six_and_twenty_two_numbered_rules(self) -> None:
+        # 22: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
-        # (skills.list for the ./ picker), rule 20 (the signed self-update) and rule 21 (a plan node's PR state
-        # through the person's own `gh`) each widened the boundary on purpose; the rules stay numbered 1..n with
-        # no gap or repeat.
+        # (skills.list for the ./ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
+        # through the person's own `gh`) and rule 22 (link chips: channel names read, web links opened on a
+        # click) each widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 21, len(rules))
+        self.assertTrue(6 <= len(rules) <= 22, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -219,6 +223,28 @@ class TheOneInstaller(unittest.TestCase):
         self.assertNotIn("String", sig)
         self.assertNotIn("&str", sig)
         self.assertIn("Channel<InstallEvent>", sig)
+
+
+class LinkChipsFetchNothing(unittest.TestCase):
+    """Rule 22: a chip is drawn from the address alone; a click opens it through the system opener."""
+
+    CHIP_FILES = ("chat/parts/LinkChip.tsx", "chat/parts/linkKinds.ts", "ui/brandIcons.tsx")
+
+    def test_chip_code_makes_no_request(self) -> None:
+        for name in self.CHIP_FILES:
+            text = (UI_SRC / name).read_text(encoding="utf-8")
+            for bad in ("fetch(", "XMLHttpRequest", "oembed", "new Image(", "<img", "sendBeacon", "WebSocket"):
+                self.assertNotIn(bad, text, f"{name}: {bad}")
+
+    def test_the_shell_opens_web_links_without_credentials_only(self) -> None:
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        body = lib[lib.index("pub(crate) fn web_link"):]
+        body = body[: body.index("\n}\n")]
+        self.assertIn('strip_prefix("https://")', body)
+        self.assertIn('strip_prefix("http://")', body)
+        self.assertIn("!host.contains('@')", body)
+        allowed = lib[lib.index("pub(crate) fn allowed_external"):]
+        self.assertIn("is_control()", allowed[: allowed.index("\n}\n")])
 
 
 class OmhNeverReachesOmher(unittest.TestCase):

@@ -3,6 +3,7 @@ import { t } from "../../i18n";
 import { useMentions, withMentions } from "./Mention";
 import type { Skill } from "../../lib/protocol";
 import { sentTokens, type SkillToken } from "./skillTokens";
+import { withLinks } from "./LinkChip";
 import "./skills.css";
 
 /** The `./` picker above the composer: one row per skill (name as a monospace pill, one-line description).
@@ -78,16 +79,19 @@ export function mirrorText(text: string, tokens: SkillToken[], anchor: number | 
   return out;
 }
 
-/** A sent message as the person typed it, each skill token drawn as a monospace pill and each bot mention as a
- * mention. */
+/** A sent message as the person typed it, each skill token drawn as a monospace pill, each URL as a link chip and
+ * each bot mention as a mention. */
 export function SkillText({ text, sent }: { text: string; sent?: string }) {
   const tokens = sentTokens(text, sent);
   const m = useMentions();
-  if (!tokens.length) return <>{withMentions(text, m)}</>;
+  // links first, then mentions in the text between them (an `@` inside a URL is never a mention)
+  const plain = (s: string, key: string): ReactNode[] =>
+    withLinks(s, `${key}l`).flatMap((n, j) => (typeof n === "string" ? withMentions(n, m, `${key}m${j}-`) : [n]));
+  if (!tokens.length) return <>{plain(text, "a")}</>;
   const out: ReactNode[] = [];
   let at = 0;
   tokens.forEach((tok, i) => {
-    out.push(...withMentions(text.slice(at, tok.start), m, `m${i}-`));
+    out.push(...plain(text.slice(at, tok.start), `t${i}`));
     out.push(
       <code key={i} className="sk-pill" data-testid="bubble-skill">
         {text.slice(tok.start, tok.end)}
@@ -95,6 +99,6 @@ export function SkillText({ text, sent }: { text: string; sent?: string }) {
     );
     at = tok.end;
   });
-  out.push(...withMentions(text.slice(at), m, "mz-"));
+  out.push(...plain(text.slice(at), "z"));
   return <>{out}</>;
 }

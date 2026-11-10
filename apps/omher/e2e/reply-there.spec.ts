@@ -44,6 +44,8 @@ const ALLOWED = new Set([
   // the sidebar's usage ring and the accounts behind it: read on boot, never written here
   "usage.read",
   "accounts.list",
+  // channel names for Slack / Discord link chips: a read of the bot's own sessions
+  "links.places",
 ]);
 
 /** Screenshot after every running animation (chip / menu `pop`) has finished; under load they start late. */

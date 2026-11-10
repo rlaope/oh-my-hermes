@@ -1,0 +1,112 @@
+/* Link chips: a service mark and a short label, inline at the text's own line height. No pill at rest: muted
+   text over a hairline underline; ink on hover. The brand colour is on the mark only. */
+a.lk,
+a.lk-text {
+  display: inline;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  border-radius: 4px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+/* chips sit in markdown (.md a is underlined) and in plain sent text */
+.md a.lk,
+.md a.lk-text {
+  color: var(--muted);
+  text-decoration: none;
+  overflow-wrap: normal;
+}
+a.lk:hover,
+a.lk-text:hover,
+.md a.lk:hover,
+.md a.lk-text:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+a.lk:focus-visible,
+a.lk-text:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 1px;
+}
+a.lk .brand-ic,
+a.lk .src-ic,
+a.lk .pr-ic,
+a.lk-text .brand-ic,
+a.lk-text .src-ic {
+  /* the mark sits on the text's middle, without making the line taller */
+  vertical-align: -1px;
+  margin-right: 4px;
+  flex: none;
+}
+/* marks drawn in the text colour (GitHub, X, Notion, LinkedIn) take the ink, not the muted label colour, so
+   they stay as visible as the coloured marks */
+a.lk .brand-ic,
+a.lk-text .brand-ic {
+  color: var(--ink);
+}
+.lk-t {
+  /* a long label ends in an ellipsis; the tooltip has the whole URL */
+  display: inline-block;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  line-height: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+a.lk:hover .lk-t {
+  text-decoration-color: currentColor;
+}
+/* a markdown link with its own text: its words keep the link look, the mark leads */
+.lk-text .lk-u {
+  white-space: normal;
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a.lk-text:hover .lk-u {
+  color: var(--ink);
+}
+/* an unknown site or a lookalike host: a plain link, shortened to where it really goes */
+a.lk-web {
+  overflow-wrap: anywhere;
+}
+
+/* the plan node drawer's Links block */
+.lk-block {
+  margin: 10px 0 2px;
+}
+.lk-bt {
+  font-size: 11px;
+  color: var(--quiet);
+  margin-bottom: 4px;
+}
+.lk-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 12.5px;
+  line-height: 20px;
+}
+.lk-more {
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.lk-more:hover {
+  color: var(--ink);
+}

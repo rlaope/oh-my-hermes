@@ -2888,6 +2888,54 @@ def reply_target(origin: dict) -> tuple[str, str] | None:
     return target, label
 
 
+LINK_PLACES_MAX = 500   # newest messenger sessions read for channel names
+
+
+def read_link_places(profile_dir: Path) -> dict[str, dict[str, str]]:
+    """Channel names the bot already knows, for naming Slack and Discord link chips: `{"slack": {channel id:
+    "#name"}, "discord": {channel id: "#name"}}`, from the `origin_json` of the bot's own newest messenger
+    sessions in its state.db, opened read-only. Only ids and names; no message is read, nothing is fetched."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    out: dict[str, dict[str, str]] = {"slack": {}, "discord": {}}
+    if not db.is_file():
+        return out
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            rows = con.execute("SELECT origin_json FROM sessions WHERE origin_json IS NOT NULL AND (origin_json LIKE"
+                               " '%\"slack\"%' OR origin_json LIKE '%\"discord\"%') ORDER BY rowid DESC LIMIT ?",
+                               (LINK_PLACES_MAX,)).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return out
+    for (raw,) in rows:
+        try:
+            o = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(o, dict):
+            continue
+        platform = str(o.get("platform") or "").lower()
+        chat, name = str(o.get("chat_id") or "").strip(), str(o.get("chat_name") or "").strip()
+        if platform not in out or not _REF_ID.fullmatch(chat) or not name:
+            continue
+        if platform == "slack":
+            if str(o.get("chat_type") or "") == "dm":
+                continue
+            place = name if name.startswith("#") else f"#{name}"
+        else:  # "Guild / #channel / thread title": the channel; a thread's parent channel gets the name too
+            parts = [x.strip() for x in name.split(" / ") if x.strip()]
+            place = parts[1] if len(parts) >= 2 else parts[0]
+            parent = str(o.get("parent_chat_id") or "").strip()
+            if parent and _REF_ID.fullmatch(parent) and place.startswith("#"):
+                out[platform].setdefault(parent, place)
+        place = " ".join(place.split())[:60]
+        out[platform].setdefault(chat, place)
+    return out
+
+
 def reply_block(target: str, label: str) -> str:
     """The one short block appended to a turn sent with a reply target: plain context the bot may act on."""
     kind = "thread" if target.count(":") >= 2 else "channel"
@@ -3029,7 +3077,7 @@ class Bridge:
             "chat.set_model": self.op_set_model,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
-            "skills.list": self.op_skills_list,
+            "skills.list": self.op_skills_list, "links.places": self.op_links_places,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
@@ -3810,6 +3858,10 @@ class Bridge:
     async def op_skills_list(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return {"skills": await asyncio.to_thread(read_skills, bot["path"])}
+
+    async def op_links_places(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"places": await asyncio.to_thread(read_link_places, bot["path"])}
 
     async def op_panel_terminal(self, p) -> dict:
         bot = self._bot(p.get("bot"))

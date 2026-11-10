@@ -2,10 +2,12 @@
 // model's mark, model · effort · category), time, why it was routed there, the nodes it comes after, the last
 // reason, earlier attempts, the helper's summary and the handoff. Read-only: the one button only prefills the
 // chat composer so the person can ask the bot; it never sends.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AgentRun, CliAgent, RunNode } from "../lib/runs";
 import { isCliRun, span } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
+import { LinksBlock } from "../chat/parts/LinkChip";
+import { linksIn } from "../chat/parts/linkKinds";
 import { CloseIcon, IconButton, PrIcon } from "../ui";
 import { getStore } from "../state/store";
 import { t as tr } from "../i18n";
@@ -74,6 +76,8 @@ export function NodeDrawer({
   const facts = [node.lane, t].filter(Boolean).join(" · ");
   const long = (text?.length ?? 0) > PREVIEW;
   const bad = node.state === "failed" || node.state === "blocked";
+  // every link the handoff or summary names, once each, as chips above the text
+  const links = useMemo(() => linksIn([text ?? "", node.summary ?? ""].join("\n")), [text, node.summary]);
   const ask = () => {
     const s = getStore();
     if (s.getState().ui.runsFull) s.actions.setRunsFull(false);
@@ -125,6 +129,7 @@ export function NodeDrawer({
           ))}
         </ol>
       )}
+      <LinksBlock urls={links} pr={node.pr} />
       {node.summary && !text && <div className="rn-sum" data-testid="run-summary">{node.summary}</div>}
       {text ? (
         <>

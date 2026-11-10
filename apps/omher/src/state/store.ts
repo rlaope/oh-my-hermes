@@ -9,6 +9,7 @@ import { toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import type {
   Away,
+  LinkPlaces,
   ApprovalChoice,
   Bot,
   BridgeEvent,
@@ -1013,6 +1014,8 @@ export interface Actions {
   botInfo(bot: string): Promise<BotInfo>;
   /** The bot's skills for the composer's `./` picker, read once per bot; [] when the bridge cannot list them. */
   skills(bot: string): Promise<Skill[]>;
+  /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
+  linkPlaces(bot: string): Promise<LinkPlaces>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
   /** Side panel reads (never cached in the store; the panel keeps its own copy). */
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
@@ -1437,6 +1440,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       }
       return list;
     },
+    linkPlaces: (bot) =>
+      bridge
+        .request("links.places", { bot })
+        .then((r) => r.places)
+        .catch(() => ({ slack: {}, discord: {} })), // an older bridge without the op: chips keep their fallback
     avatarOf: (bot) => bridge.request("bots.avatar", { bot }),
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),

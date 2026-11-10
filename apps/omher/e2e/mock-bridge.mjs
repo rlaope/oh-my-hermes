@@ -38,12 +38,27 @@ const BOT_SEED = [
   { name: "omh-tui", display_name: "OMH TUI", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "medium" },
 ];
 
+// Link chips (e2e/fixtures/links.json): a real answer listing six Slack threads as bare URLs, one answer with a
+// link of every service, and a user message with two links.
+const LINKS = JSON.parse(readFileSync(new URL("./fixtures/links.json", import.meta.url), "utf-8"));
+// links.places: the channel names the bridge reads from the bot's own Slack / Discord sessions. One of the
+// six channels is left out on purpose, so its chip shows the fallback.
+const LINK_PLACES = {
+  kami: {
+    slack: { C0BLC924P1P: "#docs-agent", C0C7TPCQZSL: "#product-docs", C0BU9M6C6EA: "#lab" },
+    discord: { "1544259371528232980": "#cron" },
+  },
+};
+
 const HISTORY_SEED = {
   kami: [
     ["user", "gateway 502 로그 좀 봐줄래?", 3 * 3600],
     ["assistant", "확인했어요. `/v1/responses`에서 upstream timeout이 간헐적으로 나고 있어요. 재시도 정책부터 볼게요.", 3 * 3600 - 40],
     // other bots by @name: each one opens that bot's chat (mention.spec.ts); @kami is this chat itself
     ["assistant", "keep-alive 문서는 @friren에게 찾아달라고 했어요. 배포 확인은 @hermes, TUI 화면은 @omh-tui가 보고, 정리는 제가(@kami) 할게요.", 3 * 3600 - 80],
+    ["user", LINKS.user, 3 * 3600 - 60],
+    ["assistant", LINKS.owner, 3 * 3600 - 80],
+    ["assistant", LINKS.services, 3 * 3600 - 90],
     ["user", "Thanks. Ping me when the retry fix is up.", 2 * 3600],
   ],
   "omh-tui": [],
@@ -165,7 +180,9 @@ const RUNS_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/ru
 // omher-v02 run and two plain delegate fan-outs for "default", and a synthetic 40-node run for the layout.
 const ROUTED = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-routed.json", import.meta.url), "utf-8"));
 const BIG = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/big-run.json", import.meta.url), "utf-8"));
-const HANDOFFS = { ...RUNS_FIXTURE.handoffs, ...ROUTED.handoffs };
+const HANDOFFS = structuredClone({ ...RUNS_FIXTURE.handoffs, ...ROUTED.handoffs });
+// One handoff names a link of every service, for the node drawer's Links block.
+HANDOFFS["dag:20261102_235818_fcfb1bdd/codex-coexist"]["t2-status-update"] += "\n\n## Links\n\n" + LINKS.services;
 function runsSeed() {
   const runs = structuredClone(ROUTED.kami);
   for (const r of runs) {
@@ -786,6 +803,7 @@ const OPS = {
     };
   },
   "skills.list": (p) => (needBot(p), { skills: SKILL_SEED.map((x) => ({ ...x })) }),
+  "links.places": (p) => ({ places: structuredClone(LINK_PLACES[needBot(p).name] ?? { slack: {}, discord: {} }) }),
   "panel.terminal": (p) => ({
     runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
   }),
