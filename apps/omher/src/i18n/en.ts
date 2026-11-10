@@ -53,8 +53,18 @@ export const en = {
   "graph.edit": "Edit",
   "graph.prefill": "Puts a request in the message box. Nothing is sent.",
 
-  // plans (the run list)
+  // plans (the Plans tab: the list of a bot's runs)
   "plans.tab": "Plans",
+  "plans.of": "{bot}'s plans",
+  "plans.all": "All {n} plans",
+  "plans.none": "No plans yet.",
+  "plans.noneHint": "When {bot} splits work into parallel parts, the plan shows here.",
+  "plans.cli": "CLI agents",
+  "plans.showAll": "Show all ({n})",
+  "plans.fewer": "Show fewer",
+  "plans.refresh": "Refresh",
+  "plans.open": "Open plan {name}",
+  "plans.graph": "Plan graph",
 
   // skills (the composer's ./ picker)
   "skills.none": "No skill matches",

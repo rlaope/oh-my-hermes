@@ -44,7 +44,7 @@ test("the panel header is six tabs; the header keeps one control", async ({ page
     "Schedule",
     "Worktrees",
     "Diff",
-    "Runs",
+    "Plans",
   ]);
   await expect(page.getByTestId("panel-tab-details")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);

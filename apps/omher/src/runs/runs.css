@@ -1,4 +1,4 @@
-/* Runs: the run list, and one run as the OMH TUI's box view (plain text header, frontiers of outlined boxes,
+/* Plans (runs in the code): the list of plans, and one plan as the OMH TUI's box view (plain text header, frontiers of outlined boxes,
    connected 1px lines), in the side panel and at full size over the chat column (⌘⇧G).
    Rules: a node is a 1px outline on the page with one 2px state line on its left edge. No fill, gradient, shadow,
    glow or shimmer on a node, a line or a header. 4px radii, 11-13px text, selection is gray. The only motion is
@@ -115,17 +115,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rn-tag {
-  flex: none;
-  font-size: 10.5px;
-  color: var(--quiet);
-}
-.rn-tag.bad {
-  color: var(--danger);
-}
-.rn-tag.fix {
-  color: var(--rn-amber);
-}
 .rn-n {
   flex: none;
   font-size: 11px;
@@ -168,23 +157,15 @@
   padding-top: 10px;
   border-top: 1px solid var(--line-soft);
 }
-/* the agent's mark and name: one width for "Claude" and "Codex", so the titles after it line up */
+/* the agent's mark and name, as text: one width for "Claude" and "Codex", so the plans after it line up */
 .rn-agent {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  width: 58px;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--raise2);
-  color: var(--body);
-  font-size: 10.5px;
-  line-height: 16px;
-}
-.rn-row.on .rn-agent {
-  background: var(--hover);
+  width: 52px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 /* ---------------------------------------------------------------- the selected run (panel) */

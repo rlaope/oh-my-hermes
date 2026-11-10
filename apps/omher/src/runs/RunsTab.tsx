@@ -1,7 +1,8 @@
-// Runs tab: the bot's runs (OMH dag runs, Hermes delegate fan-outs) as a list, and the selected run as plain text
-// and a read-only box graph (the OMH TUI's box view), plus the same drawing at full size over the chat column
-// (⌘⇧G). Below the bot's own runs, the CLI agents' runs on this machine (Claude Code subagents, Codex sub-agents)
-// in the same list style. Nothing here retries, settles or cancels.
+// Plans tab: the bot's plans (OMH dag runs, Hermes delegate fan-outs) as a list of plain text rows, and the
+// selected one as plain text and a read-only box graph (the OMH TUI's box view), plus the same drawing at full
+// size over the chat column (⌘⇧G). Below the bot's own, the CLI agents' on this machine (Claude Code subagents,
+// Codex sub-agents) in the same list style. A plan is a run in the code and the protocol (`runs.list`); only the
+// words on screen say "plan". Nothing here retries, settles or cancels.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
@@ -72,7 +73,8 @@ function useRuns(bot: string, n = 0) {
   return { runs: mine?.runs ?? null, cli: mine?.cli ?? [], error };
 }
 
-/** One run in the list: state dot, title, tags, done/total and time. CLI runs carry their agent's mark and name. */
+/** One plan in the list, as plain text: a small state dot, its goal (its title when it has none), then "3/7 · 12m".
+ *  No pills. A CLI agent's row names the agent before the text. */
 function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummary; on: boolean; nowS: number; onPick: () => void; testId?: string }) {
   const s = useStore();
   return (
@@ -89,7 +91,7 @@ function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummar
           s.openRun(r.id);
           onPick();
         }}
-        title={[r.goal || r.title, r.cwd].filter(Boolean).join(" · ")}
+        title={[r.title, r.goal, r.cwd].filter(Boolean).join(" · ")}
       >
         <i className={r.state === "running" ? "rn-live" : `rn-dot ${r.state}${r.state === "done" && r.counts.failed > 0 ? " mixed" : ""}`} aria-label={r.state} />
         {r.agent && (
@@ -98,14 +100,9 @@ function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummar
             {cliName(r.agent)}
           </span>
         )}
-        <span className="rn-title">{r.title}</span>
-        {r.kind === "delegate" && <span className="rn-tag">helpers</span>}
-        {r.state !== "failed" && r.state !== "cancelled" && r.counts.failed > 0 && <span className="rn-tag bad">{r.counts.failed} failed</span>}
-        {r.state !== "failed" && r.state !== "cancelled" && !r.counts.failed && (r.counts.repaired ?? 0) > 0 && (
-          <span className="rn-tag fix">{r.counts.repaired} repaired</span>
-        )}
-        {r.state === "cancelled" && <span className="rn-tag">Cancelled</span>}
-        {r.state === "failed" && <span className="rn-tag bad">Failed</span>}
+        <span className="rn-title" data-testid="run-row-text">
+          {r.goal || r.title}
+        </span>
         <span className="rn-n">
           {r.counts.done}/{r.counts.nodes} · {span((r.ended ?? nowS) - r.started)}
         </span>
@@ -157,16 +154,16 @@ export function RunsTab({ bot }: { bot: Bot }) {
   return (
     <div className="pn-body rn" data-testid="panel-runs" data-list={lists ? "open" : "closed"}>
       <div className="pn-sec">
-        {bot.display_name}'s runs
+        {t("plans.of", { bot: bot.display_name })}
         {selected ? (
           <button type="button" className="rn-toggle" data-testid="run-list-toggle" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)}>
-            All {runs.length + cli.length} runs
+            {t("plans.all", { n: runs.length + cli.length })}
             <Chevron up={listOpen} />
           </button>
         ) : (
           <span className="rn-count">{runs.length}</span>
         )}
-        <button type="button" className="pn-ref" onClick={() => setN((x) => x + 1)} title="Refresh" aria-label="Refresh">
+        <button type="button" className="pn-ref" onClick={() => setN((x) => x + 1)} title={t("plans.refresh")} aria-label={t("plans.refresh")}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" width="12" height="12">
             <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
           </svg>
@@ -174,9 +171,9 @@ export function RunsTab({ bot }: { bot: Bot }) {
       </div>
       {runs.length === 0 && (
         <div className="pn-empty">
-          No runs yet.
+          {t("plans.none")}
           <br />
-          When {bot.display_name} splits work into parallel parts, they show here.
+          {t("plans.noneHint", { bot: bot.display_name })}
         </div>
       )}
       {lists && runs.length > 0 && (
@@ -188,13 +185,14 @@ export function RunsTab({ bot }: { bot: Bot }) {
       )}
       {lists && runs.length > LIST_CAP && (
         <button type="button" className="rn-more" data-testid="run-list-more" onClick={() => setAll((v) => !v)}>
-          {all ? "Show fewer" : `Show all (${runs.length})`}
+          {all ? t("plans.fewer") : t("plans.showAll", { n: runs.length })}
         </button>
       )}
       {lists && cli.length > 0 && (
         <>
           <div className="pn-sec rn-sec2">
-            CLI agents<span>{cli.length}</span>
+            {t("plans.cli")}
+            <span>{cli.length}</span>
           </div>
           <ul className={`rn-list${allCli ? " all" : ""}`} data-testid="cli-run-list">
             {shownRuns(cli, allCli, selected?.id).map((r) => (
@@ -203,7 +201,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
           </ul>
           {cli.length > LIST_CAP && (
             <button type="button" className="rn-more" data-testid="cli-run-list-more" onClick={() => setAllCli((v) => !v)}>
-              {allCli ? "Show fewer" : `Show all (${cli.length})`}
+              {allCli ? t("plans.fewer") : t("plans.showAll", { n: cli.length })}
             </button>
           )}
         </>
@@ -279,9 +277,9 @@ export function RunsFull({ bot }: { bot: Bot }) {
   const node = run?.nodes.find((x) => x.id === open) ?? null;
   const nowS = nowMs / 1000;
   return (
-    <div className="rf" data-testid="runs-full" role="dialog" aria-label="Run graph">
+    <div className="rf" data-testid="runs-full" role="dialog" aria-label={t("plans.graph")}>
       <div className="rf-head">
-        {selected ? <PlanHeader summary={selected} run={run} bot={bot} nowS={nowS} /> : <b>{bot.display_name}'s runs</b>}
+        {selected ? <PlanHeader summary={selected} run={run} bot={bot} nowS={nowS} /> : <b>{t("plans.of", { bot: bot.display_name })}</b>}
         <span className="rf-hint">{t("graph.hint")}</span>
         <IconButton label={t("graph.close")} onClick={() => s.setRunsFull(false)}>
           <CloseIcon />
@@ -291,7 +289,7 @@ export function RunsFull({ bot }: { bot: Bot }) {
         {!runs ? (
           <div className="pn-empty">{error ?? <Spinner size={12} label="Loading" />}</div>
         ) : !selected ? (
-          <div className="pn-empty">No runs yet.</div>
+          <div className="pn-empty">{t("plans.none")}</div>
         ) : !run || !width ? (
           <div className="pn-empty">
             <Spinner size={12} label="Loading" />

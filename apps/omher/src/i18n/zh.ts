@@ -53,8 +53,18 @@ export const zh: Record<Key, string> = {
   "graph.edit": "编辑",
   "graph.prefill": "会把请求放入消息框，不会发送。",
 
-  // plans (the run list)
+  // plans (the Plans tab: the list of a bot's runs)
   "plans.tab": "计划",
+  "plans.of": "{bot}的计划",
+  "plans.all": "全部 {n} 个计划",
+  "plans.none": "还没有计划。",
+  "plans.noneHint": "{bot}把工作拆成并行部分后，计划会显示在这里。",
+  "plans.cli": "CLI 代理",
+  "plans.showAll": "显示全部 ({n})",
+  "plans.fewer": "收起",
+  "plans.refresh": "刷新",
+  "plans.open": "打开计划 {name}",
+  "plans.graph": "计划图",
 
   // skills (the composer's ./ picker)
   "skills.none": "没有匹配的技能",

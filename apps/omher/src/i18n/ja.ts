@@ -53,8 +53,18 @@ export const ja: Record<Key, string> = {
   "graph.edit": "編集",
   "graph.prefill": "メッセージ欄に依頼を入れます。送信はしません。",
 
-  // plans (the run list)
+  // plans (the Plans tab: the list of a bot's runs)
   "plans.tab": "計画",
+  "plans.of": "{bot}の計画",
+  "plans.all": "全{n}件の計画",
+  "plans.none": "計画はまだありません。",
+  "plans.noneHint": "{bot}が作業を並列に分けると、その計画がここに表示されます。",
+  "plans.cli": "CLI エージェント",
+  "plans.showAll": "すべて表示 ({n})",
+  "plans.fewer": "折りたたむ",
+  "plans.refresh": "更新",
+  "plans.open": "計画 {name} を開く",
+  "plans.graph": "計画グラフ",
 
   // skills (the composer's ./ picker)
   "skills.none": "一致するスキルなし",

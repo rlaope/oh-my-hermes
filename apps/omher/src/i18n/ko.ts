@@ -53,8 +53,18 @@ export const ko: Record<Key, string> = {
   "graph.edit": "수정",
   "graph.prefill": "메시지 입력창에 요청을 넣습니다. 전송하지 않습니다.",
 
-  // plans (the run list)
+  // plans (the Plans tab: the list of a bot's runs)
   "plans.tab": "계획",
+  "plans.of": "{bot}의 계획",
+  "plans.all": "계획 {n}개 전체",
+  "plans.none": "아직 계획이 없습니다.",
+  "plans.noneHint": "{bot}이(가) 작업을 병렬로 나누면 그 계획이 여기에 표시됩니다.",
+  "plans.cli": "CLI 에이전트",
+  "plans.showAll": "전체 보기 ({n})",
+  "plans.fewer": "접기",
+  "plans.refresh": "새로 고침",
+  "plans.open": "계획 {name} 열기",
+  "plans.graph": "계획 그래프",
 
   // skills (the composer's ./ picker)
   "skills.none": "일치하는 스킬 없음",

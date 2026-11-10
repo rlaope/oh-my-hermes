@@ -6,6 +6,7 @@ import type { SlotProps } from "../../features";
 import { activityText, getStore, liveLabel, type Step, type Turn } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
+import { t } from "../../i18n";
 import "./activity.css";
 
 export const slot = "activity";
@@ -97,7 +98,7 @@ function DagRows({ step, live }: { step: Step; live: boolean }) {
             className="act-dag-open"
             onClick={() => getStore().actions.openRun(d.run)}
             data-testid="activity-dag-open"
-            title={`Open run ${d.run}`}
+            title={t("plans.open", { name: d.run })}
           >
             {d.run}
           </button>

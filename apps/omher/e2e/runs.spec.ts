@@ -1,4 +1,5 @@
-// Runs tab: the bot's runs as a list, and the selected run as the OMH TUI's box view: a plain three-line header,
+// Plans tab (runs in the code): the bot's plans as a list of plain text rows, and the selected one as the OMH
+// TUI's box view: a plain three-line header,
 // frontiers of outlined boxes of four text lines, connected 1px lines, in the side panel and at full size over the
 // chat column (⌘⇧G). Real (redacted) dag runs, real delegation logs for the models and routes, and a synthetic
 // 40-node run for the layout.
@@ -59,17 +60,20 @@ async function openRuns(page: Page, bot = "kami") {
 async function mod(page: Page) {
   return (await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform))) ? "Meta" : "Control";
 }
-/** Unfolds the run list when it sits folded into the selected run's header ("All runs ▾"). */
+/** Unfolds the list when it sits folded into the selected plan's header ("All 7 plans ▾"). */
 async function showList(page: Page) {
   const t = page.getByTestId("run-list-toggle");
   await expect(t).toBeVisible();
   if ((await t.getAttribute("aria-expanded")) === "false") await t.click();
   await expect(page.getByTestId("run-list")).toBeVisible();
 }
-/** Opens a run from the list (which then folds away again). */
+/** A row of the list: by its plan's title (a row shows the goal; the title is in its tooltip), or by its text. */
+const rowOf = (page: Page, text: string | RegExp, testId = "run-row") =>
+  typeof text === "string" ? page.locator(`[data-testid="${testId}"][title*="${text}"]`) : page.getByTestId(testId).filter({ hasText: text });
+/** Opens a plan from the list (which then folds away again). */
 async function pickRow(page: Page, text: string | RegExp, testId = "run-row") {
   await showList(page);
-  await page.getByTestId(testId).filter({ hasText: text }).click();
+  await rowOf(page, text, testId).click();
 }
 const panel = (page: Page) => page.getByTestId("run-graph-box");
 const full = (page: Page) => page.getByTestId("runs-full");
@@ -113,10 +117,10 @@ test.beforeEach(async () => {
 
 // ---- the tab and the list ----
 
-test("Runs is the sixth tab; the header still holds one control; the panel is 460px", async ({ page }) => {
+test("Plans is the sixth tab; the header still holds one control; the panel is 460px", async ({ page }) => {
   await openRuns(page);
   const tabs = page.getByRole("tablist", { name: "Panel" }).getByRole("tab");
-  expect(await tabs.evaluateAll((els) => els.map((e) => e.getAttribute("title")))).toEqual(["Details", "Terminal", "Schedule", "Worktrees", "Diff", "Runs"]);
+  expect(await tabs.evaluateAll((els) => els.map((e) => e.getAttribute("title")))).toEqual(["Details", "Terminal", "Schedule", "Worktrees", "Diff", "Plans"]);
   await expect(page.getByTestId("panel-tab-runs")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);
   await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0)).toBe(460);
@@ -141,7 +145,58 @@ test("the list: running first with a live dot, then newest; dots differ by state
   await expect(rows.nth(1).locator(".rn-n")).toHaveText(/^5\/6 · /);
   const dot = (i: number) => rows.nth(i).locator("i").first().evaluate((e) => getComputedStyle(e).backgroundColor);
   expect(await dot(1)).not.toBe(await dot(2));
-  await expect(rows.nth(2)).toContainText("Cancelled");
+  await expect(rows.nth(2).locator("i").first()).toHaveAttribute("aria-label", "cancelled");
+});
+
+test("the list is plans: \"Kami's plans\"; a row is plain text: the goal, then 3/6 · 14m, and a small state dot", async ({ page }) => {
+  await openRuns(page);
+  await expect(page.getByTestId("panel-tab-runs")).toHaveText("Plans");
+  await expect(page.getByTestId("panel-runs").locator(".pn-sec").first()).toContainText("Kami's plans");
+  await expect(page.getByTestId("run-list-toggle")).toHaveText("All 7 plans");
+  await showList(page);
+  const rows = page.getByTestId("run-row");
+  // the goal is the row's text; a plan without one shows its title
+  await expect(rows.nth(0).getByTestId("run-row-text")).toHaveText(/^OMH suggests its own skills to Codex fanouts/);
+  await expect(rowOf(page, "omh-dap").getByTestId("run-row-text")).not.toHaveText("");
+  await expect(rows.nth(0)).toHaveAttribute("title", /^Codex coexistence \(live\) · OMH suggests/);
+  // a dot, the text, the numbers: nothing else, and nothing drawn as a pill
+  const parts = await rows.evaluateAll((els) =>
+    els.map((e) => ({
+      kids: [...e.children].map((c) => c.className.split(" ")[0]),
+      pills: [...e.querySelectorAll("span")].filter((c) => {
+        const s = getComputedStyle(c);
+        return s.backgroundImage !== "none" || !/rgba\(0, 0, 0, 0\)|transparent/.test(s.backgroundColor) || parseFloat(s.borderTopWidth) > 0;
+      }).length,
+      dot: Math.round(e.querySelector("i")!.getBoundingClientRect().width),
+    })),
+  );
+  for (const r of parts) {
+    expect(r.kids.slice(1)).toEqual(["rn-title", "rn-n"]);
+    expect(["rn-live", "rn-dot"]).toContain(r.kids[0]);
+    expect(r.pills).toBe(0);
+    expect(r.dot).toBe(7);
+  }
+  await expect(page.locator(".rn-tag")).toHaveCount(0);
+  // a CLI agent's row names the agent as text before the plan, with no badge behind it
+  const cli = page.getByTestId("cli-run-row").first().getByTestId("run-agent");
+  await expect(cli).toHaveText("Claude");
+  expect(await cli.evaluate((e) => [getComputedStyle(e).backgroundColor, getComputedStyle(e).borderTopWidth])).toEqual([expect.stringMatching(/rgba\(0, 0, 0, 0\)|transparent/), "0px"]);
+});
+
+test("the words are in the string table: Korean, Japanese and Chinese name the tab 계획, 計画, 计划", async ({ browser }) => {
+  for (const [lang, tab, list] of [
+    ["ko", "계획", "Kami의 계획"],
+    ["ja", "計画", "Kamiの計画"],
+    ["zh", "计划", "Kami的计划"],
+  ]) {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.addInitScript((l) => localStorage.setItem("omher.lang", l), lang);
+    await openRuns(page);
+    await expect(page.getByTestId("panel-tab-runs")).toHaveText(tab);
+    await expect(page.getByTestId("panel-runs").locator(".pn-sec").first()).toContainText(list);
+    await ctx.close();
+  }
 });
 
 test("the run list shows the 12 newest, running first, with 'Show all (N)'", async ({ page }) => {
@@ -188,7 +243,7 @@ test("a selected run folds the list into its header; 'All runs' unfolds it; pick
   await openRuns(page);
   const toggle = page.getByTestId("run-list-toggle");
   await expect(page.getByTestId("panel-runs")).toHaveAttribute("data-list", "closed");
-  await expect(toggle).toHaveText("All 7 runs"); // the bot's 4 and the CLI agents' 3
+  await expect(toggle).toHaveText("All 7 plans"); // the bot's 4 and the CLI agents' 3
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("run-row")).toHaveCount(0);
   await expect(page.getByTestId("cli-run-row")).toHaveCount(0);
@@ -205,7 +260,7 @@ test("a selected run folds the list into its header; 'All runs' unfolds it; pick
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("run-row")).toHaveCount(4);
   await expect(page.getByTestId("cli-run-row")).toHaveCount(3);
-  await page.getByTestId("run-row").filter({ hasText: "Codex coexistence fixes" }).click();
+  await rowOf(page, "Codex coexistence fixes").click();
   await expect(panel(page)).toHaveAttribute("data-run", FAN);
   await expect(page.getByTestId("run-row")).toHaveCount(0);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -219,7 +274,7 @@ test("a selected run folds the list into its header; 'All runs' unfolds it; pick
 test("a bot with no runs says so", async ({ page }) => {
   await openRuns(page);
   await page.getByTestId("bot-friren").click();
-  await expect(page.getByTestId("panel-runs")).toContainText("No runs yet.");
+  await expect(page.getByTestId("panel-runs")).toContainText("No plans yet.");
 });
 
 // ---- the header: plain text ----
@@ -529,8 +584,8 @@ test("clicking a node opens its detail under 'Node details'; a failed node offer
 test("a cancelled run says so in its header and on its unfinished nodes", async ({ page }) => {
   await openRuns(page);
   await showList(page);
-  const r = page.getByTestId("run-row").filter({ hasText: "omh-dap" });
-  await expect(r).toContainText("Cancelled");
+  const r = rowOf(page, "omh-dap");
+  await expect(r.locator("i").first()).toHaveAttribute("aria-label", "cancelled");
   await r.click();
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", CANCELLED);
@@ -547,7 +602,7 @@ test("88 sub-runs: the first 8 rows, running then failed first; 'Show all 88' op
   await page.setViewportSize({ width: 1440, height: 900 });
   await grow88(page);
   await openRuns(page);
-  await pickRow(page, "88", "cli-run-row");
+  await pickRow(page, /\/88 · /, "cli-run-row");
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", CLI_CODEX);
   await expect(box.getByTestId("run-plan-source")).toHaveText("Codex / subagents · 88 tasks");

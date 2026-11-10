@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import type { Bot, Routine, TerminalRun, Worktree, WorktreeDiff } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { shortTime } from "../app/time";
+import { t } from "../i18n";
 import { SourceIcon, Spinner } from "../ui";
 import { cadence, nextRun, sourceName } from "./format";
 import "./panel.css";
@@ -16,7 +17,7 @@ export const TABS: { id: PanelTab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
   { id: "worktrees", label: "Worktrees" },
   { id: "diff", label: "Diff" },
-  { id: "runs", label: "Runs" },
+  { id: "runs", label: t("plans.tab") },
 ];
 
 const I = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
