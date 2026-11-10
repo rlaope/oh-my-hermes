@@ -29,7 +29,7 @@
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
-> <td><a href="https://nousresearch.com">Nous Research</a> 的 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH 运行所在的智能体。OMH 是独立的一层，不是 Nous Research 的官方项目。</td></tr>
+> <td><a href="https://nousresearch.com">Nous Research</a> 的 <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH 运行所在的智能体。OMH 是其上的非官方独立层。</td></tr>
 > <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
 > <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a> 的 <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b><br>ultrawork 概念的出处。OMH 把它带到了 Hermes。</td></tr>
 > </table>

@@ -29,7 +29,7 @@ Hermes にパッチを当てたり置き換えたりせず、計画しただけ�
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
-> <td><a href="https://nousresearch.com">Nous Research</a> の <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH が動くエージェントです。OMH は独立したレイヤーで、Nous Research の公式プロジェクトではありません。</td></tr>
+> <td><a href="https://nousresearch.com">Nous Research</a> の <b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b><br>OMH が動くエージェントです。OMH はその上の非公式な独立レイヤーです。</td></tr>
 > <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
 > <td><a href="https://github.com/code-yeongyu">@code-yeongyu</a> の <b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b><br>ultrawork コンセプトの出発点です。OMH はそれを Hermes に持ち込みました。</td></tr>
 > </table>

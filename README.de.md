@@ -34,7 +34,7 @@ Es patcht oder ersetzt Hermes nie und meldet geplante Arbeit nie als erledigt.
 >
 > <table>
 > <tr><td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="56"></a></td>
-> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> von <a href="https://nousresearch.com">Nous Research</a><br>Der Agent, auf dem OMH läuft. OMH ist eine unabhängige Schicht, kein offizielles Projekt von Nous Research.</td></tr>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> von <a href="https://nousresearch.com">Nous Research</a><br>Der Agent, auf dem OMH läuft. OMH ist eine unabhängige, inoffizielle Schicht.</td></tr>
 > <tr><td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="64"></a></td>
 > <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> von <a href="https://github.com/code-yeongyu">@code-yeongyu</a><br>Der Ursprung des ultrawork-Konzepts. OMH bringt es zu Hermes.</td></tr>
 > </table>
