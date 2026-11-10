@@ -2590,7 +2590,8 @@ class Accounts(unittest.TestCase):
         which = lambda c: "/bin/codex" if c == "codex" else None  # noqa: E731
         a = ob.add_account("codex", "Work", h)
         self.assertEqual(a, {"id": "work", "dir": str(h / ".omher/accounts/codex/work")})
-        self.assertEqual(oct((h / ".omher/accounts/codex/work").stat().st_mode & 0o777), "0o700")
+        if os.name != "nt":  # Windows has no POSIX mode bits: stat() reports 0o777 whatever mkdir asked for
+            self.assertEqual(oct((h / ".omher/accounts/codex/work").stat().st_mode & 0o777), "0o700")
         self.assertEqual(ob.add_account("codex", "", h)["id"], "account-2")
         with self.assertRaises(ob.BridgeError):
             ob.add_account("codex", "Work", h)

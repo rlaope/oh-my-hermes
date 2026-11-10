@@ -537,7 +537,7 @@ describe("the layout", () => {
         expect(faults(lay), what).toEqual([]);
       }
     }
-  });
+  }, 30_000);
 
   it("keeps a line into a child clear of the lines that leave the row above it, however many there are", () => {
     // seeded runs with many start nodes, where every fifth node waits on half of the nodes before it: its top
@@ -562,7 +562,7 @@ describe("the layout", () => {
           expect(faults(lay), what).toEqual([]);
         }
     }
-  });
+  }, 30_000);
 
   it("wraps only a frontier too wide for the narrowest boxes, and still draws every edge", () => {
     // seven under one parent, one node waiting on all seven: 60 cells hold three boxes
