@@ -150,10 +150,11 @@ CODING_MODEL_ROUTE_CLAIM_BOUNDARY: Final[str] = (
 # Anthropic API from Claude Code v2.1.293 and Haiku 4.5 on Claude Platform on
 # AWS, Bedrock, Google Cloud, and Foundry (code.claude.com/docs/en/model-config,
 # read 2026-10-13), so the same row runs different generations on different
-# machines. Claude Mythos 5.1 stays listed here as a recognized candidate for
-# a user who names it: it is the same model as Fable 5.1 served only to
-# Project Glasswing-approved organizations, so an unapproved account gets a
-# provider rejection and no shipped chain recommends it.
+# machines. Claude Mythos 5.1 and 5.2 stay listed here as recognized
+# candidates for a user who names them: each is the same model as its Fable
+# sibling served only to organizations Anthropic has verified, so an
+# unapproved account gets a provider rejection and no shipped chain
+# recommends them.
 MODEL_CATALOG_KIND: Final[str] = "built_in_defaults"
 
 # Closed vocabulary for a route's catalog basis. `local_inventory` marks a
@@ -250,6 +251,23 @@ EXECUTOR_MODEL_OPTIONS: Final[dict[str, tuple[dict[str, object], ...]]] = {
         {
             "model_id": "claude-fable-5-1",
             "label": "Claude Fable 5.1 (most capable widely released tier)",
+            "tier": "frontier",
+            "recommended_roles": ("brain", "review", "design_visual"),
+            "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+        },
+        {
+            # Claude Fable 5.2 (2026-11-09). The Claude Code client needs
+            # v2.1.290 or newer for this id (observed, model contract
+            # `surface_notes.claude_code`). Ladder from the exact contract.
+            "model_id": "claude-fable-5-2",
+            "label": "Claude Fable 5.2 (most capable widely released tier)",
+            "tier": "frontier",
+            "recommended_roles": ("brain", "review", "design_visual"),
+            "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+        },
+        {
+            "model_id": "claude-mythos-5-2",
+            "label": "Claude Mythos 5.2 (Fable 5.2 weights, verified organizations only)",
             "tier": "frontier",
             "recommended_roles": ("brain", "review", "design_visual"),
             "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),

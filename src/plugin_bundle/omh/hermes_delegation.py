@@ -463,6 +463,9 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     # who asks for it still deserves "which of my providers serves this"
     # answered rather than unknown. The parity gate lists it explicitly.
     "claude-mythos-5-1": ("ccapi", "anthropic", "openrouter"),
+    # Recognition-only on the same terms: Claude Mythos 5.2 is Fable 5.2
+    # served only to verified organizations (2026-11-10).
+    "claude-mythos-5-2": ("ccapi", "anthropic", "openrouter"),
     # Recognition-only: no shipped chain names the Highspeed tier. Moonshot's
     # own API (`kimi-coding` in Hermes) is the one family observed serving it
     # (2026-10-24); OpenRouter and OpenCode list only the base id.
@@ -564,7 +567,8 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
 EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset(
     {
         "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-cyber", "gpt-6-luna",
-        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "deepseek-v4.1-flash",
+        "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-fable-5-2",
+        "deepseek-v4.1-flash",
         "kimi-k3.1-pro", "kimi-k3.1-pro-highspeed", "gemini-4-argon", "grok-4.7",
         "jev-1.13.0",
     }
@@ -609,6 +613,8 @@ DECLARED_MODEL_ALIAS_PROJECTIONS: dict[str, tuple[str, str, str]] = {
     # Claude Fable 5.1's dotted spelling (Hermes' static model catalog,
     # 2026-11-08), on the same terms.
     "claude-fable-5.1": ("claude-fable-5-1", "thinking", "standard"),
+    # Claude Fable 5.2's dotted spelling, on the same terms (2026-11-10).
+    "claude-fable-5.2": ("claude-fable-5-2", "thinking", "standard"),
     # TypeSafe publishes two aliases for Jev (docs.typesafe.ai/models,
     # 2026-09-21); both point at `jev-1.13.0` today and both move on the next
     # release, so each is a declared projection with a read date.
@@ -1586,6 +1592,10 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-fable-5": (10.0, 50.0),
     "claude-fable-5-1": (10.0, 50.0),
     "claude-mythos-5-1": (10.0, 50.0),
+    # Anthropic list price (the Fable 5.2 what's-new page, read 2026-11-10):
+    # Fable 5.2 and Mythos 5.2 share 8/40, below the 5.1 generation's 10/50.
+    "claude-fable-5-2": (8.0, 40.0),
+    "claude-mythos-5-2": (8.0, 40.0),
     "claude-sonnet-5": (2.0, 10.0),
     # Anthropic list price (platform.claude.com pricing, read 2026-10-01):
     # Sonnet 5.5 2/10. The same page says Sonnet 5's 2/10 launch price is now
@@ -1866,6 +1876,10 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     "claude-sonnet-5-5": 0.05,
     "claude-fable-5-1": 0.025,
     "claude-mythos-5-1": 0.025,
+    # Fable 5.2 and Mythos 5.2 read cache at $0.20 against $8 input, the
+    # same 0.025x (the Fable 5.2 what's-new page, read 2026-11-10).
+    "claude-fable-5-2": 0.025,
+    "claude-mythos-5-2": 0.025,
     # DeepSeek V4.1 Flash cache hit 0.006 vs cache miss 0.30 per MTok input
     # (api-docs.deepseek.com/quick_start/pricing, 2026-09); the Ultrafast
     # serving of the same model carries the same cache-hit ratio, or a run on

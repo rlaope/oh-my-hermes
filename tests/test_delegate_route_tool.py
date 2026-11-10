@@ -865,7 +865,10 @@ class DelegateRouteToolTest(unittest.TestCase):
     def test_a_no_thinking_effort_is_refused_for_always_thinking_claude_models(self):
         # Fable 5.1 / Mythos 5.1 cannot disable thinking: Mythos 400s and
         # Fable drops the flag silently, so the route never carries it.
-        for model in ("claude-fable-5-1", "claude-mythos-5-1", "fable", "anthropic/claude-mythos-5-1"):
+        for model in (
+            "claude-fable-5-1", "claude-mythos-5-1", "fable", "anthropic/claude-mythos-5-1",
+            "claude-fable-5-2", "claude-mythos-5-2", "anthropic/claude-fable-5.2",
+        ):
             result = self._call(action="set", model=model, reasoning_effort="none")
             self.assertEqual(result["status"], "error", model)
             self.assertIn("always thinks", result["error"])

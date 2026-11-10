@@ -787,7 +787,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # own test above checks pricing, provider eligibility, and `-pro`.
         # GPT-6 Cyber (2026-11-06) is access-gated and never chained; its own
         # test above checks the same three things.
-        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber"}
+        # Claude Fable 5.2 (2026-11-10) is contracted ahead of its chain
+        # placement; its own contract tests check pricing and projection.
+        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-2"}
         for model_id in (*contracts, *expected):
             contract_id = expected.get(model_id, (model_id,))[0]
             if contract_id in unchained:

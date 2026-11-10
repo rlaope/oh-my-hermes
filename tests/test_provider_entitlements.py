@@ -66,6 +66,9 @@ class ParityTests(unittest.TestCase):
     # same reason: a machine-level chain override may still name them.
     _RECOGNITION_ONLY_ALIAS_FAMILIES: dict[str, tuple[str, ...]] = {
         "claude-mythos-5-1": ("ccapi", "anthropic", "openrouter"),
+        # Mythos 5.2 is Fable 5.2 served only to verified organizations
+        # (onboarded 2026-11-10), on the Mythos 5.1 terms.
+        "claude-mythos-5-2": ("ccapi", "anthropic", "openrouter"),
         # Onboarded 2026-10-27 ahead of any chain placement.
         "gpt-6.1-terra": ("openai-codex", "openai", "openrouter"),
         # Onboarded 2026-11-06, access-gated (Daybreak Red), so never chained:
