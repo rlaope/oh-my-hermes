@@ -577,17 +577,69 @@ class BackendTests(unittest.TestCase):
                 accepted = call(action="settle", run="feat", node="check", outcome="accepted")
         self.assertEqual(accepted["verdict"], "verified", accepted)
         command = environment.calls[-1][0]
-        self.assertIn(f"{{ head -c {dag_run.MAX_HANDOFF_READ_BYTES} ", command)
-        for stage in ("{ LC_ALL=C tr '\\000' '\\001'; echo t$? >&3; }", "{ LC_ALL=C grep -F CRITERION; echo g$? >&3; }",
-                      f"{{ tail -n {dag_run.CRITERION_LINES_KEPT}; echo l$? >&3; }}", "{ base64; echo b$? >&3; } >&4;",
-                      f"echo {dag_tool._CRITERION_END}"):
+        # Every tool runs as `command`, so a login-shell alias or function of the same name never answers instead.
+        for stage in (f"{{ command head -c {dag_run.MAX_HANDOFF_READ_BYTES} ",
+                      "{ LC_ALL=C command tr '\\000' '\\001'; command echo t$? >&3; }",
+                      "{ LC_ALL=C command grep -F CRITERION; command echo g$? >&3; }",
+                      f"{{ LC_ALL=C command cut -c 1-{dag_run.CRITERION_LINE_BYTES}; command echo c$? >&3; }}",
+                      f"{{ command tail -n {dag_run.CRITERION_LINES_KEPT}; command echo l$? >&3; }}",
+                      "{ command base64; command echo b$? >&3; } >&4;",
+                      f"command echo {dag_tool._CRITERION_END} $omh_s );"):
             self.assertIn(stage, command)
 
     @staticmethod
-    def _answer(data: bytes, *, end: bool = True, **fields: object) -> dict:
+    def _answer(data: bytes, *, end: bool = True, statuses: str = "h0 t0 g0 c0 l0 b0", **fields: object) -> dict:
         encoded = base64.b64encode(data).decode()
-        lines = ["OMH_HANDOFF_FILE", encoded[:40], encoded[40:], *([dag_tool._CRITERION_END] if end else [])]
+        lines = ["OMH_HANDOFF_FILE", encoded[:40], encoded[40:],
+                 *([f"{dag_tool._CRITERION_END} {statuses}"] if end else [])]
         return {"output": "\n".join(lines) + "\n", "returncode": 0, **fields}
+
+    def test_grep_finding_no_line_is_a_read_and_any_other_failed_stage_is_none(self) -> None:
+        """Mutations: take grep's 1 (no matching line) for a failed read, or a 2 (grep's own error) for a read."""
+        data = b"Notes without a criterion line.\n"
+        for statuses, read in (
+            ("h0 t0 g1 c0 l0 b0", True),  # no line matched: a read with zero lines, so accepted is refused
+            ("h0 t0 g0 c0 l0 b0", True),
+            ("b0 l0 c0 g1 t0 h0", True),  # the order the stages exit in does not matter
+            ("h0 t0 g2 c0 l0 b0", False),  # grep's own error
+            ("h0 t0 g127 c0 l0 b0", False),
+            ("h1 t0 g0 c0 l0 b0", False), ("h0 t0 g0 c0 l0 b127", False), ("h0 t0 g1 c0 l0 b1", False),
+            ("h0 t0 g1 c0 l0", False),  # a stage missing
+            ("h0 t0 g1 c0 l0 b0 b0", False), ("h0 h0 g1 c0 l0 b0", False),  # a stage twice
+            ("h0 t0 g01 c0 l0 b0", False), ("h00 t0 g1 c0 l0 b0", False),  # a status is the shell's own digits
+            ("h0 t0 g c0 l0 b0", False), ("h0 t0 g+1 c0 l0 b0", False), ("x0 t0 g1 c0 l0 b0", False),
+            ("", False),
+        ):
+            with self.subTest(statuses=statuses):
+                self.assertEqual(dag_tool.criterion_stages_passed(statuses.split()), read)
+                settled = self._settle_with(lambda token, statuses=statuses: self._answer(data, statuses=statuses))
+                row = next((item for item in settled.get("nodes", []) if item["id"] == "check"), {})
+                if read:
+                    self.assertEqual(settled["reason"], "criteria_unobserved", settled)
+                else:
+                    self.assertEqual((settled["status"], row.get("handoff_checked")), ("ok", False), settled)
+                    self.assertEqual(row.get("handoff_unread"), "backend_unanswered", row)
+
+    @unittest.skipUnless(SANDBOX_SHELL, SANDBOX_SKIP)
+    def test_a_login_shell_alias_or_function_never_answers_for_a_tool(self) -> None:
+        """Hermes sources the login shell's functions and aliases (expand_aliases on) before each command."""
+        prelude = ("shopt -s expand_aliases; alias grep='grep --color=always'; alias base64='echo HIJACKED'; "
+                   "head() { echo 'CRITERION api #T: met - from a function'; }; tail() { echo HIJACKED; }; "
+                   "echo() { builtin echo h1; }; [() { return 1; }\n")
+        with homes() as home, terminal_env(), TemporaryDirectory() as root:
+            sandbox = Sandbox(Path(root), prelude=prelude)
+            with Terminal("ssh", sandbox).modules():
+                slots_table(home)
+                call(action="define", run="feat", nodes=NODES, criteria=CRITERIA)
+                record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+                built = sandbox.path(Path(dag_run.node_handoff(record, home.omh, "build")))
+                built.parent.mkdir(parents=True, exist_ok=True)
+                built.write_text("done", encoding="utf-8")
+                call(action="settle", run="feat", node="build", outcome="accepted")
+                inside = built.with_name("check.md")
+                inside.write_text(marked("Notes.\n" + ALL_MET, token_of(record_of(home), "check")), encoding="utf-8")
+                accepted = call(action="settle", run="feat", node="check", outcome="accepted")
+        self.assertEqual(accepted["verdict"], "verified", accepted)
 
     def _settle_with(self, answer_for) -> dict:
         with homes() as home, terminal_env():
@@ -615,7 +667,8 @@ class BackendTests(unittest.TestCase):
             "a non-zero exit": lambda token: self._answer(marked(ALL_MET, token).encode(), returncode=1),
             "no end marker": lambda token: self._answer(marked(ALL_MET, token).encode(), end=False),
             "base64 missing": lambda token: {"output": "OMH_HANDOFF_FILE\nsh: base64: not found\n", "returncode": 1},
-            "not base64": lambda token: {"output": f"OMH_HANDOFF_FILE\nnot base64!\nQQ\n{dag_tool._CRITERION_END}\n",
+            "not base64": lambda token: {"output": f"OMH_HANDOFF_FILE\nnot base64!\nQQ\n{dag_tool._CRITERION_END} "
+                                                   "h0 t0 g0 c0 l0 b0\n",
                                          "returncode": 0},
         }
         for label, answer_for in cases.items():
@@ -628,7 +681,8 @@ class BackendTests(unittest.TestCase):
                 row = next(item for item in settled["nodes"] if item["id"] == "check")
                 self.assertIs(row.get("handoff_checked"), False, row)
         # A file with no criterion line is a read that worked (grep's 1), with every criterion not checked.
-        empty = self._settle_with(lambda token: {"output": f"OMH_HANDOFF_FILE\n\n{dag_tool._CRITERION_END}\n",
+        empty = self._settle_with(lambda token: {"output": f"OMH_HANDOFF_FILE\n\n{dag_tool._CRITERION_END} "
+                                                           "h0 t0 g1 c0 l0 b0\n",
                                                  "returncode": 0})
         self.assertEqual(empty["reason"], "criteria_unobserved", empty)
 
@@ -975,6 +1029,144 @@ class ReadTests(unittest.TestCase):
                .replace(b"#T", f"#{TOKEN}".encode()))
         self.assertEqual(dag_run.criterion_statuses(dag_run.criterion_lines(nul), ids, TOKEN),
                          {"api": "unobserved", "docs": "met"})
+
+
+# What a settle reads back with volatile fields dropped (times, ids, paths, the random token), so a run can be compared
+# with what origin/main gave for the same backend answer.
+_VOLATILE = {"handed_out_at", "settled_at", "opened_at", "open_for_s", "defined_at", "updated_at", "session_id",
+             "token", "workspace_root", "handoff_root", "slots", "calls", "usage", "usage_line"}
+
+
+def _scrub(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _scrub(item) for key, item in sorted(value.items()) if key not in _VOLATILE}
+    if isinstance(value, list):
+        return [_scrub(item) for item in value]
+    return value
+
+
+def _settled_digest(home, settled: dict) -> str:
+    record = json.loads(dag_run.record_path(home.omh, PARENT, "feat").read_text(encoding="utf-8"))
+    return _sha(json.dumps({"record": _scrub(record), "result": _scrub(settled)}, sort_keys=True))
+
+
+# Captured from origin/main b201a490a (the same scenarios, before the probe read whole answers).
+MAIN_NO_CRITERIA_FILE_SHA = "ed430c1c1678785f79447f41f41c686e2dc654ef20e582b15b2c6c034469f5d9"
+MAIN_CRITERIA_SHELL_SHA = "3ae6c09b4b1eaaf64ab8c9029f4f23b5357b769f00045df6b91e7d8dea35d41a"
+
+
+class ExistenceProbeTests(unittest.TestCase):
+    """A run without criteria on a Docker or SSH terminal: the probe that asks whether the handoff file is there."""
+
+    def _settle(self, answer: dict, outcome: str = "accepted") -> tuple[dict, dict]:
+        with homes() as home, terminal_env():
+            environment = Answers({"output": "OMH_HANDOFF_FILE\n", "returncode": 0})
+            with Terminal("docker", environment).modules():
+                slots_table(home)
+                call(action="define", run="feat", nodes=NODES)
+                handoff(home, "feat", "build")  # on the host, where the host check finds it
+                call(action="settle", run="feat", node="build", outcome="accepted")
+                environment.answer = answer
+                settled = call(action="settle", run="feat", node="check", outcome=outcome)
+                digest = _settled_digest(home, settled) if settled["status"] == "ok" else ""
+        return settled, {"digest": digest}
+
+    def test_a_probe_that_printed_its_line_answered_even_if_cut_short_after_it(self) -> None:
+        """Pinned as on main: the probe prints one verdict line after its test and nothing follows it, so a line printed
+        before Hermes timed the command out, or before it exited non-zero, is still the answer. Mutation: read the
+        existence probe whole, which turned a handoff that was seen into unverified and accepted a missing one."""
+        for label, answer in {
+            "file, timed out after its line": {"output": "OMH_HANDOFF_FILE\n[Command timed out after 10s]",
+                                               "returncode": 124, "hermes_timed_out": True},
+            "file, exited non-zero after its line": {"output": "OMH_HANDOFF_FILE\n", "returncode": 1},
+        }.items():
+            with self.subTest(label):
+                settled, seen = self._settle(answer)
+                self.assertEqual((settled["verdict"], settled["verdict_reasons"]), ("verified", []), settled)
+                self.assertNotIn("handoff_checked", next(item for item in settled["nodes"] if item["id"] == "check"))
+                self.assertEqual(seen["digest"], MAIN_NO_CRITERIA_FILE_SHA)
+        for label, answer in {
+            "missing, timed out after its line": {"output": "OMH_HANDOFF_NONE\n[Command timed out after 10s]",
+                                                  "returncode": 124, "hermes_timed_out": True},
+            "missing, exited non-zero after its line": {"output": "OMH_HANDOFF_NONE\n", "returncode": 1},
+            "a link, exited non-zero after its line": {"output": "OMH_HANDOFF_LINK\n", "returncode": 1},
+        }.items():
+            with self.subTest(label):
+                settled, _ = self._settle(answer)
+                self.assertEqual((settled["status"], settled["reason"]), ("refused", "handoff_missing"), settled)
+        for label, answer in {
+            "timed out before any line": {"output": "[Command timed out after 10s]", "returncode": 124,
+                                          "hermes_timed_out": True},
+            "exited non-zero before any line": {"output": "sh: syntax error\n", "returncode": 2},
+        }.items():
+            with self.subTest(label):
+                settled, _ = self._settle(answer)
+                row = next(item for item in settled["nodes"] if item["id"] == "check")
+                self.assertEqual(settled["status"], "ok", settled)
+                self.assertEqual((row.get("handoff_checked"), row.get("handoff_unread")), (False, "backend_unanswered"))
+                self.assertEqual((settled["verdict"], settled["verdict_reasons"]),
+                                 ("unverified", ["handoff_not_checked:check"]))
+                self.assertIn("Node check is accepted, but its handoff was not checked", settled["say"])
+
+    def test_the_probe_runs_its_test_and_its_echo_as_command(self) -> None:
+        with homes() as home, terminal_env():
+            environment = Answers({"output": "OMH_HANDOFF_FILE\n", "returncode": 0})
+            with Terminal("docker", environment).modules():
+                to_check(home, criteria=None)
+                call(action="settle", run="feat", node="check", outcome="accepted")
+        command = environment.calls[-1][0]
+        for part in ("if command [ -L ", "]; then command echo OMH_HANDOFF_LINK; elif command [ -f ",
+                     "]; then command echo OMH_HANDOFF_FILE; else command echo OMH_HANDOFF_NONE; fi"):
+            self.assertIn(part, command)
+
+    @unittest.skipUnless(SANDBOX_SHELL, SANDBOX_SKIP)
+    def test_a_login_function_named_echo_or_bracket_never_answers_for_the_probe(self) -> None:
+        """A `[` that always succeeds would read every handoff as a link, an `echo` that prints the link verdict too."""
+        prelude = ("[() { return 0; }; echo() { builtin echo OMH_HANDOFF_LINK; }\n")
+        with homes() as home, terminal_env(), TemporaryDirectory() as root:
+            sandbox = Sandbox(Path(root), prelude=prelude)
+            with Terminal("ssh", sandbox).modules():
+                slots_table(home)
+                call(action="define", run="feat", nodes=NODES)
+                record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+                built = sandbox.path(Path(dag_run.node_handoff(record, home.omh, "build")))
+                built.parent.mkdir(parents=True, exist_ok=True)
+                built.write_text("done", encoding="utf-8")
+                call(action="settle", run="feat", node="build", outcome="accepted")
+                built.with_name("check.md").write_text("checked", encoding="utf-8")
+                accepted = call(action="settle", run="feat", node="check", outcome="accepted")
+        self.assertEqual((accepted["status"], accepted.get("verdict")), ("ok", "verified"), accepted)
+
+    def test_an_answered_probe_reads_as_it_did_on_main(self) -> None:
+        missing, _ = self._settle({"output": "OMH_HANDOFF_NONE\n", "returncode": 0})
+        self.assertEqual((missing["status"], missing["reason"]), ("refused", "handoff_missing"), missing)
+        for outcome in ("failed", "blocked"):
+            with self.subTest(outcome=outcome):
+                settled, _ = self._settle({"output": "OMH_HANDOFF_NONE\n", "returncode": 0}, outcome=outcome)
+                self.assertEqual(settled["status"], "ok", settled)
+        present, seen = self._settle({"output": "OMH_HANDOFF_FILE\n", "returncode": 0})
+        self.assertEqual((present["verdict"], present["verdict_reasons"]), ("verified", []))
+        self.assertNotIn("handoff_checked", next(item for item in present["nodes"] if item["id"] == "check"))
+        self.assertEqual(seen["digest"], MAIN_NO_CRITERIA_FILE_SHA)
+
+    @unittest.skipUnless(SANDBOX_SHELL, SANDBOX_SKIP)
+    def test_a_run_with_criteria_on_a_real_shell_reads_as_it_did_on_main(self) -> None:
+        with homes() as home, terminal_env(), TemporaryDirectory() as root:
+            sandbox = Sandbox(Path(root))
+            with Terminal("ssh", sandbox).modules():
+                slots_table(home)
+                call(action="define", run="feat", nodes=NODES, criteria=CRITERIA[:1])
+                record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+                built = sandbox.path(Path(dag_run.node_handoff(record, home.omh, "build")))
+                built.parent.mkdir(parents=True, exist_ok=True)
+                built.write_text("done", encoding="utf-8")
+                call(action="settle", run="feat", node="build", outcome="accepted")
+                built.with_name("check.md").write_text(
+                    f"CRITERION api #{token_of(record_of(home), 'check')}: met - curl ok\n", encoding="utf-8")
+                settled = call(action="settle", run="feat", node="check", outcome="accepted")
+                digest = _settled_digest(home, settled)
+        self.assertEqual(settled["verdict"], "verified", settled)
+        self.assertEqual(digest, MAIN_CRITERIA_SHELL_SHA)
 
 
 if __name__ == "__main__":
