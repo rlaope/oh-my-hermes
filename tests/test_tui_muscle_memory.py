@@ -13,6 +13,7 @@ transcript) and runs on the second try. Answers are the recorded Hermes
 
 from __future__ import annotations
 
+from collections import deque
 import unittest
 
 from _tui_lines import lines_text
@@ -301,11 +302,59 @@ class ModelCommandTests(unittest.TestCase):
         self.assertNotIn("unsupported", said.lower())
         self.assertIn("hermes model", said)
 
-    def test_bare_model_waits_for_the_turn_to_end(self) -> None:
+    def test_bare_model_waits_in_the_queue_and_opens_the_picker_once_the_turn_ends(self) -> None:
+        # A pick switches the session, which Hermes does between turns: the whole command waits for the turn's end.
         app, client = make_app(busy=True)
         send(app, "/model")
         self.assertEqual(client.calls, [])
-        self.assertIn("between turns", notices(app, NOTICE_WARN)[-1])
+        self.assertEqual([line.text for line in app.queued], ["/model"])
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.calls[-1], ("model.options", {"session_id": SID}))
+        self.assertEqual(app.queued, deque())
+
+    def test_a_queued_guarded_model_holds_the_prompt_behind_it_until_its_confirm_is_settled(self) -> None:
+        # #2726 review: the confirm opened after config.set was answered, so the prompt went on the old model.
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        send(app, "/model claude-opus-5-5")
+        send(app, "go on with it")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        answer(app, client, {"key": "model", "value": "", "confirm_required": True, "confirm_message": "Opus costs 5x."})
+        self.assertIsNotNone(app.slot)
+        self.assertEqual(client.named("prompt.submit"), [])  # the confirm is open: the prompt waits
+        now[0] += SLOT_ARM_SECONDS
+        app._on_input(Key(DOWN))
+        app._on_input(Key(ENTER))  # switch anyway
+        self.assertEqual(client.calls[-1][1].get("confirm_expensive_model"), True)
+        self.assertEqual(client.named("prompt.submit"), [])  # the confirmed switch is still out
+        answer(app, client, {"key": "model", "value": "claude-opus-5-5"})
+        self.assertEqual(app.model, "claude-opus-5-5")
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
+
+    def test_a_queued_bare_model_holds_the_prompt_through_its_pick_and_the_confirm_it_asks(self) -> None:
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        send(app, "/model")
+        send(app, "go on with it")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        answer(app, client, OPTIONS)
+        self.assertIsNotNone(app.model_picker)
+        self.assertEqual(client.named("prompt.submit"), [])  # the picker is open
+        for char in "opus-5-5":
+            app._on_input(Key(CHAR, char))
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        app._drain_after_queued_command()  # the loop's step after the pick: the switch it sent is the command's
+        self.assertEqual(client.named("prompt.submit"), [])  # the pick's switch is out
+        answer(app, client, {"key": "model", "value": "", "confirm_required": True, "confirm_message": "Opus costs 5x."})
+        self.assertEqual(client.named("prompt.submit"), [])  # its confirm is open
+        now[0] += SLOT_ARM_SECONDS
+        app._on_input(Key(ENTER))  # keep the model
+        self.assertIsNone(app.slot)
+        self.assertEqual(client.named("prompt.submit"), [])
+        app._drain_after_queued_command()  # the loop's step after that key: nothing of the command's is left
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
 
     def test_a_hermes_without_model_options_costs_the_picker_not_the_session(self) -> None:
         app, client = make_app()
@@ -670,7 +719,9 @@ class ModelSwitchFeedbackTests(unittest.TestCase):
             "level": "warn", "kind": "ttl", "ttl_ms": 12000, "key": app_module.MODEL_SWITCH_DROPPED_KEY}))
 
     def test_a_deferred_switch_hermes_drops_at_turn_start_is_a_lasting_row_naming_it(self) -> None:
-        app, client = make_app(busy=True)
+        # Typed during a turn, /model waits for its end (`RUNS_DURING_TURN`); Hermes still defers a switch for a
+        # session whose agent runs on a compute host, and for one that lands as a turn starts.
+        app, client = make_app()
         send(app, "/model gpt-5.4")
         answer(app, client, {"key": "model", "value": "gpt-5.4", "deferred": True, "scope": "session"})
         self.assertIn(app_module.MODEL_DEFERRED_NOTICE.format(model="gpt-5.4"), notices(app))
@@ -682,7 +733,7 @@ class ModelSwitchFeedbackTests(unittest.TestCase):
             reason="Stayed on m-a: switching to gpt-5.4 needs confirmation. Pick it again to confirm."), said)
 
     def test_a_drop_two_turns_after_the_deferral_does_not_name_that_old_switch(self) -> None:
-        app, client = make_app(busy=True)
+        app, client = make_app()
         send(app, "/model gpt-5.4")
         answer(app, client, {"key": "model", "value": "gpt-5.4", "deferred": True, "scope": "session"})
         app.turns_ended += 2  # the turn it was held for has come and gone

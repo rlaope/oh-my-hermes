@@ -99,9 +99,10 @@ class ResumeFeedbackTests(unittest.TestCase):
             (None, {"code": 5006, "message": "boom"}, "Hermes did not list the stored sessions: boom."),
         ):
             with self.subTest(said=said):
-                app, client = make_app(busy=True)
+                app, client = make_app()
+                resume(app)  # asked between turns: typed during one, it would wait for its end
+                app.turn_pending = True  # a turn started while the list was out
                 app.transcript.blocks.append(AssistantBlock("streaming", done=False))
-                resume(app)
                 reply(app, client, result, error)
                 self.assertFalse(app.transcript.blocks[0].done)  # the live reply is still open
                 self.assertTrue(any(said[:40] in line for line in drawn(app)))
@@ -110,10 +111,11 @@ class ResumeFeedbackTests(unittest.TestCase):
         for busy in (False, True):
             with self.subTest(busy=busy):
                 now = [100.0]
-                app, client = make_app(busy=busy, clock=lambda: now[0])
-                if busy:
+                app, client = make_app(clock=lambda: now[0])
+                resume(app)  # asked between turns: typed during one, it would wait for its end
+                if busy:  # a turn started while the list was out
+                    app.turn_pending = True
                     app.transcript.blocks.append(AssistantBlock("streaming", done=False))
-                resume(app)
                 type_text(app, "a prompt typed meanwhile")
                 self.assertEqual(app.composer.text, "a prompt typed meanwhile")
                 now[0] += 5.0  # the person stopped typing long before the list came
@@ -131,10 +133,11 @@ class ResumeFeedbackTests(unittest.TestCase):
         for busy in (False, True):
             with self.subTest(busy=busy):
                 now = [100.0]
-                app, client = make_app(busy=busy, clock=lambda: now[0])
-                if busy:
+                app, client = make_app(clock=lambda: now[0])
+                resume(app)  # asked between turns, or at the end of the turn it waited for
+                if busy:  # a turn started while the list was out
+                    app.turn_pending = True
                     app.transcript.blocks.append(AssistantBlock("streaming", done=False))
-                resume(app)
 
                 def typed(text: str) -> None:
                     for char in text:
@@ -194,9 +197,14 @@ RESUMED = {"session_id": "live-2", "stored_session_id": "s-other", "messages": [
 
 
 def pick_other(app: App, client: RecordingClient) -> int:
-    """Open the picker, pick `s-other` (titled `other`), and return the `session.resume` call's id."""
+    """Open the picker, pick `s-other` (titled `other`), and return the `session.resume` call's id.
+
+    The picker is asked for between turns, as a typed `/resume` waits for a running turn's end; a turn `app` runs
+    started while it was open."""
     app.stored_id = "s-current"
+    busy, app.turn_pending = app.turn_pending, False
     resume(app)
+    app.turn_pending = busy
     reply(app, client, {"sessions": [{"id": "s-current", "title": "here"}, {"id": "s-other", "title": "other"}]})
     for _step in range(len(app.picker.rows)):
         if app.picker.visible()[app.picker.index].id == "s-other":

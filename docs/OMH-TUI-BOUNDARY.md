@@ -160,8 +160,8 @@ sent that way, and the tell row's text goes as an ordinary prompt once the turn
 has ended; the TUI never steers on its own, and a queued prompt becomes a steer
 only when the person presses the send-now key (Ctrl+Enter or Ctrl+J on an empty
 composer), which takes the oldest one. A steer Hermes does not take waits in
-the TUI's own queue for the running turn to end, whatever the busy mode, so it
-never interrupts that turn. A steer Hermes does not answer within its answer
+the TUI's own queue for the running turn to end, as everything sent during a
+turn does, so it never interrupts that turn. A steer Hermes does not answer within its answer
 budget (120 s, longer when held behind a /compress) goes back to the composer
 and is never re-sent.
 

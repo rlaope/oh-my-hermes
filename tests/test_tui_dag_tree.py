@@ -772,8 +772,7 @@ class TurnBoundaryTests(unittest.TestCase):
 
     def test_leaving_the_session_keeps_nothing(self) -> None:
         app, client = tree_app()
-        type_text(app, "/new")
-        app._on_input(Key(ENTER))
+        app._new_session("")  # what /new runs; typed during the running turn it would wait for the turn's end
         answer(app, client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
         self.assertEqual(app.roster.agents, {})
 
@@ -868,8 +867,7 @@ class FoldScopeTests(unittest.TestCase):
     def test_leaving_the_session_drops_the_folds(self) -> None:
         app, client = tree_app()
         shut_layer_2(app)
-        type_text(app, "/new")
-        app._on_input(Key(ENTER))
+        app._new_session("")  # what /new runs; typed during the running turn it would wait for the turn's end
         answer(app, client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {}})
         self.assertEqual(app.tree_folds, {})
         with_graph(app, sweep())  # a run of the same name in the session opened

@@ -8,6 +8,7 @@ import { BotRow } from "./BotRow";
 import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { HiddenList, NeedsStrip } from "./Needs";
+import { UpdateButton } from "./UpdateButton";
 
 export function Sidebar() {
   const s = useStore();
@@ -108,11 +109,12 @@ export function Sidebar() {
           <GearIcon />
           Settings
         </button>
-        <div className="me">
+        <div className="me" data-testid="me">
           <span className="me-i" aria-hidden="true">
             Y
           </span>
           <span>You</span>
+          <UpdateButton />
         </div>
       </div>
     </aside>

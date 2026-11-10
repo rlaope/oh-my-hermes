@@ -266,12 +266,46 @@
 }
 .me {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 4px;
   align-items: center;
   gap: 10px;
   padding: 8px var(--side-x) 2px;
   margin-top: 6px;
   color: var(--ink);
   font-size: 12.5px;
+}
+/* Update: a quiet pill at the right end of the user row, shown only when a newer release exists. */
+.upd {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--on-accent);
+  background: var(--g-accent);
+}
+button.upd:hover {
+  filter: brightness(1.08);
+}
+.upd-busy {
+  color: var(--muted);
+  background: var(--raise2);
+  font-variant-numeric: tabular-nums;
+}
+.upd-err {
+  flex-basis: 100%;
+  padding-left: 30px;
+  font-size: 11px;
+  color: var(--danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .me-i {
   width: 20px;

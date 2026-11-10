@@ -83,7 +83,7 @@ class EscMeaningTests(unittest.TestCase):
         draft, client = make_app(busy=True, cols=100)
         from test_tui_modes import type_text
 
-        type_text(draft, "a draft")  # Esc arms the clear
+        type_text(draft, "/he")  # the `/` menu is open: Esc closes it
         listed, listed_client = agent_app(busy=True, frames=[], cols=100)
         relay(listed, STARTS)
         listed._on_input(Key(DOWN))  # the agent list: Esc goes back
@@ -94,7 +94,7 @@ class EscMeaningTests(unittest.TestCase):
         searching, searching_client = make_app(busy=True, cols=100)
         searching.composer.history = ["an older prompt"]
         searching._on_input(Key(CHAR, "r", ctrl=True))  # Esc cancels the search
-        return [("draft", draft, client), ("agent list", listed, listed_client),
+        return [("slash menu", draft, client), ("agent list", listed, listed_client),
                 ("agent steer", steering, steering_client), ("history search", searching, searching_client)]
 
     def test_no_state_that_gives_esc_another_meaning_offers_it_for_the_interrupt(self) -> None:
@@ -118,6 +118,17 @@ class EscMeaningTests(unittest.TestCase):
         self.assertNotIn("esc interrupt", said)
         app._on_input(Key(ESCAPE))
         self.assertEqual(client.calls[-1][0], "session.interrupt")
+
+    def test_a_draft_during_a_turn_offers_it_too_and_esc_keeps_the_draft(self) -> None:
+        from omh.tui.keys import ESCAPE, Key
+        from test_tui_modes import type_text
+
+        app, client = make_app(busy=True, cols=100)
+        type_text(app, "a draft")
+        self.assertEqual(self.screen_says(app).count("esc to interrupt"), 1)
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(client.calls[-1][0], "session.interrupt")
+        self.assertEqual(app.composer.text, "a draft")
 
 
 class NarrowSayTests(unittest.TestCase):

@@ -149,10 +149,10 @@ class OverlayLinesTests(unittest.TestCase):
 
     def test_a_wide_terminal_puts_the_description_beside_the_keys_and_a_narrow_one_under_them(self) -> None:
         wide = [line_text(line) for line in shortcut_lines(120, DEFAULT_THEME)]
-        self.assertIn("Enter" + " " * 41 + "Sends the composer", wide)
+        self.assertTrue(any(line.startswith("Enter" + " " * 41 + "Sends the composer;") for line in wide))
         narrow = [line_text(line) for line in shortcut_lines(40, DEFAULT_THEME)]
         at = narrow.index("Enter")
-        self.assertEqual(narrow[at + 1], "  Sends the composer")
+        self.assertTrue(narrow[at + 1].startswith("  Sends the composer;"))
 
     def test_the_keys_are_bold_and_the_text_is_text(self) -> None:
         line = next(line for line in shortcut_lines(120, DEFAULT_THEME) if line_text(line).startswith("Ctrl+T"))
