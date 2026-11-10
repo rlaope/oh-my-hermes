@@ -6,6 +6,8 @@ import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
 import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
+import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
+import { t } from "../i18n";
 import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
@@ -346,6 +348,31 @@ function NotifySeg() {
   );
 }
 
+function SoundsSeg() {
+  const [on, setOn] = useState(soundsEnabled());
+  return (
+    <span className="st-pair">
+      <button type="button" className="st-btn" disabled={!on} onClick={() => appSounds().preview()} data-testid="sounds-play">
+        {t("sounds.play")}
+      </button>
+      <Seg
+        small
+        label={t("sounds.title")}
+        value={on ? "on" : "off"}
+        options={[
+          { value: "on", label: t("sounds.on") },
+          { value: "off", label: t("sounds.off") },
+        ]}
+        onChange={(v) => {
+          setSoundsEnabled(v === "on");
+          setOn(v === "on");
+        }}
+        testId="sounds-seg"
+      />
+    </span>
+  );
+}
+
 function GeneralPage() {
   const s = useStore();
   const h = s.hello;
@@ -357,6 +384,9 @@ function GeneralPage() {
       <div className="st-grp">
         <Row title="Notify me" hint="When a bot answers, needs an approval or asks you something while omher is in the background">
           <NotifySeg />
+        </Row>
+        <Row title={t("sounds.title")} hint={t("sounds.hint")}>
+          <SoundsSeg />
         </Row>
       </div>
       <div className="st-gh">Keyboard</div>

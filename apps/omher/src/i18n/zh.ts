@@ -83,4 +83,8 @@ export const zh: Record<Key, string> = {
 
   // sounds (Settings › General)
   "sounds.title": "声音",
+  "sounds.hint": "发送、机器人回答或提问、出错时的轻声提示",
+  "sounds.play": "播放",
+  "sounds.on": "开",
+  "sounds.off": "关",
 };

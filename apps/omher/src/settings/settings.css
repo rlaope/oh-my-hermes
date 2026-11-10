@@ -168,6 +168,16 @@
 .st-btn:disabled {
   opacity: 0.5;
 }
+/* a button beside a segmented control (Sounds: Play, On/Off) */
+.st-pair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.st-pair .st-btn {
+  height: 28px;
+  border: 1px solid var(--line);
+}
 
 /* nav: bot rows carry their picture; "All bots" carries the count */
 .st-nav button {

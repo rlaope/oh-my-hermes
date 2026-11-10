@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { toWire } from "../chat/parts/skillTokens";
 import type {
@@ -1056,6 +1057,10 @@ export interface StoreOptions {
   now?: () => number;
   /** Called for every bridge event after it is applied; the app uses it for system notifications. */
   onEvent?: (ev: BridgeEvent, state: AppState) => void;
+  /** Called for every action after it is applied, and once the first state (or a reconnect's re-read) has
+   *  loaded; the app uses them for sounds. */
+  onAction?: (a: Action, state: AppState) => void;
+  onSettled?: () => void;
 }
 
 /** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
@@ -1083,6 +1088,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     state = next;
     snapshot = null;
     for (const l of [...listeners]) l();
+    opts.onAction?.(a, state);
   };
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
   const botArg = (bot?: string) => bot ?? state.selectedBot;
@@ -1167,7 +1173,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       bridge.onStatus((status) => {
         dispatch({ type: "conn", status, now: now() });
         if (status === "open") {
-          if (opened) void resync();
+          if (opened) void resync().then(() => opts.onSettled?.());
           opened = true;
         }
       });
@@ -1196,6 +1202,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       } catch (e) {
         fail(e);
       }
+      opts.onSettled?.();
     },
     selectBot,
     async send(text) {
@@ -1472,18 +1479,39 @@ export function getStore(): Store {
     onEvent(ev, state) {
       notifySessionEvent(ev, state);
     },
+    onAction: (a, state) => soundOf(a, state, appSounds()),
+    onSettled: () => appSounds().settle(),
   }));
+}
+
+/** True while the person sees chat `key`: the window has focus and shows that bot's chat or that session. */
+function watchingChat(state: AppState, key: string): boolean {
+  if (!windowWatched()) return false;
+  if (isSessionChat(key)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === key;
+  return state.ui.view === "chat" && state.selectedBot === key;
+}
+
+/** Sounds: your own send (any chat), and a bot's or SESSIONS chat's events. A chat's (re)load and a dropped
+ *  connection tell the board which asks are replays. */
+export function soundOf(a: Action, state: AppState, board: SoundBoard): void {
+  if (a.type === "local.user") board.offer("send");
+  else if (a.type === "chat.opened") board.opened(a.bot);
+  else if (a.type === "conn" && a.status !== "open") board.unsettle();
+  else if (a.type === "event") {
+    const ev = a.ev.session ? { ...a.ev, bot: folderKey(a.ev.bot, a.ev.session) } : a.ev;
+    const s = soundFor(ev, {
+      watching: (key) => watchingChat(state, key),
+      open: (key, id) => selectAsks(state).some((x) => x.bot === key && x.item.request_id === id),
+    });
+    if (s) board.offer(s.sound, s.ask ? { chat: ev.bot, id: s.ask } : undefined);
+  }
 }
 
 /** A system notification for a chat event, unless the person is looking at that chat. SESSIONS chats
  *  (`fold:` / `agent:` keys) name themselves through their route and open their own view. */
 export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
   if (!notifyEnabled()) return;
-  const watching = (bot: string) => {
-    if (!windowWatched()) return false;
-    if (isSessionChat(bot)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === bot;
-    return state.ui.view === "chat" && state.selectedBot === bot;
-  };
+  const watching = (bot: string) => watchingChat(state, bot);
   const name = (bot: string) => chatRoute(bot)?.label ?? state.bots.find((b) => b.name === bot)?.display_name ?? bot;
   const note = noteFor(ev, { name, watching });
   if (note) void showNote(note, () => {

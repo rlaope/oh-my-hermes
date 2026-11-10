@@ -278,6 +278,8 @@ let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
 let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns;
+// Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
+let asked;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -396,6 +398,7 @@ function reset() {
   runs = runsSeed();
   cliRuns = cliSeed();
   pending = new Map();
+  asked = new Map();
   idSeq = 0;
   calls = [];
   submits = [];
@@ -567,6 +570,9 @@ const OPS = {
   "chat.open": (p) => {
     const b = needBot(p);
     const m = models[b.name];
+    // asks still waiting on the person go out again after the reply (the bridge's replay)
+    const waiting = [...pending.keys()].map((id) => asked.get(id)).filter((e) => e && e.bot === b.name && !e.session);
+    if (waiting.length) setTimeout(() => waiting.forEach(broadcast), 0);
     return {
       session_id: `main-${b.name}`,
       messages: history[b.name],
@@ -944,7 +950,9 @@ function handleFrame(sock, text) {
 const ev = (bot, event, fields = {}) => {
   const [b, session] = bot.split("\u0000");
   if (session !== undefined && event === "bot.status") return; // a folder chat never moves the bot's status
-  broadcast(session !== undefined ? { event, bot: b, session, ...fields } : { event, bot, ...fields });
+  const out = session !== undefined ? { event, bot: b, session, ...fields } : { event, bot, ...fields };
+  if (event === "approval.request" || event === "clarify.request") asked.set(fields.request_id, out);
+  broadcast(out);
 };
 const hangul = /[\u3131-\u318e\uac00-\ud7a3]/;
 
