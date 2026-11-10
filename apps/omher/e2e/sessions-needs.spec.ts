@@ -95,7 +95,7 @@ test("a Claude Code session's approval shows in the needs strip and is answered 
   await item.click();
 
   // the session opens with its card scrolled to and focused; the answer goes to the agent, not the bridge
-  await expect(page.getByTestId("session-title")).toHaveText("Claude Code");
+  await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   await expect(row).toHaveClass(/active/);
   const card = page.getByTestId("timeline").getByTestId("card-approval");
   await expect(card).toBeFocused();
@@ -124,7 +124,7 @@ test("⌘J walks a bot's ask and a session's ask in age order", async ({ page })
   await expect(page.getByTestId("bot-friren")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("timeline").getByTestId("card-approval")).toBeFocused();
   await page.keyboard.press(`${key}+j`);
-  await expect(page.getByTestId("session-title")).toHaveText("Claude Code");
+  await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   const card = page.getByTestId("timeline").getByTestId("card-approval");
   await expect(card).toBeFocused();
   await expect(card.locator(".card-cmd")).toHaveText("rm -rf ./build");

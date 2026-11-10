@@ -64,6 +64,7 @@ RULES = (
     "and uses only the records written by the bot's own sessions.",
     "the CLI agents' own session files on this machine",
     "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
+    "For a SESSIONS row omher reads the same files for one more thing, the title of the conversation that row runs",
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",

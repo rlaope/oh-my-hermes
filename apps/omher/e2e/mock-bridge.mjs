@@ -6,6 +6,7 @@
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
 // Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset,
+// mock.cliTitle {agent, session, title} (the title a CLI wrote in its own session files),
 // mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open),
 // mock.demo (Kami's live "Docs dark mode" plan on top of his list, its nodes' PRs in mixed states; `--demo` seeds it
 // at start and on every reset).
@@ -335,7 +336,7 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns;
+let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns, cliTitles;
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 
@@ -455,6 +456,7 @@ function reset() {
   folders = new Map(); // folder chat id -> { bot, cwd, open }
   runs = runsSeed();
   cliRuns = cliSeed();
+  cliTitles = new Map(); // `<agent>:<session id>` -> the title in the agent's own files (cli.title)
   if (DEMO) seedDemo();
   pending = new Map();
   asked = new Map();
@@ -863,6 +865,12 @@ const OPS = {
     }
     return { prs };
   },
+  "cli.title": (p) => {
+    if (p.agent !== "claude" && p.agent !== "codex") throw new OpError("bad_request", "agent must be claude or codex");
+    if (typeof p.session !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.session))
+      throw new OpError("bad_request", "session must be the agent's session id");
+    return { title: cliTitles.get(`${p.agent}:${p.session}`) ?? "" };
+  },
   "runs.get": (p) => {
     const b = needBot(p);
     const id = needStr(p, "run");
@@ -967,6 +975,10 @@ const OPS = {
       if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });
     }
     broadcast({ event: "accounts.update", bot: "" });
+    return {};
+  },
+  "mock.cliTitle": (p) => {
+    cliTitles.set(`${p.agent}:${p.session}`, String(p.title ?? ""));
     return {};
   },
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),

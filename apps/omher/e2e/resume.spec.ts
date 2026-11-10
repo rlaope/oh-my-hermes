@@ -239,7 +239,9 @@ test("after a restart: Claude Code and Codex continue by themselves, pi waits fo
 
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
   await page.reload();
-  await expect(page.getByTestId("session-title")).toHaveText("Claude Code");
+  // the session keeps its name (a summary of its first message) and its agent and folder across the restart
+  await expect(page.getByTestId("session-title")).toHaveText("hello before");
+  await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/web-app");
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
   await expect(page.getByTestId("composer")).toHaveValue("next step, not sent");
@@ -294,7 +296,7 @@ test("a terminal session that was running comes back paused and starts only on R
   await expect.poll(async () => (await saved(page))?.sessions?.[0]?.running).toBe(true);
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
   await page.reload();
-  await expect(page.getByTestId("session-title")).toHaveText("Grok");
+  await expect(page.getByTestId("session-agent")).toHaveText("Grok");
   await expect(page.getByTestId("session-paused")).toBeVisible();
   await expect(page.getByTestId("terminal")).toHaveCount(0);
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([]);

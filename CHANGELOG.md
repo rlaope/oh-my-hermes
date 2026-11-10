@@ -329,6 +329,22 @@ All notable changes will be documented here.
   ended ones stay ended. A snapshot that is malformed, from another version or
   names a bot that is gone is ignored, and nothing starts twice.
 
+- **omher names coding sessions by what they are about.** A SESSIONS row
+  used to show only its folder, so three sessions in `web-app` looked the
+  same. The first line is now the session's name and the second line is the
+  folder and the agent (`web-app · Claude Code`). The name is the one you
+  gave the session, else the title the agent gave the conversation (Claude
+  Code's own title, a Codex thread name, the title Hermes gives an
+  oh-my-hermes chat), else a short summary of your first message made on
+  this computer: no `/command`, `@file`, code block or link, the first
+  sentence, at most 40 characters cut at a word. omher asks no model for it.
+  The agent's title replaces the summary as soon as it arrives. To rename a
+  session, double-click its name or right-click › Rename: Enter saves, Esc
+  cancels, and an empty name goes back to the automatic one. The name is
+  kept on this computer with the agent's conversation and comes back when
+  you resume that conversation or omher restarts. The session header shows
+  the name too, with the folder and the agent after it.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

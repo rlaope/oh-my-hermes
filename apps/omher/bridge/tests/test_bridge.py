@@ -828,6 +828,19 @@ class FolderChats(BridgeCase):
                 self.assertEqual(r["error"]["code"], "not_found")
                 self.assertEqual(len(c.find("prompt.submit")), 1)
 
+    async def test_hermes_titles_reach_the_folder_chat_and_the_create_name_does_not(self):
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                c.push("session.title", {"session_id": "rt-folder-0", "title": "omher · " + Path(folder).name}, sid="rt-folder-0")
+                c.push("session.title", {"session_id": "rt-folder-0", "title": "Fix the  login\nredirect"}, sid="rt-folder-0")
+                c.push("session.title", {"session_id": "main", "title": "Bot Chat"})
+                await s.until(lambda ev: any(e["event"] == "session.title" for e in ev))
+                titles = [e for e in s.events if e["event"] == "session.title"]
+                self.assertEqual([(e["bot"], e["session"], e["title"]) for e in titles], [("kami", fid, "Fix the login redirect")])
+
     async def test_refuses_bad_folders_and_foreign_ids(self):
         async with Env() as env:
             s = await self.open(env)
@@ -2534,6 +2547,86 @@ class CliRunsOps(BridgeCase):
             for bad in ({"agent": "cursor"}, {"cwd": ""}, {"since": "yesterday"}, {"since": True}):
                 self.assertEqual((await s.req("runs.cli", **bad))["error"]["code"], "bad_request", bad)
             self.assertEqual((await s.req("runs.get", bot="kami", run="codex:nope"))["error"]["code"], "not_found")
+
+
+class CliTitle(unittest.TestCase):
+    """`cli.title`: the name a SESSIONS chat's conversation has in Claude Code's or Codex's own files."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.homes = _cli_home(self.root)
+        self.proj = _claude_layout(self.root)
+        self.main = self.proj / f"{CLAUDE_SID}.jsonl"
+
+    def cli(self) -> ob.CliRuns:
+        return ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+
+    def test_claude_code_title_by_folder_or_by_id_alone_and_codex_thread_name(self):
+        before = _mtimes(self.root / "cli")
+        cli = self.cli()
+        self.assertEqual(cli.title("claude", CLAUDE_SID, "/w/web-app"), "Ship the API fix")
+        # a folder that moved (or none): the transcript is found by its id in any project folder
+        self.assertEqual(cli.title("claude", CLAUDE_SID, "/elsewhere"), "Ship the API fix")
+        self.assertEqual(cli.title("claude", CLAUDE_SID), "Ship the API fix")
+        self.assertEqual(cli.title("codex", CODEX_ROOT), "Harden the API server")
+        self.assertEqual(cli.title("claude", "00000000-0000-4000-8000-000000000000", "/w/web-app"), "")
+        self.assertEqual(cli.title("codex", "00000000-0000-4000-8000-000000000000"), "")
+        self.assertEqual(cli.title("pi", CLAUDE_SID), "")
+        self.assertEqual(_mtimes(self.root / "cli"), before)  # read-only
+
+    def test_the_latest_title_wins_and_a_rename_in_claude_code_beats_the_ai_title(self):
+        cli = self.cli()
+        rows = _jsonl(self.main)
+        rows.append({"type": "ai-title", "aiTitle": "  OAuth redirect\nloop  ", "sessionId": CLAUDE_SID})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(cli.title("claude", CLAUDE_SID, "/w/web-app"), "OAuth redirect loop")
+        rows.append({"type": "custom-title", "customTitle": "my name", "sessionId": CLAUDE_SID})
+        rows.append({"type": "ai-title", "aiTitle": "later AI title", "sessionId": CLAUDE_SID})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(cli.title("claude", CLAUDE_SID, "/w/web-app"), "my name")
+        # one more title line is read without reading the transcript again (only appended lines)
+        with open(self.main, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "custom-title", "customTitle": "x" * 300, "sessionId": CLAUDE_SID}) + "\n")
+        self.assertEqual(len(cli.title("claude", CLAUDE_SID, "/w/web-app")), ob.CLI_TITLE)
+
+    def test_message_text_that_mentions_a_title_is_not_a_title(self):
+        rows = [r for r in _jsonl(self.main) if r.get("type") != "ai-title"]
+        rows.append({"type": "user", "message": {"role": "user", "content": 'say {"type":"ai-title","aiTitle":"fake"}'},
+                     "sessionId": CLAUDE_SID})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(self.cli().title("claude", CLAUDE_SID, "/w/web-app"), "")
+
+    def test_symlinked_transcripts_are_not_read(self):
+        other = self.root / "outside.jsonl"
+        _write_jsonl(other, [{"type": "ai-title", "aiTitle": "secret", "sessionId": CLAUDE_SID}])
+        link_dir = self.proj.parent / "-w-linked"
+        link_dir.mkdir()
+        sid = "11111111-2222-4333-8444-555555555555"
+        try:
+            (link_dir / f"{sid}.jsonl").symlink_to(other)
+        except OSError:
+            self.skipTest("no symlinks here")
+        self.assertEqual(self.cli().title("claude", sid, "/w/linked"), "")
+        self.assertEqual(self.cli().title("claude", sid), "")
+
+
+class CliTitleOps(BridgeCase):
+    async def test_cli_title_over_the_socket_checks_its_params(self):
+        async with Env() as env:
+            homes = _cli_home(env.home / "r")
+            _claude_layout(env.home / "r")
+            env.bridge.cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            s = await self.open(env)
+            r = await s.req("cli.title", agent="claude", session=CLAUDE_SID, cwd="/w/web-app")
+            self.assertEqual(r["result"], {"title": "Ship the API fix"}, r)
+            r = await s.req("cli.title", agent="codex", session=CODEX_ROOT)
+            self.assertEqual(r["result"], {"title": "Harden the API server"}, r)
+            for bad in ({"agent": "pi", "session": CLAUDE_SID}, {"agent": "claude", "session": "../../etc/passwd"},
+                        {"agent": "claude", "session": CLAUDE_SID + "/x"}, {"agent": "claude"},
+                        {"agent": "claude", "session": CLAUDE_SID, "cwd": ""}):
+                self.assertEqual((await s.req("cli.title", **bad))["error"]["code"], "bad_request", bad)
 
 
 # Lines copied from real session files on the author's Mac, redacted (ids, request ids, cwd, branch removed).

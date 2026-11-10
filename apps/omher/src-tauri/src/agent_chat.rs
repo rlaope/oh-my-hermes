@@ -117,6 +117,12 @@ fn clip(t: &str, n: usize) -> String {
     }
 }
 
+/// A conversation name an agent reported, as the session row shows it: one line, at most 80 characters.
+fn title_of(t: &str) -> String {
+    let t: String = t.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    clip(t.trim(), 80)
+}
+
 /// `path` relative to the session folder when it is inside it (agents report absolute paths).
 fn rel(path: &str, cwd: &str) -> String {
     let c = cwd.trim_end_matches(['/', '\\']);
@@ -441,6 +447,13 @@ impl Adapter for Claude {
                     f["approval"] = Value::String(mode);
                 }
                 st.emit(ev("session.info", f));
+            }
+            // the conversation's name changed (a rename in Claude Code); Claude Code says it on its own
+            "system" if s(&v, "subtype") == "session_title_changed" => {
+                let t = title_of(&s(&v, "title"));
+                if !t.is_empty() {
+                    st.emit(ev("session.info", json!({"title": t})));
+                }
             }
             "control_response" => {
                 let r = &v["response"];
@@ -862,6 +875,11 @@ impl Adapter for Codex {
                     if let Some(sb) = r.get("sandbox").map(|x| s(x, "type")).filter(|x| !x.is_empty()) {
                         f["sandbox"] = Value::String(sb);
                     }
+                    // a resumed thread carries the name Codex (or the person) gave it
+                    let name = title_of(&s(&r["thread"], "name"));
+                    if !name.is_empty() {
+                        f["title"] = Value::String(name);
+                    }
                     st.emit(ev("session.info", f));
                     for text in std::mem::take(&mut self.queued) {
                         self.turn_start(&mut st, text);
@@ -930,6 +948,13 @@ impl Adapter for Codex {
         }
         let item = p.get("item").cloned().unwrap_or(Value::Null);
         match method.as_str() {
+            // the thread got a name (Codex's own, or a rename elsewhere): the session takes it
+            "thread/name/updated" if self.thread.as_deref() == Some(s(&p, "threadId").as_str()) => {
+                let t = title_of(&s(&p, "threadName"));
+                if !t.is_empty() {
+                    st.emit(ev("session.info", json!({"title": t})));
+                }
+            }
             "turn/started" => {
                 if let Some(t) = p["turn"].get("id").and_then(Value::as_str) {
                     self.turn_id = Some(t.into());
@@ -2726,6 +2751,35 @@ mod tests {
         assert_eq!(written(&st)[0]["params"]["threadId"], id);
         let st = replay(&mut x, &["codex-8-resume-turn.jsonl"], &[]);
         assert!(text_of(&st.events, "message")[0].contains("notes.txt"));
+    }
+
+    #[test]
+    fn titles_the_agents_give_the_conversation_reach_the_session() {
+        // Claude Code says a rename (in Claude Code, or from its own titler) as system/session_title_changed
+        let mut c = Claude::new("/w");
+        let st = c.on_line(r#"{"type":"system","subtype":"session_title_changed","title":"  OAuth redirect\nloop "}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "title": "OAuth redirect loop"})]);
+        assert!(c.on_line(r#"{"type":"system","subtype":"session_title_changed","title":"  "}"#).events.is_empty());
+        let long = format!(r#"{{"type":"system","subtype":"session_title_changed","title":"{}"}}"#, "x".repeat(300));
+        assert_eq!(s(&c.on_line(&long).events[0], "title").chars().count(), 80);
+
+        // Codex names a thread with thread/name/updated; only this session's thread counts
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        x.on_line(r#"{"id":1,"result":{}}"#);
+        let st = x.on_line(r#"{"id":2,"result":{"thread":{"id":"thr_1","name":null},"model":"gpt-6.1-sol"}}"#);
+        assert!(of(&st.events, "session.info")[0].get("title").is_none());
+        let st = x.on_line(r#"{"method":"thread/name/updated","params":{"threadId":"thr_1","threadName":"Harden the API"}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "title": "Harden the API"})]);
+        assert!(x.on_line(r#"{"method":"thread/name/updated","params":{"threadId":"thr_other","threadName":"Other"}}"#).events.is_empty());
+        assert!(x.on_line(r#"{"method":"thread/name/updated","params":{"threadId":"thr_1"}}"#).events.is_empty());
+
+        // a resumed thread arrives with its name
+        let mut r = Codex::new("/w/proj", Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"));
+        r.start();
+        r.on_line(r#"{"id":1,"result":{}}"#);
+        let st = r.on_line(r#"{"id":2,"result":{"thread":{"id":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","name":"Fix the build"},"model":"m"}}"#);
+        assert_eq!(s(of(&st.events, "session.info")[0], "title"), "Fix the build");
     }
 
     #[test]

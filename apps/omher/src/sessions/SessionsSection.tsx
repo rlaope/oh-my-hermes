@@ -3,7 +3,9 @@
 // answer ring around the agent mark and the turn's elapsed time while a turn runs, and the amber dot with
 // "waiting" while one of its approvals or questions is open (the same asks the Needs-you strip lists). A
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
-import { useEffect, useState } from "react";
+// Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
+// folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
+import { useEffect, useRef, useState } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
 import { ChevronRight, CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -271,43 +273,146 @@ function chatLive(s: AppState, key: string | null): ChatLive | undefined {
   return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key) };
 }
 
+/** Right-click menu of a session row: Rename, Close session. Placed at the pointer, inside the window. */
+function SessionMenu({ at, name, onRename, onClose, onDismiss }: { at: { x: number; y: number }; name: string; onRename: () => void; onClose: () => void; onDismiss: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onDown = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onDismiss]);
+  const items: [string, string, () => void][] = [
+    ["Rename", "session-rename", onRename],
+    ["Close session", "session-menu-close", onClose],
+  ];
+  return (
+    <div
+      ref={ref}
+      className="row-menu"
+      style={{ left: at.x, top: at.y }}
+      role="menu"
+      aria-label={`${name} actions`}
+      data-testid="session-row-menu"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onDismiss();
+          return;
+        }
+        if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+        e.preventDefault();
+        const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+        const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+        btns[(i + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length]?.focus();
+      }}
+    >
+      {items.map(([label, id, fn]) => (
+        <button
+          key={id}
+          type="button"
+          role="menuitem"
+          className="row-mi"
+          data-testid={id}
+          onClick={() => {
+            onDismiss();
+            fn();
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const MENU_SIZE = { w: 168, h: 70 };
+
+/** The name field of a row being renamed: Enter or leaving it saves, Esc cancels, an empty name goes back to the
+ *  automatic one. */
+function NameInput({ initial, auto, onDone }: { initial: string; auto: boolean; onDone: (title: string | null | undefined) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const finish = (save: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    const v = (ref.current?.value ?? "").replace(/\s+/g, " ").trim();
+    // undefined = leave it as it was; "" = back to the automatic name
+    onDone(!save ? undefined : !v ? "" : auto && v === initial ? undefined : v);
+  };
+  return (
+    <input
+      ref={ref}
+      className="ss-name-in"
+      defaultValue={initial}
+      maxLength={80}
+      aria-label="Session name"
+      placeholder="Automatic name"
+      spellCheck={false}
+      data-testid="session-rename-input"
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+          e.preventDefault();
+          finish(true);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          finish(false);
+        }
+      }}
+      onBlur={() => finish(true)}
+    />
+  );
+}
+
 function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; active: boolean; onClose: () => void }) {
   const s = useStore();
   const key = getSessions().chatKey(rec.id);
   const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
   const m = rowModel(rec, chat, ctx);
+  const [editing, setEditing] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
   // a chat answers in turns (ring); a terminal just runs (dot)
   const ring = rec.view === "chat" && m.live && !m.needsYou;
   const dot = rec.view !== "chat" && m.live;
   const busySince = ring && key ? (s.chats[key]?.turn?.startedAt ?? null) : null;
   const now = useNow(busySince !== null, 1_000);
-  return (
-    <div
-      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}`}
-      data-testid={`session-${rec.id}`}
-      data-status={rec.status}
-      data-needs-you={m.needsYou ? "true" : undefined}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <button
-        type="button"
-        className="ss-open"
-        onClick={() => s.openSession(rec.id)}
-        aria-current={active ? "true" : undefined}
-        title={rec.cwd}
-      >
-        <LiveRing on={ring} size={34} gap={3.5} label="Answering" seed={rec.id}>
-          <span className="ss-av">
-            <AgentMark agent={rec.agent} size={18} />
-            {dot && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
-          </span>
-        </LiveRing>
-        <span className="bot-m">
-          <span className="bot-r1">
-            <span className="bot-n">
+  const endEdit = (title: string | null | undefined) => {
+    setEditing(false);
+    if (title !== undefined) getSessions().rename(rec.id, title);
+    requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>(".ss-open")?.focus());
+  };
+  const body = (
+    <>
+      <LiveRing on={ring} size={34} gap={3.5} label="Answering" seed={rec.id}>
+        <span className="ss-av">
+          <AgentMark agent={rec.agent} size={18} />
+          {dot && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
+        </span>
+      </LiveRing>
+      <span className="bot-m">
+        <span className="bot-r1">
+          {editing ? (
+            <NameInput initial={m.title} auto={m.titleSource !== "person"} onDone={endEdit} />
+          ) : (
+            <span
+              className="bot-n"
+              data-testid="session-name"
+              data-source={m.titleSource}
+              title={m.titleSource === "folder" ? undefined : m.title}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                setEditing(true);
+              }}
+            >
               {m.title}
               {m.where && (
                 <span className="ss-where" data-testid="session-where">
@@ -316,35 +421,71 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
                 </span>
               )}
             </span>
-            {m.needsYou ? (
-              <span className="bot-t wait" data-testid="bot-time">
-                waiting
-              </span>
-            ) : busySince !== null ? (
-              <span className="bot-t busy" data-testid="bot-time">
-                {busyFor(now - busySince)}
-              </span>
-            ) : (
-              <span className="bot-t" data-testid="bot-time">
-                {shortTime(m.ts)}
-              </span>
-            )}
-          </span>
-          <span className="bot-r2">
-            <span className={`bot-p${ring ? " live" : ""}`} data-testid="session-sub">
-              {m.sub}
+          )}
+          {m.needsYou ? (
+            <span className="bot-t wait" data-testid="bot-time">
+              waiting
             </span>
-            {ring && <TypingDots size={3} testId="bot-typing" />}
-            {m.needsYou && (
-              // the bot row's plain amber dot: no number (the strip carries the count)
-              <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />
-            )}
-          </span>
+          ) : busySince !== null ? (
+            <span className="bot-t busy" data-testid="bot-time">
+              {busyFor(now - busySince)}
+            </span>
+          ) : (
+            <span className="bot-t" data-testid="bot-time">
+              {shortTime(m.ts)}
+            </span>
+          )}
         </span>
-      </button>
-      <button type="button" className="ss-x" aria-label="Close session" title="Close session" onClick={onClose} data-testid="session-close">
-        <CloseIcon />
-      </button>
+        <span className="bot-r2">
+          <span className={`bot-p${ring ? " live" : ""}`} data-testid="session-sub">
+            {m.sub}
+          </span>
+          {ring && <TypingDots size={3} testId="bot-typing" />}
+          {m.needsYou && (
+            // the bot row's plain amber dot: no number (the strip carries the count)
+            <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />
+          )}
+        </span>
+      </span>
+    </>
+  );
+  return (
+    <div
+      ref={wrap}
+      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${menu ? " menu-open" : ""}`}
+      data-testid={`session-${rec.id}`}
+      data-status={rec.status}
+      data-needs-you={m.needsYou ? "true" : undefined}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (editing) return;
+        const side = wrap.current?.closest(".side")?.getBoundingClientRect();
+        const right = (side?.right ?? window.innerWidth) - 6;
+        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_SIZE.w)), y: Math.min(e.clientY, window.innerHeight - MENU_SIZE.h - 6) });
+      }}
+    >
+      {editing ? (
+        // no button around a text field: the same row, not clickable while the name is edited
+        <div className="ss-open ss-editing" title={rec.cwd}>
+          {body}
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="ss-open"
+          onClick={() => s.openSession(rec.id)}
+          aria-current={active ? "true" : undefined}
+          title={rec.cwd}
+        >
+          {body}
+        </button>
+      )}
+      {!editing && (
+        <button type="button" className="ss-x" aria-label="Close session" title="Close session" onClick={onClose} data-testid="session-close">
+          <CloseIcon />
+        </button>
+      )}
+      {menu && <SessionMenu at={menu} name={m.title} onRename={() => setEditing(true)} onClose={onClose} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }

@@ -86,6 +86,11 @@ describe("resume snapshot", () => {
     expect(back.sessions[1]).toMatchObject({ view: "chat", messages: [{ id: "b", role: "assistant", text: "ok", ts: 2 }] });
     expect(back.drafts).toEqual({ friren: "hi" });
     expect(back).toMatchObject({ view: "session", session: "s1" });
+    // a session's names are kept when they are strings of a sane length, dropped otherwise
+    const named = parseResume(JSON.stringify({ ...raw, sessions: [{ ...good.sessions[0], title: "Mine", agentTitle: 7, promptTitle: "x".repeat(201) }] }))!;
+    expect(named.sessions[0].title).toBe("Mine");
+    expect(named.sessions[0].agentTitle).toBeUndefined();
+    expect(named.sessions[0].promptTitle).toBeUndefined();
     // the open session was dropped: back to the chat
     expect(parseResume(JSON.stringify({ ...raw, session: "s2" }))).toMatchObject({ view: "chat", session: null });
   });
@@ -135,7 +140,7 @@ function quietBridge(): BridgeLike {
 const saved = (): ResumeSnap["sessions"] => [
   { id: "s2", agent: "claude", cwd: "/w/web-app", startedAt: T, view: "chat", running: true, agentSession: "11111111-2222-4333-8444-555555555555", account: "work", messages: [{ id: "m1", role: "user", text: "fix it", ts: 1 }] },
   { id: "s3", agent: "codex", cwd: "/w/api", startedAt: T, view: "terminal", running: true, agentSession: "codex-thread-1" },
-  { id: "s4", agent: "pi", cwd: "/w/pi", startedAt: T, view: "chat", running: true },
+  { id: "s4", agent: "pi", cwd: "/w/pi", startedAt: T, view: "chat", running: true, promptTitle: "Port the parser", agentTitle: "Parser port", title: "Mine" },
   { id: "s5", agent: "grok", cwd: "/w/g", startedAt: T, view: "terminal", running: true },
   { id: "s6", agent: "claude", cwd: "/w/done", startedAt: T, view: "chat", running: false, exitCode: 0, agentSession: "22222222-2222-4333-8444-555555555555" },
 ];
@@ -161,6 +166,9 @@ describe("sessions restore", () => {
     expect(by("s5")).toMatchObject({ status: "exited", paused: true, view: "terminal" });
     expect(by("s6")).toMatchObject({ status: "exited", exitCode: 0 });
     expect(by("s6").paused).toBeUndefined();
+    // its name comes back with it (the person's, the agent's and the first-message summary)
+    expect(by("s4")).toMatchObject({ title: "Mine", agentTitle: "Parser port", promptTitle: "Port the parser" });
+    expect(by("s5").title).toBeUndefined();
     // the chat shows what was said before the restart
     expect(store.getState().chats["agent:s2"].messages.map((m) => m.text)).toEqual(["fix it"]);
 

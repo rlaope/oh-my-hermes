@@ -1926,6 +1926,27 @@ class _LineFeed:
         return hit[2]
 
 
+_SESSION_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _title_state() -> dict:
+    return {"custom": "", "ai": ""}
+
+
+def _title_fold(s: dict, raw: bytes) -> None:
+    """One transcript line for a Claude Code session's name: its last `custom-title` (the person renamed it in Claude
+    Code) and last `ai-title` (Claude Code's own title). Only lines naming one of the two are parsed."""
+    if b'"custom-title"' not in raw and b'"ai-title"' not in raw:
+        return
+    o = json.loads(raw)
+    if not isinstance(o, dict):
+        return
+    if o.get("type") == "custom-title" and isinstance(o.get("customTitle"), str) and o["customTitle"].strip():
+        s["custom"] = _one_line(o["customTitle"], CLI_TITLE)
+    elif o.get("type") == "ai-title" and isinstance(o.get("aiTitle"), str) and o["aiTitle"].strip():
+        s["ai"] = _one_line(o["aiTitle"], CLI_TITLE)
+
+
 def _claude_state() -> dict:
     return {"sid": None, "cwd": None, "first": None, "title": None, "model": None, "tasks": {}, "notes": {}}
 
@@ -2131,6 +2152,7 @@ class CliRuns:
         self.clock = clock
         self._claude = _LineFeed(_claude_state, _claude_fold)
         self._codex = _LineFeed(_codex_state, _codex_fold)
+        self._titles = _LineFeed(_title_state, _title_fold)
         self._small: dict[str, tuple[tuple, object]] = {}
         self._last: dict[str, dict] = {}
         self._lock = threading.Lock()
@@ -2317,6 +2339,32 @@ class CliRuns:
                     names[o["id"]] = _one_line(o["thread_name"], CLI_TITLE)
             return names
         return (self._cached(idx, read) or {}) if _plain_file(idx) else {}
+
+    def title(self, agent: str, session: str, cwd: str | None = None) -> str:
+        """The title a Claude Code session or Codex thread carries in the agent's own files, or "": Claude Code's
+        last `custom-title` (a rename in Claude Code) else its last `ai-title`, read from the session's transcript
+        (`<claude>/projects/<cwd slug>/<id>.jsonl`, any project folder when the cwd is unknown or moved); Codex's
+        thread name from `session_index.jsonl`. Reads only those title lines, never a message."""
+        if agent == "codex":
+            return self._codex_titles().get(session, "")
+        if agent != "claude":
+            return ""
+        root = self.homes["claude"] / "projects"
+        if not root.is_dir() or root.is_symlink():
+            return ""
+        name = f"{session}.jsonl"
+        path = root / claude_slug(cwd) / name if cwd else None
+        if path is None or not _plain_file(path):
+            try:
+                with os.scandir(root) as it:
+                    path = next((Path(d.path) / name for d in it
+                                 if d.is_dir(follow_symlinks=False) and _plain_file(Path(d.path) / name)), None)
+            except OSError:
+                path = None
+        if path is None:
+            return ""
+        st = self._titles.read(path)  # only the lines appended since the last look
+        return (st["custom"] or st["ai"]) if st else ""
 
     def _codex_meta(self, path: Path) -> dict | None:
         """The first line only (immutable once written): cached per file without reading the rest."""
@@ -3034,7 +3082,7 @@ class Bridge:
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
-            "runs.cli": self.op_runs_cli, "runs.prs": self.op_runs_prs,
+            "runs.cli": self.op_runs_cli, "runs.prs": self.op_runs_prs, "cli.title": self.op_cli_title,
             "usage.read": self.op_usage_read,
             "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
             "accounts.remove": self.op_accounts_remove, "accounts.set_active": self.op_accounts_set_active,
@@ -3355,6 +3403,11 @@ class Bridge:
             await out("tool.end", tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
                       name=str(p.get("name") or p.get("tool_name") or "tool"),
                       ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
+        elif typ == "session.title" and chat is not None:
+            # Hermes named a folder chat (its own titler, or /title); the name omher gave it at create is not news
+            title = p.get("title")
+            if isinstance(title, str) and title.strip() and not title.startswith(FOLDER_CHAT_PREFIX):
+                await out("session.title", title=_one_line(title, CLI_TITLE))
         elif typ == "message.delta":
             text = p.get("text")
             if isinstance(text, str) and text:
@@ -3899,6 +3952,18 @@ class Bridge:
         if since is not None and (isinstance(since, bool) or not isinstance(since, (int, float))):
             raise BridgeError("bad_request", "since must be epoch seconds")
         return await asyncio.to_thread(self.cli.list, agent, cwd, since)
+
+    async def op_cli_title(self, p) -> dict:
+        """The title of one Claude Code session or Codex thread a SESSIONS chat runs (`agent`, `session`: the id the
+        agent reported, `cwd`: its folder), from the agent's own files; `""` when it has none yet."""
+        agent, session, cwd = p.get("agent"), p.get("session"), p.get("cwd")
+        if agent not in ("claude", "codex"):
+            raise BridgeError("bad_request", "agent must be claude or codex")
+        if not isinstance(session, str) or not _SESSION_UUID.match(session):
+            raise BridgeError("bad_request", "session must be the agent's session id")
+        if cwd is not None and (not isinstance(cwd, str) or not cwd):
+            raise BridgeError("bad_request", "cwd must be a folder path")
+        return {"title": await asyncio.to_thread(self.cli.title, agent, session, cwd)}
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}
