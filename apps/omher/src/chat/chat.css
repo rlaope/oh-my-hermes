@@ -299,6 +299,29 @@
   overflow-wrap: anywhere;
   display: block;
 }
+/* `@name` of another bot: ink, a little heavier than the text, underlined on hover; the open chat's own bot
+   reads the same but is not a link */
+.mention {
+  color: var(--ink);
+  font-weight: 500;
+  border-radius: 2px;
+  text-decoration: none;
+}
+.mention:not(.self) {
+  cursor: pointer;
+}
+.mention:not(.self):hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.mention:focus-visible {
+  outline: 1px solid var(--quiet);
+  outline-offset: 1px;
+}
+[data-bubbles="solid"] .msg.u .mention {
+  color: inherit;
+}
 .md a {
   color: var(--link);
   text-decoration: underline;

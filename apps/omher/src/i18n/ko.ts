@@ -76,6 +76,9 @@ export const ko: Record<Key, string> = {
   "skills.label": "스킬",
   "skills.none": "일치하는 스킬 없음",
 
+  // mentions (`@name` of a bot in chat text)
+  "mention.open": "{bot} 열기",
+
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "폴더 선택…",
   "sessions.recent": "최근",

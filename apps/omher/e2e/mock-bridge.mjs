@@ -32,14 +32,18 @@ const BOT_SEED = [
   { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "khope's everyday assistant", status: "online", running: true, reasoning: "high" },
   { name: "friren", display_name: "Friren", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "research and reading", status: "online", running: false, reasoning: "medium" },
   { name: "default", display_name: "Hermes", is_default: true, model: "Haiku 5", provider: "claude-proxy", description: "the default profile", status: "online", running: false, reasoning: "low" },
+  { name: "omh-tui", display_name: "OMH TUI", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "medium" },
 ];
 
 const HISTORY_SEED = {
   kami: [
     ["user", "gateway 502 로그 좀 봐줄래?", 3 * 3600],
     ["assistant", "확인했어요. `/v1/responses`에서 upstream timeout이 간헐적으로 나고 있어요. 재시도 정책부터 볼게요.", 3 * 3600 - 40],
+    // other bots by @name: each one opens that bot's chat (mention.spec.ts); @kami is this chat itself
+    ["assistant", "keep-alive 문서는 @friren에게 찾아달라고 했어요. 배포 확인은 @hermes, TUI 화면은 @omh-tui가 보고, 정리는 제가(@kami) 할게요.", 3 * 3600 - 80],
     ["user", "Thanks. Ping me when the retry fix is up.", 2 * 3600],
   ],
+  "omh-tui": [],
   friren: [
     ["user", "Summarise the Tauri 2 updater docs.", 5 * 3600],
     ["assistant", "The updater checks a signed manifest, downloads the bundle and swaps it on restart.", 5 * 3600 - 30],

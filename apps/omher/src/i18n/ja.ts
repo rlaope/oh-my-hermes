@@ -76,6 +76,9 @@ export const ja: Record<Key, string> = {
   "skills.label": "スキル",
   "skills.none": "一致するスキルなし",
 
+  // mentions (`@name` of a bot in chat text)
+  "mention.open": "{bot} を開く",
+
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "フォルダを選択…",
   "sessions.recent": "最近",

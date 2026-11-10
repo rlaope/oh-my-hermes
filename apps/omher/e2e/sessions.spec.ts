@@ -84,9 +84,9 @@ test("bots and sessions each take the room their rows need and share what is lef
   expect(await page.locator("[data-testid=side-bots] .bot-list").evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
 });
 
-test("twelve bots beside an empty SESSIONS use the room: the list does not stop at five with a blank half under it", async ({ page }) => {
+test("thirteen bots beside an empty SESSIONS use the room: the list does not stop at five with a blank half under it", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  // the mock's three bots plus nine more
+  // the mock's four bots plus nine more
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {
     const server = ws.connectToServer();
     const ops = new Map<string, string>();
@@ -107,7 +107,7 @@ test("twelve bots beside an empty SESSIONS use the room: the list does not stop 
     });
   });
   await open(page);
-  await expect(page.locator("[data-testid=side-bots] .bot")).toHaveCount(12);
+  await expect(page.locator("[data-testid=side-bots] .bot")).toHaveCount(13);
   const geo = await page.evaluate(() => {
     const list = document.querySelector("[data-testid=side-bots] .bot-list")!.getBoundingClientRect();
     const rows = [...document.querySelectorAll("[data-testid=side-bots] .bot")].map((e) => e.getBoundingClientRect());

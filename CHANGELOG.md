@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: `@name` of a bot in a chat opens that bot's chat.** A bot that
+  writes `@hermes`, `@omh-tui` or `@kami` now draws the name in ink at medium
+  weight, and clicking it (or Enter or Space on it) switches to that bot's chat
+  with the sidebar selection; it never sends anything. Names resolve by profile
+  slug, by display name, or `hermes` for the default profile, case-insensitive;
+  unknown names, code, links, emails and `@file:` refs stay text, and the open
+  chat's own bot is not a link. It works in bot bubbles, your own bubbles and a
+  run node's handoff.
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
