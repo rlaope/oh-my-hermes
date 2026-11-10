@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import "../theme/tokens.css";
 import "../theme/base.css";
 import "./app.css";
-import { useStore } from "../state/store";
+import { getStore, useStore } from "../state/store";
+import { MentionContext, type Mentions } from "../chat/parts/Mention";
+import { botResolver } from "../chat/parts/mentions";
 import { slots } from "../features";
 import { Sidebar } from "../sidebar/Sidebar";
 import { Chat } from "../chat/Chat";
@@ -26,11 +28,27 @@ export function App() {
   }, []);
 
   const bot = s.bots.find((b) => b.name === s.selectedBot) ?? null;
+  // `@name` in any chat text opens that bot's chat; the open chat's own bot is not a link
+  const current = s.ui.view === "chat" ? s.selectedBot : null;
+  const mentions = useMemo<Mentions>(() => {
+    const names = new Map(s.bots.map((b) => [b.name, b.display_name || b.name]));
+    return {
+      resolve: botResolver(s.bots),
+      nameOf: (b) => names.get(b) ?? b,
+      current,
+      open: (b) => {
+        const st = getStore();
+        if (st.getState().ui.runsFull) st.actions.setRunsFull(false);
+        void st.actions.selectBot(b);
+      },
+    };
+  }, [s.bots, current]);
   const panelOpen = s.ui.panelOpen && s.ui.view === "chat" && !!bot;
   const Details = slots.detailsPanel;
   const close = () => s.togglePanel(false);
 
   return (
+    <MentionContext.Provider value={mentions}>
     <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window">
       <Sidebar />
       <main className="main">
@@ -50,5 +68,6 @@ export function App() {
           ))}
       </aside>
     </div>
+    </MentionContext.Provider>
   );
 }

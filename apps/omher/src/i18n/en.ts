@@ -76,6 +76,9 @@ export const en = {
   "skills.label": "Skills",
   "skills.none": "No skill matches",
 
+  // mentions (`@name` of a bot in chat text)
+  "mention.open": "Open {bot}",
+
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "Choose folder…",
   "sessions.recent": "Recent",

@@ -150,8 +150,9 @@ test("All bots: a card per bot with status, model and places; search filters; a 
   await page.getByTestId("nav-settings").click();
   await page.getByTestId("settings-nav-bots").click();
   const grid = page.getByTestId("bots-grid");
-  await expect(grid.locator(".bot-card")).toHaveCount(3);
-  await expect(page.getByTestId("settings-nav-bots")).toContainText("3");
+  // kami, friren, Hermes and OMH TUI (the mention target)
+  await expect(grid.locator(".bot-card")).toHaveCount(4);
+  await expect(page.getByTestId("settings-nav-bots")).toContainText("4");
   const kami = page.getByTestId("bot-card-kami");
   await expect(kami).toContainText("Kami");
   await expect(kami).toContainText("Working");

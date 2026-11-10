@@ -82,12 +82,12 @@ test("hello, bots and seeded data", async () => {
   const hello = await c.ok("hello");
   expect(hello).toMatchObject({ bridge: "mock", version: "0.1.0" });
   const { bots } = await c.ok("bots.list");
-  expect(bots.map((b: any) => [b.name, b.display_name])).toEqual([["kami", "Kami"], ["friren", "Friren"], ["default", "Hermes"]]);
+  expect(bots.map((b: any) => [b.name, b.display_name])).toEqual([["kami", "Kami"], ["friren", "Friren"], ["default", "Hermes"], ["omh-tui", "OMH TUI"]]);
   expect(bots[0]).toMatchObject({ model: "Opus 5.5", provider: "claude-proxy", running: true, status: "online" });
 
   const chat = await c.ok("chat.open", { bot: "kami" });
   expect(chat.messages.length).toBeGreaterThanOrEqual(2);
-  expect(chat.messages.length).toBeLessThanOrEqual(3);
+  expect(chat.messages.length).toBeLessThanOrEqual(4);
   expect(chat.messages[0]).toMatchObject({ role: "user" });
   expect(chat).toMatchObject({ model: "Opus 5.5", provider: "claude-proxy", running: false });
 

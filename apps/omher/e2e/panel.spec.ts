@@ -128,8 +128,12 @@ test("default faces are drawn whole (not cropped to a circle); an uploaded pictu
   const av = page.getByTestId("bot-kami").locator("img.ui-av");
   await expect(av).toHaveAttribute("src", /face-blob|data:image\/svg/);
   expect(await av.evaluate((e) => getComputedStyle(e).borderRadius)).toBe("0px");
-  const srcs = await page.locator('[data-testid^="bot-"] img.ui-av').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
-  expect(new Set(srcs).size).toBe(srcs.length); // each bot its own face
+  // the three bots with a fixed face each have their own (a fourth bot draws one of the four faces by name)
+  const srcs = await page
+    .locator('[data-testid="bot-kami"] img.ui-av, [data-testid="bot-friren"] img.ui-av, [data-testid="bot-default"] img.ui-av')
+    .evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
+  expect(srcs.length).toBe(3);
+  expect(new Set(srcs).size).toBe(srcs.length);
 });
 
 test("Worktrees and Diff share one worktree list; Terminal reads once on open", async ({ page }) => {

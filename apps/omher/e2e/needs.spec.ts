@@ -306,7 +306,7 @@ test("a timed-out ask shows Timed out and the dot clears", async ({ page }) => {
 test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, Show hidden brings it back", async ({ page }) => {
   await open(page);
   const order = () => page.locator(".bot-list button.bot").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
-  expect(await order()).toEqual(["bot-kami", "bot-friren", "bot-default"]);
+  expect(await order()).toEqual(["bot-kami", "bot-friren", "bot-default", "bot-omh-tui"]);
 
   // right-click opens the menu; it offers no New thread, Duplicate or Delete
   await page.getByTestId("bot-default").click({ button: "right" });
@@ -314,7 +314,7 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, 
   await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", "Hide from sidebar"]);
   await page.screenshot({ path: join(SHOTS, "T12-menu-dark.png"), animations: "disabled" });
   await menu.getByRole("menuitem", { name: "Pin to top" }).click();
-  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren"]);
+  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren", "bot-omh-tui"]);
   await expect(page.getByTestId("bot-default").getByTestId("pinned")).toBeVisible();
   await page.keyboard.press(`${await mod(page)}+1`);
   await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
@@ -323,10 +323,10 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, 
   await page.getByTestId("bot-friren").hover();
   await page.getByTestId("bot-more-friren").click();
   await page.getByTestId("row-menu").getByRole("menuitem", { name: "Hide from sidebar" }).click();
-  expect(await order()).toEqual(["bot-default", "bot-kami"]);
+  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-omh-tui"]);
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toBeVisible();
-  expect(await order()).toEqual(["bot-default", "bot-kami"]);
+  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-omh-tui"]);
 
   await page.getByTestId("bot-kami").click({ button: "right" });
   await page.getByTestId("row-menu").getByRole("menuitem", { name: "Show hidden…" }).click();
@@ -334,7 +334,7 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, 
   await expect(hidden).toContainText("Friren");
   await hidden.getByRole("button", { name: "Show Friren" }).click();
   await expect(hidden).toHaveCount(0);
-  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren"]);
+  expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren", "bot-omh-tui"]);
 
   // Edit bot opens that bot's page in Settings
   await page.getByTestId("bot-friren").click({ button: "right" });

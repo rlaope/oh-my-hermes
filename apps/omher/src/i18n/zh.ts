@@ -76,6 +76,9 @@ export const zh: Record<Key, string> = {
   "skills.label": "技能",
   "skills.none": "没有匹配的技能",
 
+  // mentions (`@name` of a bot in chat text)
+  "mention.open": "打开 {bot}",
+
   // sessions (SESSIONS in the sidebar)
   "sessions.choose": "选择文件夹…",
   "sessions.recent": "最近",
