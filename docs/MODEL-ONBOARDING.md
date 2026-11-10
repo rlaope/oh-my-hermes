@@ -445,12 +445,14 @@ Rules that have held across every onboarding so far:
 - The Claude vendor order inside any chain is Opus 5.5 → Fable (owner
   decision, 2026-10-13, then for Fable 5.1), which reverses the 2026-09-06
   Fable → Opus order. The Hermes lane and the Maestro lane are different
-  surfaces and both follow it, with one explicit exception: the Hermes-lane
+  surfaces and both follow it, with two explicit exceptions. The Hermes-lane
   `ultrabrain` chain is Fable 5.2 → GPT-6 Astra → Opus 5.5. It was GPT-6
   Astra alone, so the Claude entries give a user without OpenAI access a
   frontier fallback; putting Fable ahead of Astra is the owner's choice
-  (2026-11-09, for Fable 5.1; Fable 5.2 took the head on 2026-11-10) and
-  covers that category only. The Maestro lane's Claude Code frontier chain
+  (2026-11-09, for Fable 5.1; Fable 5.2 took the head on 2026-11-10). The
+  Hermes-lane `visual-engineering` chain is Fable 5.2 → Opus 5.5 → Gemini 4
+  Argon → Kimi K3.1 Pro, all at `high` (owner decision, 2026-11-10). Each
+  exception covers its own category only. The Maestro lane's Claude Code frontier chain
   is `claude-opus-5-5` → `claude-fable-5-2` → `opus` (owner decision,
   2026-10-13, with Fable 5.2 in the Fable slot since 2026-11-10): the
   pinned Opus 5.5 id heads it, Fable 5.2 is the fall-through, and the
@@ -542,7 +544,7 @@ alias that is genuinely served somewhere else than the default.
 
 ```sh
 omh model-chains show
-omh model-chains set architect "claude-fable-5-1:xhigh, claude-fable-5:xhigh, ..."
+omh model-chains set architect "claude-fable-5-2:xhigh, claude-fable-5-1:xhigh, ..."
 ```
 
 `dispatch-models.json` (the Claude Code profile's `--model`) is gated on the

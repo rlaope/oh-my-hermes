@@ -34,10 +34,11 @@ _OPUS = _active("claude-opus-5-5", "ccapi", "claude")
 _GROK = _active("grok-build-0.1", "xai", "grok")
 _GEMINI = _active("gemini-4-argon", "google", "gemini")
 # Shipped chain members (the superseded GLM 5.2 Ultrafast and Fable 5
-# entries left the chains on 2026-09-11): the quick head, and the entries
-# right behind Opus 5.5 in writing and visual-engineering. Opus 5.5 heads
-# both since 2026-10-13, so each category is exercised on a model that only
-# its own chain ranks above Kimi K3.1 Pro, the companion every chain ends on.
+# entries left the chains on 2026-09-11): the quick head, the entry right
+# behind Opus 5.5 in writing (Opus 5.5 heads it since 2026-10-13), and the
+# visual-engineering head, Fable 5.2 since 2026-11-10. Each category is
+# exercised on a model that its own chain ranks above Kimi K3.1 Pro, the
+# companion every chain ends on.
 _GLM_FLASH = _active("glm-5.3-flash", "zai", "glm")
 _FABLE = _active("claude-fable-5-2", "ccapi", "claude")
 _SONNET = _active("claude-sonnet-5-5", "ccapi", "claude")

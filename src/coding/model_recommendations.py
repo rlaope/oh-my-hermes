@@ -96,9 +96,9 @@ _OPUS_55 = _candidate(
     reasoning="Editorial strong-tier Claude recommendation; not a benchmark claim.",
 )
 # The Claude vendor order inside every chain is Opus 5.5 -> Fable (owner
-# decision, 2026-10-13), reversing the 2026-09-06 Fable -> Opus rule, with one
-# explicit exception: Fable heads `ultrabrain` (owner decision, 2026-11-09;
-# see that chain). Opus 5.5 had taken Opus 5's slots on 2026-09-23, and Opus
+# decision, 2026-10-13), reversing the 2026-09-06 Fable -> Opus rule, with two
+# explicit exceptions: Fable heads `ultrabrain` (owner decision, 2026-11-09)
+# and `visual-engineering` (owner decision, 2026-11-10; see those chains). Opus 5.5 had taken Opus 5's slots on 2026-09-23, and Opus
 # 5 left the shipped chains under the superseded-generation rule below.
 # Claude Fable 5.2 took every Fable 5.1 slot at the same effort on 2026-11-10
 # (owner decision), and Fable 5.1 left the shipped chains under the same
@@ -273,9 +273,10 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
     #
     # Two chain heads share a (model, effort) pair, and `mixture_category_for`
     # labels a child by the first category in canonical order whose head
-    # matches. The owner accepted both collisions (2026-10-13):
-    #   (claude-opus-5-5, high)   heads deep and visual-engineering -> "deep"
-    #   (claude-opus-5-5, medium) heads writing and capable         -> "writing"
+    # matches. The owner accepted the collision (2026-10-13):
+    #   (claude-opus-5-5, medium) heads writing and capable -> "writing"
+    # (claude-opus-5-5, high) headed deep and visual-engineering too, labelled
+    # "deep", until Fable 5.2 took visual-engineering's head on 2026-11-10.
     # Routing is unaffected, and so is a lane routed through
     # `omh_delegate_route`: its route-provenance record overrides the
     # projection, so that row keeps the lane's own category. Only a child with
@@ -292,7 +293,8 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # The chain was Astra alone, so a user without OpenAI access fell
         # straight back to the parent model, against the 2026-08-19
         # cross-ecosystem rule. An explicit choice for this category: it does
-        # not change the 2026-10-13 Opus 5.5 -> Fable order anywhere else.
+        # not change the 2026-10-13 Opus 5.5 -> Fable order elsewhere
+        # (visual-engineering is the other exception, 2026-11-10).
         # Claude Mythos stays out of every shipped chain.
         # Projection: (claude-fable-5-2, xhigh) labels "ultrabrain", and Astra
         # at xhigh labels "forensics".
@@ -304,7 +306,7 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # The strong tier across three provider ecosystems. DeepSeek V4.1
         # Flash left it: a Flash budget model does not fit the strong tier,
         # and Opus 5.5 and Kimi K3.1 Pro now carry the cross-ecosystem fallback.
-        # visual-engineering children are labelled "deep" (collision above).
+        # (claude-opus-5-5, high), second in visual-engineering, labels "deep".
         "deep": [
             _with_effort(_OPUS_55, "high"),
             _with_effort(_SOL, "high"),
@@ -363,10 +365,13 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
             _with_effort(_KIMI_K31_PRO, "medium"),
             _with_effort(_GEMINI, "medium"),
         ],
-        # Labelled "deep" by projection: its head is deep's (collision above).
+        # Fable 5.2 heads visual-engineering ahead of Opus 5.5 (owner
+        # decision, 2026-11-10), the second explicit exception to the Opus
+        # 5.5 -> Fable order after ultrabrain. Projection: (claude-fable-5-2,
+        # high) heads no other chain and labels "visual-engineering".
         "visual-engineering": [
-            _with_effort(_OPUS_55, "high"),
             _with_effort(_FABLE_52, "high"),
+            _with_effort(_OPUS_55, "high"),
             _with_effort(_GEMINI, "high"),
             _with_effort(_KIMI_K31_PRO, "high"),
         ],

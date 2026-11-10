@@ -368,6 +368,8 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # 2026-10-13 -- (claude-opus-5-5, high) heads deep and
         # visual-engineering, (claude-opus-5-5, medium) heads writing and
         # capable -- and chose `max` for deep-work so its label survives.
+        # The first ended on 2026-11-10, when Fable 5.2 took
+        # visual-engineering's head; visual-engineering now labels its own.
         # One more was accepted with the routing-recipe heads on 2026-10-28:
         # (claude-opus-5-5, xhigh) heads architect and synthesize, so that
         # label reaches a child only through a route-provenance record. The
@@ -376,7 +378,6 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # labels its own head. Routing is unaffected; a new collision fails
         # here by name.
         accepted = {
-            "visual-engineering": "deep",
             "capable": "writing",
             "synthesize": "architect",
         }

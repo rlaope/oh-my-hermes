@@ -494,7 +494,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 9f18a8fc...c7db.
         # dag-ulw's split quality bar then splits for work that can run side by side and keeps a small follow-on step
         # in the node it follows; only dag-ulw moves, and the pin before it was 1f3c01fa...fbf4.
-        self.assertEqual(_digest(legacy_hashes), '5518142e7a600e571ef0265c26ba8c25e6a0d472958e0ba468c399f7308668d0')
+        # model-setup's chain sentence then names Fable 5.2 ahead of Opus 5.5 in visual-engineering; only
+        # model-setup moves, and the pin before it was 5518142e...68d0.
+        self.assertEqual(_digest(legacy_hashes), '3a23f50656c683878e5b27ebcffeeafa71d8edbc43a5ae8e9446a7a3fc0127cf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

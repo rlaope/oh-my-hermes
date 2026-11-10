@@ -2508,7 +2508,7 @@ The shipped catalog is editorial policy, not benchmark output:
 | `unspecified-low` | Cheaper fallback | GLM 5.3 (`low`), DeepSeek V4.1 Flash (`low`), GPT-6.1 Sol (`low`), Claude Sonnet 5.5 (`low`) |
 | `quick` | Short tasks | GLM 5.3 Flash (`low`), GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), Kimi K3.1 Pro (`low`) |
 | `writing` | Prose and docs | Claude Opus 5.5 (`medium`), Claude Sonnet 5.5 (`medium`), Kimi K3.1 Pro (`medium`), Gemini 4 Argon (`medium`) |
-| `visual-engineering` | Frontend and visual | Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
+| `visual-engineering` | Frontend and visual | Claude Fable 5.2 (`high`), Claude Opus 5.5 (`high`), Gemini 4 Argon (`high`), Kimi K3.1 Pro (`high`) |
 | `artistry` | Unconventional work | Gemini 4 Argon (`high`), Claude Opus 5.5 (`high`), Claude Fable 5.2 (`high`), Kimi K3.1 Pro (`high`) |
 | `capable` | Strong general work | Claude Opus 5.5 (`medium`), GPT-6.1 Sol (`medium`), Claude Fable 5.2 (`medium`), Kimi K3.1 Pro (`medium`) |
 | `simple-work` | Small everyday tasks | GPT-6 Luna (`low`), Claude Haiku 5.5 (`low`), DeepSeek V4.1 Flash (`low`) |
@@ -2565,7 +2565,7 @@ $ cat ~/.omh/routing/model-chains.json
   "schema_version": "mixture_chain_overrides/v1",
   "categories": {
     "architect": [
-      {"model": "claude-fable-5-1", "reasoning_effort": "xhigh"},
+      {"model": "claude-fable-5-2", "reasoning_effort": "xhigh"},
       {"model": "gpt-6.1-sol", "reasoning_effort": "xhigh"}
     ],
     "quick": [
@@ -3026,7 +3026,7 @@ nothing, and vendors reprice. Put your own rates in
 {
   "schema_version": "model_price_overrides/v1",
   "models": {
-    "claude-fable-5-1": {"input_per_mtok": 8.0, "output_per_mtok": 40.0},
+    "claude-fable-5-2": {"input_per_mtok": 8.0, "output_per_mtok": 40.0},
     "grok-build-0.1": {"input_per_mtok": 1.0, "output_per_mtok": 2.0},
     "my-free-tier-model": {"input_per_mtok": 0, "output_per_mtok": 0}
   }
