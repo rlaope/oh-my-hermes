@@ -133,7 +133,9 @@ where
 fn launcher_python(script: &str) -> Option<PathBuf> {
     let line = script.lines().find_map(|l| l.strip_prefix("exec "))?;
     let exe = first_sh_word(line)?;
-    Some(PathBuf::from(exe)).filter(|p| p.is_absolute())
+    // A sh launcher names a POSIX path; `Path::is_absolute` would also need a drive letter on Windows,
+    // where these parse tests run in CI.
+    exe.starts_with('/').then(|| PathBuf::from(exe))
 }
 
 /// The first word of a POSIX sh command line: quotes removed, adjacent quoted parts joined. `None` when
