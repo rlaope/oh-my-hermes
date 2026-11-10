@@ -16,8 +16,6 @@ import grok from "../assets/agents/grok.svg?raw";
 import grokbot from "../assets/agents/grokbot.svg?raw";
 import junie from "../assets/agents/junie-color.svg?raw";
 import kilocode from "../assets/agents/kilocode.svg?raw";
-import hermesDarkPng from "../assets/agents/hermes-dark.png";
-import hermesPng from "../assets/agents/hermes.png";
 import omhPng from "../assets/agents/omh.png";
 import omp from "../assets/agents/omp.svg?raw";
 import openai from "../assets/agents/openai.svg?raw";
@@ -159,18 +157,5 @@ export function AgentIcon({
       // static markup from the bundled asset files (no user input)
       dangerouslySetInnerHTML={{ __html: mark.body }}
     />
-  );
-}
-
-/** Hermes Agent's own icon, for what a Hermes subagent ran: the app icon of NousResearch/hermes-agent
- *  (`assets/icon-master.svg` on a light theme, `assets/icon-master-dark.svg` on a dark one; MIT, (c) Nous Research),
- *  drawn small from the published files. It is not in the agent list above: Hermes runs every bot, it is not an
- *  agent CLI to pick. */
-export function HermesMark({ size = 14, className }: { size?: number; className?: string }) {
-  return (
-    <span className={`hermes-ic${className ? ` ${className}` : ""}`} data-agent="hermes" role="img" aria-label="Hermes" style={{ width: size, height: size }}>
-      <img src={hermesPng} width={size} height={size} alt="" className="on-light" />
-      <img src={hermesDarkPng} width={size} height={size} alt="" className="on-dark" />
-    </span>
   );
 }
