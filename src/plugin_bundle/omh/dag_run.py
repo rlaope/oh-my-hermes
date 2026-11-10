@@ -14,11 +14,14 @@ Hermes' compaction in either direction. Writes are a temp file and
 ``os.replace`` under the record's lock.
 
 It holds the plan the parent declared: ids, labels, categories, edges, write
-scopes, roles, and each node's prompt, kept so ``ready`` can hand a node out after
+scopes, roles, the goal's separately checkable criteria when the parent gave
+them, and each node's prompt, kept so ``ready`` can hand a node out after
 the parent's own context was compacted. It holds no child output, summary or
 tool history. Data between nodes moves through handoff files whose paths
-this module names (`handoff_path`); it never reads them beyond asking
-whether one exists. On a Docker or SSH terminal the child writes its file
+this module names (`handoff_path`); it reads one only for whether it exists
+and, for a verify node of a run with criteria, its ``CRITERION <id>: <status>``
+lines, of which an attempt keeps the status word per criterion and nothing
+else (`criterion_statuses`). On a Docker or SSH terminal the child writes its file
 there, under the ``handoff_root`` the run pins in that terminal user's home
 (`node_handoff`), so `dag_tool` asks there (the run records its
 ``backend`` at define); when nothing can reach that terminal, an accepted
@@ -86,6 +89,14 @@ MAX_SCOPE_ENTRIES: Final = 16
 MAX_SCOPE_CHARS: Final = 200
 OVERLAPS_NAMED: Final = 20  # pairs one write_scope_overlap refusal names; the rest are counted
 MAX_REASON_CHARS: Final = 200
+# The goal split into separately checkable outcomes (`criteria`), each an id and one line, given at define or extend.
+MAX_CRITERIA: Final = 12
+MAX_CRITERION_CHARS: Final = 160
+CRITERION_FIELDS: Final = frozenset({"id", "text"})
+# What a verify node's handoff says per criterion (`criterion_statuses`); a view adds `unchecked` (no read yet).
+CRITERION_STATUSES: Final = ("met", "unmet", "unobserved")
+# How much of a verify node's handoff is read for its criterion lines; the rest is ignored.
+MAX_HANDOFF_READ_BYTES: Final = 262_144
 # The verify node's producer scope map and a repair node's `git diff` paths are cut at these lengths (per node turn).
 SCOPE_MAP_CHARS: Final = 600
 LEFTOVER_PATHS_CHARS: Final = 300
@@ -158,6 +169,9 @@ _DOUBLE_CHECK: Final = re.compile(r"(?<![a-z])double[- ]check")
 DOC_SUFFIXES: Final = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
 # A write scope entry named exactly one of these (casefolded, no suffix) is docs, not code (`writes_code`).
 DOC_NAMES: Final = frozenset({"readme", "changelog", "license", "notice", "authors", "contributing", "copying"})
+# `CRITERION <id>: met|unmet|unobserved` at a line's start (after spaces, list bullets or backticks), then the rest.
+_CRITERION_LINE: Final = re.compile(
+    r"[ \t*`-]*CRITERION[ \t]+([a-z0-9][a-z0-9-]{0,31})[ \t]*:[ \t]*(?i:(met|unmet|unobserved))(?![A-Za-z0-9_-])(.*)")
 _MARKER_PATTERNS: Final = {
     marker: re.compile(r"(?<![A-Za-z])" + r"\s+".join(marker.split()) + r"\s*:", re.IGNORECASE)
     for marker in PROMPT_MARKERS
@@ -250,6 +264,14 @@ def _record_shape_ok(raw: object) -> bool:
     # The coding owners the defining request named (`dag_tool._define`); only `define` writes them.
     owners = raw.get("owners", [])
     if not isinstance(owners, list) or not all(isinstance(owner, str) and owner in EXTERNAL_OWNERS for owner in owners):
+        return False
+    # The goal criteria (`_validated_criteria`); a run defined without them has no key.
+    criteria = raw.get("criteria", [])
+    if not isinstance(criteria, list) or not all(
+            isinstance(item, dict) and isinstance(item.get("id"), str) and _ID.fullmatch(item["id"])
+            and isinstance(item.get("text"), str) for item in criteria):
+        return False
+    if len({item["id"] for item in criteria}) != len(criteria):
         return False
     known = set(ids)
     for node in nodes:
@@ -419,6 +441,71 @@ def _validated_node(raw: object) -> dict[str, Any]:
         if raw["local"]:
             validated["local"] = True
     return validated
+
+
+def _validated_criteria(raw: object, taken: Sequence[str] = ()) -> list[dict[str, str]]:
+    """The goal criteria as given at define (``taken`` empty) or extend (``taken``: the ids the run already has).
+
+    Each is ``{id, text}``: an id as a node's, and one plain line. New ids
+    only; nothing rewrites or removes a criterion, and a run holds at most
+    `MAX_CRITERIA` in all.
+    """
+    if not isinstance(raw, list) or not raw:
+        raise DagRefusal("invalid_criteria",
+                         f"criteria lists 1 to {MAX_CRITERIA} outcomes, each {{id, text}}; leave it out when the goal "
+                         "has no separately checkable outcome.")
+    if len(taken) + len(raw) > MAX_CRITERIA:
+        raise DagRefusal("invalid_criteria",
+                         f"A run holds at most {MAX_CRITERIA} criteria in all; merge the outcomes that are checked "
+                         "together.")
+    criteria: list[dict[str, str]] = []
+    seen = set(taken)
+    for item in raw:
+        if not isinstance(item, Mapping) or set(item) != CRITERION_FIELDS:
+            raise DagRefusal("invalid_criteria", "Each criterion takes exactly id and text.")
+        criterion_id = valid_id(item.get("id"), "invalid_criteria",
+                                "Each criterion needs a short lowercase id (a-z, 0-9, -).")
+        if criterion_id in seen:
+            raise DagRefusal("invalid_criteria",
+                             f"Criterion {criterion_id} is already in the run; give each criterion its own id "
+                             "(extend adds new ones only, and nothing rewrites one).")
+        seen.add(criterion_id)
+        text = item.get("text")
+        if isinstance(text, str) and "\n" in text:
+            text = None
+        criteria.append({"id": criterion_id, "text": _plain(
+            text, MAX_CRITERION_CHARS, "invalid_criteria",
+            f"Criterion {criterion_id}: text is one plain line of at most {MAX_CRITERION_CHARS} characters.")})
+    return criteria
+
+
+def run_criteria(record: Mapping[str, Any]) -> list[dict[str, str]]:
+    """The run's goal criteria, in the order given; ``[]`` for a run defined without them."""
+    return list(record.get("criteria") or [])
+
+
+def criterion_lines(text: str) -> list[str]:
+    """The lines of a handoff that carry a ``CRITERION`` marker at their start, in order."""
+    return [line for line in text.splitlines() if _CRITERION_LINE.match(line)]
+
+
+def criterion_statuses(lines: Iterable[str], ids: Sequence[str]) -> dict[str, str]:
+    """Each of ``ids`` as a verify node's handoff marks it: ``met``, ``unmet`` or ``unobserved``.
+
+    Only a line opening with ``CRITERION <id>: <status>`` counts, for an id
+    the run declares; the last line per id wins. ``met`` with nothing after
+    the status is ``unobserved``, and so is an id with no line. Only the
+    status word is kept, never the evidence text.
+    """
+    statuses = dict.fromkeys(ids, "unobserved")
+    for line in lines:
+        match = _CRITERION_LINE.match(line)
+        if match is None or match[1] not in statuses:
+            continue
+        status = match[2].casefold()
+        evidence = match[3].strip(" \t-:*`.\u2013\u2014")
+        statuses[match[1]] = "unobserved" if status == "met" and not evidence else status
+    return statuses
 
 
 def leading_check_role(label: str) -> str:
@@ -702,21 +789,25 @@ def topology(nodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def definition_digest(nodes: Sequence[Mapping[str, Any]]) -> str:
+def definition_digest(nodes: Sequence[Mapping[str, Any]], criteria: Sequence[Mapping[str, str]] = ()) -> str:
     # A build role is left out, so a run stored before nodes carried a role, defined again unchanged, is the same run.
-    shape = [{key: node[key] for key in sorted(NODE_FIELDS)
-              if key in node and (key != "role" or node[key] != DEFAULT_ROLE)}
-             for node in nodes]
+    shape: object = [{key: node[key] for key in sorted(NODE_FIELDS)
+                      if key in node and (key != "role" or node[key] != DEFAULT_ROLE)}
+                     for node in nodes]
+    if criteria:
+        # Criteria are part of what a run is; a run defined without them keeps the digest it had before they existed.
+        shape = {"criteria": [dict(item) for item in criteria], "nodes": shape}
     return hashlib.sha256(json.dumps(shape, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
 def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes: object, now: float, *,
                oneshot_limit: int | None = None, oneshot_spent: int = 0,
-               named_roles: bool = True) -> dict[str, Any]:
+               named_roles: bool = True, criteria: object = None) -> dict[str, Any]:
     """A validated run record. ``oneshot_limit`` and ``oneshot_spent``: the one-shot child budget and the children
     this process already started against it; a graph over what is left is refused. ``named_roles=False`` leaves
     `require_named_roles` to the caller: `dag_tool` first checks whether the run already exists (a run stored
-    before nodes carried a role, defined again unchanged, is the same run)."""
+    before nodes carried a role, defined again unchanged, is the same run). ``criteria``: the goal's separately
+    checkable outcomes (`_validated_criteria`); ``None`` keeps the record as it was before criteria existed."""
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "A run needs at least one node.")
     if len(raw_nodes) > MAX_NODES:
@@ -740,13 +831,14 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
     _require_graph(nodes)
     title = _plain(name, MAX_NAME_CHARS, "invalid_name", "The run needs a short name.") if name else run
     stated = _plain(goal, MAX_GOAL_CHARS, "invalid_goal", "The goal is one line.") if goal else ""
-    return {
+    checks = _validated_criteria(criteria) if criteria is not None else []
+    record = {
         "schema_version": DAG_SCHEMA_VERSION,
         "session_id": session_id,
         "run": run,
         "name": title,
         "goal": stated,
-        "digest": definition_digest(nodes),
+        "digest": definition_digest(nodes, checks),
         "defined_at": now,
         "updated_at": now,
         "cancelled_at": None,
@@ -756,6 +848,9 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
         "lint": lint(nodes),
         "claim_boundary": DAG_CLAIM_BOUNDARY,
     }
+    if checks:
+        record["criteria"] = checks
+    return record
 
 
 # ── derivation ───────────────────────────────────────────────────────────
@@ -888,6 +983,21 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     """Whether a passing verify node covers the run's work, and the reason codes when none does. Apart from
     `run_state`: a ``done`` run may be ``unverified``.
 
+    A run with criteria is ``verified`` only when, beside the conditions of
+    `_checks_verdict`, every criterion is ``met`` in the last attempt of an accepted
+    verify node whose handoff was read (the newest such node per criterion);
+    otherwise it is ``unverified`` with ``criteria_unmet:<ids>`` and
+    ``criteria_unobserved:<ids>`` beside the other reasons (`criteria_reasons`).
+    ``verify_failed`` is unchanged, and so is a run without criteria.
+    """
+    verdict, reasons = _checks_verdict(record, derived)
+    missing = criteria_reasons(record, derived) if verdict != "verify_failed" else []
+    return ("unverified", [*reasons, *missing]) if missing else (verdict, reasons)
+
+
+def _checks_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]]) -> tuple[str, list[str]]:
+    """`goal_verdict` from the verify nodes' outcomes alone, criteria aside.
+
     ``verified``: every producer (`is_producer`; a repair node standing in
     for what it repairs) is an ancestor of a verify node that was accepted
     with its handoff checked, and every verify node passed. ``verify_failed``:
@@ -927,6 +1037,69 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     return ("unverified", reasons) if reasons else ("verified", [])
 
 
+def _criterion_reads(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]], *,
+                     accepted_only: bool) -> dict[str, str]:
+    """Each criterion's status as the newest verify read naming it says (by ``settled_at``, then record order).
+
+    ``accepted_only``: the last attempt of each accepted verify node whose
+    handoff was read, as the verdict counts them; otherwise every settled
+    attempt of every verify node still in the run, as the views show them.
+    A criterion no read names is left out.
+    """
+    ids = [item["id"] for item in run_criteria(record)]
+    reads: list[tuple[float, int, Mapping[str, Any]]] = []
+    for order, node in enumerate(record["nodes"]):
+        node_id = str(node["id"])
+        if not is_verification(node) or derived[node_id]["state"] == "superseded":
+            continue
+        attempts = [attempt for attempt in node.get("attempts") or [] if isinstance(attempt, Mapping)]
+        if accepted_only:
+            if derived[node_id]["state"] != "accepted" or handoff_unchecked(node):
+                continue
+            attempts = attempts[-1:]
+        reads += [(_number(attempt.get("settled_at")) or 0.0, order, attempt["criteria"]) for attempt in attempts
+                  if isinstance(attempt.get("criteria"), Mapping)]
+    found: dict[str, str] = {}
+    for _settled, _order, statuses in sorted(reads, key=lambda read: (read[0], read[1])):
+        found.update({key: str(statuses[key]) for key in ids if statuses.get(key) in CRITERION_STATUSES})
+    return found
+
+
+def criteria_reasons(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """``criteria_unmet:<ids>`` and ``criteria_unobserved:<ids>`` for the criteria no accepted, read verify node
+    marked ``met``; ``[]`` when each one is met, or the run has none."""
+    ids = [item["id"] for item in run_criteria(record)]
+    found = _criterion_reads(record, derived, accepted_only=True)
+    unmet = [key for key in ids if found.get(key) == "unmet"]
+    unseen = [key for key in ids if found.get(key) not in ("met", "unmet")]
+    return ([f"criteria_unmet:{','.join(unmet)}"] if unmet else []) + (
+        [f"criteria_unobserved:{','.join(unseen)}"] if unseen else [])
+
+
+def criteria_view(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]]) -> dict[str, Any] | None:
+    """The run's criteria as every view shows them, or ``None`` for a run without criteria: ``total``, ``met``,
+    the ``unmet`` and ``unobserved`` ids, and each item's ``status`` as the newest verify read says it, or
+    ``unchecked`` when no verify attempt was read yet. The verdict counts accepted reads only (`criteria_reasons`)."""
+    criteria = run_criteria(record)
+    if not criteria:
+        return None
+    found = _criterion_reads(record, derived, accepted_only=False)
+    items = [{"id": item["id"], "text": item["text"], "status": found.get(item["id"], "unchecked")}
+             for item in criteria]
+    return {
+        "total": len(items),
+        "met": sum(1 for item in items if item["status"] == "met"),
+        "unmet": [item["id"] for item in items if item["status"] == "unmet"],
+        "unobserved": [item["id"] for item in items if item["status"] == "unobserved"],
+        "items": items,
+    }
+
+
+def criteria_count(view: Mapping[str, Any]) -> str:
+    """``2/3 criteria met``: what the status line, the done say and the run's end views add for a run with criteria."""
+    return f"{view['met']}/{view['total']} criteria met"
+
+
 def counts(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """The run's tallies. ``running`` counts nodes whose child is running, as the graph and its chat line do;
     ``out`` every node handed out and not settled (no child yet, running, or returned)."""
@@ -963,6 +1136,9 @@ def status_line(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, An
                     if derived[str(node["id"])]["state"] == "accepted" and handoff_unchecked(node))
     if unchecked:
         parts.append(f"{unchecked} {HANDOFF_NOT_CHECKED}")
+    view = criteria_view(record, derived)
+    if view is not None:
+        parts.append(criteria_count(view))
     found = stuck(record, derived, now, limits=limits) if now is not None else []
     if found:
         labels = {str(node["id"]): str(node["label"]) for node in record["nodes"]}
@@ -1283,6 +1459,17 @@ def task_for(
                              "goal done.")
         lines.append("Check the complete run goal, not only this node's local VERIFY. "
                      "Name each unmet or unobserved goal criterion; producer claims are not verification evidence.")
+        criteria = run_criteria(record)
+        if criteria:
+            # The engine reads these lines from the handoff (`criterion_statuses`); a criterion without one is unobserved.
+            lines.extend([
+                "Goal criteria:",
+                *(f"- {item['id']}: {item['text']}" for item in criteria),
+                "In the handoff, write one line per criterion, each at the start of a line:",
+                "CRITERION <id>: met | unmet | unobserved - <the command you ran and what it showed>",
+                "`met` needs that evidence after the dash; `unobserved` means it could not be checked here, with the "
+                "reason. Every criterion gets a line; one without a line counts as unobserved.",
+            ])
         scopes = _producer_scopes(record, node, preceding)
         if scopes:
             lines.append("In the handoff, name for each failing check the producer whose declared write_scope holds "
@@ -1437,6 +1624,7 @@ def settle(
     record: dict[str, Any], derived: Mapping[str, Mapping[str, Any]], node_id: str, outcome: object, reason: object,
     provider_error: bool, *, read_handoff: Callable[[], tuple[bool, str]], now: float,
     handle: object = None, wake_at: object = None,
+    read_criteria: Callable[[], tuple[bool, str, list[str]]] | None = None,
 ) -> str:
     """Close the node's open attempt. Returns what happened: the outcome, or ``retry`` (a provider error's one retry).
 
@@ -1446,6 +1634,15 @@ def settle(
     handoff could not be read where the child wrote it
     (`dag_tool.backend_handoff`): ``accepted`` then stands, and the attempt
     records ``handoff_checked: false`` with that reason.
+
+    A verify node of a run with criteria is read with ``read_criteria``
+    instead, which also answers the handoff's ``CRITERION`` lines, on an
+    accepted, failed or blocked settle (not a provider error's retry). A
+    handoff that was read records each criterion's status on the attempt
+    (`criterion_statuses`); an ``accepted`` settle with one ``unmet`` is
+    refused as ``criteria_unmet``, and with one ``unobserved`` as
+    ``criteria_unobserved``. A missing handoff still refuses only
+    ``accepted``, and an unread one records no statuses.
     """
     nodes = {str(node["id"]): node for node in record["nodes"]}
     if node_id not in nodes:
@@ -1476,20 +1673,46 @@ def settle(
     if reason and record.get("backend"):
         # A run on a Docker or SSH terminal checks the reason before its backend is asked, so a bad one sends nothing.
         _plain(reason, MAX_REASON_CHARS, "invalid_reason", "The reason is one short line.")
+    retries = sum(1 for item in nodes[node_id]["attempts"] if item.get("outcome") == "retry")
+    retrying = outcome == "failed" and bool(provider_error) and retries < MAX_PROVIDER_RETRIES
+    ids = ([item["id"] for item in run_criteria(record)]
+           if is_verification(nodes[node_id]) and outcome in ("accepted", "failed", "blocked") and not retrying else [])
     unread = ""
-    if outcome == "accepted":
-        found, unread = read_handoff()
-        if not found and not unread:
+    statuses: dict[str, str] | None = None
+    if outcome == "accepted" or ids:
+        lines: list[str] = []
+        if ids and read_criteria is not None:
+            found, unread, lines = read_criteria()
+        else:
+            found, unread = read_handoff()
+        if outcome == "accepted" and not found and not unread:
             raise DagRefusal(
                 "handoff_missing",
                 f"Node {node_id} has no handoff file, and the nodes after it read one. Write it from the child's "
                 "result, or settle the node failed.",
             )
+        if ids and found and not unread:
+            statuses = criterion_statuses(lines, ids)
+    if outcome == "accepted" and statuses is not None:
+        unmet = [key for key in ids if statuses[key] == "unmet"]
+        unseen = [key for key in ids if statuses[key] == "unobserved"]
+        if unmet:
+            raise DagRefusal(
+                "criteria_unmet",
+                f"Node {node_id}'s handoff marks criteria {', '.join(unmet)} unmet, so it is not accepted. Settle it "
+                "failed, then repair it with nodes that fix the work; the check runs again once they pass.",
+            )
+        if unseen:
+            raise DagRefusal(
+                "criteria_unobserved",
+                f"Node {node_id}'s handoff has no checked result for criteria {', '.join(unseen)} (no CRITERION "
+                "line, or met with no evidence), so it is not accepted. Have the check run them: settle it failed "
+                "and repair it so it runs again, or settle it blocked when they cannot be checked here.",
+            )
     attempt = nodes[node_id]["attempts"][-1]
-    retries = sum(1 for item in nodes[node_id]["attempts"] if item.get("outcome") == "retry")
     note = _plain(reason, MAX_REASON_CHARS, "invalid_reason", "The reason is one short line.") if reason else ""
     attempt.update(settled_at=now, reason=note, provider_error=bool(provider_error))
-    if outcome == "failed" and provider_error and retries < MAX_PROVIDER_RETRIES:
+    if retrying:
         attempt["outcome"] = "retry"
         return "retry"
     attempt["outcome"] = outcome
@@ -1497,6 +1720,8 @@ def settle(
         attempt.update(handle=handle, wake_at=wake_at)
     if outcome == "accepted" and unread:
         attempt.update(handoff_checked=False, handoff_unread=unread)
+    if statuses is not None:
+        attempt["criteria"] = statuses  # the status words only: no evidence text, no handoff content
     return str(outcome)
 
 
@@ -1579,9 +1804,12 @@ def extend_rounds_left(record: Mapping[str, Any]) -> int:
 
 def extend(
     record: dict[str, Any], derived: Mapping[str, Mapping[str, Any]], raw_nodes: object, found_by: object, now: float,
-    *, oneshot_remaining: int | None = None,
+    *, oneshot_remaining: int | None = None, criteria: object = None,
 ) -> list[str]:
     """Add a round of nodes to a run whose every node passed but whose goal check found work missing.
+
+    ``criteria`` adds goal criteria the run does not have yet (new ids only,
+    `MAX_CRITERIA` in all); nothing rewrites or removes one.
 
     The new nodes may depend on the run's accepted nodes and on each other.
     The whole run then passes define's hard rejects: unknown or self edges, a
@@ -1636,8 +1864,12 @@ def extend(
             )
         node.update(origin=f"extend:{len(rounds) + 1}", found_by=origin)
     _require_oneshot_room(added, oneshot_remaining, "extend round")
+    more = (_validated_criteria(criteria, [item["id"] for item in run_criteria(record)])
+            if criteria is not None else [])
     record["nodes"].extend(added)
     rounds.append([str(node["id"]) for node in added])
+    if more:
+        record["criteria"] = [*run_criteria(record), *more]
     record["topology"] = topology(record["nodes"])
     record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now

@@ -405,7 +405,15 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # head (tests/test_delegate_route_tool.py). Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base b38ff85a1.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72566
+# 72566 -> 72792: omh_dag takes the goal's criteria at define and extend
+# (+226, 3175 -> 3401): a bare `criteria` array of {id, text} with no
+# description, one clause in the tool description, and the goal parameter no
+# longer calls itself "goal criteria". The refusals, the handoff line format
+# and the limits live in the engine's own say and the skill's run-loop
+# reference. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base 0cba53d76.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72792
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

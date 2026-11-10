@@ -466,7 +466,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # -> Opus 5.5; that branch's pin was b40a640d...731df, and this branch's was 88ddc8a4...71bf.
         # dag-ulw's ladder quality bar and run-loop lint then name the one judgement node that takes `ultrabrain`,
         # only where the routes serve it; only dag-ulw moves, and the pin before it was 0b3c71d9...1783.
-        self.assertEqual(_digest(legacy_hashes), '4713baa9f74ee17d9a945ec0084647a1639830fed1a95f7349d79b9948bc5447')
+        # dag-ulw's goal criteria: First Steps passes each checkable outcome as `criteria`, the verify and completion
+        # bars name the CRITERION line and the plain-words count, and run-loop gains a Goal criteria section; only
+        # dag-ulw moves, and the pin before it was 4713baa9...5447.
+        self.assertEqual(_digest(legacy_hashes), 'cc3217f7876f2c58cb6998b7689f20bf42dfa0b87db6e5161764d550da718447')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -516,7 +519,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72566,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5).
+            'plugin_tool_schema_chars': 72792,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), dag node owner (+70), dag node local (+37) less the route fallback sentence (-1), then the ultrabrain head in the route example (+5), then omh_dag goal criteria (+226).
             'pre_llm_call_context_chars_max': 5977,  # The pi-family runtime rename (+6), the route-hint dedup (-154), then the console choices line (+409).
             'pre_llm_call_context_fallback_chars_max': 7529,  # The same rename (+6), the human-voice primer sentence (+116), the route-hint dedup (-154), then the console choices line (+409).
             'awareness_primer_markdown_chars': 4051,  # Human-voice reply sentence (+110), full skill names in the checkpoint (+55), then loadable labels there (+49), on the card and cue lines (+239) and in the lane keys (+78).

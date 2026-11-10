@@ -264,9 +264,9 @@ class DefineTests(unittest.TestCase):
         self.assertEqual(result["topology"]["layers"], [["api", "ui"], ["docs"], ["verify"]])
         self.assertEqual(result["topology"]["critical_path"], ["api", "docs", "verify"])
         self.assertEqual(result["topology"]["bottlenecks"][0], {"node": "api", "blocks": 2})
-        # api and ui write code and no node reviews them, and four nodes carry no judgement category: advice, never a
-        # refusal.
-        self.assertEqual(result["lint"], ["no_review_node", "no_judgement_node"])
+        # api and ui write code and no node reviews them, four nodes carry no judgement category, and the run was
+        # defined without goal criteria (the define reply alone says so): advice, never a refusal.
+        self.assertEqual(result["lint"], ["no_review_node", "no_judgement_node", "no_goal_criteria"])
         self.assertEqual([(c["category"], c["nodes"], c["route"]["action"]) for c in result["calls"]],
                          [("quick", ["api"], "set"), ("unspecified-low", ["ui"], "set")])
         task = result["calls"][0]["tasks"][0]

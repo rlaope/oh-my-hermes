@@ -1614,6 +1614,10 @@ def dag_run_summary(graph: Mapping[str, Any]) -> str:
     verdict = _safe_text(graph.get("dag_verdict"))
     if verdict:
         said.append(verdict)
+    # A run with goal criteria: how many its verify node marked met (`dag_run.criteria_count`).
+    criteria = _safe_text(graph.get("dag_criteria"))
+    if criteria:
+        said.append(criteria)
     return " · ".join(["DAG", _safe_text(graph.get("name")) or "delegation", *said])
 
 
