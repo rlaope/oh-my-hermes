@@ -18,7 +18,7 @@ from test_tui_app import info_row_of
 from test_tui_choice_ui import armed, press
 from test_tui_modes import SID, answer, drawn, make_app, notices, type_text
 from test_tui_questions import COLOUR, TELL_APPROVAL
-from omh.tui.app import EXIT_CONFIRM_SECONDS, EXIT_HINT, INTERRUPTING, QUEUE_HELD_HINT, QueuedLine, Rewind, queue_lines
+from omh.tui.app import EXIT_CONFIRM_SECONDS, UnsentPrompt, EXIT_HINT, INTERRUPTING, QUEUE_HELD_HINT, QueuedLine, Rewind, queue_lines
 from omh.tui.gateway import Event
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
 from omh.tui.theme import DEFAULT_THEME
@@ -51,6 +51,18 @@ class EscWithADraftTests(unittest.TestCase):
         app._on_event(INTERRUPTED)
         self.assertEqual(app.composer.text, "half a thought")  # what was queued waits instead of joining it
         self.assertEqual([line.text for line in app.queued], ["queued"])
+
+    def test_esc_over_a_draft_while_a_prompt_is_unsent_leaves_the_draft_and_queues_the_prompt(self) -> None:
+        # #2726 review: the unsent prompt (its images still staging) used to come back after the draft.
+        app, client = make_app()
+        app.unsent.append(UnsentPrompt("the staging prompt", ()))
+        app.turn_pending = True  # it started the turn; nothing reached Hermes yet
+        type_text(app, "my draft")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(app.composer.text, "my draft")
+        self.assertEqual([line.text for line in app.queued], ["the staging prompt"])
+        self.assertTrue(app.queue_held)  # no turn ends to send it: it waits for the person, Up takes it back
+        self.assertEqual(client.named("prompt.submit"), [])
 
     def test_esc_with_a_draft_between_turns_interrupts_nothing_and_still_clears_on_the_second(self) -> None:
         app, client = make_app()

@@ -1619,7 +1619,9 @@ before Hermes answered stays, with the prompt's row under it.
 Typed during a turn, a command waits in the queue (`⧗`, as a prompt does, whatever Hermes'
 `display.busy_input_mode` says) and runs when the turn ends, in the order you sent it: a prompt queued after a
 `/compress` goes once Hermes has answered the `/compress`, and the lines queued after a `/new` or a
-`/sessions <id>` go into the session it opens. Up takes a queued command back on its own, and the send-now key
+`/sessions <id>` go into the session it opens. A command that opens a picker or a question (bare `/model`, a
+guarded model's confirm) holds the queue until you answer it. Up takes a queued command back on its own, its paste
+chips as you typed them, and the send-now key
 never sends one into the turn. Only these run at once during a turn: `/stop` and `/steer`, which are for the
 running turn, `/queue`, `/btw` and `/bg`, which Hermes runs beside it, the commands about this terminal (`/help`,
 `/keys`, `/whats-new`, `/redraw`, `/history`, `/todos`, `/details`, `/logs`, `/dag`, `/bots`, `/copy`, `/theme`,

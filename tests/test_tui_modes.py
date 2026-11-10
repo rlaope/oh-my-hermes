@@ -1216,6 +1216,48 @@ class BusyQueueTests(unittest.TestCase):
                 self.assertEqual(len(client.named("prompt.submit")), 1)
                 self.assertEqual(len(client.named("slash.exec")), 1)
 
+    def compress_out_with_b_queued(self) -> tuple[App, RecordingClient]:
+        """[/compress, B] queued; the turn ended, so /compress went and is still out."""
+        app, client = make_app(busy=True)
+        for text in ("/compress", "B"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        self.end_turn(app)
+        self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
+        return app, client
+
+    def test_a_turn_that_ends_while_a_queued_command_is_out_sends_nothing_past_it(self) -> None:
+        app, client = self.compress_out_with_b_queued()
+        app._on_event(Event("message.start", SID, {}))  # a turn of Hermes' own, while /compress is out
+        self.end_turn(app)
+        self.assertEqual(client.named("prompt.submit"), [])
+        answer(app, client, {"output": "Compressed."})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "B", "queued": True}])
+
+    def test_what_is_sent_while_a_queued_command_is_out_goes_behind_the_queue(self) -> None:
+        app, client = self.compress_out_with_b_queued()
+        type_text(app, "C")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [])
+        self.assertEqual([line.text for line in app.queued], ["B", "C"])
+        answer(app, client, {"output": "Compressed."})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "B", "queued": True}])
+        self.assertEqual([line.text for line in app.queued], ["C"])  # behind B's turn
+
+    def test_up_takes_a_queued_command_back_with_its_paste_chips(self) -> None:
+        app, _client = make_app(busy=True)
+        type_text(app, "/compress ")
+        app._on_input(Paste("focus on the auth module\nand its tests\nand its fixtures\nand nothing else"))
+        typed = app.composer.text
+        self.assertIn("[Pasted", typed)
+        app._on_input(Key(ENTER))
+        (line,) = app.queued
+        self.assertEqual(line.shown, typed)
+        self.assertTrue(line.text.startswith("/compress focus on the auth module"))
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, typed)  # the chip again, not its text
+        self.assertEqual(app.composer.expanded(), line.text)
+
     def test_a_command_with_nothing_out_lets_the_next_line_go_at_once(self) -> None:
         app, client = make_app(busy=True)
         for text in ("/details", "/frobnicate", "next"):
@@ -1237,7 +1279,8 @@ class BusyQueueTests(unittest.TestCase):
             "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
         }))
         # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
-        for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse"):
+        for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse", "worktree",
+                     "snapshot"):
             with self.subTest(name=name):
                 app, client = make_app(busy=True)
                 with patch.object(App, "_route_slash") as ran:

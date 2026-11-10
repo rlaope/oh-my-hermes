@@ -4565,6 +4565,17 @@ class App(ModesMixin, AgentViewMixin):
         self.composer.replace(0, len(self.composer.text), text)
 
     def _on_input(self, event: Key | Paste | Mouse) -> None:
+        """One input event. While a queued command is out (`_queued_command_out`), a key for a picker or a question
+        is that command's too: the call a pick or an answer makes (`/model`'s `config.set`) holds the queue."""
+        opened = self.queue_command_open
+        if self.queue_command_calls is not None and (self.slot is not None or self._front_picker() is not None):
+            self.queue_command_open = True
+        try:
+            self._on_event_input(event)
+        finally:
+            self.queue_command_open = opened
+
+    def _on_event_input(self, event: Key | Paste | Mouse) -> None:
         if isinstance(event, Mouse):
             self.report_at = self.clock()
             if not event.motion and event.button not in (WHEEL_UP, WHEEL_DOWN):
@@ -5185,8 +5196,8 @@ class App(ModesMixin, AgentViewMixin):
     def _model(self, arg: str) -> None:
         """`/model <name> [--provider <slug>]` switches this session as Hermes' own TUI does (`config.set model`).
 
-        Bare, or with `--refresh` alone, it opens between turns a picker of
-        what Hermes offers this session, asked again of the providers for
+        Bare, or with `--refresh` alone, it opens a picker of what Hermes
+        offers this session (typed during a turn it waits for the turn's end, `_run_slash`), asked again of the providers for
         `--refresh`. Any other flag (`--global`, `--once`) is Hermes' own
         `/model` as typed, which a shared gateway refuses (`_on_slash_refused`).
         """
@@ -5196,9 +5207,6 @@ class App(ModesMixin, AgentViewMixin):
             self._switch_model(value)
         elif arg and not refresh:
             self._route_slash(SlashInvocation("model", arg, None), 0)
-        elif self._busy():
-            # Bare /model has no echo to say this under, so it waits under what runs rather than close it.
-            self.transcript.add_aside(NoticeBlock(MODEL_BUSY_NOTICE, NOTICE_WARN))
         elif not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
         else:
@@ -5637,11 +5645,15 @@ class App(ModesMixin, AgentViewMixin):
 
         A prompt taken but not sent yet (its images still staging, or waiting
         to) is not sent: it comes back to the draft with its tokens
-        (`_give_back_unsent`), and with no turn running or sent besides it,
+        (`_give_back_unsent`), or, over a draft the person typed (Esc stops a
+        turn with one), to the head of the queue, held, so the draft stays as
+        it is; and with no turn running or sent besides it,
         nothing is asked of Hermes. Lines queued behind it are held, as after
         any interrupt (`_hold_queue`): no turn ends to send them on.
         """
-        if self._give_back_unsent() and not (self.transcript.running or self.claim == CLAIM_SUBMITTED):
+        if self._give_back_unsent(keep_draft=bool(self._draft().text)) and not (
+            self.transcript.running or self.claim == CLAIM_SUBMITTED
+        ):
             self.turn_pending = False
             if self.queued and not self.queue_held:
                 self._hold_queue(INTERRUPTED_WHY)
@@ -5834,7 +5846,8 @@ class App(ModesMixin, AgentViewMixin):
             if sent is None or sent.name != invocation.name:
                 sent = invocation
             # A picked rewind or agent stays picked under a command; a prompt the command sends replaces the rewind's.
-            self._run_slash(replace(sent, rewind=self.rewind, images=tuple(images)), echo=f"/{invocation.text}")
+            self._run_slash(replace(sent, rewind=self.rewind, images=tuple(images)), echo=f"/{invocation.text}",
+                            chips=chips)
         elif self.agent_steer is not None:
             self._keep_images(images, "A subagent's steer")
             self._steer_agent(text)
@@ -6113,12 +6126,23 @@ class App(ModesMixin, AgentViewMixin):
         answered(image, "")
         return True
 
-    def _give_back_unsent(self) -> bool:
+    def _give_back_unsent(self, keep_draft: bool = False) -> bool:
         """Every prompt taken but not sent goes back to the draft, its images tokens again; True when one did. One
-        staging is detached once its answers come (`_stage_images`)."""
+        staging is detached once its answers come (`_stage_images`).
+
+        `keep_draft` leaves the draft as it is: each goes back to the head of
+        the queue instead, in order (a command's prompt as the command typed),
+        and a submit held for its pastes is left to go when they answer, behind
+        the turn as anything sent during one.
+        """
         unsent, self.unsent = [prompt for prompt in self.unsent if not prompt.cancelled], []
         for prompt in unsent:
             prompt.cancelled = True
+        if keep_draft:
+            for prompt in reversed(unsent):
+                self.queued.appendleft(QueuedLine(prompt.text, images=prompt.images, command=parse_slash(prompt.text)))
+            return bool(unsent)
+        for prompt in unsent:
             self._give_back_prompt(prompt.text, prompt.images)
         return self._give_back_held() or bool(unsent)
 
@@ -6461,13 +6485,14 @@ class App(ModesMixin, AgentViewMixin):
             self._drain_unless_busy()
 
     def _queued_command_out(self) -> bool:
-        """Whether the queued command that ran last is still out: a call it made (or one its answers made) waits for
-        Hermes, or a picker or a picked rewind it opened waits for the person. Once nothing is, it is over."""
+        """Whether the queued command that ran last is still out: a call it made (or one its answers, or a pick or
+        an answer in what it opened, made) waits for Hermes, or a picker, a question (`/model`'s guarded-model
+        confirm) or a picked rewind it opened waits for the person. Once nothing is, it is over."""
         calls = self.queue_command_calls
         if calls is None:
             return False
         if any(request_id in self.pending for request_id in calls) or self._front_picker() is not None \
-                or self.picker is not None or self.rewind is not None:
+                or self.picker is not None or self.rewind is not None or self.slot is not None or self.waiting_requests:
             return True
         self.queue_command_calls = None
         return False
@@ -6576,7 +6601,9 @@ class App(ModesMixin, AgentViewMixin):
         while self.queued and not taken[0].alone and not self.queued[0].alone:
             taken.append(self.queued.popleft())
         first = taken[0]
-        if not first.shell and not first.typed and first.shown and first.text.startswith(SHELL_PREFIX):
+        if first.alone and first.command is not None and first.chips:  # a typed command: its chips again, as typed
+            composer.restore(first.shown, first.chips, _tokens(first.images))
+        elif not first.shell and not first.typed and first.shown and first.text.startswith(SHELL_PREFIX):
             # Its chips again, never a `!` line the composer would run; without them, one chip holding its text.
             if first.chips:
                 composer.restore(first.shown, first.chips, _tokens(first.images))
@@ -6877,7 +6904,10 @@ class App(ModesMixin, AgentViewMixin):
 
     # ── slash commands ──
 
-    def _run_slash(self, invocation: SlashInvocation, depth: int = 0, echo: str = "", drained: bool = False) -> None:
+    def _run_slash(
+        self, invocation: SlashInvocation, depth: int = 0, echo: str = "", drained: bool = False,
+        chips: tuple[tuple[str, str], ...] = (),
+    ) -> None:
         """Run a slash command; one the person typed is echoed first, and stays open while its calls are out.
 
         Everything it says while open (a notice, its output) lands under the
@@ -6888,11 +6918,12 @@ class App(ModesMixin, AgentViewMixin):
         Sent while a turn runs (`_queue_waits`), it waits in the queue as a
         prompt does, whatever Hermes' busy mode, and runs in order once the
         turn ends (`drained`: the queue runs it now); only the commands
-        `runs_during_turn` names run at once.
+        `runs_during_turn` names run at once. A queued one keeps the paste
+        `chips` in `echo` for Up.
         """
         if not depth and not drained and not runs_during_turn(invocation) and self._queue_waits():
-            self.queued.append(QueuedLine(invocation.typed, echo or invocation.shown, images=tuple(invocation.images),
-                                          command=invocation))
+            self.queued.append(QueuedLine(invocation.typed, echo or invocation.shown, chips=tuple(chips),
+                                          images=tuple(invocation.images), command=invocation))
             return
         command = invocation.command
         echoed = command is None or (command.echo and (bool(invocation.arg) or command.echo_bare))

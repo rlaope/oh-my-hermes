@@ -311,6 +311,50 @@ class ModelCommandTests(unittest.TestCase):
         self.assertEqual(client.calls[-1], ("model.options", {"session_id": SID}))
         self.assertEqual(app.queued, deque())
 
+    def test_a_queued_guarded_model_holds_the_prompt_behind_it_until_its_confirm_is_settled(self) -> None:
+        # #2726 review: the confirm opened after config.set was answered, so the prompt went on the old model.
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        send(app, "/model claude-opus-5-5")
+        send(app, "go on with it")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        answer(app, client, {"key": "model", "value": "", "confirm_required": True, "confirm_message": "Opus costs 5x."})
+        self.assertIsNotNone(app.slot)
+        self.assertEqual(client.named("prompt.submit"), [])  # the confirm is open: the prompt waits
+        now[0] += SLOT_ARM_SECONDS
+        app._on_input(Key(DOWN))
+        app._on_input(Key(ENTER))  # switch anyway
+        self.assertEqual(client.calls[-1][1].get("confirm_expensive_model"), True)
+        self.assertEqual(client.named("prompt.submit"), [])  # the confirmed switch is still out
+        answer(app, client, {"key": "model", "value": "claude-opus-5-5"})
+        self.assertEqual(app.model, "claude-opus-5-5")
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
+
+    def test_a_queued_bare_model_holds_the_prompt_through_its_pick_and_the_confirm_it_asks(self) -> None:
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        send(app, "/model")
+        send(app, "go on with it")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        answer(app, client, OPTIONS)
+        self.assertIsNotNone(app.model_picker)
+        self.assertEqual(client.named("prompt.submit"), [])  # the picker is open
+        for char in "opus-5-5":
+            app._on_input(Key(CHAR, char))
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        app._drain_after_queued_command()  # the loop's step after the pick: the switch it sent is the command's
+        self.assertEqual(client.named("prompt.submit"), [])  # the pick's switch is out
+        answer(app, client, {"key": "model", "value": "", "confirm_required": True, "confirm_message": "Opus costs 5x."})
+        self.assertEqual(client.named("prompt.submit"), [])  # its confirm is open
+        now[0] += SLOT_ARM_SECONDS
+        app._on_input(Key(ENTER))  # keep the model
+        self.assertIsNone(app.slot)
+        self.assertEqual(client.named("prompt.submit"), [])
+        app._drain_after_queued_command()  # the loop's step after that key: nothing of the command's is left
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
+
     def test_a_hermes_without_model_options_costs_the_picker_not_the_session(self) -> None:
         app, client = make_app()
         send(app, "/model")

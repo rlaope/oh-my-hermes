@@ -263,13 +263,14 @@ RUNS_DURING_TURN = frozenset({
 def runs_during_turn(invocation: SlashInvocation) -> bool:
     """Whether `invocation` runs at once while a turn runs (`RUNS_DURING_TURN`), instead of waiting for its end.
 
-    A command only Hermes' own terminal runs, or one dropped here, runs at
-    once too: all it does is print a notice saying so. An alias goes by the
+    A command only Hermes' own terminal or its classic CLI runs, or one
+    dropped here, runs at once too: all it does is print a notice saying so
+    (Hermes' own pointer, for a classic one). An alias goes by the
     command it names; a name the TUI does not know is Hermes' and queues
     unless the list names it.
     """
     command = invocation.command
-    if command is not None and command.route in (HERMES, DROPPED):
+    if command is not None and command.route in (HERMES, DROPPED, CLASSIC):
         return True
     name = command.name if command is not None else invocation.name.lower()
     return name in RUNS_DURING_TURN
