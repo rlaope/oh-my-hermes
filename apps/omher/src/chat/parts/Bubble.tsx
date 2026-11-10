@@ -5,6 +5,7 @@ import { Markdown } from "./Markdown";
 import { MediaList } from "./Media";
 import { splitMedia } from "./mediaLines";
 import { SentFiles } from "./Attach";
+import { SkillText } from "./Skills";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
  * sent (`MEDIA:` lines) leave the text and show under it in the same column as the bubble, in order; while
@@ -17,7 +18,7 @@ export const Bubble = memo(function Bubble({
   face,
   faceEl,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "sent">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -28,7 +29,11 @@ export const Bubble = memo(function Bubble({
   if (item.kind === "user") {
     return (
       <div className="msg u" data-testid="bubble-user">
-        {(item.text || !item.files?.length) && <div className="b">{item.text}</div>}
+        {(item.text || !item.files?.length) && (
+          <div className="b">
+            <SkillText text={item.text} sent={item.sent} />
+          </div>
+        )}
         {item.files?.length ? <SentFiles files={item.files} /> : null}
         {item.reply && (
           <div className="msg-reply" data-testid="bubble-reply">

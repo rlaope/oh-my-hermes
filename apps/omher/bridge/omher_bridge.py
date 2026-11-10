@@ -737,6 +737,108 @@ def read_bot_facts(profile_dir: Path) -> dict:
             "last_active": last, "skills": skills, "routines": len(read_routines(profile_dir))}
 
 
+# ---------------------------------------------------------------- skills (read-only, the composer's ./ picker)
+
+SKILL_HEAD_MAX = 8 * 1024     # bytes read from the top of a SKILL.md: its frontmatter, nothing past it
+SKILL_DESC_MAX = 120
+# Folders Hermes' own skill scan skips (agent/skill_utils.py EXCLUDED_SKILL_DIRS), plus every hidden folder,
+# and a skill's support folders (only below a folder that has its own SKILL.md).
+SKILL_SKIP_DIRS = frozenset(("venv", "node_modules", "site-packages", "__pycache__"))
+SKILL_SUPPORT_DIRS = frozenset(("references", "templates", "assets", "scripts"))
+# Hermes' `/command` key for a skill name (agent/skill_commands.py slugify_skill_name).
+_SKILL_INVALID_CHARS = re.compile(r"[^\w-]")
+_SKILL_MULTI_HYPHEN = re.compile(r"-{2,}")
+
+
+def skill_slug(name: str) -> str:
+    """The name Hermes registers as `/<slug>`: lower case, spaces and `_` to `-`, other marks dropped."""
+    cmd = _SKILL_INVALID_CHARS.sub("", name.lower().replace(" ", "-").replace("_", "-"))
+    return _SKILL_MULTI_HYPHEN.sub("-", cmd).strip("-")
+
+
+def _frontmatter_value(lines: list[str], key: str) -> str:
+    """One top-level `key:` of a YAML frontmatter, as one line of text: a quoted value unquoted, a folded or
+    literal block (`>`, `|`) or a value on the next lines read as its first line. No YAML library."""
+    for i, line in enumerate(lines):
+        if not line.startswith(f"{key}:"):
+            continue
+        value = line[len(key) + 1:].strip()
+        if value[:1] == '"':
+            m = re.match(r'"((?:[^"\\]|\\.)*)"', value)
+            if not m:
+                return value[1:].strip()
+            try:
+                return str(json.loads(f'"{m.group(1)}"'))
+            except ValueError:
+                return m.group(1)
+        if value[:1] == "'":
+            m = re.match(r"'((?:[^']|'')*)'", value)
+            return m.group(1).replace("''", "'") if m else value[1:].strip()
+        value = re.sub(r"\s+#.*$", "", value)
+        if value in ("", ">", "|", ">-", "|-", ">+", "|+"):
+            for nxt in lines[i + 1:]:
+                if nxt.strip() and not nxt[:1].isspace():
+                    break  # the next key: the block was empty
+                if nxt.strip():
+                    return nxt.strip()
+            return ""
+        return value
+    return ""
+
+
+def read_skill_head(path: Path) -> dict | None:
+    """`name` and `description` from a SKILL.md's frontmatter (`---` lines at the top), or None without one."""
+    try:
+        with open(path, "rb") as fh:
+            raw = fh.read(SKILL_HEAD_MAX)
+    except OSError:
+        return None
+    lines = raw.decode("utf-8", errors="replace").removeprefix("\ufeff").replace("\r\n", "\n").split("\n")
+    if lines[0].strip() != "---":
+        return None
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        return None
+    block = lines[1:end]
+    return {"name": _frontmatter_value(block, "name"), "description": _frontmatter_value(block, "description")}
+
+
+def read_skills(profile_dir: Path) -> list[dict]:
+    """`skills.list`: the bot's own skills (`<profile>/skills/**/SKILL.md`), each as the `/command` Hermes registers
+    for it (`name`, the slug of the frontmatter name or of the folder's) and a one-line description, sorted, one
+    row per slug (the first in path order wins, as in Hermes' scan). Symlinked skill folders and files are
+    followed as Hermes' own scan follows them, each real folder once (a link back up is a cycle, not a loop);
+    hidden folders (`.archive`, `.hub`) are skipped. Read-only: the first 8 KB of each SKILL.md."""
+    root = profile_dir / "skills"
+    if not root.is_dir():
+        return []
+    found: dict[str, str] = {}
+    seen: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
+        real = os.path.realpath(dirpath)
+        if real in seen:
+            dirnames[:] = []
+            continue
+        seen.add(real)
+        here = Path(dirpath)
+        has_skill = "SKILL.md" in filenames
+        dirnames[:] = sorted(
+            n for n in dirnames
+            if not n.startswith(".") and n not in SKILL_SKIP_DIRS and not (has_skill and n in SKILL_SUPPORT_DIRS))
+        skill = here / "SKILL.md"
+        if not has_skill or not skill.is_file():
+            continue
+        head = read_skill_head(skill)
+        if head is None:
+            continue
+        slug = skill_slug(head["name"] or here.name)
+        if not slug or slug in found:
+            continue
+        desc = " ".join(head["description"].split())
+        found[slug] = desc if len(desc) <= SKILL_DESC_MAX else desc[:SKILL_DESC_MAX - 1].rstrip() + "…"
+    return [{"name": n, "description": found[n]} for n in sorted(found)]
+
+
 # ---------------------------------------------------------------- usage meters (read-only)
 
 USAGE_FILES = 5               # newest session files read per CLI
@@ -2757,6 +2859,7 @@ class Bridge:
             "chat.set_model": self.op_set_model,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
+            "skills.list": self.op_skills_list,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
@@ -3532,6 +3635,10 @@ class Bridge:
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
+
+    async def op_skills_list(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"skills": await asyncio.to_thread(read_skills, bot["path"])}
 
     async def op_panel_terminal(self, p) -> dict:
         bot = self._bot(p.get("bot"))

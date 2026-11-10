@@ -280,6 +280,9 @@ function fakeBridge() {
           return { providers: [], current: { model: "Opus 5.5", provider: "claude-proxy", reasoning: "high" }, reasoning_levels: ["low"] };
         case "chat.send":
           return { input_id: "i1" };
+        case "skills.list":
+          if (params.bot === "friren") throw { code: "unknown_op", message: "no such op: skills.list" };
+          return { skills: [{ name: "plan", description: "Plan it" }, { name: "review", description: "" }] };
         default:
           return {};
       }
@@ -318,6 +321,35 @@ describe("store", () => {
     const send = f.calls.find((c) => c.op === "chat.send")!;
     expect(send.params).toEqual({ bot: "kami", text: "hello" });
     expect(store.getState().chats.kami.messages.at(-1)).toMatchObject({ role: "user", text: "hello" });
+  });
+
+  it("send hoists skill tokens to the front on the wire; the row keeps the typed text, also after a re-read", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    await store.actions.send("before the list ./plan"); // names not read yet: sent as typed
+    expect(await store.actions.skills("kami")).toHaveLength(2);
+    await store.actions.skills("kami");
+    expect(f.calls.filter((c) => c.op === "skills.list")).toHaveLength(1); // read once per bot
+    await store.actions.send(" fix ./review this ./plan now ");
+    const sends = f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.text);
+    expect(sends).toEqual(["before the list ./plan", "/review /plan fix this now"]);
+    const row = () => store.getState().chats.kami.items.filter((i) => i.kind === "user").at(-1)!;
+    expect(row()).toMatchObject({ text: "fix ./review this ./plan now", sent: "/review /plan fix this now" });
+
+    f.setHistory([{ id: "h9", role: "user", text: "/review /plan fix this now", ts: T0 / 1000 }]);
+    f.status("closed");
+    f.status("open");
+    await new Promise((r) => setTimeout(r, 0));
+    const users = store.getState().chats.kami.items.filter((i) => i.kind === "user");
+    expect(users.filter((i) => "sent" in i && i.sent === "/review /plan fix this now")).toHaveLength(1);
+    expect(users.find((i) => i.id === "h9")).toMatchObject({ text: "fix ./review this ./plan now" });
+
+    // a bridge without the op: an empty list, no error, asked again next time
+    expect(await store.actions.skills("friren")).toEqual([]);
+    expect(store.getState().lastError).toBeNull();
+    await store.actions.skills("friren");
+    expect(f.calls.filter((c) => c.op === "skills.list" && c.params.bot === "friren")).toHaveLength(2);
   });
 
   it("sendWithFiles attaches each file in order, then sends once; a failed attach sends nothing", async () => {

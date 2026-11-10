@@ -1309,6 +1309,126 @@ class BotIdentity(BridgeCase):
             self.assertEqual(r["places"], {})
 
 
+class Skills(BridgeCase):
+    """`skills.list`: each skill's `/command` slug and one-line description from its SKILL.md frontmatter, read-only."""
+
+    FILES = {
+        "plan/SKILL.md": "---\nname: plan\ndescription: Plan the work before doing it.\n---\n# Plan\n",
+        "dev/review/SKILL.md": '---\nname: "review"\ndescription: "Review a diff: \\"axes\\" first"\n---\n',
+        "quoted/SKILL.md": "---\nname: 'it''s'\ndescription: 'Single quoted'\n---\n",
+        "folded/SKILL.md": "---\nname: folded\ndescription: >\n  First line of a folded text\n  second line\nlicense: MIT\n---\n",
+        "literal/SKILL.md": "---\ndescription: |\n  Literal first line\n  more\n---\n",  # no name: the folder's
+        "comment/SKILL.md": "---\nname: comment # trailing\ndescription:\n---\n",
+        "crlf/SKILL.md": "\ufeff---\r\nname: crlf\r\ndescription: Windows line ends\r\n---\r\n",
+        "long/SKILL.md": "---\nname: long\ndescription: " + "word " * 60 + "\n---\n",
+        "spaced/SKILL.md": "---\nname: Git  Helper_Tool!\ndescription: spaces, case and marks\n---\n",
+        "spaced2/SKILL.md": "---\nname: git-helper-tool\ndescription: the same slug, later in path order\n---\n",
+        "x-dup/SKILL.md": "---\nname: plan\ndescription: a second plan\n---\n",  # after plan/ in path order
+        "nofm/SKILL.md": "# No frontmatter\nname: nope\n",
+        "open/SKILL.md": "---\nname: open\n",  # never closed
+        "plan/references/SKILL.md": "---\nname: support\n---\n",  # a support folder of a skill
+        ".archive/old/SKILL.md": "---\nname: archived\n---\n",
+        ".hub/x/SKILL.md": "---\nname: hubbed\n---\n",
+        "node_modules/y/SKILL.md": "---\nname: vendored\n---\n",
+    }
+
+    def _write(self, root: Path) -> None:
+        for rel, text in self.FILES.items():
+            f = root / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(text.encode("utf-8"))
+
+    def _links(self, pairs) -> None:
+        try:
+            for link, target in pairs:
+                link.symlink_to(target, target_is_directory=target.is_dir())
+        except (OSError, NotImplementedError):
+            self.skipTest("this system cannot make symlinks (Windows without the privilege)")
+
+    @staticmethod
+    def _tree(root: Path):
+        return sorted((str(p), p.lstat().st_mtime_ns, p.lstat().st_size) for p in root.rglob("*"))
+
+    async def test_lists_slugs_and_one_line_descriptions_sorted(self):
+        async with Env() as env:
+            skills = env.home / "profiles" / "kami" / "skills"
+            self._write(skills)
+            s = await self.open(env)
+            r = await s.req("skills.list", bot="kami")
+            self.assertTrue(r["ok"], r)
+            got = {x["name"]: x["description"] for x in r["result"]["skills"]}
+            self.assertEqual(list(got), sorted(got))
+            self.assertEqual(sorted(got), ["comment", "crlf", "folded", "git-helper-tool", "its", "literal", "long",
+                                           "plan", "review"])
+            self.assertEqual(got["plan"], "Plan the work before doing it.")  # the first in path order wins (as in Hermes' scan)
+            self.assertEqual(got["git-helper-tool"], "spaces, case and marks")  # one row per slug
+            self.assertEqual(got["review"], 'Review a diff: "axes" first')
+            self.assertEqual(got["its"], "Single quoted")
+            self.assertEqual(got["folded"], "First line of a folded text")
+            self.assertEqual(got["literal"], "Literal first line")
+            self.assertEqual(got["comment"], "")
+            self.assertEqual(got["crlf"], "Windows line ends")
+            self.assertEqual(len(got["long"]), 120)
+            self.assertTrue(got["long"].endswith("…"))
+
+    def test_slug_is_hermes_command_key(self):
+        cases = {"plan": "plan", "Git Helper": "git-helper", "Foo  Bar_baz": "foo-bar-baz", "--x--": "x",
+                 "C++ Tools": "c-tools", "it's": "its", "한국어 스킬": "한국어-스킬", "!!!": ""}
+        for name, slug in cases.items():
+            self.assertEqual(ob.skill_slug(name), slug, name)
+
+    async def test_symlinked_skills_are_listed_and_nothing_is_written(self):
+        async with Env() as env:
+            skills = env.home / "profiles" / "kami" / "skills"
+            self._write(skills)
+            outside = env.home / "outside"
+            (outside / "linked").mkdir(parents=True)
+            (outside / "linked" / "SKILL.md").write_text("---\nname: linked-dir\ndescription: from a linked folder\n---\n")
+            (outside / "file.md").write_text("---\nname: linked-file\n---\n")
+            (outside / "big.md").write_bytes(b"---\nname: late\n" + b"x: y\n" * 4000 + b"---\n")  # past the 8 KB read
+            (skills / "lf").mkdir()
+            (skills / "big").mkdir()
+            (skills / "media").mkdir()
+            self._links([(skills / "media" / "linked", outside / "linked"), (skills / "lf" / "SKILL.md", outside / "file.md"),
+                         (skills / "big" / "SKILL.md", outside / "big.md")])
+            before = self._tree(env.home)
+            s = await self.open(env)
+            got = {x["name"]: x["description"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(got["linked-dir"], "from a linked folder")
+            self.assertIn("linked-file", got)
+            self.assertNotIn("late", got)  # its frontmatter does not close inside the bytes read
+            self.assertIn("plan", got)
+            self.assertEqual(self._tree(env.home), before)
+            # the whole skills folder as a symlink is followed too
+            moved = env.home / "moved-skills"
+            skills.rename(moved)
+            self._links([(skills, moved)])
+            again = {x["name"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(again, set(got))
+
+    async def test_a_symlink_cycle_is_read_once(self):
+        async with Env() as env:
+            skills = env.home / "profiles" / "kami" / "skills"
+            (skills / "a" / "plan").mkdir(parents=True)
+            (skills / "a" / "plan" / "SKILL.md").write_text("---\nname: plan\n---\n")
+            (skills / "b").mkdir()
+            self._links([(skills / "a" / "up", skills), (skills / "b" / "to-a", skills / "a"), (skills / "a" / "to-b", skills / "b")])
+            s = await self.open(env)
+            r = await s.req("skills.list", bot="kami")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"]["skills"], [{"name": "plan", "description": ""}])
+            with mock.patch.object(ob, "read_skill_head", wraps=ob.read_skill_head) as head:
+                ob.read_skills(skills.parent)
+            self.assertEqual(head.call_count, 1)  # three links back into the tree, one read
+
+    async def test_no_skills_folder_and_unknown_bot(self):
+        async with Env() as env:
+            s = await self.open(env)
+            self.assertEqual((await s.req("skills.list", bot="kami"))["result"], {"skills": []})
+            self.assertEqual((await s.req("skills.list", bot="ghost"))["error"]["code"], "unknown_bot")
+            self.assertEqual(env.connects, [])  # a file read: no gateway started for it
+
+
 class ReplyThere(BridgeCase):
     """"Reply there": omher passes a thread reference to the bot as one context block; it posts nothing."""
 

@@ -27,6 +27,13 @@ export interface BotInfo {
   routines: number;
 }
 
+/** One of a bot's skills (a `SKILL.md` under `<profile>/skills`), for the composer's `./` picker. */
+export interface Skill {
+  name: string;
+  /** One line, clipped to about 120 characters; "" when the skill has none. */
+  description: string;
+}
+
 /** One row of a bot's main chat. `ts` is seconds since epoch (float). */
 export interface Msg {
   id: string;
@@ -180,6 +187,8 @@ export interface OpMap {
     result: { avatar_rev: number | null };
   };
   "bots.info": { params: { bot: string }; result: BotInfo };
+  /** The bot's skills from its profile folder (read-only), sorted by name. */
+  "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
   /** Side panel, all read-only: the bot's latest terminal runs, the git worktrees it worked in, one diff. */
   "panel.terminal": { params: { bot: string }; result: { runs: TerminalRun[] } };
   "panel.worktrees": { params: { bot: string }; result: { worktrees: Worktree[] } };

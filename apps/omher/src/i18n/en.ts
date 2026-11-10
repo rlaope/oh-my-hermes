@@ -67,6 +67,7 @@ export const en = {
   "plans.graph": "Plan graph",
 
   // skills (the composer's ./ picker)
+  "skills.label": "Skills",
   "skills.none": "No skill matches",
 
   // sessions (SESSIONS in the sidebar)

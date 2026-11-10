@@ -67,6 +67,7 @@ export const ja: Record<Key, string> = {
   "plans.graph": "計画グラフ",
 
   // skills (the composer's ./ picker)
+  "skills.label": "スキル",
   "skills.none": "一致するスキルなし",
 
   // sessions (SESSIONS in the sidebar)

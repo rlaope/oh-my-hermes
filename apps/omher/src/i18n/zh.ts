@@ -67,6 +67,7 @@ export const zh: Record<Key, string> = {
   "plans.graph": "计划图",
 
   // skills (the composer's ./ picker)
+  "skills.label": "技能",
   "skills.none": "没有匹配的技能",
 
   // sessions (SESSIONS in the sidebar)

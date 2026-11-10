@@ -67,6 +67,7 @@ export const ko: Record<Key, string> = {
   "plans.graph": "계획 그래프",
 
   // skills (the composer's ./ picker)
+  "skills.label": "스킬",
   "skills.none": "일치하는 스킬 없음",
 
   // sessions (SESSIONS in the sidebar)

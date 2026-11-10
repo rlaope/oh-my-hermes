@@ -67,6 +67,10 @@ RULES = (
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
+    "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
+    "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
+    "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
+    "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
 )
 SETUP_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "setup.rs"
 SHELL_SRC = ROOT / "apps" / "omher" / "src-tauri" / "src"
@@ -99,13 +103,14 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_eighteen_numbered_rules(self) -> None:
-        # 18: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+    def test_boundary_is_between_six_and_nineteen_numbered_rules(self) -> None:
+        # 19: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Runs: dag records, delegation and
-        # route reads, CLI agents' session files), rule 17 (CLI usage records) and rule 18 (accounts) each
-        # widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
+        # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts) and rule 19
+        # (skills.list for the ./ picker) each widened the boundary on purpose; the rules stay numbered 1..n
+        # with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 18, len(rules))
+        self.assertTrue(6 <= len(rules) <= 19, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -260,6 +265,30 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("media_named(profile_dir, path)", ast.unparse(fns["read_media"]))
         lib = (ROOT / "apps" / "omher" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
         self.assertIn("media_target(&path, |p| shell.bridge.served_media(p))", lib)
+
+    def test_skills_list_reads_frontmatter_only_and_follows_links_once(self) -> None:
+        """Rule 19: `skills.list` is `read_skills` on the bot's own profile folder. The reader follows symlinked
+        folders as Hermes does but reads each real folder once, skips hidden folders, opens only `SKILL.md` for
+        reading and only its first 8 KB, writes nothing and calls nothing in Hermes."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        self.assertIn("'skills.list': self.op_skills_list", ast.unparse(fns["__init__"]))
+        op = ast.unparse(fns["op_skills_list"])
+        self.assertIn("asyncio.to_thread(read_skills, bot['path'])", op)
+        self.assertNotIn("conn", op)  # no gateway call: a file read
+        reader = "\n".join(ast.unparse(fns[n]) for n in ("read_skills", "read_skill_head", "_frontmatter_value"))
+        self.assertIn("os.walk(root, followlinks=True)", reader)
+        self.assertIn("real = os.path.realpath(dirpath)", reader)
+        self.assertIn("if real in seen:", reader)
+        self.assertIn("n.startswith('.')", reader)
+        self.assertIn("skill = here / 'SKILL.md'", reader)
+        self.assertIn("read_skill_head(skill)", reader)
+        self.assertIn("fh.read(SKILL_HEAD_MAX)", reader)
+        self.assertIn("SKILL_HEAD_MAX = 8 * 1024", self.source)
+        opens = [c for n in ("read_skills", "read_skill_head", "_frontmatter_value") for c in ast.walk(fns[n])
+                 if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
+        self.assertEqual([ast.unparse(c) for c in opens], ["open(path, 'rb')"])
+        for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self."):
+            self.assertNotIn(banned, reader, banned)
 
     def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
         """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""

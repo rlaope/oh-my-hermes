@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, showNote, windowWatched } from "../lib/notify";
 import { promptText } from "../chat/parts/attachFiles";
+import { toWire } from "../chat/parts/skillTokens";
 import type {
   Away,
   ApprovalChoice,
@@ -29,6 +30,7 @@ import type {
   AttachResult,
   AccountCli,
   AccountGroup,
+  Skill,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
 
@@ -442,7 +444,8 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
-      if (twin && i.files) Object.assign(twin, { text: i.text, files: i.files, sent }); // keep the local pictures
+      // keep the local pictures, and the text as typed (skill tokens go out hoisted)
+      if (twin && (i.files || i.sent)) Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}) });
       return !twin;
     }
     return i.ts >= lastServerTs;
@@ -947,7 +950,8 @@ export function selectUnreadTotal(state: AppState): number {
 export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
-  /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. */
+  /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. Skill tokens
+   *  (`./name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
   send(text: string): Promise<void>;
   /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
@@ -996,6 +1000,8 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
+  /** The bot's skills for the composer's `./` picker, read once per bot; [] when the bridge cannot list them. */
+  skills(bot: string): Promise<Skill[]>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
   /** Side panel reads (never cached in the store; the panel keeps its own copy). */
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
@@ -1067,6 +1073,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   let snapshot: (AppState & Actions) | null = null;
   let started = false;
   const eventFns = new Set<(ev: BridgeEvent) => void>();
+  // skills.list per bot: the promise (asked once) and the names, for hoisting tokens when a message is sent
+  const skillLists = new Map<string, Promise<Skill[]>>();
+  const skillNames = new Map<string, string[]>();
 
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
@@ -1196,10 +1205,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const id = `local-${++localSeq}`;
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
-      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply });
+      const wire = toWire(t, skillNames.get(bot) ?? []);
+      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire });
       if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
-        await bridge.request("chat.send", chip ? { bot, text: t, reply_to: chip.session_id } : { bot, text: t });
+        await bridge.request("chat.send", chip ? { bot, text: wire, reply_to: chip.session_id } : { bot, text: wire });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }
@@ -1220,7 +1230,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
           throw new Error(`Couldn't attach ${f.name} · ${errText(e)}`);
         }
       }
-      const sent = promptText(text, results);
+      const sent = toWire(promptText(text, results), skillNames.get(bot) ?? []);
       const id = `local-${++localSeq}`;
       const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
       dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent });
@@ -1375,6 +1385,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
+    skills(bot) {
+      let list = skillLists.get(bot);
+      if (!list) {
+        list = bridge
+          .request("skills.list", { bot })
+          .then((r) => {
+            skillNames.set(bot, r.skills.map((x) => x.name));
+            return r.skills;
+          })
+          .catch(() => {
+            skillLists.delete(bot); // an older bridge without the op, or a failed read: no picker, no toast
+            return [];
+          });
+        skillLists.set(bot, list);
+      }
+      return list;
+    },
     avatarOf: (bot) => bridge.request("bots.avatar", { bot }),
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),

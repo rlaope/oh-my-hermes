@@ -286,6 +286,20 @@ const INFO_SEED = {
   default: { places: {}, first: null, skills: 41 },
 };
 
+// Every bot's skills (skills.list), sorted by name as the bridge sends them: plan and review, one that only
+// contains "pl", and one long name with a long description.
+const SKILL_SEED = [
+  { name: "deep-interview", description: "Ask the questions that settle what to build before any code is written." },
+  { name: "explain-code", description: "Walk through a piece of code and say what each part does." },
+  {
+    name: "long-document-reading-and-summarising",
+    description: "Read a document far larger than the context in passes, keep a running outline, and answer with page refe…",
+  },
+  { name: "plan", description: "Break the work into steps and agree on them before doing it." },
+  { name: "research", description: "Find sources, read them and answer with citations." },
+  { name: "review", description: "Review a diff for correctness, tests and risk, worst first." },
+];
+
 // Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (no %), Grok on PATH only.
 // "stale": the same Codex record after both reset times passed (no numbers). Switch with mock.usage {fixture}.
 let usageFixture = "default";
@@ -706,6 +720,7 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "skills.list": (p) => (needBot(p), { skills: SKILL_SEED.map((x) => ({ ...x })) }),
   "panel.terminal": (p) => ({
     runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
   }),

@@ -32,6 +32,7 @@ export function Chat() {
           running={!!chat?.turn}
           asking={asking}
           offline={bot.status === "offline"}
+          skills
           onSend={(t) => void s.send(t)}
           onSendFiles={(t, files) => s.sendWithFiles(t, files)}
           onStop={() => void s.interrupt()}
