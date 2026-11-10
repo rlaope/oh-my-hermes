@@ -38,11 +38,22 @@ async function open(page: Page, folder = "/Users/you/code/omher") {
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
 }
 
-async function start(page: Page, agent: string) {
+/** A New session chat on `agent` in the dialog's folder; nothing runs until its first message. */
+async function draft(page: Page, agent: string) {
   await page.getByTestId("session-new").click();
+  await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
+  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
-  await expect(page.getByTestId("session-chat")).toBeVisible();
+}
+
+/** `agent` started by its first message (`first`), its answer done. */
+async function start(page: Page, agent: string, first = "hi") {
+  await draft(page, agent);
+  await page.getByTestId("composer").fill(first);
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-chat")).not.toHaveAttribute("data-draft", "true");
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
 }
 
@@ -57,23 +68,23 @@ test.beforeEach(async () => {
 
 test("Claude Code opens as a chat: bubbles, one progress line, no terminal", async ({ page }) => {
   await open(page);
-  await start(page, "claude");
+  await draft(page, "claude");
+  await expect(page.getByTestId("session-title")).toHaveText("New session");
+  expect((await calls(page)).filter((c) => c.op === "chat.start")).toEqual([]);
+  const row = page.locator("[data-testid=session-list] .ss-row").first();
+  await expect(row.getByTestId("live-ring")).toHaveCount(0); // a draft: no ring
+  await page.getByTestId("composer").fill("explain the sessions feature");
+  await page.keyboard.press("Enter");
   await expect(page.getByTestId("terminal")).toHaveCount(0);
   // before any message the session's name is its folder; the agent and the full path sit next to it
   await expect(page.getByTestId("session-title")).toHaveText("omher");
   await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/omher");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");
-  await expect(page.getByTestId("timeline")).toContainText("Say hi to Claude Code");
   // the UI sent only an agent id and a folder
   const st = (await calls(page)).find((c) => c.op === "chat.start")!;
   expect(Object.keys(st).sort()).toEqual(["agent", "cwd", "id", "op"]);
   expect(st).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
-
-  const row = page.locator("[data-testid=session-list] .ss-row").first();
-  await expect(row.getByTestId("live-ring")).toHaveCount(0); // idle chat: no ring
-  await page.getByTestId("composer").fill("explain the sessions feature");
-  await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-user")).toHaveText("explain the sessions feature");
   await expect(row.getByTestId("live-ring")).toBeVisible(); // the answer ring while the turn runs, as on a bot row
   await expect(row.getByTestId("live-dot")).toHaveCount(0); // a chat row rings; only a terminal row keeps the dot
@@ -95,7 +106,7 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
 test("a file in a session's answer sits under its bubble in the same column, one face per run", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await open(page);
-  await start(page, "claude");
+  await draft(page, "claude");
   // the mock agent echoes the text: a MEDIA line in it comes back as a file under the answer
   await page.getByTestId("composer").fill("here\nMEDIA:/w/media/report.zip");
   await page.getByTestId("composer").press("Enter");
@@ -111,21 +122,23 @@ test("a file in a session's answer sits under its bubble in the same column, one
   await expect(msg.locator(".msg-face:not(.blank)")).toHaveCount(1);
 });
 
-test("the empty section's New session row starts a chat session, then gives way to the session row", async ({ page }) => {
+test("the empty section's New session row opens a New session chat, then gives way to the session row", async ({ page }) => {
   await open(page);
   await expect(page.getByTestId("session-start")).toHaveAttribute("title", /Claude Code/);
   await page.getByTestId("session-start").click();
-  await page.getByTestId("session-agent-claude").click();
-  await page.getByTestId("session-choose").click();
-  await expect(page.getByTestId("session-chat")).toBeVisible();
+  await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
   await expect(page.getByTestId("session-none")).toHaveCount(0);
   await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);
-  expect((await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
+  await page.getByTestId("session-folder").click();
+  await page.getByTestId("session-choose").click();
+  await page.getByTestId("composer").fill("hello");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls(page)).find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
 });
 
 test("an approval card in a session: Deny first, answered with Allow for session, the row waits", async ({ page }) => {
   await open(page);
-  await start(page, "claude");
+  await draft(page, "claude");
   await page.getByTestId("composer").fill("/approve");
   await page.keyboard.press("Enter");
   const card = page.getByTestId("card-approval");
@@ -157,10 +170,10 @@ test("an approval card in a session: Deny first, answered with Allow for session
 
 test("Esc and Stop send the agent's own interrupt; the model button switches the agent's model", async ({ page }) => {
   await open(page);
-  await start(page, "codex");
-  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Sol");
+  await draft(page, "codex");
   await page.getByTestId("composer").fill("/slow");
   await page.keyboard.press("Enter");
+  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Sol");
   await expect(page.getByTestId("bubble-streaming")).toContainText("line 2");
   await page.getByTestId("timeline").click();
   await page.keyboard.press("Escape");
@@ -196,7 +209,7 @@ test("a chat session resets first and loads xterm only when its Terminal view op
 
 test("Terminal toggle: Claude Code's terminal resumes the same conversation, and back to the chat continues it", async ({ page }) => {
   await open(page);
-  await start(page, "claude");
+  await draft(page, "claude");
   await page.getByTestId("composer").fill("hello");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-bot")).toBeVisible();
@@ -237,19 +250,18 @@ test("Codex's terminal view starts its TUI fresh and the chat keeps running", as
   await page.getByTestId("session-terminal-toggle").click();
   await page.getByTestId("composer").fill("still here?");
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("bubble-bot")).toContainText("still here?");
+  await expect(page.getByTestId("bubble-bot").last()).toContainText("still here?");
 });
 
 test("oh-my-hermes opens as a Hermes chat in the folder through the bridge", async ({ page }) => {
   await open(page, "/Users/you/work/api");
-  await start(page, "omh");
-  await expect(page.getByTestId("session-title")).toHaveText("api");
+  await draft(page, "omh");
+  await page.getByTestId("composer").fill("what is here?");
+  await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-agent")).toHaveText("oh-my-hermes");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");
   const opened = (await bridgeCalls()).find((c) => c.op === "folder.open")!;
   expect(opened.params).toEqual({ bot: "kami", cwd: "/Users/you/work/api" });
-  await page.getByTestId("composer").fill("what is here?");
-  await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-bot")).toHaveText("(mock oh-my-hermes) Working in /Users/you/work/api: what is here?");
   await page.getByTestId("activity-toggle").click();
   await expect(page.getByTestId("activity-step")).toHaveText(/Ran\s*ls \/Users\/you\/work\/api/);
@@ -270,7 +282,7 @@ test("oh-my-hermes opens as a Hermes chat in the folder through the bridge", asy
 
 test("close stops the agent; an agent that exits ends the session with its reason", async ({ page }) => {
   await open(page);
-  await start(page, "claude");
+  await draft(page, "claude");
   await page.getByTestId("composer").fill("/exit");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-status")).toHaveText("Ended");
@@ -293,8 +305,7 @@ test("close stops the agent; an agent that exits ends the session with its reaso
 
 test("an ended session restarts in the same chat; Claude Code and Codex continue their conversation", async ({ page }) => {
   await open(page);
-  await start(page, "codex");
-  await expect(page.getByTestId("session-status")).toHaveText("Ready");
+  await draft(page, "codex");
   await page.getByTestId("composer").fill("/exit");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-status")).toHaveText("Ended");
@@ -316,7 +327,7 @@ test("an ended session restarts in the same chat; Claude Code and Codex continue
 
 test("a session's question becomes a question card; a failed command and a missing login stay calm", async ({ page }) => {
   await open(page);
-  await start(page, "claude");
+  await draft(page, "claude");
   await page.getByTestId("composer").fill("/ask");
   await page.keyboard.press("Enter");
   const card = page.getByTestId("card-clarify");
@@ -343,7 +354,7 @@ test("a session's question becomes a question card; a failed command and a missi
 
 test("the approval card says which folder the command runs in", async ({ page }) => {
   await open(page, "/Users/you/code/web-app");
-  await start(page, "claude");
+  await draft(page, "claude");
   await page.getByTestId("composer").fill("/approve");
   await page.keyboard.press("Enter");
   const card = page.getByTestId("card-approval");
@@ -359,14 +370,10 @@ test("screenshots: a chat session with an approval, dark and light", async ({ pa
   await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/work/api"));
   await start(page, "omh");
   await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/omher"));
-  await start(page, "codex");
-  await page.getByTestId("composer").fill("run the tests");
-  await page.keyboard.press("Enter");
+  await start(page, "codex", "run the tests");
   await expect(page.getByTestId("activity")).toHaveAttribute("data-state", "done");
   await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/oh-my-hermes"));
-  await start(page, "claude");
-  await page.getByTestId("composer").fill("explain the sessions feature");
-  await page.keyboard.press("Enter");
+  await start(page, "claude", "explain the sessions feature");
   await expect(page.getByTestId("activity")).toHaveAttribute("data-state", "done");
   await page.getByTestId("composer").fill("/approve clean the build folder");
   await page.keyboard.press("Enter");
@@ -399,7 +406,7 @@ test("screenshots: a chat session with an approval, dark and light", async ({ pa
   await expect(page.getByTestId("session-agent")).toHaveText("oh-my-hermes");
   await page.getByTestId("composer").fill("what is in this folder?");
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("bubble-bot")).toBeVisible();
+  await expect(page.getByTestId("bubble-bot").last()).toBeVisible();
   await settle(page);
   await page.screenshot({ path: join(SHOTS, "T14-omh-dark.png") });
 });

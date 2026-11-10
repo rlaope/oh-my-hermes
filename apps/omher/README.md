@@ -80,9 +80,11 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
-- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` lists the agent programs found on
-  `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`), asks
-  for a folder, and starts the program in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
+- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a New session chat at once.
+  Its composer row picks the agent among the programs found on `PATH` and in the usual install folders
+  (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`), and the folder chip under it picks the folder
+  (the last one used, else home; recent folders, Choose folder… or home). Nothing runs until the first message, which
+  becomes the agent's first prompt; a terminal agent starts on Start. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals

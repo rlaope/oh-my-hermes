@@ -46,6 +46,7 @@ function snapshot(): ResumeSnap {
         view: r.view,
         // a paused one was running before the last restart and still waits for Resume
         running: r.status === "running" || r.status === "starting" || !!r.paused,
+        ...(r.status === "draft" ? { draft: true } : {}),
         ...(r.status === "failed" ? { failed: true } : {}),
         ...(r.exitCode !== undefined ? { exitCode: r.exitCode } : {}),
         ...(r.error ? { error: r.error } : {}),

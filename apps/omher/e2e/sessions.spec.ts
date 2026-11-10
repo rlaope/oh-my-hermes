@@ -46,10 +46,14 @@ async function settle(page: Page) {
 const calls = (page: Page) =>
   page.evaluate(() => ((window as unknown as { __omherSessionCalls?: { op: string; agent?: string; cwd?: string; data?: string; id?: number }[] }).__omherSessionCalls ?? []));
 
+/** A New session chat on `agent` in the dialog's folder, started with Start (a terminal agent gets no prompt). */
 async function startSession(page: Page, agent: string) {
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
+  await page.getByTestId("session-go").click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
 }
@@ -128,9 +132,10 @@ test("thirteen bots beside an empty SESSIONS use the room: the list does not sto
   expect(name[2]).toBeLessThanOrEqual(20);
 });
 
-test("+ lists the agent CLIs with their marks; missing ones are disabled", async ({ page }) => {
+test("the New session chat's agent picker lists the agent CLIs with their marks; missing ones are disabled", async ({ page }) => {
   await open(page, undefined, ["claude", "codex", "omh"]);
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   const menu = page.getByTestId("session-menu");
   await expect(menu).toBeVisible();
   const rows = menu.locator("[data-testid^=session-agent-]");
@@ -159,18 +164,19 @@ test("the menu says which account a new session uses; This computer says nothing
   await mock("accounts.set_active", { cli: "codex", account: "work" });
   await open(page);
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-pick").click();
   const menu = page.getByTestId("session-menu");
   // the masked email when the account has no name, else its name
   await expect(menu.getByTestId("session-account-claude")).toHaveText("as work@…");
   await expect(menu.getByTestId("session-agent-claude")).toContainText(/Claude Code\s*as work@…/);
   await expect(menu.getByTestId("session-account-claude")).not.toContainText("example.com");
   await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
-  // the menu stays 8px inside both sidebar edges, so the account sits on its own muted line under the agent;
-  // both are whole at the default sidebar width, and the row's tooltip names both
-  const side = (await page.getByTestId("sidebar").boundingBox())!;
+  // the account sits on its own muted line under the agent; both are whole, and the row's tooltip names both.
+  // The picker opens above the composer, its right edge on the composer's
+  const box = (await page.getByTestId("composer-box").boundingBox())!;
   const pop = (await menu.locator("..").boundingBox())!;
-  expect(Math.round(pop.x - side.x)).toBe(8);
-  expect(Math.round(side.x + side.width - (pop.x + pop.width))).toBe(8);
+  expect(pop.y + pop.height).toBeLessThanOrEqual(box.y);
+  expect(Math.abs(pop.x + pop.width - (box.x + box.width))).toBeLessThanOrEqual(1);
   for (const a of ["claude", "codex"]) {
     const fits = await menu.getByTestId(`session-agent-${a}`).evaluate((row) => {
       const as = row.querySelector(".ss-as")!;
@@ -204,10 +210,13 @@ test("the menu says which account a new session uses; This computer says nothing
     await page.waitForTimeout(350);
     await menu.screenshot({ path: join(SHOTS, "session-menu-account.png"), animations: "disabled" });
   }
+  // the chosen agent's account also shows under the composer, next to the folder
+  await expect(page.getByTestId("session-account")).toHaveText("as work@…");
   // back to This computer: the suffix goes (read-only: the menu itself never switches)
   await mock("accounts.set_active", { cli: "claude", account: "default" });
   await expect(menu.getByTestId("session-account-claude")).toHaveCount(0);
   await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
+  await expect(page.getByTestId("session-account")).toHaveCount(0);
   await page.keyboard.press("Escape");
 });
 
@@ -303,33 +312,29 @@ for (const theme of ["dark", "light"] as const) {
     await expect.poll(() => plus.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     await page.mouse.move(900, 780);
 
-    const side = (await page.getByTestId("sidebar").boundingBox())!;
     const sideBg = await page.getByTestId("sidebar").evaluate((e) => getComputedStyle(e).backgroundColor);
     for (const [sel, r] of await contrast(page, ["[data-testid=side-sessions] .side-sh", "[data-testid=session-new]", "[data-testid=session-start]"], sideBg))
       expect(r, sel).toBeGreaterThanOrEqual(4.5);
 
-    // the button opens the same menu, 8px in from both sidebar edges; its secondary labels meet 4.5:1
+    if (SHOTS) {
+      mkdirSync(SHOTS, { recursive: true });
+      await page.mouse.move(900, 780);
+      await page.waitForTimeout(350);
+      await page.screenshot({ path: join(SHOTS, `sessions-empty-${theme}.png`), clip: { x: 0, y: 380, width: 560, height: 220 } });
+    }
+    // either opener opens the same New session chat (one draft, reused); the agent picker's dim labels meet 4.5:1
     for (const opener of [start, plus]) {
       await opener.click();
+      await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
+      await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);
+      await page.getByTestId("session-agent-pick").click();
       const menu = page.getByTestId("session-menu");
-      await expect(menu).toBeVisible();
       await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(6);
-      const pop = (await menu.locator("..").boundingBox())!;
-      expect(Math.round(pop.x - side.x)).toBe(8);
-      expect(Math.round(side.x + side.width - (pop.x + pop.width))).toBe(8);
       const popBg = await menu.locator("..").evaluate((e) => getComputedStyle(e).backgroundColor);
-      const sec = await contrast(page, [".ss-pop .ss-h", ".ss-pop .ss-cmd", ".ss-pop .ss-missing", ".ss-pop .ss-item:disabled .ss-n"], popBg);
+      const sec = await contrast(page, [".ss-dpop .ss-cmd", ".ss-dpop .ss-missing", ".ss-dpop .ss-item:disabled .ss-n"], popBg);
       for (const [sel, r] of sec) expect(r, sel).toBeGreaterThanOrEqual(4.5);
       await page.keyboard.press("Escape");
       await expect(menu).toHaveCount(0);
-    }
-    await page.mouse.move(900, 780);
-    if (SHOTS) {
-      mkdirSync(SHOTS, { recursive: true });
-      await page.waitForTimeout(350);
-      await page.screenshot({ path: join(SHOTS, `sessions-empty-${theme}.png`), clip: { x: 0, y: 380, width: 560, height: 220 } });
-      await start.click();
-      await page.screenshot({ path: join(SHOTS, `sessions-empty-menu-${theme}.png`), clip: { x: 0, y: 380, width: 560, height: 420 }, animations: "disabled" });
     }
   });
 }
@@ -337,8 +342,10 @@ for (const theme of ["dark", "light"] as const) {
 test("the empty section's tooltip names no agent when no coding agent is installed (omh alone is not one)", async ({ page }) => {
   await open(page, undefined, ["omh"]);
   await expect(page.getByTestId("session-start")).toHaveAttribute("title", "Run a coding agent in a folder, as a chat.");
-  // omh still starts from the + menu
+  // omh is still offered in the New session chat, and is its agent (the only one installed)
   await page.getByTestId("session-start").click();
+  await expect(page.getByTestId("session-agent-pick")).toHaveText("oh-my-hermes");
+  await page.getByTestId("session-agent-pick").click();
   await expect(page.getByTestId("session-agent-omh")).toBeEnabled();
 });
 
@@ -396,18 +403,22 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
   await expect(rows.first()).toContainText("Grok");
   await expect(page.getByTestId("session-title")).toHaveText("api");
 
-  // the + menu opens inside the sidebar; after the agent it offers the recent folders
+  // a New session chat opens on the last folder and agent; its folder chip offers the recent folders
   await page.getByTestId("session-new").click();
-  await expect(page.getByTestId("session-recent")).toHaveCount(0);
-  await page.getByTestId("session-agent-grok").click();
+  await expect(page.getByTestId("session-folder")).toHaveText("api");
+  await expect(page.getByTestId("session-agent-pick")).toHaveText("Grok");
+  await page.getByTestId("session-folder").click();
   await expect(page.getByTestId("session-recent")).toHaveCount(2);
-  const pop = (await page.getByTestId("session-menu").locator("..").boundingBox())!;
-  const side = (await page.getByTestId("sidebar").boundingBox())!;
-  expect(pop.x).toBeGreaterThanOrEqual(side.x);
-  expect(pop.x + pop.width).toBeLessThanOrEqual(side.x + side.width);
   await expect(page.getByTestId("session-recent").first()).toContainText("api");
   await expect(page.getByTestId("session-recent").first().locator(".ss-path")).toHaveText("~/work");
   await page.keyboard.press("Escape");
+  // closing the draft starts nothing
+  const draftRow = rows.first();
+  await draftRow.hover();
+  await draftRow.getByTestId("session-close").click();
+  await expect(rows).toHaveCount(2);
+  expect((await calls(page)).filter((c) => c.op === "start")).toHaveLength(2);
+  await rows.first().locator(".ss-open").click();
 
   await page.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("exit");
@@ -528,11 +539,6 @@ test("screenshots: sidebar with sessions and an open session, dark and light", a
   await expect(page.locator(".xterm-rows")).toContainText("you said");
   await settle(page);
   await page.screenshot({ path: join(SHOTS, "session-dark.png") });
-  await page.getByTestId("session-new").click();
-  await expect(page.getByTestId("session-menu")).toBeVisible();
-  await page.waitForTimeout(300); // the popover fades in
-  await page.screenshot({ path: join(SHOTS, "menu-dark.png") });
-  await page.keyboard.press("Escape");
   await page.getByTestId("bot-kami").click();
   await expect(page.getByTestId("bubble-user").first()).toBeVisible();
   await settle(page);
@@ -547,8 +553,4 @@ test("screenshots: sidebar with sessions and an open session, dark and light", a
   await expect(page.locator(".xterm-rows")).toContainText("you said");
   await settle(page);
   await page.screenshot({ path: join(SHOTS, "session-light.png") });
-  await page.getByTestId("session-new").click();
-  await expect(page.getByTestId("session-menu")).toBeVisible();
-  await page.waitForTimeout(300); // the popover fades in
-  await page.screenshot({ path: join(SHOTS, "menu-light.png") });
 });

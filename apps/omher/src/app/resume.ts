@@ -31,6 +31,8 @@ export interface SavedSession {
   view: "chat" | "terminal";
   /** Its program ran (or was starting) when omher closed. */
   running: boolean;
+  /** A New session chat that never started: it comes back as a draft and is never started by the restart. */
+  draft?: boolean;
   /** Ended ones: how. */
   failed?: boolean;
   exitCode?: number | null;
@@ -91,6 +93,10 @@ function parseSession(v: unknown): SavedSession | null {
     running: v.running === true,
   };
   if (v.failed === true) out.failed = true;
+  if (v.draft === true) {
+    out.draft = true;
+    out.running = false;
+  }
   if (typeof v.exitCode === "number" || v.exitCode === null) out.exitCode = v.exitCode;
   const error = str(v.error, MAX_TEXT);
   if (error) out.error = error;

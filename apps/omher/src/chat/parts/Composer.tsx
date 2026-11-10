@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Bot, Skill } from "../../lib/protocol";
 import { useStore, type OutFile, type ReplyChip } from "../../state/store";
 import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
@@ -28,6 +28,9 @@ export function Composer({
   onClearReply,
   offlineText,
   skills: skillsOn = false,
+  tools,
+  action,
+  foot,
 }: {
   bot: Bot;
   running: boolean;
@@ -44,6 +47,12 @@ export function Composer({
   offlineText?: string;
   /** Offer the bot's skills on `./` (a bot's main chat). */
   skills?: boolean;
+  /** Controls in the row before Send (a New session chat's agent picker). */
+  tools?: ReactNode;
+  /** Stands in for Send (a terminal agent's Start). */
+  action?: ReactNode;
+  /** A quiet line under the box (a session's folder and account). */
+  foot?: ReactNode;
 }) {
   // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
   const [text, setText] = useState(() => getDraft(bot.name));
@@ -310,7 +319,10 @@ export function Composer({
               }}
             />
           </div>
-          {showStop ? (
+          {tools}
+          {action ? (
+            action
+          ) : showStop ? (
             <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={onStop} data-testid="stop">
               <StopIcon />
             </button>
@@ -329,6 +341,7 @@ export function Composer({
           )}
         </div>
       </div>
+      {foot}
     </div>
   );
 }
