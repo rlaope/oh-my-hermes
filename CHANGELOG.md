@@ -8,9 +8,10 @@ All notable changes will be documented here.
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH has not yet
   observed that chat while the gateway's newest observation is a fresh ON,
-  the chip still shows. A pane that names its chat no longer draws another
-  chat's graph, or a fanout another chat dispatched, in its DAG section; a
-  fanout that names no origin yet (one still running) is drawn as before.
+  the chip still shows. In its DAG section, a pane that names its chat no
+  longer draws a fanout whose record names another chat as its origin; one
+  with no recorded origin, which includes any fanout still running, is drawn
+  as before.
   The pane always draws the same five sections in one order, USAGE, CATCHES,
   PLAN, DAG and AGENTS, each with an empty line when it has nothing to say;
   the subagent list and the routes are one AGENTS section, and a plan that
@@ -24,8 +25,10 @@ All notable changes will be documented here.
   stuck ones, so neither is cut while a finished lane is shown, and a lane
   whose parent was cut hangs from its nearest shown ancestor by a dotted
   edge. A run too deep for even its layer rows reads as its counts by state
-  instead of "No DAG". USAGE reads the gateway's `session.stats` counters,
-  and done DAG work is drawn green. The TUI's DAG block and the chat's end
+  instead of "No DAG". Layers held open are asked for again within a larger
+  bound, and a layer bigger than that still comes back cut. USAGE reads the
+  gateway's `session.stats` counters where they count more than the chat's
+  recorded row, and done DAG work is drawn green. The TUI's DAG block and the chat's end
   post get the same graph as before. Thanks @yqm-307. (#2745)
 
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
@@ -220,7 +223,8 @@ All notable changes will be documented here.
   DAG header picks which one to draw (the newest by default); a picked run is
   drawn alone, without another run's children. A finished run keeps its
   cards, node summaries and figures under its run line instead of
-  collapsing to one line; the chat end post and the TUI keep their linger.
+  collapsing to one line (under the pane's Auto fold, a run of nine lanes or
+  more shows them as folded layer chips); the chat end post and the TUI keep their linger.
   Edges are routed by the rows the cards actually wrap to, implied
   dependency edges are hidden unless Implied edges is on in the DAG's View
   menu, and repair/extend edges are drawn faint. USAGE is a token ring with

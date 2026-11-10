@@ -2149,17 +2149,18 @@ Desktop (Capabilities -> Plugins -> Rescan, or restart the app), inspect the
 Plugins page, and verify the pane/backend in that runtime before reporting
 it ready. The pane always draws the same five sections in the same order, each
 with an empty line when it has nothing to say: USAGE (the focused chat's
-figures: the gateway's live `session.stats` counters, then what Hermes
-recorded for the chat), CATCHES (what OMH caught earlier in the session), PLAN
+figures: what Hermes recorded for the chat, or the gateway's live
+`session.stats` counters where they count more, or the status bar's stream
+where neither has any), CATCHES (what OMH caught earlier in the session), PLAN
 (the plan as it stands), DAG (the session's one graph, a dag-ulw run, the
 native delegation tree or a fanout, drawn as cards) and AGENTS (one summary
 line for the subagents Desktop's Agents panel lists, beside the routes OMH
 dispatched). Each section folds, and the folds are kept in the app's local
 storage. The DAG section follows the focused chat: a pane that names its chat
-never draws another chat's graph. A fanout whose dispatch names another chat as
-its origin is left out, one that names this chat is drawn as this chat's, and
-one that names none (still running, since the origin is recorded when the
-dispatch ends, or dispatched outside Hermes) is drawn as the home's, as before.
+does not draw a fanout whose record names another chat as its origin, draws
+one that names this chat as this chat's, and draws one with no recorded origin
+as the home's, as before; that includes any fanout still running, whichever
+chat started it, since the origin is recorded when the dispatch ends.
 The yolo chip follows the focused chat too; where OMH has not yet observed that
 chat while the gateway's newest observation is a fresh ON, the chip still
 shows, since a wrong ON is the safer error. The pane reads idle when nothing is
@@ -2173,12 +2174,15 @@ fold), Focus (the running layers and the layers either side), Unfold all, or
 Fold all (the work in hand stays open); a layer's chip or tag opens or folds
 that layer by hand. The View menu turns the figures, the stats, implied edges
 and compact cards on or off, and the fold mode and those choices are kept in
-the app's local storage. A settled run keeps its cards under its run line. A
+the app's local storage. A settled run keeps its cards under its run line;
+under Auto, one of nine lanes or more shows them as folded layer chips. A
 graph too large for the pane's payload comes as a bounded layer view: lanes in
 hand (running, or returned to be checked) and lanes that stopped short
 (failed, blocked, stuck) first, then the layers nearest the work in hand. Each
 layer that lost lanes counts them by state, an edge that skips cut lanes is
-drawn dotted, and the layers drawn open are asked for whole. A run too deep for
+drawn dotted, and the layers drawn open are asked for again within the larger
+open-view bound: a layer bigger than that comes back cut, with its hidden
+count. A run too deep for
 even its layer rows reads as its counts by state. The pane follows Desktop's
 language when Korean is selected.
 `omh uninstall --registration-only` does not disable the plugin or
