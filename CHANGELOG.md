@@ -12,6 +12,13 @@ All notable changes will be documented here.
   met; the status line, the end of the run and the TUI say how many were met
   (`2/3 criteria met`). A run defined without them works as before.
 
+- **dag-ulw on a Docker or SSH terminal no longer counts a cut-short check as
+  read.** When the terminal times out or the check exits with an error, the
+  node's handoff is reported as not checked and the goal stays unverified,
+  even if the check printed part of its answer; a run with goal criteria
+  already worked this way, and now a run without them does too. The read
+  also ignores shell aliases and functions that share a tool's name.
+
 - **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
   HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,
   `TYPESAFE_BASE_URL` may be a plain-HTTP root on `localhost` or a loopback,

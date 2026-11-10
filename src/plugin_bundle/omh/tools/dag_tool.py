@@ -106,26 +106,38 @@ _HANDOFF_FILE, _HANDOFF_LINK, _HANDOFF_NONE = "OMH_HANDOFF_FILE", "OMH_HANDOFF_L
 # SOH so grep reads text, the lines naming the marker, cut, the last kept), in the C locale so invalid UTF-8 is just
 # bytes, with flags BusyBox, GNU and BSD share. The result comes back base64, so no byte of the file (an escape, a CR,
 # invalid UTF-8) is changed or stripped by the terminal on its way: this host decodes the very bytes it would have read.
-# POSIX sh has no pipefail, so each stage reports its own exit status on fd 3, and `_CRITERION_END` is printed only when
-# every stage succeeded (grep's 1 is no matching line, a successful empty read). A read without it, one Hermes timed out,
-# or one that exited non-zero is unread: a cut-short read could have lost the line that overrides an earlier one.
+# POSIX sh has no pipefail, so each stage reports its own exit status on fd 3, and the pipe ends with one
+# `_CRITERION_END` line naming them (`OMH_CRITERIA_END h0 t0 g1 c0 l0 b0`), printed after every stage has exited.
+# `criterion_stages_passed` judges it here: a read without it, one Hermes timed out, or one that exited non-zero is
+# unread, since a cut-short read could have lost the line that overrides an earlier one. Every tool runs as `command`:
+# Hermes sources the login shell's functions and aliases (with `expand_aliases` on) before each command, and an alias
+# such as `grep --color=always` or a function named `head` must not change what is read.
 _CRITERION_END = "OMH_CRITERIA_END"
 _CRITERION_STAGES = (
-    ("h", f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} PATH"), ("t", "LC_ALL=C tr '\\000' '\\001'"),
-    ("g", "LC_ALL=C grep -F CRITERION"), ("c", f"LC_ALL=C cut -c 1-{dag_run.CRITERION_LINE_BYTES}"),
-    ("l", f"tail -n {dag_run.CRITERION_LINES_KEPT}"), ("b", "base64"),
+    ("h", f"command head -c {dag_run.MAX_HANDOFF_READ_BYTES} PATH"), ("t", "LC_ALL=C command tr '\\000' '\\001'"),
+    ("g", "LC_ALL=C command grep -F CRITERION"), ("c", f"LC_ALL=C command cut -c 1-{dag_run.CRITERION_LINE_BYTES}"),
+    ("l", f"command tail -n {dag_run.CRITERION_LINES_KEPT}"), ("b", "command base64"),
 )
+# A stage's exit statuses that count as success: grep's 1 is no matching line, a successful read with zero lines.
+_STAGE_SUCCESS = {name: ("0", "1") if name == "g" else ("0",) for name, _command in _CRITERION_STAGES}
 _BASE64_LINE = re.compile(r"[A-Za-z0-9+/=]+")
 
 
 def criterion_pipe(quoted: str) -> str:
-    """The shell that prints a handoff's criterion lines base64, then `_CRITERION_END` when every stage succeeded."""
-    stages = " | ".join(f"{{ {command.replace('PATH', quoted)}; echo {name}$? >&3; }}"
+    """The shell that prints a handoff's criterion lines base64, then one `_CRITERION_END` line with every stage's
+    exit status (`criterion_stages_passed`)."""
+    stages = " | ".join(f"{{ {command.replace('PATH', quoted)}; command echo {name}$? >&3; }}"
                         for name, command in _CRITERION_STAGES)
-    passed = " ".join(f"{name}0" for name, _command in _CRITERION_STAGES if name != "g")
-    return ("( exec 4>&1; omh_s=$( { " + stages + " >&4; } 3>&1 ); omh_s=\" $(echo $omh_s) \"; "
-            f"for omh_x in {passed}; do case $omh_s in *\" $omh_x \"*) ;; *) exit 1 ;; esac; done; "
-            f"case $omh_s in *\" g0 \"*|*\" g1 \"*) echo {_CRITERION_END} ;; *) exit 1 ;; esac ); ")
+    return "( exec 4>&1; omh_s=$( { " + stages + f" >&4; }} 3>&1 ); command echo {_CRITERION_END} $omh_s ); "
+
+
+def criterion_stages_passed(words: list[str]) -> bool:
+    """Whether a `_CRITERION_END` line's statuses (``h0 t0 g1 ...``) name each stage once, each with a success."""
+    statuses = {word[:1]: word[1:] for word in words}
+    return (len(words) == len(_CRITERION_STAGES) and set(statuses) == set(_STAGE_SUCCESS)
+            and all(statuses[name] in passed for name, passed in _STAGE_SUCCESS.items()))
+
+
 # What a run on a Docker or SSH terminal says, each time, while no environment is up to find its handoff root in.
 # Same turn: on a session-isolated Docker terminal a later turn may get another task id, and so another environment.
 TERMINAL_FIRST = ("No node was handed out: the children write their handoff files in the {backend} terminal, and "
@@ -733,8 +745,10 @@ def backend_handoff(path: str, task_id: str) -> tuple[bool, str]:
     """Whether a handoff is a regular file and no link inside the terminal backend a child wrote it in: (found, unread).
 
     ``unread`` names why there is no answer (`_backend_lines`), and ``found``
-    is then False. A read the parent's interrupt stopped refuses the settle
-    and records nothing, so the parent settles again.
+    is then False: a probe Hermes timed out or one that exited non-zero is
+    ``backend_unanswered`` whatever verdict line it printed. A read the
+    parent's interrupt stopped refuses the settle and records nothing, so the
+    parent settles again.
     """
     found, unread, _lines = _backend_probe(path, task_id, criteria=False)
     return found, unread
@@ -753,9 +767,11 @@ def backend_criterion_lines(path: str, task_id: str) -> tuple[bool, str, list[st
 def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, str, list[str]]:
     quoted = shlex.quote(path)
     grep = criterion_pipe(quoted) if criteria else ""
+    # Whole for every read: a verdict line printed before Hermes timed the probe out, or before it exited non-zero,
+    # is no answer either (`backend_unanswered`, so an accepted node keeps `handoff_checked: false`).
     lines, unread = _backend_lines(task_id, f"if [ -L {quoted} ]; then echo {_HANDOFF_LINK}; elif [ -f {quoted} ]; "
                                             f"then echo {_HANDOFF_FILE}; {grep}else echo {_HANDOFF_NONE}; fi",
-                                   whole=criteria)
+                                   whole=True)
     if unread == "interrupted":
         raise dag_run.DagRefusal("settle_interrupted", "The handoff check was interrupted, so nothing was settled; "
                                                        "settle the node again.")
@@ -763,9 +779,10 @@ def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, st
         return False, unread, []
     verdicts = {line.strip() for line in lines}
     if _HANDOFF_FILE in verdicts and criteria:
-        if _CRITERION_END not in verdicts:
+        ends = [index for index, line in enumerate(lines) if line.split()[:1] == [_CRITERION_END]]
+        if not ends or not criterion_stages_passed(lines[ends[-1]].split()[1:]):
             return False, "backend_unanswered", []
-        body = [line.strip() for line in lines[:[line.strip() for line in lines].index(_CRITERION_END)]]
+        body = [line.strip() for line in lines[:ends[-1]]]
         encoded = "".join(line for line in body if _BASE64_LINE.fullmatch(line))
         try:
             data = base64.b64decode(encoded, validate=True)
