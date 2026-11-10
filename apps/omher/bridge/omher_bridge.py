@@ -817,6 +817,49 @@ def origin_link(source: str, origin: dict) -> tuple[str | None, str | None]:
     return url, place
 
 
+REPLY_PLATFORMS = frozenset({"slack", "discord", "telegram"})
+_REF_ID = re.compile(r"-?[A-Za-z0-9._]{1,64}")
+
+
+def reply_target(origin: dict) -> tuple[str, str] | None:
+    """(target, label) for asking the bot to post in a session's thread: Hermes' own send target
+    (`platform:chat_id[:thread_id]`, the form Hermes' own send command and messaging tool take) and a
+    short quote-free name for it. None when the origin names no messenger thread (cron, local, a missing
+    or malformed id). omher only passes this reference to the bot; it never posts anything itself."""
+    s = lambda k: str(origin.get(k) or "").strip()
+    platform, chat, thread = s("platform").lower(), s("chat_id"), s("thread_id")
+    if platform not in REPLY_PLATFORMS or not _REF_ID.fullmatch(chat) or (thread and not _REF_ID.fullmatch(thread)):
+        return None
+    target = f"{platform}:{chat}:{thread}" if thread else f"{platform}:{chat}"
+    name = s("chat_name")
+    if platform == "discord":  # "Guild / #channel / thread title" -> "#channel / thread title"
+        parts = [x.strip() for x in name.split(" / ") if x.strip()]
+        name = " / ".join(parts[1:]) if len(parts) >= 2 else (parts[0] if parts else "")
+    elif platform == "slack" and name and not name.startswith("#") and s("chat_type") != "dm":
+        name = f"#{name}"
+    label = " ".join(name.replace('"', "'").split())[:80] or platform.capitalize()
+    return target, label
+
+
+def reply_block(target: str, label: str) -> str:
+    """The one short block appended to a turn sent with a reply target: plain context the bot may act on."""
+    kind = "thread" if target.count(":") >= 2 else "channel"
+    return (f"[omher] Reply target: {target} ({kind} \"{label}\"). Post there only if the user asked; "
+            f"use your own messaging tool or `hermes send --to {target}`.")
+
+
+_REPLY_BLOCK = re.compile(r"\n*\[omher\] Reply target: (\S+) \((?:thread|channel) \"([^\"]*)\"\)\. Post there only if "
+                          r"the user asked; use your own messaging tool or `hermes send --to \S+`\.\s*$")
+
+
+def split_reply_block(text: str) -> tuple[str, dict | None]:
+    """A user row sent with a reply target, back as (what the person typed, {target, label})."""
+    m = _REPLY_BLOCK.search(text or "")
+    if not m:
+        return text, None
+    return text[: m.start()].rstrip(), {"target": m.group(1), "label": m.group(2)}
+
+
 def _clip(text: str, n: int = PEEK_CHARS) -> str:
     text = text.strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
@@ -840,8 +883,14 @@ def chat_messages(rows) -> list[dict]:
         if not text:
             continue
         rid = row.get("row_id")
-        out.append({"id": str(rid) if rid is not None else f"m{i}", "role": row["role"], "text": text,
-                    "ts": float(row.get("timestamp") or 0.0)})
+        reply = None
+        if row["role"] == "user":
+            text, reply = split_reply_block(text)
+        m = {"id": str(rid) if rid is not None else f"m{i}", "role": row["role"], "text": text,
+             "ts": float(row.get("timestamp") or 0.0)}
+        if reply:
+            m["reply_to"] = reply
+        out.append(m)
     return out[-MAX_OPEN_MESSAGES:]
 
 
@@ -1417,8 +1466,20 @@ class Bridge:
         text = p.get("text")
         if not isinstance(text, str) or not text.strip():
             raise BridgeError("bad_request", "missing text")
+        reply_to = p.get("reply_to")
+        if reply_to is not None and (not isinstance(reply_to, str) or not reply_to):
+            raise BridgeError("bad_request", "reply_to must be a session id")
         conn = await self._conn(p.get("bot"))
         main, _chat = await self._target(conn, p)
+        if reply_to is not None:
+            # A thread reference for the bot, read from the profile's own state.db. omher posts nothing.
+            if reply_to in conn.main_ids:
+                raise BridgeError("bad_request", "reply_to names the main chat")
+            facts = await asyncio.to_thread(read_session_facts, conn.bot["path"], [reply_to])
+            ref = reply_target((facts.get(reply_to) or {}).get("origin") or {})
+            if ref is None:
+                raise BridgeError("bad_request", "that session has no thread to reply in")
+            text = f"{text.rstrip()}\n\n{reply_block(*ref)}"
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
         await self._submit(conn, main, text, input_id)
@@ -1777,6 +1838,8 @@ class Bridge:
         for a in out:
             f = facts.get(a["id"]) or {}
             a["url"], a["place"] = origin_link(a["source"], f.get("origin") or {})
+            ref = reply_target(f.get("origin") or {})
+            a["reply_target"] = ref[0] if ref else None
             a["last_reply"] = f.get("last_reply")
             a["last_reply_at"] = f.get("last_reply_at")
         return out

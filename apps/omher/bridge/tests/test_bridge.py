@@ -600,7 +600,7 @@ class Elsewhere(BridgeCase):
             self.assertTrue(by["s-slack"]["running"])
             self.assertEqual(by["s-slack"]["message_count"], 12)
             for a in rows:
-                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place", "last_reply", "last_reply_at"})
+                self.assertEqual(set(a), {"id", "source", "label", "title", "started_at", "last_active", "message_count", "running", "url", "place", "last_reply", "last_reply_at", "reply_target"})
                 self.assertTrue(a["label"])
 
     async def test_active_list_adds_live_sessions_and_caps_at_twenty(self):
@@ -1250,6 +1250,116 @@ class BotIdentity(BridgeCase):
             self.assertEqual((d / "state.db").stat().st_mtime_ns, before)
             r = (await s.req("bots.info", bot="default"))["result"]
             self.assertEqual(r["places"], {})
+
+
+class ReplyThere(BridgeCase):
+    """"Reply there": omher passes a thread reference to the bot as one context block; it posts nothing."""
+
+    SLACK = {"platform": "slack", "chat_id": "C0C7ABCDE12", "chat_name": "product-opengateway-ai-loop", "chat_type": "group",
+             "thread_id": "1794224935.556179", "guild_id": "T058XXXX"}
+    DISCORD = {"platform": "discord", "chat_id": "1569310397687791637", "thread_id": "1569310397687791637",
+               "chat_name": "Oh-My-Hermes Community / #cron / OMH 스킬 \"홍보\" 리스트업", "chat_type": "thread",
+               "guild_id": "1544", "parent_chat_id": "1544259371528232980"}
+    SESSIONS = [
+        {"id": "s-slack", "title": "loop", "source": "slack", "started_at": 3000.0},
+        {"id": "s-discord", "title": "promo", "source": "discord", "started_at": 2000.0},
+        {"id": "s-cron", "title": "nightly", "source": "cron", "started_at": 1000.0},
+        {"id": "s-bare", "title": "no origin", "source": "slack", "started_at": 500.0},
+    ]
+
+    def _db(self, profile: Path) -> None:
+        import sqlite3
+        con = sqlite3.connect(profile / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, origin_json TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp REAL)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?)", [
+            ("s-slack", json.dumps(self.SLACK)), ("s-discord", json.dumps(self.DISCORD)),
+            ("s-cron", json.dumps({"platform": "local", "chat_id": "local"})), ("s-bare", None)])
+        con.commit()
+        con.close()
+
+    def test_reply_target_for_slack_thread_discord_thread_and_channels(self):
+        self.assertEqual(ob.reply_target(self.SLACK),
+                         ("slack:C0C7ABCDE12:1794224935.556179", "#product-opengateway-ai-loop"))
+        self.assertEqual(ob.reply_target(self.DISCORD),
+                         ("discord:1569310397687791637:1569310397687791637", "#cron / OMH 스킬 '홍보' 리스트업"))
+        self.assertEqual(ob.reply_target({"platform": "discord", "chat_id": "42", "chat_name": "G / #ops"}),
+                         ("discord:42", "#ops"))
+        self.assertEqual(ob.reply_target({"platform": "slack", "chat_id": "D0CB1", "chat_type": "dm",
+                                          "chat_name": "김희망 (Khope)", "thread_id": "1793.5"}),
+                         ("slack:D0CB1:1793.5", "김희망 (Khope)"))
+        # no messenger thread -> no chip
+        for origin in ({}, {"platform": "local", "chat_id": "local"}, {"platform": "slack"},
+                       {"platform": "slack", "chat_id": "C1 ; rm -rf"}, {"platform": "discord", "chat_id": "1", "thread_id": "a:b"},
+                       {"platform": "cron", "chat_id": "x"}):
+            self.assertIsNone(ob.reply_target(origin), origin)
+
+    def test_block_is_one_line_naming_the_target_and_round_trips(self):
+        block = ob.reply_block("slack:C1:1794.5", "#og-dev")
+        self.assertEqual(block, '[omher] Reply target: slack:C1:1794.5 (thread "#og-dev"). Post there only if the user '
+                                'asked; use your own messaging tool or `hermes send --to slack:C1:1794.5`.')
+        self.assertNotIn("\n", block)
+        self.assertIn('(channel "#ops")', ob.reply_block("discord:42", "#ops"))
+        typed, ref = ob.split_reply_block(f"결과 요약해서 남겨줘\n\n{block}")
+        self.assertEqual((typed, ref), ("결과 요약해서 남겨줘", {"target": "slack:C1:1794.5", "label": "#og-dev"}))
+        self.assertEqual(ob.split_reply_block("plain"), ("plain", None))
+        rows = ob.chat_messages([{"role": "user", "text": f"post it\n\n{block}", "row_id": 9},
+                                 {"role": "assistant", "text": block, "row_id": 10}])
+        self.assertEqual(rows[0]["text"], "post it")
+        self.assertEqual(rows[0]["reply_to"], {"target": "slack:C1:1794.5", "label": "#og-dev"})
+        self.assertNotIn("reply_to", rows[1])  # only the person's own rows carry a reference
+
+    async def test_elsewhere_list_carries_the_target_only_for_threads(self):
+        async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
+            self._db(env.home / "profiles" / "kami")
+            s = await self.open(env)
+            rows = {a["id"]: a for a in (await s.req("elsewhere.list", bot="kami"))["result"]["sessions"]}
+            self.assertEqual(rows["s-slack"]["reply_target"], "slack:C0C7ABCDE12:1794224935.556179")
+            self.assertEqual(rows["s-discord"]["reply_target"], "discord:1569310397687791637:1569310397687791637")
+            self.assertIsNone(rows["s-cron"]["reply_target"])
+            self.assertIsNone(rows["s-bare"]["reply_target"])
+
+    async def test_send_with_reply_to_submits_once_to_the_main_chat_with_one_block(self):
+        async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
+            self._db(env.home / "profiles" / "kami")
+            s = await self.open(env)
+            r = await s.req("chat.send", bot="kami", text="결과 요약해서 남겨줘  ", reply_to="s-slack")
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            sub = c.find("prompt.submit")
+            self.assertEqual(len(sub), 1)
+            self.assertEqual(sub[0]["session_id"], MAIN_RUNTIME)
+            text = sub[0]["text"]
+            self.assertEqual(text, "결과 요약해서 남겨줘\n\n" + ob.reply_block("slack:C0C7ABCDE12:1794224935.556179",
+                                                                         "#product-opengateway-ai-loop"))
+            self.assertEqual(text.count("[omher] Reply target:"), 1)
+            # the referenced thread is never resumed, created or written
+            for m, p in c.calls:
+                self.assertNotIn("s-slack", json.dumps(p), m)
+            # Discord thread
+            await s.req("chat.send", bot="kami", text="there", reply_to="s-discord")
+            self.assertIn("discord:1569310397687791637:1569310397687791637", c.find("prompt.submit")[-1]["text"])
+            # no thread to reply in -> refused, nothing submitted
+            for sid in ("s-cron", "s-bare", "nope"):
+                r = await s.req("chat.send", bot="kami", text="post", reply_to=sid)
+                self.assertEqual(r["error"]["code"], "bad_request", sid)
+            for bad in ("", 5, ["s-slack"]):
+                r = await s.req("chat.send", bot="kami", text="post", reply_to=bad)
+                self.assertEqual(r["error"]["code"], "bad_request", bad)
+            r = await s.req("chat.send", bot="kami", text="post", reply_to=MAIN_STORED)
+            self.assertEqual(r["error"]["code"], "bad_request")
+            self.assertEqual(len(c.find("prompt.submit")), 2)
+
+    async def test_there_without_a_chip_adds_nothing(self):
+        """'거기'/'there' with no chip is an ordinary turn: the bridge never guesses a target."""
+        async with Env(sessions=[dict(r) for r in self.SESSIONS]) as env:
+            self._db(env.home / "profiles" / "kami")
+            s = await self.open(env)
+            await s.req("elsewhere.list", bot="kami")
+            for text in ("거기 슬랙에 남겨줘", "leave it there"):
+                await s.req("chat.send", bot="kami", text=text)
+            self.assertEqual([p["text"] for p in env.clients["kami"].find("prompt.submit")],
+                             ["거기 슬랙에 남겨줘", "leave it there"])
 
 
 class SidePanel(unittest.TestCase):

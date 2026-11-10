@@ -5,7 +5,7 @@
 //   node e2e/mock-bridge.mjs --port 5308 [--token T]
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
-// Test-control ops (not part of the protocol): mock.calls, mock.emit {events}, mock.reset,
+// Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset,
 // mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
 import http from "node:http";
 import crypto from "node:crypto";
@@ -47,9 +47,9 @@ const HISTORY_SEED = {
 // Away sessions are stored as offsets from "now" so the timeline always looks fresh.
 const AWAY_SEED = {
   kami: [
-    { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", reply: "Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.", started: 4 * MIN, last: 20, count: 14, running: true },
-    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
-    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
+    { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", target: "slack:C0123ABCD:1794186944.520669", reply: "Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.", started: 4 * MIN, last: 20, count: 14, running: true },
+    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", target: "discord:1569310397687791637:1569310397687791637", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
+    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", target: "discord:1544259371528232981", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
   ],
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
@@ -147,6 +147,8 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 // ---- mutable state ---------------------------------------------------------------------------
 
 let calls = [];
+// What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
+let submits = [];
 let bots, history, models, turns, pending, idSeq, queues, avatars, folders;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
@@ -173,6 +175,7 @@ function reset() {
   pending = new Map();
   idSeq = 0;
   calls = [];
+  submits = [];
 }
 reset();
 
@@ -330,6 +333,7 @@ const awayFor = (bot) =>
       place: a.place ?? null,
       last_reply: a.reply ?? null,
       last_reply_at: a.reply ? now() - a.last : null,
+      reply_target: a.target ?? null,
     }))
     .sort((x, y) => y.last_active - x.last_active)
     .slice(0, 20);
@@ -370,6 +374,21 @@ const OPS = {
   "chat.send": (p) => {
     const b = needBot(p);
     const text = needStr(p, "text");
+    // Same as the real bridge: a reply_to session adds one context block for the bot. Nothing is posted.
+    let submitted = text;
+    let reply_to = null;
+    if (p.reply_to !== undefined) {
+      if (typeof p.reply_to !== "string" || !p.reply_to) throw new OpError("bad_request", "reply_to must be a session id");
+      const seed = (AWAY_SEED[b.name] ?? []).find((a) => a.id === p.reply_to);
+      if (!seed?.target) throw new OpError("bad_request", "that session has no thread to reply in");
+      const label = seed.place || seed.source;
+      const kind = seed.target.split(":").length >= 3 ? "thread" : "channel";
+      reply_to = { target: seed.target, label };
+      submitted =
+        `${text.trimEnd()}\n\n[omher] Reply target: ${seed.target} (${kind} "${label}"). Post there only if the user asked; ` +
+        `use your own messaging tool or \`hermes send --to ${seed.target}\`.`;
+    }
+    submits.push({ bot: b.name, session_id: `main-${b.name}`, text: submitted });
     const input_id = nextId("input");
     if (p.session !== undefined) {
       const f = needFolder(p, b);
@@ -378,7 +397,7 @@ const OPS = {
       startTurn(key, text, f);
       return { input_id };
     }
-    history[b.name].push({ id: nextId("u"), role: "user", text, ts: now() });
+    history[b.name].push({ id: nextId("u"), role: "user", text, ts: now(), ...(reply_to ? { reply_to } : {}) });
     if (turns[b.name]) (queues[b.name] ??= []).push(text);
     else startTurn(b.name, text);
     return { input_id };
@@ -525,6 +544,7 @@ const OPS = {
   },
   // ---- test control (not part of the protocol)
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
+  "mock.submits": () => ({ submits: submits.map((x) => ({ ...x })) }),
   "mock.emit": (p) => {
     if (!Array.isArray(p.events)) throw new OpError("bad_request", "events must be an array");
     for (const ev of p.events) broadcast(ev);
