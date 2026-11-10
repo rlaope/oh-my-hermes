@@ -2669,3 +2669,10 @@ class Accounts(unittest.TestCase):
                    src.index("# ---------------------------------------------------------------- transcript helpers")]
         for bad in ("subprocess", "urllib", "http.client", ".send(", "sendall", "keyring", "os.environ[", "socket"):
             self.assertNotIn(bad, body, bad)
+
+
+class VersionTest(unittest.TestCase):
+    def test_the_bridge_reports_the_app_version(self):
+        # hello's version is the app's: a release bump that misses the bridge fails here
+        app = json.loads((HERE.parent.parent / "package.json").read_text(encoding="utf-8"))
+        self.assertEqual(ob.VERSION, app["version"])
