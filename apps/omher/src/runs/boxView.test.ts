@@ -26,6 +26,11 @@ import {
 } from "./boxView";
 import { modelName } from "./format";
 
+/** Hand the event loop back for a moment. The seeded layout checks below run for seconds at a time; without a
+ *  pause between their runs the worker never answers vitest's own messages on a slow CI runner, and vitest fails
+ *  the job with "Timeout calling onTaskUpdate" although every test passed. */
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+
 const G = GEOMETRY;
 const node = (id: string, deps: string[] = [], extra: Partial<RunNode> = {}): RunNode => ({ id, label: id, deps, layer: 0, state: "done", attempts: [], ...extra });
 const dag = (nodes: RunNode[]): Pick<AgentRun, "kind" | "nodes"> => ({ kind: "dag", nodes });
@@ -1018,12 +1023,13 @@ describe("the layout", () => {
     expect(lay(sample(), 1136, { stretch: 1.25 }).w).toBe(1136);
   });
 
-  it("gives a dense run fewer boxes to a row rather than two lines one place: no fault at any panel width", () => {
+  it("gives a dense run fewer boxes to a row rather than two lines one place: no fault at any panel width", async () => {
     // seeded, so the same runs every time: 12 to 50 nodes, each waiting on some of the nodes before it
     let seed = 1;
     let shared = 0; // the layouts in which lines share a place
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     for (let k = 0; k < 36; k++) {
+      await breathe();
       const n = 12 + Math.floor(rnd() * 39);
       const p = 0.05 + rnd() * 0.2;
       const nodes = Array.from({ length: n }, (_, i) => node(`n${i}`, Array.from({ length: i }, (_, j) => `n${j}`).filter(() => rnd() < p), { label: `Node ${i} of run ${k}` }));
@@ -1040,7 +1046,7 @@ describe("the layout", () => {
     expect(shared).toBe(0);
   }, 30_000);
 
-  it("keeps a line into a child clear of the lines that leave the row above it, however many there are", () => {
+  it("keeps a line into a child clear of the lines that leave the row above it, however many there are", async () => {
     // seeded runs with many start nodes, where every fifth node waits on half of the nodes before it: its top
     // edge takes many lines, right under the stubs of the row above (found by an independent check: a point that
     // stayed on another net's stub once the first six places beside it were taken)
@@ -1048,6 +1054,7 @@ describe("the layout", () => {
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const states: RunNode["state"][] = ["done", "running", "failed", "waiting", "done", "cancelled", "parked"];
     for (let k = 0; k < 30; k++) {
+      await breathe();
       const roots = 2 + Math.floor(rnd() * 14);
       const n = roots + 3 + Math.floor(rnd() * 30);
       const nodes: RunNode[] = [];
@@ -1073,8 +1080,7 @@ describe("the layout", () => {
   // the generator of the check that found two lines on one place in 54-60-node runs at 428px and 460px (its runs
   // 11, 13, 27 and 47): one column of boxes at the comfortable width left the lines too little room beside them.
   // Seeded: 10 to 60 nodes, some with many roots, some with one node that waits on most of the others. Its 80 runs
-  // are laid out in four tests of 20: one test of all 80 keeps the worker busy past vitest's RPC timeout on a slow
-  // CI runner (it took 73 s on windows-latest), which fails the run though every test passed
+  // are laid out in four tests of 20 (it took 73 s in one on windows-latest), with a breath between runs
   const checkRuns = (() => {
     let seed = 12345;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
@@ -1105,8 +1111,9 @@ describe("the layout", () => {
   })();
   let checkShared = 0; // the panel layouts of this generator in which lines share a place
   for (let part = 0; part < 4; part++)
-    it(`gives every passing line a place of its own in runs up to 60 nodes at the panel's widths (an independent check's generator, runs ${part * 20}-${part * 20 + 19})`, () => {
+    it(`gives every passing line a place of its own in runs up to 60 nodes at the panel's widths (an independent check's generator, runs ${part * 20}-${part * 20 + 19})`, async () => {
       for (let k = part * 20; k < part * 20 + 20; k++) {
+        await breathe();
         const { n, hub, nodes } = checkRuns[k];
         // the two panel widths for every run; the full view for every fourth
         for (const [width, stretch] of [
