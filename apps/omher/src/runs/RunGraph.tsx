@@ -59,7 +59,7 @@ export function Marks({ ids }: { ids: string[] }) {
     <>
       {ids.map((id) => (
         <span key={id} className="bx-mk" data-testid="node-mark" data-mark={id}>
-          {id === "hermes" ? <HermesMark size={14} /> : <AgentIcon id={id} size={14} />}
+          {id === "hermes" ? <HermesMark size={12} /> : <AgentIcon id={id} size={12} />}
         </span>
       ))}
     </>
@@ -328,6 +328,11 @@ export function RunGraph({
   const shownDeps = allDeps || deps.length <= DEPS_CAP + 2 ? deps : deps.slice(0, DEPS_CAP);
   const live = lay.boxes.map((b) => byId.get(b.id)!).filter((n) => n.state === "running" && n.id !== open);
 
+  const texts = new Map(lay.boxes.map((b) => [b.id, boxText(byId.get(b.id)!, run, lay.shape, lay.inner, nowS, bot)]));
+  // a second facts line stands under the first's text, after the marks, when every box's fits there: one left
+  // edge for all of them, never some indented and some not
+  const hang = [...texts.values()].every((tx) => tx.facts.length < 2 || tx.hang);
+
   const drawing = (
     <div className="bv-boxes" style={{ width: lay.w, height: lay.h }} data-testid="run-canvas">
       <svg className={`bv-edges${hover ? " focus" : ""}`} width={lay.w} height={lay.h} aria-hidden overflow="visible">
@@ -378,7 +383,7 @@ export function RunGraph({
       {lay.boxes.map((b) => {
         const n = byId.get(b.id)!;
         const r = rect(b.id);
-        const tx = boxText(n, run, lay.shape, lay.inner, nowS, bot);
+        const tx = texts.get(b.id)!;
         const dim = !!hover && hover !== n.id && !near.has(n.id);
         return (
           <button
@@ -419,7 +424,7 @@ export function RunGraph({
                 <span className="bx-ft">{tx.facts[0]}</span>
               </span>
               {tx.facts[1] !== undefined && (
-                <span className="bx-l bx-ft" style={tx.hang ? { paddingLeft: tx.marks.length * 19 } : undefined}>
+                <span className="bx-l bx-ft" style={hang ? { paddingLeft: tx.marks.length * 17 } : undefined}>
                   {tx.facts[1]}
                 </span>
               )}

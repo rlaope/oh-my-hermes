@@ -539,6 +539,31 @@ describe("the layout", () => {
     }
   });
 
+  it("keeps a line into a child clear of the lines that leave the row above it, however many there are", () => {
+    // seeded runs with many start nodes, where every fifth node waits on half of the nodes before it: its top
+    // edge takes many lines, right under the stubs of the row above (found by an independent check: a point that
+    // stayed on another net's stub once the first six places beside it were taken)
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const states: RunNode["state"][] = ["done", "running", "failed", "waiting", "done", "cancelled", "parked"];
+    for (let k = 0; k < 30; k++) {
+      const roots = 2 + Math.floor(rnd() * 14);
+      const n = roots + 3 + Math.floor(rnd() * 30);
+      const nodes: RunNode[] = [];
+      for (let i = 0; i < n; i++) {
+        const deps = i < roots ? [] : Array.from({ length: i }, (_, j) => `n${j}`).filter(() => rnd() < (i % 5 === 0 ? 0.5 : 0.12));
+        nodes.push(node(`n${i}`, deps, { label: `Task ${i} with a fairly long title for wrapping`, state: states[Math.floor(rnd() * states.length)] }));
+      }
+      for (const capRows of [undefined, 8])
+        for (const width of [56, 72]) {
+          const lay = layoutBoxes(dag(nodes), { cells: width, metrics: M, capRows });
+          const what = `run ${k} (${n} nodes) at ${width} cells${capRows ? ", capped" : ""}`;
+          expect(lay.crowded, what).toBe(0);
+          expect(faults(lay), what).toEqual([]);
+        }
+    }
+  });
+
   it("wraps only a frontier too wide for the narrowest boxes, and still draws every edge", () => {
     // seven under one parent, one node waiting on all seven: 60 cells hold three boxes
     const mids = ["m1", "m2", "m3", "m4", "m5", "m6", "m7"];

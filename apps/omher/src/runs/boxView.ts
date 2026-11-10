@@ -52,6 +52,7 @@ export const GEOMETRY = {
   lane: 4, // between two lines that pass a row side by side
   hop: 2, // the gap a line leaves, each side, where it passes over another net's bus
   clear: 2, // the least a passing line keeps from a box
+  keep: 7, // and what it keeps where the space beside the box is that wide: half the gap between two boxes
 };
 
 export type Tone = "done" | "running" | "out" | "failed" | "repaired" | "retry" | "waiting" | "off";
@@ -546,8 +547,8 @@ export interface BoxLayout {
   heads: EdgeHead[];
   /** The edges that have a line ("from>to"): every edge between two boxes on screen. */
   drawn: Set<string>;
-  /** The lines that found no place of their own beside the rows they pass, and share another's: 0, unless the
-   *  width is too small for the run's lines even with the widest margins. */
+  /** The lines that found no place of their own (beside the rows they pass, or on a child's top edge) and share
+   *  another's: 0, unless the width is too small for the run's lines even at one box to a row. */
   crowded: number;
   shape: Frontiers;
 }
@@ -674,6 +675,7 @@ function layoutAt(run: Pick<AgentRun, "kind" | "nodes"> & { agent?: CliAgent }, 
   // left to right in the order of where they come from.
   const into = new Map<string, typeof nets>();
   for (const n of nets) for (const c of n.children) (into.get(c) ?? into.set(c, []).get(c)!).push(n);
+  let crowded = 0; // the lines that found no place of their own
   const port = new Map<string, number>(); // `${net}\n${child}` -> x
   for (const [child, ns] of into) {
     const step = Math.min(GEOMETRY.port, (boxW - 24) / Math.max(1, ns.length - 1));
@@ -691,13 +693,13 @@ function layoutAt(run: Pick<AgentRun, "kind" | "nodes"> & { agent?: CliAgent }, 
       const clash = (x: number) => others.some((s) => Math.abs(s.x - x) < 4) || taken.some((px) => Math.abs(px - x) < 4);
       const x0 = port.get(key)!;
       if (!clash(x0)) continue;
-      for (const d of [6, -6, 12, -12, 18, -18]) {
-        const x = x0 + d;
-        if (x > xOf.get(c)! + 6 && x < xOf.get(c)! + boxW - 6 && !clash(x)) {
-          port.set(key, x);
-          break;
-        }
-      }
+      // the nearest point of the child's top edge that is clear, on either side; a line that finds none stays
+      // where it is and counts as crowded, so the layout is tried again with more room
+      const [left, right] = [xOf.get(c)! + 6, xOf.get(c)! + boxW - 6];
+      let clear: number | undefined;
+      for (let d = 2; d < boxW && clear === undefined; d += 2) clear = [x0 + d, x0 - d].find((at) => at > left && at < right && !clash(at));
+      if (clear === undefined) crowded++;
+      else port.set(key, clear);
     }
 
   // ---- a net whose ends are more than one row apart runs down a lane beside the rows it passes
@@ -726,7 +728,6 @@ function layoutAt(run: Pick<AgentRun, "kind" | "nodes"> & { agent?: CliAgent }, 
   };
   const lane = new Map<string, number>(); // net -> the x of its line past the rows between its ends
   const lanes: { x: number; lo: number; hi: number }[] = [];
-  let crowded = 0;
   for (const n of nets) {
     const [lo, hi] = reach.get(n.key)!;
     if (lo === hi) continue;
@@ -735,14 +736,21 @@ function layoutAt(run: Pick<AgentRun, "kind" | "nodes"> & { agent?: CliAgent }, 
     const pins = pinsIn(lo, hi, n.key);
     const busy = (x: number) => lanes.some((l) => l.lo <= hi && lo <= l.hi && Math.abs(l.x - x) < GEOMETRY.lane) || pins.some((px) => Math.abs(px - x) < 4);
     let best: number | null = null;
+    let cost = Infinity;
     let spare: number | null = null;
     for (const [a, b] of free(Array.from({ length: hi - lo }, (_, i) => lo + 1 + i))) {
-      const near = snap(Math.min(Math.max(ideal, a + 1), Math.max(a + 1, b - 1)));
+      // in a free space the line stands as near its own ends as it can while keeping half a gap from the boxes
+      // (the middle of a space narrower than that): a line 2px from a box reads as part of its outline. The
+      // places beside that one are taken only when it is.
+      const inset = Math.min(GEOMETRY.keep, (b - a) / 2);
+      const near = snap(Math.min(Math.max(ideal, a + inset), b - inset));
       if (spare === null || Math.abs(near - ideal) < Math.abs(spare - ideal)) spare = near;
-      for (let k = 0; k * GEOMETRY.lane <= b - a; k++)
+      search: for (let k = 0; k * GEOMETRY.lane <= b - a; k++)
         for (const x of k ? [near + k * GEOMETRY.lane, near - k * GEOMETRY.lane] : [near]) {
           if (x < a + 0.5 || x > b - 0.5 || busy(x)) continue;
-          if (best === null || Math.abs(x - ideal) < Math.abs(best - ideal)) best = x;
+          const c = Math.abs(near - ideal) + k * GEOMETRY.lane;
+          if (c < cost) [best, cost] = [x, c];
+          break search;
         }
     }
     if (best === null) crowded++;

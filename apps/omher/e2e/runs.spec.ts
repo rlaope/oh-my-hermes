@@ -442,12 +442,12 @@ test("a node is its title, what ran it and its status, in monospace: a neutral 1
   expect(new Set([rail("done"), rail("running"), rail("repaired")]).size).toBe(3);
   expect(rail("waiting")).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
   for (const tone of ["done", "running", "repaired"]) expect(looks.find((l) => l.tone === tone)!.word).toBe(rail(tone));
-  // the marks are 14px, the agents' own: Hermes first on every node, never a model maker's mark
+  // the marks are 12px, the agents' own: Hermes first on every node, never a model maker's mark
   const marks = await box.getByTestId("run-canvas").getByTestId("node-mark").evaluateAll((els) => els.map((e) => [e.getAttribute("data-mark"), Math.round(e.getBoundingClientRect().width)]));
   expect(marks).toHaveLength(11); // five lanes handed to Codex, one Hermes helper
   for (const [mark, size] of marks) {
     expect(["hermes", "codex"]).toContain(mark);
-    expect(size).toBe(14);
+    expect(size).toBe(12);
   }
   for (const n of Object.values(by)) expect(n.marks[0]).toBe("hermes");
   await expect(box).not.toContainText("model not logged");
