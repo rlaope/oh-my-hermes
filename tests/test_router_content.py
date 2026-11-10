@@ -4495,7 +4495,7 @@ class RouterContentTests(unittest.TestCase):
         # section, which pins them below.
         self.assertIn('src="assets/oh-my-hermes-wordmark.png" alt="Oh My Hermes"', hero)
         self.assertIn('src="assets/omh-logo-pinklight.png"', hero)
-        self.assertIn("The coding harness with", hero)
+        self.assertIn("The ultrawork agent with", hero)
         self.assertIn(
             "curl -fsSL https://omher.app/install | sh",
             hero,
