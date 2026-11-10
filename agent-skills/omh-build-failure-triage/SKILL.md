@@ -48,7 +48,7 @@ Bad example:
 - The proposed remediation is minimal, scoped to affected files, and separated from implementation evidence.
 - Every cluster carries an origin, and no FIX_READY handoff covers a `pre_existing` or `unknown` one.
 - The rerun ladder names targeted, broad local, CI, and DCO checks without claiming they already passed.
-- The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE.
+- The final verdict is FIX_READY, NEEDS_MORE_LOGS, BLOCKED_BY_ENVIRONMENT, or ROUTE_TO_VERIFICATION_GATE in the record; the reply says it in plain words (ready to fix, more of the log is needed, blocked by the environment, needs a fresh observed rerun or the failures were already there before this change), and record names such as handoff, cluster matrix, or evidence boundary are never reply headings.
 
 ## Recovery Notes
 

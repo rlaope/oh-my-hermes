@@ -42,6 +42,17 @@ All notable changes will be documented here.
   read as success); the app image is checked against the release's `SHA256SUMS.txt` and swapped in
   only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
   one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
+- **Skill replies say verdicts and labels in plain words.** Live replies
+  copied skill vocabulary to people: release-cut's "version surface",
+  build-failure-triage's handoff and its `FIX_READY` / `NEEDS_MORE_LOGS`
+  verdicts, code-review's `no_ship`, `not_assessed`, `spec_axis` and
+  `verification_gaps`, and "run record" inside commit text. The
+  build-failure-triage, code-review and commit-pr-authoring checklists now
+  give each verdict a plain reading (the review verdict makes no merge
+  claim) and keep the tokens in the record or structured return, which a
+  dispatched reviewer still returns in full; release-cut says "every file
+  that carries the version". No schema, tool contract or record field
+  changes, and routing is unchanged.
 
 - **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
   Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra
