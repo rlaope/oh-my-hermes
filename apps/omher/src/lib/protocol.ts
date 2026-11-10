@@ -381,6 +381,8 @@ export type BridgeEvent =
       title: string;
       command: string;
       choices: ApprovalChoice[];
+      /** The folder the command runs in (agent sessions say it). */
+      cwd?: string;
       /** Seconds the gateway waits before giving up on it, when it says. */
       timeout_s?: number;
     })

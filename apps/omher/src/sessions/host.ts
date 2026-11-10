@@ -40,7 +40,7 @@ export interface SessionHost {
   write(id: number, data: string): Promise<void>;
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
-  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code session id to continue). */
+  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code session id or a Codex thread id to continue). */
   chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string): Promise<number>;
   chatInput(id: number, input: ChatInput): Promise<void>;
   chatClose(id: number): Promise<void>;
@@ -214,7 +214,7 @@ export class MockHost implements SessionHost {
   async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string) {
     const id = ++this.next;
     this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}) });
-    const c = new MockChat(agent, onEvent, resume);
+    const c = new MockChat(agent, onEvent, resume, cwd);
     this.chats.set(id, c);
     c.boot();
     return id;
@@ -255,7 +255,7 @@ class MockChat {
   private waiting: string | null = null;
   private model: string;
   private session: string;
-  constructor(private agent: AgentId, private emit: (ev: ChatEvent) => void, resume?: string) {
+  constructor(private agent: AgentId, private emit: (ev: ChatEvent) => void, resume?: string, private cwd = "") {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
@@ -305,8 +305,28 @@ class MockChat {
         this.at(60, () => this.emit({ event: "tool.start", tool_id: "t-rm", name: "terminal", detail: "rm -rf ./build" }));
         this.at(140, () => {
           this.waiting = rid;
-          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", choices: ["deny", "once", "session"] });
+          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices: ["deny", "once", "session"] });
         });
+        return;
+      }
+      if (text.startsWith("/ask")) {
+        // the shapes the adapters emit for a question (Claude Code AskUserQuestion, a Codex question) and a file edit
+        const rid = `ask-${++this.seq}`;
+        this.at(60, () => {
+          this.waiting = rid;
+          this.emit({ event: "clarify.request", request_id: rid, question: "Which greeting should go in greet.txt?", choices: ["hello", "hi"] });
+        });
+        return;
+      }
+      if (text.startsWith("/bad")) {
+        this.at(60, () => this.emit({ event: "tool.start", tool_id: "t-bad", name: "terminal", detail: "definitely-not-a-command-xyz --flag" }));
+        this.at(140, () => this.emit({ event: "tool.end", tool_id: "t-bad", name: "", ok: false, ms: 20 }));
+        this.say("Exit code: 127.", 200);
+        this.at(600, () => this.end("done"));
+        return;
+      }
+      if (text.startsWith("/signedout")) {
+        this.at(60, () => this.end("error", `${agentDef(this.agent).label} is not signed in. Sign in from Settings › Accounts, then Restart.`));
         return;
       }
       if (text.startsWith("/slow")) {
@@ -337,8 +357,16 @@ class MockChat {
       if (!m) throw new Error(`unknown model ${i.model}`);
       this.model = m.label;
       this.at(20, () => this.emit({ event: "session.info", model: this.model }));
+    } else if (i.kind === "clarify") {
+      if (i.request_id !== this.waiting) throw new Error("no question is open");
+      this.waiting = null;
+      const answer = typeof i.answer === "string" ? i.answer : Object.values(i.answer).filter(Boolean).join(", ");
+      this.at(40, () => this.emit({ event: "tool.start", tool_id: "t-w", name: "patch", detail: "greet.txt +1" }));
+      this.at(120, () => this.emit({ event: "tool.end", tool_id: "t-w", name: "", ok: true, ms: 60 }));
+      this.say(`Wrote ${answer} to greet.txt.`, 160);
+      this.at(600, () => this.end("done"));
     } else {
-      throw new Error("no question is open");
+      throw new Error("unknown input");
     }
   }
 }

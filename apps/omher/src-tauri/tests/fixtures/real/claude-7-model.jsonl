@@ -1,0 +1,2 @@
+{"type":"user","parent_tool_use_id":null,"message":{"role":"user","content":"<local-command-stdout>Set model to `haiku (claude-haiku-5-5)`</local-command-stdout>"}}
+{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-2","response":{"model":"claude-haiku-5-5"}}}

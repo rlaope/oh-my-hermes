@@ -105,6 +105,8 @@ export type ApprovalItem = {
   title: string;
   command: string;
   choices: ApprovalChoice[];
+  /** The folder the command runs in, when the agent says. */
+  cwd?: string;
   resolved?: ApprovalChoice;
   expired?: AskExpiry;
 };
@@ -617,6 +619,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           title: ev.title,
           command: ev.command,
           choices: ev.choices,
+          ...(ev.cwd ? { cwd: ev.cwd } : {}),
         };
         return withItems(base, [...base.items, item]);
       });

@@ -116,8 +116,19 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
       <Timeline bot={bot} face={face} />
       {ended && (
         <div className="ss-ended" role="status" data-testid="session-ended">
-          {rec.status === "failed" ? "Could not start" : "Ended"}
-          {why ? ` · ${why}` : ""}
+          <span className="ss-ended-t" title={why || undefined}>
+            {rec.status === "failed" ? "Could not start" : "Ended"}
+            {why ? ` · ${why}` : ""}
+          </span>
+          <button
+            type="button"
+            className="ss-restart"
+            onClick={() => void getSessions().restart(rec.id)}
+            title={rec.agent === "claude" || rec.agent === "codex" ? `Start ${label} again, continuing this conversation` : `Start ${label} again in this folder`}
+            data-testid="session-restart"
+          >
+            Restart
+          </button>
         </div>
       )}
       <Composer

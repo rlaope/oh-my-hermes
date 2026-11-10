@@ -1,0 +1,43 @@
+{"id":"omher-4","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run `ls -la` and `echo hi` and `pwd`"}]}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"ls -la\"}"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"ls -la"}}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"ls -la"}}],"stopReason":"toolUse","model":"stub-a"}}
+{"type":"tool_execution_start","toolCallId":"call_bash_0","toolName":"bash","args":{"command":"ls -la"}}
+{"type":"tool_execution_end","toolCallId":"call_bash_0","toolName":"bash","result":{"content":[{"type":"text","text":"total 16\ndrwxr-xr-x@  5 u  staff  160 Nov 10 13:24 .\ndrwxr-xr-x@ 18 u  staff  576 Nov 10 13:37 ..\ndrwxr-xr-x@ 12 u  staff  384 Nov 10 13:24 .git\n-rw-r--r--@  1 u  staff    7 Nov 10 13:24 README.md\n-rw-r--r--@  1 u  staff   12 Nov 10 13:24 hello.py\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"total 16\ndrwxr-xr-x@  5 u  staff  160 Nov 10 13:24 .\ndrwxr-xr-x@ 18 u  staff  576 Nov 10 13:37 ..\ndrwxr-xr-x@ 12 u  staff  384 Nov 10 13:24 .git\n-rw-r--r--@  1 u  staff    7 Nov 10 13:24 README.md\n-rw-r--r--@  1 u  staff   12 Nov 10 13:24 hello.py\n"}],"toolCallId":"call_bash_0","toolName":"bash","isError":false}}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"echo hi\"}"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_1","name":"bash","arguments":{"command":"echo hi"}}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_1","name":"bash","arguments":{"command":"echo hi"}}],"stopReason":"toolUse","model":"stub-a"}}
+{"type":"tool_execution_start","toolCallId":"call_bash_1","toolName":"bash","args":{"command":"echo hi"}}
+{"type":"tool_execution_end","toolCallId":"call_bash_1","toolName":"bash","result":{"content":[{"type":"text","text":"hi\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"hi\n"}],"toolCallId":"call_bash_1","toolName":"bash","isError":false}}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"pwd\"}"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_2","name":"bash","arguments":{"command":"pwd"}}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_2","name":"bash","arguments":{"command":"pwd"}}],"stopReason":"toolUse","model":"stub-a"}}
+{"type":"tool_execution_start","toolCallId":"call_bash_2","toolName":"bash","args":{"command":"pwd"}}
+{"type":"tool_execution_end","toolCallId":"call_bash_2","toolName":"bash","result":{"content":[{"type":"text","text":"/w/proj\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"/w/proj\n"}],"toolCallId":"call_bash_2","toolName":"bash","isError":false}}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"done"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"done"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"stopReason":"stop","model":"stub-a"}}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"agent_end"}

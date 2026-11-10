@@ -1,0 +1,13 @@
+{"id":"omher-6","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run sleep 30 then tell me"}]}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"sleep 30; e"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"cho finished"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"}"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"sleep 30; echo finished"}}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"sleep 30; echo finished"}}],"stopReason":"toolUse","model":"stub-a"}}
+{"type":"tool_execution_start","toolCallId":"call_bash_0","toolName":"bash","args":{"command":"sleep 30; echo finished"}}

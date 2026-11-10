@@ -1,0 +1,11 @@
+{"type":"tool_execution_end","toolCallId":"call_bash_0","toolName":"bash","result":{"content":[{"type":"text","text":"Command aborted"}]},"isError":true}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"Command aborted"}],"toolCallId":"call_bash_0","toolName":"bash","isError":true},"messageId":"msg-19"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"aborted","errorMessage":"Interrupted by user","model":"stub-a"},"messageId":"msg-20"}
+{"type":"turn_end","stopReason":"aborted"}
+{"type":"agent_end"}
+{"type":"extension_ui_request","id":"15c83d5f1b74cc33","method":"setWidget","widgetKey":"autoresearch"}
+{"id":"omher-7","type":"response","command":"abort","success":true}
+{"type":"prompt_result","id":"omher-6","agentInvoked":true,"status":"aborted","sessionSettled":true}
+{"type":"session_settled"}

@@ -1,0 +1,47 @@
+{"type":"session_settled"}
+{"id":"omher-5","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"create notes.txt with one line (pi-edit)"}]},"messageId":"msg-11"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"path\": \"no"},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"tes.txt\", \"c"},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"ontent\": \"he"},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"llo from qa\\"},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"n\"}"},"messageId":"msg-12"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_write_0","name":"write","arguments":{"path":"notes.txt","content":"hello from qa\n"},"partialArgs":"{\"path\": \"notes.txt\", \"content\": \"hello from qa\\n\"}","streamIndex":0}},"messageId":"msg-12"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_write_0","name":"write","arguments":{"path":"notes.txt","content":"hello from qa\n"},"partialArgs":"{\"path\": \"notes.txt\", \"content\": \"hello from qa\\n\"}","streamIndex":0}],"stopReason":"toolUse","model":"stub-a"},"messageId":"msg-12"}
+{"type":"tool_execution_start","toolCallId":"call_write_0","toolName":"write","args":{"path":"notes.txt","content":"hello from qa\n"}}
+{"type":"extension_ui_request","id":"15c83d5cf3b4cc30","method":"select","title":"Allow tool: write\nPath: notes.txt\nContent:\nhello from qa\n","options":["Approve","Approve write for this session","Deny"]}
+{"type":"tool_execution_end","toolCallId":"call_write_0","toolName":"write","result":{"content":[{"type":"text","text":"[notes.txt#E068]\nSuccessfully wrote 14 bytes to notes.txt"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"[notes.txt#E068]\nSuccessfully wrote 14 bytes to notes.txt"}],"toolCallId":"call_write_0","toolName":"write","isError":false},"messageId":"msg-13"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"path\": \"RE"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"ADME.md\", \"e"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"dits\": [{\"ol"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"dText\": \"# t"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"iny\", \"newTe"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"xt\": \"# tiny"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":" project\"}]}"},"messageId":"msg-14"}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_edit_1","name":"edit","arguments":{"path":"README.md","edits":[{"oldText":"# tiny","newText":"# tiny project"}]},"partialArgs":"{\"path\": \"README.md\", \"edits\": [{\"oldText\": \"# tiny\", \"newText\": \"# tiny project\"}]}","streamIndex":0}},"messageId":"msg-14"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_edit_1","name":"edit","arguments":{"path":"README.md","edits":[{"oldText":"# tiny","newText":"# tiny project"}]},"partialArgs":"{\"path\": \"README.md\", \"edits\": [{\"oldText\": \"# tiny\", \"newText\": \"# tiny project\"}]}","streamIndex":0}],"stopReason":"toolUse","model":"stub-a"},"messageId":"msg-14"}
+{"type":"tool_execution_start","toolCallId":"call_edit_1","toolName":"edit","args":{"edits":[{"oldText":"# tiny","newText":"# tiny project"}],"input":"README.md"}}
+{"type":"extension_ui_request","id":"15c83d5cf834cc31","method":"select","title":"Allow tool: edit\nFile: (unknown)","options":["Approve","Approve edit for this session","Deny"]}
+{"type":"tool_stream_update","toolCallId":"call_edit_1","toolName":"edit","update":{"generation":9,"streaming":false,"files":[]}}
+{"type":"tool_execution_end","toolCallId":"call_edit_1","toolName":"edit","result":{"content":[{"type":"text","text":"input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"README.md\". Example: \"[src/foo.ts#1A2B]\" then edit ops."}],"isError":true},"isError":true}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"README.md\". Example: \"[src/foo.ts#1A2B]\" then edit ops."}],"toolCallId":"call_edit_1","toolName":"edit","isError":true},"messageId":"msg-15"}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0},"messageId":"msg-16"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"ok"},"messageId":"msg-16"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"ok"},"messageId":"msg-16"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}],"stopReason":"stop","model":"stub-a"},"messageId":"msg-16"}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"extension_ui_request","id":"15c83d5d1234cc32","method":"setWidget","widgetKey":"autoresearch"}
+{"type":"agent_end"}
+{"type":"prompt_result","id":"omher-5","agentInvoked":true,"status":"completed","sessionSettled":true}
+{"type":"session_settled"}

@@ -1,0 +1,29 @@
+{"id":"omher-11","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run a bad command"}]}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":""}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"{\"command\": "}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"definitely-"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"not-a-comman"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"d-xyz --flag"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_delta","contentIndex":0,"delta":"\"}"}}
+{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","contentIndex":0,"toolCall":{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"definitely-not-a-command-xyz --flag"}}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_bash_0","name":"bash","arguments":{"command":"definitely-not-a-command-xyz --flag"}}],"stopReason":"toolUse","model":"stub-b"}}
+{"type":"tool_execution_start","toolCallId":"call_bash_0","toolName":"bash","args":{"command":"definitely-not-a-command-xyz --flag"}}
+{"type":"tool_execution_end","toolCallId":"call_bash_0","toolName":"bash","result":{"content":[{"type":"text","text":"/bin/bash: definitely-not-a-command-xyz: command not found\n\n\nCommand exited with code 127"}]},"isError":true}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"/bin/bash: definitely-not-a-command-xyz: command not found\n\n\nCommand exited with code 127"}],"toolCallId":"call_bash_0","toolName":"bash","isError":true}}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"exit "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"code "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"127 "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"(command "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"not "}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"found)"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"exit code 127 (command not found)"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"exit code 127 (command not found)"}],"stopReason":"stop","model":"stub-b"}}
+{"type":"turn_end","stopReason":"stop"}
+{"type":"agent_end"}

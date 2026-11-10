@@ -1,0 +1,8 @@
+{"type":"tool_execution_end","toolCallId":"call_bash_0","toolName":"bash","result":{"content":[{"type":"text","text":"Command aborted"}]},"isError":true}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"Command aborted"}],"toolCallId":"call_bash_0","toolName":"bash","isError":true}}
+{"type":"turn_end","stopReason":"toolUse"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"aborted","errorMessage":"Request was aborted.","model":"stub-a"}}
+{"type":"turn_end","stopReason":"aborted"}
+{"type":"agent_end"}
+{"id":"omher-7","type":"response","command":"abort","success":true}
