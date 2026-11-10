@@ -395,6 +395,14 @@ hooks.interrupt = (bot) => {
 // (it was hidden while it loaded, a recording, a busy page): a 250 ms timer then keeps the story on time.
 let last = 0;
 let lastTick = 0;
+let lastPin = 0;
+// The chat follows the newest message while the story runs. The app's own "stick to the bottom" can lose that when a
+// row grows between its scroll and the scroll event (two events in the same moment), which left the last bubble
+// below the fold, under the composer. Scrolling to the end again also resets the app's flag, so it follows on.
+function pinThread() {
+  const el = document.querySelector<HTMLElement>('[data-testid="timeline"]');
+  if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 1) el.scrollTop = el.scrollHeight;
+}
 function frame() {
   tick();
   requestAnimationFrame(frame);
@@ -419,6 +427,10 @@ function tick() {
       live.shift()![1]();
       if (!live.length) liveEnd = Date.now();
     }
+    if (!yielded() && !touched && now - lastPin > 250) {
+      lastPin = now;
+      pinThread();
+    }
     if (!yielded() && !RM) {
       storyT += dt;
       while (steps.length && steps[0][0] <= storyT) steps.shift()![1]();
@@ -433,8 +445,9 @@ function tick() {
 async function seedSessions() {
   const S = getSessions();
   const ids: Record<string, string> = {};
-  // three sessions: what fits under the four bots in the hero-sized window
-  for (const [folder, agent] of [["docs", "omp"], ["api-server", "codex"], ["web-app", "claude"]] as [string, AgentId][]) {
+  // two sessions: what fits whole under the four bots and the "needs you" strip in the hero-sized window (a third
+  // row was cut in half at 975x568)
+  for (const [folder, agent] of [["api-server", "codex"], ["web-app", "claude"]] as [string, AgentId][]) {
     const id = await S.launch(agent, `/Users/you/code/${folder}`);
     if (id) ids[folder] = id;
   }
