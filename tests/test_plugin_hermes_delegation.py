@@ -299,12 +299,15 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         )
 
     def test_a_routed_ultrabrain_child_is_labeled_ultrabrain(self):
-        # Fable 5.1 at xhigh heads ultrabrain since 2026-11-09 (owner
-        # decision); it sat third in architect and labelled that before.
+        # Fable at xhigh heads ultrabrain since 2026-11-09 (owner decision;
+        # Fable 5.2 since 2026-11-10); it sat third in architect and labelled
+        # that before. Fable 5.1 left every shipped chain on 2026-11-10, so
+        # it labels nothing now.
         self.assertEqual(
-            mixture_category_for("claude-fable-5-1", "xhigh", parent_model="kimi-k3"),
+            mixture_category_for("claude-fable-5-2", "xhigh", parent_model="kimi-k3"),
             "ultrabrain",
         )
+        self.assertEqual(mixture_category_for("claude-fable-5-1", "xhigh", parent_model="kimi-k3"), "")
 
     def test_an_astra_xhigh_child_is_labeled_forensics(self):
         # Astra at xhigh sits second in ultrabrain and architect and heads
@@ -775,8 +778,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
             "claude-opus-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-sonnet-5-5": ("anthropic", "medium", "writing", "anthropic", "openai"),
             "claude-haiku-5-5": ("anthropic", "low", "simple-work", "anthropic", "openai"),
-            # Fable 5.1 at `xhigh` heads ultrabrain since 2026-11-09.
-            "claude-fable-5-1": ("anthropic", "xhigh", "ultrabrain", "anthropic", "openai"),
+            # Fable at `xhigh` heads ultrabrain since 2026-11-09 (Fable 5.2
+            # since 2026-11-10).
+            "claude-fable-5-2": ("anthropic", "xhigh", "ultrabrain", "anthropic", "openai"),
         }
         # A contract in no shipped chain, named by no provider-family row,
         # has nothing for its aliases to inherit. Jev is that case by
@@ -787,9 +791,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # own test above checks pricing, provider eligibility, and `-pro`.
         # GPT-6 Cyber (2026-11-06) is access-gated and never chained; its own
         # test above checks the same three things.
-        # Claude Fable 5.2 (2026-11-10) is contracted ahead of its chain
-        # placement; its own contract tests check pricing and projection.
-        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-2"}
+        # Claude Fable 5.1 left every shipped chain on 2026-11-10; its
+        # recognition-only provider row is checked in test_provider_entitlements.
+        unchained = {"jev-1.13.0", "gpt-6.1-terra", "gpt-6-cyber", "claude-fable-5-1"}
         for model_id in (*contracts, *expected):
             contract_id = expected.get(model_id, (model_id,))[0]
             if contract_id in unchained:
@@ -1741,7 +1745,7 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
                 "effort": "high",
                 "started_at": NOW - 60,
                 "usage": {
-                    "model": "claude-fable-5-1",
+                    "model": "claude-fable-5-2",
                     "input_tokens": 10_000,
                     "output_tokens": 4_000,
                     "last_seen": NOW - 5,
@@ -1754,7 +1758,7 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
         # Then: the label names the observed model instead of the bare
         # `:high` the empty recording used to produce, and everything keyed
         # off the model follows it -- category here, and pricing below.
-        self.assertEqual(row["model"], "claude-fable-5-1")
+        self.assertEqual(row["model"], "claude-fable-5-2")
         self.assertEqual(row["effort"], "high")
         self.assertEqual(row["category"], "visual-engineering")
         self.assertTrue(row["cost_approximate"])

@@ -141,8 +141,9 @@ CODING_MODEL_ROUTE_CLAIM_BOUNDARY: Final[str] = (
 # ids this catalog has never heard of, so requested models always pass
 # through unvalidated — the catalog is a default candidate list, not an
 # allowlist. The Opus 5.5 and Fable-tier rows are concrete ids on purpose:
-# the owner-ordered Claude chain (Opus 5.5 -> Fable 5.1, owner decision
-# 2026-10-13, reversing the 2026-09-06 Fable -> Opus order) needs both
+# the owner-ordered Claude chain (Opus 5.5 -> Fable 5.2, owner decision
+# 2026-10-13 for Fable 5.1, reversing the 2026-09-06 Fable -> Opus order;
+# Fable 5.2 took the Fable slot on 2026-11-10) needs both
 # generations named exactly, which neither alias can do -- `opus` is whatever
 # Opus the client recommends, and `fable` cannot pin the tier. The `opus`
 # alias stays as the chain's always-resolving tail. The `haiku` and
@@ -154,7 +155,9 @@ CODING_MODEL_ROUTE_CLAIM_BOUNDARY: Final[str] = (
 # candidates for a user who names them: each is the same model as its Fable
 # sibling served only to organizations Anthropic has verified, so an
 # unapproved account gets a provider rejection and no shipped chain
-# recommends them.
+# recommends them. The Fable 5.1 row stays after it left every shipped chain
+# (2026-11-10), as the retired GPT rows above do: it is this catalog's
+# authority over the effort of an explicit `--model claude-fable-5-1`.
 MODEL_CATALOG_KIND: Final[str] = "built_in_defaults"
 
 # Closed vocabulary for a route's catalog basis. `local_inventory` marks a
@@ -249,15 +252,9 @@ EXECUTOR_MODEL_OPTIONS: Final[dict[str, tuple[dict[str, object], ...]]] = {
             "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
         },
         {
-            "model_id": "claude-fable-5-1",
-            "label": "Claude Fable 5.1 (most capable widely released tier)",
-            "tier": "frontier",
-            "recommended_roles": ("brain", "review", "design_visual"),
-            "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
-        },
-        {
-            # Claude Fable 5.2 (2026-11-09). The Claude Code client needs
-            # v2.1.290 or newer for this id (observed, model contract
+            # Claude Fable 5.2 (2026-11-09) takes the Fable 5.1 row's place in
+            # the chain (owner decision, 2026-11-10). The Claude Code client
+            # needs v2.1.290 or newer for this id (observed, model contract
             # `surface_notes.claude_code`). Ladder from the exact contract.
             "model_id": "claude-fable-5-2",
             "label": "Claude Fable 5.2 (most capable widely released tier)",
@@ -268,6 +265,13 @@ EXECUTOR_MODEL_OPTIONS: Final[dict[str, tuple[dict[str, object], ...]]] = {
         {
             "model_id": "claude-mythos-5-2",
             "label": "Claude Mythos 5.2 (Fable 5.2 weights, verified organizations only)",
+            "tier": "frontier",
+            "recommended_roles": ("brain", "review", "design_visual"),
+            "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
+        },
+        {
+            "model_id": "claude-fable-5-1",
+            "label": "Claude Fable 5.1 (previous Fable generation)",
             "tier": "frontier",
             "recommended_roles": ("brain", "review", "design_visual"),
             "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
@@ -418,10 +422,12 @@ CATEGORY_SCALE_SOURCES: Final[dict[str, tuple[str, ...]]] = {
 
 # The built-in category->model table, the fallback for a profile with no local
 # inventory. Codex takes vendor model ids; Claude Code takes the pinned Opus
-# 5.5 id, then the pinned Fable 5.1 id, then the `opus` alias (owner decision,
+# 5.5 id, then the pinned Fable id, then the `opus` alias (owner decision,
 # 2026-10-13: literally "Opus 5.5 before Fable 5.1", with the alias as the
-# always-resolving tail the pre-2026-10-13 chain also ended on).
-CLAUDE_FRONTIER_CHAIN_MODELS: Final[tuple[str, ...]] = ("claude-opus-5-5", "claude-fable-5-1", "opus")
+# always-resolving tail the pre-2026-10-13 chain also ended on). Fable 5.2
+# took the Fable slot on 2026-11-10 (owner decision, superseded-generation
+# rule); the client needs v2.1.290 or newer for that id (observed).
+CLAUDE_FRONTIER_CHAIN_MODELS: Final[tuple[str, ...]] = ("claude-opus-5-5", "claude-fable-5-2", "opus")
 
 
 def _CLAUDE_FRONTIER_CHAIN(effort: str) -> tuple[dict[str, str], ...]:
@@ -473,10 +479,10 @@ BUILTIN_CATEGORY_MODELS: Final[dict[str, dict[str, tuple[dict[str, str], ...]]]]
     # Claude Code: every frontier category runs the owner-ordered Claude chain
     # (owner decision, 2026-10-13, reversing the 2026-09-06 Fable -> Opus
     # order the Hermes lane also left that day): the pinned `claude-opus-5-5`
-    # heads it, `claude-fable-5-1` is the fall-through, and the `opus` alias
+    # heads it, `claude-fable-5-2` is the fall-through, and the `opus` alias
     # is the tail. The chain is next-candidate advice (omh never retries or
     # switches models itself), so a run moves down it only when the operator
-    # or a dispatcher acts on a rejection: Fable 5.1 when the account does
+    # or a dispatcher acts on a rejection: Fable 5.2 when the account does
     # not serve the pinned Opus 5.5 id, then `opus`, which every Claude Code
     # resolves -- to Opus 5.5 from v2.1.280 and to Opus 4.6 on Microsoft
     # Foundry -- so the tail keeps the out-of-the-box behavior.

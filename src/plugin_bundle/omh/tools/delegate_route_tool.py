@@ -591,7 +591,7 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
                 "enum": sorted(HERMES_MIXTURE_CATEGORY_CHAINS),
                 "description": (
                     "Mixture category to route to; resolves to the chain head "
-                    "(e.g. ultrabrain -> claude-fable-5-1 xhigh). Required for set unless "
+                    "(e.g. ultrabrain -> claude-fable-5-2 xhigh). Required for set unless "
                     "an explicit model is given."
                 ),
             },

@@ -376,14 +376,14 @@ class DelegateRouteToolTest(unittest.TestCase):
     def test_a_routed_alias_dispatches_the_providers_own_model_name(self):
         self._record_providers("gateway")
         self._write_provider_routes(
-            {"claude-fable-5-1": {"provider": "gateway", "model": "vendor/claude-fable-5-1"}}
+            {"claude-fable-5-2": {"provider": "gateway", "model": "vendor/claude-fable-5-2"}}
         )
         result = self._call(action="set", category="ultrabrain")
         self.assertEqual(
             result["applied"],
             {
-                "alias": "claude-fable-5-1",
-                "model": "vendor/claude-fable-5-1",
+                "alias": "claude-fable-5-2",
+                "model": "vendor/claude-fable-5-2",
                 "provider": "gateway",
                 "reasoning_effort": "xhigh",
             },
@@ -420,8 +420,8 @@ class DelegateRouteToolTest(unittest.TestCase):
         self.assertEqual(
             result["applied"],
             {
-                "alias": "claude-fable-5-1",
-                "model": "claude-fable-5-1",
+                "alias": "claude-fable-5-2",
+                "model": "claude-fable-5-2",
                 "reasoning_effort": "xhigh",
             },
         )
@@ -750,8 +750,8 @@ class DelegateRouteToolTest(unittest.TestCase):
         self.assertEqual(
             result["applied"],
             {
-                "alias": "claude-fable-5-1",
-                "model": "claude-fable-5-1",
+                "alias": "claude-fable-5-2",
+                "model": "claude-fable-5-2",
                 "reasoning_effort": "xhigh",
             },
         )
@@ -759,7 +759,7 @@ class DelegateRouteToolTest(unittest.TestCase):
         self.assertIn("Prepared route only", result["evidence_boundary"])
         self.assertEqual(
             read_delegation_route(self.home),
-            {"model": "claude-fable-5-1", "reasoning_effort": "xhigh"},
+            {"model": "claude-fable-5-2", "reasoning_effort": "xhigh"},
         )
 
     def test_every_category_now_routes_an_explicit_effort(self):

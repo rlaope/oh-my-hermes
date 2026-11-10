@@ -2205,7 +2205,7 @@ class GrokBuildPriceTests(unittest.TestCase):
 class FableTwoContractTests(unittest.TestCase):
     """Claude Fable 5.2 (2026-11-09) got its own exact contract on 2026-11-10,
     read from its own pages; Claude Mythos 5.2 gets none, as Mythos 5.1 got
-    none."""
+    none, and stays out of every shipped chain."""
 
     def test_contract_fields_come_from_the_fable_52_pages(self) -> None:
         contract = model_contract("claude-fable-5-2")
@@ -2266,12 +2266,47 @@ class FableTwoContractTests(unittest.TestCase):
         # The retired generation keeps its own price row.
         self.assertEqual(APPROX_PRICE_PER_MTOK["claude-fable-5-1"], (10.0, 50.0))
 
-    def test_mythos_52_has_no_contract_but_stays_routable(self) -> None:
+    def test_mythos_52_has_no_contract_and_no_shipped_chain_but_stays_routable(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+        from omh.coding.model_routing import BUILTIN_CATEGORY_MODELS
+
         self.assertIsNone(model_contract("claude-mythos-5-2"))
+        hermes = {
+            candidate["model_alias"]
+            for section in ("categories", "role_suggestions", "domain_affinities", "last_resort")
+            for chain in SHIPPED_MODEL_RECOMMENDATIONS[section].values()
+            for candidate in chain
+        }
+        maestro = {
+            entry["model_id"] for categories in BUILTIN_CATEGORY_MODELS.values()
+            for chain in categories.values() for entry in chain
+        }
+        for model_id in ("claude-mythos-5-2", "claude-fable-5-1"):
+            with self.subTest(model_id=model_id):
+                self.assertNotIn(model_id, hermes)
+                self.assertNotIn(model_id, maestro)
         route = resolve_model_route("claude-code", requested_model="claude-mythos-5-2", requested_effort="xhigh")
         self.assertEqual(route["status"], "routed")
         self.assertEqual(route["selected_model"], "claude-mythos-5-2")
         self.assertEqual(route["model_family"], "claude")
+
+    def test_fable_52_heads_ultrabrain_and_takes_every_fable_51_slot(self) -> None:
+        from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
+        from omh.coding.model_routing import CLAUDE_FRONTIER_CHAIN_MODELS
+
+        ultrabrain = SHIPPED_MODEL_RECOMMENDATIONS["categories"]["ultrabrain"]
+        self.assertEqual(
+            [(entry["model_alias"], entry["reasoning_effort"]) for entry in ultrabrain],
+            [("claude-fable-5-2", "xhigh"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")],
+        )
+        self.assertEqual(CLAUDE_FRONTIER_CHAIN_MODELS, ("claude-opus-5-5", "claude-fable-5-2", "opus"))
+        for category, chain in SHIPPED_MODEL_RECOMMENDATIONS["categories"].items():
+            for entry in chain:
+                if entry["model_alias"] == "claude-fable-5-2":
+                    contract = model_contract("claude-fable-5-2")
+                    assert contract is not None
+                    with self.subTest(category=category):
+                        self.assertIn(entry["reasoning_effort"], contract["reasoning_efforts"])
 
     def test_the_cli_prints_the_contract(self) -> None:
         code, stdout, stderr = run_cli(

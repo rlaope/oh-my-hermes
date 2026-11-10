@@ -466,7 +466,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # -> Opus 5.5; that branch's pin was b40a640d...731df, and this branch's was 88ddc8a4...71bf.
         # dag-ulw's ladder quality bar and run-loop lint then name the one judgement node that takes `ultrabrain`,
         # only where the routes serve it; only dag-ulw moves, and the pin before it was 0b3c71d9...1783.
-        self.assertEqual(_digest(legacy_hashes), '4713baa9f74ee17d9a945ec0084647a1639830fed1a95f7349d79b9948bc5447')
+        # model-setup's chain sentence then names Fable 5.2 in every Fable 5.1 slot and lists Fable 5.1 among
+        # the superseded generations; only model-setup moves, and the pin before it was 4713baa9...5447.
+        self.assertEqual(_digest(legacy_hashes), '7ac345f6da42057addec4711143d39748dd6ba7d4867c60be60bf5edbbe5e62f')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -63,7 +63,7 @@ class ResearchRoleTests(unittest.TestCase):
         self.assertEqual(deep["selected_model"], "claude-opus-5-5")
         self.assertEqual(
             [entry["model_id"] for entry in deep["chain"]][:3],
-            ["claude-opus-5-5", "claude-fable-5-1", "opus"],
+            ["claude-opus-5-5", "claude-fable-5-2", "opus"],
         )
         # `deep` reads the `ultrabrain` category, which is the deepest rung and
         # is reachable only by DECLARING it -- so the escalation to xhigh costs
@@ -855,7 +855,7 @@ class RouteVocabularyPolicyTests(unittest.TestCase):
         # empty effort would run below what the category asks for.
         from omh.coding.model_routing import BUILTIN_CATEGORY_MODELS, CLAUDE_FRONTIER_CHAIN_MODELS
 
-        self.assertEqual(CLAUDE_FRONTIER_CHAIN_MODELS, ("claude-opus-5-5", "claude-fable-5-1", "opus"))
+        self.assertEqual(CLAUDE_FRONTIER_CHAIN_MODELS, ("claude-opus-5-5", "claude-fable-5-2", "opus"))
         claude = BUILTIN_CATEGORY_MODELS["claude-code"]
         expected_efforts = {
             "ultrabrain": "xhigh",

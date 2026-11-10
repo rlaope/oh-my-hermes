@@ -14,8 +14,8 @@ table out of human hands the same way the ULW regions are.
 Two things the table shows do not exist as catalog data, so they live here and
 only here:
 
-- The display label for a model alias (`claude-fable-5-1` -> `Claude Fable
-  5.1`). The alias is what routing uses; the label is what a reader needs.
+- The display label for a model alias (`claude-fable-5-2` -> `Claude Fable
+  5.2`). The alias is what routing uses; the label is what a reader needs.
 - The "What it is for" phrase per surface. This is editorial one-line prose,
   and the same strings are already duplicated into `site/i18n.js` under the
   `chain.*` keys; source is the better home for them.
