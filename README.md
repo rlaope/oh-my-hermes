@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami's chat holds replies from Discord #releases and Slack #design, then the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts; the Plans panel shows the graph with Claude Code, Codex, omp and pi marks on its parts" width="900">
-
 ### omher, the desktop app
+
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami's chat holds replies from Discord #releases and Slack #design, then the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts; the Plans panel shows the graph with Claude Code, Codex, omp and pi marks on its parts" width="900">
 
 Your Hermes bots, coding sessions and `dag-ulw` runs, in one window.
 
-[macOS (Apple silicon)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-arm64.dmg) · [macOS (Intel)](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-macos-x64.dmg) · [Windows](https://github.com/rlaope/oh-my-hermes/releases/download/omher-v0.1.0/omher-0.1.0-windows-x64-setup.exe) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
+[macOS (Apple silicon)](https://omher.app/#omher) · [macOS (Intel)](https://omher.app/#omher) · [Windows](https://omher.app/#omher) · [All releases →](https://github.com/rlaope/oh-my-hermes/releases?q=omher&expanded=true)
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
