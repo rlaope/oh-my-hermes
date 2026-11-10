@@ -16,7 +16,7 @@ from contextlib import ExitStack
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from .pi_family_names import canonical_progress_record
 from .approval_bypass import effective_approval_bypass
@@ -983,11 +983,13 @@ def read_omh_hud(
     tui_identity_expected: bool = False,
     delegation_graph: bool = True,
     dag_run: str | None = None,
+    dag_open: Sequence[int] = (),
 ) -> dict[str, Any]:
     """The HUD payload for one reading session.
 
     ``dag_run`` is for a pane that lets the person switch between the session's dag runs: a string (empty for the
-    newest) draws that run and adds ``dag_runs``, the runs to choose from; ``None`` leaves both out.
+    newest) draws that run and adds ``dag_runs``, the runs to choose from; ``None`` leaves both out. ``dag_open`` are
+    the graph's layers that pane holds open, sent whole (`delegation_graph._bounded`).
 
     Without ``delegation_graph`` the payload's graph is left inactive
     (``not_requested``) unread: a reader that only wants the status line, or
@@ -1083,7 +1085,7 @@ def read_omh_hud(
         # toggle between turns shows on the next widget poll; the hook
         # ledger answers only when neither surface speaks. The [OMH] status
         # line renders it as "yolo mode: on/off".
-        "yolo": effective_approval_bypass(str(home), str(hermes)),
+        "yolo": effective_approval_bypass(str(home), str(hermes), session_id=reading[0] if scoped else ""),
         "evidence_boundary": (
             "HUD is metadata-only. Prepared handoffs are not execution, review, CI, merge, or token-usage evidence. "
             "Todo items are plan declarations, not execution evidence."
@@ -1209,6 +1211,7 @@ def read_omh_hud(
             scope="session" if scoped else "global",
             dag_run=dag_run or "",
             keep_dag=dag_run is not None,
+            open_layers=dag_open,
         )
         if dag_run is not None and scoped:
             payload["dag_runs"] = dag_run_choices(home, hermes, graph_session)

@@ -98,6 +98,10 @@ export function useQuery(options) {
     globalThis.__omh.contextQuery = options
     return globalThis.__omh.context
   }
+  if (options.queryKey[1] === 'stats') {
+    globalThis.__omh.statsQuery = options
+    return globalThis.__omh.stats
+  }
   globalThis.__omh.lastQuery = options
   return globalThis.__omh.query
 }
@@ -130,6 +134,7 @@ const [pluginPath, scenariosPath, formatterCasesPath] = process.argv.slice(2)
 globalThis.__omh = {
   gateway: 'open', stored: null, model: '', usage: null, focused: '', breakdown: undefined, requests: [],
   query: { data: undefined, error: null }, lastQuery: null, context: { data: undefined, error: null }, contextQuery: null,
+  stats: { data: undefined, error: null }, statsQuery: null,
   revealed: [], notified: [], tips: [], dots: [], badges: []
 }
 const styleEvents = []
@@ -229,8 +234,10 @@ for (const [name, scenario] of Object.entries(scenarios)) {
     error: scenario.errorMessage ? new Error(scenario.errorMessage) : null
   }
   globalThis.__omh.context = { data: scenario.breakdown, error: null }
+  globalThis.__omh.stats = { data: scenario.stats, error: null }
   globalThis.__omh.lastQuery = null
   globalThis.__omh.contextQuery = null
+  globalThis.__omh.statsQuery = null
   globalThis.__omh.requests = []
   replay(scenario)
   globalThis.__omh.revealed = []
@@ -261,13 +268,15 @@ for (const [name, scenario] of Object.entries(scenarios)) {
   await query.queryFn()
   const asked = globalThis.__omh.contextQuery
   if (asked) await asked.queryFn()
+  const counted = globalThis.__omh.statsQuery
   const sentinel = { previous: true }
   renders[name] = {
     byId,
     refetchInterval: query.refetchInterval,
     enabled: query.enabled,
     queryKey: query.queryKey,
-    keepsPreviousData: typeof query.placeholderData === 'function' && query.placeholderData(sentinel) === sentinel,
+    keepsPreviousData: typeof query.placeholderData === 'function' && query.placeholderData(sentinel, { queryKey: query.queryKey }) === sentinel,
+    dropsOtherChat: typeof query.placeholderData === 'function' && query.placeholderData(sentinel, { queryKey: [...query.queryKey.slice(0, 2), 'other-chat', ''] }) === undefined,
     context: asked
       ? {
           enabled: asked.enabled,
@@ -277,6 +286,7 @@ for (const [name, scenario] of Object.entries(scenarios)) {
           dropsOtherChat: asked.placeholderData(sentinel, { queryKey: [...asked.queryKey.slice(0, 2), 'other-chat'] }) === undefined
         }
       : null,
+    stats: counted ? { enabled: counted.enabled, queryKey: counted.queryKey } : null,
     restCalls: [...restCalls],
     revealed: clicked,
     tips: [...globalThis.__omh.tips],
@@ -310,19 +320,24 @@ const local = {
   // A lane record as the backend sends it, read into the detail's prompt legend.
   laneLegend: record => mod.usageLegend(mod.laneUsage(record)),
   koreanStates: states => states.map(state => [state, mod.stateWord(state, 'en'), mod.stateWord(state, 'ko')]),
-  // The pane body as the browser measures it: `clientWidth` px wide, one cell of the drawing's font `cell` px.
-  measureCellsAt: (clientWidth, cell) => {
-    const made = globalThis.document.createElement
-    const probes = []
-    globalThis.document.createElement = tag => {
-      const probe = { tagName: tag, className: '', textContent: '', getBoundingClientRect() { return { width: cell * this.textContent.length } }, remove() { probes.push(this.className) } }
-      return probe
+  // The layers a run folds under a mode, the person's own folds and an open lane.
+  foldsOf: (graph, mode, overrides, pick) => [...mod.foldedLayers(mod.dagModel(graph), mode, overrides || {}, pick || '')].sort((a, b) => a - b),
+  // The edges drawn once `folded` layers stand behind their chips.
+  // A graph the reader cut by layer: each layer's lanes, what it holds counted whole, and what `auto` folds.
+  cutLayers: graph => {
+    const dag = mod.dagModel(graph)
+    return {
+      layers: dag.layers,
+      summaries: dag.layers.map((ids, at) => {
+        const summary = mod.layerSummary(dag, at)
+        return [summary.count, summary.hidden, summary.state]
+      }),
+      folds: [...mod.foldedLayers(dag, 'auto', {}, '')].sort((a, b) => a - b)
     }
-    try {
-      return [mod.measureCells({ clientWidth, append() {} }), probes]
-    } finally {
-      globalThis.document.createElement = made
-    }
+  },
+  foldedEdges: (graph, folded) => {
+    const dag = mod.dagModel(graph)
+    return mod.foldedView(dag, new Set(folded), dag.edges, null).edges.map(edge => `${edge.from}>${edge.to}`)
   }
 }
 for (const [name, cases] of Object.entries(formatterCases)) {
@@ -374,6 +389,7 @@ for (const name of koreanScenarios) {
   globalThis.__omh.usage = scenario.usage || null
   globalThis.__omh.focused = scenario.focused || ''
   globalThis.__omh.context = { data: scenario.breakdown, error: null }
+  globalThis.__omh.stats = { data: scenario.stats, error: null }
   globalThis.__omh.tips = []
   replay(scenario)
   const byId = {}
@@ -728,6 +744,22 @@ DAG_GRAPH = _dag_graph(
     ["Write a.txt", "Sum", "Check"],
     [["Sum", 1]],
 )
+# What the reader sends for a run it cut (`delegation_graph._bounded`): kept lanes carry their layer, and every layer
+# counts the lanes it lost. Layer 0 lost all four of its own, layer 1 two of three.
+CUT_DAG_GRAPH = {
+    **_dag_graph(
+        [_dag_lane("b", "B", state="done", status="accepted"), _dag_lane("c", "C", state="running", status="running"),
+         _dag_lane("d", "D", waits_on=1)],
+        [("b", "c"), ("c", "d")],
+        [],
+        [],
+    ),
+    "hidden_nodes": 6,
+    "layer_hidden": [{"count": 4, "states": {"done": 4}}, {"count": 2, "states": {"done": 2}}, {"count": 0, "states": {}},
+                     {"count": 0, "states": {}}],
+}
+for _lane, _at in zip((node for node in CUT_DAG_GRAPH["nodes"] if node.get("kind") != "root"), (1, 2, 3)):
+    _lane["layer"] = _at
 FANOUT_GRAPH = {
     **DAG_GRAPH,
     "source": "fanout",
@@ -742,6 +774,15 @@ FANOUT_GRAPH = {
     ],
 }
 FANOUT_GRAPH.pop("dag_topology")
+# A large run under way: three layers done, the fourth running, eight more waiting.
+WORKING_DAG_GRAPH = _dag_graph(
+    [_dag_lane(f"n{at}", f"Step {at}", state="done", status="accepted") if at < 3
+     else _dag_lane(f"n{at}", f"Step {at}", state="running", status="running") if at == 3
+     else _dag_lane(f"n{at}", f"Step {at}") for at in range(12)],
+    [(f"n{at}", f"n{at + 1}") for at in range(11)],
+    ["Step 0"],
+    [],
+)
 BEYOND_DAG_GRAPH = _dag_graph(
     [_dag_lane(f"n{at}", f"Step {at}") for at in range(17)],
     [(f"n{at}", f"n{at + 1}") for at in range(16)],
@@ -830,7 +871,17 @@ SCENARIOS["usage_board_stream_only"] = {
     "focused": "rt-2",
     "usage": {"model": "gpt-6-luna", "calls": 2, "input": 500, "prompt": 4000, "output": 300, "cache_hit_pct": 50},
 }
+# The gateway's `session.stats` answer (`gateway/session_usage.py::usage_stats`) for a chat seven calls in.
+GATEWAY_STATS = {
+    "input_tokens": 4000, "cache_read_tokens": 36000, "cache_write_tokens": 0, "output_tokens": 2000,
+    "prompt_tokens": 40000, "completion_tokens": 2000, "total_tokens": 42000, "reasoning_tokens": 0, "api_calls": 7,
+    "last_prompt_tokens": 50000, "context_tokens": 50000, "context_length": 200000, "context_source": "provider_usage",
+    "avg_latency_s": 2.5, "tokens_per_s": 33.3, "model": "claude-opus-5-5", "provider": "custom",
+}
+
 SCENARIOS["usage_board_unknown"] = {**SCENARIOS["open_with_payload"], "usage": None}
+# A chat whose only figures are the gateway's counters: the case a recorded chat with no row yet showed nothing for.
+SCENARIOS["usage_board_gateway"] = {**SCENARIOS["usage_board_unknown"], "focused": "rt-9", "stats": GATEWAY_STATS}
 # A fresh run with nothing counted yet: live, so not grey.
 SCENARIOS["runtime_only"] = {
     "gateway": "open",
@@ -869,11 +920,10 @@ IMPLIED_EDGES_GRAPH = {
 # carries the answers in this order.
 FORMATTER_CASES = {
     "pollInterval": [[True], [False]],
-    "hudPath": [[None, 44], ["s 1", 0], [None, None], ["s", 61], ["s", 61, "r 1"]],
+    "hudPath": [[None, ""], ["s 1"], [None, None], ["s", "r 1"], ["s", "", "1,4"]],
     "segmentTone": [["node:running"], ["node:done"], ["node-title:done"], ["node-word:waiting"], ["glyph:failed"],
                     ["status:stuck"], ["node:interrupted"], ["edge"], ["connector"], ["connector:running"], ["header"],
                     ["frontier"], ["model"], ["something"], [""]],
-    "measureCellsAt": [[320, 6.6], [420, 6.6], [320, 0]],
     "rowFigures": [[{"state": "running", "tool_count": count}, 0] for count in (0, 1, 2)],
     "stateWord": [["running"], ["blocked_by_dependency"], ["review"], ["some_new_state"], [""], ["failed", "ko"], ["review", "ko"]],
     # Every fanout status the reader accepts and every stuck unit state, read in Korean.
@@ -893,6 +943,18 @@ FORMATTER_CASES = {
         [{"dag_runs": DAG_RUNS}, ""], [{"dag_runs": DAG_RUNS}, "old"], [{"dag_runs": DAG_RUNS}, "gone"],
         [{"dag_runs": DAG_RUNS[:1]}, ""], [{}, ""],
     ],
+    "foldsOf": [
+        [WORKING_DAG_GRAPH, "auto"], [WORKING_DAG_GRAPH, "active"], [WORKING_DAG_GRAPH, "open"], [WORKING_DAG_GRAPH, "closed"],
+        # A layer the person opened stays open under the mode; the open lane's layer is never folded.
+        [WORKING_DAG_GRAPH, "auto", {"1": True}], [WORKING_DAG_GRAPH, "auto", {}, "d:r:n7"],
+        # A layer the person folded stays folded, although the mode would leave it open.
+        [WORKING_DAG_GRAPH, "open", {"4": False}],
+        # A small run reads whole; a large one with nothing started keeps its first layers open.
+        [DAG_GRAPH, "auto"], [BEYOND_DAG_GRAPH, "auto"],
+    ],
+    "foldedEdges": [[DAG_GRAPH, [0]], [DAG_GRAPH, [1]], [DAG_GRAPH, []]],
+    "cutLayers": [[CUT_DAG_GRAPH]],
+    "dagViewOptions": [[None], [{"fold": "closed", "figures": False, "implied": True}], [{"fold": "sideways", "compact": "yes"}]],
     "dagModel": [
         [DAG_GRAPH],
         [FANOUT_GRAPH],
@@ -909,7 +971,7 @@ FORMATTER_CASES = {
         # a to fix dependency stays although a reaches fix through c's repair; a repeated edge is one edge.
         [IMPLIED_EDGES_GRAPH],
     ],
-    "t": [["graphTitle", {"ready": 1, "edges": 1}], ["graphTitle", {"ready": 1, "edges": 2}], ["stateIdle", {}, "ko"]],
+    "t": [["dgLayerFold", {"layer": 1, "count": 1}], ["dgLayerFold", {"layer": 1, "count": 2}], ["stateIdle", {}, "ko"]],
     "foldLabels": [[[{"state": "done"}] * 4, {"start": 3, "earlier": 3, "later": 1}]],
     "agentTally": [[{**SCENARIOS["graph_and_other"]["data"], "subagents": {"rows": [RUNNING_ROW], "hidden_rows": 1, "hidden_in_graph": 9}}]],
     "tokenCountText": [[77000], [184800], [999950], [999], [0], [-1]],
@@ -995,6 +1057,14 @@ FORMATTER_CASES = {
         [{"live": {"prompt": 4000, "output": 300}, "withSubs": True,
           "subs": {"lanes": 1, "priced": 1, "input": 200, "read": 0, "write": 0, "output": 50, "cost": 0.25,
                    "estimated": False, "partial": False}}],
+        # The gateway's counters run ahead of the row (they count the turn in flight): they take the tokens, the
+        # window, the speed and the model, and the row's cost becomes a floor. Then the same counters behind the row.
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 1000, "cache_read": 500, "output": 100, "cost_usd": 0.5},
+          "stats": GATEWAY_STATS}],
+        [{"stored": "c1", "saved": {"session_id": "c1", "input": 90000, "cache_read": 500, "output": 100, "cost_usd": 0.5},
+          "stats": GATEWAY_STATS}],
+        # Counters before the first call are no figures.
+        [{"stats": {**GATEWAY_STATS, "api_calls": 0}}],
     ],
     "elapsedText": [[12], [242], [7260], [None]],
     "costSegmentText": [
@@ -1384,6 +1454,12 @@ class DesktopPluginFileTests(unittest.TestCase):
         self.assertEqual(struck, [".omh-pane-item[data-state=done] .omh-pane-item-label"])
 
 
+# Every pane draws these five sections, in this order, whatever the payload says (owner, 2026-11-10).
+SECTION_LABELS = ("USAGE", "CATCHES", "PLAN", "DAG", "AGENTS")
+KOREAN_SECTION_LABELS = ("사용량", "잡아낸 실수", "계획", "DAG", "에이전트")
+UNAVAILABLE = ["Not available: the OMH backend did not answer"]
+
+
 def _split_at_dag(render: dict) -> tuple[list[dict], list[dict]]:
     """The pane's nodes above the DAG block (the usage board among them) and from its `DAG` header on."""
     nodes = render["structure"]
@@ -1451,6 +1527,23 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def _status(self, scenario: str) -> list[str]:
         return self._drive()["renders"][scenario]["byId"]["status"]
 
+    def _sections(self, scenario: str, korean: bool = False) -> dict[str, list[str]]:
+        """The pane's text per section, keyed by label, in order; `head` is what precedes the first."""
+        pane = self._drive()["korean" if korean else "renders"][scenario]["byId"]["hud"]
+        labels = KOREAN_SECTION_LABELS if korean else SECTION_LABELS
+        out: dict[str, list[str]] = {"head": []}
+        current = "head"
+        at = 0
+        while at < len(pane):
+            if pane[at] in ("▾", "▸") and at + 1 < len(pane) and pane[at + 1] in labels:
+                current = pane[at + 1]
+                out[current] = []
+                at += 2
+                continue
+            out[current].append(pane[at])
+            at += 1
+        return out
+
     def test_register_contributes_one_status_item_and_one_pane(self) -> None:
         report = self._drive()
         self.assertEqual(
@@ -1481,27 +1574,50 @@ class DesktopPluginNodeTests(unittest.TestCase):
         render = self._drive()["renders"]["open_with_payload"]
         self.assertEqual(render["refetchInterval"], 5000)
         self.assertTrue(render["enabled"])
-        self.assertTrue(render["keepsPreviousData"])
-        self.assertEqual(render["queryKey"], ["omh", "hud", "20260924_101010_abc123", 41, ""])
-        self.assertEqual(render["restCalls"], ["/hud?session=20260924_101010_abc123&cols=41"])
+        self.assertTrue(render["keepsPreviousData"], "a refetch keeps this chat's answer on screen")
+        self.assertTrue(render["dropsOtherChat"], "another chat's answer is never shown under this one")
+        self.assertEqual(render["queryKey"], ["omh", "hud", "20260924_101010_abc123", "", ""])
+        self.assertEqual(render["restCalls"], ["/hud?session=20260924_101010_abc123"])
 
     def test_the_pane_draws_the_plan_and_the_agent_rows_structurally(self) -> None:
         pane = self._pane("open_with_payload")
-        self.assertEqual(pane, [
-            "OMH", "1 running", "this session", "2 tools · 4m 2s",
-            # The usage board leads: the stream's counts (no recorded row here), its cost marked as unvouched.
-            "USAGE", "9 calls", "45.2k", "TPS", "—", "TTFT", "—", "send → first token", "Cost", "~$0.0120",
-            "Context", "—",
-            "PLAN", "Desktop check", "1/3", "Research", "1/1", "✓", "Read the pane spec",
-            "Build", "0/2", "●", "Draw the structured pane", "○", "Screenshot the result",
-            "waiting: needs the app", "2 subagents · 1 running",
+        sections = self._sections("open_with_payload")
+        self.assertEqual(list(sections), ["head", *SECTION_LABELS])
+        self.assertEqual(sections["head"], ["OMH", "1 running", "this session", "2 tools · 4m 2s"])
+        # The usage board leads: the stream's counts (no recorded row here), its cost marked as unvouched.
+        self.assertEqual(sections["USAGE"][:4], ["9 calls", "stream", "Main", "+ subagents (0)"])
+        self.assertEqual(sections["PLAN"], [
+            "Desktop check", "1/3", "Research", "1/1", "✓", "Read the pane spec",
+            "Build", "0/2", "●", "Draw the structured pane", "○", "Screenshot the result", "waiting: needs the app",
         ])
+        self.assertEqual(sections["CATCHES"], ["Nothing caught in this session"])
+        self.assertEqual(sections["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
+        self.assertEqual(sections["AGENTS"], ["2", "2 subagents · 1 running"])
         # Structured blocks replace both the legacy lines and Desktop's native rows.
         for line in ESTABLISHED_PAYLOAD["display"]["widget_lines"] + ESTABLISHED_PAYLOAD["display"]["todo_lines"]:
             self.assertNotIn(line, pane)
-        self.assertNotIn("AGENTS", pane)
         self.assertNotIn("a1b2c3d4", pane)
         self.assertNotIn("e5f6a7b8", pane)
+
+    def test_every_scenario_draws_the_same_five_sections_in_one_order(self) -> None:
+        """Mutation: drop a section that has nothing to say, or let a payload reorder them."""
+        for name in SCENARIOS:
+            with self.subTest(name=name):
+                self.assertEqual(list(self._sections(name))[1:], list(SECTION_LABELS))
+        for name in ("catches_and_lanes", "usage_board", "gateway_closed"):
+            with self.subTest(korean=name):
+                self.assertEqual(list(self._sections(name, korean=True))[1:], list(KOREAN_SECTION_LABELS))
+        self.assertIn("export const SECTION_ORDER = ['usage', 'catches', 'plan', 'dag', 'agents']", PLUGIN_JS.read_text(encoding="utf-8"))
+
+    def test_every_section_folds_and_remembers_it(self) -> None:
+        structure = self._drive()["renders"]["catches_and_lanes"]["structure"]
+        toggles = [node for node in structure if "omh-pane-section-toggle" in node["className"].split()]
+        self.assertEqual(len(toggles), len(SECTION_LABELS), "one fold control per section")
+        for toggle, label in zip(toggles, SECTION_LABELS):
+            self.assertTrue(toggle["text"].startswith(f"▾{label}"), toggle["text"])
+        self.assertTrue(all(node["text"].startswith("▾") for node in toggles), "every section starts open")
+        source = PLUGIN_JS.read_text(encoding="utf-8")
+        self.assertIn("const FOLD_STORE = 'omh-pane-folds'", source)
 
     def test_agent_rows_keep_the_secondary_figures_in_the_tooltip(self) -> None:
         render = self._drive()["renders"]["open_with_payload"]
@@ -1515,14 +1631,22 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertNotIn("$0.0000 (included)", route["byId"]["hud"])
 
     def test_the_pane_draws_maestro_board_dag_and_a_finished_plan(self) -> None:
-        pane = self._pane("maestro_and_board")
-        self.assertEqual(pane, [
+        sections = self._sections("maestro_and_board")
+        self.assertEqual(sections["head"], [
             "OMH", "1 running", "1 blocked", "this session", "repeat x3 blocked", "board 2 queued, 1 running",
-            "board dispatcher not seen", "yolo on", "PLAN", "Ship the pane", "✓ 1/2 (1 skipped)",
-            "✓", "Build it", "–", "Benchmark it", "skipped: no bench harness", "ROUTES", "2",
-            "⠋", "Refactor the router", "run-42", "(codex/maestro gpt-5.6)", "running", "30s",
-            "▲", "Triage the flaky suite", "kb-7", "kanban/unassigned(gpt-5.6:medium)", "review", "1m 1s",
-            "+2 more", "DAG", "1 ready · 1 edge", "✓", "a", "completed", "●", "b", "running", "○", "c", "waiting on b",
+            "board dispatcher not seen", "yolo on",
+        ])
+        self.assertEqual(sections["PLAN"], ["Ship the pane", "✓ 1/2 (1 skipped)", "✓", "Build it", "–", "Benchmark it", "skipped: no bench harness"])
+        self.assertEqual(sections["AGENTS"], [
+            "2", "⠋", "Refactor the router", "run-42", "(codex/maestro gpt-5.6)", "running", "30s",
+            "▲", "Triage the flaky suite", "kb-7", "kanban/unassigned(gpt-5.6:medium)", "review", "1m 1s", "+2 more",
+        ])
+        # The runtime graph is drawn as the same cards as a dag-ulw run, named for what it is, not a fanout.
+        dag = sections["DAG"]
+        self.assertEqual(dag[:3], ["1/3", "View", "runtime graph · 1 running · 1 waiting · 1 done"])
+        self.assertEqual(dag[dag.index("▾ layer 1"):], [
+            "▾ layer 1", "a", "—", "✓ done", "Start node", "b", "—", "● running", "Start node",
+            "▾ layer 2", "c", "—", "○ waiting", "← b",
         ])
 
     def test_the_parallel_shot_chip_shows_only_a_count_of_two_or_more(self) -> None:
@@ -1557,47 +1681,62 @@ class DesktopPluginNodeTests(unittest.TestCase):
             self.assertLessEqual(len(render["byId"]["status"]), 3)
 
     def test_a_plan_todo_list_holds_keeps_only_its_recorded_reason(self) -> None:
-        pane = self._pane("native_held_waiting")
-        start = pane.index("PLAN")
-        end = pane.index("2 subagents · 1 running")
-        self.assertEqual(pane[start:end], ["PLAN", "in Hermes todos", "1 waiting", "○", "Screenshot the result", "waiting: needs the app"])
-        self.assertNotIn("Draw the structured pane", pane)
+        self.assertEqual(self._sections("native_held_waiting")["PLAN"],
+                         ["in Hermes todos", "1 waiting", "○", "Screenshot the result", "waiting: needs the app"])
+        self.assertNotIn("Draw the structured pane", self._pane("native_held_waiting"))
         self.assertIn("Draw the structured pane", self._pane("open_with_payload"))
         self.assertEqual(self._status("native_held_waiting"), ["OMH", "1 running"])
 
-    def test_a_plan_todo_list_holds_with_nothing_omh_only_has_no_plan_section(self) -> None:
+    def test_a_plan_todo_list_holds_with_nothing_omh_only_says_where_the_steps_are(self) -> None:
         pane = self._pane("native_held_quiet")
-        self.assertNotIn("PLAN", pane)
+        self.assertEqual(self._sections("native_held_quiet")["PLAN"], ["in Hermes todos", "Steps are in the Hermes todos above the composer"])
         self.assertNotIn("Read the pane spec", pane)
         self.assertIn("2 subagents · 1 running", pane)
         self.assertEqual(self._status("native_held_quiet"), ["OMH", "1 running"])
 
     def test_an_undeclared_todo_is_said_rather_than_invented(self) -> None:
-        self.assertEqual(self._pane("no_todo_declared"), [
-            "OMH", "idle", "this session", "PLAN", "No plan yet", "A workflow adds one when it starts.",
-        ])
+        sections = self._sections("no_todo_declared")
+        self.assertEqual(sections["head"], ["OMH", "idle", "this session"])
+        self.assertEqual(sections["PLAN"], ["No plan yet", "A workflow adds one when it starts."])
+        self.assertEqual(sections["CATCHES"], ["Nothing caught in this session"])
+        self.assertEqual(sections["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
+        self.assertEqual(sections["AGENTS"], ["No subagents or routes in this session"])
 
     def test_a_reader_error_record_is_shown_as_a_quiet_notice(self) -> None:
         render = self._drive()["renders"]["reader_error"]
         self.assertEqual(render["byId"]["status"], ["OMH", "reader error"])
-        self.assertEqual(render["byId"]["hud"], [
-            "OMH", "reader error", "all sessions", "OMH backend: RuntimeBindingError: OMH home is not configured",
-        ])
-        self.assertEqual(render["restCalls"], ["/hud?cols=41"])
+        sections = self._sections("reader_error")
+        self.assertEqual(sections["head"], ["OMH", "reader error", "all sessions"])
+        # Every section the reader feeds says it could not answer; the notice under them names why.
+        for label in SECTION_LABELS[1:-1]:
+            self.assertEqual(sections[label], UNAVAILABLE)
+        self.assertEqual(sections["AGENTS"], [*UNAVAILABLE, "OMH backend: RuntimeBindingError: OMH home is not configured"])
+        self.assertEqual(render["restCalls"], ["/hud"])
 
     def test_a_transport_error_degrades_to_backend_unavailable(self) -> None:
         render = self._drive()["renders"]["transport_error"]
         self.assertEqual(render["byId"]["status"], ["OMH", "unavailable"])
-        self.assertEqual(render["byId"]["hud"], ["OMH", "unavailable", "all sessions", "OMH backend: HTTP 404: Plugin not found"])
+        sections = self._sections("transport_error")
+        self.assertEqual(sections["head"], ["OMH", "unavailable", "all sessions"])
+        self.assertEqual(sections["PLAN"], UNAVAILABLE)
+        self.assertEqual(render["byId"]["hud"][-1], "OMH backend: HTTP 404: Plugin not found")
 
-    def test_the_first_poll_renders_no_loading_text(self) -> None:
-        # Skeletons carry no text under the brand and scope line.
-        self.assertEqual(self._pane("loading"), ["OMH", "this session"])
+    def test_the_first_poll_reads_as_pending_in_every_section(self) -> None:
+        sections = self._sections("loading")
+        self.assertEqual(sections["head"], ["OMH", "this session"])
+        for label in SECTION_LABELS[1:]:
+            with self.subTest(label=label):
+                self.assertEqual(sections[label], ["reading…"])
 
     def test_polling_waits_for_an_open_gateway(self) -> None:
         render = self._drive()["renders"]["gateway_closed"]
         self.assertFalse(render["enabled"])
-        self.assertEqual(render["byId"]["hud"], ["OMH", "gateway connecting", "all sessions"])
+        sections = self._sections("gateway_closed")
+        self.assertEqual(sections["head"], ["OMH", "gateway connecting", "all sessions"])
+        # Nothing has been asked yet, so nothing is said to be unavailable: the sections wait.
+        for label in SECTION_LABELS[1:]:
+            with self.subTest(label=label):
+                self.assertEqual(sections[label], ["reading…"])
 
     def test_the_formatters_spell_figures_the_way_the_tui_widget_does(self) -> None:
         formatters = self._drive()["formatters"]
@@ -1717,59 +1856,47 @@ class DesktopPluginNodeTests(unittest.TestCase):
             {"seq": entry["seq"], "emoji": CATCH_EMOJI[entry["kind"]], "text": sentence}
             for entry, sentence in zip(CATCHES, expected)
         ]])
-        pane = self._pane("catches_and_lanes")
-        self.assertLess(pane.index("CATCHES"), pane.index("PLAN"))
-        self.assertLess(pane.index("PLAN"), pane.index("DELEGATION"))
-        self.assertLess(pane.index("DELEGATION"), pane.index("ROUTES"))
-        self.assertLess(pane.index("ROUTES"), pane.index("DAG"))
+        sections = self._sections("catches_and_lanes")
+        self.assertEqual(list(sections)[1:], list(SECTION_LABELS))
+        # A history, so its header says so and counts what it keeps.
+        self.assertEqual(sections["CATCHES"][:2], ["earlier in this session", "6"])
         for sentence in expected:
-            self.assertIn(sentence, pane)
-        self.assertNotIn("CATCHES", self._pane("open_with_payload"))
+            self.assertIn(sentence, sections["CATCHES"])
+        self.assertEqual(self._sections("open_with_payload")["CATCHES"], ["Nothing caught in this session"])
 
-    def test_inactive_delegation_is_absent_and_settled_lanes_collapse_to_a_summary(self) -> None:
+    def test_inactive_delegation_says_so_and_a_settled_run_keeps_its_cards(self) -> None:
         views = self._drive()["formatters"]["delegationView"]
         self.assertEqual(views[:2], [None, None])
         self.assertTrue(views[2]["settled"])
-        self.assertEqual(views[2]["summary"], "DAG · Pane refresh · done 1/2 · 1 failed")
-        self.assertNotIn("DELEGATION", self._pane("inactive_lanes"))
-        settled = self._pane("settled_lanes")
-        self.assertIn("DELEGATION", settled)
-        self.assertIn("DAG · Pane refresh · done 1/2 · 1 failed", settled)
-        self.assertNotIn("Settled child", settled)
-        self.assertNotIn("Failed child", settled)
-        self.assertIn("Pane refresh · 1 running", self._pane("catches_and_lanes"))
-        self.assertIn("Graph-drawn child", self._pane("catches_and_lanes"))
+        # The section is labelled DAG already; its run line does not say it twice.
+        self.assertEqual(views[2]["summary"], "Pane refresh · done 1/2 · 1 failed")
+        self.assertEqual(self._sections("inactive_lanes")["DAG"], ["No DAG in this session", "A delegated workflow draws its graph here."])
+        settled = self._sections("settled_lanes")["DAG"]
+        self.assertEqual(settled[:3], ["1/2", "View", "Pane refresh · done 1/2 · 1 failed"])
+        # Finished, the lanes stay inspectable rather than collapsing into the line.
+        self.assertIn("Settled child", settled)
+        self.assertIn("Failed child", settled)
+        live = self._sections("catches_and_lanes")["DAG"]
+        self.assertIn("Pane refresh · 1 running", live)
+        self.assertIn("Graph-drawn child", live)
 
-    def test_a_running_graph_is_the_backend_drawing_coloured_by_its_roles(self) -> None:
-        """Mutation: draw the lane rows beside the drawing, wrap it, or drop a segment's tone."""
-        render = self._drive()["renders"]["drawn_graph"]
-        pane = self._pane("drawn_graph")
-        drawn = [node for node in render["structure"] if node["className"] == "omh-pane-dag"]
-        self.assertEqual(len(drawn), 1)
-        self.assertEqual(drawn[0]["text"], "".join("".join(seg["text"] for seg in line) or " " for line in DRAWING["lines"]))
-        self.assertNotIn("omh-pane-lane", {node["className"] for node in render["structure"]})
-        self.assertIn("DELEGATION", pane)
-        titles = {node["text"]: node["className"] for node in render["structure"] if "omh-pane-dag-title" in node["className"]}
-        self.assertEqual(titles["Graph-drawn child"], "omh-pane-accent omh-pane-dag-title")
-        self.assertEqual(titles["Stuck child"], "omh-pane-warn omh-pane-dag-title")
-        self.assertIn("omh-pane-dag-card", {node["className"] for node in render["structure"]}, "the drawing sits in a card")
+    def test_every_graph_is_drawn_as_cards_and_never_as_text(self) -> None:
+        """Mutation: fall back to the backend's text drawing for a graph without topology, past a lane count, or on
+        a failed drawing; or send the pane's width for one."""
+        renders = self._drive()["renders"]
+        for name in ("drawn_graph", "wide_drawn", "drawing_error", "settled_lanes", "settled_drawn", "graph_and_other",
+                     "failed_lane", "catches_and_lanes", "dag_cards", "fanout_cards", "dag_beyond_cards", "maestro_and_board"):
+            with self.subTest(name=name):
+                classes = {name for node in renders[name]["structure"] for name in node["className"].split()}
+                self.assertTrue({"omh-pane-dv-canvas", "omh-pane-dv-card"} <= classes)
+                self.assertFalse({"omh-pane-dag", "omh-pane-lane", "omh-pane-dag-card"} & classes)
+                self.assertNotIn("cols=", " ".join(renders[name]["restCalls"]))
+        source = PLUGIN_JS.read_text(encoding="utf-8")
+        for gone in ("DAG_CARD_LIMIT", "measureCells", "delegation_drawing", "DEFAULT_DRAWING_CELLS"):
+            self.assertNotIn(gone, source)
         css = self._drive()["style"]["css"]
-        self.assertIn("white-space:pre;overflow-x:auto", css[css.index(".omh-pane-dag{"):])
-
-    def test_a_wide_segment_is_held_to_the_renderers_cells(self) -> None:
-        structure = self._drive()["renders"]["wide_drawn"]["structure"]
-        wide = [node for node in structure if "omh-pane-dag-wide" in node["className"]]
-        self.assertEqual([(node["text"], node["style"]) for node in wide], [("인증 모듈", {"width": "9ch"})])
-        css = self._drive()["style"]["css"]
-        self.assertIn(".omh-pane-dag-wide{display:inline-block;overflow:hidden;vertical-align:top}", css)
-
-    def test_without_a_usable_drawing_the_lanes_are_rows_and_a_settled_run_is_one_line(self) -> None:
-        failed = self._drive()["renders"]["drawing_error"]["structure"]
-        self.assertNotIn("omh-pane-dag", {node["className"] for node in failed})
-        self.assertIn("Stuck child", {node["text"] for node in failed if node["className"] == "omh-pane-lane-title"})
-        settled = self._drive()["renders"]["settled_drawn"]["structure"]
-        self.assertNotIn("omh-pane-dag", {node["className"] for node in settled})
-        self.assertIn("DAG · Pane refresh · done 1/2 · 1 failed", self._pane("settled_drawn"))
+        self.assertIn("container-type:inline-size", css)
+        self.assertNotIn(".omh-pane-dag{", css)
 
     def test_a_session_with_two_dag_runs_offers_to_switch_and_follows_the_newest_by_default(self) -> None:
         choices = self._drive()["formatters"]["dagRunChoices"]
@@ -1791,18 +1918,14 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertNotIn("main plan · done · 31 nodes", shown)
         self.assertFalse([line for line in self._pane("dag_cards") if "nodes · latest" in line])
 
-    def test_the_drawing_width_is_measured_and_sent_as_cols(self) -> None:
-        formatters = self._drive()["formatters"]
-        self.assertEqual(formatters["hudPath"], ["/hud?cols=44", "/hud?session=s%201", "/hud", "/hud?session=s&cols=61",
-                          "/hud?session=s&cols=61&dag_run=r%201"])
-        # (320 - 46) / 6.6 and (420 - 46) / 6.6 cells; nothing measured is no width; the probe is removed each time.
-        self.assertEqual(formatters["measureCellsAt"], [[41, ["omh-pane-dag-probe"]], [56, ["omh-pane-dag-probe"]],
-                                                        [0, ["omh-pane-dag-probe"]]])
-        self.assertIn("export const DEFAULT_DRAWING_CELLS = 41", PLUGIN_JS.read_text(encoding="utf-8"))
+    def test_the_hud_path_names_the_chat_and_the_dag_run_only(self) -> None:
+        self.assertEqual(self._drive()["formatters"]["hudPath"],
+                         ["/hud", "/hud?session=s%201", "/hud", "/hud?session=s&dag_run=r%201",
+                          "/hud?session=s&dag_open=1%2C4"])
 
     def test_drawing_roles_take_the_tui_meaning_of_each_state(self) -> None:
         self.assertEqual(self._drive()["formatters"]["segmentTone"], [
-            "accent", "accent", "accent", "muted", "error", "warn", "error", "mark", "mark", "accent", "secondary",
+            "accent", "ok", "ok", "muted", "error", "warn", "error", "mark", "mark", "accent", "secondary",
             "mark", "tertiary", "", "",
         ])
 
@@ -1845,14 +1968,16 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def test_edges_are_pluralized_and_dependency_waits_are_humanized(self) -> None:
         report = self._drive()
         self.assertEqual(report["formatters"]["humanState"], ["waiting", "done", "planned"])
-        self.assertEqual(report["formatters"]["t"][:2], ["1 ready · 1 edge", "1 ready · 2 edges"])
-        self.assertIn("1 ready · 1 edge", self._pane("maestro_and_board"))
-        self.assertIn("1 ready · 2 edges", self._pane("two_edges"))
-        self.assertIn("waiting on b", self._pane("maestro_and_board"))
+        self.assertEqual(report["formatters"]["t"][:2], ["layer 1 · 1 node", "layer 1 · 2 nodes"])
+        # A card names what it waits on by the lane it follows, and never in the reader's state word.
+        self.assertIn("← b", self._sections("maestro_and_board")["DAG"])
         self.assertNotIn("blocked_by_dependency", " ".join(self._pane("maestro_and_board")))
         self.assertEqual(report["formatters"]["wordTone"], ["accent", "warn", "error", "muted", "tertiary"])
-        for token in ("--ui-cyan", "--ui-green", "--ui-success"):
+        for token in ("--ui-cyan", "--ui-success"):
             self.assertNotIn(token, report["style"]["css"])
+        # Green is kept for done DAG work alone: the card border and the folded layer's tally.
+        self.assertIn("--omh-ok:var(--ui-green)", report["style"]["css"])
+        self.assertIn(".omh-pane-dv-card[data-tone=ok]{--dv-c:var(--omh-ok)}", report["style"]["css"])
 
     def test_a_live_run_with_nothing_counted_is_drawn_in_the_accent(self) -> None:
         report = self._drive()
@@ -1903,27 +2028,6 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(korean["byId"]["hud"][:3], ["OMH", "1개 실행 중", "1개 실패"])
         self.assertEqual(korean["byId"]["status"], ["OMH", "1개 실행 중", "1개 실패"])
 
-    def test_a_narrow_pane_stacks_the_lane_model_under_its_title(self) -> None:
-        report = self._drive()
-        css = report["style"]["css"]
-        self.assertIn("container-type:inline-size", css)
-        narrow = css[css.index("@container (max-width: 420px)") :]
-        narrow = narrow[: narrow.index("}}") + 2]
-        self.assertIn(".omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}", narrow)
-        self.assertIn(".omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none;padding-left:var(--omh-lane-indent,0)}", narrow)
-        self.assertIn(".omh-pane-lane-state{grid-column:3;grid-row:1}", narrow)
-        # The lane's indent rides a variable: the title always takes it, the model only on its own
-        # line in a narrow pane, so a wide row's model cell is not narrowed by it.
-        self.assertIn(".omh-pane-lane-title{min-width:0;padding-left:var(--omh-lane-indent,0);", css)
-        wide_model = css[css.index(".omh-pane-lane-model{") : css.index("}", css.index(".omh-pane-lane-model{"))]
-        self.assertNotIn("omh-lane-indent", wide_model)
-        lanes = [node for node in report["renders"]["failed_lane"]["structure"] if node["className"] == "omh-pane-lane"]
-        self.assertEqual(len(lanes), 2)
-        # `broke` runs after `drawn`, one step in: its row carries the indent, the top lane none.
-        self.assertEqual([node.get("style") for node in lanes], [None, {"--omh-lane-indent": "12px"}])
-        model = next(node for node in report["renders"]["failed_lane"]["structure"] if "omh-pane-lane-model" in node["className"])
-        self.assertEqual(model["text"], "gpt-5.6")
-
     def test_text_the_user_reads_is_darker_than_the_hint_role(self) -> None:
         css = self._drive()["style"]["css"]
         self.assertIn("--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary))", css)
@@ -1956,7 +2060,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def test_a_korean_host_reads_state_words_in_korean(self) -> None:
         korean = self._drive()["korean"]
         lanes = " ".join(korean["catches_and_lanes"]["byId"]["hud"])
-        self.assertIn("위임", lanes)
+        self.assertIn("에이전트", lanes)
         self.assertIn("Pane refresh · 1 실행 중", lanes)
         self.assertNotIn("1 running", lanes)
         board = korean["maestro_and_board"]["byId"]["hud"]
@@ -1964,8 +2068,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
             self.assertNotIn(english, board)
         self.assertIn("검토", board)
         self.assertIn("실행 중", board)
-        self.assertIn("완료", board)
-        self.assertIn("DAG · Pane refresh · 완료 1/2 · 1 실패", korean["settled_lanes"]["byId"]["hud"])
+        self.assertIn("✓ 완료", board)
+        self.assertIn("Pane refresh · 완료 1/2 · 1 실패", korean["settled_lanes"]["byId"]["hud"])
         self.assertEqual(korean["gateway_closed"]["byId"]["hud"][:2], ["OMH", "게이트웨이 연결 중"])
         tips = " ".join(korean["maestro_and_board"]["tips"])
         self.assertIn("0 토큰", tips)
@@ -1992,7 +2096,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._classed(render, "omh-pane-dv-kpi-value"), ["12.6k", "77.5%", "~$0.0184", "1m 18s"])
         self.assertEqual(
             self._classed(render, "omh-pane-dv-kpi-sub"),
-            ["↓630 out · 12.0k in", "9.3k of 12.0k prompt", "2/2 nodes priced", "sum of 2 nodes"],
+            # Each share names the whole it is of: the run's four lanes, two of them priced and timed.
+            ["↓630 out · 12.0k in", "9.3k of 12.0k prompt", "2/4 nodes priced", "2/4 nodes timed"],
         )
         self.assertEqual(self._classed(render, "omh-pane-dv-title"), ["Write a.txt", "Write b.txt", "Sum", "Check"])
         self.assertEqual(self._classed(render, "omh-pane-dv-path-l"), ["Critical path", "Bottlenecks"])
@@ -2009,32 +2114,73 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._classed(render, "omh-pane-dv-kpi-label"), ["Tokens", "Cache hit", "Cost", "Node time"])
         self.assertNotIn("omh-pane-dag", {node["className"] for node in render["structure"]})
 
-    def test_a_run_past_the_card_limit_keeps_its_figures_and_draws_the_backend_drawing(self) -> None:
+    def test_a_large_run_is_cards_folded_past_its_frontier(self) -> None:
+        """Mutation: fall back to text past a lane count, or draw every far-off layer open by default."""
         render = self._drive()["renders"]["dag_beyond_cards"]
-        self.assertEqual(self._classed(render, "omh-pane-dv-title"), [])
-        self.assertIn("omh-pane-dag", {node["className"] for node in render["structure"]})
-        self.assertEqual(self._classed(render, "omh-pane-more"), ["+3 more"])
+        dag = self._sections("dag_beyond_cards")["DAG"]
+        # Nothing started: the first layer and the two after it stay open; the fourteen beyond wait behind chips.
+        self.assertEqual(self._classed(render, "omh-pane-dv-title"), ["Step 0", "Step 1", "Step 2"])
+        chips = self._classed(render, "omh-pane-dv-layer-name")
+        self.assertEqual((len(chips), chips[0], chips[-1]), (14, "▸ layer 4 · 1 node", "▸ layer 17 · 1 node"))
+        self.assertIn("+3 more", dag)
         # Nothing counted yet: a dash and a short note, never `0 of 0 prompt` or `sum of 0 nodes`.
         self.assertEqual(self._classed(render, "omh-pane-dv-kpi-value"), ["—", "—", "—", "—"])
         self.assertEqual(self._classed(render, "omh-pane-dv-kpi-sub"), ["", "", "no usage yet", ""])
         self.assertIn("Step 0 (blocks 16)", self._classed(render, "omh-pane-dv-chip-t"))
+        # The fold modes are buttons over the cards, not entries in the View menu.
+        self.assertEqual(self._classed(render, "omh-pane-seg-b"), ["Auto", "Focus", "Unfold all", "Fold all"])
 
-    def test_only_a_run_with_a_topology_takes_the_card_view(self) -> None:
-        renders = self._drive()["renders"]
-        cards = {"omh-pane-dv-canvas", "omh-pane-dv-card", "omh-pane-dv-title"}
-        for name in ("drawn_graph", "wide_drawn", "drawing_error", "settled_lanes", "graph_and_other", "failed_lane", "catches_and_lanes"):
-            with self.subTest(name=name):
-                self.assertFalse([node for node in renders[name]["structure"] if cards & set(node["className"].split())])
+    def test_the_view_menu_is_drawn_opaque(self) -> None:
+        """Mutation: draw the menu in the card token, which is nearly clear and lets the pane show through."""
+        css = self._drive()["style"]["css"]
+        menu = css[css.index(".omh-pane-pick-menu{") : css.index("}", css.index(".omh-pane-pick-menu{"))]
+        self.assertIn("background:var(--ui-bg-elevated,var(--background))", menu)
 
-    def test_a_settled_dag_ulw_run_keeps_its_cards_under_a_folding_summary_line(self) -> None:
-        """Mutation: replace a finished run's drawing by its summary line (the node summaries and figures are for debugging)."""
+    def test_layers_fold_by_the_chosen_mode_the_persons_own_folds_and_the_open_lane(self) -> None:
+        """Mutation: fold the running layer, ignore a layer the person opened or folded, or fold the open lane's layer."""
+        auto, active, opened, closed, kept_open, picked, kept_folded, small, untouched = self._drive()["formatters"]["foldsOf"]
+        self.assertEqual(auto, [0, 1, 2, 6, 7, 8, 9, 10, 11], "finished layers, and those past the frontier and two more")
+        self.assertEqual(active, [0, 1, 5, 6, 7, 8, 9, 10, 11], "focus: the running layer and the layers either side")
+        self.assertEqual(opened, [])
+        self.assertEqual(closed, [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11], "fold all still leaves the running layer open")
+        self.assertEqual(kept_open, [0, 2, 6, 7, 8, 9, 10, 11])
+        self.assertEqual(picked, [0, 1, 2, 6, 8, 9, 10, 11])
+        self.assertEqual(kept_folded, [4])
+        self.assertEqual(small, [], "a small run reads whole")
+        self.assertEqual(untouched, list(range(3, 17)))
+
+    def test_a_graph_cut_by_layer_keeps_its_layers_and_counts_what_they_lost(self) -> None:
+        """Mutation: lay a cut graph out from its kept edges, or count a layer by its kept lanes only."""
+        (cut,) = self._drive()["formatters"]["cutLayers"]
+        self.assertEqual(cut["layers"], [[], ["d:r:b"], ["d:r:c"], ["d:r:d"]], "a lane stays in the layer the reader numbered")
+        self.assertEqual(cut["summaries"], [[4, 4, "done"], [3, 2, "done"], [1, 0, "running"], [1, 0, "waiting"]])
+        self.assertEqual(cut["folds"], [0, 1], "nine lanes in all, so `auto` folds the settled layers")
+
+    def test_a_folded_layer_takes_its_lanes_edges_once(self) -> None:
+        first, middle, none = self._drive()["formatters"]["foldedEdges"]
+        self.assertEqual(first, ["layer:0>d:r:sum", "d:r:sum>d:r:chk"], "two lanes into one chip are one edge")
+        self.assertEqual(middle, ["d:r:a>layer:1", "d:r:b>layer:1", "layer:1>d:r:chk"])
+        self.assertEqual(none, ["d:r:a>d:r:sum", "d:r:b>d:r:sum", "d:r:sum>d:r:chk"])
+
+    def test_the_dag_view_options_default_and_survive_a_bad_store(self) -> None:
+        defaults, chosen, bad = self._drive()["formatters"]["dagViewOptions"]
+        self.assertEqual(defaults, {"fold": "auto", "figures": True, "stats": True, "implied": False, "compact": False})
+        self.assertEqual(chosen, {"fold": "closed", "figures": False, "stats": True, "implied": True, "compact": False})
+        self.assertEqual(bad, defaults, "an unknown mode or a stray value reads as the default")
+        # The menu offers every mode and every switch, and the choice is kept across reloads.
+        menu = " ".join(self._drive()["renders"]["dag_cards"]["byId"]["hud"])
+        self.assertIn("View", menu)
+        self.assertIn("const DAG_VIEW_STORE = 'omh-pane-dag-view'", PLUGIN_JS.read_text(encoding="utf-8"))
+
+    def test_a_settled_dag_ulw_run_keeps_its_cards_under_its_run_line(self) -> None:
+        """Mutation: replace a finished run's cards by its summary line (the node summaries and figures are for debugging)."""
         structure = self._drive()["renders"]["dag_settled"]["structure"]
-        folds = [node for node in structure if node["className"] == "omh-pane-dv-fold"]
-        self.assertEqual(len(folds), 1)
-        self.assertTrue(folds[0]["text"].startswith("DAG · Write and sum · "), folds[0]["text"])
+        lines = [node["text"] for node in structure if node["className"] == "omh-pane-run"]
+        self.assertEqual(lines, ["Write and sum · done 2/2"])
         self.assertTrue({"omh-pane-dv-kpis", "omh-pane-dv-canvas", "omh-pane-dv-card"}
                         <= {name for node in structure for name in node["className"].split()})
-        self.assertEqual([node for node in structure if node["className"] == "omh-pane-run"], [])
+        # The same line a running run carries: finishing changes the words, not the shape.
+        self.assertEqual([node for node in structure if node["className"] == "omh-pane-dv-fold"], [])
 
     def test_a_settled_dag_ulw_run_keeps_its_figures_under_the_line(self) -> None:
         """#2684. Keep recorded figures, and keep uncounted nodes inspectable without inventing usage."""
@@ -2076,7 +2222,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def test_the_dag_block_is_named_dag_and_its_stats_come_before_the_dag(self) -> None:
         """Mutation: label it `DELEGATION` again, or put the stats back under the cards."""
         renders = self._drive()["renders"]
-        for name, drawn in (("dag_cards", "omh-pane-dv-canvas"), ("fanout_cards", "omh-pane-dv-canvas"), ("dag_beyond_cards", "omh-pane-dag")):
+        for name, drawn in (("dag_cards", "omh-pane-dv-canvas"), ("fanout_cards", "omh-pane-dv-canvas"), ("dag_beyond_cards", "omh-pane-dv-canvas")):
             with self.subTest(name=name):
                 labels = [node["text"] for node in renders[name]["structure"] if node["className"] == "omh-pane-section-label"]
                 self.assertIn("DAG", labels)
@@ -2085,8 +2231,9 @@ class DesktopPluginNodeTests(unittest.TestCase):
                 at = {key: next(index for index, names in enumerate(classes) if key in names) for key in ("omh-pane-dv-kpis", "omh-pane-dv-stats", drawn)}
                 self.assertLess(at["omh-pane-dv-kpis"], at["omh-pane-dv-stats"])
                 self.assertLess(at["omh-pane-dv-stats"], at[drawn])
-        # A run with no topology stays a delegation, as before.
-        self.assertIn("DELEGATION", [node["text"] for node in renders["settled_lanes"]["structure"] if node["className"] == "omh-pane-section-label"])
+        # A run with no topology is the same DAG block, not a delegation list beside it.
+        labels = [node["text"] for node in renders["settled_lanes"]["structure"] if node["className"] == "omh-pane-section-label"]
+        self.assertEqual(labels, list(SECTION_LABELS))
 
     def test_the_usage_board_leads_the_pane_with_this_chats_figures(self) -> None:
         """Mutation: count the output in the hit rate, take the stream's counts over the recorded row, or show it below the plan."""
@@ -2096,7 +2243,9 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._board(render, "omh-pane-section-count")[0], "4 calls")
         # The dial holds the tokens and the cache; the figures beside it are TPS, TTFT, cost and context.
         self.assertEqual(self._board(render, "omh-pane-ub-total"), ["12.6k"])
-        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 9.3k"])
+        # The dial's line is the hit rate whatever the source, so it never switches between a count and a share.
+        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 77.5%"])
+        self.assertEqual(self._board(render, "omh-pane-ub-source"), ["recorded"])
         self.assertEqual(self._board(render, "omh-pane-dv-kpi-label"), ["TPS", "TTFT", "Cost", "Context"])
         # The recorded row: 1600 + 9300 + 1100 prompt + 630 out; 9300 / 12000 read; $0.5 priced. Then the stream's
         # window (15.7k of 100.0k), its rolling speed, and the two waits this window timed (1850 ms, 410 ms).
@@ -2132,11 +2281,26 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual(self._board(render, "omh-pane-dv-kpi-sub"), ["", "send → first token", "unpriced", ""])
         self.assertEqual(self._board(render, "omh-pane-dv-legend-k"), [], "no breakdown yet, so no composition")
 
-    def test_a_chat_nothing_has_reported_on_gets_no_board(self) -> None:
-        render = self._drive()["renders"]["usage_board_unknown"]
-        labels = [node["text"] for node in render["structure"] if node["className"] == "omh-pane-section-label"]
-        self.assertTrue(labels)
-        self.assertNotIn("USAGE", labels, "an empty board is noise above the plan")
+    def test_a_chat_nothing_has_reported_on_keeps_its_board_and_says_so(self) -> None:
+        """Mutation: drop the board when nothing has reported (the block that comes and goes)."""
+        usage = self._sections("usage_board_unknown")["USAGE"]
+        self.assertEqual(usage[:3], ["Main", "+ subagents (0)", "—"])
+        self.assertIn("Nothing recorded for this chat yet", usage)
+        self.assertIn("Open a chat to see its usage", self._sections("reader_error")["USAGE"])
+
+    def test_the_gateways_counters_fill_a_board_the_record_has_not_reached(self) -> None:
+        """Mutation: read only Hermes' recorded row (a chat with no row showed nothing), or ask with no chat named."""
+        renders = self._drive()["renders"]
+        render = renders["usage_board_gateway"]
+        self.assertEqual(render["stats"], {"enabled": True, "queryKey": ["omh", "stats", "rt-9", 0]})
+        self.assertEqual(self._board(render, "omh-pane-ub-source"), ["live"], "the gateway's counters, in the person's word")
+        self.assertEqual(self._board(render, "omh-pane-section-title")[0], "claude-opus-5-5")
+        self.assertEqual(self._board(render, "omh-pane-section-count")[0], "7 calls")
+        self.assertEqual(self._board(render, "omh-pane-ub-total"), ["42.0k"])
+        self.assertEqual(self._board(render, "omh-pane-ub-cache"), ["cache 90.0%"])
+        values = dict(zip(self._board(render, "omh-pane-dv-kpi-label"), self._board(render, "omh-pane-dv-kpi-value")))
+        self.assertEqual(values, {"TPS": "33 t/s", "TTFT": "—", "Cost": "—", "Context": "25%"})
+        self.assertFalse(renders["open_with_payload"]["stats"]["enabled"], "no chat named, so nothing is asked")
 
     def test_the_composition_is_asked_for_only_while_a_chat_is_idle_and_never_shown_under_another(self) -> None:
         """Mutation: ask mid-turn, ask with no chat named, or keep the last answer across a chat switch."""
@@ -2180,14 +2344,15 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: take the stream over the recorded row, drop the `~` from a cost the stream does not vouch for, or
         show a recorded zero read as a dash."""
         (streamed, recorded, zero_read, empty, calls_only, guessed, window, ragged,
-         other_chat, unnamed, failed, free, floor, with_subs, without_subs, unpriced_chat) = self._drive()["formatters"]["usageBoard"]
+         other_chat, unnamed, failed, free, floor, with_subs, without_subs, unpriced_chat,
+         gateway_ahead, gateway_behind, gateway_idle) = self._drive()["formatters"]["usageBoard"]
 
         def cells(model: dict) -> dict:
             return {cell["label"]: (cell["value"], cell["sub"]) for cell in model["cells"]}
 
         self.assertEqual(
             cells(streamed),
-            {"Tokens": ("4.3k", "↓300 out · 4.0k in"), "Cache hit": ("50.0%", ""), "Cost": ("~$0.0100", ""),
+            {"Tokens": ("4.3k", "↓300 out · 4.0k in"), "Cache hit": ("50.0%", "2.0k of 4.0k prompt"), "Cost": ("~$0.0100", ""),
              "Context": ("—", ""), "TPS": ("—", ""), "TTFT": ("—", "send → first token")},
         )
         self.assertEqual(
@@ -2200,8 +2365,13 @@ class DesktopPluginNodeTests(unittest.TestCase):
         )
         self.assertEqual(cells(zero_read)["Cache hit"], ("0.0%", "0 of 12.0k prompt"))
         self.assertEqual(cells(zero_read)["Cost"], ("—", "unpriced"))
-        self.assertIsNone(empty)
-        self.assertIsNone(calls_only, "a call count alone is no figure")
+        # Never null: a board with nothing known is a board of dashes that says so.
+        self.assertTrue(empty["empty"])
+        self.assertEqual({label: value for label, (value, _) in cells(empty).items()},
+                         {"Tokens": "—", "Cache hit": "—", "Cost": "—", "Context": "—", "TPS": "—", "TTFT": "—"})
+        self.assertEqual(empty["dial"], {"split": None, "total": 0, "cache": None})
+        self.assertTrue(calls_only["empty"], "a call count alone is no figure")
+        self.assertEqual((streamed["source"], recorded["source"], empty["source"]), ("stream", "recorded", ""))
         self.assertEqual(cells(guessed)["Context"], ("~5.0k", ""), "an estimate keeps its mark, and no window gives no percent")
         self.assertEqual(cells(window)["Context"], ("25%", "8.0k of 32.0k"))
         self.assertEqual(
@@ -2209,7 +2379,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
             [("System prompt", 3000, 0.09375), ("Conversation", 5000, 0.15625)],
         )
         # Subagents join the dial and the cost (a floor: one lane is unpriced); left out, the chat stands alone.
-        self.assertEqual(with_subs["dial"], {"split": {"input": 1200, "read": 800, "write": 0, "output": 150}, "total": 2150, "cache": "800"})
+        self.assertEqual(with_subs["dial"], {"split": {"input": 1200, "read": 800, "write": 0, "output": 150}, "total": 2150, "cache": "40.0%"})
         self.assertEqual(cells(with_subs)["Cost"][0], "≥$0.7500")
         self.assertEqual(without_subs["dial"]["total"], 1600)
         self.assertEqual(cells(without_subs)["Cost"][0], "$0.5000")
@@ -2222,10 +2392,22 @@ class DesktopPluginNodeTests(unittest.TestCase):
             self.assertEqual((cells(model)["Tokens"], cells(model)["Cost"]), (("4.3k", "↓300 out · 4.0k in"), ("—", "unpriced")))
         self.assertEqual(cells(free)["Cost"], ("$0.0000", ""), "a provider-reported zero is a zero cost")
         self.assertEqual(cells(floor)["Cost"], ("≥$0.5210", ""), "an unpriced part makes the priced sum a floor, as in the DAG")
+        # The gateway's counters ahead of the row take the tokens; the row's cost then covers less than is shown.
+        self.assertEqual(gateway_ahead["source"], "gateway")
+        self.assertEqual((gateway_ahead["model"], gateway_ahead["calls"]), ("claude-opus-5-5", 7))
+        self.assertEqual(cells(gateway_ahead)["Tokens"], ("42.0k", "↓2.0k out · 40.0k in"))
+        self.assertEqual(cells(gateway_ahead)["Cache hit"], ("90.0%", "36.0k of 40.0k prompt"))
+        self.assertEqual(cells(gateway_ahead)["Cost"][0], "≥$0.5000")
+        self.assertEqual(cells(gateway_ahead)["Context"], ("25%", "50.0k of 200.0k"))
+        self.assertEqual(cells(gateway_ahead)["TPS"][0], "33 t/s")
+        # Behind the row, the row keeps the tokens and its cost; the window is still the gateway's.
+        self.assertEqual((gateway_behind["source"], cells(gateway_behind)["Cost"][0]), ("recorded", "$0.5000"))
+        self.assertEqual(cells(gateway_behind)["Context"][0], "25%")
+        self.assertEqual((gateway_idle["source"], cells(gateway_idle)["Tokens"][0]), ("", "—"), "counters before a call count nothing")
 
     def test_a_korean_host_reads_the_usage_board_in_korean(self) -> None:
         hud = " ".join(self._drive()["korean"]["usage_board"]["byId"]["hud"])
-        for word in ("사용량", "호출 4회", "캐시 9.3k", "비용", "컨텍스트", "100.0k 중 15.7k", "호출 평균 3.2s", "평균 1.1s · 2턴", "프롬프트 구성"):
+        for word in ("사용량", "호출 4회", "캐시 77.5%", "기록", "비용", "컨텍스트", "100.0k 중 15.7k", "호출 평균 3.2s", "평균 1.1s · 2턴", "프롬프트 구성"):
             with self.subTest(word=word):
                 self.assertIn(word, hud)
         for english in ("USAGE", "Context", "Prompt composition", "avg call"):
@@ -2239,17 +2421,18 @@ class DesktopPluginNodeTests(unittest.TestCase):
         self.assertEqual({lane["id"]: lane["blocks"] for lane in plain["lanes"]}, {"d:r:a": 2, "d:r:b": 2, "d:r:sum": 1, "d:r:chk": 0})
         self.assertEqual(plain["total"], {"lanes": 2, "priced": 2, "input": 1600, "read": 9300, "write": 1100, "output": 630, "cost": 0.0184, "estimated": True,
                                           "partial": False})
-        self.assertEqual((plain["seconds"], plain["timed"], plain["cards"]), (78, 2, True))
+        self.assertEqual((plain["seconds"], plain["timed"]), (78, 2))
         self.assertEqual([(entry["model"], entry["count"]) for entry in plain["models"]], [("claude-haiku-5-5", 2)])
-        self.assertEqual((fanout["cards"], fanout["path"], fanout["bottlenecks"]), (True, [], []))
+        self.assertEqual((fanout["path"], fanout["bottlenecks"]), ([], []))
         self.assertEqual(fanout["layers"], [["f:a", "f:b"], ["f:sum"], ["f:chk"]])
         self.assertEqual(fanout["total"], plain["total"])
         self.assertEqual((with_noise["layers"], with_noise["edges"]), (plain["layers"], plain["edges"]))
         # Two lanes waiting on each other still each get one layer; the model must not loop.
         self.assertEqual(sum(len(layer) for layer in cyclic["layers"]), 4)
-        self.assertIsNone(no_topology)
+        # Without the backend's topology the edges still lay the run out: the same layers, no critical path claimed.
+        self.assertEqual((no_topology["layers"], no_topology["path"]), (plain["layers"], []))
         self.assertIsNone(inactive)
-        self.assertEqual((beyond["cards"], len(beyond["layers"]), beyond["hidden"]), (False, 17, 3))
+        self.assertEqual((len(beyond["layers"]), beyond["hidden"]), (17, 3))
         self.assertEqual(beyond["total"]["lanes"], 0)
         self.assertEqual((floor["total"]["priced"], floor["total"]["partial"]), (2, True))
         self.assertEqual(implied["implied"], ["d:r:a.d:r:c"])
@@ -2260,12 +2443,8 @@ class DesktopPluginNodeTests(unittest.TestCase):
         """Mutation: clip every drawing (native and team graphs too), clip in a narrow mouse window, or let the cards
         scroll sideways."""
         css = self._drive()["style"]["css"]
-        # A run past the card limit falls back to the drawn graph; on touch that drawing clips rather than eats the
-        # host's sideways swipe. Nothing else clips a drawing: elsewhere, and with a mouse, it still scrolls.
-        clipped = "@media (pointer:coarse){.omh-pane-dv .omh-pane-dag{overflow-x:hidden}}"
-        self.assertIn(clipped, css.splitlines())
-        self.assertEqual(re.findall(r"[^{}]*omh-pane-dag\{[^}]*overflow-x:hidden", css), [".omh-pane-dv .omh-pane-dag{overflow-x:hidden"])
-        view = [line for line in css.splitlines() if "omh-pane-dv" in line and line != clipped]
+        # Cards wrap; nothing in the view scrolls sideways, so the host's swipe stays the host's.
+        view = [line for line in css.splitlines() if "omh-pane-dv" in line]
         self.assertTrue(view)
         self.assertNotIn("touch-action", css)
         for rule in [rule for line in view for rule in line.split("}") if "omh-pane-dv" in rule]:
@@ -2278,7 +2457,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
 
     def test_a_korean_host_reads_the_dag_view_in_korean(self) -> None:
         hud = self._drive()["korean"]["dag_cards"]["byId"]["hud"]
-        for word in ("토큰", "캐시 적중", "프롬프트 12.0k 중 9.3k", "노드 2개 합계", "통계", "병목", "Sum (후속 1개 대기)"):
+        for word in ("토큰", "캐시 적중", "프롬프트 12.0k 중 9.3k", "노드 4개 중 2개 시간 기록", "통계", "병목", "Sum (후속 1개 대기)"):
             with self.subTest(word=word):
                 self.assertIn(word, hud)
         for english in ("Tokens", "Cache hit", "Node time", "Bottlenecks", "sum of"):

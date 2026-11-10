@@ -269,12 +269,16 @@ class StructureTests(unittest.TestCase):
                  for order, (index, state, group) in enumerate(
                      [(index, "done", "layer 1") for index in range(10)]
                      + [(index, "waiting", "layer 2") for index in range(10)], start=1)]
-        cut = _cut({"nodes": [{"id": "root", "kind": "root"}, *lanes], "edges": []}, 6)
+        layer_ids = [[lane["id"] for lane in lanes]]
+        cut = _cut({"nodes": [{"id": "root", "kind": "root"}, *lanes], "edges": []},
+                   {f"waiting-{index}" for index in range(5, 10)}, layer_ids, {lane["id"]: 0 for lane in lanes})
         self.assertEqual(cut["hidden_by_group"], {"layer 1": 10, "layer 2": 5})
         self.assertEqual(cut["hidden_nodes"], 15)
         # Layer 1 lost every node: its place stays known, and so do the states the cut lanes ended in.
         self.assertEqual(cut["group_order"], ["layer 1", "layer 2"])
         self.assertEqual(cut["hidden_by_state"], {"done": 10, "waiting": 5})
+        self.assertEqual(cut["layer_hidden"], [{"count": 15, "states": {"done": 10, "waiting": 5}}])
+
 
     def test_a_settled_graph_goes_quiet_after_the_linger(self) -> None:
         with homes() as home:
@@ -1001,6 +1005,71 @@ class NoRaiseTests(unittest.TestCase):
                     home.hermes.chmod(0o700)
                 self.assertIn(graph["status"], ("active", "inactive"))
                 self.assertEqual(segments, [PARENT])
+
+
+
+def _layered_graph(states: list[str], width: int = 3, summary: int = 400) -> dict:
+    """A run of `len(states)` layers of `width` lanes, each lane waiting on every lane of the layer above it."""
+    from omh.plugin_bundle.omh.delegation_graph import _finish
+
+    lanes, edges = [], []
+    for at, state in enumerate(states):
+        for index in range(width):
+            lane = f"L{at}-{index}"
+            lanes.append({"id": lane, "kind": "lane", "state": state, "order": at * width + index, "group": f"layer {at + 1}",
+                          "summary": "x" * summary})
+            edges += [{"from": f"L{at - 1}-{up}", "to": lane, "kind": "depends_on"} for up in range(width)] if at else [
+                {"from": "root", "to": lane, "kind": "dispatch"}]
+    return _finish("run", [{"id": "root", "kind": "root"}, *lanes], edges, "session", source="dag")
+
+
+class LayerBoundTests(unittest.TestCase):
+    """The graph is cut by layer, outward from the frontier, and the pane's open layers come whole."""
+
+    def _bounded(self, graph: dict, open_layers=(), byte_limit: int = 6_000) -> dict:
+        from omh.plugin_bundle.omh import delegation_graph
+
+        with patch.object(delegation_graph, "GRAPH_BYTE_LIMIT", byte_limit):
+            return delegation_graph._bounded(graph, open_layers)
+
+    @staticmethod
+    def _kept_layers(graph: dict) -> list[int]:
+        return sorted({node["layer"] for node in graph["nodes"] if node.get("kind") != "root"})
+
+    def test_a_deep_run_keeps_the_layers_around_its_frontier_not_the_root_alone(self) -> None:
+        # Regression: every kept lane used to pull in all it waits on, so a deep run fell through to the root alone.
+        graph = self._bounded(_layered_graph(["done"] * 5 + ["running"] + ["waiting"] * 6))
+        kept = self._kept_layers(graph)
+        self.assertIn(5, kept)
+        self.assertEqual(kept, list(range(kept[0], kept[-1] + 1)), "whole layers, outward from the frontier")
+        ids = {node["id"] for node in graph["nodes"]}
+        self.assertTrue(all(edge["from"] in ids and edge["to"] in ids for edge in graph["edges"]))
+        self.assertEqual(sum(row["count"] for row in graph["layer_hidden"]), graph["hidden_nodes"])
+        self.assertEqual(len(graph["layer_hidden"]), 12)
+        self.assertLessEqual(len(json.dumps(graph, sort_keys=True, default=str)), 6_000)
+
+    def test_an_open_layer_comes_whole_however_far_from_the_frontier(self) -> None:
+        graph = self._bounded(_layered_graph(["done"] * 5 + ["running"] + ["waiting"] * 6), open_layers=(0, 11))
+        kept = self._kept_layers(graph)
+        self.assertIn(0, kept)
+        self.assertIn(11, kept)
+        self.assertEqual((graph["layer_hidden"][0]["count"], graph["layer_hidden"][11]["count"]), (0, 0))
+
+    def test_a_graph_that_fits_is_unchanged_unless_the_pane_holds_layers_open(self) -> None:
+        small = _layered_graph(["done", "running"], width=2, summary=10)
+        self.assertIs(self._bounded(small), small)
+        opened = self._bounded(small, open_layers=(1,))
+        # Named open layers: every lane carries its layer and nothing is counted lost, so the pane asks the same again.
+        self.assertEqual([node.get("layer") for node in opened["nodes"]], [None, 0, 0, 1, 1])
+        self.assertEqual(opened["hidden_nodes"], 0)
+        self.assertEqual([row["count"] for row in opened["layer_hidden"]], [0, 0])
+
+    def test_open_layers_are_read_from_the_query_as_digits_only(self) -> None:
+        from omh.plugin_bundle.omh.dashboard.plugin_api import OPEN_LAYER_LIMIT, open_layers
+
+        self.assertEqual(open_layers("3, 1,3,x,-2,1e3,"), (3, 1))
+        self.assertEqual(open_layers(""), ())
+        self.assertEqual(len(open_layers(",".join(str(at) for at in range(OPEN_LAYER_LIMIT + 9)))), OPEN_LAYER_LIMIT)
 
 
 if __name__ == "__main__":

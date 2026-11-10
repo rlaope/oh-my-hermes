@@ -18,10 +18,12 @@ from pathlib import Path
 from omh.plugin_bundle.omh.approval_bypass import (
     APPROVAL_BYPASS_FRESH_SECONDS,
     APPROVAL_BYPASS_REFRESH_SECONDS,
+    APPROVAL_BYPASS_SESSION_LIMIT,
     approval_bypass_path,
     effective_approval_bypass,
     latest_approval_bypass,
     record_approval_bypass,
+    session_digest,
 )
 from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
 
@@ -91,8 +93,45 @@ class ApprovalBypassLedgerTest(unittest.TestCase):
         record_approval_bypass(omh_home=self.home, now=NOW)
         record = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))
         self.assertEqual(
-            sorted(record), ["claim_boundary", "enabled", "observed_ts", "schema_version"]
+            sorted(record), ["claim_boundary", "enabled", "observed_ts", "schema_version", "sessions"]
         )
+
+    def test_a_session_entry_is_keyed_by_digest_and_holds_only_the_flag(self):
+        import json
+
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="local-secret-session", now=NOW)
+        raw = approval_bypass_path(self.home).read_text(encoding="utf-8")
+        self.assertNotIn("local-secret-session", raw)
+        sessions = json.loads(raw)["sessions"]
+        self.assertEqual(list(sessions), [session_digest("local-secret-session")])
+        self.assertEqual(sessions[session_digest("local-secret-session")], {"enabled": True, "observed_ts": NOW})
+
+    def test_another_sessions_tick_does_not_answer_for_the_named_session(self):
+        # One gateway runs many sessions; a subagent with yolo off ticking last must not turn the pane's chip off.
+        self._install_host_approval(True)
+        record_approval_bypass(omh_home=self.home, session_id="main", now=NOW)
+        self._install_host_approval(False)
+        record_approval_bypass(omh_home=self.home, session_id="child", now=NOW + 1)
+        self.assertTrue(latest_approval_bypass(self.home, session_id="main", now=NOW + 2)["enabled"])
+        self.assertFalse(latest_approval_bypass(self.home, session_id="child", now=NOW + 2)["enabled"])
+        # A reader naming no session keeps the newest tick, as before.
+        self.assertFalse(latest_approval_bypass(self.home, now=NOW + 2)["enabled"])
+        # A session that never ticked reads idle, never another session's state.
+        self.assertEqual(latest_approval_bypass(self.home, session_id="unseen", now=NOW + 2)["status"], "idle")
+        hermes = str(Path(self._tmp.name) / "hermes")
+        self.assertTrue(effective_approval_bypass(self.home, hermes, session_id="main", now=NOW + 2)["enabled"])
+
+    def test_the_ledger_keeps_a_bounded_number_of_sessions(self):
+        import json
+
+        self._install_host_approval(True)
+        for index in range(APPROVAL_BYPASS_SESSION_LIMIT + 5):
+            record_approval_bypass(omh_home=self.home, session_id=f"s{index}", now=NOW + index)
+        sessions = json.loads(approval_bypass_path(self.home).read_text(encoding="utf-8"))["sessions"]
+        self.assertEqual(len(sessions), APPROVAL_BYPASS_SESSION_LIMIT)
+        self.assertNotIn(session_digest("s0"), sessions)
+        self.assertIn(session_digest(f"s{APPROVAL_BYPASS_SESSION_LIMIT + 4}"), sessions)
 
     def test_the_hud_payload_carries_the_state(self):
         self._install_host_approval(True)
@@ -113,6 +152,15 @@ class ApprovalBypassLedgerTest(unittest.TestCase):
         approval_bypass_path(self.home).unlink()
         pre_llm_call(user_message="hello", omh_home=self.home, include_omh_awareness=False)
         self.assertTrue(approval_bypass_path(self.home).exists())
+
+    def test_tool_hook_falls_back_to_task_id_for_the_session_ledger(self):
+        from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
+
+        self._install_host_approval(True)
+        pre_tool_call(tool_name="terminal", task_id="task-session", omh_home=self.home)
+        state = latest_approval_bypass(self.home, session_id="task-session", now=time.time())
+        self.assertEqual(state["status"], "observed")
+        self.assertTrue(state["enabled"])
 
 
 class ApprovalBypassWriteEconomyTest(unittest.TestCase):
@@ -276,6 +324,14 @@ class HostStateYoloTest(unittest.TestCase):
         self.assertEqual(state["status"], "observed")
         self.assertTrue(state["enabled"])
         self.assertEqual(state["source"], "host_state")
+
+    def test_a_named_session_requires_a_fresh_live_tui_row(self):
+        self._build_db([("stale", {"yolo_mode": True}, NOW - 7 * 3600)])
+        self._write_ledger(True, observed_ts=NOW - 30)
+        state = effective_approval_bypass(
+            self.omh_home, str(self.hermes_home), session_id="stale", now=NOW
+        )
+        self.assertEqual(state["status"], "idle")
 
     def test_a_toggle_off_beats_a_stale_hook_observation(self):
         # The reported bug: the ledger observed ON at the last turn, the

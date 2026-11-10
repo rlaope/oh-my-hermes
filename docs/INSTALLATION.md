@@ -4171,16 +4171,16 @@ is how a session leaves one for unrelated work (a recorded `deferred_reason`
 only pauses it), and the session's next turn is told once when a `todo_list`
 write was not mirrored and the plan is still held and not deferred. Hermes
 Desktop draws a `todo_list` itself (the composer's status stack), so for a
-plan `todo_list` holds the Desktop pane does not repeat its items: it shows a
-compact "in todo_list" plan summary only when OMH knows something Hermes
-does not show — an item waiting on a recorded reason, or a checklist
-unchanged past the stall threshold. The OMH TUI's plan panel draws the items
-whichever tool holds them: the done ones quiet (a `✓` in the done colour,
-their words muted) and, when they do not all fit, folded into one `✓ N done`
-row before any item still to do is cut. Ctrl+P folds the plan to its header
-and the item it is on (`[Plan] │ 6/7 ▸ <item>`), or expands it again, for the
-rest of the session; the header says `ctrl+p fold` or `ctrl+p expand` on its
-right where there is room.
+plan `todo_list` holds the Desktop pane does not repeat its items: its PLAN
+block lists only what OMH knows and Hermes does not show — an item waiting on
+a recorded reason, or a checklist unchanged past the stall threshold — and
+otherwise says the steps are in the Hermes todos above the composer. The OMH
+TUI's plan panel draws the items whichever tool holds them: the done ones
+quiet (a `✓` in the done colour, their words muted) and, when they do not all
+fit, folded into one `✓ N done` row before any item still to do is cut. Ctrl+P
+folds the plan to its header and the item it is on (`[Plan] │ 6/7 ▸ <item>`),
+or expands it again, for the rest of the session; the header says
+`ctrl+p fold` or `ctrl+p expand` on its right where there is room.
 
 A plan may be declared from a named phase template instead of from phases the
 model writes out itself. `omh_todo` with `action=set` and

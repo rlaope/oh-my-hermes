@@ -221,10 +221,11 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         # process per file signature.
         return runtime_binding_degradation(exc)
     _ = observe_plugin_hook_call("pre_tool_call", kwargs)
+    session_id = str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or "")
     # The approval-bypass ledger observes session state, not this call's
     # outcome, so it ticks before the rule gate — a blocked call still sees
     # the same Shift+Tab flag.
-    record_approval_bypass(omh_home=omh_home)
+    record_approval_bypass(omh_home=omh_home, session_id=session_id)
     # User-authored toolcall rules intervene first: a block directive is the
     # strongest host-supported response (hermes_cli/plugins.py,
     # `_get_pre_tool_call_directive_details`: "``block`` vetoes the tool call
@@ -236,7 +237,6 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     # `_route_gated`, so a `delegate_task` behind a person's yes still runs
     # on its own route (#2251).
     route_gate = {"kwargs": kwargs, "tool_input": tool_input, "omh_home": omh_home, "hermes_home": hermes_home}
-    session_id = str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or "")
     rule_directive = _rule_directive_or_recorded_fault(
         tool_name=kwargs.get("tool_name"),
         tool_input=tool_input,
