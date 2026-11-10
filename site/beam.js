@@ -12,7 +12,7 @@
 (() => {
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const q = s => document.querySelector(s);
-  let cv = q('[data-beam]'); const pill = q('[data-dlpill]'), sec = q('[data-omher]'), shot = q('[data-app-shot]'), win = q('[data-app-win]') || shot;
+  let cv = q('[data-beam]'); const pill = q('[data-dlpill]'), sec = q('[data-omher]'), shot = q('[data-app-shot]'), win = q('[data-app-win]') || shot, title = q('[data-omher] .omher__t');
   if (!cv || !pill || !sec || !shot) return;
   let winDy = 0;   // the window's top-left corner sits this fraction of its height below the top-right one (perspective in the composition)
 
@@ -52,6 +52,7 @@ uniform vec2 uView, uA, uB;    // pillar top (x, y) and landing point on the win
 uniform vec4 uWin;             // window left, top (at its right corner), right, bottom
 uniform vec3 uRim;             // cursor over the window: x, y, strength
 uniform vec4 uPill;            // the Download pill (left, top, right, bottom): the light stays off its label
+uniform vec4 uTitle;           // the block's title text box: the light dims behind it so the title keeps its contrast
 uniform float uSlope;          // window top edge dy/dx
 uniform float uScale, uTime, uFlow, uI, uPour, uK, uBright, uLand, uHov, uBurst;
 uniform float uPulse[4];
@@ -181,6 +182,9 @@ void main(){
   vec2 pc = (uPill.xy + uPill.zw) * .5, ph = (uPill.zw - uPill.xy) * .5;
   vec2 pq = abs(p - pc) - ph + ph.y; float pd = length(max(pq, 0.)) + min(max(pq.x, pq.y), 0.) - ph.y;
   col *= smoothstep(-2., 10., pd);
+  vec2 tc = (uTitle.xy + uTitle.zw) * .5, th = (uTitle.zw - uTitle.xy) * .5;
+  vec2 tq = abs(p - tc) - th + 40.; float td = length(max(tq, 0.)) + min(max(tq.x, tq.y), 0.) - 40.;
+  col *= mix(.5, 1., smoothstep(-24., 60., td));
   col *= uI * uBright;
   // tone map, then cap: the light never reaches full opacity
   col = (1. - exp(-col * 1.25)) * .94;
@@ -199,7 +203,7 @@ void main(){
       gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
       gl.useProgram(prog); gl.bindVertexArray(gl.createVertexArray());
-      for (const n of ['uBox', 'uView', 'uA', 'uB', 'uWin', 'uRim', 'uPill', 'uSlope', 'uScale', 'uTime', 'uFlow', 'uI', 'uPour', 'uK', 'uBright', 'uLand', 'uHov', 'uBurst', 'uPulse']) U[n] = gl.getUniformLocation(prog, n);
+      for (const n of ['uBox', 'uView', 'uA', 'uB', 'uWin', 'uRim', 'uPill', 'uTitle', 'uSlope', 'uScale', 'uTime', 'uFlow', 'uI', 'uPour', 'uK', 'uBright', 'uLand', 'uHov', 'uBurst', 'uPulse']) U[n] = gl.getUniformLocation(prog, n);
     } catch (e) { console.warn('[beam] shader failed, using canvas 2D', e); gl = null; }
   }
   // a context that failed to build its program cannot hand the canvas to 2D; swap in a fresh canvas
@@ -231,7 +235,7 @@ void main(){
     gl.uniform4f(U.uBox, l, 0, r, b); gl.uniform2f(U.uView, W, H); gl.uniform1f(U.uScale, cv.width / W);
     gl.uniform2f(U.uA, f.x0, f.y0); gl.uniform2f(U.uB, f.x1, f.y1);
     gl.uniform4f(U.uWin, sr.left, sr.top, sr.right, sr.bottom); gl.uniform1f(U.uSlope, f.slope);
-    gl.uniform3f(U.uRim, S.rimX, S.rimY, S.rim); gl.uniform4f(U.uPill, f.p.left, f.p.top, f.p.right, f.p.bottom);
+    gl.uniform3f(U.uRim, S.rimX, S.rimY, S.rim); gl.uniform4f(U.uPill, f.p.left, f.p.top, f.p.right, f.p.bottom); const tr = f.tr; gl.uniform4f(U.uTitle, tr ? tr.left : -9e3, tr ? tr.top : -9e3, tr ? tr.right : -9e3, tr ? tr.bottom : -9e3);
     gl.uniform1f(U.uTime, f.t); gl.uniform1f(U.uFlow, S.ft); gl.uniform1f(U.uI, S.I); gl.uniform1f(U.uPour, ease(S.pour)); gl.uniform1f(U.uK, f.k);
     gl.uniform1f(U.uBright, 1 + .35 * S.near + .45 * S.hov); gl.uniform1f(U.uLand, f.land);
     gl.uniform1f(U.uHov, S.hov); gl.uniform1f(U.uBurst, S.burst);
@@ -333,7 +337,7 @@ void main(){
     const hit = S.burst > 0 && t > S.burst ? Math.exp(-(t - S.burst) * 3) : 0;
     setVar('--lit', (S.I * land * (1 + .25 * S.near + .3 * S.hov)).toFixed(2)); setVar('--bx', (x1 - sr.left).toFixed(0) + 'px'); setVar('--hit', hit.toFixed(2));
     S.geo = stats.geo = {x0, y0, x1, y1, len: y1 - y0};
-    const f = {t, x0, y0, x1, y1, sr, land, slope, k, p};
+    const f = {t, x0, y0, x1, y1, sr, land, slope, k, p, tr: title ? title.getBoundingClientRect() : null};
     if (gl) drawGL(f); else if (cx) draw2d(f, dt);
   }
 
