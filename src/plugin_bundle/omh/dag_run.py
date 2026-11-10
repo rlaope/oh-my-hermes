@@ -176,14 +176,14 @@ _DOUBLE_CHECK: Final = re.compile(r"(?<![a-z])double[- ]check")
 DOC_SUFFIXES: Final = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
 # A write scope entry named exactly one of these (casefolded, no suffix) is docs, not code (`writes_code`).
 DOC_NAMES: Final = frozenset({"readme", "changelog", "license", "notice", "authors", "contributing", "copying"})
-# `CRITERION <id> #<attempt>: met|unmet|unobserved` at a line's start (after spaces, list bullets or backticks), then
-# the rest (`criterion_statuses`): nothing, or a separator and the evidence.
+# `CRITERION <id> #<token>: met|unmet|unobserved` at a line's start (after spaces, list bullets or backticks), then
+# the rest (`criterion_statuses`): nothing, or a separator and the evidence. The token is the attempt's own.
 _CRITERION_LINE: Final = re.compile(
-    r"[ \t*`-]*CRITERION[ \t]+([A-Za-z0-9][A-Za-z0-9-]{0,31})[ \t]+#([0-9]{1,6})[ \t]*:[ \t]*"
+    r"[ \t*`-]*CRITERION[ \t]+([A-Za-z0-9][A-Za-z0-9-]{0,31})[ \t]+#([A-Za-z0-9]{1,16})[ \t]*:[ \t]*"
     r"(?i:(met|unmet|unobserved))(.*)")
 _CRITERION_EVIDENCE: Final = re.compile("[ \t]*[-:\u2013\u2014](.*)")
-# Evidence made only of whitespace and these marks is no evidence (`criterion_status`).
-_EVIDENCE_MARKS: Final = "-:*`.\u2013\u2014"
+# The random token a verify node's attempt in a run with criteria carries (`hand_out`), in hex digits.
+ATTEMPT_TOKEN_BYTES: Final = 3
 # Of a verify node's handoff head only the last lines naming the marker are read, each cut at a byte count, the same
 # way on this host and in a Docker or SSH terminal (`criterion_lines`, `dag_tool.backend_criterion_lines`).
 CRITERION_LINE_BYTES: Final = 400
@@ -519,27 +519,28 @@ def criterion_lines(data: bytes) -> list[str]:
     return b"\n".join(kept).decode("utf-8", errors="replace").split("\n")
 
 
-def criterion_status(line: str, ids: Iterable[str], attempt: int) -> tuple[str, str] | None:
-    """``(id, status)`` when ``line`` is a criterion line of attempt ``attempt`` for one of ``ids``, else None.
+def criterion_status(line: str, ids: Iterable[str], token: str) -> tuple[str, str] | None:
+    """``(id, status)`` when ``line`` is a criterion line of the attempt whose token is ``token`` for one of
+    ``ids``, else None. An empty ``token`` (an attempt stored without one) matches no line.
 
     Every reader takes its lines through `criterion_lines` and hands each one
     here, so the host and a Docker or SSH terminal read them the same way.
     A trailing CR and a leading BOM are dropped; a line holding any other
     control or line-separator character is no criterion line. The line opens
-    with ``CRITERION <id> #<attempt>: <status>`` (spaces, ``-``, ``*`` or
+    with ``CRITERION <id> #<token>: <status>`` (spaces, ``-``, ``*`` or
     backticks before it are fine), and after the status comes nothing or a
     separator (``-``, ``:``, an en or em dash) and the evidence. ``met``
-    needs evidence that is more than whitespace and marks; a bare ``unmet``
-    or ``unobserved`` stands, since it can only hold the run back. Anything
-    else after the status (``?``, ``(``, ``/``, ``|``, another word) makes
-    it no criterion line.
+    needs evidence with a letter or digit in it that is not one ``<...>``
+    placeholder; a bare ``unmet`` or ``unobserved`` stands, since it can
+    only hold the run back. Anything else after the status (``?``, ``(``,
+    ``/``, ``|``, another word) makes it no criterion line.
     """
     line = line.removesuffix("\r").removeprefix("\ufeff")
     if any(char != "\t" and unicodedata.category(char) in ("Cc", "Zl", "Zp") for char in line):
         return None
     match = _CRITERION_LINE.match(line)
     criterion_id = match[1].lower() if match is not None else ""
-    if match is None or criterion_id not in ids or int(match[2]) != attempt:
+    if match is None or criterion_id not in ids or not token or match[2].lower() != token:
         return None
     status, rest = match[3].casefold(), match[4]
     if not rest.strip(" \t"):
@@ -547,31 +548,38 @@ def criterion_status(line: str, ids: Iterable[str], attempt: int) -> tuple[str, 
     separated = _CRITERION_EVIDENCE.fullmatch(rest)
     if separated is None:
         return None
-    if status == "met" and not any(not char.isspace() and char not in _EVIDENCE_MARKS for char in separated[1]):
+    evidence = separated[1].strip()
+    if status == "met" and (not any(char.isalnum() for char in evidence)
+                            or (evidence.startswith("<") and evidence.endswith(">"))):
         return None
     return criterion_id, status
 
 
-def criterion_statuses(lines: Iterable[str], ids: Sequence[str], attempt: int) -> dict[str, str]:
-    """Each of ``ids`` as a verify node's handoff marks it for attempt ``attempt``: ``met``, ``unmet`` or
-    ``unobserved`` (`criterion_status` reads each line). The last line per id wins, and an id with no line, or only
-    lines of another attempt, is ``unobserved``. Only the status word is kept, never the evidence text.
+def criterion_statuses(lines: Iterable[str], ids: Sequence[str], token: str) -> dict[str, str]:
+    """Each of ``ids`` as a verify node's handoff marks it for the attempt whose token is ``token``: ``met``,
+    ``unmet`` or ``unobserved`` (`criterion_status` reads each line). The last line per id wins, and an id with no
+    line, or only lines of another attempt, is ``unobserved``. Only the status word is kept, never the evidence text.
     """
     statuses = dict.fromkeys(ids, "unobserved")
     for line in lines:
-        found = criterion_status(line, statuses, attempt)
+        found = criterion_status(line, statuses, token)
         if found is not None:
             statuses[found[0]] = found[1]
     return statuses
 
 
-def attempt_number(node: Mapping[str, Any]) -> int:
-    """The number of the node's latest attempt: the ``#<n>`` its verify child writes on each criterion line."""
+def attempt_token(node: Mapping[str, Any]) -> str:
+    """The token of the node's latest attempt, the ``#<token>`` its verify child writes on each criterion line;
+    ``""`` when it has none (no attempt, or one stored without a token, which counts no line)."""
     attempts = node.get("attempts") or []
-    if not attempts:
-        return 1
-    number = attempts[-1].get("n") if isinstance(attempts[-1], Mapping) else None
-    return number if isinstance(number, int) and not isinstance(number, bool) and number > 0 else len(attempts)
+    token = attempts[-1].get("token") if attempts and isinstance(attempts[-1], Mapping) else None
+    return token if isinstance(token, str) else ""
+
+
+def wants_token(record: Mapping[str, Any], node: Mapping[str, Any]) -> bool:
+    """Whether a new attempt of ``node`` carries a token: a verify node of a run with criteria, and nothing else, so
+    a run without criteria keeps the record it always had."""
+    return is_verification(node) and bool(run_criteria(record))
 
 
 def leading_check_role(label: str) -> str:
@@ -1380,10 +1388,13 @@ def resume_handle_for(attempts: Sequence[Mapping[str, Any]]) -> str:
     return ""
 
 
-def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool = False) -> dict[str, Any]:
+def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool = False,
+             token: bool = False) -> dict[str, Any]:
     """Write-ahead: the attempt exists before its goal leaves this tool, so a marker always finds it.
 
     ``lost``: the attempt is offered again because a restart ended its child, which the attempt counts.
+    ``token`` (`wants_token`): a new attempt gets a random token its criterion lines must carry, so no line written
+    for another attempt, earlier or later, counts for it. Offering the same attempt again keeps its token.
     """
     attempts = node.setdefault("attempts", [])
     if derived_state == "handed_out" and attempts:
@@ -1399,6 +1410,8 @@ def hand_out(node: dict[str, Any], derived_state: str, now: float, *, lost: bool
     handle = resume_handle_for(attempts)
     if handle:
         attempt["resume_handle"] = handle
+    if token:
+        attempt["token"] = secrets.token_hex(ATTEMPT_TOKEN_BYTES)
     attempts.append(attempt)
     return attempt
 
@@ -1530,13 +1543,13 @@ def task_for(
         criteria = run_criteria(record)
         if criteria:
             # The engine reads these lines from the handoff (`criterion_statuses`); a criterion without one is unobserved.
-            number = attempt_number(node)
+            token = attempt_token(node)
             lines.extend([
                 "Goal criteria:",
                 *(f"- {item['id']}: {item['text']}" for item in criteria),
                 "In the handoff, write one line per criterion, each at the start of a line, with one status word:",
-                f"CRITERION <id> #{number}: met | unmet | unobserved - <the command you ran and what it showed>",
-                f"`#{number}` is this attempt: a line without it, or with another number, does not count. `met` needs "
+                f"CRITERION <id> #{token}: met | unmet | unobserved - <the command you ran and what it showed>",
+                f"`#{token}` is this attempt's mark: a line without it, or with another, does not count. `met` needs "
                 "that evidence after the dash. `unmet` means you ran the check and the outcome is not there; "
                 "`unobserved` means the check could not run here, and the reason says why. Every criterion gets a "
                 "line; one without a line counts as unobserved.",
@@ -1662,7 +1675,7 @@ def calls_for(
                 left -= len(chunk)
             for node_id in chunk:
                 attempt = hand_out(nodes[node_id], derived[node_id]["state"], now,
-                                   lost=bool(derived[node_id].get("lost")))
+                                   lost=bool(derived[node_id].get("lost")), token=wants_token(record, nodes[node_id]))
                 if "backend" in route:
                     attempt.update(backend=route["backend"], option=option)
             tasks = [task_for(record, nodes[node_id], omh_home, derived) for node_id in chunk]
@@ -1770,7 +1783,7 @@ def settle(
                 "the node failed or blocked.",
             )
         if ids and found and not unread:
-            statuses = criterion_statuses(lines, ids, attempt_number(nodes[node_id]))
+            statuses = criterion_statuses(lines, ids, attempt_token(nodes[node_id]))
     if outcome == "accepted" and statuses is not None:
         unmet = [key for key in ids if statuses[key] == "unmet"]
         unseen = [key for key in ids if statuses[key] == "unobserved"]
@@ -1785,7 +1798,7 @@ def settle(
             raise DagRefusal(
                 "criteria_unobserved",
                 f"Node {node_id}'s handoff has no checked result of this attempt for criteria {', '.join(unseen)} (no "
-                f"CRITERION line marked #{attempt_number(nodes[node_id])}, or met with no evidence), so it is not "
+                f"CRITERION line marked #{attempt_token(nodes[node_id])}, or met with no evidence), so it is not "
                 f"accepted. Settle it failed and repair it so they are checked ({again}), or settle it blocked when "
                 "they cannot be checked here.",
             )

@@ -106,11 +106,26 @@ _HANDOFF_FILE, _HANDOFF_LINK, _HANDOFF_NONE = "OMH_HANDOFF_FILE", "OMH_HANDOFF_L
 # SOH so grep reads text, the lines naming the marker, cut, the last kept), in the C locale so invalid UTF-8 is just
 # bytes, with flags BusyBox, GNU and BSD share. The result comes back base64, so no byte of the file (an escape, a CR,
 # invalid UTF-8) is changed or stripped by the terminal on its way: this host decodes the very bytes it would have read.
-_CRITERION_PIPE = (
-    f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} {{path}} | LC_ALL=C tr '\\000' '\\001' | LC_ALL=C grep -F CRITERION "
-    f"| LC_ALL=C cut -c 1-{dag_run.CRITERION_LINE_BYTES} | tail -n {dag_run.CRITERION_LINES_KEPT} | base64; "
+# POSIX sh has no pipefail, so each stage reports its own exit status on fd 3, and `_CRITERION_END` is printed only when
+# every stage succeeded (grep's 1 is no matching line, a successful empty read). A read without it, one Hermes timed out,
+# or one that exited non-zero is unread: a cut-short read could have lost the line that overrides an earlier one.
+_CRITERION_END = "OMH_CRITERIA_END"
+_CRITERION_STAGES = (
+    ("h", f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} PATH"), ("t", "LC_ALL=C tr '\\000' '\\001'"),
+    ("g", "LC_ALL=C grep -F CRITERION"), ("c", f"LC_ALL=C cut -c 1-{dag_run.CRITERION_LINE_BYTES}"),
+    ("l", f"tail -n {dag_run.CRITERION_LINES_KEPT}"), ("b", "base64"),
 )
 _BASE64_LINE = re.compile(r"[A-Za-z0-9+/=]+")
+
+
+def criterion_pipe(quoted: str) -> str:
+    """The shell that prints a handoff's criterion lines base64, then `_CRITERION_END` when every stage succeeded."""
+    stages = " | ".join(f"{{ {command.replace('PATH', quoted)}; echo {name}$? >&3; }}"
+                        for name, command in _CRITERION_STAGES)
+    passed = " ".join(f"{name}0" for name, _command in _CRITERION_STAGES if name != "g")
+    return ("( exec 4>&1; omh_s=$( { " + stages + " >&4; } 3>&1 ); omh_s=\" $(echo $omh_s) \"; "
+            f"for omh_x in {passed}; do case $omh_s in *\" $omh_x \"*) ;; *) exit 1 ;; esac; done; "
+            f"case $omh_s in *\" g0 \"*|*\" g1 \"*) echo {_CRITERION_END} ;; *) exit 1 ;; esac ); ")
 # What a run on a Docker or SSH terminal says, each time, while no environment is up to find its handoff root in.
 # Same turn: on a session-isolated Docker terminal a later turn may get another task id, and so another environment.
 TERMINAL_FIRST = ("No node was handed out: the children write their handoff files in the {backend} terminal, and "
@@ -737,9 +752,10 @@ def backend_criterion_lines(path: str, task_id: str) -> tuple[bool, str, list[st
 
 def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, str, list[str]]:
     quoted = shlex.quote(path)
-    grep = _CRITERION_PIPE.format(path=quoted) if criteria else ""
+    grep = criterion_pipe(quoted) if criteria else ""
     lines, unread = _backend_lines(task_id, f"if [ -L {quoted} ]; then echo {_HANDOFF_LINK}; elif [ -f {quoted} ]; "
-                                            f"then echo {_HANDOFF_FILE}; {grep}else echo {_HANDOFF_NONE}; fi")
+                                            f"then echo {_HANDOFF_FILE}; {grep}else echo {_HANDOFF_NONE}; fi",
+                                   whole=criteria)
     if unread == "interrupted":
         raise dag_run.DagRefusal("settle_interrupted", "The handoff check was interrupted, so nothing was settled; "
                                                        "settle the node again.")
@@ -747,7 +763,10 @@ def _backend_probe(path: str, task_id: str, *, criteria: bool) -> tuple[bool, st
         return False, unread, []
     verdicts = {line.strip() for line in lines}
     if _HANDOFF_FILE in verdicts and criteria:
-        encoded = "".join(line.strip() for line in lines if _BASE64_LINE.fullmatch(line.strip()))
+        if _CRITERION_END not in verdicts:
+            return False, "backend_unanswered", []
+        body = [line.strip() for line in lines[:[line.strip() for line in lines].index(_CRITERION_END)]]
+        encoded = "".join(line for line in body if _BASE64_LINE.fullmatch(line))
         try:
             data = base64.b64decode(encoded, validate=True)
         except (binascii.Error, ValueError):
@@ -798,11 +817,14 @@ def backend_root(task_id: str) -> tuple[str | None, str]:
     return (f"{home}/.omh/dag" if usable else ""), ""
 
 
-def _backend_lines(task_id: str, command: str) -> tuple[list[str], str]:
+def _backend_lines(task_id: str, command: str, *, whole: bool = False) -> tuple[list[str], str]:
     """The output lines of one command in Hermes' live environment for ``task_id``, terminal escapes stripped.
 
     A line keeps its own spaces: a caller that compares a verdict strips it,
-    and one that reads a value takes it as it was printed.
+    and one that reads a value takes it as it was printed. ``whole``: the
+    caller needs all of the output, so a command Hermes timed out
+    (``hermes_timed_out``, partial output) or one that exited non-zero is
+    ``backend_unanswered``.
 
     The environment is the one `get_active_env` returns, which follows a
     delegated child to its parent's environment, the one the child's
@@ -841,6 +863,9 @@ def _backend_lines(task_id: str, command: str) -> tuple[list[str], str]:
         return [], "backend_unanswered"
     if isinstance(answer, Mapping) and answer.get("hermes_interrupted"):
         return [], "interrupted"
+    if whole and (not isinstance(answer, Mapping) or answer.get("hermes_timed_out")
+                  or str(answer.get("returncode", "")).strip() != "0"):
+        return [], "backend_unanswered"
     output = answer.get("output") if isinstance(answer, Mapping) else None
     output = output if isinstance(output, str) else ""
     return [_TERMINAL_ESCAPES.sub("", line) for line in output.splitlines()], ""
@@ -883,7 +908,8 @@ def _ready(
     if spent_out and not calls and not any(info["state"] in dag_run.LIVE for info in derived.values()):
         mine = list(held)
         for node_id in mine:
-            attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now)
+            attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now,
+                                       token=dag_run.wants_token(record, nodes[node_id]))
             attempt["lane"] = "parent"
         held = []
     if calls or pinned or mine:
@@ -923,7 +949,7 @@ def _ready(
         for node_id in (node_id for node_id in mine if criteria and dag_run.is_verification(nodes[node_id])):
             # A verify node the parent does itself writes the criterion lines its child would have been told.
             say = (f"{say} In {node_id}'s handoff write one line per criterion ({', '.join(criteria)}): "
-                   f"`CRITERION <id> #{dag_run.attempt_number(nodes[node_id])}: met | unmet | unobserved - "
+                   f"`CRITERION <id> #{dag_run.attempt_token(nodes[node_id])}: met | unmet | unobserved - "
                    "<the command you ran and what it showed>`.")
     elif spent_out:
         # Added to whatever else the reply says (a provider-error retry's offer, for one): no child takes these.

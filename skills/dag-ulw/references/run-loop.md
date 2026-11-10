@@ -92,15 +92,18 @@ refused as `invalid_criteria`; an empty list is the same as none. Leaving them o
 the same run id defined with other criteria is refused as `run_exists`. `extend` takes new `criteria` too
 (new ids only, 12 in all); nothing rewrites or removes one, and `repair` takes none.
 
-Each verify node's task lists the criteria and asks for one handoff line per criterion, marked with the
-attempt it was handed out as (`#2` on a re-run, after a provider-error retry, or after a park):
+Each verify node's task lists the criteria and asks for one handoff line per criterion, marked with its
+attempt's own random token, which the task prints (a re-run, a provider-error retry and a resumed park get a
+new one; the same attempt offered again keeps it):
 
-    CRITERION <id> #<attempt>: met | unmet | unobserved - <the command it ran and what it showed>
+    CRITERION <id> #<token>: met | unmet | unobserved - <the command it ran and what it showed>
 
 OMH reads only those lines, at a line's start (spaces, `-`, `*` or backticks before it are fine), for the
-ids the run declares and this attempt's number, so an earlier attempt's lines left in the file never count.
-After the status comes nothing or a separator (`-`, `:`, a dash) and the evidence; anything else (`?`, `(`,
-`/`, `|`) makes it no criterion line. `met` needs evidence. The last line per id wins, and a criterion with
+ids the run declares and this attempt's token, so no line written for another attempt ever counts. After the
+status comes nothing or a separator (`-`, `:`, a dash) and the evidence; anything else (`?`, `(`, `/`, `|`)
+makes it no criterion line. `met` needs evidence with a letter or digit, not the `<...>` placeholder. A read
+on a Docker or SSH terminal that timed out, failed or came back without its end mark is unread, like one
+OMH cannot reach. The last line per id wins, and a criterion with
 no line counts as `unobserved`. Ids read in lower case (`C1` is `c1`). `unmet` means the check ran and the
 outcome is not there; `unobserved` means the check could not run here. Read those lines before settling: settle
 the verify node accepted only when every one says met, failed when one is unmet, blocked when one could not be

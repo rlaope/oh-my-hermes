@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 from tempfile import TemporaryDirectory
 import time
@@ -25,16 +26,28 @@ from _local_package import load_local_package
 
 load_local_package()
 
-from _delegation_state import PARENT, homes  # noqa: E402
+from _delegation_state import PARENT, homes, start  # noqa: E402
 from omh.plugin_bundle.omh import dag_run  # noqa: E402
 from omh.plugin_bundle.omh.tools import dag_tool  # noqa: E402
 from test_dag_tool import (  # noqa: E402
-    PROMPT, SANDBOX_SHELL, SANDBOX_SKIP, Answers, Sandbox, Terminal, call, handoff, node, slots_table, terminal_env,
+    PROMPT, SANDBOX_SHELL, SANDBOX_SKIP, Answers, Sandbox, Terminal, call, node, slots_table, terminal_env,
 )
+from test_dag_tool import handoff as _write_handoff  # noqa: E402
 
 CRITERIA = [{"id": "api", "text": "The export API returns CSV"}, {"id": "docs", "text": "The docs page names the API"}]
 NODES = [node("build", scope=("src/api.py",)), node("check", depends_on=("build",), role="verify")]
-ALL_MET = "CRITERION api #1: met - curl /export returned text/csv\nCRITERION docs #1: met - grep found it in docs/api.md\n"
+ALL_MET = "CRITERION api #T: met - curl /export returned text/csv\nCRITERION docs #T: met - grep found it in docs/api.md\n"
+# Lines below say `#T` for "this attempt's token", which only the record knows (`dag_run.hand_out`); a parse test uses
+# TOKEN in its place.
+TOKEN = "ab12cd"
+
+
+def token_of(record: dict, node_id: str) -> str:
+    return dag_run.attempt_token(next(item for item in record["nodes"] if item["id"] == node_id))
+
+
+def marked(text: str, token: str) -> str:
+    return text.replace("#T", f"#{token}")
 
 
 def record_of(home, run: str = "feat") -> dict:
@@ -47,6 +60,16 @@ def record_bytes(home, run: str = "feat") -> bytes:
 
 def last_attempt(record: dict, node_id: str) -> dict:
     return next(item for item in record["nodes"] if item["id"] == node_id)["attempts"][-1]
+
+
+def handoff(home, run: str, node_id: str, text: str = "done") -> Path:
+    """`test_dag_tool.handoff`, with `#T` in ``text`` made the token of the node's latest attempt."""
+    path = dag_run.record_path(home.omh, PARENT, run)
+    if "#T" in text and path.exists():
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if any(item["id"] == node_id for item in record["nodes"]):
+            text = marked(text, token_of(record, node_id))
+    return _write_handoff(home, run, node_id, text)
 
 
 def to_check(home, criteria: list | None = CRITERIA) -> dict:
@@ -199,7 +222,7 @@ class DefineTests(unittest.TestCase):
         with homes() as home:
             to_check(home, criteria=upper)
             stored = record_of(home)
-            handoff(home, "feat", "check", "CRITERION C1 #1: met - curl returned csv\nCRITERION c2 #1: met - grep")
+            handoff(home, "feat", "check", "CRITERION C1 #T: met - curl returned csv\nCRITERION c2 #T: met - grep")
             done = call(action="settle", run="feat", node="check", outcome="accepted")
             again = call(action="extend", run="feat", criteria=[{"id": "c1", "text": "again"}],
                          nodes=[node("more", depends_on=("check",), scope=("src/more.py",))])
@@ -277,7 +300,10 @@ class TaskTests(unittest.TestCase):
         check = second["calls"][0]["tasks"][0]["context"]
         self.assertNotIn("CRITERION", build)
         self.assertIn("Goal criteria:\n- api: The export API returns CSV\n- docs: The docs page names the API\n", check)
-        self.assertIn("CRITERION <id> #1: met | unmet | unobserved - <the command you ran and what it showed>", check)
+        token = re.search(r"CRITERION <id> #([0-9a-f]{6}): met \| unmet \| unobserved - <the command you ran and what "
+                          r"it showed>", check)
+        self.assertIsNotNone(token, check)
+        self.assertIn(f"`#{token[1]}` is this attempt's mark", check)
         self.assertIn("`unmet` means you ran the check and the outcome is not there; `unobserved` means the check "
                       "could not run here, and the reason says why.", check)
         self.assertIn("producer claims are not verification evidence", check)
@@ -301,45 +327,47 @@ class SkillTextTests(unittest.TestCase):
 
 
 class LineParsingTests(unittest.TestCase):
-    def statuses(self, text: str, attempt: int = 1) -> dict:
-        return dag_run.criterion_statuses(text.split("\n"), ["api", "docs"], attempt)
+    def statuses(self, text: str, token: str = TOKEN) -> dict:
+        return dag_run.criterion_statuses(marked(text, TOKEN).split("\n"), ["api", "docs"], token)
 
     def test_only_marked_lines_of_this_attempt_for_declared_ids_count_and_the_last_wins(self) -> None:
         cases = [
-            ("CRITERION api #1: met - ran it\nCRITERION docs #1: unmet - 404", {"api": "met", "docs": "unmet"}),
+            ("CRITERION api #T: met - ran it\nCRITERION docs #T: unmet - 404", {"api": "met", "docs": "unmet"}),
             # An id the run does not declare is ignored.
-            ("CRITERION extra #1: met - ran it\nCRITERION api #1: met - ok", {"api": "met", "docs": "unobserved"}),
+            ("CRITERION extra #T: met - ran it\nCRITERION api #T: met - ok", {"api": "met", "docs": "unobserved"}),
             # `met` with nothing after it is not evidence.
-            ("CRITERION api #1: met\nCRITERION docs #1: met -  ", {"api": "unobserved", "docs": "unobserved"}),
+            ("CRITERION api #T: met\nCRITERION docs #T: met -  ", {"api": "unobserved", "docs": "unobserved"}),
             # Prose that mentions a criterion has no line-start marker.
-            ("The criterion api was met.\nCRITERION api #1 was met - ok\nWe saw CRITERION api #1: met - x",
+            ("The criterion api was met.\nCRITERION api #T was met - ok\nWe saw CRITERION api #T: met - x",
              {"api": "unobserved", "docs": "unobserved"}),
             # A later line overrides an earlier one, either way.
-            ("CRITERION api #1: met - ok\nCRITERION api #1: unmet - broke again\nCRITERION docs #1: unmet - no\n"
-             "CRITERION docs #1: met - fixed", {"api": "unmet", "docs": "met"}),
+            ("CRITERION api #T: met - ok\nCRITERION api #T: unmet - broke again\nCRITERION docs #T: unmet - no\n"
+             "CRITERION docs #T: met - fixed", {"api": "unmet", "docs": "met"}),
             # Bullets, spaces and backticks before the marker are fine; the status word ignores case.
-            ("  - `CRITERION api #1: MET - ran x`\n* CRITERION docs #1: unobserved - no access",
+            ("  - `CRITERION api #T: MET - ran x`\n* CRITERION docs #T: unobserved - no access",
              {"api": "met", "docs": "unobserved"}),
             # A status word must stand alone: `metric` is no `met`; the marker is upper case.
-            ("CRITERION api #1: metric - x\ncriterion docs #1: met - lower-case marker",
+            ("CRITERION api #T: metric - x\ncriterion docs #T: met - lower-case marker",
              {"api": "unobserved", "docs": "unobserved"}),
             # The id reads in lower case.
-            ("CRITERION API #1: met - ran it\nCRITERION Docs #1: unmet - 404", {"api": "met", "docs": "unmet"}),
+            ("CRITERION API #T: met - ran it\nCRITERION Docs #T: unmet - 404", {"api": "met", "docs": "unmet"}),
             # A bare `unmet` or `unobserved` stands: it can only hold the run back.
-            ("CRITERION api #1: unmet\nCRITERION docs #1: unobserved", {"api": "unmet", "docs": "unobserved"}),
+            ("CRITERION api #T: unmet\nCRITERION docs #T: unobserved", {"api": "unmet", "docs": "unobserved"}),
             # A CRLF file and a BOM on its first line read as plain lines.
-            ("\ufeffCRITERION api #1: met - ran it\r\nCRITERION docs #1: met - grep\r\n", {"api": "met", "docs": "met"}),
+            ("\ufeffCRITERION api #T: met - ran it\r\nCRITERION docs #T: met - grep\r\n", {"api": "met", "docs": "met"}),
         ]
         for text, expected in cases:
             with self.subTest(text=text):
                 self.assertEqual(self.statuses(text), expected)
 
-    def test_a_line_of_another_attempt_or_with_no_attempt_never_counts(self) -> None:
-        """Mutation: drop the attempt check, so a re-run is accepted on the lines its previous attempt left."""
-        self.assertEqual(self.statuses(ALL_MET, attempt=2), {"api": "unobserved", "docs": "unobserved"})
-        self.assertEqual(self.statuses(ALL_MET.replace(" #1", ""), attempt=1), {"api": "unobserved",
-                                                                                "docs": "unobserved"})
-        self.assertEqual(self.statuses(ALL_MET.replace("#1", "#2"), attempt=2), {"api": "met", "docs": "met"})
+    def test_a_line_of_another_attempt_or_with_no_token_never_counts(self) -> None:
+        """Mutation: drop the token check, so a re-run is accepted on the lines another attempt left."""
+        none = {"api": "unobserved", "docs": "unobserved"}
+        self.assertEqual(self.statuses(ALL_MET, token="ffffff"), none)
+        self.assertEqual(self.statuses(ALL_MET.replace(" #T", "")), none)
+        self.assertEqual(self.statuses(ALL_MET.replace("#T", "#1")), none)  # an attempt number is no token
+        self.assertEqual(self.statuses(ALL_MET, token=""), none)  # an attempt stored without a token counts no line
+        self.assertEqual(self.statuses(ALL_MET.replace("#T", f"#{TOKEN.upper()}")), {"api": "met", "docs": "met"})
 
     def test_a_hedged_or_echoed_status_is_no_status(self) -> None:
         """Measured in review: each of these used to read as `met`."""
@@ -358,21 +386,26 @@ class LineParsingTests(unittest.TestCase):
             "met - ran\x00it",
             "unmet?",
             "unobserved (maybe)",
+            "met - <the command you ran and what it showed>",  # the placeholder left as it is
+            "met - <ran it>",
+            "met - \u200b",  # a zero-width space: no letter or digit
+            "met - -- ** --",
         ):
             with self.subTest(tail=tail):
-                self.assertEqual(self.statuses(f"CRITERION api #1: {tail}")["api"], "unobserved")
-        for tail in ("met - ran it", "met: ran it", "met \u2013 ran it", "met\u2014ran it", "met-ran it"):
+                self.assertEqual(self.statuses(f"CRITERION api #T: {tail}")["api"], "unobserved")
+        # Structure only, no phrase lists: these have a letter or digit and are no lone placeholder.
+        for tail in ("met - not checked", "met: n/a", "met - ran <cmd> and saw 200", "met - ran it", "met: ran it", "met \u2013 ran it", "met\u2014ran it", "met-ran it"):
             with self.subTest(tail=tail):
-                self.assertEqual(self.statuses(f"CRITERION api #1: {tail}")["api"], "met")
+                self.assertEqual(self.statuses(f"CRITERION api #T: {tail}")["api"], "met")
 
 
 class SettleTests(unittest.TestCase):
     def test_accepted_needs_every_criterion_met_and_a_refusal_changes_nothing(self) -> None:
         """Mutation: accept with one unmet or unobserved, or write the attempt before refusing."""
         for text, reason, named in (
-            ("CRITERION api #1: met - ok\nCRITERION docs #1: unmet - page missing", "criteria_unmet", "docs"),
-            ("CRITERION api #1: met - ok\nCRITERION docs #1: met", "criteria_unobserved", "docs"),
-            ("CRITERION api #1: unobserved - no network", "criteria_unobserved", "api, docs"),
+            ("CRITERION api #T: met - ok\nCRITERION docs #T: unmet - page missing", "criteria_unmet", "docs"),
+            ("CRITERION api #T: met - ok\nCRITERION docs #T: met", "criteria_unobserved", "docs"),
+            ("CRITERION api #T: unobserved - no network", "criteria_unobserved", "api, docs"),
         ):
             with self.subTest(reason=reason, text=text), homes() as home:
                 to_check(home)
@@ -402,7 +435,7 @@ class SettleTests(unittest.TestCase):
         for outcome in ("failed", "blocked"):
             with self.subTest(outcome=outcome), homes() as home:
                 to_check(home)
-                handoff(home, "feat", "check", "CRITERION api #1: met - ok\nCRITERION docs #1: unmet - 404")
+                handoff(home, "feat", "check", "CRITERION api #T: met - ok\nCRITERION docs #T: unmet - 404")
                 settled = call(action="settle", run="feat", node="check", outcome=outcome)
                 self.assertEqual(last_attempt(record_of(home), "check")["criteria"], {"api": "met", "docs": "unmet"})
                 self.assertEqual(settled["criteria"]["unmet"], ["docs"])
@@ -419,8 +452,8 @@ class SettleTests(unittest.TestCase):
         that follows still carries how far the goal got."""
         criteria = [{"id": f"c{index}", "text": f"Outcome {index} holds"} for index in range(1, dag_run.MAX_CRITERIA)]
         criteria.append({"id": "staging", "text": "It works on staging"})
-        marked = "".join(f"CRITERION c{index} #1: met - test {index} passed\n" for index in range(1, dag_run.MAX_CRITERIA))
-        marked += "CRITERION staging #1: unobserved - staging_check exit 3: no STAGING_TOKEN here\n"
+        marked = "".join(f"CRITERION c{index} #T: met - test {index} passed\n" for index in range(1, dag_run.MAX_CRITERIA))
+        marked += "CRITERION staging #T: unobserved - staging_check exit 3: no STAGING_TOKEN here\n"
         with homes() as home:
             to_check(home, criteria=criteria)
             handoff(home, "feat", "check", marked)
@@ -471,7 +504,7 @@ class SettleTests(unittest.TestCase):
     def test_a_run_without_criteria_settles_its_verify_node_as_before(self) -> None:
         with homes() as home:
             to_check(home, criteria=None)
-            handoff(home, "feat", "check", "CRITERION api #1: unmet - not a run with criteria")
+            handoff(home, "feat", "check", "CRITERION api #T: unmet - not a run with criteria")
             done = call(action="settle", run="feat", node="check", outcome="accepted")
             stored = record_of(home)
         self.assertEqual(done["verdict"], "verified")
@@ -526,7 +559,8 @@ class VerdictAndExtendTests(unittest.TestCase):
             dag_run.calls_for(record, dag_run.derive(record, [], at - 1), free_slots=4, per_call=4,
                               omh_home=Path("/h"), now=at - 1)
             dag_run.settle(record, dag_run.derive(record, [], at), node_id, "accepted", "", False,
-                           read_handoff=lambda: (True, ""), now=at, read_criteria=lambda: (True, "", ALL_MET.split("\n")))
+                           read_handoff=lambda: (True, ""), now=at,
+                           read_criteria=lambda: (True, "", marked(ALL_MET, token_of(record, "check")).split("\n")))
         # A record edited by hand past the settle rule: the verdict reads the statuses, not the outcome alone.
         next(item for item in record["nodes"] if item["id"] == "check")["attempts"][-1]["criteria"]["docs"] = "unmet"
         self.assertEqual(dag_run.goal_verdict(record, dag_run.derive(record, [], 5.0)),
@@ -535,24 +569,68 @@ class VerdictAndExtendTests(unittest.TestCase):
 
 class BackendTests(unittest.TestCase):
     def test_criterion_lines_come_back_with_the_file_test_in_one_command(self) -> None:
-        encoded = base64.b64encode(b"CRITERION api #1: met - ran it\nCRITERION docs #1: met - grep\n").decode()
-        answer = {"output": f"OMH_HANDOFF_FILE\n{encoded[:20]}\n{encoded[20:]}\n", "returncode": 0}
         with homes() as home, terminal_env():
-            environment = Answers(answer)
+            environment = Answers({"output": "OMH_HANDOFF_FILE\n", "returncode": 0})
             with Terminal("docker", environment).modules():
                 to_check(home)
+                environment.answer = self._answer(marked(ALL_MET, token_of(record_of(home), "check")).encode())
                 accepted = call(action="settle", run="feat", node="check", outcome="accepted")
         self.assertEqual(accepted["verdict"], "verified", accepted)
         command = environment.calls[-1][0]
-        self.assertIn(f"head -c {dag_run.MAX_HANDOFF_READ_BYTES} ", command)
-        self.assertIn("| LC_ALL=C tr '\\000' '\\001' | LC_ALL=C grep -F CRITERION | LC_ALL=C cut -c 1-", command)
-        self.assertIn(f"| tail -n {dag_run.CRITERION_LINES_KEPT} | base64;", command)
+        self.assertIn(f"{{ head -c {dag_run.MAX_HANDOFF_READ_BYTES} ", command)
+        for stage in ("{ LC_ALL=C tr '\\000' '\\001'; echo t$? >&3; }", "{ LC_ALL=C grep -F CRITERION; echo g$? >&3; }",
+                      f"{{ tail -n {dag_run.CRITERION_LINES_KEPT}; echo l$? >&3; }}", "{ base64; echo b$? >&3; } >&4;",
+                      f"echo {dag_tool._CRITERION_END}"):
+            self.assertIn(stage, command)
+
+    @staticmethod
+    def _answer(data: bytes, *, end: bool = True, **fields: object) -> dict:
+        encoded = base64.b64encode(data).decode()
+        lines = ["OMH_HANDOFF_FILE", encoded[:40], encoded[40:], *([dag_tool._CRITERION_END] if end else [])]
+        return {"output": "\n".join(lines) + "\n", "returncode": 0, **fields}
+
+    def _settle_with(self, answer_for) -> dict:
         with homes() as home, terminal_env():
-            with Terminal("docker", Answers({"output": "OMH_HANDOFF_FILE\nnot base64!\nQQ\n", "returncode": 0})).modules():
+            environment = Answers({"output": "OMH_HANDOFF_FILE\n", "returncode": 0})
+            with Terminal("docker", environment).modules():
                 to_check(home)
-                garbled = call(action="settle", run="feat", node="check", outcome="accepted")
-        # Output that does not decode is an unanswered backend: accepted stands unread and verifies nothing.
-        self.assertEqual(garbled["verdict"], "unverified", garbled)
+                environment.answer = answer_for(token_of(record_of(home), "check"))
+                return call(action="settle", run="feat", node="check", outcome="accepted")
+
+    def test_a_cut_short_or_failed_read_is_unread_never_a_read(self) -> None:
+        """Review probe D: a read Hermes timed out came back as whole lines of base64 that still decoded, and the
+        dropped tail held the later `unmet` line that overrides the earlier `met`."""
+        def cut(token: str) -> dict:
+            data = marked("CRITERION api #T: met - first pass\nCRITERION docs #T: met - ok\n"
+                          + "CRITERION note\n" * 6 + "CRITERION api #T: unmet - regression on the second run\n",
+                          token).encode()
+            whole = base64.b64encode(data[:57]).decode()  # 57 bytes encode to 76 characters, a whole line
+            return {"output": f"OMH_HANDOFF_FILE\n{whole}\n[Command timed out after 10s]", "returncode": 124,
+                    "hermes_timed_out": True}
+
+        cases = {
+            "timed out with decodable partial output": cut,
+            "timed out with the end marker": lambda token: self._answer(marked(ALL_MET, token).encode(),
+                                                                        returncode=124, hermes_timed_out=True),
+            "a non-zero exit": lambda token: self._answer(marked(ALL_MET, token).encode(), returncode=1),
+            "no end marker": lambda token: self._answer(marked(ALL_MET, token).encode(), end=False),
+            "base64 missing": lambda token: {"output": "OMH_HANDOFF_FILE\nsh: base64: not found\n", "returncode": 1},
+            "not base64": lambda token: {"output": f"OMH_HANDOFF_FILE\nnot base64!\nQQ\n{dag_tool._CRITERION_END}\n",
+                                         "returncode": 0},
+        }
+        for label, answer_for in cases.items():
+            with self.subTest(label):
+                settled = self._settle_with(answer_for)
+                # Unread: accepted stands with its handoff not checked, records nothing, and verifies nothing.
+                self.assertEqual(settled["status"], "ok", settled)
+                self.assertEqual(settled["verdict"], "unverified", settled)
+                self.assertIn("handoff_not_checked:check", settled["verdict_reasons"])
+                row = next(item for item in settled["nodes"] if item["id"] == "check")
+                self.assertIs(row.get("handoff_checked"), False, row)
+        # A file with no criterion line is a read that worked (grep's 1), with every criterion not checked.
+        empty = self._settle_with(lambda token: {"output": f"OMH_HANDOFF_FILE\n\n{dag_tool._CRITERION_END}\n",
+                                                 "returncode": 0})
+        self.assertEqual(empty["reason"], "criteria_unobserved", empty)
 
     def test_an_interrupted_read_settles_nothing(self) -> None:
         interrupted = {"output": "[Command interrupted]", "returncode": 130, "hermes_interrupted": True}
@@ -580,15 +658,16 @@ class BackendTests(unittest.TestCase):
                 built.write_text("done", encoding="utf-8")
                 call(action="settle", run="feat", node="build", outcome="accepted")
                 inside = built.with_name("check.md")
+                token = token_of(record_of(home), "check")
                 elsewhere = inside.with_name("elsewhere.md")
-                elsewhere.write_text(ALL_MET, encoding="utf-8")
+                elsewhere.write_text(marked(ALL_MET, token), encoding="utf-8")
                 os.symlink(elsewhere, inside)
                 link = call(action="settle", run="feat", node="check", outcome="accepted")
                 inside.unlink()
-                inside.write_text("Notes.\n  - CRITERION api #1: met - ran it\nCRITERION docs #1: unmet - 404\n",
-                                  encoding="utf-8")
+                inside.write_text(marked("Notes.\n  - CRITERION api #T: met - ran it\nCRITERION docs #T: unmet - 404\n",
+                                         token), encoding="utf-8")
                 unmet = call(action="settle", run="feat", node="check", outcome="accepted")
-                inside.write_text("Notes.\n" + ALL_MET, encoding="utf-8")
+                inside.write_text("Notes.\n" + marked(ALL_MET, token), encoding="utf-8")
                 accepted = call(action="settle", run="feat", node="check", outcome="accepted")
         self.assertEqual(link["reason"], "handoff_missing", link)
         self.assertEqual(unmet["reason"], "criteria_unmet", unmet)
@@ -622,29 +701,50 @@ def _settle_path(record: dict, steps: list[tuple[str, str]], read=None) -> None:
                           now=at)
         dag_run.settle(record, dag_run.derive(record, [], at + 1), node_id, outcome, "", False,
                        read_handoff=lambda: (True, ""), now=at + 1,
-                       read_criteria=(read or {}).get(node_id, lambda: (True, "", ALL_MET.split("\n"))))
+                       read_criteria=(read or {}).get(
+                           node_id, lambda: (True, "", marked(ALL_MET, token_of(record, node_id)).split("\n"))))
+
+
+def told_token(result: dict) -> str:
+    """The token the verify task in ``result``'s calls tells its child to write."""
+    context = next(task["context"] for call_row in result["calls"] for task in call_row["tasks"])
+    return re.search(r"CRITERION <id> #([0-9a-f]{6}):", context)[1]
 
 
 class AttemptTests(unittest.TestCase):
-    """A verify node's lines carry the attempt they were written for (`CRITERION <id> #<n>:`)."""
+    """A verify node's lines carry its attempt's own random token (`CRITERION <id> #<token>:`)."""
 
     def test_a_rerun_is_never_accepted_on_the_lines_its_previous_attempt_left(self) -> None:
         """Review probe A: attempt 1 wrote every criterion met and was settled failed; the re-run wrote nothing."""
         with homes() as home:
             to_check(home)
+            first = token_of(record_of(home), "check")
             handoff(home, "feat", "check", ALL_MET)
             call(action="settle", run="feat", node="check", outcome="failed", reason="the curl failed")
             call(action="repair", run="feat", node="check", nodes=[node("fix", scope=("src/api.py",))])
             handoff(home, "feat", "fix")
             fixed = call(action="settle", run="feat", node="fix", outcome="accepted")
             rerun = call(action="settle", run="feat", node="check", outcome="accepted")
-            handoff(home, "feat", "check", ALL_MET.replace("#1", "#2"))
+            handoff(home, "feat", "check", ALL_MET)
             accepted = call(action="settle", run="feat", node="check", outcome="accepted")
-        context = next(task["context"] for call_row in fixed["calls"] for task in call_row["tasks"])
-        self.assertIn("CRITERION <id> #2: met | unmet | unobserved", context)
+        second = told_token(fixed)
+        self.assertNotEqual(second, first)
         self.assertEqual(rerun["reason"], "criteria_unobserved", rerun)
-        self.assertIn("#2", rerun["say"])
+        self.assertIn(f"#{second}", rerun["say"])
         self.assertEqual((accepted["state"], accepted["verdict"]), ("done", "verified"), accepted)
+
+    def test_lines_written_for_a_later_attempt_never_count(self) -> None:
+        """Review probe E: attempt 1 also wrote lines for what it guessed attempt 2 would be."""
+        with homes() as home:
+            to_check(home)
+            guesses = "".join(marked(ALL_MET, guess) for guess in ("2", "02", "1", "000000", "ffffff", "T"))
+            handoff(home, "feat", "check", ALL_MET + guesses)
+            call(action="settle", run="feat", node="check", outcome="failed")
+            call(action="repair", run="feat", node="check", nodes=[node("fix", scope=("src/api.py",))])
+            handoff(home, "feat", "fix")
+            call(action="settle", run="feat", node="fix", outcome="accepted")
+            rerun = call(action="settle", run="feat", node="check", outcome="accepted")
+        self.assertEqual(rerun["reason"], "criteria_unobserved", rerun)
 
     def test_a_provider_error_retry_is_neither_read_nor_counted_and_hands_out_the_next_number(self) -> None:
         """Mutation: read the handoff on a provider-error retry, so the dead attempt records statuses."""
@@ -657,8 +757,7 @@ class AttemptTests(unittest.TestCase):
         check = next(item for item in first["nodes"] if item["id"] == "check")
         self.assertEqual(check["attempts"][0]["outcome"], "retry")
         self.assertNotIn("criteria", check["attempts"][0])
-        context = next(task["context"] for call_row in retried["calls"] for task in call_row["tasks"])
-        self.assertIn("CRITERION <id> #2:", context)
+        self.assertNotEqual(told_token(retried), check["attempts"][0]["token"])
         self.assertEqual(stale["reason"], "criteria_unobserved", stale)
 
     def test_a_provider_error_retry_reads_nothing(self) -> None:
@@ -670,19 +769,42 @@ class AttemptTests(unittest.TestCase):
         reads: list[str] = []
         happened = dag_run.settle(record, dag_run.derive(record, [], 31.0), "check", "failed", "", True,
                                   read_handoff=lambda: reads.append("handoff") or (True, ""), now=31.0,
-                                  read_criteria=lambda: reads.append("criteria") or (True, "", ALL_MET.split("\n")))
+                                  read_criteria=lambda: reads.append("criteria") or (True, "", []))
         self.assertEqual((happened, reads), ("retry", []))
 
     def test_a_parked_check_resumes_under_the_next_number(self) -> None:
         with homes() as home:
             to_check(home)
+            parked = token_of(record_of(home), "check")
             wake = time.time() + 120
             call(action="settle", run="feat", node="check", outcome="parked", handle="ci-run-7", wake_at=wake)
             with patch.object(dag_tool.time, "time", return_value=wake + 1):
                 woken = call(action="ready", run="feat")
+            with patch.object(dag_tool.time, "time", return_value=wake + 2 + dag_run.HANDOUT_STALE_SECONDS):
+                reoffered = call(action="ready", run="feat")
         context = next(task["context"] for call_row in woken["calls"] for task in call_row["tasks"])
         self.assertIn("Resume the still-running wait: ci-run-7", context)
-        self.assertIn("CRITERION <id> #2:", context)
+        self.assertNotEqual(told_token(woken), parked)
+        # Offering the same attempt again (no child took it) keeps its token.
+        self.assertEqual(told_token(reoffered), told_token(woken))
+
+    def test_the_parent_doing_a_check_itself_is_told_the_line_and_its_token(self) -> None:
+        """Mutation: drop the parent-lane criterion line, so a one-shot parent never learns the token."""
+        with homes() as home, patch.object(dag_tool, "_single_query_session", return_value=True):
+            slots_table(home)
+            (home.hermes / "config.yaml").write_text("delegation:\n  oneshot_max_children: 2\n", encoding="utf-8")
+            call(action="define", run="feat", nodes=NODES, criteria=CRITERIA)
+            start(home, "child-build", "sa-build", "Node build [dag:feat/build]", now=time.time())
+            start(home, "child-other", "sa-other", "Look something up", now=time.time())
+            handoff(home, "feat", "build")
+            mine = call(action="settle", run="feat", node="build", outcome="accepted")
+            token = token_of(record_of(home), "check")
+            handoff(home, "feat", "check", ALL_MET)
+            done = call(action="settle", run="feat", node="check", outcome="accepted")
+        self.assertEqual(mine["for_parent"], ["check"], mine)
+        self.assertIn(f"In check's handoff write one line per criterion (api, docs): `CRITERION <id> #{token}: met",
+                      mine["say"])
+        self.assertEqual(done["verdict"], "verified", done)
 
     def test_the_unmet_say_names_what_checks_again(self) -> None:
         """Review probe 4: a verify node inside another node's repair group is superseded, never run again."""
@@ -694,7 +816,7 @@ class AttemptTests(unittest.TestCase):
                  nodes=[node("fix", scope=("src/api.py",)), node("reverify", depends_on=("fix",), role="verify")])
             handoff(home, "feat", "fix")
             call(action="settle", run="feat", node="fix", outcome="accepted")
-            handoff(home, "feat", "reverify", "CRITERION api #1: unmet - 500\nCRITERION docs #1: met - ok")
+            handoff(home, "feat", "reverify", "CRITERION api #T: unmet - 500\nCRITERION docs #T: met - ok")
             grouped = call(action="settle", run="feat", node="reverify", outcome="accepted")
         self.assertEqual(grouped["reason"], "criteria_unmet", grouped)
         self.assertIn("part of build's repair group and does not run again; check checks the work", grouped["say"])
@@ -706,19 +828,19 @@ class AttemptTests(unittest.TestCase):
                  nodes=[node("fix", scope=("src/api.py",)), node("reverify", depends_on=("fix",), role="verify")])
             handoff(home, "feat", "fix")
             call(action="settle", run="feat", node="fix", outcome="accepted")
-            handoff(home, "feat", "reverify", "CRITERION api #1: unmet - 500")
+            handoff(home, "feat", "reverify", "CRITERION api #T: unmet - 500")
             alone = call(action="settle", run="feat", node="reverify", outcome="accepted")
         self.assertIn("does not run again, so put a role=verify node in the new group", alone["say"])
         with homes() as home:
             to_check(home)
-            handoff(home, "feat", "check", "CRITERION api #1: unmet - 500\nCRITERION docs #1: met - ok")
+            handoff(home, "feat", "check", "CRITERION api #T: unmet - 500\nCRITERION docs #T: met - ok")
             own = call(action="settle", run="feat", node="check", outcome="accepted")
             call(action="settle", run="feat", node="check", outcome="failed")
             call(action="repair", run="feat", node="check",
                  nodes=[node("fix", scope=("src/api.py",)), node("recheck", depends_on=("fix",), role="verify")])
             handoff(home, "feat", "fix")
             call(action="settle", run="feat", node="fix", outcome="accepted")
-            handoff(home, "feat", "recheck", "CRITERION api #1: unmet - 500")
+            handoff(home, "feat", "recheck", "CRITERION api #T: unmet - 500")
             under_verify = call(action="settle", run="feat", node="recheck", outcome="accepted")
         self.assertIn("this check runs again once they pass", own["say"])
         self.assertIn("check runs again once they pass", under_verify["say"])
@@ -762,7 +884,7 @@ class ViewAgreementTests(unittest.TestCase):
         """Mutation: add criteria reasons to a verify_failed verdict, which turns it into unverified."""
         record = dag_run.new_record(PARENT, "feat", "", "", NODES, 1.0, criteria=CRITERIA)
         _settle_path(record, [("build", "accepted"), ("check", "failed")],
-                     read={"check": lambda: (True, "", ["CRITERION api #1: unmet - 500"])})
+                     read={"check": lambda: (True, "", ["CRITERION api #T: unmet - 500"])})
         self.assertEqual(dag_run.goal_verdict(record, dag_run.derive(record, [], 50.0)),
                          ("verify_failed", ["verify_failed:check"]))
 
@@ -808,14 +930,21 @@ class ReadTests(unittest.TestCase):
     def test_the_host_and_a_terminal_read_the_same_bytes_the_same_way(self) -> None:
         """A NUL, invalid UTF-8, CRLF, a BOM, an escape or a line separator never reads differently on either side."""
         contents = {
-            "nul and invalid utf-8": b"\x00\xff\xfe bytes\nCRITERION api #1: met - ran it\x00\nCRITERION docs #1: "
+            "nul and invalid utf-8": b"\x00\xff\xfe bytes\nCRITERION api #T: met - ran it\x00\nCRITERION docs #T: "
                                      b"met - grep \xff found it\n",
-            "crlf and bom": "\ufeffCRITERION api #1: met - ran it\r\nCRITERION docs #1: unmet - 404\r\n".encode(),
-            "escape": b"CRITERION api #1: met - \x1b[32mok\x1b[0m\n\x1b[0mCRITERION docs #1: met - ran it\n",
-            "separators": "CRITERION api #1: met\u2028- ran it\nCRITERION docs #1: met\x0b- x\n".encode(),
-            "bell": b"CRITERION api #1: met - ran it\x07\nCRITERION docs #1: met - ok\n",
+            "crlf and bom": "\ufeffCRITERION api #T: met - ran it\r\nCRITERION docs #T: unmet - 404\r\n".encode(),
+            "escape": b"CRITERION api #T: met - \x1b[32mok\x1b[0m\n\x1b[0mCRITERION docs #T: met - ran it\n",
+            "separators": "CRITERION api #T: met\u2028- ran it\nCRITERION docs #T: met\x0b- x\n".encode(),
+            "bell": b"CRITERION api #T: met - ran it\x07\nCRITERION docs #T: met - ok\n",
+            "line separators in the evidence": "CRITERION api #T: met - ran\u2028it\nCRITERION docs #T: met - a\u2029b\n"
+                                               "CRITERION api #T: met - ok\n".encode(),
+            # The last lines naming the marker are kept, the same number on both sides: docs' only line is dropped.
+            "past the kept lines": b"CRITERION docs #T: met - early\n" + b"CRITERION api #T: met - ok\n" * 70,
         }
         ids = ["api", "docs"]
+        contents = {label: data.replace(b"#T", f"#{TOKEN}".encode()) for label, data in contents.items()}
+        expected = {"line separators in the evidence": {"api": "met", "docs": "unobserved"},
+                    "past the kept lines": {"api": "met", "docs": "unobserved"}}
         for label, data in contents.items():
             with self.subTest(label), TemporaryDirectory() as root, terminal_env():
                 sandbox = Sandbox(Path(root))
@@ -825,14 +954,27 @@ class ReadTests(unittest.TestCase):
                 host_file.write_bytes(data)
                 with Terminal("ssh", sandbox).modules():
                     found, unread, lines = dag_tool.backend_criterion_lines(told, "task")
-                host = dag_run.criterion_statuses(dag_run.criterion_lines(dag_tool._host_head(host_file)), ids, 1)
+                host = dag_run.criterion_statuses(dag_run.criterion_lines(dag_tool._host_head(host_file)), ids, TOKEN)
                 self.assertEqual((found, unread), (True, ""))
-                self.assertEqual(dag_run.criterion_statuses(lines, ids, 1), host)
-        with TemporaryDirectory() as root:
-            host_file = Path(root) / "host.md"
-            host_file.write_bytes(contents["nul and invalid utf-8"])
-            self.assertEqual(dag_run.criterion_statuses(dag_run.criterion_lines(dag_tool._host_head(host_file)), ids, 1),
-                             {"api": "unobserved", "docs": "met"})
+                self.assertEqual(dag_run.criterion_statuses(lines, ids, TOKEN), host)
+                if label in expected:
+                    self.assertEqual(host, expected[label])
+
+    def test_the_host_keeps_the_last_marked_lines_and_refuses_line_separators(self) -> None:
+        """Mutations: keep every marked line on the host, or let U+2028 / U+2029 into a criterion line."""
+        ids = ["api", "docs"]
+        many = (f"CRITERION docs #{TOKEN}: met - early\n" + f"CRITERION api #{TOKEN}: met - ok\n" * 70).encode()
+        self.assertEqual(len([line for line in dag_run.criterion_lines(many) if line]), dag_run.CRITERION_LINES_KEPT)
+        self.assertEqual(dag_run.criterion_statuses(dag_run.criterion_lines(many), ids, TOKEN),
+                         {"api": "met", "docs": "unobserved"})
+        for separator in ("\u2028", "\u2029", "\x85"):
+            with self.subTest(separator=separator):
+                line = f"CRITERION api #{TOKEN}: met - ran{separator}it"
+                self.assertIsNone(dag_run.criterion_status(line, ids, TOKEN))
+        nul = (b"\x00\xff\xfe bytes\nCRITERION api #T: met - ran it\x00\nCRITERION docs #T: met - grep \xff found\n"
+               .replace(b"#T", f"#{TOKEN}".encode()))
+        self.assertEqual(dag_run.criterion_statuses(dag_run.criterion_lines(nul), ids, TOKEN),
+                         {"api": "unobserved", "docs": "met"})
 
 
 if __name__ == "__main__":
