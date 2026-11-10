@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Claude Fable 5.2 takes every Claude Fable 5.1 slot, and heads
+  `ultrabrain`** (owner decision, 2026-11-10). The `ultrabrain` chain is now
+  Claude Fable 5.2, GPT-6 Astra, then Claude Opus 5.5, all at `xhigh`. Fable
+  5.2 also replaces Fable 5.1 in `architect`, `visual-engineering`,
+  `artistry`, `capable`, the Hermes `main` suggestion, and the Claude Code
+  chain (`claude-opus-5-5` -> `claude-fable-5-2` -> `opus`), each at the effort
+  5.1 had. Claude Code needs version 2.1.290 or newer to run Fable 5.2 (seen on
+  one machine, not stated by Anthropic). `omh coding model-contract --model
+  claude-fable-5-2` prints its record from Anthropic's pages: thinking is always
+  on, so a request for `off` or `minimal` is raised to `low`. It lists at $8 /
+  $40 per million tokens, against $10 / $50 for Fable 5.1, and cost estimates
+  use that price. Fable 5.1 left the shipped chains but stays recognized,
+  priced and routable, so a chain you set yourself can still name it. Claude
+  Mythos 5.2, the same model for organizations Anthropic has verified, is
+  recognized and priced but in no shipped chain. The calibration text a
+  Claude model receives is unchanged.
+
 - **One command installs Hermes, OMH and the omher desktop app (beta).**
   `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
   (and the PowerShell script-block form with the same argument) installs Hermes with its official

@@ -375,8 +375,9 @@ Rules that have held across every onboarding so far:
   behind Haiku 5.5 and to the 2025 Qwen3-Coder, the first retiree with no
   same-line successor: its row is written out with an empty `successor` and
   a reason naming the model that now holds its only slot; and on 2026-10-24
-  to Kimi K3 behind Kimi K3.1 Pro; and on 2026-10-28 to Gemini 3.1 Pro
-  behind Gemini 4 Argon).
+  to Kimi K3 behind Kimi K3.1 Pro; on 2026-10-28 to Gemini 3.1 Pro
+  behind Gemini 4 Argon; and on 2026-11-10 to Claude Fable 5.1 behind
+  Fable 5.2, the `ultrabrain` head included).
   Record each retirement as a `RETIREMENT_DECISIONS` row with its
   own `decision_date`. The table is keyed by model id, so a second
   retirement of the same id rewrites its row rather than adding one: GPT-5.6
@@ -424,7 +425,8 @@ Rules that have held across every onboarding so far:
   profile for the family before choosing the alias — it is the one place
   that shows what the wire will carry.
 - An access-restricted sibling (Mythos 5.1 = Fable 5.1 under Project
-  Glasswing) stays out of every shipped chain: naming a model most accounts
+  Glasswing; Mythos 5.2 = Fable 5.2 for organizations Anthropic has
+  verified) stays out of every shipped chain: naming a model most accounts
   cannot reach reads as a second model in the public tables. Keep it
   recognized, priced, and routable for a user who asks for it by name.
   GPT-6 Cyber (2026-11-05, Daybreak Red only) is the second case, onboarded
@@ -440,19 +442,23 @@ Rules that have held across every onboarding so far:
   have none for that reason. A probe
   refusal from a subscription route proves nothing about gating when an
   unknown id gets the same wording; probe a made-up id beside it.
-- The Claude vendor order inside any chain is Opus 5.5 → Fable 5.1 (owner
-  decision, 2026-10-13), which reverses the 2026-09-06 Fable → Opus order.
-  The Hermes lane and the Maestro lane are different surfaces and both
-  follow it, with one explicit exception: the Hermes-lane `ultrabrain`
-  chain is Fable 5.1 → GPT-6 Astra → Opus 5.5. It was GPT-6 Astra alone,
-  so the Claude entries give a user without OpenAI access a frontier
-  fallback; putting Fable 5.1 ahead of Astra is the owner's choice
-  (2026-11-09) and covers that category only. The Maestro lane's Claude
-  Code frontier chain is `claude-opus-5-5` → `claude-fable-5-1` → `opus`
-  (owner decision, 2026-10-13): the pinned Opus 5.5 id heads it, Fable
-  5.1 is the fall-through, and the `opus` alias is the always-resolving
-  tail. The setup interview seeds the Claude Code `--model` preference
-  with that head.
+- The Claude vendor order inside any chain is Opus 5.5 → Fable (owner
+  decision, 2026-10-13, then for Fable 5.1), which reverses the 2026-09-06
+  Fable → Opus order. The Hermes lane and the Maestro lane are different
+  surfaces and both follow it, with one explicit exception: the Hermes-lane
+  `ultrabrain` chain is Fable 5.2 → GPT-6 Astra → Opus 5.5. It was GPT-6
+  Astra alone, so the Claude entries give a user without OpenAI access a
+  frontier fallback; putting Fable ahead of Astra is the owner's choice
+  (2026-11-09, for Fable 5.1; Fable 5.2 took the head on 2026-11-10) and
+  covers that category only. The Maestro lane's Claude Code frontier chain
+  is `claude-opus-5-5` → `claude-fable-5-2` → `opus` (owner decision,
+  2026-10-13, with Fable 5.2 in the Fable slot since 2026-11-10): the
+  pinned Opus 5.5 id heads it, Fable 5.2 is the fall-through, and the
+  `opus` alias is the always-resolving tail. A pinned id can need a newer
+  client than the alias does: a Claude Code OAuth route refused
+  `claude-fable-5-2` below v2.1.290 (observed 2026-11-10), so record such a
+  floor in the contract's `surface_notes.claude_code`. The setup interview
+  seeds the Claude Code `--model` preference with that head.
 - Know whether a slot names a pinned id or a vendor-tracking alias before
   deciding it needs an edit. The Hermes lane names pinned ids
   (`claude-opus-5-5`), so a generation bump is a repo change, and since
