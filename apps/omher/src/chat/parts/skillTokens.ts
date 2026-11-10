@@ -12,7 +12,9 @@ export interface SkillToken {
   end: number;
 }
 
-const AFTER = /[\s.,;:!?)]/;
+/** Whether the character at `at` ends a token: the end of the text, whitespace, closing punctuation, or a full
+ * stop that does not start a file extension ("./plan." ends a sentence; "./plan.md" is a path, not a skill). */
+const closes = (text: string, at: number) => at >= text.length || /[\s,;:!?)]/.test(text[at]) || (text[at] === "." && !/[\w/]/.test(text[at + 1] ?? ""));
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 /** Ranges of `text` that are code: fenced blocks (an unclosed fence runs to the end) and inline code spans
@@ -58,7 +60,7 @@ export function findTokens(text: string, names: readonly string[]): SkillToken[]
   const out: SkillToken[] = [];
   for (let i = text.indexOf("./"); i >= 0; i = text.indexOf("./", i + 1)) {
     if ((i > 0 && !/\s/.test(text[i - 1])) || inside(code, i)) continue;
-    const name = byLength.find((n) => text.startsWith(n, i + 2) && (i + 2 + n.length === text.length || AFTER.test(text[i + 2 + n.length])));
+    const name = byLength.find((n) => text.startsWith(n, i + 2) && closes(text, i + 2 + n.length));
     if (!name) continue;
     out.push({ name, start: i, end: i + 2 + name.length });
     i += 1 + name.length;
@@ -81,8 +83,12 @@ export function toWire(text: string, names: readonly string[]): string {
     const gap = !left || !right || !rws ? "" : /\n/.test(rws) && !/\n/.test(lws) ? rws : lws;
     rest = left + gap + right;
   }
-  const lead = [...new Set(tokens.map((t) => t.name))].map((n) => `/${n}`).join(" ");
-  return rest ? `${lead} ${rest}` : lead;
+  // a message that already starts with slash commands keeps them first, as typed: the hoisted skills follow them
+  const typed = /^\s*\/[\w-]+(?:[ \t]+\/[\w-]+)*(?=\s|$)/.exec(rest)?.[0] ?? "";
+  const had = new Set(typed.split(/\s+/).filter(Boolean));
+  const lead = [...new Set(tokens.map((t) => `/${t.name}`))].filter((n) => !had.has(n)).join(" ");
+  const tail = rest.slice(typed.length).replace(/^[ \t]+/, "");
+  return [typed.trim(), lead, tail].filter(Boolean).join(" ");
 }
 
 /** The tokens of a sent message `text`, given the `sent` wire text: the names hoisted to its front. */

@@ -14,7 +14,6 @@
   --rn-pink: 240, 124, 196;
   --rn-violet: 190, 150, 255;
   --rn-edge: #6f6872;
-  --rn-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.18);
 }
 [data-theme="light"] .rn,
 [data-theme="light"] .rf {
@@ -24,7 +23,6 @@
   --rn-pink: 196, 54, 127;
   --rn-violet: 122, 62, 190;
   --rn-edge: #8e8694;
-  --rn-shadow: 0 1px 2px rgba(40, 20, 50, 0.08), 0 4px 14px rgba(40, 20, 50, 0.07);
 }
 /* the surface a box stands on: its own background is this colour, so a line never shows through a dragged box */
 .rn {

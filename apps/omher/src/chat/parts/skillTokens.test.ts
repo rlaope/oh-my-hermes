@@ -27,6 +27,24 @@ describe("findTokens", () => {
     expect(names("./plan-y")).toEqual([]);
   });
 
+  it("does not take a file path for a skill: a full stop ends a token only when no extension follows", () => {
+    expect(names("open ./plan.md and ./review.sh")).toEqual([]);
+    expect(names("see ./plan.test.ts")).toEqual([]);
+    expect(names("then ./plan. Next")).toEqual(["plan"]);
+    expect(names("then ./plan.")).toEqual(["plan"]);
+    expect(names("then ./plan...")).toEqual(["plan"]);
+    expect(toWire("open ./plan.md and ./review.sh", NAMES)).toBe("open ./plan.md and ./review.sh");
+  });
+
+  it("keeps slash commands typed first in front, as typed: the hoisted skills follow them", () => {
+    expect(toWire("/model ./plan", NAMES)).toBe("/model /plan");
+    expect(toWire("/review ./plan check this", NAMES)).toBe("/review /plan check this");
+    expect(toWire("/plan ./plan again", NAMES)).toBe("/plan again"); // already named: not twice
+    expect(toWire("  /review  look ./plan", NAMES)).toBe("/review /plan look");
+    // a slash later in the text is not a command
+    expect(toWire("see a/b ./plan", NAMES)).toBe("/plan see a/b");
+  });
+
   it("needs the start or whitespace before ./", () => {
     expect(names("x./plan")).toEqual([]);
     expect(names("../plan")).toEqual([]);
