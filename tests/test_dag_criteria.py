@@ -179,7 +179,9 @@ class DefineTests(unittest.TestCase):
             "duplicate id": [CRITERIA[0], {"id": "api", "text": "again"}],
             "unknown field": [{**CRITERIA[0], "weight": 2}],
             "missing text": [{"id": "api"}],
-            "bad id": [{"id": "API", "text": "x"}],
+            "bad id": [{"id": "c_1", "text": "x"}],
+            "bad id after folding": [{"id": "-C1", "text": "x"}],
+            "duplicate by case": [{"id": "C1", "text": "x"}, {"id": "c1", "text": "y"}],
             "two lines": [{"id": "api", "text": "one\ntwo"}],
             "too long": [{"id": "api", "text": "x" * (dag_run.MAX_CRITERION_CHARS + 1)}],
             "not an object": ["api"],
@@ -190,6 +192,31 @@ class DefineTests(unittest.TestCase):
                 refused = call(action="define", run="feat", nodes=NODES, criteria=criteria)
                 self.assertEqual((refused["status"], refused["reason"]), ("refused", "invalid_criteria"), refused)
                 self.assertFalse(dag_run.record_path(home.omh, PARENT, "feat").exists())
+
+    def test_an_upper_case_id_is_read_in_lower_case(self) -> None:
+        """Measured live: 6/6 first defines sent `C1`..`C8` and were refused."""
+        upper = [{"id": "C1", "text": "The export API returns CSV"}, {"id": "C2", "text": "The docs page names it"}]
+        with homes() as home:
+            to_check(home, criteria=upper)
+            stored = record_of(home)
+            handoff(home, "feat", "check", "CRITERION C1 #1: met - curl returned csv\nCRITERION c2 #1: met - grep")
+            done = call(action="settle", run="feat", node="check", outcome="accepted")
+            again = call(action="extend", run="feat", criteria=[{"id": "c1", "text": "again"}],
+                         nodes=[node("more", depends_on=("check",), scope=("src/more.py",))])
+        self.assertEqual([item["id"] for item in stored["criteria"]], ["c1", "c2"])
+        self.assertEqual((done["verdict"], done["criteria"]["met"]), ("verified", 2), done)
+        self.assertEqual(again["reason"], "invalid_criteria", again)
+
+    def test_a_criterion_takes_as_much_text_as_the_goal_and_the_record_keeps_room(self) -> None:
+        """Measured live: the model merged conditions under the cap of 12 into a 190-character criterion."""
+        self.assertEqual(dag_run.MAX_CRITERION_CHARS, dag_run.MAX_GOAL_CHARS)
+        widest = [{"id": f"c{index}", "text": "t" * dag_run.MAX_CRITERION_CHARS} for index in range(dag_run.MAX_CRITERIA)]
+        prompt = PROMPT + "x" * (dag_run.MAX_PROMPT_CHARS - len(PROMPT))
+        nodes = [node(f"n{index}", prompt=prompt, label="L" * dag_run.MAX_LABEL_CHARS, scope=(f"src/f{index}.py",),
+                      depends_on=(f"n{index - 1}",) if index else ()) for index in range(dag_run.MAX_NODES)]
+        record = dag_run.new_record(PARENT, "feat", "n", "g" * dag_run.MAX_GOAL_CHARS, nodes, 1.0, criteria=widest)
+        size = len(json.dumps(record, sort_keys=True).encode("utf-8"))
+        self.assertLess(size, dag_run.MAX_RECORD_BYTES * 0.7, size)
 
     def test_an_empty_list_is_no_criteria(self) -> None:
         """A model that sends `criteria: []` gets the run it would get without them, not a refusal."""
@@ -251,6 +278,8 @@ class TaskTests(unittest.TestCase):
         self.assertNotIn("CRITERION", build)
         self.assertIn("Goal criteria:\n- api: The export API returns CSV\n- docs: The docs page names the API\n", check)
         self.assertIn("CRITERION <id> #1: met | unmet | unobserved - <the command you ran and what it showed>", check)
+        self.assertIn("`unmet` means you ran the check and the outcome is not there; `unobserved` means the check "
+                      "could not run here, and the reason says why.", check)
         self.assertIn("producer claims are not verification evidence", check)
 
 
@@ -263,6 +292,9 @@ class SkillTextTests(unittest.TestCase):
         self.assertIn("verified, unverified, needs_repair, blocked, settle and node ids are record words", completion)
         self.assertIn("in the request's own condition, never weakened", DEFINITION.opening_steps[0])
         self.assertIn('never "staging check reported"', " ".join(run_loop_reference().split()))
+        settle = next(step for step in DEFINITION.opening_steps if step.startswith("On each completion"))
+        self.assertIn("a verify node with criteria is accepted only when every `CRITERION` line says met, failed when "
+                      "one is unmet, blocked when one could not be checked here", settle)
 
 
 class LineParsingTests(unittest.TestCase):
@@ -288,6 +320,8 @@ class LineParsingTests(unittest.TestCase):
             # A status word must stand alone: `metric` is no `met`; the marker is upper case.
             ("CRITERION api #1: metric - x\ncriterion docs #1: met - lower-case marker",
              {"api": "unobserved", "docs": "unobserved"}),
+            # The id reads in lower case.
+            ("CRITERION API #1: met - ran it\nCRITERION Docs #1: unmet - 404", {"api": "met", "docs": "unmet"}),
             # A bare `unmet` or `unobserved` stands: it can only hold the run back.
             ("CRITERION api #1: unmet\nCRITERION docs #1: unobserved", {"api": "unmet", "docs": "unobserved"}),
             # A CRLF file and a BOM on its first line read as plain lines.

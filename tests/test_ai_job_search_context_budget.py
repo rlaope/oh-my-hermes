@@ -479,7 +479,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # dag-ulw's criteria then keep the request's own condition (First Steps, run-loop), the completion bar states
         # the result in plain words with the record words named, and run-loop says a failed or blocked check still
         # counts the criteria; only dag-ulw moves, and the pin before it was f04f3355...5f6b.
-        self.assertEqual(_digest(legacy_hashes), '4bae7a24965bd2594a8bf95b44e1d8222c34c8d487c51200ee41a72940d746bb')
+        # Its settle step then says when a verify node with criteria is accepted, failed or blocked, and run-loop
+        # reads ids in lower case and tells unmet from unobserved; only dag-ulw moves, and the pin before it was
+        # 4bae7a24...46bb.
+        self.assertEqual(_digest(legacy_hashes), '823b83742151ffc2855dd786710bd514a7421a47e3ff6a72cd920f5e78c0bc51')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

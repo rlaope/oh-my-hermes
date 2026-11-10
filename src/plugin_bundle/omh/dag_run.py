@@ -92,7 +92,7 @@ OVERLAPS_NAMED: Final = 20  # pairs one write_scope_overlap refusal names; the r
 MAX_REASON_CHARS: Final = 200
 # The goal split into separately checkable outcomes (`criteria`), each an id and one line, given at define or extend.
 MAX_CRITERIA: Final = 12
-MAX_CRITERION_CHARS: Final = 160
+MAX_CRITERION_CHARS: Final = MAX_GOAL_CHARS
 CRITERION_FIELDS: Final = frozenset({"id", "text"})
 # What a verify node's handoff says per criterion (`criterion_statuses`); a view adds `unchecked` (no read yet).
 CRITERION_STATUSES: Final = ("met", "unmet", "unobserved")
@@ -179,7 +179,7 @@ DOC_NAMES: Final = frozenset({"readme", "changelog", "license", "notice", "autho
 # `CRITERION <id> #<attempt>: met|unmet|unobserved` at a line's start (after spaces, list bullets or backticks), then
 # the rest (`criterion_statuses`): nothing, or a separator and the evidence.
 _CRITERION_LINE: Final = re.compile(
-    r"[ \t*`-]*CRITERION[ \t]+([a-z0-9][a-z0-9-]{0,31})[ \t]+#([0-9]{1,6})[ \t]*:[ \t]*"
+    r"[ \t*`-]*CRITERION[ \t]+([A-Za-z0-9][A-Za-z0-9-]{0,31})[ \t]+#([0-9]{1,6})[ \t]*:[ \t]*"
     r"(?i:(met|unmet|unobserved))(.*)")
 _CRITERION_EVIDENCE: Final = re.compile("[ \t]*[-:\u2013\u2014](.*)")
 # Evidence made only of whitespace and these marks is no evidence (`criterion_status`).
@@ -481,8 +481,10 @@ def _validated_criteria(raw: object, taken: Sequence[str] = ()) -> list[dict[str
     for item in raw:
         if not isinstance(item, Mapping) or set(item) != CRITERION_FIELDS:
             raise DagRefusal("invalid_criteria", "Each criterion takes exactly id and text.")
-        criterion_id = valid_id(item.get("id"), "invalid_criteria",
-                                "Each criterion needs a short lowercase id (a-z, 0-9, -).")
+        raw_id = item.get("id")
+        # Read in lower case (`C1` is `c1`), here and in the handoff lines (`criterion_status`).
+        criterion_id = valid_id(raw_id.lower() if isinstance(raw_id, str) else raw_id, "invalid_criteria",
+                                "Each criterion needs a short id (a-z, 0-9, -; upper case reads as lower case).")
         if criterion_id in seen:
             raise DagRefusal("invalid_criteria",
                              f"Criterion {criterion_id} is already in the run; give each criterion its own id "
@@ -536,17 +538,18 @@ def criterion_status(line: str, ids: Iterable[str], attempt: int) -> tuple[str, 
     if any(char != "\t" and unicodedata.category(char) in ("Cc", "Zl", "Zp") for char in line):
         return None
     match = _CRITERION_LINE.match(line)
-    if match is None or match[1] not in ids or int(match[2]) != attempt:
+    criterion_id = match[1].lower() if match is not None else ""
+    if match is None or criterion_id not in ids or int(match[2]) != attempt:
         return None
     status, rest = match[3].casefold(), match[4]
     if not rest.strip(" \t"):
-        return None if status == "met" else (match[1], status)
+        return None if status == "met" else (criterion_id, status)
     separated = _CRITERION_EVIDENCE.fullmatch(rest)
     if separated is None:
         return None
     if status == "met" and not any(not char.isspace() and char not in _EVIDENCE_MARKS for char in separated[1]):
         return None
-    return match[1], status
+    return criterion_id, status
 
 
 def criterion_statuses(lines: Iterable[str], ids: Sequence[str], attempt: int) -> dict[str, str]:
@@ -1534,8 +1537,9 @@ def task_for(
                 "In the handoff, write one line per criterion, each at the start of a line, with one status word:",
                 f"CRITERION <id> #{number}: met | unmet | unobserved - <the command you ran and what it showed>",
                 f"`#{number}` is this attempt: a line without it, or with another number, does not count. `met` needs "
-                "that evidence after the dash; `unobserved` means it could not be checked here, with the reason. "
-                "Every criterion gets a line; one without a line counts as unobserved.",
+                "that evidence after the dash. `unmet` means you ran the check and the outcome is not there; "
+                "`unobserved` means the check could not run here, and the reason says why. Every criterion gets a "
+                "line; one without a line counts as unobserved.",
             ])
         scopes = _producer_scopes(record, node, preceding)
         if scopes:

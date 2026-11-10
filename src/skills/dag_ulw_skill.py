@@ -141,7 +141,9 @@ DEFINITION = SkillDefinition(
         "`backend` (Hermes' model_map or profile_routes) runs no route tool: its tasks already carry what that "
         "backend takes. Then end the turn with one status line; never wait or poll.",
         "On each completion read the node's handoff file and call `omh_dag action=settle` (accepted, failed, or "
-        "blocked; a provider error is failed with provider_error). Dispatch what it returns in the same turn.",
+        "blocked; a provider error is failed with provider_error); a verify node with criteria is accepted only when "
+        "every `CRITERION` line says met, failed when one is unmet, blocked when one could not be checked here. "
+        "Dispatch what it returns in the same turn.",
         "When the run reports done, check each node against its SCOPE and the goal criteria: extend the run when "
         "work is missing, otherwise report.",
     ),
@@ -280,7 +282,7 @@ work. OMH starts no timer or poll. After three parks per node, another park is r
 ## Goal criteria
 
 Split the goal into the outcomes that can each be checked on their own, from what the request names, and
-pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short lowercase id and one line. Keep
+pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short id and one line. Keep
 `goal` to one short line of what the request is for; its conditions go into criteria, not the goal. A
 criterion keeps the request's own condition: "it works on staging" stays that, never "staging check
 reported" or "staging checked", since the outcome asked for is what the verify node must confirm. Never
@@ -299,7 +301,10 @@ OMH reads only those lines, at a line's start (spaces, `-`, `*` or backticks bef
 ids the run declares and this attempt's number, so an earlier attempt's lines left in the file never count.
 After the status comes nothing or a separator (`-`, `:`, a dash) and the evidence; anything else (`?`, `(`,
 `/`, `|`) makes it no criterion line. `met` needs evidence. The last line per id wins, and a criterion with
-no line counts as `unobserved`. It keeps the status word only. Settling that verify node:
+no line counts as `unobserved`. Ids read in lower case (`C1` is `c1`). `unmet` means the check ran and the
+outcome is not there; `unobserved` means the check could not run here. Read those lines before settling: settle
+the verify node accepted only when every one says met, failed when one is unmet, blocked when one could not be
+checked here. It keeps the status word only. Settling that verify node:
 
 - `accepted` with a criterion `unmet` is refused as `criteria_unmet`: settle it failed, then repair it with
   nodes that fix the work. The say names what checks again: the node itself, the verify node it repairs, or,
