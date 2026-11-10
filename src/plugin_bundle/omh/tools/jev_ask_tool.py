@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .._governance_safety import contains_credential_like_material
 from ..host_observation import (
@@ -50,6 +51,8 @@ from ..jev_ask_client import (
     PINNED_MODEL_BY_ROUTE,
     RETRYABLE_STATUSES,
     ROUTE_OPENROUTER,
+    ROUTE_TYPESAFE,
+    ROUTES,
     STATUS_ANSWERED,
     STATUS_CONSENT_NOT_OBSERVED,
     STATUS_INVALID_REQUEST,
@@ -75,6 +78,8 @@ from ..jev_ask_store import (
     ROUTE_NONE,
     KeyUnresolvable,
     append_ledger_record,
+    local_http_endpoint_enabled,
+    operator_typesafe_model,
     read_key,
     remember_answered_ask,
     resolve_route,
@@ -243,6 +248,16 @@ def _plugin_version() -> str:
     return match.group(1) if match else "unknown"
 
 
+def _names_typesafe_host(endpoint_url: str) -> bool:
+    """Whether `endpoint_url` is on TypeSafe's own host, however the operator spelled it.
+
+    `API.TYPESAFE.AI`, `api.typesafe.ai:443` and `api.typesafe.ai.` all reach
+    the first-party API, where the pinned `jev-*` versions must stay in force.
+    """
+    host = (urlsplit(endpoint_url).hostname or "").rstrip(".")
+    return host == urlsplit(ROUTES[ROUTE_TYPESAFE][0]).hostname
+
+
 def _withheld(values: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key not in _WITHHELD_FROM_OBSERVATION}
 
@@ -289,8 +304,9 @@ class _Ask:
                 error="credential_like_content: state or question text holds part of a configured route key; "
                 "nothing was sent",
             )
+        local_http = local_http_endpoint_enabled(self.home)
         try:
-            self.endpoint_url = route_url(self.route)
+            self.endpoint_url = route_url(self.route, allow_local_http=local_http)
             self.model = self._model_for_route()
             body = build_request_body(self.model, body_state, self.questions)
         except AskRequestError as error:
@@ -302,6 +318,7 @@ class _Ask:
                 body=body,
                 user_agent=f"oh-my-hermes/{_plugin_version()}",
                 transport=transport,
+                allow_local_http=local_http,
             )
         except AskRequestError as error:
             return self._finish(STATUS_INVALID_REQUEST, error=str(error))
@@ -356,15 +373,26 @@ class _Ask:
         return state, requested_route
 
     def _model_for_route(self) -> str:
+        operator_model = self._operator_model()
         if self.preset:
-            return PINNED_MODEL_BY_ROUTE[self.route]
-        model = str(self.args.get("model") or DEFAULT_MODEL).strip()
-        accepted = set(FIRST_PARTY_MODEL_IDS)
+            # A substitute model was not tuned against the preset's thresholds;
+            # `contract_model_id` stays unresolved, so the result says so.
+            return operator_model or PINNED_MODEL_BY_ROUTE[self.route]
+        model = str(self.args.get("model") or operator_model or DEFAULT_MODEL).strip()
+        accepted: set[str] = set(FIRST_PARTY_MODEL_IDS)
+        if operator_model:
+            accepted.add(operator_model)
         if self.route == ROUTE_OPENROUTER:
             accepted |= set(OPENROUTER_ONLY_MODEL_IDS)
         if model not in accepted:
             raise AskRequestError(f"model must be one of {', '.join(sorted(accepted))} on this route")
         return model
+
+    def _operator_model(self) -> str:
+        """The settings' `typesafe_model`, only for a TypeSafe ask to an endpoint other than TypeSafe's own."""
+        if self.route != ROUTE_TYPESAFE or _names_typesafe_host(self.endpoint_url):
+            return ""
+        return operator_typesafe_model(self.home)
 
     def _finish(self, status: str, *, validated: dict[str, Any] | None = None, error: str = "", **extra: Any) -> dict[str, Any]:
         answered = status == STATUS_ANSWERED and validated is not None

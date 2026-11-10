@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
+  HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,
+  `TYPESAFE_BASE_URL` may be a plain-HTTP root on `localhost` or a loopback,
+  RFC 1918, ULA, or link-local IP literal, and `"typesafe_model"` names the
+  model that endpoint serves (an Ollama, vLLM or llama.cpp server exposing
+  `/v1/systemone`). The local ranges are named exactly, so documentation,
+  reserved, Teredo, 6to4 and NAT64 addresses and an IP with a trailing dot are
+  refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
+  sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
+  own host however it is spelled. Thanks @brentkearney. (#2716)
 - **omher updates itself.** When a new omher release is out, an "Update to
   0.1.x" button appears at the bottom left of the sidebar; one click
   downloads it, checks its signature and restarts omher on the new version.
@@ -34,6 +44,17 @@ All notable changes will be documented here.
   read as success); the app image is checked against the release's `SHA256SUMS.txt` and swapped in
   only once copied whole; a profile `HERMES_HOME` finds Hermes under its root; the release lookup reads
   one small API page instead of 700 KB and stops with a clear message when GitHub's rate limit is hit.
+- **Skill replies say verdicts and labels in plain words.** Live replies
+  copied skill vocabulary to people: release-cut's "version surface",
+  build-failure-triage's handoff and its `FIX_READY` / `NEEDS_MORE_LOGS`
+  verdicts, code-review's `no_ship`, `not_assessed`, `spec_axis` and
+  `verification_gaps`, and "run record" inside commit text. The
+  build-failure-triage, code-review and commit-pr-authoring checklists now
+  give each verdict a plain reading (the review verdict makes no merge
+  claim) and keep the tokens in the record or structured return, which a
+  dispatched reviewer still returns in full; release-cut says "every file
+  that carries the version". No schema, tool contract or record field
+  changes, and routing is unchanged.
 
 - **The `ultrabrain` chain is Claude Fable 5.1, GPT-6 Astra, then Claude
   Opus 5.5, all at `xhigh`** (owner decision, 2026-11-09). It was GPT-6 Astra

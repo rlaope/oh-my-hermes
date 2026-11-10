@@ -37,7 +37,7 @@ This is an OMH `release-cut` workflow skill, projected for Agent Skills hosts (C
 Good example:
 
 - Prompt: cut a release and tag it
-- Expected behavior: List what goes in and what is held, derive the version, and prepare release_plan/v1: freeze, bump every version surface, tag, run the release workflow, pass its approval, publish, and curate notes, with rollback_trigger/v1 naming the signal, the threshold, and the exact command.
+- Expected behavior: List what goes in and what is held, derive the version, and prepare release_plan/v1: freeze, bump every file that carries the version, tag, run the release workflow, pass its approval, publish, and curate notes, with rollback_trigger/v1 naming the signal, the threshold, and the exact command.
 - Why: A release whose rollback is decided during the outage is a release with no rollback.
 
 Bad example:
@@ -56,7 +56,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If the release mechanism is unknown, ask for the workflow or command and every version surface it bumps before proposing a cut.
+- If the release mechanism is unknown, ask for the workflow or command and every file that carries the version it bumps before proposing a cut.
 - If there is no traffic split, stage by environment or by cohort and say that the canary is coarse.
 
 
@@ -85,7 +85,7 @@ Quality bar:
 Required inputs:
 
 - the changes since the last release, and the current version and versioning scheme
-- how a release is cut here: the workflow or command, the approval gates, and every version surface it bumps
+- how a release is cut here: the workflow or command, the approval gates, and every file that carries the version it bumps
 - the deploy target, the traffic split available, and the health signals with their normal range
 - the rollback mechanism: redeploy of the previous artifact, a flag, or a revert, and who may run it
 - observed evidence for any published, promoted, or rolled-back claim
@@ -101,7 +101,7 @@ Expected outputs:
 Artifact expectations:
 
 - release_scope/v1 lists what goes in and what is held back, and derives the version from the change classes: a breaking change, a feature, or a fix
-- release_plan/v1 orders the cut: freeze the release branch, bump every version surface, tag, run the release workflow, pass its approval gate, publish, and curate the notes
+- release_plan/v1 orders the cut: freeze the release branch, bump every file that carries the version, tag, run the release workflow, pass its approval gate, publish, and curate the notes
 - rollout_stages/v1 gives each stage its traffic share, its bake time, and the promotion criterion read from a named health signal
 - rollback_trigger/v1 names the signal and threshold that trigger the rollback, the exact command that performs it, and who runs it
 - release_readiness_verdict/v1 reads ready only when a named rollback trigger and its exact command are stated; otherwise it names what is missing
