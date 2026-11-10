@@ -8,6 +8,11 @@
 .bv-secs > [data-testid="run-details"] {
   order: -1;
 }
+/* The sidebar in the hero-sized window: BOTS keeps every bot row whole and SESSIONS takes what is left (the app shares
+   the room in proportion, which cut the last bot, Pip, in half at 975x568). */
+.side-sec:has(> .bot-list:not(.ss-list)) {
+  flex: none;
+}
 .pv-toast {
   position: fixed;
   left: 50%;
