@@ -400,6 +400,22 @@ jobs:
         if: matrix.shard == 0
         shell: powershell
         run: ./tests/powershell/Test-OmhOmherBeta.ps1 -InjectRegression
+      - name: Windows short install wrapper (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhShortInstall.ps1
+      - name: Windows short install wrapper mutation (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhShortInstall.ps1 -InjectRegression
+      - name: Windows short install wrapper (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhShortInstall.ps1
+      - name: Windows short install wrapper mutation (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhShortInstall.ps1 -InjectRegression
       - name: Windows installer end-to-end
         if: matrix.shard == 0
         shell: pwsh
