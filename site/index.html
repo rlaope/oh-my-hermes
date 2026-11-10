@@ -484,15 +484,16 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
      at ~60% of the screen on load and never taller than the screen allows; --top is where the window starts on load */
   --pt:clamp(84px,11svh,112px);--tf:clamp(40px,min(6.4vw,8.5svh),96px);--gt:clamp(28px,5svh,56px);
   --top:calc(var(--pt) + var(--tf) * .98 + 14px + clamp(17px,1.5vw,22px) * 1.35 + var(--gt));
-  --ww:max(320px,min(1180px,92vw,calc((119svh - 2 * var(--top)) * 1817 / 1109),calc((100svh - 230px) * 1817 / 1109)))}
+  /* about 20% larger than the first cut (896 -> ~1075px wide at 1440x900): bound by 76vw and by the screen's height
+     (the settled window leaves at least 60px above and below it); the title still shows on load because the window starts
+     at .9 scale, lower down */
+  --ww:max(320px,min(1180px,74.5vw,calc((100svh - 120px) * 1817 / 1109)))}
 /* desktop: a tall block, so the window has room to rise into place as the page scrolls (beam.js) */
 @media (min-width:761px){.omher{min-height:195svh}}
 /* the window and the download row ride together: they rise from the load position and settle with the window centred on the
    screen, held there while the block scrolls (sticky), then leave with the block */
 .omher__stage{position:sticky;top:calc(50svh - var(--ww) * 1109 / 1817 / 2);z-index:2;order:1;width:100%;display:flex;flex-direction:column;align-items:center;margin-top:var(--gt)}
-.omher::before{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px,linear-gradient(90deg,rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px;
-  -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);opacity:.6}
+/* no grid behind the block: the pink aura carries the background on its own */
 /* the seam into the OMH hero: one soft spectrum hairline */
 /* the seam into the OMH hero: no line; the light fades out above the breathing room and the page background carries on */
 /* The window slot. .omher__win[data-app-win] is the app window itself: beam.js lands the light on its box and draws the rim
@@ -506,7 +507,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
   /* the one-time reveal under the light is a CSS transition, off the frame loop */
   transition:--reveal 1.3s cubic-bezier(.2,.7,.2,1),--lit 1.2s ease;
   /* the scroll-rise: beam.js writes transform and opacity from scrollY in rAF; origin at the window's centre */
-  transform-origin:50% 50%;will-change:transform,opacity}
+  transform-origin:50% 50%}
 .omher__shot::before{content:"";position:absolute;left:-6%;right:-6%;top:-10%;bottom:-12%;z-index:-1;pointer-events:none;
   background:radial-gradient(closest-side,rgba(255,95,162,.07),rgba(224,76,224,.03) 60%,transparent)}
 .omher__win{position:relative;display:block;width:100%;aspect-ratio:var(--win-ar);overflow:hidden;border-radius:7px;background:#0e0d12;
@@ -537,6 +538,52 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
   background:radial-gradient(30px 26px at var(--gx) var(--gy),rgba(255,255,255,.06),rgba(255,255,255,.015) 60%,transparent 85%),
     linear-gradient(118deg,transparent 14%,rgba(176,107,255,.05) 30%,rgba(224,76,224,.05) 48%,rgba(255,95,162,.055) 64%,rgba(255,225,238,.04) 80%,transparent 90%) calc(var(--gx) - 130px) calc(var(--gy) - 100px)/260px 200px no-repeat;
   -webkit-mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent);mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent)}
+/* the rim around the window (hero.js): a faint base line, a pink rim while a light source is hovered, a spotlight
+   that follows the cursor along the edge, and a short comet orbiting the frame (white core, pink tail, soft bloom).
+   The blooms are masked to outside the window, so nothing lies over the traffic lights or the app */
+.omher__rim{position:absolute;left:-12px;top:-12px;z-index:3;pointer-events:none;overflow:visible;fill:none;--hot:0;--glow:1;--off:0}
+.omher__rim rect{vector-effect:non-scaling-stroke}
+.omher__rim .r-base{stroke:rgba(255,255,255,.07);stroke-width:1}
+.omher__rim .r-hot{stroke:#ff5fa2;stroke-width:1;opacity:calc(var(--hot) * .7)}
+.omher__rim .r-spot{stroke-width:1.5;opacity:0}
+.omher__rim .r-c{stroke-linecap:round;stroke-dashoffset:calc(var(--d) - var(--off,0))}
+.omher__rim .r-b3{stroke:#ff5fa2;stroke-width:24;opacity:calc(.08 * var(--glow))}
+.omher__rim .r-b2{stroke:#ff6fae;stroke-width:12;opacity:calc(.17 * var(--glow))}
+.omher__rim .r-b1{stroke:#ffa3cc;stroke-width:5;opacity:calc(.38 * var(--glow))}
+.omher__rim .r-t{stroke:#ff5fa2;stroke-width:1.4;opacity:calc(.7 * var(--glow))}
+.omher__rim .r-m{stroke:#ffd6e8;stroke-width:1.8;opacity:min(1,calc(.95 * var(--glow)))}
+.omher__rim .r-h{stroke:#fff;stroke-width:2.2;opacity:1}
+.omher__rim.still .r-c{display:none}
+.omher__rim.still .r-base{stroke:rgba(255,200,226,.16)}
+/* the live app (hero.js mounts it on desktop once the page is idle): CSS chrome with traffic lights, the real omher
+   UI in an iframe scaled to the window, faded in over the film when it says it is ready */
+.omher__live{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:#0b090d;opacity:0;visibility:hidden;transition:opacity .24s ease,visibility 0s linear .24s}
+.omher__live[data-live="ready"]{opacity:1;visibility:visible;transition:opacity .24s ease}
+.omher__bar{flex:none;position:relative;display:flex;align-items:center;gap:7px;height:max(22px,3.8%);padding:0 11px;background:#141117;border-bottom:1px solid rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.omher__bar i{width:9px;height:9px;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
+.omher__bar i:nth-child(2){background:#febc2e}.omher__bar i:nth-child(3){background:#28c840}
+.omher__bar span{position:absolute;left:50%;transform:translateX(-50%);font:500 11px var(--sans);color:#8e8794;letter-spacing:.01em}
+/* a quiet cue that the window is live: a pink dot and a few words at the right of the title bar, gone after the first click */
+.omher__try{position:absolute;right:12px;display:flex;align-items:center;gap:6px;font:600 11px var(--sans);color:#f3dce8;letter-spacing:.01em;transition:opacity .4s ease}
+.omher__try::before{content:"";width:6px;height:6px;border-radius:50%;background:#ff5fa2;box-shadow:0 0 6px rgba(255,95,162,.8);animation:omher-try 2.4s ease-in-out infinite}
+@keyframes omher-try{50%{opacity:.35}}
+.omher__live[data-touched] .omher__try{opacity:0}
+.omher__lbody{position:relative;flex:1;min-height:0;overflow:hidden}
+.omher__lbody iframe{position:absolute;left:0;top:0;width:1200px;border:0;transform-origin:0 0;background:#0b090d;color-scheme:dark}
+/* a light source is hovered: a soft pink rim on the pill too */
+.nav > a.dlpill.is-hot{box-shadow:-12px 12px 30px -6px rgba(176,107,255,.7),0 16px 34px -6px rgba(224,76,224,.55),12px 12px 30px -6px rgba(255,95,162,.7),0 0 0 1px #fff,0 0 14px 2px rgba(255,95,162,.55)}
+/* on load: the header slides in, then the title, the line under it and the downloads rise out of a blur one after
+   another, and the window fades in (backwards fill only, so nothing is held after) */
+@keyframes omher-rise{from{opacity:0;transform:translateY(8px);filter:blur(6px)}}
+@keyframes omher-fade{from{opacity:0}}
+@keyframes omher-top{from{opacity:0;transform:translateY(-10px)}}
+.top__in{animation:omher-top .24s cubic-bezier(.2,.7,.2,1) backwards}
+.omher__t{animation:omher-rise .48s cubic-bezier(.2,.7,.2,1) .06s backwards}
+.omher__d{animation:omher-rise .48s cubic-bezier(.2,.7,.2,1) .13s backwards}
+.omher__win{animation:omher-fade .24s ease .2s backwards}
+.omher__get{animation:omher-rise .48s cubic-bezier(.2,.7,.2,1) .27s backwards}
+.omher__cmd{animation:omher-rise .48s cubic-bezier(.2,.7,.2,1) .34s backwards}
+@media (prefers-reduced-motion:reduce){.top__in,.omher__t,.omher__d,.omher__win,.omher__get,.omher__cmd,.omher__try::before{animation:none}.omher__live{transition:none}}
 .omher__meta{position:relative;z-index:2;order:0;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:14px}
 /* the block's title: large, in the site's own type; the light pours past it onto the window */
 .omher__t{margin:0;min-height:0;font:650 var(--tf)/.98 var(--sans);letter-spacing:-.045em;color:var(--ink);text-shadow:0 2px 24px rgba(12,10,18,.55)}
@@ -563,6 +610,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
 .omher + .hero{align-items:flex-start;padding-top:88px}
 .omher + .hero::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;z-index:1;pointer-events:none;background:linear-gradient(var(--bg),rgba(12,10,18,0))}
 @media (max-width:600px){.omher__shot{--win-l:.03611;--win-t:.01625;--win-w:.92917;--win-h:.9675;--win-ar:669 / 774}}
+@media (max-width:760px){.omher__rim{display:none}}
 @media (max-width:760px){.omher{min-height:0;padding:96px 20px 40px;--ww:min(350px,100%)}.omher__stage{position:static;margin-top:150px}.omher__act{margin-top:0}.omher__shot{margin:0 auto;transform:none!important;opacity:1!important;will-change:auto}.omher__meta{gap:10px}.omher__win{border-radius:6px}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__d{font-size:16px;max-width:330px}.osbtn{height:42px;justify-content:center}.omher + .hero{padding-top:72px}.omher__get{flex-direction:column;align-items:stretch;gap:10px;width:min(350px,100%);max-width:none;margin:28px auto 12px}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
 </style>
 <script type="application/ld+json">
@@ -1812,6 +1860,7 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
 })();
 </script>
 <script src="beam.js"></script>
+<script src="hero.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>

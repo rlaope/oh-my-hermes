@@ -121,9 +121,12 @@ fn hermes_homes<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> 
     homes
 }
 
-/// Where Hermes' Python lives, in the order the person would expect: `OMHER_HERMES_PYTHON`, then each
-/// Hermes home's `hermes-agent/venv`, then `hermes-agent/.venv` (`bin/python`, or `Scripts\python.exe`
-/// on Windows). `env` and `exists` are injected so tests never touch the real machine.
+/// Where Hermes' Python lives, in the order the person would expect: `OMHER_HERMES_PYTHON`, then (Unix) the
+/// interpreter each Hermes home's PM launcher `hermes-agent/.hermes/bin/hermes` execs, then each home's
+/// `hermes-agent/venv`, then `hermes-agent/.venv` (`bin/python`, or `Scripts\python.exe` on Windows).
+/// The launcher goes first because it is the Python `hermes` itself runs on: an install upgraded to the
+/// unified package manager keeps its old venv, whose older Python cannot load the committed dependency
+/// generation the bridge activates. `env` and `exists` are injected so tests never touch the real machine.
 pub fn discover_python<E, X>(env: E, exists: X) -> Result<PathBuf, String>
 where
     E: Fn(&str) -> Option<String>,
@@ -137,6 +140,60 @@ where
     E: Fn(&str) -> Option<String>,
     X: Fn(&Path) -> bool,
 {
+    discover_python_in(env, exists, |p| std::fs::read_to_string(p).ok(), os)
+}
+
+/// The interpreter a PM launcher script `exec`s: `exec /abs/python3 -I -c '...'`. Hermes writes that line
+/// with `shlex.join`, so a path with a space arrives as `'/a b/python3'` and an apostrophe as `'"'"'`; read
+/// the first word the way sh does, as Hermes' own `_launchers` reader does.
+fn launcher_python(script: &str) -> Option<PathBuf> {
+    let line = script.lines().find_map(|l| l.strip_prefix("exec "))?;
+    let exe = first_sh_word(line)?;
+    // A sh launcher names a POSIX path; `Path::is_absolute` would also need a drive letter on Windows,
+    // where these parse tests run in CI.
+    exe.starts_with('/').then(|| PathBuf::from(exe))
+}
+
+/// The first word of a POSIX sh command line: quotes removed, adjacent quoted parts joined. `None` when
+/// the line is empty or a quote is left open within that word.
+fn first_sh_word(line: &str) -> Option<String> {
+    let mut chars = line.trim_start().chars();
+    let mut word = String::new();
+    while let Some(c) = chars.next() {
+        match c {
+            c if c.is_whitespace() => break,
+            '\'' => loop {
+                match chars.next()? {
+                    '\'' => break,
+                    c => word.push(c),
+                }
+            },
+            '"' => loop {
+                match chars.next()? {
+                    '"' => break,
+                    '\\' => match chars.next()? {
+                        c @ ('"' | '\\' | '$' | '`') => word.push(c),
+                        c => {
+                            word.push('\\');
+                            word.push(c);
+                        }
+                    },
+                    c => word.push(c),
+                }
+            },
+            '\\' => word.push(chars.next()?),
+            c => word.push(c),
+        }
+    }
+    (!word.is_empty()).then_some(word)
+}
+
+pub fn discover_python_in<E, X, R>(env: E, exists: X, read: R, os: Os) -> Result<PathBuf, String>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+    R: Fn(&Path) -> Option<String>,
+{
     if let Some(p) = env("OMHER_HERMES_PYTHON").filter(|p| !p.trim().is_empty()) {
         let p = PathBuf::from(p.trim());
         if exists(&p) {
@@ -149,6 +206,14 @@ where
     };
     for home in hermes_homes(&env, os) {
         let agent = home.join("hermes-agent");
+        if os == Os::Unix {
+            let launcher = agent.join(".hermes").join("bin").join("hermes");
+            if let Some(p) = exists(&launcher).then(|| read(&launcher)).flatten().as_deref().and_then(launcher_python) {
+                if exists(&p) {
+                    return Ok(p);
+                }
+            }
+        }
         for dir in ["venv", ".venv"] {
             let p = exe.iter().fold(agent.join(dir), |p, part| p.join(part));
             if exists(&p) {
@@ -625,6 +690,43 @@ mod tests {
         assert_eq!(discover_python(env, fs_of(&[DOTVENV])), Ok(PathBuf::from(DOTVENV)));
         let blank = env_of(&[("OMHER_HERMES_PYTHON", "  "), ("HOME", "/h")]);
         assert_eq!(discover_python(blank, fs_of(&[VENV])), Ok(PathBuf::from(VENV)));
+    }
+
+    #[test]
+    fn python_falls_back_to_the_pm_launcher_interpreter() {
+        const LAUNCHER: &str = "/h/.hermes/hermes-agent/.hermes/bin/hermes";
+        const PM_PY: &str = "/h/.hermes/tools/python-3.14.9/bin/python3";
+        let script = format!("#!/bin/sh\nexec {PM_PY} -I -c 'import os'\n");
+        let read = |p: &Path| (p == Path::new(LAUNCHER)).then(|| script.clone());
+        let env = env_of(&[("HOME", "/h")]);
+        assert_eq!(discover_python_in(&env, fs_of(&[LAUNCHER, PM_PY]), read, Os::Unix), Ok(PathBuf::from(PM_PY)));
+        // An install upgraded to PM keeps its old venv; `hermes` runs on the launcher's Python, so omher does too.
+        assert_eq!(discover_python_in(&env, fs_of(&[LAUNCHER, PM_PY, VENV]), read, Os::Unix), Ok(PathBuf::from(PM_PY)));
+        // A launcher whose interpreter is gone (a pruned tool) falls back to the venv, then to "not found".
+        assert_eq!(discover_python_in(&env, fs_of(&[LAUNCHER, VENV]), read, Os::Unix), Ok(PathBuf::from(VENV)));
+        let gone = discover_python_in(&env, fs_of(&[LAUNCHER]), read, Os::Unix).unwrap_err();
+        assert_eq!(gone, HERMES_NOT_FOUND);
+        // The override still wins over the launcher.
+        let pinned = env_of(&[("HOME", "/h"), ("OMHER_HERMES_PYTHON", "/opt/py")]);
+        assert_eq!(discover_python_in(&pinned, fs_of(&[LAUNCHER, PM_PY, "/opt/py"]), read, Os::Unix), Ok(PathBuf::from("/opt/py")));
+    }
+
+    #[test]
+    fn launcher_python_reads_the_shlex_joined_exec_word() {
+        // hermes_cli/_launchers.py writes `exec {shlex.join(command)} "$@"`.
+        let spaced = "#!/bin/sh\nexec '/Users/k k/.hermes/tools/python-3.14.9/bin/python3' -I -c 'import os\nx'\n";
+        assert_eq!(launcher_python(spaced), Some(PathBuf::from("/Users/k k/.hermes/tools/python-3.14.9/bin/python3")));
+        let apostrophe = "#!/bin/sh\nexec '/Users/o'\"'\"'neil/py' -I\n";
+        assert_eq!(launcher_python(apostrophe), Some(PathBuf::from("/Users/o'neil/py")));
+        assert_eq!(launcher_python("#!/bin/sh\nexec /p/py -I -c 'a b'\n"), Some(PathBuf::from("/p/py")));
+        assert_eq!(launcher_python("#!/bin/sh\nexec '/p/unterminated\n"), None);
+    }
+
+    #[test]
+    fn launcher_python_needs_an_absolute_exec_target() {
+        assert_eq!(launcher_python("#!/bin/sh\nexec \"/p/py\" -I\n"), Some(PathBuf::from("/p/py")));
+        assert_eq!(launcher_python("#!/bin/sh\nexec python3 -I\n"), None);
+        assert_eq!(launcher_python("echo hi\n"), None);
     }
 
     #[test]

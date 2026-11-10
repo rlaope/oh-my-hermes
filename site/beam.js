@@ -86,16 +86,20 @@ void main(){
   // and sides; brightest behind the window's upper half, centred; the page top stays the site's own near-black
   float d = max(sdBox(p, vec2(cx, wt + wh * .5), vec2(ww * .5, wh * .5), 8.), 0.);
   float xr = (p.x - cx - L) / (ww * .5);
-  float across = exp(-xr * xr * .4);                          // centred: strongest over the middle of the window
-  float down = exp(-max(p.y - (wt + wh * .5), 0.) / (wh * .32));  // holds down the sides through the upper half, then fades
+  float across = exp(-xr * xr * .22);                         // centred, but reaching both sides of the window
+  float down = exp(-max(p.y - (wt + wh * .8), 0.) / (wh * 1.1));   // holds down the sides and reaches under the window
   float above = smoothstep(wt - 170. * K, wt + 60. * K, p.y);     // it falls from above, gone well before the title
   // a wider, softer halo on the sides than above: the light pools behind the window rather than cresting its edge
   // a pool of light behind the window's upper middle (an ellipse, not the window's outline) plus a soft rim of it
   // around the edges; only what spills past the window shows
-  vec2 pe = vec2((p.x - cx - L) / (ww * .62), (p.y - (wt + wh * .28)) / (wh * .62));
-  float pool = exp(-dot(pe, pe) * 1.6);
-  float halo = pool * .75 + exp(-d / (110. * K)) * .32;
-  halo *= mix(.85, .35, smoothstep(0., 1., (wt - p.y) / (110. * K)));   // lighter above the window than beside it
+  vec2 pe = vec2((p.x - cx - L) / (ww * .66), (p.y - (wt + wh * .42)) / (wh * .74));
+  float pool = exp(-dot(pe, pe) * 1.45);
+  // a halo all the way round: the pool behind the window plus a soft rim of light on every edge, a little more on the
+  // sides and the top than under it
+  // under the window the rim glow is a touch stronger, so the halo closes round it
+  float under = 1. + .5 * smoothstep(wb - 20., wb + 40., p.y);
+  float halo = pool * .8 + (exp(-d / (160. * K)) * .62 + exp(-d / (34. * K)) * .32) * under;
+  halo *= mix(.9, .4, smoothstep(0., 1., (wt - p.y) / (110. * K)));   // lighter above the window than beside it
   float aura = halo * across * down * above;
   // the falling: wide feathered bands sliding down at two slow rates, plus a slow breath; every loop is seamless
   float fall = .72 + .17 * fallBand(p.y + .2 * p.x, 520. * K, 8., T, 0.) + .11 * fallBand(p.y - .15 * p.x, 330. * K, 6.4, T, 2.1);
@@ -166,12 +170,17 @@ void main(){
     cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
     measure();
   }
-  // at rest the window is tilted back a little and at .96; it straightens and comes to full size as it rises
-  const riseOf = e => ({ty: 0, a: (1 - e) * 3, sc: .96 + .04 * e, op: 1});
+  // the scroll-rise: on load the window sits a little lower, at .9 and tilted back 2.5deg; it grows to full size and
+  // straightens as the page scrolls into it (eased in the frame loop). Once settled it carries no transform at all, so
+  // the window is flat (top and bottom the same width) and the picture and the live app stay sharp
+  const riseOf = e => ({ty: (1 - e) * 14, a: (1 - e) * 2.5, sc: .9 + .1 * e, op: 1});
   function applyRise(e) {
     const r = riseOf(e);
-    shot.style.transform = `perspective(${PERSP}px) translateY(${r.ty.toFixed(2)}px) rotateX(${r.a.toFixed(3)}deg) scale(${r.sc.toFixed(4)})`;
-    shot.style.opacity = r.op.toFixed(3);
+    if (e >= .9995) { shot.style.transform = 'none'; shot.style.willChange = 'auto'; }
+    else {
+      shot.style.willChange = 'transform';
+      shot.style.transform = `perspective(${PERSP}px) translateY(${r.ty.toFixed(2)}px) rotateX(${r.a.toFixed(3)}deg) scale(${r.sc.toFixed(4)})`;
+    }
     if (stage) stage.style.setProperty('--rise', smooth(.35, 1, e).toFixed(3));   // the download row arrives as the window settles
   }
 

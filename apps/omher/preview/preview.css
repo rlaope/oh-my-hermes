@@ -1,0 +1,37 @@
+/* The preview's own bits on top of the app's styles: the small note for inert actions, and, in the Plans panel, the
+   open part's Node details before the Dependencies list (the order the promo film uses), so the part that is working
+   shows its latest lines right under the graph. */
+.bv-secs {
+  display: flex;
+  flex-direction: column;
+}
+.bv-secs > [data-testid="run-details"] {
+  order: -1;
+}
+.pv-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  z-index: 9999;
+  max-width: min(520px, calc(100vw - 48px));
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: var(--pop, #1c1a22);
+  color: var(--ink, #f2eef8);
+  font: 500 13px/1.4 var(--font);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+.pv-toast.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-toast {
+    transition: none;
+  }
+}
