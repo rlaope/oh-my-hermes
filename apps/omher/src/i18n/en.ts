@@ -33,6 +33,12 @@ export const en = {
   "graph.hint": "View only · drag a node to move it · Esc closes",
   "graph.full": "Full view",
   "graph.close": "Close graph",
+  // a plan node's pull request: GitHub's state words
+  "pr.open": "Open",
+  "pr.merged": "Merged",
+  "pr.closed": "Closed",
+  "pr.draft": "Draft",
+  "pr.onGithub": "Open {pr} on GitHub",
   "graph.main": "main",
   "graph.effort": "{e} effort",
   "graph.needs": "{n} needs you",

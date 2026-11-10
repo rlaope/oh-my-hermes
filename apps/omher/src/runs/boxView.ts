@@ -29,7 +29,8 @@
 // above the first node that waits on it; a dependency on a failed node that has repairs is an edge from those
 // repairs, which is what the dependent waits on; a duration reads as everywhere else in the app (`span`).
 import type { AgentRun, RunNode } from "../lib/runs";
-import { cliName, isRepaired, nodeModel, span, type CliAgent } from "../lib/runs";
+import { cliName, isRepaired, nodeModel, span, type CliAgent, type NodePr } from "../lib/runs";
+import { prLabel } from "./pr";
 import { t } from "../i18n";
 import { markFor } from "../ui/ModelIcon";
 import { modelName } from "./format";
@@ -53,6 +54,8 @@ export const GEOMETRY = {
   markGap: 5, // and the space after it
   icon: 12, // the status icon
   iconGap: 5,
+  prGap: 10, // the least room between the status and the PR number at the end of its line
+  prIconGap: 4, // between the PR's state mark (as wide as the status icon) and its number
   gap: 12, // between two boxes of a row, at the least
   gapLane: 28, // and at the least in a run whose lines pass rows, where the boxes can spare it: room for a lane
   gapMost: 48, // and at the most, where the boxes leave the room
@@ -322,7 +325,13 @@ export interface BoxText {
   /** "repaired", "1.2k tokens": after the duration, only those that fit whole. */
   extras: string[];
   tone: Tone;
+  /** The pull request the node opened, at the end of the status line ("#2746" with its state mark), where the line
+   *  holds it beside the status word; the node's detail always names it. */
+  pr: NodePr | null;
 }
+
+/** The room a PR takes at the end of a status line: the least gap, its mark and "#2746". */
+export const prWidth = (pr: NodePr, measure: Measure) => G.prGap + G.icon + G.prIconGap + measure(prLabel(pr), "text");
 
 /** How tall a node's box is: its title's lines, its facts' lines and its status. (It names no parent: every edge
  *  is a line, and the node's detail lists what it comes after.) */
@@ -344,7 +353,10 @@ export function boxText(
   const f = factsOf(n, run, bot);
   const fl = factLines(f, inner, measure);
   const w = (s: string) => measure(s, "text");
-  const room = inner - G.icon - G.iconGap;
+  // the PR at the end of the line, where the status word still fits beside it; the duration and notes then share
+  // what is left
+  const pr = n.pr && w(st.word) <= inner - G.icon - G.iconGap - prWidth(n.pr, measure) - 0.5 ? n.pr : null;
+  const room = inner - G.icon - G.iconGap - (pr ? prWidth(pr, measure) : 0);
   // the duration whole, else its first unit alone ("1h" for "1h 1m"), else none
   const whole = st.timed ? durationOf(n, nowS) : "";
   const fit = (s: string) => w(s) <= room - 0.5;
@@ -371,6 +383,7 @@ export function boxText(
     time,
     extras,
     tone: st.tone,
+    pr,
   };
 }
 
@@ -823,7 +836,7 @@ function layoutAt(run: Run, o: LayoutOpts, W: number, { margin, least, cols, mos
         const f = facts.get(n.id)!;
         const title = measure(titleOf(n), "title") + (shape.origin.has(n.id) ? G.icon + G.iconGap : 0);
         const ran = (f.mark ? G.mark + G.markGap : 0) + measure([...f.parts, f.via].filter(Boolean).join(SEP), "text");
-        const status = G.icon + G.iconGap + measure(st.timed ? `${st.word} ${LONGEST_DURATION}` : st.word, "text");
+        const status = G.icon + G.iconGap + measure(st.timed ? `${st.word} ${LONGEST_DURATION}` : st.word, "text") + (n.pr ? prWidth(n.pr, measure) : 0);
         return Math.ceil(Math.max(title, ran, status)) + 2 * G.padX + 2 * G.border;
       }),
     ),

@@ -7,7 +7,8 @@ profile's own gateway through Hermes' ``connect_gateway``.
 
 Prints one line ``OMHER_BRIDGE_READY {"port": N}`` on stdout once listening; everything else goes
 to stderr. Binds 127.0.0.1 only and refuses (403) any connection whose ``token`` query parameter
-differs. Makes no model or network call of its own.
+differs. Makes no model or network call of its own; the one outside read is a PR's state through the
+person's own `gh` (``runs.prs``).
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
@@ -1190,6 +1191,173 @@ def run_summary(run: dict) -> dict:
     return out
 
 
+# ---------------------------------------------------------------- runs: the PR a node produced (read-only)
+# A node's attempt reasons, its helper's summary and its handoff often name the pull request it opened ("PR #2746",
+# "https://github.com/o/r/pull/2750"). `runs.get` carries the newest such reference as `pr: {number, repo?, url?}`;
+# `runs.prs` asks the person's own GitHub CLI for each one's state, later and apart, so the run list never waits.
+
+PR_URL = re.compile(r"https?://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9_.-]{1,100})/pull/(\d{1,7})\b")
+PR_WORD = re.compile(r"\b(?:PR|pull request)s?\b[\s:]*#(\d{1,7})\b", re.I)
+PR_REPO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$")
+PR_TTL = 300.0          # seconds a PR state is reused
+PR_TTL_MISS = 60.0      # and a failed look-up (no gh, no network): tried again sooner
+PR_TIMEOUT = 3.0        # seconds one `gh pr view` may take
+PR_POOL = 4             # look-ups at once
+PR_STATES = ("open", "merged", "closed", "draft", "unknown")
+
+
+def _pr_refs(text: str) -> list[tuple[int, int, str | None]]:
+    """(offset, number, repo or None) of every PR reference in `text`, in order. A URL names its repo."""
+    out = [(m.start(), int(m.group(3)), f"{m.group(1)}/{m.group(2)}") for m in PR_URL.finditer(text)]
+    out += [(m.start(), int(m.group(1)), None) for m in PR_WORD.finditer(text)]
+    return sorted(out)
+
+
+def find_pr(texts) -> dict | None:
+    """The newest PR a node names: the last reference in the last text that has one (texts oldest first:
+    the attempts' reasons, the helper's summary, then the handoff). A bare `PR #n` takes the repo of a URL with
+    the same number in any of the texts, else the one repo all its URLs name. {number, repo?, url?} or None."""
+    refs = [r for text in texts if isinstance(text, str) and text for r in _pr_refs(text)]
+    if not refs:
+        return None
+    _, number, repo = refs[-1]
+    repos = {r for _, _, r in refs if r}
+    if repo is None:
+        same = [r for _, n, r in refs if r and n == number]
+        repo = same[-1] if same else (next(iter(repos)) if len(repos) == 1 else None)
+    out: dict = {"number": number}
+    if repo:
+        out["repo"] = repo
+        out["url"] = f"https://github.com/{repo}/pull/{number}"
+    return out
+
+
+def attach_prs(run: dict, texts: dict[str, str]) -> dict:
+    """`pr` on each node that names one (see find_pr); `texts` holds each node's handoff text. A bare `#n` with no
+    repo of its own takes the run's, when every URL in the run names the same one."""
+    for node in run["nodes"]:
+        found = find_pr([a.get("reason") for a in node.get("attempts") or []] + [node.get("summary"), texts.get(node["id"])])
+        if found:
+            node["pr"] = found
+    repos = {n["pr"]["repo"] for n in run["nodes"] if n.get("pr", {}).get("repo")}
+    if len(repos) == 1:
+        repo = next(iter(repos))
+        for node in run["nodes"]:
+            if "pr" in node and "repo" not in node["pr"]:
+                node["pr"].update(repo=repo, url=f"https://github.com/{repo}/pull/{node['pr']['number']}")
+    return run
+
+
+def pr_state_of(view: dict) -> str:
+    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,url`) as one of PR_STATES."""
+    state = str(view.get("state") or "").upper()
+    if state == "MERGED" or (state == "CLOSED" and view.get("mergedAt")):
+        return "merged"
+    if state == "CLOSED":
+        return "closed"
+    if state == "OPEN":
+        return "draft" if view.get("isDraft") is True else "open"
+    return "unknown"
+
+
+def _gh_path(which=None) -> str | None:
+    """The GitHub CLI: on PATH, else where its installers put it (an app opened from the Dock has a short PATH)."""
+    import shutil
+    which = which or shutil.which
+    found = which("gh")
+    if found:
+        return found
+    if os.name == "nt":
+        roots = [os.environ.get("ProgramFiles", ""), os.environ.get("LOCALAPPDATA", "")]
+        for p in (Path(r, "GitHub CLI", "gh.exe") for r in roots if r):
+            if p.is_file():
+                return str(p)
+        return None
+    for d in ("/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".local" / "bin"), "/usr/bin"):
+        p = Path(d) / "gh"
+        if p.is_file() and os.access(p, os.X_OK):
+            return str(p)
+    return None
+
+
+def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float = PR_TIMEOUT) -> dict | None:
+    """One fixed read through the person's own `gh`: `gh pr view <n> -R <owner>/<repo> --json
+    state,isDraft,mergedAt,url`. None when gh is missing, slow, signed out or offline. omher passes no token and
+    reads none; gh uses its own login."""
+    if not PR_REPO.match(repo) or not isinstance(number, int) or isinstance(number, bool) or not 0 < number < 10**7:
+        raise ValueError(f"not a PR: {repo}#{number}")
+    gh = gh or _gh_path()
+    if not gh:
+        return None
+    kw = {}
+    if os.name == "nt":
+        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json", "state,isDraft,mergedAt,url"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                           stdin=subprocess.DEVNULL, env={**os.environ, "GH_PROMPT_DISABLED": "1",
+                                                          "GH_NO_UPDATE_NOTIFIER": "1", "NO_COLOR": "1"}, **kw)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        view = json.loads(r.stdout)
+    except ValueError:
+        return None
+    return view if isinstance(view, dict) else None
+
+
+class PrStates:
+    """PR states by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view` is the look-up
+    (gh_pr_view; tests pass a stub)."""
+
+    def __init__(self, view=None, clock=time.monotonic):
+        self._view = view or gh_pr_view
+        self._clock = clock
+        self._cache: dict[tuple[str, int], tuple[float, dict]] = {}
+        self._lock = threading.Lock()
+
+    def _one(self, repo: str, number: int) -> dict:
+        key = (repo, number)
+        now = self._clock()
+        with self._lock:
+            hit = self._cache.get(key)
+        if hit and now < hit[0]:
+            return hit[1]
+        try:
+            view = self._view(repo, number)
+        except ValueError:
+            view = None
+        state = pr_state_of(view) if view else "unknown"
+        out = {"state": state}
+        url = view.get("url") if view else None
+        if isinstance(url, str) and url == f"https://github.com/{repo}/pull/{number}":
+            out["url"] = url
+        with self._lock:
+            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out)
+            if len(self._cache) > 2000:
+                self._cache.clear()
+        return out
+
+    def states(self, run: dict) -> dict[str, dict]:
+        """{node id: {number, repo?, url?, state}} for every node of `run` that names a PR; a PR with no repo is
+        `unknown` without asking. The look-ups run side by side."""
+        nodes = [n for n in run.get("nodes") or [] if isinstance(n.get("pr"), dict)]
+        keys = sorted({(n["pr"]["repo"], n["pr"]["number"]) for n in nodes if n["pr"].get("repo")})
+        got: dict[tuple[str, int], dict] = {}
+        if keys:
+            with ThreadPoolExecutor(max_workers=min(PR_POOL, len(keys))) as pool:
+                for key, res in zip(keys, pool.map(lambda k: self._one(*k), keys)):
+                    got[key] = res
+        out = {}
+        for n in nodes:
+            pr = dict(n["pr"])
+            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown"}))
+            out[n["id"]] = pr
+        return out
+
+
 # ---------------------------------------------------------------- runs: Hermes delegate_task fan-outs (read-only)
 
 DELEG_ID = re.compile(r"^deleg_[0-9a-f]{6,32}$")
@@ -1636,7 +1804,7 @@ class DagRuns:
         for path, _, run in self._owned(bot, profile_dir):
             if run["id"] != run_id:
                 continue
-            handoffs = {}
+            handoffs, whole = {}, {}
             for node in run["nodes"]:
                 f = self._handoff_file(root, path, node["id"]) if node.get("handoff") and path else None
                 if f is None:
@@ -1646,8 +1814,10 @@ class DagRuns:
                         data = fh.read(HANDOFF_MAX * 4)
                 except OSError:
                     continue
-                handoffs[node["id"]] = data.decode("utf-8", "replace")[:HANDOFF_MAX]
-            return {"run": run, "handoffs": handoffs}
+                whole[node["id"]] = data.decode("utf-8", "replace")
+                handoffs[node["id"]] = whole[node["id"]][:HANDOFF_MAX]
+            # the PR a node opened is often named at the end of its handoff: read the whole read, not the clip
+            return {"run": attach_prs(run, whole), "handoffs": handoffs}
         raise BridgeError("not_found", f"no run {run_id} for {bot}")
 
 
@@ -2864,7 +3034,7 @@ class Bridge:
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
-            "runs.cli": self.op_runs_cli,
+            "runs.cli": self.op_runs_cli, "runs.prs": self.op_runs_prs,
             "usage.read": self.op_usage_read,
             "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
             "accounts.remove": self.op_accounts_remove, "accounts.set_active": self.op_accounts_set_active,
@@ -2873,6 +3043,7 @@ class Bridge:
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self.runs = DagRuns()
         self.cli = CliRuns()
+        self.prs = PrStates()
 
     # ------------------------------------------------------------ lifecycle
 
@@ -3704,6 +3875,18 @@ class Bridge:
         if run.split(":", 1)[0] in CLI_AGENTS:
             return await asyncio.to_thread(self.cli.get, run)
         return await asyncio.to_thread(self.runs.get, bot["name"], bot["path"], run)
+
+    async def op_runs_prs(self, p) -> dict:
+        """The state of each PR the run's nodes name (`runs.get` gives the numbers): {prs: {node id: {number,
+        repo?, url?, state}}}. Asked apart from `runs.get` so a slow or missing `gh` never holds the graph."""
+        bot = self._bot(p.get("bot"))
+        run = p.get("run")
+        if not isinstance(run, str) or not run:
+            raise BridgeError("bad_request", "missing run")
+        if run.split(":", 1)[0] in CLI_AGENTS:
+            return {"prs": {}}
+        got = await asyncio.to_thread(self.runs.get, bot["name"], bot["path"], run)
+        return {"prs": await asyncio.to_thread(self.prs.states, got["run"])}
 
     async def op_runs_cli(self, p) -> dict:
         """CLI agent sessions with sub-runs: `agent` (claude, codex, pi, omp, grok; all when absent), `cwd` (only

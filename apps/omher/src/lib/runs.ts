@@ -50,6 +50,19 @@ export interface RunNode {
   attempts: RunAttempt[];
   /** Handoff file name when the node wrote one (text comes from `runs.get`). */
   handoff?: string;
+  /** The pull request the node opened, as its reasons, summary or handoff name it (`runs.get`); its GitHub state
+   *  comes later, apart, from `runs.prs`. */
+  pr?: NodePr;
+}
+
+/** A pull request's state as GitHub says it (`unknown`: no `gh`, no login, no network, or no repository). */
+export type PrState = "open" | "merged" | "closed" | "draft" | "unknown";
+export interface NodePr {
+  number: number;
+  /** `owner/repo`, when a github.com link in the run named it. */
+  repo?: string;
+  url?: string;
+  state?: PrState;
 }
 
 export interface AgentRun {
