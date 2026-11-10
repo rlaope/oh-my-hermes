@@ -29,6 +29,18 @@ window.OMH_I18N = {
       ja: "インストール",
       zh: "安装"
     },
+    "nav.download": {
+      en: "Download app",
+      ko: "앱 다운로드",
+      ja: "アプリをダウンロード",
+      zh: "下载应用"
+    },
+    "omher.desc": {
+      en: "Your Hermes bots, coding sessions and dag‑ulw runs — one window.",
+      ko: "Hermes 봇, 코딩 세션, dag‑ulw 실행을 한 창에서.",
+      ja: "Hermes のボット、コーディングセッション、dag‑ulw の実行をひとつの窓で。",
+      zh: "Hermes 机器人、编码会话和 dag‑ulw 运行，尽在一个窗口。"
+    },
     "nav.docs": {
       en: "Docs",
       ko: "문서",
@@ -36,10 +48,10 @@ window.OMH_I18N = {
       zh: "文档"
     },
     "hero.badge": {
-      en: "For Hermes Agent · v4.0.6",
-      ko: "Hermes Agent 전용 · v4.0.6",
-      ja: "Hermes Agent のための · v4.0.6",
-      zh: "为 Hermes Agent 打造 · v4.0.6"
+      en: "For Hermes Agent · v4.0.7",
+      ko: "Hermes Agent 전용 · v4.0.7",
+      ja: "Hermes Agent のための · v4.0.7",
+      zh: "为 Hermes Agent 打造 · v4.0.7"
     },
     "hero.tagline": {
       en: "All-in-one package for Hermes Agent. Install once, then just type <code>dag-ulw</code>.",

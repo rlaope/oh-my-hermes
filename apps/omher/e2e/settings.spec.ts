@@ -47,16 +47,17 @@ test("model pill: one control, popover lists providers and models with the curre
   await expect(right.locator(":scope > *")).toHaveCount(1);
   expect(await right.locator("button, a, [role=button], input, select").count()).toBe(1);
   const pill = page.getByTestId("model-pill");
+  // the model's company mark sits before the name (Opus -> Claude)
+  await expect(pill.locator('svg.model-ic[data-mark="claude"]')).toBeVisible();
   await expect(pill).toContainText("Opus 5.5");
   await expect(pill).toContainText("High");
 
   await pill.click();
   const pop = page.getByTestId("model-pop");
   await expect(pop).toBeVisible();
-  await expect(pop.getByText("Claude (proxy)")).toBeVisible();
-  await expect(pop.getByText("OpenAI")).toBeVisible();
+  await expect(pop.locator(".mp-g")).toHaveText(["Claude (proxy)", "OpenAI", "OpenRouter", "Ollama"]);
   const opts = pop.getByTestId("model-opt");
-  await expect(opts).toHaveCount(5);
+  await expect(opts).toHaveCount(12);
   const on = pop.locator(".mp-opt.on");
   await expect(on).toHaveCount(1);
   await expect(on).toContainText("Opus 5.5");
@@ -152,7 +153,7 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   await expect(list.locator("input, select, textarea")).toHaveCount(0);
 
   await page.getByTestId("settings-nav-computer").click();
-  await expect(page.getByTestId("settings-page-computer")).toContainText("Not in this version");
+  await expect(page.getByTestId("settings-page-computer")).toContainText("Soon");
 
   // close with the header button
   await page.getByRole("button", { name: "Close settings" }).click();

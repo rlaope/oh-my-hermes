@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oh My Hermes (OMH) · Coding harness for Hermes Agent</title>
-<meta name="description" content="Oh My Hermes (OMH) turns Hermes Agent into a coding harness: a model chain per kind of work, parallel /dag-ulw runs, and evidence before “done”.">
+<title>Oh My Hermes (OMH) · Ultrawork agent and desktop app for Hermes</title>
+<meta name="description" content="⚚ The ultrawork agent with AI coworkers wired into you">
 <link rel="canonical" href="https://omher.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Oh My Hermes">
-<meta property="og:title" content="Oh My Hermes (OMH) · Coding harness for Hermes Agent">
-<meta property="og:description" content="Oh My Hermes (OMH) turns Hermes Agent into a coding harness: a model chain per kind of work, parallel /dag-ulw runs, and evidence before “done”.">
+<meta property="og:title" content="Oh My Hermes (OMH) · Ultrawork agent and desktop app for Hermes">
+<meta property="og:description" content="⚚ The ultrawork agent with AI coworkers wired into you">
 <meta property="og:url" content="https://omher.app/">
 <meta property="og:image" content="https://omher.app/assets/og/omh-share.png">
 <meta property="og:image:type" content="image/png">
@@ -17,8 +17,8 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Oh My Hermes: the coding harness with Hermes Agent wired into IDE.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Oh My Hermes (OMH) · Coding harness for Hermes Agent">
-<meta name="twitter:description" content="Oh My Hermes (OMH) turns Hermes Agent into a coding harness: a model chain per kind of work, parallel /dag-ulw runs, and evidence before “done”.">
+<meta name="twitter:title" content="Oh My Hermes (OMH) · Ultrawork agent and desktop app for Hermes">
+<meta name="twitter:description" content="⚚ The ultrawork agent with AI coworkers wired into you">
 <meta name="twitter:image" content="https://omher.app/assets/og/omh-share.png">
 <meta name="twitter:image:alt" content="Oh My Hermes: the coding harness with Hermes Agent wired into IDE.">
 <meta name="twitter:site" content="@rlaope">
@@ -458,6 +458,97 @@ details.chains[open] summary::before{transform:rotate(90deg)}
 .mini code{font:inherit;color:inherit}
 details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var(--line-2);border-radius:999px}
 @media (max-width:900px){.route-states{grid-template-columns:1fr}.route-states div + div{padding-left:0;border-left:0}}
+
+/* omher at the top: header Download pill, the beam under it, then one promo shot, OS downloads and a one-line install */
+.nav > a.dlpill{position:relative;gap:7px;padding:0 15px 0 12px;border:0;background:#f4f1f8;color:#0c0a12;font:600 12.5px var(--sans);letter-spacing:0;text-transform:none;
+  box-shadow:-12px 12px 28px -8px rgba(164,108,245,.62),-4px 16px 30px -8px rgba(47,208,255,.5),4px 16px 30px -8px rgba(242,210,74,.4),12px 12px 28px -8px rgba(242,123,182,.62),0 0 0 1px rgba(255,255,255,.4);
+  transition:transform var(--fast),background var(--fast),box-shadow var(--fast)}
+.nav > a.dlpill:hover{background:#fff;transform:translateY(-1px);
+  box-shadow:-12px 12px 30px -6px rgba(164,108,245,.75),0 16px 34px -6px rgba(47,208,255,.55),12px 12px 30px -6px rgba(242,123,182,.75),0 0 0 1px #fff}
+/* the beam's source: a faint spectral rim on the pill and a soft spectral glow under it (box-shadow); the beam itself starts ~40px lower */
+.nav > a.dlpill::before{content:"";position:absolute;inset:-1.5px;border-radius:inherit;padding:1.5px;pointer-events:none;opacity:.8;
+  background:linear-gradient(90deg,#a46cf5,#5a7cff,#2fd0ff,#7fe08a,#f2d24a,#ff8f3c,#f27bb6);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+
+.nav > a.dlpill svg{width:15px;height:15px}
+@media (max-width:720px){.nav > a.dlpill span{display:none}.nav > a.dlpill{padding:0 10px}}
+@media (max-width:480px){.nav .nav__icon{display:none}.top__in{padding:0 16px}}
+.dlbeam{position:fixed;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;mix-blend-mode:screen}
+.omher{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100svh - 8px);padding:192px var(--gut) 40px;text-align:center;overflow:hidden}
+.omher::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px,linear-gradient(90deg,rgba(242,238,248,.035) 1px,transparent 1px) 0 0/56px 56px;
+  -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
+/* the seam into the OMH hero: one soft spectrum hairline */
+.omher::after{content:"";position:absolute;left:50%;bottom:0;width:min(880px,80%);height:1px;transform:translateX(-50%);pointer-events:none;opacity:.55;
+  background:linear-gradient(90deg,transparent,#a46cf5 22%,#f27bb6 42%,#ff9a5a 58%,#c6f36b 74%,transparent);box-shadow:0 0 18px 1px rgba(242,123,182,.28)}
+/* The shot is a promo composition (2400x1239: the flat app window with a caption card on each side). --win-* place the
+   window inside it, so the beam lands on the window's top edge; a new image at the same size and layout is a pure file swap.
+   Only the window and the two cards are drawn (mask boxes --mw/--ml/--mr: size and position, % of the image): the composition's
+   own backdrop glows are masked away, and one brand ambient glow sits behind the window instead. --sw is the image width:
+   the window is ~72% of a 1440 viewport, capped at the 2400px source (a 1200 CSS px window at 2x would need more). */
+.omher__shot{position:relative;z-index:2;order:0;flex:none;align-self:flex-start;--sw:min(1585px,95vw,calc((100svh - 210px) * 1.937));width:var(--sw);min-width:min(640px,100%);
+  /* wider than the column: centre the WINDOW (its centre sits 2.07% right of the image's) and let the backdrop overflow both sides */
+  margin:calc(var(--sw) / -1.937 * .0525) 0 calc(var(--sw) / -1.937 * .048) calc((100% - var(--sw)) / 2 - var(--sw) * .0207);
+  --win-l:14.167%;--win-t:5.246%;--win-w:75.708%;--win-h:89.508%;--win-dy:0;--win-rot:0deg;--win-clip:none;
+  --mw:75.708% 89.508%;--mwp:58.319% 50.000%;--ml:12.125% 11.703%;--mlp:1.897% 65.539%;--mr:8.042% 11.703%;--mrp:98.188% 59.781%;
+  --reveal:1;--lit:0;--bx:80%;--rx:0deg;--ry:0deg;--gx:600px;--gy:300px;--glare:0;--hit:0;
+  transform-origin:50% 40%}
+.omher__shot.is-tilt{transform:perspective(1600px) rotateX(var(--rx)) rotateY(var(--ry))}
+.omher__shot::before{content:"";position:absolute;left:4%;right:4%;top:-6%;bottom:-8%;z-index:-1;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(164,108,245,.13),rgba(242,123,182,.05) 60%,transparent)}
+.omher__shot img{display:block;width:100%;height:auto;
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%)),linear-gradient(#000 0 0),linear-gradient(#000 0 0),linear-gradient(#000 0 0);
+  -webkit-mask-size:100% 100%,var(--mw),var(--ml),var(--mr);-webkit-mask-position:0 0,var(--mwp),var(--mlp),var(--mrp);-webkit-mask-repeat:no-repeat;
+  -webkit-mask-composite:source-in,source-over,source-over;
+  mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%)),linear-gradient(#000 0 0),linear-gradient(#000 0 0),linear-gradient(#000 0 0);
+  mask-size:100% 100%,var(--mw),var(--ml),var(--mr);mask-position:0 0,var(--mwp),var(--mlp),var(--mrp);mask-repeat:no-repeat;
+  mask-composite:intersect,add,add}
+.omher__win{position:absolute;left:var(--win-l);top:var(--win-t);width:var(--win-w);height:var(--win-h);pointer-events:none;border-radius:6px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 28px 70px -12px rgba(0,0,0,.7),0 10px 24px -8px rgba(0,0,0,.5)}
+.omher__glow{position:absolute;inset:0;overflow:hidden;pointer-events:none;transform-origin:100% 0;transform:rotate(var(--win-rot));
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%));mask-image:linear-gradient(180deg,#000 calc(var(--reveal) * 130% - 30%),transparent calc(var(--reveal) * 130%))}
+/* the window's top border lit in the spectrum where the beam lands (the only light that enters the window, with a <=6% sheen) */
+.omher__glow::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;opacity:calc(var(--lit) * .82 + var(--hit) * .5);
+  background:radial-gradient(closest-side,rgba(255,255,255,.7),rgba(255,255,255,0)) var(--bx) 0/90px 2px no-repeat,linear-gradient(90deg,#8a5cff,#5a7cff,#2fd0ff,#7fe08a,#f2d24a,#ff8f3c,#ff4a58) calc(var(--bx) - 240px) 0/480px 100% no-repeat;
+  -webkit-mask-image:radial-gradient(120px 400% at var(--bx) 0,#000 15%,transparent);mask-image:radial-gradient(120px 400% at var(--bx) 0,#000 15%,transparent);
+  box-shadow:0 0 10px rgba(255,255,255,.2)}
+/* glass: a faint spectrum sheen that sweeps across now and then, and a glare that follows the cursor */
+.omher__sheen{position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:screen;border-radius:6px;opacity:max(var(--glare),calc(var(--lit) * .9))}
+.omher__sheen::before{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:38%;transform:skewX(-18deg) translateX(0);
+  background:linear-gradient(90deg,transparent,rgba(255,61,74,.03) 18%,rgba(255,143,44,.035) 30%,rgba(255,217,62,.035) 42%,rgba(91,234,106,.035) 54%,rgba(47,208,255,.04) 66%,rgba(74,114,255,.04) 76%,rgba(154,76,255,.03) 86%,transparent);
+  animation:omher-sheen 9s cubic-bezier(.45,.05,.3,1) 2.6s infinite}
+@keyframes omher-sheen{0%{transform:skewX(-18deg) translateX(0)}38%,100%{transform:skewX(-18deg) translateX(560%)}}
+.omher__sheen::after{content:"";position:absolute;inset:0;opacity:var(--glare);
+  /* the cursor glare stays a faint glass glint (<=6%), never a coloured spot over the UI */
+  background:radial-gradient(30px 26px at var(--gx) var(--gy),rgba(255,255,255,.06),rgba(255,255,255,.015) 60%,transparent 85%),
+    linear-gradient(118deg,transparent 14%,rgba(255,74,88,.05) 25%,rgba(255,150,60,.05) 35%,rgba(250,224,80,.04) 44%,rgba(100,234,140,.045) 53%,rgba(50,210,255,.055) 63%,rgba(90,124,255,.06) 72%,rgba(164,96,255,.05) 81%,transparent 90%) calc(var(--gx) - 130px) calc(var(--gy) - 100px)/260px 200px no-repeat;
+  -webkit-mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent);mask-image:radial-gradient(102px 80px at var(--gx) var(--gy),#000 30%,rgba(0,0,0,.4) 64%,transparent)}
+.omher__meta{position:relative;z-index:2;order:1;margin:14px auto 0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.omher__t{margin:0 0 4px;min-height:0;font:500 11.5px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
+.omher__t b{color:var(--ink-2);font-weight:600}
+.omher__d{margin:0;font:500 clamp(18px,1.9vw,28px)/1.3 var(--sans);letter-spacing:-.01em;color:var(--ink)}
+.omher__act{position:relative;z-index:2;order:2;width:100%;display:flex;flex-direction:column;align-items:center}
+.omher__get{position:relative;z-index:2;display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:24px auto 16px}
+@media (min-width:1100px){.omher__act{flex-direction:row;justify-content:center;gap:12px;margin-top:24px}.omher__act .omher__get,.omher__act .omher__cmd{margin:0}}
+.osbtn{display:inline-flex;align-items:center;gap:9px;height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--line-2);color:var(--ink);font:500 14px var(--sans);transition:border-color var(--fast),background var(--fast),transform var(--fast)}
+.osbtn:hover{border-color:var(--ink-3);background:rgba(255,255,255,.03)}
+.osbtn svg{width:16px;height:16px;fill:currentColor;flex:none}
+.osbtn--main{border-color:transparent;background:var(--ink);color:#0c0a12;font-weight:600}
+.osbtn--main:hover{background:#fff;border-color:transparent;transform:translateY(-1px)}
+.omher__cmd{position:relative;z-index:2;display:flex;align-items:stretch;width:fit-content;max-width:min(920px,100%);margin:0 auto;border:1px solid var(--line-2);border-radius:12px;background:rgba(17,14,24,.78);text-align:left}
+.omher__cmd > div{flex:1;min-width:0;padding:12px 16px;font:400 12.5px/1.7 var(--mono);color:var(--ink);overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.omher__cmd > div::-webkit-scrollbar{display:none}
+.omher__cmd .p{color:var(--pink);margin-right:10px;user-select:none}
+@media (max-width:900px){.omher__cmd > div{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 64px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 64px),transparent)}}
+@media (prefers-reduced-motion:reduce){.omher__shot{transform:none}.omher__sheen::before{animation:none;display:none}}
+/* the 01-08 rail belongs to the OMH sections; it stays hidden beside the omher block */
+.rail{transition:opacity var(--base) var(--ease)}
+body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
+/* the OMH hero keeps its content; it now starts right under the omher block instead of centring in a full screen */
+.omher + .hero{align-items:flex-start;padding-top:88px}
+.omher + .hero::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;z-index:1;pointer-events:none;background:linear-gradient(var(--bg),rgba(12,10,18,0))}
+@media (max-width:600px){.omher__shot{--win-l:3.611%;--win-t:1.625%;--win-w:92.917%;--win-h:96.75%;--mw:92.917% 96.750%;--mwp:50.980% 50.000%;--ml:0 0;--mr:0 0}}
+@media (max-width:760px){.omher{min-height:0;padding:84px 20px 40px}.omher__shot{min-width:0;--sw:min(350px,100%);align-self:center;margin:0 auto;transform:none}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__meta{margin-top:18px}.omher__d{font-size:16px;max-width:330px}.osbtn{height:42px;justify-content:center}.omher + .hero{padding-top:72px}.omher__get{flex-direction:column;align-items:stretch;gap:10px;width:min(350px,100%);max-width:none;margin:20px auto 12px}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
 </style>
 <script type="application/ld+json">
 {
@@ -481,7 +572,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
       "name": "Oh My Hermes",
       "alternateName": "OMH",
       "url": "https://omher.app/",
-      "description": "Oh My Hermes (OMH) turns Hermes Agent into a coding harness: a model chain per kind of work, parallel /dag-ulw runs, and evidence before “done”.",
+      "description": "⚚ The ultrawork agent with AI coworkers wired into you",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "macOS, Linux, Windows",
       "license": "https://opensource.org/licenses/MIT",
@@ -520,6 +611,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
       </div>
       <a class="pill" href="https://discord.gg/6EjTP3cWM" aria-label="Discord: Oh-My-Hermes Community"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg></a>
       <a class="nav__icon" href="https://github.com/rlaope/oh-my-hermes" aria-label="Star oh-my-hermes on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><b data-stars>4.9k</b></a>
+      <a class="pill dlpill" href="#omher" data-dlpill><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="nav.download">Download app</span></a>
     </nav>
   </div>
 </header>
@@ -535,7 +627,24 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
   <a href="#community">08<i>Community</i></a>
 </nav>
 
+<canvas class="dlbeam" data-beam aria-hidden="true"></canvas>
 <main>
+<section class="omher" id="omher" aria-labelledby="omher-t" data-omher>
+  <figure class="omher__shot" data-app-shot><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: the bots Kami, Friren, Juno and Pip; coding sessions web-app in Claude Code, api-server in Codex, mobile in pi, docs in oh-my-pi and infra in Grok; Kami's chat about shipping a checkout redesign; and the Runs tab with the plan card and the run's graph." width="2400" height="1239" fetchpriority="high" decoding="async"></picture><span class="omher__win" data-app-win aria-hidden="true"><span class="omher__sheen"></span><span class="omher__glow"></span></span></figure>
+  <div class="omher__meta">
+    <h2 class="omher__t" id="omher-t"><b>omher</b> · the desktop app</h2>
+    <p class="omher__d" data-i18n="omher.desc">Your Hermes bots, coding sessions and dag‑ulw runs — one window.</p>
+  </div>
+  <div class="omher__act">
+  <div class="omher__get" data-dl>
+    <a class="osbtn osbtn--main" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="mac-arm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c.02 2.4 2.1 3.2 2.13 3.21-.02.06-.33 1.14-1.1 2.26-.66.97-1.35 1.93-2.43 1.95-1.06.02-1.4-.63-2.62-.63s-1.6.61-2.6.65c-1.04.04-1.84-1.05-2.5-2.01-1.36-1.97-2.4-5.57-1-8 .69-1.21 1.93-1.97 3.28-1.99 1.02-.02 1.99.69 2.62.69.62 0 1.8-.85 3.04-.73.52.02 1.98.21 2.92 1.58-.08.05-1.74 1.02-1.74 3.02M14.37 4.68c.56-.68.93-1.62.83-2.56-.8.03-1.77.53-2.35 1.21-.51.6-.97 1.56-.85 2.48.9.07 1.81-.46 2.37-1.13"/></svg>macOS (Apple silicon)</a>
+    <a class="osbtn" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="mac-x64"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c.02 2.4 2.1 3.2 2.13 3.21-.02.06-.33 1.14-1.1 2.26-.66.97-1.35 1.93-2.43 1.95-1.06.02-1.4-.63-2.62-.63s-1.6.61-2.6.65c-1.04.04-1.84-1.05-2.5-2.01-1.36-1.97-2.4-5.57-1-8 .69-1.21 1.93-1.97 3.28-1.99 1.02-.02 1.99.69 2.62.69.62 0 1.8-.85 3.04-.73.52.02 1.98.21 2.92 1.58-.08.05-1.74 1.02-1.74 3.02M14.37 4.68c.56-.68.93-1.62.83-2.56-.8.03-1.77.53-2.35 1.21-.51.6-.97 1.56-.85 2.48.9.07 1.81-.46 2.37-1.13"/></svg>macOS (Intel)</a>
+    <a class="osbtn" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-k="win-exe"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.1 10.4 4v7.1H3zm0 13.8 7.4 1.1v-7H3zm8.3 1.2L21 21.5V13H11.3zm0-16.2V11.1H21V2.5z"/></svg>Windows</a>
+  </div>
+  <div class="omher__cmd" data-omher-cmd><div><span class="p">$</span><code>curl -fsSL https://omher.app/omher | sh</code></div><button class="copy" data-copy-text="curl -fsSL https://omher.app/omher | sh">Copy</button></div>
+  </div>
+</section>
+
 <section class="hero hero--center" aria-labelledby="h1" data-hero>
   <canvas id="planet" aria-hidden="true"></canvas>
   <div class="flyer" data-flyer aria-hidden="true">
@@ -566,7 +675,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
       <div class="kami" data-kami><img src="assets/omh-logo-pinklight.png" alt="Oh My Hermes logo: Kami"></div>
       <div>
         <canvas id="wordmark" role="img" aria-label="Oh My Hermes"><img src="assets/oh-my-hermes-wordmark.png" alt="Oh My Hermes" width="2412" height="288"></canvas>
-        <div class="lockup__sub caps"><span data-i18n="hero.badge">For Hermes Agent · v4.0.6</span></div>
+        <div class="lockup__sub caps"><span data-i18n="hero.badge">For Hermes Agent · v4.0.7</span></div>
       </div>
     </div>
     <h1 id="h1" data-tw='[["The coding harness with ",""],["Hermes Agent","spec"],[" wired into IDE.",""]]'>The coding harness with <span class="spec">Hermes Agent</span> wired into IDE.</h1>
@@ -682,7 +791,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
                 </tr>
               </thead>
               <tbody>
-                <tr><th scope="row"><span>ultrabrain</span></th><td data-i18n="chain.ultrabrain">Deepest reasoning</td><td class="chain-order"><code>GPT-6 Astra</code></td><td class="chain-effort"><span class="chain-badge">xhigh</span></td></tr>
+                <tr><th scope="row"><span>ultrabrain</span></th><td data-i18n="chain.ultrabrain">Deepest reasoning</td><td class="chain-order"><code>Claude Fable 5.1</code><span class="chain-arrow" aria-hidden="true">→</span><code>GPT-6 Astra</code><span class="chain-arrow" aria-hidden="true">→</span><code>Claude Opus 5.5</code></td><td class="chain-effort"><span class="chain-badge">xhigh</span></td></tr>
                 <tr><th scope="row"><span>deep</span></th><td data-i18n="chain.deep">Strong default tier</td><td class="chain-order"><code>Claude Opus 5.5</code><span class="chain-arrow" aria-hidden="true">→</span><code>GPT-6.1 Sol</code><span class="chain-arrow" aria-hidden="true">→</span><code>Kimi K3.1 Pro</code></td><td class="chain-effort"><span class="chain-badge">high</span></td></tr>
                 <tr><th scope="row"><span>architect</span></th><td data-i18n="chain.architect">Architecture and system design</td><td class="chain-order"><code>Claude Opus 5.5</code><span class="chain-arrow" aria-hidden="true">→</span><code>GPT-6 Astra</code><span class="chain-arrow" aria-hidden="true">→</span><code>Claude Fable 5.1</code><span class="chain-arrow" aria-hidden="true">→</span><code>Kimi K3.1 Pro</code></td><td class="chain-effort"><span class="chain-badge">xhigh</span></td></tr>
                 <tr><th scope="row"><span>unspecified-high</span></th><td data-i18n="chain.unspecified-high">Default working model</td><td class="chain-order"><code>GPT-6.1 Sol</code><span class="chain-arrow" aria-hidden="true">→</span><code>Claude Opus 5.5</code><span class="chain-arrow" aria-hidden="true">→</span><code>Kimi K3.1 Pro</code></td><td class="chain-effort"><span class="chain-badge">medium</span></td></tr>
@@ -1300,7 +1409,7 @@ for (let i=0;i<6;i++) tick();
 if (!RM) setInterval(tick, 1400);
 
 /* ModelSwapLine: erase, retype the head model per category, glow while typing */
-const CH = [['deep','Claude Opus 5.5','high'],['ultrabrain','GPT-6 Astra','xhigh'],['quick','GLM 5.3 Flash','low'],['visual-engineering','Claude Opus 5.5','high'],['x-search','Grok 4.7','high'],['swarm','DeepSeek V4.1 Flash','low'],['review','GPT-6.1 Sol','xhigh']];
+const CH = [['deep','Claude Opus 5.5','high'],['ultrabrain','Claude Fable 5.1','xhigh'],['quick','GLM 5.3 Flash','low'],['visual-engineering','Claude Opus 5.5','high'],['x-search','Grok 4.7','high'],['swarm','DeepSeek V4.1 Flash','low'],['review','GPT-6.1 Sol','xhigh']];
 const swEl = $('[data-swap]'), swCat = $('[data-swcat]'), swEff = $('[data-sweff]'); let ci = 0;
 async function swapLoop(){
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -1639,6 +1748,42 @@ if (!RM) setInterval(() => { skp.textContent = SKILLS[(Math.random()*SKILLS.leng
 $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const r = a.getBoundingClientRect(); a.style.setProperty('--mx', (e.clientX-r.left)+'px'); a.style.setProperty('--my', (e.clientY-r.top)+'px'); }));
 })();
 </script>
+<script>
+/* omher at the top. Downloads: newest omher-v* release from the GitHub API; the button for this OS goes first and
+   becomes the primary one (Apple silicon vs Intel where the browser says); the releases page when the API fails.
+   The beam, the shot's tilt and glare, and the rail visibility live in beam.js. */
+(() => {
+  const REL = 'https://github.com/rlaope/oh-my-hermes/releases?q=omher';
+  const row = document.querySelector('[data-dl]'); if (!row) return;
+  const btn = k => row.querySelector('[data-dl-k="' + k + '"]');
+  const uad = navigator.userAgentData, ua = navigator.userAgent, plat = (uad && uad.platform) || navigator.platform || '';
+  let os = /win/i.test(plat) || /Windows/.test(ua) ? 'win' : /mac/i.test(plat) || /Macintosh/.test(ua) ? 'mac' : 'other';
+  if (/iPhone|iPad|Android|Mobi/.test(ua) || (uad && uad.mobile) || (os === 'mac' && navigator.maxTouchPoints > 1)) os = 'other';
+  function order(first){
+    ['mac-arm','mac-x64','win-exe'].forEach(k => btn(k).classList.remove('osbtn--main'));
+    if (!first) return;
+    row.prepend(btn(first)); btn(first).classList.add('osbtn--main');
+  }
+  order(os === 'win' ? 'win-exe' : os === 'mac' ? 'mac-arm' : null);
+  if (os === 'other') btn('mac-arm').classList.add('osbtn--main');
+  const cmd = document.querySelector('[data-omher-cmd]');
+  if (cmd && os === 'win'){ const ps = 'irm https://omher.app/omher.ps1 | iex'; cmd.querySelector('code').textContent = ps; cmd.querySelector('.copy').dataset.copyText = ps; cmd.querySelector('.p').textContent = 'PS>'; }
+  if (os === 'mac' && uad && uad.getHighEntropyValues) uad.getHighEntropyValues(['architecture']).then(h => { if (h.architecture === 'x86') order('mac-x64'); }).catch(() => {});
+  const key = t => { const m = /^omher-v(\d+)\.(\d+)\.(\d+)(-.+)?$/.exec(t) || []; return [+m[1] || 0, +m[2] || 0, +m[3] || 0, m[4] ? 0 : 1]; };
+  const newer = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+  fetch('https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=100', {headers:{Accept:'application/vnd.github+json'}})
+    .then(r => r.ok ? r.json() : null)
+    .then(list => {
+      const rel = (Array.isArray(list) ? list : []).filter(r => !r.draft && /^omher-v\d/.test(r.tag_name || '')).reduce((m, r) => !m || newer(r.tag_name, m.tag_name) ? r : m, null);
+      if (!rel) return;
+      const v = rel.tag_name.slice(7), assets = rel.assets || [];
+      const file = {'mac-arm':`omher-${v}-macos-arm64.dmg`,'mac-x64':`omher-${v}-macos-x64.dmg`,'win-exe':`omher-${v}-windows-x64-setup.exe`};
+      for (const k in file){ const a = assets.find(x => x.name === file[k]); btn(k).href = a ? a.browser_download_url : (rel.html_url || REL); }
+      row.dataset.version = v;
+    }).catch(() => {});
+})();
+</script>
+<script src="beam.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>

@@ -1,0 +1,444 @@
+/* SESSIONS: sidebar section, + menu, terminal view. */
+
+/* BOTS and SESSIONS share the sidebar height half and half; each list scrolls on its own. */
+.side-sec {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.side-sec + .side-sec {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.side-sec > .bot-list,
+.side-sec > .ss-list {
+  flex: 1 1 auto;
+}
+.side-sh-row {
+  position: relative; /* the + menu spans the section's width under this row */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 3px; /* the + sits on the "Add a bot" + column above */
+  height: 24px;
+  padding-bottom: 4px;
+}
+.ss-add {
+  display: flex;
+}
+.ss-plus {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.ss-plus:hover,
+.ss-plus[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ss-pop {
+  left: calc(-1 * var(--side-x) + 8px);
+  right: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.ss-h {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 4px 6px 4px;
+}
+.ss-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px;
+}
+.ss-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.ss-item:hover:not(:disabled) {
+  background: var(--raise2);
+}
+.ss-item:disabled {
+  color: var(--muted);
+}
+.ss-item:disabled .ss-ic {
+  /* the official mark stays as is; "Not installed" in the text says why the row is off */
+  opacity: 1;
+}
+.ss-ic {
+  width: 18px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.ss-n {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-cmd {
+  font-size: 10.5px;
+  color: var(--muted);
+  background: none;
+  padding: 0;
+}
+.ss-missing {
+  font-size: 10.5px;
+  color: var(--muted);
+  flex: none;
+}
+.ss-path {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-family: var(--mono);
+  max-width: 96px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+}
+.ss-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 0 4px;
+}
+
+/* agent marks */
+.ag-mark {
+  flex: none;
+  display: block;
+}
+.ag-codex {
+  color: var(--ink);
+}
+.ag-img {
+  border-radius: 4px;
+}
+.ag-pi {
+  color: var(--ink);
+  padding: 1px;
+}
+
+/* rows */
+/* empty section: one row-sized button and one muted line of installed agents (BOTS and SESSIONS stay balanced) */
+.ss-none {
+  flex: none;
+  padding-top: 2px;
+}
+.ss-start-w {
+  position: relative; /* the + menu opens right under the button, at the section's width */
+}
+/* a centred, raised button: the search field and the selected row are flat gray fills, so it uses
+   neither look (a fill one step lighter than the sidebar, and an edge) */
+.ss-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--side-x);
+  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--side)); /* 3:1 on the sidebar, both themes */
+  border-radius: var(--r);
+  background: var(--pop);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: background 0.12s;
+}
+/* the same + as the header's, in the same --muted */
+.ss-start > svg {
+  flex: none;
+  color: var(--muted);
+}
+.ss-start:hover > svg,
+.ss-start[aria-expanded="true"] > svg {
+  color: var(--ink);
+}
+.ss-start:hover,
+.ss-start[aria-expanded="true"] {
+  background: var(--raise2);
+}
+/* the installed agents' official marks (up to 4) with their names */
+.ss-start-ag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 17px;
+  margin-top: 8px;
+  padding: 0 var(--side-x);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ss-start-a {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.ss-start-a .ag-mark,
+.ss-start-dot {
+  flex: none;
+}
+.ss-start-dot {
+  margin: 0 2px 0 6px; /* even space either side once the mark's own gap is added */
+  font-weight: 700;
+}
+.ss-start-n {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-row.bot {
+  padding: 0;
+  gap: 0;
+}
+.ss-open {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 7px var(--side-x);
+  text-align: left;
+}
+.ss-av,
+.ss-head-mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+/* SESSIONS owns its live dot: the bot row's dot styles may change (the answer ring replaced them) */
+.ss-row .live-dot {
+  position: absolute;
+  left: 26px;
+  top: 26px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--spin);
+  border: 2px solid var(--side);
+  animation: pulse 1.4s infinite;
+}
+.ss-row.active .live-dot {
+  border-color: var(--active-row);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-row .live-dot {
+    animation: none;
+  }
+}
+.ss-x {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  display: none;
+  place-items: center;
+  color: var(--quiet);
+  background: var(--active-row);
+}
+.ss-row:hover .ss-x,
+.ss-x:focus-visible {
+  display: grid;
+}
+.ss-x:hover {
+  color: var(--ink);
+  background: var(--seg-on);
+}
+.ss-row:hover .bot-t {
+  visibility: hidden;
+}
+.ss-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding: 8px var(--side-x);
+  border-radius: var(--r);
+  background: var(--active-row);
+  flex: none;
+}
+/* the question gets its own line, so a long agent name is never cut off */
+.ss-q {
+  flex: 1 0 100%;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ss-btn {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  background: var(--raise2);
+  color: var(--ink);
+  font-size: 11.5px;
+  flex: none;
+}
+.ss-btn:hover {
+  background: var(--seg-on);
+}
+
+/* main column */
+.ss-head-mark {
+  width: 26px;
+  height: 26px;
+}
+.ss-head-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ss-head-st {
+  margin-left: 4px;
+  font-size: 11.5px;
+  color: var(--quiet);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ss-head-st.running,
+.ss-head-st.starting {
+  color: var(--muted);
+}
+/* the same live dot as the sidebar rows */
+.ss-head-st.running::before,
+.ss-head-st.starting::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--spin);
+  animation: pulse 1.4s infinite;
+}
+.ss-head-st.failed {
+  color: var(--danger);
+}
+.term-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 14px 6px 8px 16px;
+  background: var(--bg);
+}
+.term-box {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.term-host {
+  position: absolute;
+  inset: 0;
+}
+.term-host .xterm {
+  height: 100%;
+}
+.term-host .xterm .xterm-viewport {
+  /* xterm.css paints it #000; the theme background (on the scrollable element) shows through instead */
+  background-color: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+/* chat sessions */
+.ss-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ss-toggle {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--body);
+  background: var(--raise);
+}
+.ss-toggle:hover,
+.ss-toggle.on {
+  color: var(--ink);
+  background: var(--raise2);
+}
+.ss-head-st.idle::before {
+  animation: none;
+  background: var(--ok);
+}
+.ss-ended {
+  width: min(var(--thread-w), calc(100% - 56px));
+  margin: 0 auto 8px;
+  font-size: 11.5px;
+  color: var(--quiet);
+  text-align: center;
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* an approval or question waits: amber, the app's "needs attention" colour (never the brand gradient) */
+:root {
+  --needs: #eaaf55;
+}
+[data-theme="light"] {
+  --needs: #9a6200;
+}
+.bot-p.ss-needs {
+  color: var(--needs-text, var(--needs));
+  font-weight: 600;
+}
+/* typing dots end the agent name like they end a bot's live step */
+.ss-row .bot-p.live {
+  flex: 0 1 auto;
+}
+.ss-head-st.needs {
+  color: var(--needs);
+}
+.ss-head-st.needs::before {
+  background: var(--needs);
+}
+/* a session's face outside its row (Needs-you list, typing bubble): the agent mark in the row's box */
+.ss-face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}

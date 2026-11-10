@@ -3,6 +3,7 @@ import type { Chat } from "../../state/store";
 import { useStore } from "../../state/store";
 import { slots } from "../../features";
 import { Avatar, Pill } from "../../ui";
+import { isMac } from "../../app/shortcuts";
 
 const REASONING: Record<string, string> = { none: "Off", low: "Low", medium: "Med", high: "High", xhigh: "Max" };
 export const reasoningLabel = (r: string) => REASONING[r] ?? (r ? r[0].toUpperCase() + r.slice(1) : "");
@@ -21,7 +22,7 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
         className="who-btn"
         onClick={() => s.togglePanel()}
         aria-expanded={s.ui.panelOpen}
-        title="Details"
+        title={`Details (${isMac() ? "⌘." : "Ctrl+."})`}
         data-testid="who"
       >
         <Avatar bot={bot.name} size={26} />
@@ -33,7 +34,9 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
           <Picker bot={bot} chat={chat} />
         ) : (
           <Pill as="span" className="model-pill">
-            <span data-testid="model-label">{model}</span>
+            <span data-testid="model-label" title={model}>
+              {model}
+            </span>
             {reasoning && (
               <>
                 <span className="sep" />

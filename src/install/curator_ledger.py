@@ -31,6 +31,7 @@ from pathlib import Path
 import stat
 
 from ..hashutil import sha256_file
+from ..skin_pack import TUI_PROFILE
 from .manifest import same_directory
 from .skill_registration import hermes_profile_dirs
 
@@ -84,7 +85,7 @@ def _curator_ledger_paths_reporting(hermes_home: Path, unread: list[str]) -> lis
             unread.append(f"{root}: {error}")
         return paths
     for entry in entries:
-        if entry.name.startswith("."):
+        if entry.name.startswith(".") or entry.name == TUI_PROFILE:  # the TUI's runtime profile links the root's skills
             continue
         try:
             is_directory = stat.S_ISDIR(entry.stat().st_mode)

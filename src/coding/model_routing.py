@@ -367,17 +367,13 @@ def category_from_text(message: str) -> str:
 # category. Review deliberately reuses the high-capability categories --
 # reviewer-vs-author separation is advisory handoff text, not a catalog property.
 CATEGORY_ROLE_SOURCES: Final[dict[str, tuple[str, ...]]] = {
-    # `deep` first, not `ultrabrain`: the composer runs on every split, so its
-    # default is the strong tier rather than the deepest one. `ultrabrain` is
-    # reserved for work that DECLARES it needs that depth -- `research:deep`
-    # and scale `large` -- which is what keeps a declared dial meaningful.
-    # `deep` first, not `ultrabrain`: the composer runs on every split, so its
-    # default is the strong tier rather than the deepest one. `ultrabrain` is
-    # reserved for work that DECLARES it needs that depth -- `research:deep`
-    # and scale `large` -- which is what keeps a declared dial meaningful.
+    # `ultrabrain` first (owner decision, 2026-11-09): brain is planning and
+    # decomposition, the work whose mistakes every later unit inherits, so it
+    # heads on the deepest tier. `deep` follows as the next candidate. Scale
+    # `large` and `research:deep` keep their own entries for the other roles.
     # `unspecified-low` closes the chain so the fallback names a DIFFERENT
     # model rather than repeating the head at a weaker effort.
-    "brain": ("deep", "unspecified-low"),
+    "brain": ("ultrabrain", "deep", "unspecified-low"),
     # `unspecified-high` is the runtime config's name for "the default working model", not for
     # "the strongest one" -- that is `ultrabrain`. So standard implementation
     # heads on it, `small` drops to quick/unspecified-low, and `large` escalates
@@ -1396,6 +1392,30 @@ def _resolve_hermes_recommendation_route(
         overrides=recommendation_overrides,
         **selector,
     )
+    # A derived `ultrabrain` (brain, research depth deep, scale large) with no
+    # confirmed-active generative candidate steps down to `deep`, the next
+    # depth tier, before the shared last resort, and never into a cheaper
+    # tier. When `deep` has none either, the `ultrabrain` resolution stands
+    # unchanged. A requested category is never widened.
+    if not requested_category and category == "ultrabrain" and not _has_generative_candidate(recommendation, active):
+        deeper = resolve_model_recommendation(
+            owner="hermes",
+            active_models=active,
+            overrides=recommendation_overrides,
+            category="deep",
+        )
+        if _has_generative_candidate(deeper, active):
+            attempted.append(
+                {
+                    "stage": "recommendation_category",
+                    "outcome": "no_active_candidate",
+                    "reason": (
+                        "no confirmed-active generative candidate in recommendation category `ultrabrain`; "
+                        "`deep` selected before the shared last resort"
+                    ),
+                }
+            )
+            recommendation, category = deeper, "deep"
     chain = (
         _hermes_recommendation_chain(recommendation, active_models=active)
         if recommendation["status"] == "resolved"
@@ -1559,6 +1579,21 @@ def _recommendation_category(role: str, depth: str, scale: str) -> str:
         return "unspecified-low"
     sources = CATEGORY_ROLE_SOURCES.get(role, ("unspecified-high",))
     return sources[0]
+
+
+def _has_generative_candidate(
+    resolution: Mapping[str, object],
+    active_models: tuple[str | Mapping[str, object], ...],
+) -> bool:
+    """Whether a category resolved to a confirmed-active model that can write code.
+
+    The class rule stays in `_generative_chain`; its skip records go to a
+    scratch list because this only decides which category the lane shapes.
+    """
+    if resolution.get("source") != "recommendation_chain":
+        return False
+    chain = _hermes_recommendation_chain(resolution, active_models=active_models)
+    return bool(_generative_chain(tuple(chain), []))
 
 
 def _recommendation_binding(resolution: Mapping[str, object]) -> str:

@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
-import { useStore } from "../state/store";
-import { Avatar, GridIcon } from "../ui";
+import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
+import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
 import { Appearance } from "./Appearance";
@@ -97,11 +97,24 @@ function NavItem({
   );
 }
 
-function Row({ title, hint, children }: { title: string; hint?: string; children?: React.ReactNode }) {
+function Row({
+  title,
+  hint,
+  icon,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="st-row">
       <div className="st-k">
-        <b>{title}</b>
+        <b className={icon ? "st-kt" : undefined}>
+          {icon}
+          {title}
+        </b>
         {hint && <span>{hint}</span>}
       </div>
       {children !== undefined && <div className="st-v">{children}</div>}
@@ -203,8 +216,10 @@ function BotPage({ bot }: { bot: Bot }) {
         <Row title="Ask before" hint="Approvals follow this profile’s Hermes settings">
           <Value>Set in Hermes</Value>
         </Row>
-        <Row title="Use this Mac" hint="Click and type in your apps">
-          <Value>Not in this version</Value>
+        <Row title="Use this computer" hint="Click and type in your apps">
+          <Value>
+            <span className="st-soon">Soon</span>
+          </Value>
         </Row>
       </div>
     </div>
@@ -278,15 +293,49 @@ function BotCard({ bot }: { bot: Bot }) {
       </span>
       {bot.description && <span className="bc-desc">{bot.description}</span>}
       <span className="bc-foot">
-        <span className="bc-model">{bot.model || "—"}</span>
+        <span className="bc-model">
+          <ModelIcon model={bot.model} provider={bot.provider} size={11} />
+          {bot.model || "—"}
+        </span>
         {places.map(([src, n]) => (
           <span key={src} className="bc-place" title={`${n} ${placeName(src)} sessions`}>
-            <i className={`src-sq src-${src}`} />
+            <SourceIcon source={src} size={11} />
             {n}
           </span>
         ))}
       </span>
     </button>
+  );
+}
+
+const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
+const SHORTCUTS: [string, string][] = [
+  [`${MOD}1 … ${MOD}9`, "Open bot 1 to 9"],
+  [`${MOD}K`, "Search bots"],
+  [`${MOD}.`, "Show or hide Details"],
+  [`${MOD},`, "Settings"],
+  [`${MOD}J`, "Next approval or question"],
+  ["1 · 2 · 3", "Deny · Allow once · Allow for session (focused card)"],
+  ["Esc", "Stop the running answer"],
+];
+
+function NotifySeg() {
+  const [on, setOn] = useState(notifyEnabled());
+  return (
+    <Seg
+      small
+      label="Notify me"
+      value={on ? "on" : "off"}
+      options={[
+        { value: "on", label: "On" },
+        { value: "off", label: "Off" },
+      ]}
+      onChange={(v) => {
+        setNotifyEnabled(v === "on");
+        setOn(v === "on");
+      }}
+      testId="notify-seg"
+    />
   );
 }
 
@@ -297,6 +346,22 @@ function GeneralPage() {
     <div className="st-page">
       <div className="st-gh st-gh0">Appearance</div>
       <Appearance />
+      <div className="st-gh">Notifications</div>
+      <div className="st-grp">
+        <Row title="Notify me" hint="When a bot answers, needs an approval or asks you something while omher is in the background">
+          <NotifySeg />
+        </Row>
+      </div>
+      <div className="st-gh">Keyboard</div>
+      <div className="st-grp" data-testid="shortcuts">
+        {SHORTCUTS.map(([keys, what]) => (
+          <Row key={keys} title={what}>
+            <Value>
+              <kbd className="st-kbd">{keys}</kbd>
+            </Value>
+          </Row>
+        ))}
+      </div>
       <div className="st-gh">Hermes</div>
       <div className="st-grp">
         <Row title="Hermes home">
@@ -334,7 +399,12 @@ function ProvidersPage() {
           <Row title={bot?.status === "offline" ? "Not connected" : "Loading…"} />
         ) : (
           opts.providers.map((p) => (
-            <Row key={p.slug} title={p.name} hint={p.models.join(" · ") || "No models"}>
+            <Row
+              key={p.slug}
+              title={p.name}
+              icon={<ModelIcon model={p.models[0]} provider={`${p.slug} ${p.name}`} size={14} />}
+              hint={p.models.join(" · ") || "No models"}
+            >
               <Value mono>
                 {p.slug}
                 {p.slug === opts.current.provider && <small className="st-tag">in use</small>}
@@ -352,8 +422,10 @@ function ComputerPage() {
     <div className="st-page">
       <div className="st-gh st-gh0">Computer</div>
       <div className="st-grp">
-        <Row title="Use this Mac" hint="Let a bot click and type in your apps">
-          <Value>Not in this version</Value>
+        <Row title="Use this computer" hint="Let a bot click and type in your apps">
+          <Value>
+            <span className="st-soon">Soon</span>
+          </Value>
         </Row>
       </div>
     </div>

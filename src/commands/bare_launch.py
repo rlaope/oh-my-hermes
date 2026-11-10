@@ -458,7 +458,7 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
 def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     """The TUI's own Hermes runtime home when this launch opens there, built or refreshed; None for the shared gateway.
 
-    `own` is read from the OMH home's saved choice (`omh theme runtime own`).
+    `own` is the default; `omh theme runtime shared` saves the other choice.
     An explicit `--hermes-home` or `--profile` names a home of its own and
     stays on the shared gateway. `--resume <id>` opens where the session is,
     whatever the choice: a session only the shared store knows opens on the
@@ -473,11 +473,11 @@ def _own_runtime_home(args: argparse.Namespace, paths) -> Path | None:
     """
     if os.name == "nt" or getattr(args, "hermes_home", None) or getattr(args, "tui_profile", None):
         return None
-    from ..skin_pack import RUNTIME_OWN, read_runtime_choice
+    from ..skin_pack import RUNTIME_OWN, effective_runtime
     from ..tui.own_runtime import build_tui_home, tui_home_path
 
-    own = read_runtime_choice(paths.omh_home) == RUNTIME_OWN
-    home = tui_home_path(paths.omh_home)
+    own = effective_runtime(paths.omh_home) == RUNTIME_OWN
+    home = tui_home_path(Path(paths.hermes_home))
     resume = getattr(args, "tui_resume", None)
     if resume and (home / "state.db").is_file():
         from ..maintenance.hermes_resume import session_known

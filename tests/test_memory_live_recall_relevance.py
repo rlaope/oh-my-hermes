@@ -380,6 +380,9 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         saved = json.loads(self.live.handle_tool_call(
             "omh_remember", {"summary": summary, "record_type": "fact", "subject": "ticket-tool-db-choice"}))
         self.assertEqual(saved["status"], "remembered", saved)
+        # The earlier conversation ends as Hermes ends one; without the close the
+        # session digest reports the save whenever the clock crosses a second.
+        self.live.shutdown()
         self.live = provider(self.root, session_id="session-later")
         for turn, message in enumerate((
             "이 폴더의 calc.py에 버그가 있는지 리뷰해 주세요.",
@@ -418,6 +421,7 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         saved = json.loads(self.live.handle_tool_call(
             "omh_remember", {"summary": "Deploys run nightly from the release branch", "record_type": "decision", "subject": "deploy-schedule"}))
         self.assertEqual(saved["status"], "remembered", saved)
+        self.live.shutdown()
         self.live = provider(self.root, session_id="session-later")
         question = "What did we decide last time?"
         self.assertEqual(hermes_turn(self.live, 1, question), "", "the turn's words match no record")

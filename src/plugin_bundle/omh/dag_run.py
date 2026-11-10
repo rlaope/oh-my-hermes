@@ -112,6 +112,10 @@ MAX_LOST_REOFFERS_LIMIT: Final = 10
 BIND_SLACK_SECONDS: Final = 2.0
 CATEGORIES: Final = tuple(HERMES_MIXTURE_CATEGORY_CHAINS)
 DEEP_CATEGORIES: Final = frozenset({"deep", "deep-work"})
+# The categories that carry the one judgement deciding a run (a design decision, a root cause, a contested
+# trade-off); a graph this wide with none of them is told to give that node `ultrabrain` (`no_judgement_node`).
+JUDGEMENT_CATEGORIES: Final = frozenset({"ultrabrain", "architect", "forensics"})
+JUDGEMENT_GRAPH_NODES: Final = 4
 OUTCOMES: Final = ("accepted", "failed", "blocked", "parked")
 # The ``origin`` kinds of a node added after define: ``repair:<root>`` and ``extend:<round>``.
 ADDED_ORIGIN_KINDS: Final = ("repair", "extend")
@@ -124,7 +128,8 @@ CHILD_FAILURE_STOPS: Final = frozenset({"failed", "error", "timeout", "interrupt
 # What every view says for a node accepted while its handoff could not be read where the child wrote it.
 HANDOFF_NOT_CHECKED: Final = "handoff not checked"
 EXTERNAL_OWNERS: Final = ("claude-code", "codex")
-NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner"})
+NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
+                                "local"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
 # producer; baseline, verify and review nodes stay native whoever builds, and only a ``verify`` node verifies the goal.
 ROLES: Final = ("build", "baseline", "verify", "review")
@@ -348,7 +353,8 @@ def valid_id(value: object, reason: str, say: str) -> str:
 def _validated_node(raw: object) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or set(raw) - NODE_FIELDS:
         raise DagRefusal("invalid_node",
-                         "Each node takes only id, label, category, prompt, depends_on, write_scope, role and owner.")
+                         "Each node takes only id, label, category, prompt, depends_on, write_scope, role, owner and "
+                         "local.")
     node_id = valid_id(raw.get("id"), "invalid_node_id", "Each node needs a short lowercase id (a-z, 0-9, -).")
     label = _plain(raw.get("label"), MAX_LABEL_CHARS, "invalid_label", f"Node {node_id} needs a short label.")
     # Either lane's reader also takes a marker that opens a goal (one handed out before an update), so a label holding
@@ -401,6 +407,17 @@ def _validated_node(raw: object) -> dict[str, Any]:
             raise DagRefusal("invalid_owner",
                              f"Node {node_id}: owner is one of {', '.join(EXTERNAL_OWNERS)} and only a coding node may name it.")
         validated["owner"] = raw["owner"]
+    if "local" in raw:
+        # A node whose material must not leave the machine: only a local model_map option runs it (`local_options`).
+        # An external coding CLI calls its own cloud model, so a local node never names one. Stored only when true,
+        # so a node sent with `local: false` keeps the digest it had before the field existed.
+        if not isinstance(raw["local"], bool):
+            raise DagRefusal("invalid_local", f"Node {node_id}: local is true or false.")
+        if raw["local"] and "owner" in validated:
+            raise DagRefusal("invalid_local",
+                             f"Node {node_id}: a local node runs only on a local model, so it cannot name an owner.")
+        if raw["local"]:
+            validated["local"] = True
     return validated
 
 
@@ -532,8 +549,12 @@ def _mentions_full_suite(prompt: str) -> bool:
     return False
 
 
-def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
-    """Advisory findings: they never reject a run, and the run records them."""
+def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[str]:
+    """Advisory findings: they never reject a run, and the run records them.
+
+    `no_judgement_node` is define-time only (``defining``): a repair or extend
+    round cannot change the category of a node already settled.
+    """
     findings: list[str] = []
     for node in nodes:
         missing = [marker for marker in PROMPT_MARKERS if not _MARKER_PATTERNS[marker].search(str(node["prompt"]))]
@@ -566,6 +587,8 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
         findings.append("all_nodes_deep")
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
+    if defining and len(nodes) >= JUDGEMENT_GRAPH_NODES and not any(node["category"] in JUDGEMENT_CATEGORIES for node in nodes):
+        findings.append("no_judgement_node")
     # Only a declared review: a guessed one (a role-less or stored node) is not asked to move. Verify nodes are left
     # alone: they judge the run goal, which can need a high category.
     findings += [f"review_not_review_category:{node['id']}" for node in nodes
@@ -1273,8 +1296,35 @@ def task_for(
     return {"goal": f"{node['label']} [dag:{run}/{node['id']}]", "context": "\n".join(lines)}
 
 
+def retry_count(node: Mapping[str, Any]) -> int:
+    """How many of the node's attempts ended in a provider-error retry: the index of its next model_map option."""
+    return sum(1 for item in node.get("attempts") or [] if item.get("outcome") == "retry")
+
+
+def local_blocked(record: Mapping[str, Any], offered: Iterable[str], backend: Mapping[str, Any] | None) -> list[str]:
+    """Offered nodes marked ``local`` that no local model can take now; they are held, never sent to another model.
+
+    A local node runs only on a local option of Hermes' `model_map` backend
+    (`category_local_options`), one per provider-error retry. Under any other
+    backend, an unreadable one, or with every local option tried, OMH cannot
+    tell where a child would run, so the node waits for the person.
+    """
+    nodes = {str(node["id"]): node for node in record["nodes"]}
+    local_options = (backend or {}).get("local_options") or {}
+    readable = str((backend or {}).get("backend") or "") == "model_map" and (backend or {}).get("status") == "read"
+    blocked = []
+    for node_id in offered:
+        node = nodes[node_id]
+        if not node.get("local"):
+            continue
+        names = list(local_options.get(str(node["category"])) or []) if readable else []
+        if retry_count(node) >= len(names):
+            blocked.append(node_id)
+    return blocked
+
+
 def _call_route(
-    category: str, fallback: bool, retries: int, backend: Mapping[str, Any] | None
+    category: str, fallback: bool, retries: int, backend: Mapping[str, Any] | None, local: bool = False
 ) -> tuple[dict[str, Any], str]:
     """The call's ``route`` and the model_map option its tasks carry (``""`` for none).
 
@@ -1282,16 +1332,20 @@ def _call_route(
     route with `omh_delegate_route` as before. Under `model_map` the option
     goes on each task and no tool runs: a provider-error retry takes the
     category's next option. Any other backend gets nothing from OMH -- it
-    never picks a `profile_routes` profile.
+    never picks a `profile_routes` profile. A ``local`` call takes the
+    category's local options only; `local_blocked` keeps a local node that
+    has none out of every call.
     """
     name = str((backend or {}).get("backend") or "default")
     if name == "default":
         return {"tool": "omh_delegate_route", "action": "fallback" if fallback else "set", "category": category}, ""
     route: dict[str, Any] = {"backend": name, "category": category}
+    if local:
+        route["local"] = True
     if name != "model_map" or (backend or {}).get("status") != "read":
         route["status"] = "not_applied"
         return route, ""
-    names = list(((backend or {}).get("options") or {}).get(category) or [])
+    names = list(((backend or {}).get("local_options" if local else "options") or {}).get(category) or [])
     if retries < len(names):
         route.update(status="option_selected", option=names[retries])
         return route, names[retries]
@@ -1316,24 +1370,26 @@ def calls_for(
     `_call_route`.
     """
     nodes = {str(node["id"]): node for node in record["nodes"]}
-    groups: dict[tuple[str, bool, int], list[str]] = {}
     skipped = set(skip)
     # Under model_map the option is the retry count's: nodes on different retries go in different calls.
     by_option = str((backend or {}).get("backend") or "") == "model_map"
+    # A local node no local model can take is never handed out, whatever the caller skips.
+    skipped |= set(local_blocked(record, offerable(record, derived, now, limits=limits), backend))
+    groups: dict[tuple[str, bool, int, bool], list[str]] = {}
     for node_id in offerable(record, derived, now, limits=limits):
         if node_id in skipped:
             continue
         node = nodes[node_id]
         attempts = node.get("attempts") or []
         fallback = bool(attempts) and attempts[-1].get("outcome") == "retry"
-        retries = sum(1 for item in attempts if item.get("outcome") == "retry") if by_option else 0
-        groups.setdefault((str(node["category"]), fallback, retries), []).append(node_id)
+        retries = retry_count(node) if by_option else 0
+        groups.setdefault((str(node["category"]), fallback, retries, bool(node.get("local"))), []).append(node_id)
     calls: list[dict[str, Any]] = []
     held: list[str] = []
     size = max(1, per_call)
     left = None if task_budget is None else max(0, task_budget)
-    for (category, fallback, retries), members in groups.items():
-        route, option = _call_route(category, fallback, retries, backend)
+    for (category, fallback, retries, local), members in groups.items():
+        route, option = _call_route(category, fallback, retries, backend, local)
         for start in range(0, len(members), size):
             chunk = members[start:start + size]
             if left is not None:
@@ -1512,7 +1568,7 @@ def repair(
     record["nodes"].extend(added)
     groups.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"])
+    record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 
@@ -1583,7 +1639,7 @@ def extend(
     record["nodes"].extend(added)
     rounds.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"])
+    record["lint"] = lint(record["nodes"], defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 

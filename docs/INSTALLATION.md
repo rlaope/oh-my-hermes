@@ -283,6 +283,40 @@ environment the wheel cannot be installed into. With nothing suitable found and
 versions it did find. `OMH_PYTHON=/path/to/python3.12` overrides the search
 entirely.
 
+### Hermes, OMH and the omher desktop app in one command (beta)
+
+```sh
+curl -fsSL https://omher.app/omher | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta
+```
+
+```powershell
+irm https://omher.app/omher.ps1 | iex
+# same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
+```
+
+The `omher@beta` argument adds three things to the plain install, and only with it:
+
+| Starting point | What runs |
+| --- | --- |
+| OMH and Hermes installed | OMH is upgraded; the omher app is added |
+| Hermes, no OMH | OMH is installed, `omh setup` + `omh doctor` connect it to Hermes; the app is added |
+| Neither | Hermes' official installer runs non-interactively first, then OMH, `omh setup`, and the app |
+
+The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is checked against the release's
+`SHA256SUMS.txt`, mounted, and `omher.app` is copied to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`)
+under a temporary name, then swapped for an older copy only once the copy is whole; on Windows the per-user
+installer is checked the same way and runs silently. Linux gets Hermes and OMH only, with a note.
+`OMH_WITH_HERMES=0` skips installing Hermes and `OMH_WITH_DESKTOP=0` skips the app. Run from a Hermes profile
+shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes under `<root>`, as omher does.
+
+The release lookup reads GitHub's API ten releases at a time and stops at the first omher one. Without a token
+GitHub allows 60 API requests an hour per network; when that runs out the installer stops with exit 1 and says so
+(set `GITHUB_TOKEN` to raise the limit). A Hermes installed this way skipped its setup wizard: open omher and pick a
+model from the model menu at the top of the chat (without the app, run `hermes setup`). `irm ... | iex` cannot
+pass an argument, which is why the PowerShell form runs the downloaded script as a script block; a failed run
+leaves its exit code in `$LASTEXITCODE`.
+
 ### Windows (PowerShell 5.1+)
 
 ```powershell
@@ -1342,7 +1376,7 @@ Esc closes it):
 | Ctrl+_ / Ctrl+Y | Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); a run of typed characters is one edit |
 | Esc | Closes the `/` or `@` menu; on an empty composer, interrupts a running turn (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to the composer unsent); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
 | Esc Esc | With text, clears it and keeps it in this session's history; on an empty composer between turns, lists your prompts to rewind to (`/rewind` does too) |
-| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `iw aw` or a quote object (`i` or `a` with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner `y` keeps the register and moves inside, `d` keeps register and caret, and `c` enters INSERT inside), `p P`, `u` and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
+| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `iw aw`, a quote object (`i` or `a` with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner `y` keeps the register and moves inside, `d` keeps register and caret, and `c` enters INSERT inside), or a bracket object (`i` or `a` with `(`, `)`, `[`, `]`, `{`, `}`; closing aliases identical; inner and around count selects enclosing ancestor; empty inner `y` keeps register and moves to interior, `d` keeps register and caret, and `c` enters INSERT at interior), `p P`, `u` and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
 | Ctrl+V | Attaches the clipboard image as an `[Image #N]` token at the caret |
 | Ctrl+O | Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, while Hermes asks something, the whole question (it answers nothing); q leaves it |
 | Ctrl+L | Redraws the screen |
@@ -1369,6 +1403,17 @@ In Vim NORMAL, Esc cancels a pending Space leader and discards any earlier
 Escape confirmation without clearing the draft, interrupting a turn or opening
 rewind. The next Esc starts a fresh confirmation; another Esc within 0.8 s
 completes it. Ordinary Esc Esc still confirms as before.
+
+Bracket text objects (`(`, `)`, `[`, `]`, `{`, `}`) balance within the requested
+family across the entire composer, characterwise, preserving intervening newlines
+and indentation without linewise promotion or blank-line injection. Quotes and
+backslashes are treated as literal content rather than language or escape syntax.
+Count multiplication (capped at 9999) on both inner and around selects enclosing
+same-family ancestor depth; an unmatched or missing opener returns no span
+without mutating state. An empty inner span preserves register and caret on `d`,
+preserves register while moving caret to normal-clamped interior on `y`, and enters
+INSERT at interior on `c`. This target policy prioritizes deterministic composer
+integration rather than claiming exhaustive Vim parity.
 
 Ctrl+Enter and Shift+Enter reach the OMH TUI as keys of their own only where
 the terminal reports them. On start it asks iTerm2, kitty, WezTerm, tmux, VS
@@ -1705,44 +1750,67 @@ liveness probe, and it calls nothing in Hermes' gateway.
 
 #### The TUI on a Hermes runtime of its own
 
-By default bare `omh` opens its session on the Hermes gateway that also serves
-your bots: Hermes runs one gateway per host for every profile under
-`profiles/`, and refuses its standalone entry beside it. So a whole-gateway
-restart with a bot turn running drains first, up to Hermes'
-`agent.restart_after_turn_timeout` (30 minutes by default), and `omh` waits
-with it. `omh theme runtime own` moves the TUI's sessions to a Hermes home of
-the TUI's own, `<omh_home>/tui-home`, which Hermes gives a gateway of its own
-(auto-started, exits once idle). Nothing that happens to the bots' gateway
-reaches it, and `/gateway restart` there restarts only that runtime, which
-loads new OMH code without a bot reconnecting.
+Bare `omh` opens its session on a Hermes runtime of the TUI's own, not on the
+gateway that serves your bots. Hermes runs one gateway per host for every
+profile under `profiles/`, and refuses its standalone entry beside it, so a
+session on that gateway shares the bots' fate: a whole-gateway restart with a
+bot turn running drains first, up to Hermes' `agent.restart_after_turn_timeout`
+(30 minutes by default), and refuses every session meanwhile. The TUI's
+runtime is a Hermes profile, `<root>/profiles/omh-tui`, whose config says
+`gateway.standalone: true`: the host gateway never serves it, Hermes starts a
+gateway for it when the TUI attaches (auto-started, exits once idle), and
+nothing that happens to the bots' gateway reaches it. `/gateway restart` there
+restarts only that runtime, which loads new OMH code without a bot
+reconnecting. Your login is the TUI's too: a profile without an `auth.json` of
+its own reads the root's store for every provider (Hermes' profile rule) and
+rotates an OAuth provider's tokens back into it, so there is no copy of the
+store, no second login, and nothing the bots lose. `hermes profile list` and
+Hermes Desktop show the profile; it holds no bot.
 
-`omh` builds the home from the root Hermes home at every launch and refreshes
-only what changed: `config.yaml` copied (model, providers and their keys,
-OMH's memory provider, OMH's skills through `skills.external_dirs`, the
-plugins; a copy you changed in the TUI home is replaced, with a line saying
-so), `auth.json` copied only when the root's is newer (Hermes rotates OAuth
-refresh tokens into the store it read, so a TUI-home copy that moved later is
-kept), `.env` copied without any messaging credential, and the same names
-stripped from the environment the TUI is started with (no adapter of the
-TUI runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link per
+`omh` builds the profile from the root Hermes home at every launch and
+refreshes only what changed: `config.yaml` copied with `standalone: true` set
+in its `gateway:` block (the rest byte for byte: model, providers and their
+keys, OMH's memory provider, OMH's skills through `skills.external_dirs`, the
+plugins; a copy you changed in the profile is replaced, with a line saying
+so), `.env` copied without any messaging credential, and the same names
+stripped from the environment the TUI is started with (no adapter of the TUI
+runtime ever polls a bot's token), `SOUL.md` linked, `skills/` a link per
 skill at its own `<category>/<skill>` path over the root's and every served
 profile's (a skill is any directory holding `SKILL.md`; the root wins a name
-clash; a skill or link you put there yourself is left alone and stands for
-its name), and `plugins/omh` linked to the same OMH bundle the bots run. A
-root `config.yaml` that connects a messaging platform under `platforms:`
-keeps bare `omh` on the shared gateway, with a line naming the entry.
-Sessions, Hermes' own memory, cron and kanban are the TUI home's. The bot
-board keeps reading the bots' home. `omh --hermes-home` and `omh -p <profile>`
+clash; a skill or link you put there yourself is left alone and stands for its
+name), `plugins/omh` linked to the same OMH bundle the bots run, and Hermes'
+`.no-bundled-skills` marker so `hermes update` seeds only its essential skills
+there. A new profile is built whole under a dot name and renamed into place,
+so the host gateway never sees it half-built. A root `config.yaml` that
+connects a messaging platform under `platforms:` keeps bare `omh` on the
+shared gateway, with a line naming the entry. Sessions, Hermes' own memory,
+cron and kanban are the profile's. The bot board keeps reading the bots' home
+and never lists the TUI profile. `omh --hermes-home` and `omh -p <profile>`
 stay on the home they name; `omh --resume <id>` opens where that session is,
 whichever runtime is chosen, and says so when that differs (the id as the exit
-card printed it; a title is not looked up); `omh theme runtime shared` goes
-back. `omh-tui-home.json` in
-the home records what was built from what. `omh update` rebuilds the home
-too (the plugin bundle it links moved with the update), `omh doctor` has an
-`omh_tui_runtime` row (which runtime, what the home was built from, how many
-skills, a messaging credential or adapter that should not be there, whether
-its gateway runs), and the menu bar's settings name the runtime and the TUI
-gateway's pid while it is live.
+card printed it; a title is not looked up). `omh-tui-home.json` in the profile
+records what was built from what.
+
+`omh theme runtime shared` puts bare `omh` back on the bots' gateway (`omh
+theme runtime own` is the default). The TUI home an OMH before this one built
+under the OMH home (`<omh_home>/tui-home`, with a copy of `auth.json`) is
+removed by the first build once its gateway is not running. `omh update`
+rebuilds the profile too (the plugin bundle it links moved with the update),
+`omh uninstall` removes it, `omh doctor` has an `omh_tui_runtime` row (which
+runtime, what the profile was built from, how many skills, a messaging
+credential or adapter that should not be there, whether its gateway runs), and
+the menu bar's settings name the runtime and the TUI gateway's pid while it is
+live.
+
+One cost, Hermes' own for every per-profile gateway: a gateway under the root
+ticks every root profile's cron store, standing down each tick for a profile
+another gateway owns, and its idle exit counts their scheduled jobs as work.
+On a host whose bots have scheduled cron jobs the TUI gateway therefore stays
+up between sessions (`/gateway restart` stops it; the next `omh` starts a
+fresh one). Hermes calls `gateway.standalone` a temporary compatibility shim;
+should a later Hermes drop it, the host gateway serves the profile and `omh`
+behaves as on the shared gateway (it waits out a drain), with the login
+unchanged.
 
 When the OMH TUI cannot start, `omh` says why in one line on stderr and opens
 Hermes instead, so you lose the OMH screen, never the session. For a reason
@@ -2412,7 +2480,7 @@ The shipped catalog is editorial policy, not benchmark output:
 | Surface | What it is for | Shipped editable order |
 | --- | --- | --- |
 | Hermes `main` suggestion | The session's own model | GPT-6.1 Sol (`high`), Claude Opus 5.5, Claude Fable 5.1, GPT-6 Astra (`xhigh`), Kimi K3.1 Pro |
-| `ultrabrain` | Deepest reasoning | GPT-6 Astra (`xhigh`) |
+| `ultrabrain` | Deepest reasoning | Claude Fable 5.1 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Opus 5.5 (`xhigh`) |
 | `deep` | Strong default tier | Claude Opus 5.5 (`high`), GPT-6.1 Sol (`high`), Kimi K3.1 Pro (`high`) |
 | `architect` | Architecture and system design | Claude Opus 5.5 (`xhigh`), GPT-6 Astra (`xhigh`), Claude Fable 5.1 (`xhigh`), Kimi K3.1 Pro (`xhigh`) |
 | `unspecified-high` | Default working model | GPT-6.1 Sol (`medium`), Claude Opus 5.5 (`medium`), Kimi K3.1 Pro (`medium`) |
@@ -3505,7 +3573,7 @@ omh theme use crimson --dry-run
 omh theme status             # the active theme, which source decided it, and where it is saved
 omh theme wallpaper off      # the living wallpaper off in every later OMH TUI session (on, or alone to show it)
 omh theme update-check off   # no once-a-day ask of npm for a newer release (on, or alone to show it)
-omh theme runtime own        # open sessions on a Hermes runtime of the TUI's own (shared, or alone to show it)
+omh theme runtime shared     # open sessions on the bots' gateway instead of the TUI's own runtime (own, the default; alone to show it)
 ```
 
 Bare `omh theme` opens a picker: up/down arrows (or `j`/`k`) move the cursor,

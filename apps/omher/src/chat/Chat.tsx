@@ -1,5 +1,5 @@
 import "./chat.css";
-import { useStore } from "../state/store";
+import { selectAsks, useStore } from "../state/store";
 import { Header } from "./parts/Header";
 import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
@@ -18,6 +18,7 @@ export function Chat() {
     );
   }
   const chat = s.chats[bot.name];
+  const asking = selectAsks(s).some((a) => a.bot === bot.name);
   return (
     <>
       <Header bot={bot} chat={chat} />
@@ -27,9 +28,12 @@ export function Chat() {
           key={bot.name}
           bot={bot}
           running={!!chat?.turn}
+          asking={asking}
           offline={bot.status === "offline"}
           onSend={(t) => void s.send(t)}
           onStop={() => void s.interrupt()}
+          reply={s.replyTo[bot.name] ?? null}
+          onClearReply={() => s.setReplyTo(null, bot.name)}
         />
       </div>
     </>

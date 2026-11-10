@@ -5,7 +5,7 @@
 //! open for the life of the app: the bridge runs with `--exit-on-stdin-eof`, so it also stops if this
 //! process dies without cleaning up. The app makes no model or network call of its own.
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc;
@@ -49,17 +49,74 @@ pub fn make_token<F: FnOnce(&mut [u8]) -> std::io::Result<()>>(fill: F) -> std::
 }
 
 fn os_random(buf: &mut [u8]) -> std::io::Result<()> {
-    std::fs::File::open("/dev/urandom")?.read_exact(buf)
+    // The OS random source on every platform (`/dev/urandom` does not exist on Windows).
+    getrandom::fill(buf).map_err(|e| std::io::Error::other(e.to_string()))
 }
 
 pub fn new_token() -> std::io::Result<String> {
     make_token(os_random)
 }
 
-/// Where Hermes' Python lives, in the order the person would expect:
-/// `OMHER_HERMES_PYTHON`, then `~/.hermes/hermes-agent/venv`, then `~/.hermes/hermes-agent/.venv`.
-/// `env` and `exists` are injected so tests never touch the real machine.
+/// Which layout Hermes uses on this machine. Passed in so the Windows rules are tested on any host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Os {
+    Unix,
+    Windows,
+}
+
+impl Os {
+    pub fn current() -> Os {
+        if cfg!(windows) {
+            Os::Windows
+        } else {
+            Os::Unix
+        }
+    }
+}
+
+/// The Hermes home(s) to look in, the way Hermes' own installers place it: `HERMES_HOME` first, then
+/// `~/.hermes` (macOS, Linux) or `%LOCALAPPDATA%\hermes` (Windows; `install.ps1`, falling back to
+/// `%USERPROFILE%\AppData\Local`).
+fn hermes_homes<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> {
+    let set = |k: &str| env(k).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    let mut homes = Vec::new();
+    if let Some(h) = set("HERMES_HOME") {
+        let h = PathBuf::from(h);
+        // `HERMES_HOME=<root>/profiles/<name>` (Hermes running a profile): the venv lives under the root.
+        if let Some(root) = h.parent().filter(|p| p.file_name().is_some_and(|n| n == "profiles")).and_then(|p| p.parent()) {
+            homes.push(root.to_path_buf());
+        }
+        homes.push(h);
+    }
+    match os {
+        Os::Unix => {
+            if let Some(h) = set("HOME") {
+                homes.push(PathBuf::from(h).join(".hermes"));
+            }
+        }
+        Os::Windows => {
+            if let Some(l) = set("LOCALAPPDATA") {
+                homes.push(PathBuf::from(l).join("hermes"));
+            } else if let Some(u) = set("USERPROFILE") {
+                homes.push(PathBuf::from(u).join("AppData").join("Local").join("hermes"));
+            }
+        }
+    }
+    homes
+}
+
+/// Where Hermes' Python lives, in the order the person would expect: `OMHER_HERMES_PYTHON`, then each
+/// Hermes home's `hermes-agent/venv`, then `hermes-agent/.venv` (`bin/python`, or `Scripts\python.exe`
+/// on Windows). `env` and `exists` are injected so tests never touch the real machine.
 pub fn discover_python<E, X>(env: E, exists: X) -> Result<PathBuf, String>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+{
+    discover_python_for(env, exists, Os::current())
+}
+
+pub fn discover_python_for<E, X>(env: E, exists: X, os: Os) -> Result<PathBuf, String>
 where
     E: Fn(&str) -> Option<String>,
     X: Fn(&Path) -> bool,
@@ -70,10 +127,14 @@ where
             return Ok(p);
         }
     }
-    if let Some(home) = env("HOME").filter(|h| !h.is_empty()) {
-        let agent = PathBuf::from(home).join(".hermes").join("hermes-agent");
+    let exe: &[&str] = match os {
+        Os::Unix => &["bin", "python"],
+        Os::Windows => &["Scripts", "python.exe"],
+    };
+    for home in hermes_homes(&env, os) {
+        let agent = home.join("hermes-agent");
         for dir in ["venv", ".venv"] {
-            let p = agent.join(dir).join("bin").join("python");
+            let p = exe.iter().fold(agent.join(dir), |p, part| p.join(part));
             if exists(&p) {
                 return Ok(p);
             }
@@ -91,8 +152,9 @@ pub fn resolve_script<X: Fn(&Path) -> bool>(
 ) -> Result<PathBuf, String> {
     let mut tried = Vec::new();
     if let Some(r) = resource_dir {
-        for rel in ["bridge/omher_bridge.py", "resources/bridge/omher_bridge.py"] {
-            let p = r.join(rel);
+        for rel in [&["bridge", "omher_bridge.py"][..], &["resources", "bridge", "omher_bridge.py"][..]] {
+            // one component at a time, so the path uses this OS's separator throughout
+            let p = rel.iter().fold(r.to_path_buf(), |p, part| p.join(part));
             if exists(&p) {
                 return Ok(p);
             }
@@ -145,12 +207,25 @@ struct Inner {
     generation: u64,
 }
 
-/// `{state: "ready"|"starting"|"failed", error?}`, the shape the UI reads.
+/// `{state: "ready"|"starting"|"failed", error?, missing?}`, the shape the UI reads. `missing:
+/// "hermes"` marks the one failure the first-run screen can fix by installing Hermes.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct BridgeStatus {
     pub state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<&'static str>,
+}
+
+impl BridgeStatus {
+    fn of(state: &'static str, error: Option<String>) -> BridgeStatus {
+        let missing = match error.as_deref() {
+            Some(HERMES_NOT_FOUND) => Some("hermes"),
+            _ => None,
+        };
+        BridgeStatus { state, error, missing }
+    }
 }
 
 pub struct Bridge {
@@ -198,11 +273,14 @@ impl Bridge {
         let script = resolve_script(resource_dir, manifest, |p| p.is_file())?;
         let token = new_token().map_err(|e| format!("could not make a bridge token: {e}"))?;
 
-        let mut child = Command::new(&python)
-            .args(bridge_args(&script, &token))
+        let mut cmd = Command::new(&python);
+        cmd.args(bridge_args(&script, &token))
+            .env("PYTHONUTF8", "1") // the bridge's stdio stays UTF-8 on Windows code pages too
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        no_console_window(&mut cmd);
+        let mut child = cmd
             .spawn()
             .map_err(|e| format!("could not start the bridge ({}): {e}", python.display()))?;
         eprintln!("omher: bridge pid {} started with {}", child.id(), python.display());
@@ -321,9 +399,9 @@ impl Bridge {
             }
         }
         match &g.phase {
-            Phase::Starting => BridgeStatus { state: "starting", error: None },
-            Phase::Ready { .. } => BridgeStatus { state: "ready", error: None },
-            Phase::Failed(e) => BridgeStatus { state: "failed", error: Some(e.clone()) },
+            Phase::Starting => BridgeStatus::of("starting", None),
+            Phase::Ready { .. } => BridgeStatus::of("ready", None),
+            Phase::Failed(e) => BridgeStatus::of("failed", Some(e.clone())),
         }
     }
 
@@ -353,6 +431,18 @@ impl Bridge {
         g.token = token.into();
     }
 }
+
+/// A release build on Windows has no console of its own, so a console child (python.exe) would flash a
+/// terminal window. `CREATE_NO_WINDOW` keeps it hidden; elsewhere this does nothing.
+#[cfg(windows)]
+pub(crate) fn no_console_window(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+pub(crate) fn no_console_window(_cmd: &mut Command) {}
 
 fn stop_locked(g: &mut Inner) {
     g.stdin = None; // EOF first: the bridge exits on its own
@@ -408,6 +498,49 @@ mod tests {
 
     const VENV: &str = "/h/.hermes/hermes-agent/venv/bin/python";
     const DOTVENV: &str = "/h/.hermes/hermes-agent/.venv/bin/python";
+
+    fn discover_python<E: Fn(&str) -> Option<String>, X: Fn(&Path) -> bool>(env: E, exists: X) -> Result<PathBuf, String> {
+        discover_python_for(env, exists, Os::Unix)
+    }
+
+    fn win(parts: &[&str]) -> String {
+        parts.iter().fold(PathBuf::new(), |p, x| p.join(x)).display().to_string()
+    }
+
+    #[test]
+    fn python_on_windows_is_under_localappdata_scripts() {
+        let want = win(&["C:/Users/k/AppData/Local", "hermes", "hermes-agent", "venv", "Scripts", "python.exe"]);
+        let env = env_of(&[("LOCALAPPDATA", "C:/Users/k/AppData/Local"), ("USERPROFILE", "C:/Users/k")]);
+        assert_eq!(discover_python_for(env, fs_of(&[&want]), Os::Windows), Ok(PathBuf::from(&want)));
+    }
+
+    #[test]
+    fn python_on_windows_falls_back_to_userprofile_and_dot_venv() {
+        let want = win(&["C:/Users/k", "AppData", "Local", "hermes", "hermes-agent", ".venv", "Scripts", "python.exe"]);
+        let env = env_of(&[("USERPROFILE", "C:/Users/k")]);
+        assert_eq!(discover_python_for(env, fs_of(&[&want]), Os::Windows), Ok(PathBuf::from(&want)));
+        // A Unix-layout venv is not what Windows Hermes makes, so it is not picked there.
+        let unix = win(&["C:/Users/k", "AppData", "Local", "hermes", "hermes-agent", "venv", "bin", "python"]);
+        assert_eq!(discover_python_for(env_of(&[("USERPROFILE", "C:/Users/k")]), fs_of(&[&unix]), Os::Windows).unwrap_err(), HERMES_NOT_FOUND);
+    }
+
+    #[test]
+    fn a_profile_home_finds_the_venv_at_its_root() {
+        // Hermes runs a profile as HERMES_HOME=<root>/profiles/<name>; the venv is under <root>.
+        let venv = win(&["/h/.hermes", "hermes-agent", "venv", "bin", "python"]);
+        let env = env_of(&[("HERMES_HOME", "/h/.hermes/profiles/kami"), ("HOME", "/elsewhere")]);
+        assert_eq!(discover_python(env, fs_of(&[&venv])), Ok(PathBuf::from(&venv)));
+    }
+
+    #[test]
+    fn python_follows_hermes_home_first() {
+        let custom = win(&["/srv/hermes", "hermes-agent", "venv", "bin", "python"]);
+        let env = env_of(&[("HERMES_HOME", "/srv/hermes"), ("HOME", "/h")]);
+        assert_eq!(discover_python(env, fs_of(&[&custom, VENV])), Ok(PathBuf::from(&custom)));
+        let wcustom = win(&["D:/hermes", "hermes-agent", "venv", "Scripts", "python.exe"]);
+        let wenv = env_of(&[("HERMES_HOME", "D:/hermes"), ("LOCALAPPDATA", "C:/L")]);
+        assert_eq!(discover_python_for(wenv, fs_of(&[&wcustom]), Os::Windows), Ok(PathBuf::from(&wcustom)));
+    }
 
     #[test]
     fn python_env_override_wins() {
@@ -487,7 +620,8 @@ mod tests {
         );
         assert_eq!(dev, Ok(PathBuf::from("/repo/src-tauri/../bridge/omher_bridge.py")));
         let none = resolve_script(Some(Path::new("/app/Resources")), None, fs_of(&[])).unwrap_err();
-        assert!(none.contains("/app/Resources/bridge/omher_bridge.py"), "{none}");
+        let tried = Path::new("/app/Resources").join("bridge").join("omher_bridge.py");
+        assert!(none.contains(&tried.display().to_string()), "{none}");
     }
 
     #[test]
@@ -503,10 +637,13 @@ mod tests {
 
     #[test]
     fn status_serialises_as_the_ui_expects() {
-        let ready = serde_json::to_string(&BridgeStatus { state: "ready", error: None }).unwrap();
+        let ready = serde_json::to_string(&BridgeStatus::of("ready", None)).unwrap();
         assert_eq!(ready, r#"{"state":"ready"}"#);
-        let failed = serde_json::to_string(&BridgeStatus { state: "failed", error: Some("x".into()) }).unwrap();
+        let failed = serde_json::to_string(&BridgeStatus::of("failed", Some("x".into()))).unwrap();
         assert_eq!(failed, r#"{"state":"failed","error":"x"}"#);
+        // Only "Hermes not found" offers the installer; any other failure keeps Retry alone.
+        let missing = serde_json::to_string(&BridgeStatus::of("failed", Some(HERMES_NOT_FOUND.into()))).unwrap();
+        assert_eq!(missing, r#"{"state":"failed","error":"Hermes not found: install Hermes Agent first","missing":"hermes"}"#);
     }
 
     #[test]

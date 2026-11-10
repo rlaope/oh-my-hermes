@@ -42,6 +42,7 @@ from .config_adapter import (
     remove_external_dir_entries,
 )
 from ..paths import OmhPaths, configured_omh_home, managed_command_venv_dir
+from ..skin_pack import TUI_PROFILE
 from .lifecycle_safety import command_runtime_owned, primary_hermes_home
 from ..plugin_bundle.omh import runtime_paths
 
@@ -354,8 +355,11 @@ def hermes_profile_dirs(hermes_home: Path) -> list[tuple[str, Path]]:
         return []
     # Match Hermes' dependency-free named_profile_has_identity contract, not
     # incidental runtime directories. Keep link markers as identity claims so
-    # the existing writer/refusal boundaries still inspect them.
+    # the existing writer/refusal boundaries still inspect them. The OMH TUI's
+    # own runtime profile (`tui/own_runtime.py`) links the root's skills, OMH's
+    # registration among them: a registration of its own would double every name.
     markers = ("config.yaml", ".env", "SOUL.md", "profile.yaml", "auth.json", "state.db")
     return [(entry.name, entry) for entry in entries
-            if not (root / ".deleted" / entry.name).exists()
+            if entry.name != TUI_PROFILE
+            and not (root / ".deleted" / entry.name).exists()
             and any((entry / marker).is_file() or (entry / marker).is_symlink() for marker in markers)]

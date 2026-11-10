@@ -1,5 +1,5 @@
 // Settings > General > Appearance: theme, colour set, bubble style and text size, with a live preview.
-// The choices only change how omher looks on this Mac (saved in localStorage); nothing goes to Hermes.
+// The choices only change how omher looks on this computer (saved in localStorage); nothing goes to Hermes.
 import { useStore, PALETTES, BUBBLE_STYLES, type BubbleStyle, type Palette, type TextSize, type Theme } from "../state/store";
 import { Seg } from "../chat/model/Seg";
 
@@ -56,7 +56,7 @@ export function Appearance() {
         <div className="st-row">
           <div className="st-k">
             <b>Theme</b>
-            <span>System follows your Mac</span>
+            <span>System follows your computer</span>
           </div>
           <div className="st-v">
             <Seg small label="Theme" value={s.ui.theme} options={THEMES} onChange={(t) => s.setTheme(t as Theme)} testId="theme-seg" />

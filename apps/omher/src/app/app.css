@@ -1,5 +1,6 @@
 /* App frame: sidebar | main | details (0px closed, 300px open). */
 .window {
+  position: relative;
   height: 100%;
   display: grid;
   grid-template-columns: var(--side-w) minmax(0, 1fr) 0px;
@@ -26,6 +27,26 @@
 }
 .window:not(.panel-open) .details {
   border-left-color: transparent;
+}
+/* A narrow window keeps the chat its width: the panel slides over it instead of pushing it to ~350px. */
+@media (max-width: 1099px) {
+  .window.panel-open {
+    grid-template-columns: var(--side-w) minmax(0, 1fr) 0px;
+  }
+  .details {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--panel-w);
+    z-index: 20;
+    box-shadow: var(--pop-shadow);
+    transition: transform 0.25s ease;
+  }
+  .window:not(.panel-open) .details {
+    transform: translateX(100%);
+    box-shadow: none;
+  }
 }
 .details-in {
   width: var(--panel-w);

@@ -718,6 +718,16 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "end, and the thread reads again instead of dying for the rest of the session.",
     ),
     ClassifiedSite(
+        "src/tui/own_runtime.py",
+        "build_tui_home",
+        INTENTIONAL,
+        "A first build of the TUI's Hermes profile stages under a dot name the host never serves; when "
+        "`_build` raises (any exception, and a KeyboardInterrupt too, hence BaseException), the staging "
+        "directory is removed so no half-built profile without the standalone key is left for the host "
+        "to adopt, and the original exception is re-raised unchanged: the launch reports it, nothing is "
+        "relabeled as a built home.",
+    ),
+    ClassifiedSite(
         "src/tui/app.py",
         "_drawn",
         INTENTIONAL,
@@ -1113,8 +1123,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 112 -> 113 / 102: a third handler inside the classified `plugin_api.hud_payload`, the
 # Desktop pane's usage board (a failure is a `session_usage` record with `error` beside a HUD
 # that still reads, and the board shows dashes for the recorded row).
-EXPECTED_HANDLER_COUNT = 113
-EXPECTED_ANCHOR_COUNT = 102
+# 113 -> 114 / 102 -> 103: `own_runtime.build_tui_home`, the staged first build of the TUI's Hermes
+# profile (a failed `_build` removes its staging and re-raises; the host never sees a half-built
+# profile).
+EXPECTED_HANDLER_COUNT = 114
+EXPECTED_ANCHOR_COUNT = 103
 
 
 class DerivedSite(NamedTuple):

@@ -391,7 +391,21 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # owners. No description (the skill's run-loop reference explains it).
 # Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against base
 # df07e3573. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
+# 72525 -> 72561: the node `local` field on omh_dag (+37, 3138 -> 3175): a bare
+# boolean and the word in the description's field list, so a node whose
+# material must not leave the machine runs only on a local model_map option
+# and is held otherwise. No description (the skill's run-loop reference
+# explains it). omh_delegate_route's fallback sentence was corrected in the
+# same change (-1, 5296 -> 5295). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base a72f02362.
+# No headroom.
+# 72561 -> 72566: omh_delegate_route's category example names the shipped
+# ultrabrain head, which became claude-fable-5-1 in place of gpt-6-astra
+# (+5, 5295 -> 5300; owner decision, 2026-11-09). The example has to track the
+# head (tests/test_delegate_route_tool.py). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base b38ff85a1.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72566
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain
@@ -1004,7 +1018,14 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72525
 # re-derived from the producer.
 # Merged with main again: 541116 (main) + 3975 for the `model-compression` row =
 # 545091, re-derived from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545091
+# 545091 -> 545113: ultrawork's handoff policy routes planning, decomposition and hard-debugging lanes to
+# ultrabrain and ideation to deep (+22); no other row moved. Measured per row from the producer; no headroom.
+# 545113 -> 545231: dag-ulw's ladder quality bar gives `ultrabrain` to the one build node whose judgement decides
+# the run (a design decision, a root cause, a contested trade-off), at most one, and says the verify node is not
+# that node (+118); no other row moved. Measured from the producer; no headroom.
+# 545231 -> 545258: the same sentence gives `ultrabrain` only "where your routes serve it", as the review clause
+# says for `review` (+27); no other row moved. Measured from the producer; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545258
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

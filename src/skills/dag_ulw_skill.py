@@ -80,10 +80,11 @@ DEFINITION = SkillDefinition(
         ADAPTATION_QUALITY_READ_RULE,
         "Split first: many small nodes beat one big one, but never split one shared write scope or one judgement.",
         "Climb the difficulty ladder `quick` -> `unspecified-low` -> `unspecified-high` with a one-line reason per "
-        "climb; use `ultrabrain` at most once, and a graph whose every node is `deep` or `deep-work` is a routing "
-        "failure. A `role=review` node takes category `review` where your routes serve it; a `role=baseline` node "
-        "stays `quick` or `unspecified-low`; a `role=verify` node judges the run goal and baseline exemptions, so "
-        "climb the ladder for it as for any judgement.",
+        "climb. When one build node's judgement decides the run (a design decision, a root cause, a contested "
+        "trade-off), give it `ultrabrain` where your routes serve it, at most one; a graph whose every node is "
+        "`deep` or `deep-work` is a routing failure. A `role=review` node takes category `review` where your routes serve it; a "
+        "`role=baseline` node stays `quick` or `unspecified-low`; a `role=verify` node judges the run goal and "
+        "baseline exemptions, so climb the ladder for it; it is not the `ultrabrain` node.",
         "Write every node prompt self-contained, in order: TASK, DELIVERABLE, SCOPE (what it may read and write), "
         "VERIFY (the literal command and expected result), STOP WHEN.",
         "`depends_on` only orders nodes; data moves through the handoff files `omh_dag` names, never through "
@@ -218,8 +219,10 @@ def run_loop_reference() -> str:
    the role; until then it runs as a native build node), a build node whose `write_scope` holds anything
    but docs with no `review` node in the run (`no_review_node`: add a `role=review` node when the change
    warrants a separate review, otherwise go on), every node `deep`, more than one
-   `ultrabrain`, and a graph of 5+ nodes whose critical path is at least 80% of it (`serial_graph`: split
-   it into parallel lanes where the work allows).
+   `ultrabrain`, a graph defined with 4+ nodes and no `ultrabrain`, `architect` or `forensics` node
+   (`no_judgement_node`: when one node's judgement decides the run, give it `ultrabrain`; otherwise go
+   on), and a graph of 5+ nodes whose critical path is at least 80% of it (`serial_graph`: split it
+   into parallel lanes where the work allows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
    `delegate_task` with its `tasks` unchanged. The goal ends with `[dag:<run>/<node>]`; that marker is how
@@ -229,6 +232,12 @@ def run_loop_reference() -> str:
    (a retry takes the category's next option; a category no option matches carries none and runs on the
    backend's default). Under `profile_routes` OMH picks no profile: the tasks go as they are. Views name the
    option Hermes reports the child ran on, and a lane keeps its category only when that is the option handed out.
+   In `swarm`, `quick` and `simple-work` an option with a fast `service_tier` is tried before the same model's
+   normal one; elsewhere the normal one leads. Mark a node `local: true` when its material must not leave the
+   machine (customer data, keys, private documents): it runs only on a `model_map` option whose `base_url` is
+   on this machine or its private network (or provider `lmstudio`/`llamacpp`), a retry takes the next local
+   one, and with none left it is listed in `held_for_local_model`, never sent to a cloud model. Tell the
+   person; they add a local option or the node is settled blocked.
 3. `calls` never exceeds the free background slots (`slots.free`): a call past them would run blocking.
    In a one-shot session, `calls` also never carries more tasks than the remaining one-shot budget;
    nodes past it are listed in `held_for_slots`, and `slots.oneshot` shows the limit, the spent count
