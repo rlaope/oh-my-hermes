@@ -42,6 +42,10 @@ export interface SavedSession {
   /** oh-my-hermes: the bot it ran on. */
   bot?: string;
   model?: string;
+  /** Its name: the person's (Rename), the agent's own title, a summary of the first message (SessionRec). */
+  title?: string;
+  agentTitle?: string;
+  promptTitle?: string;
   /** The chat's last messages, text only. */
   messages?: SavedMsg[];
 }
@@ -90,7 +94,7 @@ function parseSession(v: unknown): SavedSession | null {
   if (typeof v.exitCode === "number" || v.exitCode === null) out.exitCode = v.exitCode;
   const error = str(v.error, MAX_TEXT);
   if (error) out.error = error;
-  for (const k of ["agentSession", "account", "bot", "model"] as const) {
+  for (const k of ["agentSession", "account", "bot", "model", "title", "agentTitle", "promptTitle"] as const) {
     const s = str(v[k], 200);
     if (s) out[k] = s;
   }

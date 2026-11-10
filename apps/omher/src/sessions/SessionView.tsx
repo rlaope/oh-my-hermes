@@ -1,5 +1,5 @@
-// Main column for a SESSIONS entry: a header (agent mark, folder, status, the Terminal toggle and the model
-// button) above either the chat (the bot chat's own Timeline and Composer, fed by the agent's structured
+// Main column for a SESSIONS entry: a header (agent mark, the session's name, the agent and folder, status, the
+// Terminal toggle and the model button) above either the chat (the bot chat's own Timeline and Composer, fed by the agent's structured
 // mode) or the agent's terminal.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ITheme } from "@xterm/xterm";
@@ -13,7 +13,8 @@ import { ChatIcon, ChevronDown, ModelIcon, Popover, TerminalIcon } from "../ui";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, terminalNote, tildePath, type SessionRec } from "./agents";
+import { agentDef, folderName, terminalNote, tildePath, type SessionRec } from "./agents";
+import { pickTitle } from "./titles";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { t } from "../i18n";
 
@@ -268,6 +269,7 @@ export function SessionView() {
     );
   }
   const def = agentDef(rec.agent);
+  const name = pickTitle(rec, folderName(rec.cwd)).title;
   const chatKey = getSessions().chatKey(rec.id);
   const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
   const canToggle = mode !== "terminal";
@@ -295,11 +297,14 @@ export function SessionView() {
         <span className="ss-head-mark">
           <AgentMark agent={rec.agent} size={18} />
         </span>
-        <span className="head-title" data-testid="session-title">
-          {def.label}
+        <span className="head-title" data-testid="session-title" title={name}>
+          {name}
         </span>
-        <span className="ss-head-path" title={rec.cwd} data-testid="session-cwd">
-          {tildePath(rec.cwd, ss.home)}
+        {/* the same order as the row's second line: where, then which agent */}
+        <span className="ss-head-path" title={rec.cwd}>
+          <span data-testid="session-cwd">{tildePath(rec.cwd, ss.home)}</span>
+          {" · "}
+          <span data-testid="session-agent">{def.label}</span>
         </span>
         <span
           className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}

@@ -87,7 +87,11 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
   and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
-  session row rings while a turn runs and shows the amber dot while it asks.
+  session row rings while a turn runs and shows the amber dot while it asks. A row's first line is the session's
+  name: the one you gave it (double-click or right-click › Rename), else the title the agent gave the conversation
+  (`session_title_changed` from Claude Code, `thread/name/updated` from Codex, `session.title` from Hermes, or the
+  bridge's `cli.title` read of their own session files), else a summary of your first message made in the UI
+  (`src/sessions/titles.ts`, no model call), else the folder. The second line is the folder and the agent.
 
 Rules the code keeps:
 

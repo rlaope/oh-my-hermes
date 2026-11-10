@@ -252,7 +252,8 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
 };
 
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
- *  Esc; `/exit` ends the program; anything else gets a short answer after one tool step. */
+ *  Esc; `/exit` ends the program; `/title <name>` names the conversation as the agent; anything else gets a
+ *  short answer after one tool step. */
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
@@ -329,6 +330,14 @@ class MockChat {
         this.at(140, () => this.emit({ event: "tool.end", tool_id: "t-bad", name: "", ok: false, ms: 20 }));
         this.say("Exit code: 127.", 200);
         this.at(600, () => this.end("done"));
+        return;
+      }
+      if (text.startsWith("/title ")) {
+        // the agent names the conversation (Claude Code session_title_changed, Codex thread/name/updated)
+        const name = text.slice(7).trim();
+        this.at(40, () => this.emit({ event: "session.info", title: name }));
+        this.say("Named it.", 80);
+        this.at(400, () => this.end("done"));
         return;
       }
       if (text.startsWith("/signedout")) {

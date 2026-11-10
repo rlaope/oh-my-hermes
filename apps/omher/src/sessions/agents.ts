@@ -1,3 +1,5 @@
+import { pickTitle, type TitleSource } from "./titles";
+
 // The agent programs a session can run, and the pure helpers the sidebar and the session views share.
 // The list is fixed and mirrors `AGENTS` in src-tauri/src/sessions.rs (the shell refuses anything else).
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
@@ -112,6 +114,12 @@ export interface SessionRec {
   account?: string;
   /** omher restarted while it ran and it does not continue by itself: it starts again on Resume. */
   paused?: boolean;
+  /** The name the person gave it (Rename); none = the automatic one. */
+  title?: string;
+  /** The title the agent gave its conversation (Claude Code's own title, a Codex thread name). */
+  agentTitle?: string;
+  /** A short summary of the person's first real message, made here (no model is asked). */
+  promptTitle?: string;
 }
 
 /** Live state of a session's chat that the row needs (from the store). */
@@ -128,13 +136,25 @@ export interface RowContext {
   home: string | null;
 }
 
-/** What one sidebar row shows. `where` is the parent folder (`~/work`), set only when another session's folder
- *  has the same name in a different place, so two `web-app` rows read `web-app · ~/work` and `web-app · ~/oss`. */
+/** What one sidebar row shows. Line 1 is the session's name ([pickTitle]: the person's, the agent's, a summary of
+ *  the first message, else the folder); line 2 is the folder, the agent and its state (`web-app · Claude Code`).
+ *  `where` is the parent folder (`~/work`), set only when another session's folder has the same name in a
+ *  different place: it follows the folder on line 2 (`web-app · ~/work · Claude Code`), or the name on line 1
+ *  while the name still is the folder. */
 export function rowModel(
   s: SessionRec,
   chat?: ChatLive,
   ctx?: RowContext,
-): { title: string; where?: string; sub: string; live: boolean; needsYou: boolean; ts: number } {
+): {
+  title: string;
+  titleSource: TitleSource;
+  folder: string;
+  where?: string;
+  sub: string;
+  live: boolean;
+  needsYou: boolean;
+  ts: number;
+} {
   const label = agentDef(s.agent).label;
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
@@ -154,12 +174,18 @@ export function rowModel(
             : `Ended · exit ${s.exitCode}`;
   // A chat is live while a turn runs; a terminal while its program runs.
   const live = s.view === "chat" && chat ? alive && chat.turn : alive;
-  const title = folderName(s.cwd);
-  const clash = !!ctx?.cwds.some((c) => c !== s.cwd && folderName(c) === title);
+  const folder = folderName(s.cwd);
+  const clash = !!ctx?.cwds.some((c) => c !== s.cwd && folderName(c) === folder);
+  const where = clash ? parentPath(tildePath(s.cwd, ctx!.home)) : undefined;
+  const { title, source } = pickTitle(s, folder);
+  const agent = state ? `${label} · ${state}` : label;
+  const place = source === "folder" ? "" : `${folder}${where ? ` · ${where}` : ""} · `;
   return {
     title,
-    ...(clash ? { where: parentPath(tildePath(s.cwd, ctx!.home)) } : {}),
-    sub: state ? `${label} · ${state}` : label,
+    titleSource: source,
+    folder,
+    ...(where && source === "folder" ? { where } : {}),
+    sub: `${place}${agent}`,
     live,
     needsYou,
     ts: s.startedAt / 1000,

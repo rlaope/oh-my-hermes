@@ -62,7 +62,7 @@ describe("session agents", () => {
 
   it("row model: folder as the title, agent and state below, live while running", () => {
     const base: SessionRec = { id: "s1", agent: "claude", cwd: "/Users/k/app", startedAt: 1_700_000_000_000, status: "running", view: "terminal" };
-    expect(rowModel(base)).toEqual({ title: "app", sub: "Claude Code", live: true, needsYou: false, ts: 1_700_000_000 });
+    expect(rowModel(base)).toEqual({ title: "app", titleSource: "folder", folder: "app", sub: "Claude Code", live: true, needsYou: false, ts: 1_700_000_000 });
     expect(rowModel({ ...base, status: "starting" })).toMatchObject({ sub: "Claude Code · Starting…", live: true });
     expect(rowModel({ ...base, status: "exited", exitCode: 0 })).toMatchObject({ sub: "Claude Code · Ended", live: false });
     expect(rowModel({ ...base, status: "exited", exitCode: null }).sub).toBe("Claude Code · Ended");
@@ -81,6 +81,32 @@ describe("session agents", () => {
     expect(rowModel(at("d", "/Users/k/notes"), undefined, { cwds: ["/Users/k/notes", "/Users/k/notes"], home: "/Users/k" }).where).toBeUndefined();
     expect(rowModel(at("e", "C:\\a\\api"), undefined, { cwds: ["C:\\a\\api", "C:\\b\\api"], home: null }).where).toBe("C:\\a");
     expect(rowModel(at("f", cwds[0])).where).toBeUndefined();
+  });
+
+  it("row model: a named session shows its name on line 1 and the folder before the agent on line 2", () => {
+    const base: SessionRec = { id: "s1", agent: "claude", cwd: "/Users/k/web-app", startedAt: 1, status: "running", view: "chat" };
+    // first message summary
+    expect(rowModel({ ...base, promptTitle: "Fix the login redirect" })).toMatchObject({
+      title: "Fix the login redirect",
+      titleSource: "prompt",
+      folder: "web-app",
+      sub: "web-app · Claude Code",
+    });
+    // the agent's own title wins over the summary, the person's name over both
+    expect(rowModel({ ...base, promptTitle: "Fix the login redirect", agentTitle: "OAuth redirect loop" }).title).toBe("OAuth redirect loop");
+    expect(rowModel({ ...base, promptTitle: "a", agentTitle: "b", title: "Mine" })).toMatchObject({ title: "Mine", titleSource: "person" });
+    // blank names do not count
+    expect(rowModel({ ...base, title: "  ", agentTitle: "", promptTitle: "x" })).toMatchObject({ title: "x", titleSource: "prompt" });
+    // the state follows the agent
+    expect(rowModel({ ...base, promptTitle: "Fix it", status: "exited", exitCode: 0 }).sub).toBe("web-app · Claude Code · Ended");
+    expect(rowModel({ ...base, agentTitle: "t", status: "starting" }).sub).toBe("web-app · Claude Code · Starting…");
+    // a clash of folder names: the parent goes with the folder on line 2, not after the name
+    const ctx = { cwds: ["/Users/k/work/web-app", "/Users/k/oss/web-app"], home: "/Users/k" };
+    const named = rowModel({ ...base, cwd: "/Users/k/work/web-app", agentTitle: "OAuth fix" }, undefined, ctx);
+    expect(named).toMatchObject({ title: "OAuth fix", sub: "web-app · ~/work · Claude Code" });
+    expect(named.where).toBeUndefined();
+    // while the name is still the folder, the parent stays after it and line 2 is the agent alone
+    expect(rowModel({ ...base, cwd: "/Users/k/oss/web-app" }, undefined, ctx)).toMatchObject({ title: "web-app", where: "~/oss", sub: "Claude Code" });
   });
 
   it("a missing agent's tooltip carries its install line, as text", () => {

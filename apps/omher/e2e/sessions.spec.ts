@@ -346,7 +346,8 @@ test("start a mock terminal session, type, see the echo, then switch to a bot ch
   await open(page);
   await startSession(page, "grok");
   const header = page.getByTestId("header");
-  await expect(page.getByTestId("session-title")).toHaveText("Grok");
+  await expect(page.getByTestId("session-title")).toHaveText("oh-my-hermes");
+  await expect(page.getByTestId("session-agent")).toHaveText("Grok");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/oh-my-hermes");
   await expect(header.locator("button")).toHaveCount(0); // no extra header icons
   const row = page.locator("[data-testid=session-list] .ss-row").first();
@@ -393,7 +394,7 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("api");
   await expect(rows.first()).toContainText("Grok");
-  await expect(page.getByTestId("session-title")).toHaveText("Grok");
+  await expect(page.getByTestId("session-title")).toHaveText("api");
 
   // the + menu opens inside the sidebar; after the agent it offers the recent folders
   await page.getByTestId("session-new").click();
@@ -473,8 +474,9 @@ test("closing a running session asks first and stops the program", async ({ page
   await expect(row).toBeVisible();
   expect((await calls(page)).some((c) => c.op === "close")).toBe(false);
 
-  // right-click is the other way to close
+  // right-click › Close session is the other way to close
   await row.click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-menu-close").click();
   await page.getByTestId("session-stop").click();
   await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(0);
   await expect.poll(async () => (await calls(page)).filter((c) => c.op === "close").length).toBe(1);

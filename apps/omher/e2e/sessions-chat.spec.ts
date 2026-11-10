@@ -59,7 +59,9 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   await open(page);
   await start(page, "claude");
   await expect(page.getByTestId("terminal")).toHaveCount(0);
-  await expect(page.getByTestId("session-title")).toHaveText("Claude Code");
+  // before any message the session's name is its folder; the agent and the full path sit next to it
+  await expect(page.getByTestId("session-title")).toHaveText("omher");
+  await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/omher");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");
   await expect(page.getByTestId("timeline")).toContainText("Say hi to Claude Code");
@@ -241,7 +243,8 @@ test("Codex's terminal view starts its TUI fresh and the chat keeps running", as
 test("oh-my-hermes opens as a Hermes chat in the folder through the bridge", async ({ page }) => {
   await open(page, "/Users/you/work/api");
   await start(page, "omh");
-  await expect(page.getByTestId("session-title")).toHaveText("oh-my-hermes");
+  await expect(page.getByTestId("session-title")).toHaveText("api");
+  await expect(page.getByTestId("session-agent")).toHaveText("oh-my-hermes");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");
   const opened = (await bridgeCalls()).find((c) => c.op === "folder.open")!;
   expect(opened.params).toEqual({ bot: "kami", cwd: "/Users/you/work/api" });
@@ -393,7 +396,7 @@ test("screenshots: a chat session with an approval, dark and light", async ({ pa
   await page.getByTestId("session-terminal-toggle").click();
   await expect(page.getByTestId("session-chat")).toBeVisible();
   await page.locator("[data-testid=session-list] .ss-row").nth(2).locator(".ss-open").click();
-  await expect(page.getByTestId("session-title")).toHaveText("oh-my-hermes");
+  await expect(page.getByTestId("session-agent")).toHaveText("oh-my-hermes");
   await page.getByTestId("composer").fill("what is in this folder?");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-bot")).toBeVisible();

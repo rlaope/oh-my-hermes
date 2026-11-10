@@ -339,8 +339,16 @@
   width: 26px;
   height: 26px;
 }
+/* the session's name: it can be a long sentence, so it gives way to the path and the controls */
+.head .head-title[data-testid="session-title"] {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 46%;
+}
 .ss-head-path {
-  font-family: var(--mono);
   font-size: 11.5px;
   color: var(--quiet);
   white-space: nowrap;
@@ -348,6 +356,7 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+
 .ss-head-st {
   margin-left: 4px;
   font-size: 11.5px;
@@ -466,6 +475,11 @@
 [data-theme="light"] {
   --needs: #9a6200;
 }
+/* line 2 carries the folder now (it used to be the name): muted, not quiet, so it reads at 4.5:1 or better on the
+   sidebar and on the selected row in both themes */
+.ss-row .bot-p {
+  color: var(--muted);
+}
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {
   flex: 0 1 auto;
@@ -489,4 +503,34 @@
 .ss-where {
   color: var(--quiet);
   font-weight: 400;
+}
+/* Rename: the name becomes a field of the same size in the row; the row is not a button meanwhile */
+.ss-open.ss-editing {
+  cursor: default;
+}
+.ss-name-in {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin: -1px 0;
+  padding: 0 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  outline: 0;
+}
+.ss-name-in:focus {
+  border-color: var(--spin);
+}
+.ss-name-in::placeholder {
+  color: var(--quiet);
+  font-weight: 400;
+}
+.ss-row.menu-open .ss-x {
+  display: none;
 }

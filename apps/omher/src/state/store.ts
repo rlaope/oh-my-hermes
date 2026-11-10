@@ -1029,6 +1029,8 @@ export interface Actions {
   /** The GitHub state of the PRs a run's nodes name (the bridge asks `gh`, apart from `runsGet`). */
   runsPrs(bot: string, run: string): Promise<{ prs: Record<string, NodePr> }>;
   runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
+  /** A SESSIONS chat's title from the agent's own session files (`cli.title`). */
+  cliTitle(agent: "claude" | "codex", session: string, cwd?: string): Promise<{ title: string }>;
   /** Subscription usage meters (sidebar); the meter keeps its own copy. */
   usage(): Promise<{ providers: UsageProvider[] }>;
   /** Settings › Accounts (the page keeps its own copy). */
@@ -1454,6 +1456,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
     runsPrs: (bot, run) => bridge.request("runs.prs", { bot, run }),
     runsCli: (params = {}) => bridge.request("runs.cli", params),
+    cliTitle: (agent, session, cwd) => bridge.request("cli.title", { agent, session, ...(cwd ? { cwd } : {}) }),
     usage: () => bridge.request("usage.read", {}),
     accounts: () => bridge.request("accounts.list", {}),
     addAccount: (cli, label) => bridge.request("accounts.add", { cli, label }),
