@@ -24,7 +24,9 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   when the user named Jev in that turn and a key resolves (TypeSafe, at the
   HTTPS `TYPESAFE_BASE_URL` API root when set, or OpenRouter only
   with the operator setting in `<omh_home>/jev/settings.json`).
-  Stdlib, HTTPS only, redirects refused.
+  Stdlib, HTTPS only, redirects refused; the same file's
+  `local_http_endpoint` opt-in alone allows plain HTTP, and only to a
+  loopback, private, or link-local `TYPESAFE_BASE_URL`.
   `src/plugin_bundle/omh/jev_ask_client.py` is one of the two in-process
   network clients in `src/`, both pinned by INVARIANT 2's
   `NETWORK_CLIENT_BRIDGES`. Third-party Jev plugins are never called.

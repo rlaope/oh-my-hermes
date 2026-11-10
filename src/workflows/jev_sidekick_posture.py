@@ -51,7 +51,9 @@ from ..plugin_bundle.omh.jev_ask_store import (
     OPENROUTER_SETTING_KEY,
     ROUTE_NONE,
     ledger_summary,
+    local_http_endpoint_enabled,
     openrouter_route_enabled,
+    operator_typesafe_model,
     route_available_by_names,
     settings_path,
 )
@@ -137,6 +139,8 @@ def omh_jev_ask_posture(
         "route_available": route,
         "typesafe_base_url_configured": TYPESAFE_BASE_URL_ENV_NAME in names,
         "openrouter_setting": openrouter_route_enabled(Path(omh_home)),
+        "local_http_endpoint_setting": local_http_endpoint_enabled(Path(omh_home)),
+        "typesafe_model_setting": operator_typesafe_model(Path(omh_home)),
         "setting_path": str(settings_path(Path(omh_home))),
         "setting_key": OPENROUTER_SETTING_KEY,
         **ledger_summary(Path(omh_home)),
@@ -155,6 +159,10 @@ def omh_jev_ask_sentence(block: dict[str, Any]) -> str:
     else:
         custom_base = route == "typesafe" and bool(block.get("typesafe_base_url_configured"))
         suffix = " (custom base URL configured)" if custom_base else ""
+        if custom_base and block.get("local_http_endpoint_setting"):
+            suffix += " (local HTTP allowed)"
+        if custom_base and block.get("typesafe_model_setting"):
+            suffix += f" (model {block.get('typesafe_model_setting')})"
         head = f"omh_jev_ask: route {route}{suffix} by variable name"
     calls = int(block.get("ledger_calls", 0) or 0)
     tier = f"{calls} ask(s) recorded, last status {block.get('last_status')}" if calls else "no ask recorded"

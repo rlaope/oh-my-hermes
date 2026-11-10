@@ -75,6 +75,8 @@ class ContractEffortOptionTests(unittest.TestCase):
         for model_id, efforts in (
             ("claude-fable-5-1", ("low", "medium", "high", "xhigh", "max")),
             ("anthropic/claude-fable-5.1", ("low", "medium", "high", "xhigh", "max")),
+            ("claude-fable-5-2", ("low", "medium", "high", "xhigh", "max")),
+            ("anthropic/claude-fable-5.2", ("low", "medium", "high", "xhigh", "max")),
             ("grok-4.7", ("low", "medium", "high", "xhigh")),
         ):
             with self.subTest(model_id=model_id):

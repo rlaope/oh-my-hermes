@@ -196,6 +196,8 @@ class PortfolioTests(unittest.TestCase):
             # No Qwen-line successor: the row carries an empty successor, and
             # its reason names the model that now holds Qwen3-Coder's slot.
             "qwen3-coder": ("", "2026-10-13"),
+            # Fable 5.2 took every Fable 5.1 slot, the ultrabrain head included.
+            "claude-fable-5-1": ("claude-fable-5-2", "2026-11-10"),
         }
         rows = rows_for(*successors)
         self.assertIn("is now held by claude-sonnet-5-5", rows["qwen3-coder"]["decision"]["reason"])
@@ -271,6 +273,7 @@ class PortfolioTests(unittest.TestCase):
         self.assertIn("gpt-5.6-luna", retirees)
         self.assertIn("gpt-5.6-sol", retirees)
         self.assertIn("gpt-5.6-terra", retirees)
+        self.assertIn("claude-fable-5-1", retirees)
         hermes = {candidate["model_alias"].rsplit("/", 1)[-1].casefold()
                   for section in SECTIONS for chain in SHIPPED_MODEL_RECOMMENDATIONS[section].values()
                   for candidate in chain}
