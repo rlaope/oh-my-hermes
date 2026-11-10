@@ -148,12 +148,13 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
   const now = Date.now();
   const total = elapsed((t.endedAt ?? now) - t.startedAt);
   const n = t.steps.length;
-  const state = live ? "live" : t.outcome === "interrupted" ? "interrupted" : t.outcome === "error" ? "error" : "done";
+  const state = live ? "live" : t.outcome === "interrupted" || t.outcome === "ended" || t.outcome === "error" ? t.outcome : "done";
   const canOpen = n > 0;
 
   let summary = "";
   if (state === "done") summary = `Worked for ${total} · ${n} step${n === 1 ? "" : "s"}`;
   else if (state === "interrupted") summary = `Stopped after ${total}`;
+  else if (state === "ended") summary = `Ended after ${total}`;
   else if (state === "error") summary = `Failed after ${total}${t.error ? ` · ${t.error}` : ""}`;
 
   return (

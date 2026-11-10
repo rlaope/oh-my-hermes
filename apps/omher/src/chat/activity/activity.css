@@ -39,7 +39,8 @@
 .act-ic.done {
   color: var(--ok);
 }
-.act-ic.interrupted {
+.act-ic.interrupted,
+.act-ic.ended {
   color: var(--quiet);
   font-size: 8px;
 }

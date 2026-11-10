@@ -273,7 +273,7 @@ class MockChat {
     this.timers.forEach(clearTimeout);
     this.timers = [];
   }
-  private end(outcome: "done" | "interrupted" | "error", error?: string) {
+  private end(outcome: "done" | "interrupted" | "ended" | "error", error?: string) {
     if (!this.turn) return;
     this.stop();
     this.turn = false;
@@ -295,7 +295,8 @@ class MockChat {
       const text = i.text.trim();
       if (text === "/exit") {
         this.at(30, () => {
-          this.end("error", "the agent stopped");
+          // a clean exit mid-turn, as the Rust watcher reports it (exit_turn_end)
+          this.end("ended");
           this.emit({ event: "exit", code: 0, error: "" });
         });
         return;
