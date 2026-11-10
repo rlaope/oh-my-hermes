@@ -2147,21 +2147,37 @@ the bundle carries its files, and `plugin_enabled` for local Hermes config;
 neither check proves Desktop copied, enabled or mounted the half. Rescan in
 Desktop (Capabilities -> Plugins -> Rescan, or restart the app), inspect the
 Plugins page, and verify the pane/backend in that runtime before reporting
-it ready. The pane shows OMH catches, the plan checklist, the active delegation
-graph, board or route summaries, and the active fanout DAG as they become
-available. It reads idle when nothing is running, keeps the plan and status bar
-in agreement, and leaves individual subagent rows to Desktop's Agents panel.
-A failed lane reads as failed (red), apart from blocked (yellow).
+it ready. The pane always draws the same five sections in the same order, each
+with an empty line when it has nothing to say: USAGE (the focused chat's
+figures: the gateway's live `session.stats` counters, then what Hermes
+recorded for the chat), CATCHES (what OMH caught earlier in the session), PLAN
+(the plan as it stands), DAG (the session's one graph, a dag-ulw run, the
+native delegation tree or a fanout, drawn as cards) and AGENTS (one summary
+line for the subagents Desktop's Agents panel lists, beside the routes OMH
+dispatched). Each section folds, and the folds are kept in the app's local
+storage. The DAG section follows the focused chat: a pane that names its chat
+never draws another chat's graph, nor the home's fanout, which no chat owns.
+The yolo chip follows the focused chat too; where OMH has not yet observed that
+chat while the gateway's newest observation is a fresh ON, the chip still
+shows, since a wrong ON is the safer error. The pane reads idle when nothing is
+running and keeps the plan and status bar in agreement. A failed lane reads as
+failed (red), apart from blocked (yellow), and done DAG work is green.
 The pane keeps Desktop's own look (its sans, components and theme tokens) with the
 OMH TUI's colour character: a rose brand, warm section labels and muted violet
-frames. While a delegation graph runs, the pane shows it as the box drawing the
-TUI prints into its transcript, made by the same renderer at the pane's width,
-in a card: boxes for a run of up to 12 lanes, the tree for a bigger run or a
-pane too narrow for boxes. The drawing scrolls sideways rather than wrap, and a
-settled run reads as one summary line. Without a drawing (an older backend, or
-one that failed to draw), a delegation row stacks its model under the title at the
-default pane width. It uses calmer colours and follows Desktop's language when
-Korean is selected; the drawing's own words are the TUI's, in English.
+frames. The DAG's cards fold by layer. A bar over the cards picks Auto (from
+nine lanes on, finished layers and those more than two past the work in hand
+fold), Focus (the running layers and the layers either side), Unfold all, or
+Fold all (the work in hand stays open); a layer's chip or tag opens or folds
+that layer by hand. The View menu turns the figures, the stats, implied edges
+and compact cards on or off, and the fold mode and those choices are kept in
+the app's local storage. A settled run keeps its cards under its run line. A
+graph too large for the pane's payload comes as a bounded layer view: lanes in
+hand (running, or returned to be checked) and lanes that stopped short
+(failed, blocked, stuck) first, then the layers nearest the work in hand. Each
+layer that lost lanes counts them by state, an edge that skips cut lanes is
+drawn dotted, and the layers drawn open are asked for whole. A run too deep for
+even its layer rows reads as its counts by state. The pane follows Desktop's
+language when Korean is selected.
 `omh uninstall --registration-only` does not disable the plugin or
 change `plugins.enabled`. Desktop mounting must be observed separately.
 
