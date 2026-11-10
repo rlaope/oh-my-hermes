@@ -25,6 +25,8 @@
   --bx-hi: rgba(255, 255, 255, 0.07);
   --bx-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   --bx-ring: #6f6872;
+  /* what waits on the person: the sidebar's needs amber (sidebar.css .side) */
+  --ph-needs: #e9a23b;
 }
 [data-theme="light"] .rn,
 [data-theme="light"] .rf {
@@ -39,6 +41,7 @@
   --bx-hi: rgba(255, 255, 255, 0.9);
   --bx-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   --bx-ring: #8e8694;
+  --ph-needs: #a8640a;
 }
 /* the surface a box stands on: its own background is this colour, so a line never shows through a dragged box */
 .rn {
@@ -151,13 +154,25 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 20px;
+  height: 24px;
   padding: 0 6px;
   border-radius: var(--r-sm);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--body);
+  color: var(--muted);
+}
+/* the Plans section's header row: "KAMI'S PLANS" 11px caps, the plan list toggle and refresh in one grey family;
+   12px down to the plan */
+.rn > .pn-sec:first-child {
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rn > .pn-sec:first-child .pn-ref {
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
 }
 .rn-toggle:hover,
 .rn-toggle[aria-expanded="true"],
@@ -184,17 +199,25 @@
 
 /* ---------------------------------------------------------------- the selected run (panel) */
 .rn-run {
+  padding: 0 4px;
+}
+.rn-list + .rn-run,
+.rn-more + .rn-run,
+.rn-list ~ .rn-run {
   border-top: 1px solid var(--line-soft);
-  padding: 12px 4px 0;
+  padding-top: 12px;
 }
 .rn-gwrap {
   min-width: 0;
 }
 
 /* ---------------------------------------------------------------- the header: plain text in the app's font */
+/* the title leads; its status and who runs it sit close under it (2-4px), the goal 10px apart. Muted text stays
+   4.5:1 or more on the panel in both themes: --muted, and --ph-dim (between --muted and --quiet) for the dimmest */
 .ph {
+  --ph-dim: color-mix(in srgb, var(--muted) 60%, var(--quiet));
   min-width: 0;
-  font: 400 12px/18px var(--font);
+  font: 400 12px/17px var(--font);
   color: var(--muted);
 }
 .rn .ph {
@@ -202,8 +225,8 @@
 }
 .ph-top {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 .ph-title {
@@ -215,16 +238,44 @@
   font: 600 14px/20px var(--font);
   color: var(--ink);
 }
-/* one muted line under the title; in a narrow panel it wraps between its parts */
+/* the status line: a 6px state dot, the state word, how far it is; in a narrow panel it wraps between its parts */
 .ph-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   min-width: 0;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .ph-meta > span {
   flex: none;
   white-space: pre;
+}
+.ph-dot {
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--quiet);
+}
+.ph-dot.running {
+  background: rgb(var(--rn-pink));
+  animation: ph-pulse 2.4s ease-in-out infinite;
+}
+.ph-dot.done {
+  background: rgb(var(--rn-green));
+}
+.ph-dot.failed {
+  background: var(--danger);
+}
+@keyframes ph-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-dot.running {
+    animation: none;
+  }
 }
 .ph-w.running {
   color: rgb(var(--rn-pink));
@@ -238,21 +289,61 @@
 .ph-w.repaired {
   color: var(--rn-amber);
 }
-.ph-goal {
+/* what waits on the person: the sidebar's needs colour, and it opens the ask */
+.ph-needs {
+  font: inherit;
+  color: var(--ph-needs);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ph-needs) 45%, transparent);
+  text-underline-offset: 3px;
+}
+.ph-needs:hover {
+  text-decoration-color: currentColor;
+}
+/* who runs it: the main model's mark, then "Opus 5.5 · high effort · main", the dimmest line */
+.ph-who {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+  color: var(--ph-dim);
+}
+.ph-who > svg,
+.ph-who > img {
+  flex: none;
+}
+.ph-who-t {
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--quiet);
 }
+/* the goal: a little apart, two lines at most, the whole of it in the tooltip */
+.ph-goal {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+/* the full view: a small icon button on the title's row, in the panel's one right gutter */
 .ph-full {
   flex: none;
+  width: 24px;
+  height: 24px;
   margin-left: auto;
-  font: inherit;
-  white-space: nowrap;
-  color: var(--quiet);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted);
 }
-.ph-full kbd {
-  font: inherit;
+.ph-full:hover {
+  background: var(--hover);
 }
 .ph-act {
   display: flex;
@@ -567,9 +658,14 @@
 }
 /* a dependency: the two titles and an arrow between them, quieter than the drawing they repeat */
 .bv-dep {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  /* a wrapped row hangs under its first word, so its second line never reads as a row of its own */
+  padding-left: 14px;
+  text-indent: -14px;
   color: var(--muted);
 }
 .bv-arrow {

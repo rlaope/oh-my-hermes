@@ -61,12 +61,14 @@ export const GEOMETRY = {
   marginMost: 58, // and as much as a drawing with more passing lines than that holds may take
   rowGap: 24, // between two rows no line runs between
   moreH: 24, // the "+76 more · Show all 88" line under a capped frontier
-  stub: 16, // from a parent's bottom down to the first level stretch
+  stub: 24, // from a parent's bottom down to the first level stretch: room for a soft turn onto it
   track: 20, // between two level stretches that share the space between two rows: a line that passes one runs straight on for a while before it turns into its own
   drop: 24, // from the last level stretch down to a child's top, arrowhead included
   arrow: 5, // the arrowhead's height
   arrowW: 7, // and its width
-  r: 8, // a turn's radius
+  r: 8, // a turn's radius, as the layout reserves room for it
+  curve: 12, // and as a line is drawn, where the stretches at the turn leave it: the lines into a child that several
+  // lead into sweep in as soft elbows, not as a square bracket under the row
   port: 32, // between two lines into one child
   portInset: 14, // a line into a child keeps this from the child's corners
   portClear: 12, // two of them are this far apart or more, while the child's top edge holds them so
@@ -1404,7 +1406,7 @@ function drawLines(routes: Omit<EdgeLine, "d">[]): EdgeLine[] {
     }
     return [...ys];
   };
-  return routes.map((rt) => ({ ...rt, d: roundedPath(rt.pts, G.r, gapsOf(rt.net)) }));
+  return routes.map((rt) => ({ ...rt, d: roundedPath(rt.pts, G.curve, gapsOf(rt.net)) }));
 }
 
 /** The dash into a running node rides its edges, each drawn from the child back to its parent: the edges into one
@@ -1419,7 +1421,7 @@ function flowsOf(routes: { net: string; from: string; to: string; pts: [number, 
     const taken = ridden.get(rt.net) ?? ridden.set(rt.net, []).get(rt.net)!;
     const pts = untilTaken([...rt.pts].reverse(), taken.filter((st) => st.to !== rt.to));
     for (let i = 1; i < pts.length; i++) taken.push({ to: rt.to, x1: Math.min(pts[i - 1][0], pts[i][0]), y1: Math.min(pts[i - 1][1], pts[i][1]), x2: Math.max(pts[i - 1][0], pts[i][0]), y2: Math.max(pts[i - 1][1], pts[i][1]) });
-    if (pts.length > 1) flows.push({ key: `${rt.net}:f:${rt.from}>${rt.to}`, net: rt.net, d: roundedPath(pts), from: rt.from, to: rt.to });
+    if (pts.length > 1) flows.push({ key: `${rt.net}:f:${rt.from}>${rt.to}`, net: rt.net, d: roundedPath(pts, G.curve), from: rt.from, to: rt.to });
   }
   return flows;
 }
@@ -1478,8 +1480,9 @@ export function movedLines(
     const into = snap(cr.y - above);
     let pts: [number, number][];
     if (y2 - y1 >= 2 * G.r) {
-      // below its parent: one elbow
-      const turn = snap(Math.min((y1 + y2) / 2, cr.y - above));
+      // below its parent: one elbow, nearer the child's top than the layout's level stretches stand (`stub` under
+      // the row above), where the parent leaves the room for it; else halfway
+      const turn = snap(cr.y - above - y1 >= G.r ? cr.y - above : Math.min((y1 + y2) / 2, cr.y - above));
       pts = [[px, y1], [px, turn], [cx, turn], [cx, y2]];
     } else if (y2 > y1) {
       // just under its parent, too near for that elbow: straight down where the child's point stands under the

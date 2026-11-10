@@ -34,6 +34,8 @@ export const ko: Record<Key, string> = {
   "graph.full": "전체 보기",
   "graph.close": "그래프 닫기",
   "graph.main": "main",
+  "graph.effort": "{e} 노력",
+  "graph.needs": "{n}개 확인 필요",
   "graph.run.running": "실행 중",
   "graph.run.done": "완료됨",
   "graph.run.failed": "실패",

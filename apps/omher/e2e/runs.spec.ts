@@ -285,7 +285,7 @@ test("a selected run folds the list into its header; 'All runs' unfolds it; pick
   const head = (await panel(page).getByTestId("run-plan").boundingBox())!;
   expect(head.y).toBeLessThanOrEqual(120);
   const first = (await panel(page).getByTestId("run-node").first().boundingBox())!;
-  expect(first.y).toBeLessThanOrEqual(220);
+  expect(first.y).toBeLessThanOrEqual(240); // under the title, the status, who runs it and the goal
   expect(await page.locator(".details .pn-scroll").evaluate((e) => e.scrollTop)).toBe(0);
   // the toggle unfolds both lists; picking a run folds them away and opens it
   await toggle.click();
@@ -311,12 +311,15 @@ test("a bot with no runs says so", async ({ page }) => {
 
 // ---- the header: plain text ----
 
-test("the run's header is plain text in the app's font: the title, one muted line, the goal; no card, badge, bar, chips, mark or prefix", async ({ page }) => {
+test("the run's header is plain text in the app's font: the title leads, a status line with a state dot, who runs it, the goal; no card or prefix", async ({ page }) => {
   await openRuns(page);
   const head = panel(page).getByTestId("run-plan");
   await expect(head.getByTestId("run-plan-title")).toHaveText("Codex coexistence (live)");
-  // one line under the title: the state, how far it is, how long it has run, the main agent's model and effort
-  await expect(head.getByTestId("run-plan-counts")).toHaveText(/^Running · 3 of 6 done · 1 repaired · 1 waiting · \d+(s|m) · main Opus 5\.5 · high$/);
+  // the status line: the state, how far it is and how long it has run; who runs it is the line under it
+  await expect(head.getByTestId("run-plan-counts")).toHaveText(/^Running · 3 of 6 done · 1 repaired · 1 waiting · \d+(s|m)$/);
+  await expect(head.getByTestId("run-plan-where")).toHaveText("Opus 5.5 · high effort · main");
+  await expect(head.getByTestId("run-plan-where").locator("[data-mark=claude], .model-ic")).toHaveCount(1);
+  await expect(head.getByTestId("run-dot")).toHaveClass(/running/);
   await expect(head.getByTestId("run-plan-goal")).toContainText("OMH suggests its own skills to Codex fanouts");
   // the "OMH / DAG · 6 tasks" line is gone, and nothing names Hermes
   await expect(head.getByTestId("run-plan-source")).toHaveCount(0);
@@ -324,41 +327,112 @@ test("the run's header is plain text in the app's font: the title, one muted lin
   await expect(head).not.toContainText("Hermes");
   const look = await head.evaluate((e) => {
     const s = getComputedStyle(e);
-    const title = getComputedStyle(e.querySelector("[data-testid=run-plan-title]")!);
-    const meta = getComputedStyle(e.querySelector("[data-testid=run-plan-counts]")!);
+    const css = (sel: string) => getComputedStyle(e.querySelector(sel)!);
+    const title = css("[data-testid=run-plan-title]");
+    const meta = css("[data-testid=run-plan-counts]");
+    const who = css("[data-testid=run-plan-where]");
+    const goal = css("[data-testid=run-plan-goal]");
+    const box = (sel: string) => e.querySelector(sel)!.getBoundingClientRect();
     const boxed = [e, ...e.querySelectorAll("*")].filter((x) => {
+      if (x.closest("[data-testid=graph-expand]")) return false; // the full view's button has a hover fill only
       const c = getComputedStyle(x);
+      if (x.matches("[data-testid=run-dot]")) return false; // the state dot
       return c.backgroundImage !== "none" || c.boxShadow !== "none" || parseFloat(c.borderTopWidth) > 0 || !/rgba\(0, 0, 0, 0\)|transparent/.test(c.backgroundColor);
     }).length;
     return {
       font: s.fontFamily,
       body: getComputedStyle(document.body).fontFamily,
       title: [title.fontSize, title.fontWeight, title.fontFamily],
-      meta: [meta.fontSize, meta.fontWeight, meta.color],
-      muted: (() => {
-        const probe = document.createElement("i");
-        probe.style.color = "var(--muted)";
-        e.appendChild(probe);
-        const c = getComputedStyle(probe).color;
-        probe.remove();
-        return c;
-      })(),
+      meta: [meta.fontSize, meta.fontWeight],
+      who: who.fontSize,
+      goal: [goal.fontSize, goal.webkitLineClamp],
+      // title, status and who run close together; the goal stands 10px apart
+      gaps: [box("[data-testid=run-plan-counts]").top - box(".ph-top").bottom, box("[data-testid=run-plan-goal]").top - box("[data-testid=run-plan-where]").bottom],
+      dot: [box("[data-testid=run-dot]").width, box("[data-testid=run-dot]").height],
       boxed,
-      svgs: e.querySelectorAll("svg, img").length,
     };
   });
-  // the app's own sans font, never monospace: the title 14px semibold, the line under it 12px and muted
+  // the app's own sans font, never monospace: the title 14px semibold, the lines under it 12px
   expect(look.font).toBe(look.body);
   expect(look.font).not.toMatch(/mono|Menlo/i);
   expect(look.title).toEqual(["14px", "600", look.body]);
-  expect(look.meta).toEqual(["12px", "400", look.muted]);
+  expect(look.meta).toEqual(["12px", "400"]);
+  expect(look.who).toBe("12px");
+  expect(look.goal).toEqual(["12.5px", "2"]);
+  expect(look.gaps[0]).toBeGreaterThanOrEqual(0);
+  expect(look.gaps[0]).toBeLessThanOrEqual(4);
+  expect(look.gaps[1]).toBe(10);
+  expect(look.dot).toEqual([6, 6]);
   expect(look.boxed).toBe(0);
-  expect(look.svgs).toBe(0);
   // what the card held is gone
   for (const gone of [".rn-badge", ".rn-bar", ".rn-head", ".rp", ".rp-chip", "[data-testid=run-plan-layer]", "[data-testid=run-legend]", "[data-testid=run-zoom]"])
     await expect(page.locator(gone)).toHaveCount(0);
-  // the full view opens from a line of text, not an icon
-  await expect(head.getByTestId("graph-expand")).toHaveText(/^Full view (⌘⇧G|Ctrl\+Shift\+G)$/);
+  // the full view opens from a 24px icon button on the title's row, named in its tooltip, inside the panel
+  const expand = head.getByTestId("graph-expand");
+  await expect(expand).toHaveAttribute("title", /^Full view (⌘⇧G|Ctrl\+Shift\+G)$/);
+  await expect(expand).toHaveText("");
+  const [eb, tb, pb] = await Promise.all([expand.boundingBox(), head.getByTestId("run-plan-title").boundingBox(), page.getByTestId("panel-runs").boundingBox()]);
+  expect([eb!.width, eb!.height]).toEqual([24, 24]);
+  expect(Math.abs(eb!.y + eb!.height / 2 - (tb!.y + tb!.height / 2))).toBeLessThanOrEqual(1);
+  expect(eb!.x + eb!.width).toBeLessThanOrEqual(pb!.x + pb!.width);
+});
+
+test("the header's muted lines keep 4.5:1 on the panel, dark and light", async ({ page }) => {
+  for (const theme of ["dark", "light"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
+    await openRuns(page);
+    const ratios = await page.getByTestId("panel-runs").evaluate((root) => {
+      // "rgb(…)", or "color(srgb r g b)" in 0-1 from color-mix()
+      const rgb = (c: string) => {
+        const n = (c.replace(/^color\(srgb/, "").match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+        return c.startsWith("color(") ? n.map((v) => v * 255) : n;
+      };
+      const lum = ([r, g, b]: number[]) => {
+        const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const bgOf = (el: Element | null) => {
+        for (; el; el = el.parentElement) {
+          const c = getComputedStyle(el).backgroundColor;
+          if (!/rgba\(\d+, \d+, \d+, 0\)|transparent/.test(c) && !/rgba\(.*, 0\.0\d+\)/.test(c)) return c;
+        }
+        return "rgb(0, 0, 0)";
+      };
+      const ratio = (sel: string) => {
+        const el = root.querySelector(sel)!;
+        const a = lum(rgb(getComputedStyle(el).color));
+        const b = lum(rgb(bgOf(el)));
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      };
+      return [".pn-sec", ".rn-toggle", "[data-testid=run-plan-where]", "[data-testid=run-plan-goal]", "[data-testid=run-progress]"].map((sel) => {
+        const el = root.querySelector(sel)!;
+        return { sel, color: getComputedStyle(el).color, bg: bgOf(el), r: ratio(sel) };
+      });
+    });
+    for (const r of ratios) expect(r.r, `${theme} ${r.sel} ${r.color} on ${r.bg}`).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test("the header says what waits on the person, in the needs colour, and opens it", async ({ page }) => {
+  await openRuns(page);
+  await mock("mock.ask", { bot: "kami", kind: "approval" });
+  const needs = panel(page).getByTestId("run-plan-needs");
+  await expect(needs).toHaveText("1 needs you");
+  const [needsColour, sidebarNeeds] = await Promise.all([
+    needs.evaluate((e) => getComputedStyle(e).color),
+    page.locator(".side").evaluate((e) => {
+      const probe = document.createElement("i");
+      probe.style.color = document.documentElement.dataset.theme === "light" ? "var(--needs-text)" : "var(--needs)";
+      e.appendChild(probe);
+      const c = getComputedStyle(probe).color;
+      probe.remove();
+      return c;
+    }),
+  ]);
+  expect(needsColour).toBe(sidebarNeeds);
+  await needs.click();
+  await expect(page.getByTestId("timeline").getByTestId("card-approval")).toBeFocused();
 });
 
 test("a run that has not started: 'Starts in 0:..' with Start now / Edit as text, which only prefill the composer", async ({ page }) => {
@@ -603,7 +677,7 @@ test("the makers' marks: GPT carries OpenAI's, Gemini Google's, Opus and Sonnet 
   await rewrite(page, (op, r) => {
     if (op !== "runs.get" || r.run?.id !== LIVE) return;
     const set = (id: string, fields: Record<string, unknown>) => Object.assign(r.run.nodes.find((n: any) => n.id === id), fields);
-    set("t1-discovery", { model: "gpt-5.5", effort: "high" });
+    set("t1-discovery", { model: "gpt-6.1", effort: "high" });
     set("t2-status-update", { model: "claude-sonnet-5-5", effort: "medium", executor: undefined, route: "quick" });
     set("t1-hermes", { model: "gemini-3-pro", effort: "high", executor: undefined, route: "deep" });
     set("t4-fence", { model: "mystery-7b", provider: "og", executor: undefined });
@@ -615,7 +689,7 @@ test("the makers' marks: GPT carries OpenAI's, Gemini Google's, Opus and Sonnet 
     await nodeOf(box, id).getByTestId("node-mark").evaluateAll((els) => els.map((e) => e.getAttribute("data-mark"))),
     await nodeOf(box, id).getByTestId("node-facts").getAttribute("title"),
   ];
-  expect(await facts("t1-discovery")).toEqual([["openai"], "GPT-5.5 · high · via Codex"]);
+  expect(await facts("t1-discovery")).toEqual([["openai"], "GPT-6.1 · high · via Codex"]);
   expect(await facts("t2-status-update")).toEqual([["claude"], "Sonnet 5.5 · medium · quick"]);
   expect(await facts("t1-hermes")).toEqual([["gemini"], "Gemini 3 Pro · high · deep"]);
   expect(await facts("t5-verify")).toEqual([["claude"], "Opus 5.5 · high · review"]);
@@ -1087,7 +1161,8 @@ test("88 sub-runs: the first 8 rows, running then failed first; 'Show all 88' op
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", CLI_CODEX);
   // a CLI session's header names the CLI and the folder it ran in
-  await expect(box.getByTestId("run-plan-counts")).toHaveText(/^Completed · 84 of 88 done · 1 failed · \d+s · Codex · api-server$/);
+  await expect(box.getByTestId("run-plan-counts")).toHaveText(/^Completed · 84 of 88 done · 1 failed · \d+s$/);
+  await expect(box.getByTestId("run-plan-where")).toHaveText("Codex · api-server");
   const graph = box.getByTestId("run-graph");
   await expect(graph).toHaveAttribute("data-frontiers", "1");
   const cards = box.getByTestId("run-node");
@@ -1384,7 +1459,8 @@ test("a delegate fan-out without a dag is its own run of one frontier", async ({
   await row.click();
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", /^delegate:deleg_/);
-  await expect(box.getByTestId("run-plan-counts")).toHaveText(/ · \d of \d done · .* · main /);
+  await expect(box.getByTestId("run-plan-counts")).toHaveText(/ · \d of \d done/);
+  await expect(box.getByTestId("run-plan-where")).toContainText(" · main");
   await expect(box.getByTestId("run-plan")).not.toContainText("Hermes / helpers");
   await expect(box.getByTestId("run-graph")).toHaveAttribute("data-frontiers", "1");
   await expect(box.getByTestId("run-edge")).toHaveCount(0);
@@ -1437,7 +1513,8 @@ test("CLI runs: listed under the bot's own runs with the agent's mark and name; 
   await rows.nth(1).click();
   const box = panel(page);
   await expect(box).toHaveAttribute("data-run", CLI_CLAUDE);
-  await expect(box.getByTestId("run-plan-counts")).toHaveText(/ of 3 done · .* · Claude · web-app$/); // the CLI, and the folder the session ran in
+  await expect(box.getByTestId("run-plan-counts")).toHaveText(/ of 3 done/);
+  await expect(box.getByTestId("run-plan-where")).toHaveText("Claude · web-app"); // the CLI, and the folder the session ran in
   await expect(box.getByTestId("run-node")).toHaveCount(3);
   await expect(box.getByTestId("run-graph")).toHaveAttribute("data-frontiers", "1");
   // the mark of the model each subagent ran on (Opus 5.5: Anthropic's), one a node

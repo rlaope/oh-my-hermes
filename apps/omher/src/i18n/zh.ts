@@ -34,6 +34,8 @@ export const zh: Record<Key, string> = {
   "graph.full": "全屏视图",
   "graph.close": "关闭图",
   "graph.main": "main",
+  "graph.effort": "{e} 推理",
+  "graph.needs": "{n} 项待你处理",
   "graph.run.running": "运行中",
   "graph.run.done": "已完成",
   "graph.run.failed": "失败",

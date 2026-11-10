@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
-import { CloseIcon, IconButton, ModelIcon, Spinner } from "../ui";
+import { CloseIcon, ExpandIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
@@ -243,8 +243,15 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
         bot={bot}
         nowS={nowS}
         action={
-          <button type="button" className="ph-full" onClick={() => s.setRunsFull(true)} data-testid="graph-expand" title={`${t("graph.full")} (${fullKey})`}>
-            {t("graph.full")} <kbd>{fullKey}</kbd>
+          <button
+            type="button"
+            className="ph-full"
+            onClick={() => s.setRunsFull(true)}
+            data-testid="graph-expand"
+            title={`${t("graph.full")} ${fullKey}`}
+            aria-label={`${t("graph.full")} ${fullKey}`}
+          >
+            <ExpandIcon />
           </button>
         }
       />

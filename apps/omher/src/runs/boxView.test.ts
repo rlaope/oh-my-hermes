@@ -37,10 +37,10 @@ const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../lib/__fixt
 /** The TUI's own sample (docs/CODING-OBSERVABILITY.md): one node, three that wait on it, one that waits on those. */
 const sample = () =>
   dag([
-    node("api", [], { label: "Export API", route: "quick", model: "z-ai/glm-5.3-flash", effort: "low", started: 0, ended: 12 }),
+    node("api", [], { label: "Export API", route: "quick", model: "z-ai/glm5.3-airx01", effort: "low", started: 0, ended: 12 }),
     node("button", ["api"], { label: "Export button", route: "unspecified-high", model: "claude-opus-5-5", effort: "high", state: "running", started: 100, attempts: [{ n: 1, outcome: "open" }] }),
     node("docs", ["api"], { label: "Export docs", route: "writing", state: "running", attempts: [{ n: 1, outcome: "open" }] }),
-    node("cli", ["api"], { label: "Export CLI flag", route: "quick", model: "glm-5.3-flash", effort: "low", state: "failed", started: 100, ended: 108, attempts: [{ n: 1, outcome: "failed" }] }),
+    node("cli", ["api"], { label: "Export CLI flag", route: "quick", model: "glm5.3-airx01", effort: "low", state: "failed", started: 100, ended: 108, attempts: [{ n: 1, outcome: "failed" }] }),
     node("verify", ["button", "docs", "cli"], { label: "Verify export", route: "unspecified-high", state: "waiting" }),
   ]);
 
@@ -229,20 +229,35 @@ describe("text", () => {
   it("names a model as people say it", () => {
     expect(modelName("claude-opus-5-5")).toBe("Opus 5.5");
     expect(modelName("anthropic/claude-haiku-5")).toBe("Haiku 5");
-    expect(modelName("gpt-5.5")).toBe("GPT-5.5");
+    expect(modelName("gpt-6.1-sol")).toBe("GPT-6.1 Sol");
+    expect(modelName("gpt-6.1-terra")).toBe("GPT-6.1 Terra");
     expect(modelName("gpt-6-astra")).toBe("GPT-6 Astra");
     expect(modelName("gemini-3-pro")).toBe("Gemini 3 Pro");
     expect(modelName("google/gemini-2.5-flash")).toBe("Gemini 2.5 Flash");
-    expect(modelName("z-ai/glm-5.3-flash")).toBe("glm-5.3-flash");
     expect(modelName("Opus 5.5")).toBe("Opus 5.5");
-    expect(modelName("gpt-5.5-codex")).toBe("GPT-5.5 Codex");
+    expect(modelName("gpt-6.1-sol-codex")).toBe("GPT-6.1 Sol Codex");
     expect(modelName("claude-opus-5-5-thinking")).toBe("Opus 5.5 Thinking");
+  });
+
+  it("names the open models of a demo plan: GLM, Kimi and DeepSeek, without the provider or the speed tier", () => {
+    expect(modelName("glm-5.3-ultrafast")).toBe("GLM-5.3");
+    expect(modelName("z-ai/glm-5.3-ultrafast")).toBe("GLM-5.3");
+    expect(modelName("z-ai/glm-5.3-flash")).toBe("GLM-5.3");
+    expect(modelName("glm-5.3")).toBe("GLM-5.3");
+    expect(modelName("kimi-k3-ultrafast")).toBe("Kimi K3");
+    expect(modelName("moonshotai/kimi-k3")).toBe("Kimi K3");
+    expect(modelName("kimi-k3.1-pro")).toBe("Kimi K3.1 Pro");
+    expect(modelName("deepseek/deepseek-v4.1-flash-ultrafast")).toBe("DeepSeek V4.1");
+    expect(modelName("deepseek-v4.1")).toBe("DeepSeek V4.1");
+    expect(modelName("deepseek-v4.1-reasoner")).toBe("DeepSeek V4.1 Reasoner");
+    // a tier is dropped only after a model name: a Gemini Flash is a model, not a tier
+    expect(modelName("gemini-2.5-flash")).toBe("Gemini 2.5 Flash");
   });
 
   it("drops what a provider puts around a model's id: a date, a context tag, an effort, a revision", () => {
     expect(modelName("claude-sonnet-4-20250514")).toBe("Sonnet 4");
     expect(modelName("claude-haiku-5-20261001")).toBe("Haiku 5");
-    expect(modelName("gpt-5.5-2026-08-01")).toBe("GPT-5.5");
+    expect(modelName("gpt-6.1-sol-2026-10-01")).toBe("GPT-6.1 Sol");
     expect(modelName("claude-opus-5-5[1m]")).toBe("Opus 5.5");
     expect(modelName("claude-opus-5-5:high")).toBe("Opus 5.5");
     expect(modelName("us.anthropic.claude-opus-5-5-v1:0")).toBe("Opus 5.5");
@@ -299,7 +314,7 @@ describe("what ran a node", () => {
       via: "",
       text: "Opus 5.5 · high · visual-engineering",
     });
-    expect(said(node("a", [], { model: "gpt-5.5", effort: "low", route: "quick" }))).toEqual(["model:openai", "GPT-5.5 · low · quick"]);
+    expect(said(node("a", [], { model: "gpt-6.1", effort: "low", route: "quick" }))).toEqual(["model:openai", "GPT-6.1 · low · quick"]);
     expect(said(node("a", [], { model: "gemini-3-pro", provider: "google", route: "deep" }))).toEqual(["model:gemini", "Gemini 3 Pro · deep"]);
     // not run yet: what its route resolves to
     expect(said(node("a", [], { state: "waiting", category: "review", planned: { model: "claude-opus-5-5", provider: "anthropic", effort: "high" } }), { kind: "dag" }, bot)).toEqual(["model:claude", "Opus 5.5 · high · review"]);
@@ -329,25 +344,25 @@ describe("what ran a node", () => {
       via: "via Claude",
       text: "Opus 5.5 · high · via Claude",
     });
-    expect(said(node("a", [], { executor: "codex", model: "gpt-5.5", effort: "high", route: "deep" }))).toEqual(["model:openai", "GPT-5.5 · high · deep · via Codex"]);
+    expect(said(node("a", [], { executor: "codex", model: "gpt-6.1", effort: "high", route: "deep" }))).toEqual(["model:openai", "GPT-6.1 · high · deep · via Codex"]);
   });
 
-  it("still says the effort of a node whose category OMH left unnamed: Codex · high, GPT-5.5 · high", () => {
+  it("still says the effort of a node whose category OMH left unnamed: Codex · high, GPT-6.1 · high", () => {
     // "unspecified-high" is no name to show, but it is how hard the node thinks
     expect(said(node("a", [], { executor: "codex", route: "unspecified-high" }))).toEqual(["agent:codex", "Codex · high"]);
     expect(said(node("a", [], { executor: "codex", category: "unspecified-low" }))).toEqual(["agent:codex", "Codex · low"]);
-    expect(said(node("a", [], { model: "gpt-5.5", route: "unspecified-high" }))).toEqual(["model:openai", "GPT-5.5 · high"]);
+    expect(said(node("a", [], { model: "gpt-6.1", route: "unspecified-high" }))).toEqual(["model:openai", "GPT-6.1 · high"]);
     // an effort that was recorded wins over the category's
-    expect(said(node("a", [], { model: "gpt-5.5", effort: "low", route: "unspecified-high" }))).toEqual(["model:openai", "GPT-5.5 · low"]);
+    expect(said(node("a", [], { model: "gpt-6.1", effort: "low", route: "unspecified-high" }))).toEqual(["model:openai", "GPT-6.1 · low"]);
     expect(said(node("a", [], { executor: "codex", effort: "xhigh", route: "unspecified-low" }))).toEqual(["agent:codex", "Codex · xhigh"]);
     expect(said(node("a", [], { state: "waiting", route: "unspecified-high", planned: { model: "claude-opus-5-5", effort: "medium" } }))).toEqual(["model:claude", "Opus 5.5 · medium"]);
     // it went out under an unnamed route, but the plan calls it deep: the name is the plan's, the effort the route's
-    expect(said(node("a", [], { model: "gpt-5.5", route: "unspecified-high", category: "deep" }))).toEqual(["model:openai", "GPT-5.5 · high · deep"]);
+    expect(said(node("a", [], { model: "gpt-6.1", route: "unspecified-high", category: "deep" }))).toEqual(["model:openai", "GPT-6.1 · high · deep"]);
     // the route it went out under wins over the plan's
-    expect(said(node("a", [], { model: "gpt-5.5", route: "quick", category: "deep" }))).toEqual(["model:openai", "GPT-5.5 · quick"]);
+    expect(said(node("a", [], { model: "gpt-6.1", route: "quick", category: "deep" }))).toEqual(["model:openai", "GPT-6.1 · quick"]);
     // only a word that is an effort: "unspecified" alone, or another tail, says nothing
-    expect(said(node("a", [], { model: "gpt-5.5", route: "unspecified" }))).toEqual(["model:openai", "GPT-5.5"]);
-    expect(said(node("a", [], { model: "gpt-5.5", route: "unspecified-misc" }))).toEqual(["model:openai", "GPT-5.5"]);
+    expect(said(node("a", [], { model: "gpt-6.1", route: "unspecified" }))).toEqual(["model:openai", "GPT-6.1"]);
+    expect(said(node("a", [], { model: "gpt-6.1", route: "unspecified-misc" }))).toEqual(["model:openai", "GPT-6.1"]);
   });
 
   it("gives a CLI session's own sub-runs their model's mark, or the session's CLI when none is known: never the bot's model", () => {
@@ -388,22 +403,22 @@ describe("what ran a node", () => {
   });
 
   it("ends the facts in 'via Codex' only where everything before it fits whole; else the tooltip and the node's detail say it", () => {
-    const f = factsOf(node("a", [], { executor: "codex", model: "gpt-5.5", effort: "high" }), { kind: "dag" }); // "GPT-5.5 · high" 98px, " · via Codex" 84px
+    const f = factsOf(node("a", [], { executor: "codex", model: "gpt-6.1", effort: "high" }), { kind: "dag" }); // "GPT-6.1 · high" 98px, " · via Codex" 84px
     const lead = G.mark + G.markGap;
-    expect(factLines(f, 98 + 84 + lead, M)).toEqual({ lines: ["GPT-5.5 · high"], via: "via Codex", hang: true });
-    expect(factLines(f, 98 + 84 + lead - 1, M)).toEqual({ lines: ["GPT-5.5 · high"], via: "", hang: true }); // no second line for it
+    expect(factLines(f, 98 + 84 + lead, M)).toEqual({ lines: ["GPT-6.1 · high"], via: "via Codex", hang: true });
+    expect(factLines(f, 98 + 84 + lead - 1, M)).toEqual({ lines: ["GPT-6.1 · high"], via: "", hang: true }); // no second line for it
     // a category that does not fit: neither it nor what follows it is in the box
-    const long = factsOf(node("a", [], { executor: "codex", model: "gpt-5.5", effort: "high", route: "visual-engineering" }), { kind: "dag" });
-    expect(factLines(long, 130, M)).toEqual({ lines: ["GPT-5.5 · high"], via: "", hang: true });
-    expect(long.text).toBe("GPT-5.5 · high · visual-engineering · via Codex");
-    // on two lines (the box is too narrow for "GPT-5.5 · high" after the mark) it ends the second where the box holds it
-    expect(factLines(f, 96 + lead, M)).toEqual({ lines: ["GPT-5.5", "high"], via: "via Codex", hang: false });
+    const long = factsOf(node("a", [], { executor: "codex", model: "gpt-6.1", effort: "high", route: "visual-engineering" }), { kind: "dag" });
+    expect(factLines(long, 130, M)).toEqual({ lines: ["GPT-6.1 · high"], via: "", hang: true });
+    expect(long.text).toBe("GPT-6.1 · high · visual-engineering · via Codex");
+    // on two lines (the box is too narrow for "GPT-6.1 · high" after the mark) it ends the second where the box holds it
+    expect(factLines(f, 96 + lead, M)).toEqual({ lines: ["GPT-6.1", "high"], via: "via Codex", hang: false });
   });
 
   it("says no effort for 'none', takes the planned effort when none is recorded, and gives a model of no known maker the mark of the CLI that ran it", () => {
-    expect(said(node("a", [], { model: "gpt-5.5", effort: "none" }))).toEqual(["model:openai", "GPT-5.5"]);
-    expect(said(node("a", [], { model: "gpt-5.5", effort: "none", route: "unspecified-high" }))).toEqual(["model:openai", "GPT-5.5"]);
-    expect(said(node("a", [], { model: "gpt-5.5", effort: "", planned: { model: "gpt-5.5", provider: "openai", effort: "low" } }))).toEqual(["model:openai", "GPT-5.5 · low"]);
+    expect(said(node("a", [], { model: "gpt-6.1", effort: "none" }))).toEqual(["model:openai", "GPT-6.1"]);
+    expect(said(node("a", [], { model: "gpt-6.1", effort: "none", route: "unspecified-high" }))).toEqual(["model:openai", "GPT-6.1"]);
+    expect(said(node("a", [], { model: "gpt-6.1", effort: "", planned: { model: "gpt-6.1", provider: "openai", effort: "low" } }))).toEqual(["model:openai", "GPT-6.1 · low"]);
     // one mark still, and no "via Codex" after it: the mark says it
     expect(factsOf(node("a", [], { model: "mystery-7b", executor: "codex", effort: "high" }), { kind: "dag" })).toMatchObject({ mark: { kind: "agent", id: "codex" }, parts: ["mystery-7b", "high"], via: "" });
     expect(factsOf(node("a", [], { model: "mystery-7b" }), { kind: "dag" }).mark).toBeNull();
@@ -457,7 +472,7 @@ describe("a node's status line", () => {
   });
 
   it("carries no glyph of the terminal's box view in any state", () => {
-    const r = dag([node("a", [], { state: "failed" }), node("fix", ["a"], { repairOf: "a" }), node("b", ["fix"], { state: "waiting" }), node("c", [], { state: "running", model: "gpt-5.5" }), node("d", [], { state: "cancelled" }), node("e", [], { state: "parked" })]);
+    const r = dag([node("a", [], { state: "failed" }), node("fix", ["a"], { repairOf: "a" }), node("b", ["fix"], { state: "waiting" }), node("c", [], { state: "running", model: "gpt-6.1" }), node("d", [], { state: "cancelled" }), node("e", [], { state: "parked" })]);
     const l = lay(r, 700);
     for (const n of r.nodes) {
       const tx = boxText(n, r, l, l.inner, 60, M);
@@ -473,7 +488,7 @@ describe("a box's lines", () => {
   const text = (id: string, inner = 240, now = 121) => boxText(run.nodes.find((n) => n.id === id)!, run, l, inner, now, M);
 
   it("is the title, the mark and facts, and an icon with the status and its time", () => {
-    expect(text("api")).toMatchObject({ title: "Export API", titleLines: 1, repair: false, mark: { kind: "model", id: "zhipu" }, facts: ["glm-5.3-flash · low · quick"], icon: "check", word: "Done", time: "12s", extras: [], tone: "done" });
+    expect(text("api")).toMatchObject({ title: "Export API", titleLines: 1, repair: false, mark: { kind: "model", id: "zhipu" }, facts: ["glm5.3-airx01 · low · quick"], icon: "check", word: "Done", time: "12s", extras: [], tone: "done" });
     // its route is unnamed: the effort that was recorded stays, the category is not shown
     expect(text("button")).toMatchObject({ mark: { kind: "model", id: "claude" }, facts: ["Opus 5.5 · high"], icon: "dot", word: "Running", time: "21s", tone: "running" });
     expect(text("docs")).toMatchObject({ mark: null, facts: ["writing"], icon: "dashed", word: "Handed out", time: "", tone: "out" });
@@ -608,7 +623,7 @@ describe("the layout", () => {
   });
 
   it("sizes a box in px: as wide as its widest line wants, between BOX_MIN and BOX_MAX, whatever the text's length in characters", () => {
-    // the widest line is the title "Export CLI flag" (15 characters, 120px) and the facts "glm-5.3-flash · low · quick" (27, 189px, after a 17px mark)
+    // the widest line is the title "Export CLI flag" (15 characters, 120px) and the facts "glm5.3-airx01 · low · quick" (27, 189px, after a 17px mark)
     const l = lay(sample(), 900);
     expect(l.boxW).toBe(189 + G.mark + G.markGap + 2 * G.padX + 2 * G.border);
     expect(l.inner).toBe(innerOf(l.boxW));
@@ -937,10 +952,12 @@ describe("the layout", () => {
       expect(turns, `${e.from}>${e.to}`).toBe(straight ? 0 : 2);
       expect(e.d).toMatch(/^M[\d.]+,[\d.]+( [VH][\d.]+| Q[\d.]+,[\d.]+ [\d.]+,[\d.]+| M[\d.]+,[\d.]+)+$/);
     }
-    // the turn's legs are the radius long, where the stretches leave it
+    // the turn's legs are the drawing's radius long, where the stretches leave it: a soft elbow, wider than the
+    // room the layout keeps for a turn
     const bent = l.lines.find((e) => e.from === "api" && e.to === "button")!;
     const [, cx, cy, ex, ey] = /Q([\d.]+),([\d.]+) ([\d.]+),([\d.]+)/.exec(bent.d)!.map(Number);
-    expect(Math.abs(ex - cx) + Math.abs(ey - cy)).toBe(G.r);
+    expect(G.curve).toBeGreaterThan(G.r);
+    expect(Math.abs(ex - cx) + Math.abs(ey - cy)).toBe(G.curve);
     const l2 = lay(dag([node("a"), node("b", ["a"])]), 900);
     expect(l2.lines).toHaveLength(1);
     const a = l2.at.get("a")!;
@@ -1350,7 +1367,7 @@ describe("the lines", () => {
     // no edge into a node that is not running carries it
     expect(l.flows.some((f) => f.to === "cli" || f.to === "verify")).toBe(false);
     // three parents into one running child: three edges, whole, which leave the child as one
-    const join = lay(dag([node("a"), node("b"), node("c"), node("z", ["a", "b", "c"], { state: "running", model: "gpt-5.5" })]), 900);
+    const join = lay(dag([node("a"), node("b"), node("c"), node("z", ["a", "b", "c"], { state: "running", model: "gpt-6.1" })]), 900);
     expect(join.flows).toHaveLength(3);
     expect(new Set(join.flows.map((f) => /^M[\d.]+,[\d.]+/.exec(f.d)![0])).size).toBe(1);
     const starts = join.flows.map((f) => pieces([f])[0]);
@@ -1358,7 +1375,7 @@ describe("the lines", () => {
     for (const f of join.flows) expect(nums(f.d).slice(-1)[0]).toBe(join.at.get(f.from)!.y + join.at.get(f.from)!.h);
     // a parent with three running children at any width: no stretch carries two children's dashes
     for (const width of [428, 740, 1136]) {
-      const fan = lay(dag([node("p"), ...["x", "y", "z"].map((id) => node(id, ["p"], { state: "running", model: "gpt-5.5" }))]), width);
+      const fan = lay(dag([node("p"), ...["x", "y", "z"].map((id) => node(id, ["p"], { state: "running", model: "gpt-6.1" }))]), width);
       expect(fan.flows).toHaveLength(3);
       const by = fan.flows.map((f) => pieces([f]));
       by.forEach((a, i) => by.forEach((b, k) => i < k && a.forEach((p) => b.forEach((q) => expect(shared(p, q), `at ${width}`).toBeLessThanOrEqual(0.01)))));
@@ -1520,7 +1537,7 @@ describe("the lines", () => {
 
   it("cuts the dash of a moved line where another child's already rides: two dashes out of step never lie on one stretch, moved or not", () => {
     // a leads to x and y, both running, and with b, c and q to z; a is dragged up: its two elbows share its line down
-    const run = dag([node("a"), node("b"), node("c"), node("q"), node("x", ["a"], { state: "running", model: "gpt-5.5" }), node("y", ["a"], { state: "running", model: "gpt-5.5" }), node("z", ["a", "b", "c", "q"], { state: "waiting" })]);
+    const run = dag([node("a"), node("b"), node("c"), node("q"), node("x", ["a"], { state: "running", model: "gpt-6.1" }), node("y", ["a"], { state: "running", model: "gpt-6.1" }), node("z", ["a", "b", "c", "q"], { state: "waiting" })]);
     const g = lay(run, 1100);
     const at = (id: string): Rect => (id === "a" ? { ...g.at.get(id)!, y: g.at.get(id)!.y - 170 } : g.at.get(id)!);
     const m = movedLines(g, at, new Set(["a"]), () => "done", (id) => id === "x" || id === "y");

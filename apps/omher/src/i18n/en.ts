@@ -34,6 +34,8 @@ export const en = {
   "graph.full": "Full view",
   "graph.close": "Close graph",
   "graph.main": "main",
+  "graph.effort": "{e} effort",
+  "graph.needs": "{n} needs you",
   "graph.run.running": "Running",
   "graph.run.done": "Completed",
   "graph.run.failed": "Failed",

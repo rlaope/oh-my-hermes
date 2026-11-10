@@ -34,6 +34,8 @@ export const ja: Record<Key, string> = {
   "graph.full": "全体表示",
   "graph.close": "グラフを閉じる",
   "graph.main": "main",
+  "graph.effort": "effort {e}",
+  "graph.needs": "{n} 件の確認待ち",
   "graph.run.running": "実行中",
   "graph.run.done": "完了",
   "graph.run.failed": "失敗",
