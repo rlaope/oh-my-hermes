@@ -9,7 +9,7 @@ describe("markFor", () => {
       ["claude-sonnet-5-5", undefined, "claude"],
       ["anthropic/claude-opus-5-5", "og", "claude"],
       ["gpt-6.1-sol", "openai", "openai"],
-      ["gpt-5.5-mini", undefined, "openai"],
+      ["gpt-6.1-terra", undefined, "openai"],
       ["x-ai/grok-4.7", "openrouter", "grok"],
       ["z-ai/glm-5.3-ultrafast", "og", "zhipu"],
       ["deepseek/deepseek-v4.1-flash-ultrafast", "og", "deepseek"],

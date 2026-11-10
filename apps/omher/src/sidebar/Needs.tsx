@@ -1,5 +1,5 @@
 // "Needs you": approvals and questions waiting on the person in any bot or SESSIONS chat, pinned above the BOTS list. One line
-// ("2 need you"); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
+// ("2 need you · Friren: Allow rm -rf build/?", naming the newest ask); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
 // view): each ask with the bot's face, a type tag (Approve / Question), the ask on up to two lines, and its age. An
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
 // or a click outside closes the list. Past three asks the list ends on the third, whole, and a "+2 more" row shows
@@ -25,6 +25,15 @@ export function age(ts: number, nowMs: number): string {
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   return `${Math.floor(s / 3600)}h`;
+}
+
+/** The collapsed strip's line: the count, then who asked last and the first words of that ask, so the person
+ *  knows what waits without opening the list ("2 need you · Friren: Allow rm -rf build/?"). The ask is cut at
+ *  `max` characters with an ellipsis; CSS cuts again when the sidebar is narrower. */
+export function stripText(n: number, who: string, ask: string, max = 32): { count: string; rest: string } {
+  const flat = ask.replace(/`/g, "").replace(/\s+/g, " ").trim();
+  const words = flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
+  return { count: n === 1 ? "1 needs you" : `${n} need you`, rest: ` · ${who}: ${words}` };
 }
 
 /** Asks the list shows before its "+N more" row: three two-line entries fit without cutting one. */
@@ -58,6 +67,9 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
   const name = (bot: string) => askFrom(s, bot);
   const n = asks.length;
   const shown = all || n <= SHOW ? asks : asks.slice(0, SHOW);
+  // asks are oldest first: the strip names the newest
+  const newest = asks[n - 1];
+  const line = stripText(n, name(newest.bot), askText(newest.item));
   return (
     <div
       className={`needs-w${open ? " open" : ""}`}
@@ -78,7 +90,10 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="needs-ic" aria-hidden="true" />
-        <span className="needs-t">{n === 1 ? "1 needs you" : `${n} need you`}</span>
+        <span className="needs-t" title={line.count + line.rest} data-testid="needs-line">
+          {line.count}
+          <span className="needs-who">{line.rest}</span>
+        </span>
         <span className="needs-k" aria-hidden="true">
           {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘J" : "Ctrl+J"}
         </span>

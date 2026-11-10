@@ -1,0 +1,84 @@
+/* First-run cards: one flat container over an empty chat, at the thread's width, holding the two cards side by
+   side and one × in its top-right corner. No gradients; the buttons are quiet outlined ones, the sidebar's
+   "New session" look, so they are never the loudest thing on screen. */
+.onb {
+  position: relative;
+  width: min(var(--thread-w), calc(100% - 48px));
+  margin: 18px auto 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--side);
+  flex: none;
+}
+.onb-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px 13px;
+}
+.onb-card + .onb-card {
+  border-left: 1px solid var(--line);
+}
+/* the × sits in the container's corner: the last card's title clears it */
+.onb-card:last-of-type {
+  padding-right: 38px;
+}
+.onb-t {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.onb-p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.onb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-top: auto;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--side)); /* the sidebar's New session edge */
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: background 0.12s;
+}
+.onb-btn > svg {
+  flex: none;
+  color: var(--muted);
+}
+.onb-btn:hover:not(:disabled) {
+  background: var(--raise);
+}
+.onb-btn:hover:not(:disabled) > svg {
+  color: var(--ink);
+}
+.onb-btn:disabled {
+  opacity: 0.5;
+}
+.onb-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+}
+/* the line under an empty sidebar section */
+.onb-hint {
+  padding: 6px var(--side-x) 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  text-wrap: balance;
+}

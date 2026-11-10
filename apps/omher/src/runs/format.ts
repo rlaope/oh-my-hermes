@@ -1,8 +1,9 @@
 // Small display helpers shared by the Runs panel and the full view.
 import type { RunNode } from "../lib/runs";
 
-/** A model's name as people say it: "claude-opus-5-5" -> "Opus 5.5", "gpt-5.5" -> "GPT-5.5", "gpt-6-astra" ->
- *  "GPT-6 Astra". What a provider puts around the id is dropped: a path in front ("anthropic/claude-haiku-5" ->
+/** A model's name as people say it: "claude-opus-5-5" -> "Opus 5.5", "gpt-6.1-sol" -> "GPT-6.1 Sol", "gpt-6-astra"
+ *  -> "GPT-6 Astra", "gemini-3-pro" -> "Gemini 3 Pro", "z-ai/glm-5.3-ultrafast" -> "GLM-5.3", "kimi-k3" -> "Kimi K3",
+ *  "deepseek-v4.1-flash" -> "DeepSeek V4.1" (a speed tier after GLM, Kimi or DeepSeek is not part of the name). What a provider puts around the id is dropped: a path in front ("anthropic/claude-haiku-5" ->
  *  "Haiku 5"), "us.anthropic." in front, and behind it a context tag ("[1m]"), an effort or revision (":high",
  *  "-v1:0") or a date ("-20261001", "-2026-08-01"). An id of neither shape stays as it is (a display name such
  *  as "Opus 5.5" passes through). */
@@ -20,6 +21,16 @@ export function modelName(model: string): string {
   if (claude) return `${cap(claude[1])} ${claude[2]}${claude[3] ? `.${claude[3]}` : ""}${words(claude[4])}`;
   const gpt = /^gpt-(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(id);
   if (gpt) return `GPT-${gpt[1]}${words(gpt[2])}`;
+  const gemini = /^gemini-(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(id);
+  if (gemini) return `Gemini ${gemini[1]}${words(gemini[2])}`;
+  // open models served at several speeds: the tier ("-flash", "-ultrafast") is how it was served, not the model
+  const open = id.replace(/(?:-(?:flash|ultrafast|turbo|fast))+$/i, "");
+  const glm = /^glm-(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(open);
+  if (glm) return `GLM-${glm[1]}${words(glm[2])}`;
+  const kimi = /^kimi-k(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(open);
+  if (kimi) return `Kimi K${kimi[1]}${words(kimi[2])}`;
+  const deepseek = /^deepseek-v(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(open);
+  if (deepseek) return `DeepSeek V${deepseek[1]}${words(deepseek[2])}`;
   return raw;
 }
 

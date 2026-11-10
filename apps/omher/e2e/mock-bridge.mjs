@@ -261,7 +261,7 @@ const runCounts = (r) => {
 
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
-  { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
+  { slug: "openai", name: "OpenAI", models: ["gpt-6.1-sol", "gpt-6.1-terra"] },
   // several vendors behind one provider, so the picker's search and vendor chips have something to sort
   {
     slug: "openrouter",
@@ -903,6 +903,11 @@ const OPS = {
   },
   "mock.reset": () => {
     reset();
+    return {};
+  },
+  // a bot whose main chat has no messages yet (first run)
+  "mock.clearHistory": (p) => {
+    history[needBot(p).name] = [];
     return {};
   },
   "mock.ask": (p) => {

@@ -1,8 +1,10 @@
-/* Plans (runs in the code): the list of plans, and one plan as the OMH TUI's box view (plain text header, frontiers of outlined boxes,
-   connected 1px lines), in the side panel and at full size over the chat column (⌘⇧G).
-   Rules: a node is a 1px outline on the page with one 2px state line on its left edge. No fill, gradient, shadow,
-   glow or shimmer on a node, a line or a header. 4px radii, 11-13px text, selection is gray. The only motion is
-   the boxes appearing one by one and a slow dash on the lines into a running node. */
+/* Plans (runs in the code): the list of plans, and one plan as a graph (a plain text header, frontiers of outlined
+   boxes joined by lines), in the side panel and at full size over the chat column (⌘⇧G).
+   Rules: a node is a thin outline on the page with one 2px state line on its left edge. No fill, gradient or glow on
+   a node, a line or a header, and no shadow on a node at rest (a soft one only under the pointer or while it is
+   dragged). Everything is in the app's own font; monospace is for code and paths only. 6px radii, 12-14px text,
+   selection is gray. The only motion is the boxes appearing one by one, a slow dash on the last stretch into a
+   running node, and a box answering the pointer in 120ms. */
 /* the Plans panel is 460px, and up to 560px of what the window has beyond a 480px chat: three boxes to a row need
    that to say "Opus 5.5 · high" on one line */
 .window.panel-open:has(.pn-wide[data-tab="runs"]) {
@@ -15,7 +17,16 @@
   --rn-red: 240, 138, 138;
   --rn-pink: 240, 124, 196;
   --rn-violet: 190, 150, 255;
-  --rn-edge: #6f6872;
+  /* a line between two nodes; the same line stepped back while another node is under the pointer; and lit */
+  --rn-edge: #5d5663;
+  --rn-edge-back: #2b272f;
+  --rn-edge-lit: #b3abb7;
+  /* under the pointer: a 1px highlight inside a node's top edge and a soft shadow */
+  --bx-hi: rgba(255, 255, 255, 0.07);
+  --bx-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --bx-ring: #6f6872;
+  /* what waits on the person: the sidebar's needs amber (sidebar.css .side) */
+  --ph-needs: #e9a23b;
 }
 [data-theme="light"] .rn,
 [data-theme="light"] .rf {
@@ -24,7 +35,13 @@
   --rn-red: 192, 57, 43;
   --rn-pink: 196, 54, 127;
   --rn-violet: 122, 62, 190;
-  --rn-edge: #8e8694;
+  --rn-edge: #aaa2af;
+  --rn-edge-back: #e4dfe7;
+  --rn-edge-lit: #5f5765;
+  --bx-hi: rgba(255, 255, 255, 0.9);
+  --bx-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --bx-ring: #8e8694;
+  --ph-needs: #a8640a;
 }
 /* the surface a box stands on: its own background is this colour, so a line never shows through a dragged box */
 .rn {
@@ -137,13 +154,25 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 20px;
+  height: 24px;
   padding: 0 6px;
   border-radius: var(--r-sm);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--body);
+  color: var(--muted);
+}
+/* the Plans section's header row: "KAMI'S PLANS" 11px caps, the plan list toggle and refresh in one grey family;
+   12px down to the plan */
+.rn > .pn-sec:first-child {
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rn > .pn-sec:first-child .pn-ref {
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
 }
 .rn-toggle:hover,
 .rn-toggle[aria-expanded="true"],
@@ -170,49 +199,83 @@
 
 /* ---------------------------------------------------------------- the selected run (panel) */
 .rn-run {
+  padding: 0 4px;
+}
+.rn-list + .rn-run,
+.rn-more + .rn-run,
+.rn-list ~ .rn-run {
   border-top: 1px solid var(--line-soft);
-  padding: 12px 4px 0;
+  padding-top: 12px;
 }
 .rn-gwrap {
   min-width: 0;
 }
 
-/* ---------------------------------------------------------------- the header: plain text, as the TUI prints it */
+/* ---------------------------------------------------------------- the header: plain text in the app's font */
+/* the title leads; its status and who runs it sit close under it (2-4px), the goal 10px apart. Muted text stays
+   4.5:1 or more on the panel in both themes: --muted, and --ph-dim (between --muted and --quiet) for the dimmest */
 .ph {
+  --ph-dim: color-mix(in srgb, var(--muted) 60%, var(--quiet));
   min-width: 0;
-  font: 400 12px/18px ui-monospace, "SF Mono", Menlo, monospace;
-  font-variant-ligatures: none;
+  font: 400 12px/17px var(--font);
   color: var(--muted);
 }
 .rn .ph {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
-.ph-l {
+.ph-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  white-space: pre;
-}
-.ph-l > * {
-  flex: none;
-}
-/* a long count line ("… · 3 failed · 2 repaired · 18 waiting · 2h 5m") wraps between its parts */
-.ph-counts {
-  flex-wrap: wrap;
-}
-.ph-k {
-  color: var(--body);
 }
 .ph-title {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
-  font-weight: 600;
+  font: 600 14px/20px var(--font);
   color: var(--ink);
 }
-.ph-dim {
-  color: var(--quiet);
+/* the status line: a 6px state dot, the state word, how far it is; in a narrow panel it wraps between its parts */
+.ph-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  margin-top: 3px;
+}
+.ph-meta > span {
+  flex: none;
+  white-space: pre;
+}
+.ph-dot {
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--quiet);
+}
+.ph-dot.running {
+  background: rgb(var(--rn-pink));
+  animation: ph-pulse 2.4s ease-in-out infinite;
+}
+.ph-dot.done {
+  background: rgb(var(--rn-green));
+}
+.ph-dot.failed {
+  background: var(--danger);
+}
+@keyframes ph-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-dot.running {
+    animation: none;
+  }
 }
 .ph-w.running {
   color: rgb(var(--rn-pink));
@@ -226,20 +289,70 @@
 .ph-w.repaired {
   color: var(--rn-amber);
 }
-.ph-goal {
-  display: block;
+/* what waits on the person: the sidebar's needs colour, and it opens the ask */
+.ph-needs {
+  font: inherit;
+  color: var(--ph-needs);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ph-needs) 45%, transparent);
+  text-underline-offset: 3px;
+}
+.ph-needs:hover {
+  text-decoration-color: currentColor;
+}
+/* who runs it: the main model's mark, then "Opus 5.5 · high effort · main", the dimmest line */
+.ph-who {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+  color: var(--ph-dim);
+}
+.ph-who > svg,
+.ph-who > img {
+  flex: none;
+}
+.ph-who-t {
+  min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--quiet);
 }
+/* the goal: a little apart, two lines at most, the whole of it in the tooltip */
+.ph-goal {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+/* the full view: a small icon button on the title's row, in the panel's one right gutter */
 .ph-full {
+  flex: none;
+  width: 24px;
+  height: 24px;
   margin-left: auto;
-  padding-left: 12px;
-  font: inherit;
-  color: var(--quiet);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted);
 }
-.ph-full kbd {
-  font: inherit;
+.ph-full:hover {
+  background: var(--hover);
+}
+.ph-act {
+  display: flex;
+  min-width: 0;
+  margin-top: 2px;
+  white-space: pre;
+}
+.ph-act > * {
+  flex: none;
 }
 .ph-act button {
   font: inherit;
@@ -252,6 +365,9 @@
 .ph-act button:hover {
   color: var(--ink);
 }
+.ph-dim {
+  color: var(--quiet);
+}
 .ph .ph-note {
   flex: 0 1 auto;
   min-width: 0;
@@ -259,10 +375,10 @@
   text-overflow: ellipsis;
 }
 
-/* ---------------------------------------------------------------- the box view */
+/* ---------------------------------------------------------------- the graph */
+/* RunGraph.tsx measures text in these two fonts (FONT there): .bv and .bx-title */
 .bv {
-  font: 400 var(--bv-font, 12px) / var(--bv-line, 18px) ui-monospace, "SF Mono", Menlo, monospace;
-  font-variant-ligatures: none;
+  font: 400 12px / var(--bv-line, 18px) var(--font);
   color: var(--body);
 }
 .bv-boxes {
@@ -274,19 +390,21 @@
   inset: 0;
   pointer-events: none;
 }
-/* a node: a 1px neutral outline on the page and one 2px state line on its left edge. The colour of a state lives
-   in that line and in the status word, nowhere else. */
+/* a node: a thin neutral outline on the page (the surface's own colour behind it, so a line never shows through a
+   dragged box) and one 2px state line on its left edge. The colour of a state lives in that line and in the status
+   icon, nowhere else. GEOMETRY in boxView.ts holds the same padding, border and line height. */
 .bx {
   position: absolute;
   box-sizing: border-box;
-  /* its lines start at the top: the titles of a row stand on one line, whatever each box holds under it */
+  /* the title starts at the top and what follows it ends at the bottom: in a row (its boxes are equally tall) the
+     titles stand on one line, and so do the facts and the status lines, whatever each box holds */
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: stretch;
-  padding: 5px calc(var(--bv-cw, 7.2px) * 1.5 - 1px);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 60%, var(--bv-surface));
+  border-radius: 6px;
   background-color: var(--bv-surface);
   background-image: none;
   box-shadow: none;
@@ -295,32 +413,57 @@
   color: var(--body);
   overflow: hidden;
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 .bx::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 5px;
-  bottom: 5px;
+  top: 9px;
+  bottom: 9px;
   width: 2px;
-  border-radius: 1px;
+  border-radius: 0 1px 1px 0;
   background: var(--bx-tone, transparent);
+}
+/* the title: one line, or two with "…" at the end of the second (the layout says which) */
+.bx-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  flex: none;
+  margin-bottom: 2px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font: 500 13px/18px var(--font);
+  color: var(--ink);
+}
+.bx-ic {
+  flex: none;
+}
+.bx-title .bx-ic {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: -1.5px;
+  color: var(--muted);
+}
+.bx-title + * {
+  margin-top: auto;
 }
 .bx-l {
   display: block;
+  flex: none;
   height: var(--bv-line, 18px);
   overflow: hidden;
   white-space: pre;
   text-overflow: ellipsis;
 }
-.bx-title {
-  display: block;
-  font-weight: 600;
-  color: var(--ink);
-}
-/* the marks of what ran the node, then its model, effort and category (on a second line when the box is narrow) */
+/* the mark of the model that ran the node, then its model, effort and category (on a second line when the box is
+   narrow); "via Codex" after them, quieter */
 .bx-facts {
   display: block;
+  flex: none;
   color: var(--muted);
 }
 .bx-fl {
@@ -331,22 +474,41 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  width: 12px;
-  height: 12px;
+  width: 14px; /* GEOMETRY.mark */
+  height: 14px;
   margin-right: 5px;
   color: var(--body);
 }
+/* Codex's mark is a white tile (the first path of codex-color.svg). A dark page shows its edge; on a light page
+   the tile is a light gray with a hairline, so the mark is a tile there too and not a cloud on its own */
+[data-theme="light"] .bx-mk[data-mark="codex"] svg path:first-child {
+  fill: var(--raise2);
+  stroke: var(--line-strong);
+  stroke-width: 2; /* of 24: half of it falls inside the tile */
+}
 .bx-ft {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.bx-dim {
+.bx-via {
+  flex: none;
+  white-space: pre;
   color: var(--quiet);
 }
-.bx-status {
+/* the status: an icon in the state's colour, the word, then the time, quieter */
+.bx-status .bx-ic {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: -2px;
   color: var(--bx-tone, var(--muted));
+}
+.bx-t {
+  color: var(--muted);
+}
+.bx-dim {
+  color: var(--quiet);
 }
 .bx.s-done,
 .bv-card.s-done {
@@ -367,98 +529,111 @@
 .bx.s-retry {
   --bx-tone: var(--rn-amber);
 }
-/* not handed out yet, or cancelled: no state line, quieter title */
+/* not handed out yet, or cancelled: no state line, quieter text */
 .bx.s-waiting .bx-title,
 .bx.s-off .bx-title {
   color: var(--muted);
-  font-weight: 500;
 }
-.bx.s-off .bx-l {
+.bx.s-waiting .bx-status,
+.bx.s-off .bx-status {
+  color: var(--muted);
+}
+.bx.s-off .bx-l,
+.bx.s-off .bx-title {
   color: var(--quiet);
 }
+/* under the pointer: the outline at full strength, a highlight inside the top edge, a soft shadow */
 .bx:hover {
-  border-color: var(--line-strong);
+  border-color: var(--line);
+  box-shadow:
+    inset 0 1px 0 var(--bx-hi),
+    var(--bx-shadow);
 }
-/* selected: gray, whatever the state */
-.bx.on {
-  border-color: var(--muted);
-  outline: 1px solid var(--muted);
+/* selected: a 1.5px gray ring, whatever the state (the outline and half a pixel around it): a quiet gray, between
+   the outline's and the text's */
+.bx.on,
+.bx.on:hover {
+  border-color: var(--bx-ring);
+  box-shadow: 0 0 0 0.5px var(--bx-ring);
 }
 .bx:focus-visible {
   outline: 2px solid var(--muted);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
-.bx.dim {
+/* dragged (full view): it lifts */
+.bx.lift,
+.bx.lift:hover {
+  z-index: 2;
+  transform: scale(1.02);
+  border-color: var(--line);
+  box-shadow:
+    inset 0 1px 0 var(--bx-hi),
+    var(--bx-shadow);
+  cursor: grabbing;
+}
+/* stepped back while another node is under the pointer: its text, mark and state line, never the box itself (a
+   line that runs behind it must not show through) */
+.bx.dim > *,
+.bx.dim::before {
   opacity: 0.45;
 }
-/* the lines: one style everywhere, 1px solid in the parent's state colour, with a ▼ of the same colour */
+/* the lines: one style everywhere, a 1.25px muted line with rounded turns and a small filled arrowhead. Solid
+   colours, never an opacity: the edges of a net lie on each other where they share a stretch */
 .bv-line {
   fill: none;
   stroke: var(--rn-edge);
-  stroke-width: 1;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .bv-head {
   fill: var(--rn-edge);
-  stroke: none;
+  stroke: var(--rn-edge);
+  stroke-width: 0.75;
+  stroke-linejoin: round;
 }
-.bv-line.t-done {
-  stroke: rgba(var(--rn-green), 0.85);
-}
-.bv-head.t-done {
-  fill: rgba(var(--rn-green), 0.85);
-}
-.bv-line.t-running {
-  stroke: rgb(var(--rn-pink));
-}
-.bv-head.t-running {
-  fill: rgb(var(--rn-pink));
-}
-.bv-line.t-out {
-  stroke: rgb(var(--rn-violet));
-}
-.bv-head.t-out {
-  fill: rgb(var(--rn-violet));
-}
-.bv-line.t-failed {
-  stroke: var(--danger);
-}
-.bv-head.t-failed {
-  fill: var(--danger);
-}
-.bv-line.t-repaired,
-.bv-line.t-retry {
-  stroke: var(--rn-amber);
-}
-.bv-head.t-repaired,
-.bv-head.t-retry {
-  fill: var(--rn-amber);
-}
-/* into a running node: a short dash rides the solid line, slowly. The line under it stays whole. */
+/* into a running node: a dash rides the whole edge, slowly. The line under it stays whole. The path runs from the
+   child back to its parent (so the edges that share a stretch into the child dash as one), and the dashes move
+   towards the path's start: into the child. */
 .bv-flow {
   fill: none;
   stroke: rgb(var(--rn-pink));
-  stroke-width: 1;
-  stroke-dasharray: 5 19;
-  animation: bv-flow 2.4s linear infinite;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-dasharray: 4 10;
+  animation: bv-flow 1.6s linear infinite;
 }
 @keyframes bv-flow {
   to {
-    stroke-dashoffset: -24;
+    stroke-dashoffset: 14;
   }
 }
-.bv-edges.focus .bv-line:not(.lit),
-.bv-edges.focus .bv-head:not(.lit),
-.bv-edges.focus .bv-flow:not(.lit) {
-  opacity: 0.25;
+/* a node under the pointer lights its own lines and steps the rest back */
+.bv-edges.focus .bv-line {
+  stroke: var(--rn-edge-back);
+}
+.bv-edges.focus .bv-head {
+  fill: var(--rn-edge-back);
+  stroke: var(--rn-edge-back);
+}
+.bv-edges.focus .bv-line.lit {
+  stroke: var(--rn-edge-lit);
+}
+.bv-edges.focus .bv-head.lit {
+  fill: var(--rn-edge-lit);
+  stroke: var(--rn-edge-lit);
+}
+.bv-flow.back {
+  opacity: 0.3;
 }
 /* it stands over the lines that leave the row above it: opaque, so a line passes behind it and not through its text */
 .bv-more {
   position: absolute;
   z-index: 1;
-  height: 22px;
+  height: 24px;
   background-color: var(--bv-surface);
   font: inherit;
-  white-space: pre;
+  white-space: nowrap;
   color: var(--muted);
   text-decoration: underline;
   text-decoration-color: var(--line-strong);
@@ -467,34 +642,41 @@
 .bv-more.inline {
   position: static;
   display: block;
-  margin-left: calc(var(--bv-cw, 7.2px) * 2);
 }
 .bv-more:hover {
   color: var(--ink);
 }
 /* Dependencies and Node details: plain text under the boxes */
 .bv-sec {
-  margin-top: var(--bv-line, 18px);
+  margin-top: 20px;
 }
 .bv-sec h4 {
-  margin: 0;
+  margin: 0 0 2px;
   font: inherit;
   font-weight: 600;
   color: var(--ink);
 }
+/* a dependency: the two titles and an arrow between them, quieter than the drawing they repeat */
 .bv-dep {
-  padding-left: calc(var(--bv-cw, 7.2px) * 2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  white-space: pre;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  /* a wrapped row hangs under its first word, so its second line never reads as a row of its own */
+  padding-left: 14px;
+  text-indent: -14px;
+  color: var(--muted);
 }
 .bv-arrow {
+  margin: 0 5px;
+  vertical-align: -2px;
   color: var(--quiet);
 }
 .bv-card {
   display: block;
   width: 100%;
-  padding: 0 0 0 calc(var(--bv-cw, 7.2px) * 2);
+  padding: 0;
   border-radius: var(--r-sm);
   font: inherit;
   text-align: left;
@@ -503,28 +685,34 @@
 .bv-card:hover {
   background: var(--hover);
 }
-.bv-card-t,
-.bv-card-l {
-  display: block;
-  overflow: hidden;
-  white-space: pre;
-  text-overflow: ellipsis;
-}
 .bv-card-t {
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
   color: var(--ink);
 }
-.bv-card-l {
-  padding-left: calc(var(--bv-cw, 7.2px) * 2);
+.bv-card-n {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-/* the marks and what ran the node, on one centre line as in a box */
+/* under the title, in line with its text (past the icon) */
+.bv-card-l {
+  display: block;
+  padding-left: 17px; /* the status icon and the space after it */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
 .bv-card-l.bx-fl {
   display: flex;
   align-items: center;
   height: var(--bv-line, 18px);
 }
-.bv-card .bx-g,
-.bv-card .bv-word {
+.bv-card .bx-ic {
   color: var(--bx-tone, var(--muted));
 }
 /* entrance: the boxes one by one, each line once the boxes it joins are in */
@@ -542,6 +730,7 @@
 .bv.still .bv-line,
 .bv.still .bv-head {
   animation: none;
+  transition: none;
 }
 .bv.still .bv-flow {
   display: none;
@@ -552,6 +741,7 @@
   .bv-head,
   .rn-live::after {
     animation: none !important;
+    transition: none !important;
   }
   .bv-flow {
     display: none;
@@ -616,9 +806,6 @@
 .bv-full:active {
   cursor: grabbing;
 }
-.bv-full .bx {
-  cursor: grab;
-}
 .bv-canvas {
   position: absolute;
   left: 0;
@@ -637,7 +824,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--bv-surface);
-  font: 400 11.5px/1 var(--mono);
+  font: 400 11.5px/1 var(--font);
   color: var(--muted);
   cursor: default;
 }
@@ -685,7 +872,6 @@
 /* in the panel it is plain text under "Node details"; in the full view the same text floats in a bordered box */
 .rn-drawer {
   margin: 0 0 var(--bv-line, 18px);
-  padding-left: calc(var(--bv-cw, 7.2px) * 2);
   font-family: var(--font, inherit);
 }
 .rn-dh {
@@ -734,15 +920,14 @@
 .rn-reason b {
   font-weight: 600;
 }
-/* what ran the node, as its box says it: the agent marks, then model · effort · category */
+/* what ran the node, as its box says it: the model's mark, then model · effort · category */
 .rn-ran {
   display: inline-flex;
   align-items: center;
   color: var(--body);
 }
-.rn-routeline {
-  font-family: var(--mono);
-  font-size: 10.5px;
+.rn-routeline,
+.rn-after {
   color: var(--quiet);
 }
 .rn-atts {

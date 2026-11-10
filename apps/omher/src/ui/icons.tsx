@@ -31,3 +31,15 @@ export const StopIcon = () => (
 export const CloseIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" {...s} strokeWidth="2.2"><path d="M6 6l12 12M18 6 6 18" /></svg>
 );
+/** A terminal window with a prompt: the session header's "Open in Terminal". */
+export const TerminalIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...s} strokeWidth="1.9" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="m7.5 10 2.5 2.5-2.5 2.5M12.5 15.5h4" /></svg>
+);
+/** A speech bubble: back to the chat from the terminal view. */
+export const ChatIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...s} strokeWidth="1.9" aria-hidden="true"><path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z" /></svg>
+);
+/** Two corners pulling apart: open something at full size (the plan's full view). */
+export const ExpandIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...s} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" /></svg>
+);

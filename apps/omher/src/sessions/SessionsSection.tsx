@@ -9,8 +9,9 @@ import { ChevronRight, CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
+import { FirstRunHint } from "../onboarding/FirstRun";
 import { AgentMark } from "./AgentMark";
-import { agentDef, folderName, parentPath, recentFolders, rowModel, tildePath, type AgentId, type ChatLive, type SessionRec } from "./agents";
+import { agentDef, folderName, missingNote, parentPath, recentFolders, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
@@ -32,8 +33,21 @@ export function sessionAccountSuffix(groups: AccountGroup[] | null, agent: Agent
   return `as ${name}`;
 }
 
+const openers = new Set<() => void>();
+/** Open the SESSIONS + menu from elsewhere (the first-run card's "New session"). */
+export function openNewSessionMenu(): void {
+  for (const f of [...openers]) f();
+}
+
 export function SessionsHeader() {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const f = () => setOpen(true);
+    openers.add(f);
+    return () => {
+      openers.delete(f);
+    };
+  }, []);
   return (
     <div className="side-sh side-sh-row">
       <span>Sessions</span>
@@ -73,6 +87,7 @@ function SessionStart() {
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} />}
       </div>
+      <FirstRunHint text={t("onb.sessionsHint")} testId="onb-hint-sessions" />
       {installed.length > 0 && (
         // each mark next to its name; past two agents the rest show their mark only (all names in the tooltip)
         <div className="ss-start-ag" data-testid="session-start-agents" title={names}>
@@ -166,7 +181,7 @@ function NewSessionMenu({ onClose }: { onClose: () => void }) {
               type="button"
               className="ss-item"
               disabled={!a.path}
-              title={a.path ?? `${def.program} was not found on this computer`}
+              title={a.path ?? missingNote(a.id)}
               onClick={() => setAgent(a.id)}
               autoFocus={a.id === from}
               data-testid={`session-agent-${a.id}`}
@@ -212,6 +227,7 @@ export function SessionList() {
     else getSessions().close(rec.id);
   };
   if (ss.list.length === 0) return <SessionStart />;
+  const ctx: RowContext = { cwds: ss.list.map((r) => r.cwd), home: ss.home };
   return (
     <nav className="bot-list ss-list" aria-label="Sessions" data-testid="session-list">
       {ss.list.map((rec) =>
@@ -248,7 +264,7 @@ export function SessionList() {
             </button>
           </div>
         ) : (
-          <Row key={rec.id} rec={rec} active={current === rec.id} onClose={() => ask(rec)} />
+          <Row key={rec.id} rec={rec} ctx={ctx} active={current === rec.id} onClose={() => ask(rec)} />
         ),
       )}
     </nav>
@@ -262,11 +278,11 @@ function chatLive(s: AppState, key: string | null): ChatLive | undefined {
   return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key) };
 }
 
-function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClose: () => void }) {
+function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; active: boolean; onClose: () => void }) {
   const s = useStore();
   const key = getSessions().chatKey(rec.id);
   const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
-  const m = rowModel(rec, chat);
+  const m = rowModel(rec, chat, ctx);
   // a chat answers in turns (ring); a terminal just runs (dot)
   const ring = rec.view === "chat" && m.live && !m.needsYou;
   const dot = rec.view !== "chat" && m.live;
@@ -298,7 +314,15 @@ function Row({ rec, active, onClose }: { rec: SessionRec; active: boolean; onClo
         </LiveRing>
         <span className="bot-m">
           <span className="bot-r1">
-            <span className="bot-n">{m.title}</span>
+            <span className="bot-n">
+              {m.title}
+              {m.where && (
+                <span className="ss-where" data-testid="session-where">
+                  {" · "}
+                  {m.where}
+                </span>
+              )}
+            </span>
             {m.needsYou ? (
               <span className="bot-t wait" data-testid="bot-time">
                 waiting

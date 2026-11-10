@@ -9,7 +9,7 @@ import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
 import "../chat/model/model.css";
-import { ChevronDown, ModelIcon, Popover } from "../ui";
+import { ChatIcon, ChevronDown, ModelIcon, Popover, TerminalIcon } from "../ui";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
@@ -273,11 +273,13 @@ export function SessionView() {
               type="button"
               className={`ss-toggle${rec.view === "terminal" ? " on" : ""}`}
               aria-pressed={rec.view === "terminal"}
-              title={rec.view === "terminal" ? "Back to the chat" : terminalNote(rec.agent)}
+              aria-label={rec.view === "terminal" ? "Back to the chat" : "Open in Terminal"}
+              title={rec.view === "terminal" ? "Back to the chat" : "Open in Terminal"}
+              aria-description={rec.view === "terminal" ? undefined : terminalNote(rec.agent)}
               onClick={() => void getSessions().setView(rec.id, rec.view === "terminal" ? "chat" : "terminal")}
               data-testid="session-terminal-toggle"
             >
-              {rec.view === "terminal" ? "Chat" : "Terminal"}
+              {rec.view === "terminal" ? <ChatIcon /> : <TerminalIcon />}
             </button>
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
           </div>

@@ -52,6 +52,21 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.1.** The plan graph looks like part of a desktop app, and the
+  first launch says what bots and sessions are.
+  - **Plans.** Each part shows its model's logo and name (`Opus 5.5 · high`)
+    in the app's own font, with rounded boxes, small status icons and curved
+    lines; several lines into one part no longer pile up on one arrowhead.
+    The plan's title leads its header, with a quieter status line under it.
+  - **First run.** Two small cards over an empty chat explain Bots (coworkers
+    you hand work to) and Sessions (a coding agent working with you in one
+    folder), each with one button. One × hides them for good.
+  - **Sessions.** The Terminal button is a plain icon with a tooltip, so it no
+    longer looks like the model button. A session whose agent exits cleanly
+    reads Ended, not Failed. Two folders of the same name show their parent
+    folder. "Not installed" says how to install that CLI.
+  - **Needs you.** The collapsed strip names who is asking and their first
+    words.
 - **omher 0.2.0.** Your bots, coding sessions and plans in one window.
   - **Plans.** A dag-ulw run and a coding agent's sub-runs open as a plan. Its
     graph shows each part with the model, effort and category it ran on, the

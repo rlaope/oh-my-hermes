@@ -50,7 +50,7 @@ test("search is focused on open and filters by model and provider as you type", 
   await expect(pop.getByTestId("model-opt")).toHaveCount(12);
 
   await page.keyboard.type("GPT");
-  await expect(names(pop)).toHaveText(["gpt-5.5", "gpt-5.5-mini"]);
+  await expect(names(pop)).toHaveText(["gpt-6.1-sol", "gpt-6.1-terra"]);
   await expect(pop.locator(".mp-g")).toHaveText(["OpenAI"]);
 
   // provider name matches every model it serves
@@ -100,8 +100,8 @@ test("chip and search combine", async ({ page }) => {
   await expect(names(pop)).toHaveText(["Opus 5.5", "anthropic/claude-opus-5-5"]);
   await pop.getByTestId("model-chip-openai").click();
   await expect(pop.getByTestId("model-opt")).toHaveCount(0);
-  await pop.getByTestId("model-search").fill("mini");
-  await expect(names(pop)).toHaveText(["gpt-5.5-mini"]);
+  await pop.getByTestId("model-search").fill("terra");
+  await expect(names(pop)).toHaveText(["gpt-6.1-terra"]);
 });
 
 test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ page }) => {
@@ -116,8 +116,8 @@ test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ p
   await page.keyboard.press("ArrowUp");
   await expect(rows.nth(1)).toHaveAttribute("data-active", "true");
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("model-label")).toHaveText("gpt-5.5-mini");
-  await expect.poll(setModelCalls).toEqual([{ bot: "kami", model: "gpt-5.5-mini", provider: "openai" }]);
+  await expect(page.getByTestId("model-label")).toHaveText("gpt-6.1-terra");
+  await expect.poll(setModelCalls).toEqual([{ bot: "kami", model: "gpt-6.1-terra", provider: "openai" }]);
 
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("model-pop")).toHaveCount(0);
@@ -127,7 +127,7 @@ test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ p
   await expect(again.getByTestId("model-search")).toHaveValue("");
   await expect(again.getByTestId("model-search")).toBeFocused();
   await expect(again.getByTestId("model-opt")).toHaveCount(12);
-  await expect(again.locator('[data-active="true"]')).toContainText("gpt-5.5-mini");
+  await expect(again.locator('[data-active="true"]')).toContainText("gpt-6.1-terra");
 });
 
 test("Esc closes the picker and gives focus back to the model button", async ({ page }) => {

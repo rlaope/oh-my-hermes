@@ -611,6 +611,14 @@ button.upd:hover {
 .needs-t {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* who asked last and the ask's first words: the count stays the strong part */
+.needs-who {
+  font-weight: 400;
+  color: var(--body);
 }
 .needs-k {
   font-size: 10.5px;

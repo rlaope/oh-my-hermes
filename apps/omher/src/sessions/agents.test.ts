@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   AGENTS,
   folderName,
+  INSTALL,
   isAgentId,
+  missingNote,
   parentPath,
   parseRecent,
   pushRecent,
@@ -66,6 +68,28 @@ describe("session agents", () => {
     expect(rowModel({ ...base, status: "exited", exitCode: null }).sub).toBe("Claude Code · Ended");
     expect(rowModel({ ...base, agent: "codex", status: "exited", exitCode: 2 }).sub).toBe("Codex · Ended · exit 2");
     expect(rowModel({ ...base, agent: "omp", status: "failed" }).sub).toBe("oh-my-pi · Could not start");
+  });
+
+  it("row model: two folders of the same name show their parent, a unique name stays alone", () => {
+    const at = (id: string, cwd: string): SessionRec => ({ id, agent: "claude", cwd, startedAt: 1, status: "running", view: "chat" });
+    const cwds = ["/Users/k/work/web-app", "/Users/k/oss/web-app", "/Users/k/notes", "/Users/k/work/web-app"];
+    const ctx = { cwds, home: "/Users/k" };
+    expect(rowModel(at("a", cwds[0]), undefined, ctx)).toMatchObject({ title: "web-app", where: "~/work" });
+    expect(rowModel(at("b", cwds[1]), undefined, ctx)).toMatchObject({ title: "web-app", where: "~/oss" });
+    expect(rowModel(at("c", cwds[2]), undefined, ctx).where).toBeUndefined();
+    // two sessions in the very same folder are not a clash of names
+    expect(rowModel(at("d", "/Users/k/notes"), undefined, { cwds: ["/Users/k/notes", "/Users/k/notes"], home: "/Users/k" }).where).toBeUndefined();
+    expect(rowModel(at("e", "C:\\a\\api"), undefined, { cwds: ["C:\\a\\api", "C:\\b\\api"], home: null }).where).toBe("C:\\a");
+    expect(rowModel(at("f", cwds[0])).where).toBeUndefined();
+  });
+
+  it("a missing agent's tooltip carries its install line, as text", () => {
+    expect(missingNote("claude")).toBe("claude was not found on this computer · install: npm i -g @anthropic-ai/claude-code");
+    expect(missingNote("codex")).toContain("npm i -g @openai/codex");
+    expect(missingNote("pi")).toContain("npm i -g @mariozechner/pi-coding-agent");
+    expect(missingNote("omp")).toContain("npm i -g @oh-my-pi/pi-coding-agent");
+    expect(missingNote("grok")).toBe("grok was not found on this computer · see grok docs");
+    expect(Object.keys(INSTALL).sort()).toEqual(AGENTS.map((a) => a.id).sort());
   });
 
   it("row model of a chat: live only while a turn runs, needsYou while an approval waits (the line stays the agent)", () => {

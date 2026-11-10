@@ -54,7 +54,7 @@ export interface Turn {
   id: string;
   startedAt: number; // ms
   endedAt?: number; // ms
-  outcome?: "done" | "interrupted" | "error";
+  outcome?: "done" | "interrupted" | "ended" | "error";
   error?: string;
   /** Latest tool text ("Reading gateway.log") or status text. */
   status: string;
@@ -383,7 +383,7 @@ function patchTurn(chat: Chat, fn: (t: Turn) => Turn): Chat {
 }
 
 /** Closes the running turn (if any) and moves it to lastTurn. */
-function endTurn(chat: Chat, now: number, outcome: "done" | "interrupted" | "error", error?: string): Chat {
+function endTurn(chat: Chat, now: number, outcome: NonNullable<Turn["outcome"]>, error?: string): Chat {
   if (!chat.turn) return chat;
   const patched = patchTurn(chat, (t) => ({
     ...t,

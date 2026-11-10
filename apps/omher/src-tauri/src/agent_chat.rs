@@ -194,6 +194,16 @@ fn unwrap_shell(cmd: &str) -> String {
 
 /// The first useful line of what a program wrote to stderr: log lines (`2026-11-10T05:09:59Z ERROR …`) and
 /// blank lines skipped, else the last line.
+/// How a turn ends when its program exits in the middle of it: a clean exit (code 0, nothing on stderr) is
+/// "ended", which the UI shows in grey; any other exit is an "error" carrying the reason.
+pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
+    if code == Some(0) && err.is_empty() {
+        return ev("turn.end", json!({"outcome": "ended"}));
+    }
+    let e = if err.is_empty() { "the agent stopped" } else { err };
+    ev("turn.end", json!({"outcome": "error", "error": e}))
+}
+
 pub(crate) fn exit_reason(tail: &str) -> String {
     let is_log = |l: &str| l.len() > 11 && l.as_bytes()[..4].iter().all(u8::is_ascii_digit) && l.as_bytes()[4] == b'-' && l.as_bytes()[10] == b'T';
     let lines: Vec<&str> = tail.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
@@ -1687,8 +1697,7 @@ impl ChatSessions {
                 };
                 if let Ok(mut f) = sink.lock() {
                     if mid_turn {
-                        let e = if err.is_empty() { "the agent stopped".to_string() } else { err.clone() };
-                        f(ChatOut::Event(ev("turn.end", json!({"outcome": "error", "error": e}))));
+                        f(ChatOut::Event(exit_turn_end(code, &err)));
                     }
                     f(ChatOut::Exit(code, err));
                 }
@@ -1941,7 +1950,7 @@ mod tests {
         assert_eq!(sent[3]["params"]["threadId"], "thr_1");
         assert_eq!(sent[3]["params"]["input"][0]["text"], "run the tests");
         assert_eq!(s(&st.events[0], "agent_session"), "thr_1");
-        assert_eq!(s(&st.events[0], "model"), "gpt-5.5-codex");
+        assert_eq!(s(&st.events[0], "model"), "gpt-6.1-sol");
 
         let at = lines.iter().position(|l| l.contains("requestApproval")).unwrap();
         let st = run(&mut x, &lines[2..=at]);
@@ -2113,6 +2122,29 @@ mod tests {
         let got = out.lock().unwrap().clone();
         assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "error").contains("not logged in"))), "{got:?}");
         assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(2), e) if e.contains("not logged in"))), "{got:?}");
+    }
+
+    #[test]
+    fn a_clean_exit_mid_turn_ends_the_turn_without_an_error() {
+        assert_eq!(exit_turn_end(Some(0), ""), json!({"event": "turn.end", "outcome": "ended"}));
+        assert_eq!(exit_turn_end(Some(0), "boom"), json!({"event": "turn.end", "outcome": "error", "error": "boom"}));
+        assert_eq!(exit_turn_end(Some(1), ""), json!({"event": "turn.end", "outcome": "error", "error": "the agent stopped"}));
+        assert_eq!(exit_turn_end(None, ""), json!({"event": "turn.end", "outcome": "error", "error": "the agent stopped"}));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_agent_that_exits_cleanly_mid_turn_ends_the_turn_and_reports_code_0() {
+        let c = ChatSessions::default();
+        let (out, sink) = collect();
+        let mut adapter: Box<dyn Adapter> = Box::new(Claude::default());
+        adapter.on_input(Input::Send { text: "x".into() }).unwrap();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), "exit 0".into()], &tmp, None, &[], adapter, sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let got = out.lock().unwrap().clone();
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "outcome") == "ended")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(0), e) if e.is_empty())), "{got:?}");
     }
 
     /// A temp home whose `active.json` picks `active` for claude, with that account's folder made.

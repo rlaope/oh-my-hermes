@@ -3,7 +3,7 @@ import { filterRows, matchesModel, modelRows, vendorOf, vendorsPresent } from ".
 
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "claude-opus-5-5"] },
-  { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
+  { slug: "openai", name: "OpenAI", models: ["gpt-6.1-sol", "gpt-6.1-terra"] },
   { slug: "openrouter", name: "OpenRouter", models: ["google/gemini-3-pro", "x-ai/grok-4.7", "mystery-7b"] },
 ];
 const rows = modelRows(PROVIDERS);
@@ -19,8 +19,8 @@ describe("model search", () => {
   it("matches model id and provider, case-insensitive; empty query keeps everything", () => {
     expect(find("")).toHaveLength(rows.length);
     expect(find("   ")).toHaveLength(rows.length);
-    expect(find("GPT-5.5-MINI")).toEqual(["gpt-5.5-mini"]);
-    expect(find("Mini")).toEqual(["gpt-5.5-mini", "google/gemini-3-pro"]); // substring: gemini
+    expect(find("GPT-6.1-TERRA")).toEqual(["gpt-6.1-terra"]);
+    expect(find("Ini")).toEqual(["google/gemini-3-pro"]); // substring: gemini
     expect(find("openrouter")).toEqual(["google/gemini-3-pro", "x-ai/grok-4.7", "mystery-7b"]);
     expect(find("proxy")).toEqual(["Opus 5.5", "claude-opus-5-5"]);
     expect(find("anthropic")).toEqual(["Opus 5.5", "claude-opus-5-5"]);
@@ -28,21 +28,21 @@ describe("model search", () => {
 
   it("matches without separators on either side", () => {
     expect(find("opus55")).toEqual(["Opus 5.5", "claude-opus-5-5"]);
-    expect(find("gpt55mini")).toEqual(["gpt-5.5-mini"]);
+    expect(find("gpt61terra")).toEqual(["gpt-6.1-terra"]);
     expect(find("grok-47")).toEqual(["x-ai/grok-4.7"]);
   });
 
   it("needs every word, and combines with the vendor chip", () => {
-    expect(find("gpt mini")).toEqual(["gpt-5.5-mini"]);
+    expect(find("gpt terra")).toEqual(["gpt-6.1-terra"]);
     expect(find("gpt opus")).toEqual([]);
-    expect(find("5.5", "openai")).toEqual(["gpt-5.5", "gpt-5.5-mini"]);
+    expect(find("6.1", "openai")).toEqual(["gpt-6.1-sol", "gpt-6.1-terra"]);
     expect(find("", "other")).toEqual(["mystery-7b"]);
     expect(find("gemini", "grok")).toEqual([]);
   });
 
   it("a query of only separators finds nothing new", () => {
     const r = rows[2];
-    expect(matchesModel("-", r)).toBe(true); // literal "-" is in "gpt-5.5"
+    expect(matchesModel("-", r)).toBe(true); // literal "-" is in "gpt-6.1-sol"
     expect(matchesModel("--", r)).toBe(false);
   });
 });

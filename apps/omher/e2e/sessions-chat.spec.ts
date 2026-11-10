@@ -156,7 +156,7 @@ test("an approval card in a session: Deny first, answered with Allow for session
 test("Esc and Stop send the agent's own interrupt; the model button switches the agent's model", async ({ page }) => {
   await open(page);
   await start(page, "codex");
-  await expect(page.getByTestId("model-label")).toHaveText("GPT-5.5 Codex");
+  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Sol");
   await page.getByTestId("composer").fill("/slow");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-streaming")).toContainText("line 2");
@@ -166,10 +166,10 @@ test("Esc and Stop send the agent's own interrupt; the model button switches the
   expect((await calls(page)).filter((c) => c.input?.kind === "interrupt")).toHaveLength(1);
 
   await page.getByTestId("model-pill").click();
-  await expect(page.getByTestId("model-opt")).toHaveText(["GPT-5.5 Codex", "GPT-5.5"]);
+  await expect(page.getByTestId("model-opt")).toHaveText(["GPT-6.1 Sol", "GPT-6.1 Terra"]);
   await page.getByTestId("model-opt").nth(1).click();
-  await expect(page.getByTestId("model-label")).toHaveText("GPT-5.5");
-  expect((await calls(page)).find((c) => c.input?.kind === "model")!.input).toEqual({ kind: "model", model: "gpt-5.5" });
+  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Terra");
+  expect((await calls(page)).find((c) => c.input?.kind === "model")!.input).toEqual({ kind: "model", model: "gpt-6.1-terra" });
   // the header keeps the toggle and the model button only
   await page.keyboard.press("Escape");
   expect(await page.locator("[data-testid=head-right] > *").count()).toBe(2);
@@ -200,8 +200,8 @@ test("Terminal toggle: Claude Code's terminal resumes the same conversation, and
   await expect(page.getByTestId("bubble-bot")).toBeVisible();
   await expect(page.getByTestId("activity")).toHaveAttribute("data-state", "done");
   const toggle = page.getByTestId("session-terminal-toggle");
-  await expect(toggle).toHaveText("Terminal");
-  await expect(toggle).toHaveAttribute("title", /continuing this conversation/);
+  await expect(toggle).toHaveAttribute("aria-label", "Open in Terminal");
+  await expect(toggle).toHaveAttribute("aria-description", /continuing this conversation/);
   await toggle.click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
@@ -223,7 +223,7 @@ test("Codex's terminal view starts its TUI fresh and the chat keeps running", as
   await open(page);
   await start(page, "codex");
   const toggle = page.getByTestId("session-terminal-toggle");
-  await expect(toggle).toHaveAttribute("title", /starts Codex fresh/);
+  await expect(toggle).toHaveAttribute("aria-description", /starts Codex fresh/);
   await toggle.click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   // xterm loads on this first terminal view, and the terminal starts after it

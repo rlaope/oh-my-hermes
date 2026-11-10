@@ -1,16 +1,18 @@
-// A run drawn after the OMH TUI's box view (boxView.ts holds the layout): one frontier to a row, equal boxes of
-// monospace text (title; the Hermes mark, model, effort and category; glyph, status and time; the first parent),
-// and every edge a 1px solid line with a ▼ head. A box is a 1px neutral outline on the page with one 2px state
-// line on its left edge: no fill, gradient, shadow or glow. Under the boxes, "Dependencies" and "Node details" are
-// plain text. Two sizes: "panel" flows in the side panel at its width (boxes shrink to put a frontier on one row;
-// a very long one wraps, shows its first rows and "Show all"); "full" is the same drawing over the chat column,
-// where you can drag a box (its position only, kept per run), pan, zoom and Fit. The only motion is the boxes
-// appearing one by one and a slow dash riding the lines into a running node. Nothing here changes a run.
+// A run drawn as a graph: one frontier to a row, equal boxes of text joined by lines (boxView.ts holds the layout,
+// the structure of the OMH TUI's box view). A box is the title, the mark of the model that ran the node with
+// "Opus 5.5 · high · visual-engineering", and a status icon with a word; it is a thin outline on the page with one
+// 2px state line on its left edge: no fill, no gradient, no glow, and no shadow at rest. Every edge is a line with
+// rounded turns and a small arrowhead. Under the boxes, "Dependencies" and "Node details" are plain text. The font
+// is the app's own. Two sizes: "panel" flows in the side panel at its width (boxes shrink to put a frontier on one
+// row; a very long one wraps, shows its first rows and "Show all"); "full" is the same drawing over the chat
+// column, where you can drag a box (its position only, kept per run), pan, zoom and Fit. The only motion is the
+// boxes appearing one by one, a slow dash riding the edges into a running node, and a box answering the pointer.
+// Nothing here changes a run.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPE, type ReactNode } from "react";
 import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
-import { AgentIcon, HermesMark } from "../ui";
-import { boxText, durationOf, elbowNet, factsOf, GEOMETRY, layoutBoxes, statusOf, titleOf, type BoxLayout, type EdgeHead, type EdgeLine, type Rect } from "./boxView";
+import { AgentIcon, ModelIcon } from "../ui";
+import { boxText, durationOf, estimate, factsOf, GEOMETRY, layoutBoxes, movedLines, statusOf, titleOf, titleParts, type BoxLayout, type Mark, type Measure, type Rect, type StatusIcon } from "./boxView";
 import { reducedMotion } from "./format";
 
 export type GraphMode = "panel" | "full";
@@ -19,9 +21,9 @@ export interface BotModel {
   provider: string;
 }
 
-/** The drawing's type: 12px in the panel, 12.5px in the full view, on 18px lines. */
-export const TYPE = { panel: { font: 12, line: 18 }, full: { font: 12.5, line: 18 } };
-export const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
+/** The drawing's type, in the app's own font: a title in 13px medium, every other line in 12px, on 18px lines.
+ *  runs.css sets the same two on `.bx-title` and `.bv`. */
+export const FONT = { title: "500 13px var(--font)", text: "400 12px var(--font)" };
 /** The panel shows this many rows of a long frontier before "Show all". */
 export const PANEL_CAP_ROWS = 8;
 /** The Dependencies list shows this many edges before "Show all". */
@@ -34,35 +36,76 @@ const MIN_FIT = 0.4;
 /** Full view: the room around the drawing. */
 const MARGIN = 28;
 const MAX_FIT = 1; // the type is never drawn larger than its own size
+/** Full view: a frontier up to a quarter too long for the window stays on one row, and the view shows the drawing
+ *  that much smaller (never under four fifths of its size for this). */
+const FULL_STRETCH = 1.25;
 
-const widths = new Map<number, number>();
-/** One character cell of the drawing's font at `px`, measured where it is drawn (7.2px at 12px without a DOM). */
-function cellWidth(px: number): number {
-  if (typeof document === "undefined") return px * 0.6;
-  let w = widths.get(px);
+const widths = new Map<string, number>();
+let probe: HTMLSpanElement | null = null;
+/** A text's width in the drawing's font, measured where it is drawn (estimated without a DOM). */
+export const measureText: Measure = (text, font) => {
+  if (typeof document === "undefined") return estimate(text, font);
+  const key = `${font}\n${text}`;
+  let w = widths.get(key);
   if (w === undefined) {
-    const probe = document.createElement("span");
-    probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:400 ${px}px ${MONO}`;
-    probe.textContent = "0".repeat(100);
-    document.body.appendChild(probe);
-    w = probe.getBoundingClientRect().width / 100 || px * 0.6;
-    probe.remove();
-    widths.set(px, w);
+    if (!probe?.isConnected) {
+      probe = document.createElement("span");
+      probe.setAttribute("aria-hidden", "true");
+      document.body.appendChild(probe);
+    }
+    probe.style.cssText = `position:fixed;left:-9999px;top:0;visibility:hidden;white-space:pre;font:${FONT[font]}`;
+    probe.textContent = text;
+    w = probe.getBoundingClientRect().width;
+    if (widths.size > 5000) widths.clear();
+    widths.set(key, w);
   }
   return w;
+};
+
+const ICONS: Record<StatusIcon | "repair", ReactNode> = {
+  check: <path d="M20 6 9 17l-5-5" />,
+  x: <path d="M18 6 6 18M6 6l12 12" />,
+  dot: <circle cx="12" cy="12" r="5.5" fill="currentColor" stroke="none" />,
+  ring: <circle cx="12" cy="12" r="7.5" />,
+  dashed: <circle cx="12" cy="12" r="7.5" strokeDasharray="2.9 3" />,
+  alert: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5M12 16.4h.01" />
+    </>
+  ),
+  pause: <path d="M9 6v12M15 6v12" />,
+  retry: <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8M21 3v5h-5" />,
+  off: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m5.7 5.7 12.6 12.6" />
+    </>
+  ),
+  repair: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
+};
+/** A node's status as a 12px line icon (a check, a dot, a ring…), in the state's colour. The word beside it says
+ *  the same, so the icon itself is hidden from a screen reader unless it carries a label of its own. */
+export function StatusGlyph({ icon, label }: { icon: StatusIcon | "repair"; label?: string }) {
+  return (
+    <svg className="bx-ic" data-icon={icon} viewBox="0 0 24 24" width={GEOMETRY.icon} height={GEOMETRY.icon} fill="none" stroke="currentColor" strokeWidth={icon === "repair" ? 2 : 2.6} strokeLinecap="round" strokeLinejoin="round" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      {ICONS[icon]}
+    </svg>
+  );
 }
 
-/** The marks before a node's model: Hermes for a Hermes subagent, then the agent CLI its lane was handed to; a CLI
- *  session's own sub-runs carry that CLI's mark. A node whose agent is not known has none. */
-export function Marks({ ids }: { ids: string[] }) {
+/** A title that may also break where `titleParts` says (after a "/" or a "_" inside a long word), before the box
+ *  falls back to breaking anywhere. */
+const breakable = (title: string): ReactNode[] => titleParts(title).flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]));
+
+/** The one mark before a node's model: the model maker's (Claude, OpenAI, Gemini…), or the agent CLI's when the
+ *  lane went to one and no model is known. A node of which neither is known has none. */
+export function NodeMark({ mark }: { mark: Mark | null }) {
+  if (!mark) return null;
   return (
-    <>
-      {ids.map((id) => (
-        <span key={id} className="bx-mk" data-testid="node-mark" data-mark={id}>
-          {id === "hermes" ? <HermesMark size={12} /> : <AgentIcon id={id} size={12} />}
-        </span>
-      ))}
-    </>
+    <span className="bx-mk" data-testid="node-mark" data-mark={mark.id} data-kind={mark.kind}>
+      {mark.kind === "model" ? <ModelIcon model={mark.model} provider={mark.provider} size={GEOMETRY.mark} /> : <AgentIcon id={mark.id} size={GEOMETRY.mark} />}
+    </span>
   );
 }
 
@@ -108,8 +151,6 @@ export function RunGraph({
   /** Panel: the open node's detail, first under "Node details" (the full view shows it in a drawer instead). */
   detail?: ReactNode;
 }) {
-  const type = TYPE[mode];
-  const cw = cellWidth(type.font);
   // "Show all" on a long frontier (panel) and on the Dependencies list; both reset with the run
   const [opened, setOpened] = useState<Set<number>>(() => new Set());
   const [allDeps, setAllDeps] = useState(false);
@@ -120,14 +161,15 @@ export function RunGraph({
   const lay: BoxLayout = useMemo(
     () =>
       layoutBoxes(run, {
-        cells: Math.floor((Math.max(width, 200) - (mode === "full" ? 2 * MARGIN : 0)) / cw),
-        metrics: { cw, line: type.line },
+        width: Math.max(width, 200) - (mode === "full" ? 2 * MARGIN : 0),
+        measure: measureText,
         capRows: mode === "panel" ? PANEL_CAP_ROWS : undefined,
         opened,
         bot,
+        stretch: mode === "full" ? FULL_STRETCH : 1,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [run, width, cw, type.line, mode, opened, bot?.model, bot?.provider],
+    [run, width, mode, opened, bot?.model, bot?.provider],
   );
   const byId = useMemo(() => new Map(run.nodes.map((n) => [n.id, n])), [run.nodes]);
 
@@ -144,24 +186,19 @@ export function RunGraph({
   );
   const moved = Object.keys(over).some((id) => lay.at.has(id));
 
-  // the lines: as the layout ran them; a net with a dragged box is drawn edge by edge between the boxes as they
-  // stand now
-  const edges = useMemo(() => {
-    const dragged = new Set(Object.keys(over).filter((id) => lay.at.has(id)));
-    if (!dragged.size) return { lines: lay.lines, heads: lay.heads };
-    const lines: EdgeLine[] = [];
-    const heads: EdgeHead[] = [];
-    const tone = (id: string) => statusOf(byId.get(id)!, run).tone;
-    const running = (id: string) => byId.get(id)!.state === "running";
-    for (const n of lay.nets) {
-      const r = [...n.parents, ...n.children].some((id) => dragged.has(id))
-        ? elbowNet(n, rect, tone, running)
-        : { lines: lay.lines.filter((l) => l.net === n.key), heads: lay.heads.filter((h) => h.net === n.key) };
-      lines.push(...r.lines);
-      heads.push(...r.heads);
-    }
-    return { lines, heads };
-  }, [lay, rect, over, byId, run]);
+  // the lines: as the layout ran them; an edge of a box the person moved is one elbow between the two boxes as
+  // they stand now
+  const edges = useMemo(
+    () =>
+      movedLines(
+        lay,
+        rect,
+        new Set(Object.keys(over).filter((id) => lay.at.has(id))),
+        (id) => statusOf(byId.get(id)!, run).tone,
+        (id) => byId.get(id)!.state === "running",
+      ),
+    [lay, rect, over, byId, run],
+  );
 
   // entrance: the boxes one by one in frontier order, each gap's lines once the boxes under it are in
   const still = useMemo(reducedMotion, []);
@@ -175,6 +212,8 @@ export function RunGraph({
   const animate = !still && !played;
   const delayOf = (id: string) => Math.round((lay.at.get(id)?.index ?? 0) * step);
   const after = (ids: string[]) => Math.max(0, ...ids.map(delayOf)) + 160;
+  // the box under the pointer while it is dragged: it lifts
+  const [lifted, setLifted] = useState<string | null>(null);
 
   // ---- full view: pan / zoom / drag
   const box = useRef<HTMLDivElement>(null);
@@ -291,6 +330,7 @@ export function RunGraph({
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
     if (!d.moved && Math.hypot(dx, dy) < DRAG_PX) return;
+    if (!d.moved && d.id) setLifted(d.id);
     d.moved = true;
     if (d.id) {
       const id = d.id;
@@ -300,6 +340,7 @@ export function RunGraph({
   const onUp = (e: RPE) => {
     const d = drag.current;
     drag.current = null;
+    setLifted(null);
     if (!d) return;
     if (d.id && d.moved)
       setOver((p) => {
@@ -317,7 +358,7 @@ export function RunGraph({
 
   // hovering a box lights its own lines and steps the rest back
   const [hover, setHover] = useState<string | null>(null);
-  const lit = (from: string[], to: string[] | string) => !!hover && (from.includes(hover) || (Array.isArray(to) ? to.includes(hover) : to === hover));
+  const lit = (from: string[], to: string) => !!hover && (to === hover || from.includes(hover));
   const near = useMemo(() => {
     const s = new Set<string>();
     if (hover) for (const e of lay.shape.edges) if (e.from === hover || e.to === hover) s.add(e.from).add(e.to);
@@ -328,41 +369,41 @@ export function RunGraph({
   const shownDeps = allDeps || deps.length <= DEPS_CAP + 2 ? deps : deps.slice(0, DEPS_CAP);
   const live = lay.boxes.map((b) => byId.get(b.id)!).filter((n) => n.state === "running" && n.id !== open);
 
-  const texts = new Map(lay.boxes.map((b) => [b.id, boxText(byId.get(b.id)!, run, lay.shape, lay.inner, nowS, bot)]));
-  // a second facts line stands under the first's text, after the marks, when every box's fits there: one left
-  // edge for all of them, never some indented and some not
-  const hang = [...texts.values()].every((tx) => tx.facts.length < 2 || tx.hang);
+  const texts = new Map(lay.boxes.map((b) => [b.id, boxText(byId.get(b.id)!, run, lay, lay.inner, nowS, measureText, bot)]));
+  // the edges of a net lie on each other where they share a stretch: the lit ones are drawn last, on top
+  const lines = hover ? [...edges.lines].sort((a, b) => Number(lit([a.from], a.to)) - Number(lit([b.from], b.to))) : edges.lines;
+  const { arrow, arrowW } = GEOMETRY;
 
   const drawing = (
     <div className="bv-boxes" style={{ width: lay.w, height: lay.h }} data-testid="run-canvas">
       <svg className={`bv-edges${hover ? " focus" : ""}`} width={lay.w} height={lay.h} aria-hidden overflow="visible">
-        {edges.lines.map((l) => (
+        {lines.map((l) => (
           <path
             key={l.key}
-            className={`bv-line t-${l.tone ?? "mixed"}${lit(l.from, l.to) ? " lit" : ""}${animate ? " enter" : ""}`}
-            style={animate ? ({ animationDelay: `${after([...l.from, ...l.to])}ms` } as CSSProperties) : undefined}
+            className={`bv-line${lit([l.from], l.to) ? " lit" : ""}${animate ? " enter" : ""}`}
+            style={animate ? ({ animationDelay: `${after([l.from, l.to])}ms` } as CSSProperties) : undefined}
             d={l.d}
             data-testid="run-edge"
             data-net={l.net}
-            data-from={l.from.join(" ")}
-            data-to={l.to.join(" ")}
+            data-from={l.from}
+            data-to={l.to}
+            data-tone={l.tone}
           />
         ))}
-        {/* the one motion on a line: a short dash that rides the solid line into a running node, once the
-            lines have appeared */}
-        {(animate ? [] : edges.lines)
-          .filter((l) => l.flow)
-          .map((l) => (
-            <path key={`f:${l.key}`} className={`bv-flow${lit(l.from, l.to) ? " lit" : ""}`} d={l.d} data-testid="run-flow" data-to={l.to.join(" ")} />
-          ))}
+        {/* the one motion on a line: a slow dash that rides each edge into a running node, once the lines have
+            appeared */}
+        {(animate ? [] : edges.flows).map((f) => (
+          <path key={f.key} className={`bv-flow${hover && !lit([f.from], f.to) ? " back" : ""}`} d={f.d} data-testid="run-flow" data-from={f.from} data-to={f.to} />
+        ))}
         {edges.heads.map((h) => (
           <path
             key={h.key}
-            className={`bv-head t-${h.tone ?? "mixed"}${h.flow ? " flow" : ""}${lit(h.from, h.to) ? " lit" : ""}${animate ? " enter" : ""}`}
+            className={`bv-head${lit(h.from, h.to) ? " lit" : ""}${animate ? " enter" : ""}`}
             style={animate ? ({ animationDelay: `${after([...h.from, h.to])}ms` } as CSSProperties) : undefined}
-            d={h.up ? `M${h.x},${h.y} l-4,${GEOMETRY.arrow} h8 Z` : `M${h.x},${h.y} l-4,-${GEOMETRY.arrow} h8 Z`}
+            d={`M${h.x},${h.y} l${-arrowW / 2},${-arrow} h${arrowW} Z`}
             data-testid="run-arrow"
             data-to={h.to}
+            data-from={h.from.join(" ")}
             data-tip={`${h.x},${h.y}`}
           />
         ))}
@@ -385,11 +426,12 @@ export function RunGraph({
         const r = rect(b.id);
         const tx = texts.get(b.id)!;
         const dim = !!hover && hover !== n.id && !near.has(n.id);
+        const status = [tx.time ? `${tx.word} ${tx.time}` : tx.word, ...tx.extras].join(" · ");
         return (
           <button
             key={n.id}
             type="button"
-            className={`bx s-${tx.tone}${n.id === open ? " on" : ""}${dim ? " dim" : ""}${animate ? " enter" : ""}`}
+            className={`bx s-${tx.tone}${n.id === open ? " on" : ""}${dim ? " dim" : ""}${lifted === n.id ? " lift" : ""}${animate ? " enter" : ""}`}
             style={{ left: r.x, top: r.y, width: r.w, height: r.h, ...(animate ? { animationDelay: `${delayOf(n.id)}ms` } : {}) }}
             data-testid="run-node"
             data-node={n.id}
@@ -399,8 +441,8 @@ export function RunGraph({
             data-tone={tx.tone}
             data-appear={b.index}
             aria-pressed={n.id === open}
-            aria-label={[titleOf(n), tx.factsText, tx.status].filter(Boolean).join(", ")}
-            title={titleOf(n)}
+            aria-label={[tx.title, tx.factsText, status].filter(Boolean).join(", ")}
+            title={tx.title}
             onPointerDown={(e) => {
               e.stopPropagation();
               onDown(e, n.id);
@@ -411,47 +453,56 @@ export function RunGraph({
             onMouseEnter={() => setHover(n.id)}
             onMouseLeave={() => setHover(null)}
           >
-            <span className="bx-title" data-testid="node-title">
-              {tx.title.map((line, i) => (
-                <span key={i} className="bx-l">
-                  {line}
+            <span className="bx-title" data-testid="node-title" data-lines={tx.titleLines} style={{ WebkitLineClamp: tx.titleLines, height: tx.titleLines * GEOMETRY.line }}>
+              {tx.repair && <StatusGlyph icon="repair" label={t("graph.repairNode")} />}
+              {breakable(tx.title)}
+            </span>
+            {tx.facts.length > 0 && (
+              <span className="bx-facts" data-testid="node-facts" title={tx.factsText}>
+                {tx.facts.map((line, i) => (
+                  <span key={i} className="bx-l bx-fl" style={i > 0 && lay.hang && tx.mark ? { paddingLeft: GEOMETRY.mark + GEOMETRY.markGap } : undefined}>
+                    {i === 0 && <NodeMark mark={tx.mark} />}
+                    {line && <span className="bx-ft">{line}</span>}
+                    {i === tx.facts.length - 1 && tx.via && (
+                      <span className="bx-via" data-testid="node-via">
+                        {line ? ` · ${tx.via}` : tx.via}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </span>
+            )}
+            <span className="bx-l bx-status" data-testid="node-status">
+              <StatusGlyph icon={tx.icon} />
+              <span className="bx-w">{tx.word}</span>
+              {tx.time && <span className="bx-t"> {tx.time}</span>}
+              {tx.extras.map((x) => (
+                <span key={x} className="bx-t">
+                  {" · "}
+                  {x}
                 </span>
               ))}
             </span>
-            <span className="bx-facts" data-testid="node-facts" title={tx.factsText}>
-              <span className="bx-l bx-fl">
-                <Marks ids={tx.marks} />
-                <span className="bx-ft">{tx.facts[0]}</span>
-              </span>
-              {tx.facts[1] !== undefined && (
-                <span className="bx-l bx-ft" style={hang ? { paddingLeft: tx.marks.length * 17 } : undefined}>
-                  {tx.facts[1]}
-                </span>
-              )}
-            </span>
-            <span className="bx-l bx-status" data-testid="node-status">
-              <span className="bx-g">{tx.glyph}</span> {tx.status}
-              {tx.after && <span className="bx-dim">{tx.after}</span>}
-            </span>
-            {tx.parents !== null && (
-              <span className="bx-l bx-dim" data-testid="node-parents">
-                {tx.parents}
-              </span>
-            )}
           </button>
         );
       })}
     </div>
   );
 
+  // in the full view the text under the drawing starts at the drawing's own left edge (its leftmost box), not the
+  // canvas's: the two read as one
   const sections = (
-    <div className="bv-secs" onPointerDown={(e) => e.stopPropagation()}>
+    <div className="bv-secs" style={mode === "full" && lay.boxes.length ? { marginLeft: Math.min(...lay.boxes.map((b) => b.x)) } : undefined} onPointerDown={(e) => e.stopPropagation()}>
       {deps.length > 0 && (
         <section className="bv-sec" data-testid="run-deps" aria-label={t("graph.deps")}>
           <h4>{t("graph.deps")}</h4>
           {shownDeps.map((e) => (
-            <div key={`${e.from}>${e.to}`} className="bv-dep" data-testid="run-dep" title={`${titleOf(byId.get(e.from)!)} → ${titleOf(byId.get(e.to)!)}`}>
-              {titleOf(byId.get(e.from)!)} <span className="bv-arrow">→</span> {titleOf(byId.get(e.to)!)}
+            <div key={`${e.from}>${e.to}`} className="bv-dep" data-testid="run-dep" data-from={e.from} data-to={e.to} title={`${titleOf(byId.get(e.from)!)} → ${titleOf(byId.get(e.to)!)}`}>
+              <span className="bv-dep-n">{titleOf(byId.get(e.from)!)}</span>
+              <svg className="bv-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="→">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+              <span className="bv-dep-n">{titleOf(byId.get(e.to)!)}</span>
               {e.kind === "repair" && <span className="bx-dim"> ({t("graph.repair")})</span>}
             </div>
           ))}
@@ -474,16 +525,17 @@ export function RunGraph({
             return (
               <button key={n.id} type="button" className={`bv-card s-${st.tone}`} data-testid="run-detail" data-node={n.id} onClick={() => onOpen(n.id)}>
                 <span className="bv-card-t">
-                  <span className="bx-g">{st.glyph}</span> {titleOf(n)}
+                  <StatusGlyph icon={st.icon} />
+                  <span className="bv-card-n">{titleOf(n)}</span>
                 </span>
-                {(facts.text || facts.marks.length > 0) && (
+                {facts.text && (
                   <span className="bv-card-l bx-fl">
-                    <Marks ids={facts.marks} />
+                    <NodeMark mark={facts.mark} />
                     <span className="bx-ft">{facts.text}</span>
                   </span>
                 )}
                 <span className="bv-card-l">
-                  <span className="bv-word">{time ? `${st.word} ${time}` : st.word}</span>
+                  <span>{time ? `${st.word} ${time}` : st.word}</span>
                   <span className="bx-dim"> · {where.join(" · ")}</span>
                 </span>
               </button>
@@ -494,17 +546,19 @@ export function RunGraph({
     </div>
   );
 
-  const vars = { "--bv-font": `${type.font}px`, "--bv-line": `${type.line}px`, "--bv-cw": `${cw}px` } as CSSProperties;
+  const vars = { "--bv-line": `${GEOMETRY.line}px` } as CSSProperties;
   const data = {
     "data-testid": "run-graph",
     "data-frontiers": lay.shape.rows.length,
     "data-per-row": lay.perRow,
-    "data-inner": lay.inner,
+    "data-box": lay.boxW,
+    "data-gap": lay.gap,
     "data-nets": lay.nets.length,
     // every edge between two boxes on screen has a line: these two are equal
     "data-edges": lay.shape.edges.filter((e) => lay.at.has(e.from) && lay.at.has(e.to)).length,
     "data-drawn": lay.drawn.size,
     "data-crowded": lay.crowded,
+    "data-tight": lay.tight.length,
   };
   if (mode === "panel")
     return (
@@ -523,7 +577,17 @@ export function RunGraph({
       onPointerDown={(e) => onDown(e, null)}
       onPointerMove={onMove}
       onPointerUp={onUp}
-      onPointerCancel={() => (drag.current = null)}
+      onPointerCancel={() => {
+        // a drag the system took over ends where the box stands: what is on screen is what is kept
+        const d = drag.current;
+        drag.current = null;
+        setLifted(null);
+        if (d?.id && d.moved)
+          setOver((p) => {
+            savePos(run.id, p);
+            return p;
+          });
+      }}
       onScroll={(e) => {
         // focusing a box scrolls an overflow:hidden box; panning is ours, so undo it
         e.currentTarget.scrollLeft = 0;

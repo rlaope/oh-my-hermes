@@ -32,6 +32,23 @@ export function terminalNote(agent: AgentId): string {
   return `Terminal view: starts ${agentDef(agent).label} fresh in its own terminal; this chat stays as it is.`;
 }
 
+/** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
+ *  never runs it). Grok has no one-line install, so it points at its docs. */
+export const INSTALL: Record<AgentId, string> = {
+  claude: "npm i -g @anthropic-ai/claude-code",
+  codex: "npm i -g @openai/codex",
+  omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
+  pi: "npm i -g @mariozechner/pi-coding-agent",
+  omp: "npm i -g @oh-my-pi/pi-coding-agent",
+  grok: "see grok docs",
+};
+
+/** Tooltip of an agent that is not installed: what is missing, then how to install it. */
+export function missingNote(agent: AgentId): string {
+  const how = INSTALL[agent];
+  return `${agentDef(agent).program} was not found on this computer · ${how.startsWith("see ") ? how : `install: ${how}`}`;
+}
+
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
@@ -100,8 +117,19 @@ export interface ChatLive {
   needsYou: boolean;
 }
 
-/** What one sidebar row shows. */
-export function rowModel(s: SessionRec, chat?: ChatLive): { title: string; sub: string; live: boolean; needsYou: boolean; ts: number } {
+/** The other rows a row is told apart from: every session's folder, and the home folder for `~`. */
+export interface RowContext {
+  cwds: string[];
+  home: string | null;
+}
+
+/** What one sidebar row shows. `where` is the parent folder (`~/work`), set only when another session's folder
+ *  has the same name in a different place, so two `web-app` rows read `web-app · ~/work` and `web-app · ~/oss`. */
+export function rowModel(
+  s: SessionRec,
+  chat?: ChatLive,
+  ctx?: RowContext,
+): { title: string; where?: string; sub: string; live: boolean; needsYou: boolean; ts: number } {
   const label = agentDef(s.agent).label;
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
@@ -119,8 +147,11 @@ export function rowModel(s: SessionRec, chat?: ChatLive): { title: string; sub: 
             : `Ended · exit ${s.exitCode}`;
   // A chat is live while a turn runs; a terminal while its program runs.
   const live = s.view === "chat" && chat ? alive && chat.turn : alive;
+  const title = folderName(s.cwd);
+  const clash = !!ctx?.cwds.some((c) => c !== s.cwd && folderName(c) === title);
   return {
-    title: folderName(s.cwd),
+    title,
+    ...(clash ? { where: parentPath(tildePath(s.cwd, ctx!.home)) } : {}),
     sub: state ? `${label} · ${state}` : label,
     live,
     needsYou,

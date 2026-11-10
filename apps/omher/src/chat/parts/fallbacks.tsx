@@ -16,6 +16,7 @@ export function ActivityFallback({ item, live }: ActivitySlotProps) {
   let text: string;
   if (live) text = t.status || "Working…";
   else if (t.outcome === "interrupted") text = `Stopped after ${elapsed(ms)}`;
+  else if (t.outcome === "ended") text = `Ended after ${elapsed(ms)}`;
   else if (t.outcome === "error") text = `Failed${t.error ? ` · ${t.error}` : ""}`;
   else text = `Worked for ${elapsed(ms)} · ${t.steps.length} step${t.steps.length === 1 ? "" : "s"}`;
   return (

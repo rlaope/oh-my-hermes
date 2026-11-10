@@ -11,6 +11,8 @@ import "../sessions/sessions.css";
 import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { HiddenList, NeedsStrip } from "./Needs";
 import { UpdateButton } from "./UpdateButton";
+import { FirstRunHint } from "../onboarding/FirstRun";
+import { t } from "../i18n";
 
 export function Sidebar() {
   const s = useStore();
@@ -86,6 +88,7 @@ export function Sidebar() {
               Show hidden bots ({hiddenCount})
             </button>
           )}
+          {!needle && listed.length === 0 && <FirstRunHint text={t("onb.botsHint")} testId="onb-hint-bots" />}
           {showHidden && hiddenCount > 0 && <HiddenList onClose={closeHidden} />}
         </nav>
       </section>

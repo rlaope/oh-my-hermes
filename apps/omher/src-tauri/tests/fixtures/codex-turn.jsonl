@@ -1,7 +1,7 @@
 {"id":1,"result":{"userAgent":"codex_cli_rs/0.130.0","serverInfo":{"name":"codex-app-server","version":"0.130.0"}}}
-{"id":2,"result":{"thread":{"id":"thr_1","preview":"","modelProvider":"openai","createdAt":1794200000},"model":"gpt-5.5-codex","modelProvider":"openai","cwd":"/w/proj","approvalPolicy":"on-request","sandbox":{"type":"workspaceWrite"},"reasoningEffort":"medium"}}
+{"id":2,"result":{"thread":{"id":"thr_1","preview":"","modelProvider":"openai","createdAt":1794200000},"model":"gpt-6.1-sol","modelProvider":"openai","cwd":"/w/proj","approvalPolicy":"on-request","sandbox":{"type":"workspaceWrite"},"reasoningEffort":"medium"}}
 {"method":"thread/started","params":{"thread":{"id":"thr_1"}}}
-{"id":3,"result":{"data":[{"id":"gpt-5.5-codex","model":"gpt-5.5-codex","displayName":"GPT-5.5 Codex","description":"Coding","hidden":false,"isDefault":true},{"id":"old","model":"old","displayName":"Old","description":"","hidden":true,"isDefault":false}],"nextCursor":null}}
+{"id":3,"result":{"data":[{"id":"gpt-6.1-sol","model":"gpt-6.1-sol","displayName":"GPT-6.1-Sol","description":"Coding","hidden":false,"isDefault":true},{"id":"old","model":"old","displayName":"Old","description":"","hidden":true,"isDefault":false}],"nextCursor":null}}
 {"id":4,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[],"error":null}}}
 {"method":"turn/started","params":{"threadId":"thr_1","turn":{"id":"turn_1","status":"inProgress","items":[],"error":null}}}
 {"method":"item/started","params":{"threadId":"thr_1","turnId":"turn_1","startedAtMs":1794200001000,"item":{"type":"userMessage","id":"u1","clientId":null,"content":[{"type":"text","text":"run the tests"}]}}}

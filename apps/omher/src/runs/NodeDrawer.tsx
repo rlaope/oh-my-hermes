@@ -1,6 +1,6 @@
 // One node's detail, shared by the panel and the full view: attempt k of n, what ran it as its box says it (the
-// agent marks, model · effort · category), time, why it was routed there, the last reason, earlier attempts, the
-// helper's summary and the handoff. Read-only: the one button only prefills the
+// model's mark, model · effort · category), time, why it was routed there, the nodes it comes after, the last
+// reason, earlier attempts, the helper's summary and the handoff. Read-only: the one button only prefills the
 // chat composer so the person can ask the bot; it never sends.
 import { useEffect, useState } from "react";
 import type { AgentRun, CliAgent, RunNode } from "../lib/runs";
@@ -8,15 +8,17 @@ import { isCliRun, span } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
 import { CloseIcon, IconButton } from "../ui";
 import { getStore } from "../state/store";
-import { factsOf } from "./boxView";
+import { t as tr } from "../i18n";
+import { factsOf, titleOf } from "./boxView";
 import { modelName, runName, STATE_WORD } from "./format";
-import { Marks } from "./RunGraph";
+import { NodeMark } from "./RunGraph";
 
 const PREVIEW = 1200;
 
 export function NodeDrawer({
   run,
   node,
+  parents = [],
   bot,
   text,
   nowS,
@@ -24,6 +26,8 @@ export function NodeDrawer({
 }: {
   run: Pick<AgentRun, "id" | "kind"> & { agent?: CliAgent };
   node: RunNode;
+  /** The nodes it has a line from, as the graph draws them (a failed node's repairs stand in for it). */
+  parents?: RunNode[];
   /** The bot's own model: what a node with nothing else recorded is taken to run on. */
   bot?: { model: string; provider: string };
   text?: string;
@@ -57,9 +61,9 @@ export function NodeDrawer({
           {STATE_WORD[node.state]}
         </span>
         <span data-testid="run-attempt">{node.attempts.length ? `attempt ${last.n} of ${node.attempts.length}` : "not started"}</span>
-        {(ran.text || ran.marks.length > 0) && (
+        {ran.text && (
           <span className="rn-ran" data-testid="run-facts">
-            <Marks ids={ran.marks} />
+            <NodeMark mark={ran.mark} />
             {ran.text}
           </span>
         )}
@@ -67,6 +71,11 @@ export function NodeDrawer({
         {/* the category is in the facts; this line is why the node went out under it */}
         {node.routeWhy && <span className="rn-routeline">route: {node.routeWhy}</span>}
       </div>
+      {parents.length > 0 && (
+        <div className="rn-df rn-after" data-testid="run-after">
+          {tr("graph.after", { name: parents.map(titleOf).join(", ") })}
+        </div>
+      )}
       {last?.reason && (
         <div className={`rn-reason${bad ? " bad" : ""}`} data-testid="run-reason">
           {bad && <b>Why: </b>}
