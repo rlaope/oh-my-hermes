@@ -109,9 +109,9 @@ test("a file in a session's answer sits under its bubble in the same column, one
   await expect(msg.locator(".msg-face:not(.blank)")).toHaveCount(1);
 });
 
-test("the empty section's New session button starts a chat session, then gives way to the session row", async ({ page }) => {
+test("the empty section's New session row starts a chat session, then gives way to the session row", async ({ page }) => {
   await open(page);
-  await expect(page.getByTestId("session-start-agents")).toContainText("Claude Code");
+  await expect(page.getByTestId("session-start")).toHaveAttribute("title", /Claude Code/);
   await page.getByTestId("session-start").click();
   await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-choose").click();

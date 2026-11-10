@@ -1,6 +1,6 @@
 // First run: until the person dismisses it (`omher.onboarded=1` in localStorage), two small cards say what Bots
-// and Sessions are, each with one quiet button ("Message a bot" focuses the first bot's composer, "New session"
-// opens the SESSIONS + menu), and the empty Bots and Sessions sections carry one muted line each. The cards show
+// and Sessions are, each with one quiet button of the same look ("Message a bot" focuses the first bot's composer,
+// "New session" opens the SESSIONS + menu), and an empty Bots section carries one muted line. The cards show
 // only where there is no conversation yet (the empty main area, a chat with no messages), never above a chat's
 // history; one × closes both.
 import { useSyncExternalStore } from "react";
@@ -8,7 +8,7 @@ import "./firstrun.css";
 import { t } from "../i18n";
 import { selectSidebarBots, useStore } from "../state/store";
 import { openNewSessionMenu } from "../sessions/SessionsSection";
-import { CloseIcon, IconButton, PlusIcon } from "../ui";
+import { CloseIcon, IconButton } from "../ui";
 
 export const ONBOARDED_KEY = "omher.onboarded";
 
@@ -70,7 +70,6 @@ export function FirstRun() {
         <b className="onb-t">{t("onb.sessions.title")}</b>
         <p className="onb-p">{t("onb.sessions.body")}</p>
         <button type="button" className="onb-btn" onClick={openNewSessionMenu} data-testid="onb-session">
-          <PlusIcon size={13} />
           {t("onb.sessions.action")}
         </button>
       </div>

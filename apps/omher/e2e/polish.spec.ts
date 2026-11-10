@@ -387,7 +387,7 @@ test("side panel tabs: a hovered tab never looks selected (no fill), only the se
   expect(await bg("panel-tab-terminal")).not.toBe("rgba(0, 0, 0, 0)");
 });
 
-test("the SESSIONS + menu covers the New session button under it: no second edge above the menu", async ({ page }) => {
+test("the SESSIONS + menu covers the New session row under it: no second edge above the menu", async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as Record<string, unknown>).__omherMockAgents = ["claude", "codex", "omh"];
   });

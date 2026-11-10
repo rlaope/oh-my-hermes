@@ -2,7 +2,7 @@
 // build has no Tauri shell, so the MockHost echoes), switching between a bot chat and a session, closing.
 // Grok is the agent that opens as a terminal (the others open as chats: e2e/sessions-chat.spec.ts), so
 // these tests install it in the mock host.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -236,7 +236,7 @@ async function contrast(page: Page, sels: string[], bg: string) {
 }
 
 for (const theme of ["dark", "light"] as const) {
-  test(`empty SESSIONS: one New session button over the installed agents, the menu inset 8px (${theme})`, async ({ page }) => {
+  test(`empty SESSIONS: one quiet New session row in the nav rows' look, the menu inset 8px (${theme})`, async ({ page }) => {
     await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
     await open(page, undefined, ["claude", "codex", "omh", "pi", "omp"]);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
@@ -244,14 +244,42 @@ for (const theme of ["dark", "light"] as const) {
     const start = none.getByTestId("session-start");
     await expect(start).toHaveText("New session");
     await expect(start.locator("svg")).toHaveCount(1); // the + icon
-    // the official marks of up to 4 installed agents; the first two carry their names, every name in the tooltip
-    const ag = none.getByTestId("session-start-agents");
-    expect(await ag.locator("[data-mark]").evaluateAll((els) => els.map((e) => e.getAttribute("data-mark")))).toEqual(["claude", "openai", "omh", "pi"]);
-    await expect(ag).toHaveText(/^Claude Code\s*·\s*Codex/);
-    await expect(ag).toHaveAttribute("title", "Claude Code · Codex · oh-my-hermes · pi");
-    // no long hint: at most 2 lines tall (button + agent line), so BOTS and SESSIONS stay balanced
-    expect((await none.boundingBox())!.height).toBeLessThanOrEqual(60);
-    await expect(none).not.toContainText("Start Claude Code");
+    // one row and nothing else: no hint line, no agent strip; the installed coding agents (not omh) in its tooltip
+    await expect(none).toHaveText("New session");
+    await expect(page.getByTestId("session-start-agents")).toHaveCount(0);
+    await expect(start).toHaveAttribute("title", "Run a coding agent in a folder, as a chat. Claude Code, Codex, pi, oh-my-pi");
+    expect((await none.boundingBox())!.height).toBeLessThanOrEqual(32);
+    // built like the Settings row: same height, icon column, text column and --muted; no border, no fill, not centred
+    const row = (l: Locator) =>
+      l.evaluate((e) => {
+        const cs = getComputedStyle(e);
+        const r = document.createRange();
+        r.selectNodeContents([...e.childNodes].find((n) => n.nodeType === 3 && n.textContent!.trim())!);
+        const ic = e.querySelector("svg")!.getBoundingClientRect();
+        return {
+          h: e.getBoundingClientRect().height,
+          text: Math.round(r.getBoundingClientRect().x),
+          icon: Math.round(ic.x + ic.width / 2),
+          color: cs.color,
+          bg: cs.backgroundColor,
+          border: cs.borderTopWidth,
+          justify: cs.justifyContent,
+          align: cs.textAlign,
+        };
+      });
+    const [mine, settings] = [await row(start), await row(page.getByTestId("nav-settings"))];
+    expect(mine.h).toBe(settings.h);
+    expect(mine.text).toBe(settings.text);
+    expect(mine.icon).toBe(settings.icon);
+    expect(mine.color).toBe(settings.color);
+    expect(mine.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(mine.border).toBe("0px");
+    expect(mine.justify).not.toBe("center");
+    expect(mine.align).toBe("left");
+    expect(await start.evaluate((e) => getComputedStyle(e).fontSize)).toBe("12.5px");
+    await start.hover();
+    await expect.poll(() => start.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    await page.mouse.move(900, 780);
 
     // the header: the BOTS label colour, a --muted + with a 24px target and a gray hover fill
     const head = page.locator("[data-testid=side-sessions] .side-sh");
@@ -277,7 +305,7 @@ for (const theme of ["dark", "light"] as const) {
 
     const side = (await page.getByTestId("sidebar").boundingBox())!;
     const sideBg = await page.getByTestId("sidebar").evaluate((e) => getComputedStyle(e).backgroundColor);
-    for (const [sel, r] of await contrast(page, ["[data-testid=side-sessions] .side-sh", "[data-testid=session-new]", ".ss-start-n"], sideBg))
+    for (const [sel, r] of await contrast(page, ["[data-testid=side-sessions] .side-sh", "[data-testid=session-new]", "[data-testid=session-start]"], sideBg))
       expect(r, sel).toBeGreaterThanOrEqual(4.5);
 
     // the button opens the same menu, 8px in from both sidebar edges; its secondary labels meet 4.5:1
@@ -306,10 +334,12 @@ for (const theme of ["dark", "light"] as const) {
   });
 }
 
-test("the empty section shows no agent line when no agent is installed", async ({ page }) => {
-  await open(page, undefined, []);
-  await expect(page.getByTestId("session-start")).toBeVisible();
-  await expect(page.getByTestId("session-start-agents")).toHaveCount(0);
+test("the empty section's tooltip names no agent when no coding agent is installed (omh alone is not one)", async ({ page }) => {
+  await open(page, undefined, ["omh"]);
+  await expect(page.getByTestId("session-start")).toHaveAttribute("title", "Run a coding agent in a folder, as a chat.");
+  // omh still starts from the + menu
+  await page.getByTestId("session-start").click();
+  await expect(page.getByTestId("session-agent-omh")).toBeEnabled();
 });
 
 test("start a mock terminal session, type, see the echo, then switch to a bot chat and back", async ({ page }) => {
