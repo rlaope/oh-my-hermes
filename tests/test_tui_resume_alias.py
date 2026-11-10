@@ -98,7 +98,7 @@ class MenuTests(unittest.TestCase):
                          [slash.Completion("resume", sessions.summary)])
         self.assertEqual(self.names("res"), ["resume", "compress", "egress"])  # a start before an inside
         # The TUI's own names first, then the alias, then the catalog's names that start with what is typed.
-        self.assertEqual(self.names("re")[:5], ["redraw", "rewind", "reload-skills", "resume", "reasoning"])
+        self.assertEqual(self.names("re")[:5], ["redraw", "rewind", "reasoning", "reload-skills", "resume"])
         for alias in ("reset", "clear", "exit", "switch", "q", "s"):
             with self.subTest(alias=alias):
                 self.assertNotIn(alias, self.names(alias[:2]))  # no other alias gets a row

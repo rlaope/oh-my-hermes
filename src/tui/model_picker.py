@@ -19,6 +19,10 @@ so a pick can never add a flag such as `--global` to that value
 Keys: Up/Down move one row, PageUp/PageDown one page; printable text filters
 (model or provider, ignoring case) and Backspace takes a filter character
 back; Enter picks the highlighted row; Esc or Ctrl+C closes.
+
+The picker opens as `/model` runs, `loading` until Hermes' list comes: what is
+typed meanwhile is already its filter, Enter waits for the rows, and Esc
+closes it, so the list that comes later opens nothing.
 """
 
 from __future__ import annotations
@@ -39,6 +43,8 @@ CLOSE = "close"
 KEYS = ("↑↓ move · enter switches this session · esc closes", "↑↓ enter switches · esc closes", "esc closes")
 TITLE = " Model ({count})"
 TITLE_AT = " Model ({at}/{count})"  # once the list has more rows than it shows
+TITLE_LOADING = " Model"
+LOADING = " waiting for Hermes…"  # the row while the list is on its way (the app's `LIST_WAIT_LINE`)
 CURRENT_MARK = "●"
 
 
@@ -131,6 +137,7 @@ class ModelPicker:
     index: int = -1  # -1 picks the current row, else the first
     page: int = 1  # rows the last render showed; PageUp/PageDown move by this many
     caret: tuple[int, int] | None = None  # the last render's caret, at the end of its filter row
+    loading: bool = False  # opened before Hermes' list came: no rows yet, the filter already takes what is typed
 
     def __post_init__(self) -> None:
         if self.index < 0:
@@ -174,7 +181,12 @@ class ModelPicker:
         shown = self.visible()
         self.index = min(self.index, max(len(shown) - 1, 0))
         scrolls = max_rows > 2 and len(shown) > max_rows - 2  # the header and the filter row take two
-        title = TITLE_AT.format(at=self.index + 1, count=len(shown)) if scrolls else TITLE.format(count=len(self.rows))
+        if self.loading:
+            title = TITLE_LOADING
+        elif scrolls:
+            title = TITLE_AT.format(at=self.index + 1, count=len(shown))
+        else:
+            title = TITLE.format(count=len(self.rows))
         head = (
             Span(title, theme.heading),
             Span(f"  now {self.current}" if self.current else "", theme.text),
@@ -182,7 +194,8 @@ class ModelPicker:
         frame = picker_frame(
             head, len(shown), self.index,
             lambda number: self._row(shown[number], number == self.index, width, theme),
-            " no model matches the filter; /model <name> --provider <slug> names any", self.query, width, theme, max_rows,
+            LOADING if self.loading else " no model matches the filter; /model <name> --provider <slug> names any",
+            self.query, width, theme, max_rows,
         )
         self.page, self.caret = frame.page, frame.caret
         return frame.lines

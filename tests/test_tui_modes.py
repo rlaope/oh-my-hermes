@@ -1277,6 +1277,7 @@ class BusyQueueTests(unittest.TestCase):
         self.assertEqual(RUNS_DURING_TURN, frozenset({
             "stop", "steer", "queue", "btw", "bg", "help", "keys", "whats-new", "redraw", "history", "todos",
             "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
+            "yolo", "effort",
         }))
         # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
         for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse", "worktree",
@@ -1290,6 +1291,30 @@ class BusyQueueTests(unittest.TestCase):
                 (call,) = ran.call_args_list
                 self.assertEqual(call.args[0].name, name)
 
+    def test_yolo_effort_and_a_reasoning_level_set_the_session_at_once_during_a_turn_and_when_idle(self) -> None:
+        # The typed forms of Shift+Tab's and Ctrl+T's calls: one `config.set` each, which never touches the turn.
+        for typed, call in (("/yolo", YOLO_ON_CALL), ("/effort high", effort_call("high")),
+                            ("/reasoning high", effort_call("high")), ("/Reasoning HIGH", effort_call("high"))):
+            for busy in (True, False):
+                with self.subTest(typed=typed, busy=busy):
+                    app, client = make_app(busy=busy)
+                    type_text(app, typed)
+                    app._on_input(Key(ENTER))
+                    self.assertEqual(app.queued, deque())
+                    self.assertEqual(client.calls, [call])
+                    self.assertEqual(self.turn_calls(client), [])
+
+    def test_reasoning_without_a_level_waits_for_the_turn_as_hermes_own_command(self) -> None:
+        for typed in ("/reasoning", "/reasoning hide", "/reasoning show", "/reasoning high --global"):
+            with self.subTest(typed=typed):
+                app, client = make_app(busy=True)
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual([line.text for line in app.queued], [typed])
+                self.assertEqual(client.calls, [])
+                self.end_turn(app)
+                self.assertEqual(client.named("slash.exec"), [{"command": typed[1:], "session_id": SID}])
+
     def test_stop_btw_and_bg_reach_hermes_during_the_turn(self) -> None:
         for typed in ("/stop", "/btw what was that file", "/bg write the changelog"):
             with self.subTest(typed=typed):
@@ -1302,7 +1327,7 @@ class BusyQueueTests(unittest.TestCase):
 
     def test_every_other_command_queues_during_a_turn_and_runs_at_once_when_idle(self) -> None:
         typed = ("/compress", "/compact here 4", "/new", "/clear", "/undo", "/retry", "/resume", "/sessions s-2",
-                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/yolo", "/effort high", "/usage", "/cost",
+                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/reasoning", "/reasoning hide", "/usage", "/cost",
                  "/status", "/omh-model", "/reload-skills", "/export", "/frobnicate",
                  "/omh-codebase-uml map it", "/Compress")
         for text in typed:
@@ -3426,6 +3451,275 @@ class LeaderLabelTests(unittest.TestCase):
                 line = app._info_line(width)
                 self.assertIn("NORMAL · SPC", line_text(line))
                 self.assertLessEqual(line_width(line), width)
+
+
+
+def info_of(app: App) -> str:
+    return info_row_of(drawn(app))
+
+
+class YoloCommandTests(unittest.TestCase):
+    """`/yolo` goes through Shift+Tab's per-session call, never `slash.exec`: Hermes runs that in a worker apart from
+    the live agent, which then kept asking, and left a flag a later resume turned approvals off by (audit A, 1)."""
+
+    def run_yolo(self, app: App, arg: str = "") -> None:
+        type_text(app, f"/yolo {arg}".rstrip())
+        app._on_input(Key(ENTER))
+
+    def test_bare_yolo_turns_approvals_off_and_back_on_and_says_so_under_its_echo(self) -> None:
+        app, client = make_app()
+        self.run_yolo(app)
+        self.assertEqual(client.calls, [YOLO_ON_CALL])
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual((app.mode, app.yolo_by_tui), (MODE_ACCEPT, True))
+        self.assertEqual(notices(app), [modes_module.YOLO_ON_NOTICE])
+        self.run_yolo(app)
+        self.assertEqual(client.calls[-1], YOLO_OFF_CALL)
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(app.mode, MODE_NORMAL)  # /yolo leaves plan as it was; only Shift+Tab steps on to plan
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_OFF_NOTICE)
+        self.assertEqual([method for method, _params in client.calls], ["config.set", "config.set"])  # no slash.exec
+
+    def test_yolo_off_keeps_plan_on(self) -> None:
+        app, client = in_accept()
+        app.plan_mode = True
+        self.run_yolo(app, "off")
+        self.assertEqual(client.calls, [YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_yolo_on_already_on_an_unknown_word_and_a_call_out_send_nothing(self) -> None:
+        app, client = in_accept()
+        self.run_yolo(app, "on")
+        self.assertEqual(client.calls, [])
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_ALREADY_NOTICE.format(state="off"))
+        self.run_yolo(app, "maybe")
+        self.assertEqual(client.calls, [])
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_USAGE_NOTICE.format(arg="maybe"))
+        app, client = make_app()
+        self.run_yolo(app, "off")
+        self.assertEqual((client.calls, notices(app)[-1]), ([], modes_module.YOLO_ALREADY_NOTICE.format(state="on")))
+        app._on_input(SHIFT_TAB)
+        self.run_yolo(app)
+        self.assertEqual(client.calls, [YOLO_ON_CALL])
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_WAIT_NOTICE)
+
+    def test_the_tui_turns_off_what_yolo_turned_on_before_it_leaves_the_session(self) -> None:
+        app, client = make_app()
+        self.run_yolo(app)
+        answer(app, client, YOLO_IS_ON)
+        app._new_session("")
+        answer(app, client, {"session_id": "live-2", "info": {}})
+        self.assertIn(YOLO_OFF_CALL, client.calls[1:])  # so a resume does not find approvals off
+
+    def test_a_refused_yolo_says_so_and_shows_accept_off(self) -> None:
+        app, client = make_app()
+        self.run_yolo(app)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        self.assertNotIn(modes_module.YOLO_ON_NOTICE, notices(app))
+        self.assertTrue(any("did not turn approvals off" in text for text in notices(app, NOTICE_ERROR)))
+        self.assertEqual(client.calls[-1], YOLO_OFF_CALL)  # the explicit switch-back
+
+
+class ReasoningCommandTests(unittest.TestCase):
+    """`/reasoning <level>` sets the live session's effort as `/effort` does (audit A, 1); its other forms are Hermes'."""
+
+    def test_a_level_goes_as_config_set_and_says_the_level_set(self) -> None:
+        app, client = make_app()
+        type_text(app, "/reasoning high")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [effort_call("high")])
+        answer(app, client, effort_set("high"))
+        self.assertEqual(app.effort, "high")
+        self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+
+    def test_anything_but_a_level_still_goes_to_hermes_as_typed(self) -> None:
+        for typed in ("/reasoning", "/reasoning hide", "/reasoning high --global", "/reasoning reset"):
+            with self.subTest(typed=typed):
+                app, client = make_app()
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.calls, [("slash.exec", {"command": typed[1:], "session_id": SID})])
+
+
+class ShiftTabWhileYoloCallOutTests(unittest.TestCase):
+    """Presses made while a yolo call is out are counted, shown at once, and applied once it is answered (audit A, 2;
+    audit B, 8): never left on accept all when the person pressed past it."""
+
+    def test_two_quick_presses_end_in_plan(self) -> None:
+        app, client = make_app(cols=120)
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all on…", info_of(app))  # dimmed at once, before Hermes answers
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏸ plan mode on…", info_of(app))
+        self.assertEqual(client.calls, [YOLO_ON_CALL])  # one call out at a time
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # on its way to plan, not left in accept
+        self.assertIn("⏸ plan mode on…", info_of(app))
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(app.mode, MODE_PLAN)
+        self.assertIn("⏸ plan mode on (", info_of(app))
+        self.assertNotIn("…", info_of(app).split("  ")[0])
+        self.assertEqual(notices(app), [])
+
+    def test_three_quick_presses_end_in_normal_with_approvals_on(self) -> None:
+        app, client = make_app()
+        for _ in range(3):
+            app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all off…", info_of(app))
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual((app.mode, app.approvals_off), (MODE_NORMAL, False))
+
+    def test_a_press_from_accept_and_back_sends_nothing_more(self) -> None:
+        app, client = in_accept()
+        app._on_input(SHIFT_TAB)  # off, heading for plan
+        for _ in range(2):
+            app._on_input(SHIFT_TAB)  # plan → normal → accept again
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_OFF_CALL, YOLO_ON_CALL])
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+
+    def test_presses_after_a_call_that_confirms_nothing_are_dropped(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # only the switch-back
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_NORMAL)
+
+    def test_presses_kept_for_an_unanswered_call_are_dropped(self) -> None:
+        # Three presses lead back to normal; were that target kept past the expiry, the fresh press's plan would be
+        # carried on to normal once its off is answered.
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        for _ in range(3):
+            app._on_input(SHIFT_TAB)
+        now[0] += 3600
+        app._expire_calls()
+        self.assertEqual(app.mode, MODE_ACCEPT)  # unanswered: approvals may be off, shown as the TUI's own
+        self.assertEqual(notices(app), [modes_module.YOLO_UNANSWERED_NOTICE.format(
+            seconds=app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS))])
+        app._on_input(SHIFT_TAB)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # exactly one call for the fresh press
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_presses_while_the_switch_back_is_out_are_applied_once_it_is_confirmed(self) -> None:
+        app, client = make_app(cols=120)
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})  # refused: the switch-back goes
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all on…", info_of(app))
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL, YOLO_ON_CALL])  # the press the label showed
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+
+    def test_presses_while_a_failed_switch_back_was_out_are_dropped(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        app._on_input(SHIFT_TAB)
+        answer(app, client, None, {"code": 5001, "message": "boom"})
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_ACCEPT)  # approvals may be off: shown, and nothing more is sent
+        self.assertNotIn("…", info_of(app))
+        # The press made during it (to accept all) is gone: a fresh press goes from accept to plan, and nothing after.
+        app._on_input(SHIFT_TAB)
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_a_single_press_still_waits_for_hermes_before_the_mode_changes(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        self.assertEqual(app.mode, MODE_NORMAL)  # what Shift+Tab gates on is still the confirmed mode
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+        self.assertNotIn("…", info_of(app))
+
+
+class EffortFeedbackTests(unittest.TestCase):
+    """A typed `/effort <level>` says the outcome under its echo; Ctrl+T stays footer-only; both show the level asked
+    for, dimmed with `…`, until Hermes answers (audit B, 8 and 12)."""
+
+    def test_a_typed_effort_says_the_level_set_and_ctrl_t_says_nothing(self) -> None:
+        app, client = make_app()
+        type_text(app, "/effort high")
+        app._on_input(Key(ENTER))
+        self.assertIn("effort high…", info_of(app))
+        answer(app, client, effort_set("high"))
+        self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+        self.assertIn("effort high", info_of(app))
+        self.assertNotIn("effort high…", info_of(app))
+        app._on_input(CTRL_T)
+        self.assertIn("effort xhigh…", info_of(app))
+        answer(app, client, effort_set("xhigh"))
+        self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+
+    def test_an_unanswered_effort_stops_showing_as_asked_for(self) -> None:
+        for typed in (True, False):
+            with self.subTest(typed=typed):
+                now = [100.0]
+                app, client = make_app(clock=lambda: now[0])
+                app.effort = "medium"
+                if typed:
+                    type_text(app, "/effort high")
+                    app._on_input(Key(ENTER))
+                else:
+                    app._on_input(CTRL_T)
+                asked = client.calls[-1][1]["value"]
+                self.assertIn(f"effort {asked}…", info_of(app))
+                now[0] += 3600
+                app._expire_calls()
+                self.assertEqual(app.effort_asked, "")
+                self.assertIn("effort medium", info_of(app))
+                self.assertNotIn("…", info_of(app))
+                seconds = app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS)
+                self.assertEqual(notices(app), [app_module.CALL_EXPIRED_NOTICE.format(method="config.set",
+                                                                                      seconds=seconds)])
+
+    def test_an_expiry_leaves_a_newer_level_asked_for(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        app.effort = "low"
+        app._on_input(CTRL_T)  # medium
+        now[0] += 3600
+        app._on_input(CTRL_T)  # high, asked after the first went out
+        app._expire_calls()  # only the first has run out
+        self.assertEqual(app.effort_asked, "high")
+        self.assertIn("effort high…", info_of(app))
+
+    def test_a_refused_typed_effort_says_only_the_refusal(self) -> None:
+        app, client = make_app()
+        type_text(app, "/effort high")
+        app._on_input(Key(ENTER))
+        answer(app, client, None, {"code": 4002, "message": "unknown reasoning value: high"})
+        (said,) = notices(app)
+        self.assertIn("did not set the reasoning effort to high", said)
+        self.assertNotIn("…", info_of(app))
+
+
+class InfoLineKeepsTheModelTests(unittest.TestCase):
+    """At 120 columns a mode label used to leave no model on the line (audit B, 9): the context goes first."""
+
+    MODEL = "deepseek/deepseek-v4.1-flash-ultrafast"
+
+    def test_the_model_stays_beside_either_mode_label(self) -> None:
+        for mode in (MODE_NORMAL, MODE_ACCEPT, MODE_PLAN, MODE_ACCEPT_PLAN):
+            with self.subTest(mode=mode):
+                app, _client = make_app(cols=120)
+                app.model, app.effort = self.MODEL, "default"
+                app._take_usage({"context_used": 100, "context_max": 128_000, "context_percent": 0})
+                show_mode(app, mode)
+                app.yolo_by_tui = app.approvals_off
+                self.assertIn("v4.1-flash-ultrafast", info_of(app))
 
 
 if __name__ == "__main__":

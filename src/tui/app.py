@@ -220,6 +220,7 @@ from .modes import (
     INFO_SEPARATOR,
     LABEL_SEPARATOR,
     NO_SESSION_NOTICE,
+    PENDING_MARK,
     ModesMixin,
     chip_column,
     configured_effort,
@@ -492,7 +493,20 @@ MODEL_BUSY_NOTICE = "Hermes switches the model between turns: let this one end, 
 MODEL_REFRESH_ARG = "--refresh"
 # What a `config.set model` answer says, for `/model` and its picker.
 MODEL_SWITCHED_NOTICE = "This session now runs {model}."
+# Hermes persisted the switch (`scope: "global"`): its typed `/model` does so under `model.persist_switch_by_default`.
+MODEL_GLOBAL_SCOPE = "global"
+MODEL_SWITCHED_GLOBAL_NOTICE = "This session now runs {model}, and Hermes made it the default for new sessions too."
 MODEL_DEFERRED_NOTICE = "This session switches to {model} when its next turn starts."
+# Under the echo while the switch is out; the answer takes its place.
+MODEL_SWITCHING_LINE = "switching to {model}…"
+# The picker's highlighted row is the session's model and provider already: nothing is sent.
+MODEL_ALREADY_NOTICE = "This session already runs {model}; nothing switched."
+# Hermes drops a switch it held for the next turn when that turn starts (a guarded model, a failure) and says so only
+# in a 12 s `notification.show` under this key (Hermes 2bd378ed1b `session_compression._apply_pending_model_switch`).
+# The TUI writes it into the transcript instead, tied to the switch it said would happen.
+MODEL_SWITCH_DROPPED_KEY = "model_switch.dropped"
+MODEL_DROPPED_NOTICE = "The switch to {model} did not happen as the turn started: {reason}"
+MODEL_DROPPED_OTHER_NOTICE = "A model switch held for this turn did not happen: {reason}"
 # A guarded model (cost, data policy, a large context): Hermes answers `confirm_required` and switches nothing, and
 # the TUI asks in the prompt slot as Hermes' own TUI asks (`openModelConfirmation`), keeping the session's model the
 # first choice and the one selected. Only "switch anyway" sends the switch again, with `confirm_expensive_model`.
@@ -952,8 +966,8 @@ def record_verdict(gateway: Gateway | None, seen: float | None = None) -> str:
 # What may still go while Hermes' gateway restarts: the stop of the running turn (the attach child answers it), and
 # the TUI's own commands except the ones that call the gateway.
 GATEWAY_RESTART_PASSES = frozenset({"stop"})
-GATEWAY_RESTART_HELD_LOCAL = frozenset({"gateway", "new", "sessions", "steer", "model", "effort", "reload-skills",
-                                        "topup", "export", "rewind", "image", "paste"})
+GATEWAY_RESTART_HELD_LOCAL = frozenset({"gateway", "new", "sessions", "steer", "model", "effort", "reasoning", "yolo",
+                                        "reload-skills", "topup", "export", "rewind", "image", "paste"})
 # The attach child's connection to Hermes' shared gateway ended (`gateway_attach.relay` exits 1): the gateway may still
 # be running the session's turn, so a respawn resumes the session and reads whether it still runs before saying more.
 CONNECTION_DROPPED_REASON = "the connection to Hermes' gateway dropped"
@@ -1212,8 +1226,8 @@ UNKNOWN_EVENTS_NOTICE = (
     "Esc interrupts the turn."
 )
 YOLO_NOTE = (
-    "Hermes commands go to Hermes as you type them, /yolo included: it turns off Hermes' approval prompts, "
-    "so the OMH TUI then has none to show."
+    "Hermes commands go to Hermes as you type them. /yolo turns off Hermes' approval prompts for this session, "
+    "as Shift+Tab's accept all does, so the OMH TUI then has none to show."
 )
 # The commands only Hermes' classic CLI runs, which completion leaves out (`slash.CLASSIC`).
 CLASSIC_HELP = "Only Hermes' classic CLI (`hermes --cli`) runs {names}; typed here, Hermes says where to run each."
@@ -2189,6 +2203,9 @@ class App(ModesMixin, AgentViewMixin):
         self.rewind_messages: list[dict[str, Any]] = []  # the history the picker was opened over
         self.rewind: Rewind | None = None  # a picked prompt waiting to be sent again
         self.model_picker: ModelPicker | None = None  # bare /model's list of what Hermes offers
+        # The model a switch was deferred to (Hermes makes it as the next turn starts) and `turns_ended` then; None
+        # once it is over. A drop Hermes reports names it (`_model_switch_dropped`).
+        self.model_deferred: tuple[str, int] | None = None
         # Hermes' configured default model and provider (a sessionless `model.options`) when last read, and the
         # config file's mtime then; None until read. A default that moves is switched to (`_check_default`).
         self.default_route: tuple[str, str] | None = None
@@ -2242,7 +2259,9 @@ class App(ModesMixin, AgentViewMixin):
         # not said its own starts with, the launch session and each one opened later (`_adopt_session`).
         self.effort_configured = ""
         self.effort_said = False  # the shown effort is the session's own (its info, or a level set and confirmed)
-        self.mode_request_open = False  # a yolo call is out: Shift+Tab waits for its answer
+        self.mode_request_open = False  # a yolo call is out: Shift+Tab presses wait for its answer
+        self.mode_asked = ""  # the mode the yolo call out leads to (`ModesMixin.mode_pending`)
+        self.mode_target: str | None = None  # where Shift+Tab presses made while it is out lead (`_settle_mode_target`)
         self.yolo_reported: bool | None = None  # `session.info`'s yolo since the last yolo call went out
         self.yolo_confirmed_at: float | None = None  # when Hermes confirmed the TUI's on; None once one session.info was held
         self.effort_asked = ""  # the newest effort still waiting for Hermes' answer; the next Ctrl+T steps on from it
@@ -2816,10 +2835,14 @@ class App(ModesMixin, AgentViewMixin):
         # Accept belongs to the session being left; this one says its own, here or in its first session.info.
         # Plan is the TUI's flag and stays as it was.
         self.mode_request_open = False
+        self.mode_target = None
         self.yolo_reported = None
         self.notification = None  # Hermes' notices are the session's
         self.session_title = ""
         self.rewind = self.rewind_picker = None  # a rewind names a row of the session being left
+        if self.model_picker is not None and self.model_picker.loading:
+            self.model_picker = None  # its list was asked of the session being left
+        self.model_deferred = None
         self._leave_tell()  # what to tell Hermes was for a turn of the session being left
         self.approvals_off = self.yolo_by_tui = self.hermes_approvals_said = False
         self.effort_asked = ""
@@ -3286,14 +3309,19 @@ class App(ModesMixin, AgentViewMixin):
             if call.on_expiry is not None:
                 call.on_expiry(call.seconds)
             elif call.method not in QUIET_EXPIRY_METHODS:
-                notice = CALL_EXPIRED_NOTICE.format(method=call.method, seconds=call.seconds)
-                if call.command is None:
-                    self.transcript.add_aside(NoticeBlock(notice, NOTICE_WARN))  # never closes what runs
-                else:
-                    with self._for_command(call.command):  # under the echo of the command it was made for
-                        self.transcript.add_notice(notice, NOTICE_WARN)
+                self._say_unanswered(call.command, call.method, call.seconds)
             self._command_call_done(call)
         self._settle_switch_held()
+
+    def _say_unanswered(self, command: CommandBlock | None, method: str, seconds: float) -> None:
+        """CALL_EXPIRED_NOTICE for a `method` call unanswered in `seconds`: under the echo of the `command` it was made
+        for, else beside what runs."""
+        notice = CALL_EXPIRED_NOTICE.format(method=method, seconds=seconds)
+        if command is None:
+            self.transcript.add_aside(NoticeBlock(notice, NOTICE_WARN))  # never closes what runs
+        else:
+            with self._for_command(command):  # under the echo of the command it was made for
+                self.transcript.add_notice(notice, NOTICE_WARN)
 
     @contextmanager
     def _for_command(self, command: CommandBlock | None) -> Iterator[None]:
@@ -4109,7 +4137,10 @@ class App(ModesMixin, AgentViewMixin):
         elif event.type == "error":
             self._on_error_event(as_text(payload.get("message")) or "The gateway reported an error.")
         elif event.type == "notification.show":
-            self.notification = notification_from(payload, self.clock()) or self.notification
+            if as_text(payload.get(contract.NOTIFICATION_KEY)) == MODEL_SWITCH_DROPPED_KEY:
+                self._model_switch_dropped(payload)
+            else:
+                self.notification = notification_from(payload, self.clock()) or self.notification
         elif event.type == "review.summary":
             line = review_line(clean_text(as_text(payload.get(contract.REVIEW_SUMMARY_TEXT))))
             if line:  # one dim row, whenever it comes (it can come during the next turn): it closes nothing
@@ -4722,26 +4753,31 @@ class App(ModesMixin, AgentViewMixin):
     def _ask_list(
         self, kind: str, command: str, method: str, params: dict[str, Any], on_result: Callable[[dict[str, Any]], None],
         on_error: Callable[[dict[str, Any]], bool] | None = None, on_expiry: Callable[[float], None] | None = None,
-    ) -> None:
+    ) -> bool:
         """Ask Hermes for `/model`'s or `/rewind`'s list (`kind`) for this session, once: while one is on its way,
         asking again with the same params sends nothing, asking with others says it is loading (`command` names it),
         and the slot says `waiting for Hermes…` (`_list_waiting`). A session left keeps its own call: it never holds
-        up the list asked for in the session switched to."""
+        up the list asked for in the session switched to. True while a list with these params is on its way."""
         calls = list(self.pending.values())
         self.list_asked = {key: asked for key, asked in self.list_asked.items() if any(c is asked[1] for c in calls)}
         asked = self.list_asked.get((kind, self.sid))
         if asked is not None:
             if asked[0] != params:
                 self.transcript.add_aside(NoticeBlock(LIST_LOADING_NOTICE.format(command=command), NOTICE_WARN))
-            return
+            return asked[0] == params
         request_id = self._request(method, params, on_result, on_error, on_expiry)
         call = self.pending.get(request_id) if request_id is not None else None
         if call is not None:
             self.list_asked[(kind, self.sid)] = (params, call)
+        return call is not None
 
     def _list_waiting_kind(self) -> str:
-        """The kind of the list `_ask_list` made for this session that is still out (`LIST_WAIT_LINES`); "" for none."""
-        return next((kind for kind in ("sessions", "model", "rewind") if self._list_waiting(kind)), "")
+        """The kind of the list `_ask_list` made for this session that is still out (`LIST_WAIT_LINES`); "" for none.
+
+        /model's is none of them: its picker opens at once and says it waits itself (`ModelPicker.loading`), and once
+        Esc closed it the list it waited for is nobody's.
+        """
+        return next((kind for kind in ("sessions", "rewind") if self._list_waiting(kind)), "")
 
     def _list_waiting(self, kind: str = "") -> bool:
         """Whether a list call `_ask_list` made for this session (of `kind`, or of either) is still out."""
@@ -5213,7 +5249,13 @@ class App(ModesMixin, AgentViewMixin):
             sid = self.sid
             params: dict[str, Any] = {"session_id": sid, "refresh": True} if refresh else {"session_id": sid}
             typed = f"/model {MODEL_REFRESH_ARG}" if refresh else "/model"
-            self._ask_list("model", typed, "model.options", params, lambda result: self._open_model_picker(sid, result))
+            asked = self._ask_list(
+                "model", typed, "model.options", params, lambda result: self._model_list_came(sid, result),
+                lambda _error: self._model_list_failed(), self._model_list_unanswered,
+            )
+            if asked and self.model_picker is None and self._front_picker() is None:
+                # Open at once, loading: what is typed while the list is out is its filter, not a prompt.
+                self.model_picker = ModelPicker([], current=self.model, loading=True)
 
     def _switch_model(self, value: str, confirmed: bool = False) -> None:
         """Switch this session to `value` (`gateway_contract.model_switch_value`); the answer says what Hermes did.
@@ -5225,10 +5267,27 @@ class App(ModesMixin, AgentViewMixin):
             return
         sid = self.sid
         params = model_switch_params(value, sid, confirmed)
-        self._request("config.set", params, lambda result: self._on_model_switched(sid, value, confirmed, result))
+        echo = self.transcript.command
+        line = MODEL_SWITCHING_LINE.format(model=(contract.model_switch_parts(value) or (value, ""))[0])
+
+        def settled() -> None:
+            self.transcript.drop_output(echo, line)
+
+        def unanswered(seconds: float) -> None:
+            settled()
+            with self._for_command(echo):
+                self.transcript.add_notice(CALL_EXPIRED_NOTICE.format(method="config.set", seconds=seconds), NOTICE_WARN)
+
+        sent = self._request(
+            "config.set", params, lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result)),
+            lambda _error: bool(settled()), unanswered,
+        )
+        if sent is not None and echo is not None and not echo.done:
+            self.transcript.add_notice(line)  # under the echo until the answer takes its place
 
     def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any]) -> None:
-        """A `config.set model` answer: switched, switched at the next turn, or not until the person confirms."""
+        """A `config.set model` answer: switched (for this session, or as Hermes' default too), switched at the next
+        turn, or not until the person confirms."""
         if result.get("confirm_required"):
             if confirmed:  # a turn or another switch landed between the ask and the yes
                 self.transcript.add_notice(MODEL_CONFIRM_STALE_NOTICE, NOTICE_WARN)
@@ -5247,11 +5306,14 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(MODEL_UNNAMED_NOTICE, NOTICE_WARN)
             return
         if result.get("deferred"):
+            self.model_deferred = (model, self.turns_ended)
             self.transcript.add_notice(MODEL_DEFERRED_NOTICE.format(model=model))
             return
         self.model = model
+        self.model_deferred = None
         self.dirty = True
-        self.transcript.add_notice(MODEL_SWITCHED_NOTICE.format(model=model))
+        global_scope = result.get("scope") == MODEL_GLOBAL_SCOPE
+        self.transcript.add_notice((MODEL_SWITCHED_GLOBAL_NOTICE if global_scope else MODEL_SWITCHED_NOTICE).format(model=model))
         warning = as_text(result.get("warning")).strip()
         if warning:
             self.transcript.add_notice(warning, NOTICE_WARN)
@@ -5477,6 +5539,7 @@ class App(ModesMixin, AgentViewMixin):
         if not model:
             self.transcript.add_aside(NoticeBlock(MODEL_UNNAMED_NOTICE, NOTICE_WARN))
         elif result.get("deferred"):
+            self.model_deferred = (model, self.turns_ended)
             self.transcript.add_aside(NoticeBlock(DEFAULT_DEFERRED_NOTICE.format(**facts)))
         else:
             if sid == self.sid:
@@ -5500,8 +5563,39 @@ class App(ModesMixin, AgentViewMixin):
         self._default_settled()
         return True
 
-    def _open_model_picker(self, sid: str, result: dict[str, Any]) -> None:
-        """The list came: it opens unless the session was left, a turn started meanwhile, or a picker is open."""
+    def _model_switch_dropped(self, payload: Mapping[str, Any]) -> None:
+        """Hermes dropped the switch it held for this turn: a lasting row, naming the switch the TUI said would come."""
+        reason = " ".join(clean_text(as_text(payload.get(contract.NOTIFICATION_TEXT))).split()) or "Hermes gave no reason."
+        deferred, self.model_deferred = self.model_deferred, None
+        if deferred is not None and self.turns_ended - deferred[1] <= 1:  # made for this turn, not an older one
+            text = MODEL_DROPPED_NOTICE.format(model=deferred[0], reason=reason)
+        else:
+            text = MODEL_DROPPED_OTHER_NOTICE.format(reason=reason)
+        self.transcript.add_aside(NoticeBlock(text, NOTICE_WARN))
+
+    def _model_list_came(self, sid: str, result: dict[str, Any]) -> None:
+        """The list bare /model asked for came: it fills the picker that opened loading, keeping what was typed into its
+        filter. Nothing opens once that picker was closed (Esc), or in a session left meanwhile."""
+        picker = self.model_picker
+        if sid != self.sid or picker is None or not picker.loading:
+            return
+        self.model_picker = None
+        self._open_model_picker(sid, result, picker.query)
+
+    def _model_list_failed(self) -> bool:
+        """The list was refused: a loading picker closes, and the refusal is said as for any call."""
+        if self.model_picker is not None and self.model_picker.loading:
+            self.model_picker = None
+        return False
+
+    def _model_list_unanswered(self, seconds: float) -> None:
+        self._model_list_failed()
+        self.transcript.add_aside(NoticeBlock(CALL_EXPIRED_NOTICE.format(method="model.options", seconds=seconds),
+                                              NOTICE_WARN))
+
+    def _open_model_picker(self, sid: str, result: dict[str, Any], query: str = "") -> None:
+        """The list came: it opens unless the session was left, a turn started meanwhile, or a picker is open.
+        `query` is what was typed into the picker while it loaded."""
         if sid != self.sid or self.model_picker is not None:
             return
         if self._busy():
@@ -5510,10 +5604,14 @@ class App(ModesMixin, AgentViewMixin):
         if self._picker_taken("/model"):
             return
         self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model)
+        if query:
+            self.model_picker.query = query
+            self.model_picker.index = 0
         self._settle_list()
 
     def _model_picker_key(self, event: Key | Paste | Mouse) -> None:
-        """A key for the open model picker: the model picked becomes this session's (`_switch_model`), one echo."""
+        """A key for the open model picker: the model picked becomes this session's (`_switch_model`), one echo that
+        names the model as the row does. The row already current switches nothing."""
         picker = self.model_picker
         if picker is None or isinstance(event, Mouse):
             return
@@ -5521,9 +5619,23 @@ class App(ModesMixin, AgentViewMixin):
         if action is None:
             return
         self.model_picker = None
-        if action.kind == MODEL_PICK and action.row is not None:
-            value = action.row.arg
-            self._as_command(f"/model {value}", lambda: self._switch_model(value))
+        row = action.row
+        if action.kind != MODEL_PICK or row is None:
+            return
+        if row.current:
+            self.transcript.add_aside(NoticeBlock(MODEL_ALREADY_NOTICE.format(model=row.model)))
+            return
+        value = row.arg
+        self._as_command(f"/model {row.model}", lambda: self._switch_model(value))
+
+    def _reasoning_command(self, arg: str) -> None:
+        """`/reasoning <level>` sets this session's effort as `/effort <level>` does: `slash.exec` would run it in a
+        worker apart from the live agent, which keeps its effort. Anything else (alone, `show`, `--global`, `reset`)
+        is Hermes' `/reasoning` as typed."""
+        if arg.strip().lower() in contract.REASONING_LEVELS:
+            self._effort_command(arg)
+        else:
+            self._route_slash(SlashInvocation("reasoning", arg, None), 0)
 
     def _export(self, arg: str) -> None:
         """Hermes' /export, once the person has been told it is a profile archive and not the transcript."""
@@ -7194,6 +7306,8 @@ class App(ModesMixin, AgentViewMixin):
             "queue": self._show_queue,
             "steer": self._steer_command,
             "effort": self._effort_command,
+            "reasoning": self._reasoning_command,
+            "yolo": self._yolo_command,
             "logs": self._logs,
             "dag": self._dag,
             "bots": self._bots,
@@ -8275,10 +8389,26 @@ class App(ModesMixin, AgentViewMixin):
                 path = write_launch_choice(home, name)
             except OSError as error:
                 self.transcript.add_notice(
-                    LAUNCH_SAVE_FAILED_NOTICE.format(name=name, path=theme_store_path(home), error=error), NOTICE_WARN)
+                    LAUNCH_SAVE_FAILED_NOTICE.format(name=name, path=self._shown_path(theme_store_path(home)), error=error),
+                    NOTICE_WARN)
             else:
-                self.transcript.add_notice(LAUNCH_KEPT_NOTICE.format(name=name, path=path))
+                self.transcript.add_notice(LAUNCH_KEPT_NOTICE.format(name=name, path=self._shown_path(path)))
         self._redraw_launch()
+
+    def _shown_path(self, path: object) -> str:
+        """A file the TUI wrote, as a notice names it: under the home directory as `~/…`, so it fits a row.
+
+        Both sides are resolved before they are compared, so a home spelled another way (Windows' `RUNNER~1` short
+        name, a symlink) still matches, and the part under it is written with `/` on every platform."""
+        home = self.environ.get("HOME", "")
+        if home:
+            try:
+                under = Path(str(path)).resolve().relative_to(Path(home).resolve())
+            except ValueError:
+                pass
+            else:
+                return "~/" + under.as_posix() if under.parts else "~"
+        return str(path)
 
     def _preview_launch(self) -> None:
         """Draw the shown look where it shows: on the launch screen, the logo by a full redraw and the live card in
@@ -8894,9 +9024,9 @@ class App(ModesMixin, AgentViewMixin):
                 path = write_wallpaper_choice(home, self.wallpaper)
             except OSError as error:
                 self.transcript.add_notice(WALLPAPER_SAVE_FAILED_NOTICE.format(
-                    state=state, path=theme_store_path(home), error=error), NOTICE_WARN)
+                    state=state, path=self._shown_path(theme_store_path(home)), error=error), NOTICE_WARN)
             else:
-                self.transcript.add_notice(WALLPAPER_KEPT_NOTICE.format(state=state, path=path))
+                self.transcript.add_notice(WALLPAPER_KEPT_NOTICE.format(state=state, path=self._shown_path(path)))
         if self.wallpaper and self.environ.get(WALLPAPER_ENV) == WALLPAPER_OFF:
             self.transcript.add_notice(WALLPAPER_ENV_NOTICE.format(state=state))
         elif self.wallpaper and self._wallpaper_side_held():
@@ -9232,13 +9362,17 @@ class App(ModesMixin, AgentViewMixin):
         # the count does (`info_line`).
         # Vim mode's INSERT or NORMAL, while the main composer has the keys (a question's or a tell row's has none).
         editing = self.composer.vim_label if self._composer_open() else ""
-        room = cols - inset - chip_column(self._display_mode(), self.theme, editing)
+        # While a yolo call is out, the mode Shift+Tab presses lead to, dimmed (`mode_label`); the shell's own label wins.
+        mode = self._display_mode()
+        pending = mode != MODE_SHELL and bool(self.mode_pending)
+        mode = self.mode_pending if pending else mode
+        room = cols - inset - chip_column(mode, self.theme, editing, pending)
         if isinstance(say, tuple):
             room -= cell_width(LABEL_SEPARATOR + say[max(len(say) - 2, 0)])
         listing = self.list_selected is not None or self.tree_selected is not None
         chip = self._agent_chip(room) if not listing or self.slot is not None else ()
         line = info_line(
-            mode=self._display_mode(),
+            mode=mode,
             width=cols - inset,
             theme=self.theme,
             right=self._info_right(),
@@ -9246,13 +9380,14 @@ class App(ModesMixin, AgentViewMixin):
             say=say,
             say_style=say_style,
             # While Hermes has approvals off on its own, Shift+Tab turns plan on and off and nothing else.
-            cycle=HERMES_OWN_CYCLE.get(self._display_mode(), "") if self.approvals_off_by_hermes else "",
+            cycle=HERMES_OWN_CYCLE.get(mode, "") if self.approvals_off_by_hermes else "",
             badge=badge,
             branch=branch_forms(self.git.state, self.theme) if self.git is not None and badge else (),
             background=background,
             right_spare=int(bool(self.session_title)),  # the title goes before the row does (`_compose_info_right`)
             editing=editing,
             notice=self._update_notice(),
+            pending=pending,
         )
         # Whether the row's form made it onto the line: what keeps its clock ticking (`_background_second`).
         words = "".join(span.text for span in line)
@@ -9571,7 +9706,7 @@ class App(ModesMixin, AgentViewMixin):
         if switching is not None:
             waiting.append(switching)
         loading = self._list_waiting_kind()
-        if loading:  # `/resume`'s, `/model`'s or `/rewind`'s list is on its way
+        if loading:  # `/resume`'s or `/rewind`'s list is on its way
             line = LIST_WAIT_LINES.get(loading, LIST_WAIT_LINE)
             waiting.append(truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(line, self.theme.muted)), cols))
         queue = queue_lines([line.shown or line.text for line in self.queued], cols, cap - len(waiting), self.theme,
@@ -9649,8 +9784,8 @@ class App(ModesMixin, AgentViewMixin):
 
         Its forms are the same at every width; `info_line` picks the one that fits.
         """
-        shown = (self.model, self.context_percent, self.context_used, self.context_max, self.effort, self._busy(),
-                 self.slot is not None, self.session_title)
+        shown = (self.model, self.context_percent, self.context_used, self.context_max, self.effort, self.effort_asked,
+                 self._busy(), self.slot is not None, self.session_title)
         held = self.info_held
         if held is not None and held[0] == shown and held[1] is self.theme and held[2] is self.hud:
             return held[3]
@@ -9663,17 +9798,25 @@ class App(ModesMixin, AgentViewMixin):
         effort, then less.
 
         The title (Hermes' `session.title`, cut to `INFO_TITLE_CELLS`) goes
-        first; the model then shortens (`model_forms`), then goes, then the
-        effort, then the context shortens (`_context_forms`) and goes; the
-        HUD's chips (`hud_chips`: a repeating call, the tool calls in flight)
-        go last.
+        first; the model then shortens (`model_forms`), then the context
+        shortens (`_context_forms`) and goes, then the effort, and only then
+        the model, so a line wide enough for its shortest name always names
+        it; the HUD's chips (`hud_chips`: a repeating call, the tool calls in
+        flight) go last. An effort Hermes has not confirmed yet shows dimmed,
+        with `PENDING_MARK`.
         """
         payload = self.hud.payload if self.hud is not None else None
         chips = list(hud_chips(payload, self.theme, turn_runs=self._busy(), question_waits=self.slot is not None))
         contexts = self._context_forms() or [()]
-        effort: Line = (Span(effort_words(self.effort), self.theme.muted),)
+        asked = self.effort_asked
+        effort: Line = (
+            (Span(effort_words(asked) + PENDING_MARK, self.theme.dim),) if asked
+            else (Span(effort_words(self.effort), self.theme.muted),)
+        )
         models: list[Line] = [(Span(name, self.theme.muted),) for name in model_forms(self.model)]
+        short = models[-1] if models else ()
         fields = [[*chips, model, contexts[0], effort] for model in models]
+        fields += [*([*chips, short, context, effort] for context in contexts[1:]), [*chips, short, effort], [*chips, short]]
         fields += [[*chips, contexts[0], effort], *([*chips, context] for context in contexts), chips]
         forms: list[Line] = []
         for parts in fields:

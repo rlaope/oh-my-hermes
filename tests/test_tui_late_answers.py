@@ -12,7 +12,7 @@ from dataclasses import replace
 from test_tui_modes import SHIFT_TAB, SID, answer, drawn, make_app, notices, type_text
 from omh.tui import app as app_module
 from omh.tui import modes as modes_module
-from omh.tui.gateway import Response, ServerRequest
+from omh.tui.gateway import Event, Response, ServerRequest
 from omh.tui.keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste
 from omh.tui.slash import parse_slash
 from omh.tui.transcript import UserBlock
@@ -134,7 +134,7 @@ class PickerPriorityTests(unittest.TestCase):
             with self.subTest(command=command):
                 app, client = make_app()
                 rid = run(app, command)
-                run(app, "/theme")
+                app._run_slash(parse_slash("/theme"))  # not typed: /model's loading picker takes what is typed
                 self.assertIsNotNone(app.launch_picker)
                 app._on_response(Response(rid, result, None))
                 self.assertEqual((app.model_picker, app.rewind_picker), (None, None))
@@ -162,7 +162,9 @@ class DuplicateModelListTests(unittest.TestCase):
     def test_model_twice_sends_one_list_and_a_late_answer_leaves_the_open_picker(self) -> None:
         app, client = make_app()
         rid = run(app, "/model")
+        app._on_input(Key(ESCAPE))  # the loading picker closes; its list is still out
         run(app, "/model")
+        self.assertTrue(app.model_picker.loading)
         self.assertEqual(client.named("model.options"), [{"session_id": app.sid}])
         app._on_response(Response(rid, OPTIONS, None))
         app._on_input(Key(DOWN))
@@ -180,18 +182,22 @@ class ListPerSessionTests(unittest.TestCase):
             with self.subTest(command=command):
                 app, client = make_app()
                 rid = run(app, command)
+                app._on_input(Key(ESCAPE))  # /model's loading picker would take the switch's text as its filter
                 switch_to_b(app)
                 run(app, command)
                 self.assertEqual(client.named(method), [{"session_id": SID}, {"session_id": "live-b"}])
                 app._on_response(Response(rid, OPTIONS if command == "/model" else HISTORY, None))  # A's, late
-                self.assertEqual((app.model_picker, app.rewind_picker), (None, None))
+                self.assertIsNone(app.rewind_picker)
+                self.assertTrue(app.model_picker is None or app.model_picker.loading)  # B's still waits for B's list
                 answer(app, client, OPTIONS if command == "/model" else HISTORY)
                 self.assertIsNotNone(app.model_picker if command == "/model" else app.rewind_picker)
+                self.assertFalse(command == "/model" and app.model_picker.loading)
 
     def test_asking_for_one_list_keeps_the_record_of_the_other(self) -> None:
         app, client = make_app()
         run(app, "/rewind")
         run(app, "/model")
+        app._on_input(Key(ESCAPE))
         run(app, "/rewind")
         self.assertEqual(len(client.named("session.history")), 1)
         self.assertEqual(len(client.named("model.options")), 1)
@@ -199,6 +205,7 @@ class ListPerSessionTests(unittest.TestCase):
     def test_model_refresh_while_a_bare_list_is_out_says_it_is_loading(self) -> None:
         app, client = make_app()
         run(app, "/model")
+        app._on_input(Key(ESCAPE))
         run(app, "/model --refresh")
         self.assertEqual(client.named("model.options"), [{"session_id": SID}])
         self.assertIn(app_module.LIST_LOADING_NOTICE.format(command="/model --refresh"), said(app))
@@ -323,12 +330,17 @@ class UnansweredYoloTests(unittest.TestCase):
 
 class ListAfterMovingOnTests(unittest.TestCase):
     def test_a_list_answered_after_a_prompt_went_does_not_open_during_the_turn(self) -> None:
+        # /model's picker opens loading and takes what is typed (`ModelLoadingTests`), so there the turn is one
+        # Hermes starts (another client's prompt) before the list lands.
         for command, result, notice in (("/rewind", HISTORY, app_module.REWIND_BUSY_NOTICE),
                                         ("/model", OPTIONS, app_module.MODEL_BUSY_NOTICE)):
             with self.subTest(command=command):
                 app, client = make_app()
                 rid = run(app, command)
-                run(app, "run the tests")
+                if command == "/model":
+                    app._on_event(Event("message.start", SID, {}))
+                else:
+                    run(app, "run the tests")
                 self.assertTrue(app._busy())
                 app._on_response(Response(rid, result, None))
                 self.assertEqual((app.rewind_picker, app.model_picker), (None, None))
