@@ -57,18 +57,15 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 <br>
 
-<table>
-<tr>
-<td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent logo" width="64"></a></td>
-<td><b>OMH läuft auf <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> von <a href="https://nousresearch.com">Nous Research</a>.<br>
-Hermes ist der Agent, mit dem du sprichst. OMH ist eine unabhängige Schicht darüber und kein offizielles Projekt von Nous Research.</td>
-</tr>
-<tr>
-<td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
-<td><b>OMH übernimmt sein ultrawork-Konzept von <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b> von <a href="https://github.com/code-yeongyu">@code-yeongyu</a>.<br>
-Das Schlüsselwort <code>ulw</code> und graphbasierte <code>dag-ulw</code>-Läufe stammen aus OmO. OMH ist ein eigenständiges Projekt, das sie zu Hermes Agent bringt.</td>
-</tr>
-</table>
+> **Aufgebaut auf**<br>
+> Das sind keine Sponsoren, sondern die Projekte, auf denen OMH steht.
+>
+> <table>
+> <tr><td width="96" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="64"></a></td>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> von <a href="https://nousresearch.com">Nous Research</a> ist der Agent, auf dem OMH läuft. Du sprichst weiter mit Hermes; OMH ist eine unabhängige Schicht darüber und kein offizielles Projekt von Nous Research.</td></tr>
+> <tr><td width="96" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="78"></a></td>
+> <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> von <a href="https://github.com/code-yeongyu">@code-yeongyu</a> ist der Ursprung des ultrawork-Konzepts. Das Schlüsselwort <code>ulw</code> und graphbasierte <code>dag-ulw</code>-Läufe sind dort entstanden, und OMH bringt sie zu Hermes. Danke, dass ihr es offen entwickelt.</td></tr>
+> </table>
 
 <br>
 

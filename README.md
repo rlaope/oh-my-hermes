@@ -58,18 +58,15 @@ omh setup
 
 <br>
 
-<table>
-<tr>
-<td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent logo" width="64"></a></td>
-<td><b>OMH runs on <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> by <a href="https://nousresearch.com">Nous Research</a>.<br>
-Hermes is the agent you talk to. OMH is an independent layer on top and is not an official Nous Research project.</td>
-</tr>
-<tr>
-<td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
-<td><b>OMH borrows its ultrawork concept from <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b> by <a href="https://github.com/code-yeongyu">@code-yeongyu</a>.<br>
-The <code>ulw</code> keyword and graph-style <code>dag-ulw</code> runs come from OmO. OMH is a separate project that brings them to Hermes Agent.</td>
-</tr>
-</table>
+> **Built on**<br>
+> These are not sponsors. They are the projects OMH stands on.
+>
+> <table>
+> <tr><td width="96" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent" width="64"></a></td>
+> <td><b><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b> by <a href="https://nousresearch.com">Nous Research</a> is the agent OMH runs on. You keep talking to Hermes; OMH is an independent layer on top, not an official Nous Research project.</td></tr>
+> <tr><td width="96" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO" width="78"></a></td>
+> <td><b><a href="https://github.com/code-yeongyu/oh-my-openagent">OmO</a></b> by <a href="https://github.com/code-yeongyu">@code-yeongyu</a> is where the ultrawork concept comes from. The <code>ulw</code> keyword and graph-style <code>dag-ulw</code> runs started there, and OMH carries them over to Hermes. Thank you for building it in the open.</td></tr>
+> </table>
 
 <br>
 
