@@ -1557,7 +1557,12 @@ reports for it, and when Hermes reports approvals off for its own reasons
 (`approvals.mode` is off, it was started with `--yolo`, or `/yolo` turned them
 off) the info line shows accept all as well. Those approvals are not the OMH
 TUI's to turn back on: Shift+Tab then sends nothing and turns plan mode on and
-off beside accept all, and the transcript says so once per session. In plan
+off beside accept all, and the transcript says so once per session. A typed
+`/yolo` (or `/yolo on`, `/yolo off`) sends the same per-session switch and
+leaves plan mode as it is, and says the outcome under the command. Shift+Tab
+presses made before Hermes answers are kept: the info line shows the mode they
+lead to at once, dimmed with `…`, and the TUI goes there once Hermes answers.
+In plan
 mode each prompt you send goes to Hermes as `/plan <text>`, its prompt for a
 written plan instead of the work; that is an
 instruction to the model, not a restriction on its tools. An answer to a
@@ -1575,8 +1580,9 @@ its own replaces once Hermes names that one. Where none is configured, so
 the provider's own default applies, it says `effort default` and the
 first Ctrl+T sets `low`; where per-model overrides (`agent.reasoning_overrides`) may apply,
 it says `ctrl+t effort` until the session reports one. A level you set
-shows once Hermes confirms it; a level Hermes refuses leaves the line as it
-was and says so.
+shows dimmed with `…` until Hermes confirms it; a level Hermes refuses leaves
+the line as it was and says so. `/reasoning <level>` sets the level as
+`/effort <level>` does, and a typed command says the level set under it.
 
 A steer adds what you typed to the turn that is running, without interrupting
 it: Hermes reads it after its next tool call, or, while it is compressing the

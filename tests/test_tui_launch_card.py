@@ -766,5 +766,24 @@ class SwitchTests(unittest.TestCase):
         self.assertTrue(any("/theme picker" in does for _keys, does in SHORTCUTS))
 
 
+
+class KeptPathTests(unittest.TestCase):
+    """The look's file is named home-relative, so the notice fits a row instead of wrapping to three (audit B, 11)."""
+
+    def kept(self, home: Path, omh_home: Path) -> str:
+        from test_tui_modes import make_app, notices
+
+        app, _client = make_app(environ={"HOME": str(home), "OMH_HOME": str(omh_home)})
+        app._keep_launch_look("violet")
+        return notices(app)[-1]
+
+    def test_a_file_under_home_is_named_with_a_tilde_and_one_elsewhere_whole(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            home = Path(root) / "home"
+            self.assertEqual(self.kept(home, home / ".omh"), "Launch look violet, kept in ~/.omh/tui/theme.json.")
+            elsewhere = Path(root) / "elsewhere"
+            self.assertEqual(self.kept(home, elsewhere), f"Launch look violet, kept in {elsewhere}/tui/theme.json.")
+
+
 if __name__ == "__main__":
     unittest.main()

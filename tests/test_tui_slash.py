@@ -13,9 +13,9 @@ class ParseSlashTests(unittest.TestCase):
         self.assertEqual((invocation.command.name, invocation.command.route), ("quit", slash.LOCAL))
 
     def test_an_unknown_command_passes_through_with_its_argument(self) -> None:
-        invocation = slash.parse_slash("/reasoning  high --global ")
+        invocation = slash.parse_slash("/personality  terse --global ")
         self.assertIsNone(invocation.command)
-        self.assertEqual(invocation.text, "reasoning high --global")
+        self.assertEqual(invocation.text, "personality terse --global")
 
     def test_text_that_only_looks_like_a_command_is_not_one(self) -> None:
         for text in ("hello /new", "/", "//comment", "/usr/bin/env python", "  "):

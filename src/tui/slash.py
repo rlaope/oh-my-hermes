@@ -30,10 +30,17 @@ TUI only has to own five kinds:
   its own. They still go to Hermes as typed, so that pointer is what the
   person reads, but completion and /help leave them out.
 
+`/yolo` and `/reasoning <level>` are `local` too, though they are Hermes'
+commands: `slash.exec` runs them in its separate per-session worker, and
+Hermes mirrors neither to the live agent, so `/reasoning high` would say it
+set the effort and change nothing, and `/yolo` would say approvals are off
+while they stayed on (and leave a flag a later resume turns them off by).
+Hermes' own clients send both as `config.set`; the TUI sends them through the
+paths Ctrl+T and Shift+Tab use (`/reasoning` with anything but a level still
+goes to Hermes as typed).
+
 Everything else goes to `slash.exec`, and a 4018 refusal from it falls back to
-`command.dispatch`, the order Ink uses. That includes `/yolo`, which turns off
-Hermes' approval prompts: the person typed it, and the TUI relays what the
-person types (`/help` says so). It also includes `/plan`, which plan mode
+`command.dispatch`, the order Ink uses. That includes `/plan`, which plan mode
 relies on: a prompt typed in plan mode goes out as `/plan <text>`
 (`plan_invocation`), so `/plan` must never be routed to `hermes` or `dropped`.
 """
@@ -103,6 +110,10 @@ COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("steer", LOCAL, "Add a message to the running turn (/steer <text>; Ctrl+Enter where it is a key)",
                  ("s",), echo=False),
     SlashCommand("effort", LOCAL, "Set this session's reasoning effort (/effort <level>; Ctrl+T steps through it)"),
+    SlashCommand("reasoning", LOCAL,
+                 "Hermes' /reasoning: a level sets this session's effort as /effort does; anything else goes to Hermes"),
+    SlashCommand("yolo", LOCAL,
+                 "Turn this session's approval prompts off or back on (/yolo [on|off]; Shift+Tab's accept all)"),
     SlashCommand("logs", LOCAL, "Show the gateway's recent stderr (kept in memory only)", echo_bare=False),
     SlashCommand("dag", LOCAL, "Show the delegation graph whole, with full boxes, in a pager", echo_bare=False),
     SlashCommand("bots", LOCAL, "Watch this machine's Hermes profiles, gateways and sessions, read-only (also Ctrl+S)",

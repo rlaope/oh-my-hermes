@@ -1398,10 +1398,11 @@ class InfoLineRightTests(unittest.TestCase):
         for gone in ("⚚", "OMH", "idle", "running", "│"):
             self.assertNotIn(gone, row)
 
-    def test_the_model_shortens_first_then_goes_then_the_effort_then_the_context(self) -> None:
+    def test_the_model_shortens_then_the_context_goes_then_the_effort_and_the_model_last(self) -> None:
         # The inset, the badge with its version and the 3-cell gap take 26 cells; the right side takes the longest form
         # that fits beside, and goes whole before the badge shortens. No token counts here: the gauge is the longest
-        # context.
+        # context. The model's shortest name outlasts the context and the effort (owner QA, 2026-11-10: a mode label
+        # beside them used to leave no model at 120 columns).
         app = self.app()
         expected = {
             100: f"{self.MODEL} · ctx ━─────────── 5% · effort high",
@@ -1409,9 +1410,12 @@ class InfoLineRightTests(unittest.TestCase):
             91: "deepseek-v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
             90: "v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
             82: "v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
-            81: "ctx ━─────────── 5% · effort high",
-            59: "ctx ━─────────── 5% · effort high",
-            58: "ctx ━─────────── 5%",
+            81: "v4.1-flash-ultrafast · ctx 5% · effort high",
+            69: "v4.1-flash-ultrafast · ctx 5% · effort high",
+            68: "v4.1-flash-ultrafast · effort high",
+            60: "v4.1-flash-ultrafast · effort high",
+            59: "v4.1-flash-ultrafast",
+            46: "v4.1-flash-ultrafast",
             45: "ctx ━─────────── 5%",
             44: "ctx 5%",
             32: "ctx 5%",
@@ -1452,16 +1456,18 @@ class InfoLineRightTests(unittest.TestCase):
     def test_a_narrow_line_drops_the_token_counts_then_the_gauge_then_the_context(self) -> None:
         app = self.app()
         app._take_usage({"context_used": 74_000, "context_max": 200_000, "context_percent": 37})
-        full, gauge = "ctx ━━━━──────── 37% 74k/200k", "ctx ━━━━──────── 37%"
+        full, gauge, model = "ctx ━━━━──────── 37% 74k/200k", "ctx ━━━━──────── 37%", "v4.1-flash-ultrafast"
         expected = {
             109: f"deepseek-v4.1-flash-ultrafast · {full} · effort high",
-            100: f"v4.1-flash-ultrafast · {full} · effort high",
-            91: f"{full} · effort high",
-            69: f"{full} · effort high",
-            68: full,
-            55: full,
-            54: gauge,
-            46: gauge,
+            100: f"{model} · {full} · effort high",
+            92: f"{model} · {full} · effort high",
+            91: f"{model} · {gauge} · effort high",
+            83: f"{model} · {gauge} · effort high",
+            82: f"{model} · ctx 37% · effort high",
+            70: f"{model} · ctx 37% · effort high",
+            69: f"{model} · effort high",
+            59: model,
+            46: model,
             45: "ctx 37%",
             33: "ctx 37%",
             32: "",
@@ -2291,7 +2297,7 @@ class LocalCommandTests(AppTestCase):
         self.assertNotIn("skill commands available", pager)  # the recording lists none
         # The keys live in one table that ? and /keys draw; /help points there.
         self.assertIn("Keys: ? on an empty composer, or /keys, lists every key.", pager)
-        self.assertIn("/yolo included", pager)
+        self.assertIn("/yolo turns off Hermes' approval prompts for this session, as Shift+Tab's accept all does", pager)
         # The banner no longer says it, so /help is where the way back to Hermes' own terminal stays.
         self.assertIn("Bare `hermes` opens Hermes' own terminal.", pager)
         self.assertIn("┃ ❯ /help\n┃   ⎿  OMH TUI commands:", terminal.history())

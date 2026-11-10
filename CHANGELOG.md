@@ -69,6 +69,28 @@ All notable changes will be documented here.
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
 
+- **OMH TUI settings changes say what they did, and do what they say.**
+  `/yolo` and `/reasoning <level>` went to Hermes' `slash.exec`, which runs
+  them in a worker apart from the live agent: `/reasoning high` said it was
+  set and changed nothing, and `/yolo` said approvals were off while Hermes
+  kept asking, then left a flag that turned them off at the next resume. Both
+  now go through the TUI's own per-session calls (Ctrl+T's and Shift+Tab's),
+  and say the outcome under the command; `/reasoning` with anything but a
+  level still goes to Hermes as typed. Shift+Tab presses made while Hermes
+  has not answered the last one are kept and shown at once, dimmed with `…`,
+  so two quick presses end in plan mode instead of in accept all; Ctrl+T's
+  level shows the same way until Hermes confirms it. `/model <name>` and the
+  picker show `switching to <model>…` under the command until Hermes
+  answers, say when Hermes also made the model the default for new sessions,
+  and a switch held for the next turn that Hermes drops as that turn starts
+  is now a lasting transcript row naming it. Bare `/model` opens its picker
+  at once: what is typed while the list loads filters it, Enter waits for the
+  list, and Esc cancels it; picking the current row switches nothing, and the
+  echo names the model without the flags sent. A typed `/effort <level>`
+  says the level set. The info line keeps the model's name beside the mode
+  label at 120 columns (the context goes first), and the launch look's file
+  is named as `~/…`.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
