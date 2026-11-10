@@ -1033,7 +1033,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72792
 # that node (+118); no other row moved. Measured from the producer; no headroom.
 # 545231 -> 545258: the same sentence gives `ultrabrain` only "where your routes serve it", as the review clause
 # says for `review` (+27); no other row moved. Measured from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545258
+# 545258 -> 545272: merged with the plain-words branch, whose release-cut required inputs say "every file that
+# carries the version" where they said "every version surface", a skill term replies copied to people (+14, only
+# that row); that branch's pin was 545127 and main's 545258. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545272
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
