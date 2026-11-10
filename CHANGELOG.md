@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh_jev_ask` can reach a self-hosted Jev-compatible server over local
+  HTTP.** With `{"local_http_endpoint": true}` in `<omh_home>/jev/settings.json`,
+  `TYPESAFE_BASE_URL` may be a plain-HTTP root on `localhost` or a loopback,
+  RFC 1918, ULA, or link-local IP literal, and `"typesafe_model"` names the
+  model that endpoint serves (an Ollama, vLLM or llama.cpp server exposing
+  `/v1/systemone`). The local ranges are named exactly, so documentation,
+  reserved, Teredo, 6to4 and NAT64 addresses and an IP with a trailing dot are
+  refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
+  sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
+  own host however it is spelled. Thanks @brentkearney. (#2716)
+
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their
   questions and approvals join the bots' asks in a "needs you" strip that ⌘J
@@ -13,6 +24,22 @@ All notable changes will be documented here.
   itself. The side panel has tabs, the model picker has search, and the chat
   keeps one face per run of bot bubbles. (#2695, #2702, #2704, #2706, #2708,
   #2709, #2710)
+- **Claude Fable 5.2 takes every Claude Fable 5.1 slot, and heads
+  `ultrabrain`** (owner decision, 2026-11-10). The `ultrabrain` chain is now
+  Claude Fable 5.2, GPT-6 Astra, then Claude Opus 5.5, all at `xhigh`. Fable
+  5.2 also replaces Fable 5.1 in `architect`, `visual-engineering`,
+  `artistry`, `capable`, the Hermes `main` suggestion, and the Claude Code
+  chain (`claude-opus-5-5` -> `claude-fable-5-2` -> `opus`), each at the effort
+  5.1 had. Claude Code needs version 2.1.290 or newer to run Fable 5.2 (seen on
+  one machine, not stated by Anthropic). `omh coding model-contract --model
+  claude-fable-5-2` prints its record from Anthropic's pages: thinking is always
+  on, so a request for `off` or `minimal` is raised to `low`. It lists at $8 /
+  $40 per million tokens, against $10 / $50 for Fable 5.1, and cost estimates
+  use that price. Fable 5.1 left the shipped chains but stays recognized,
+  priced and routable, so a chain you set yourself can still name it. Claude
+  Mythos 5.2, the same model for organizations Anthropic has verified, is
+  recognized and priced but in no shipped chain. The calibration text a
+  Claude model receives is unchanged.
 
 - **One command installs Hermes, OMH and the omher desktop app (beta).**
   `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta`
@@ -79,6 +106,15 @@ All notable changes will be documented here.
   when no node decides the run). Repair and extend rounds do not raise it,
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
+- **omher.app shows the real GitHub star count.** The header used to show a
+  `4.9k` baked into the page on 2026-10-31 whenever the visitor's own,
+  unauthenticated GitHub API call was rate-limited. The Pages deploy now
+  stamps the current count into the page (`tools/stamp_site_counts.py`, with
+  the workflow's token; a failed call keeps the committed value and never
+  fails the deploy), and a schedule rebuilds the site every 6 hours so it
+  stays current without a merge. In the browser, one code path in `app.js`
+  updates the count, and a cached or fetched count can only raise the baked
+  one, never lower it.
 - **A short install command: `curl -fsSL https://omher.app/install | sh`.** omher.app now serves
   `install` and `install.ps1`, small wrappers that download `install.sh` (or `install.ps1`) from main and
   run it with only the arguments you pass, so the short form installs exactly what the long
