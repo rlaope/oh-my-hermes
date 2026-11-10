@@ -138,7 +138,8 @@ OUTCOMES: Final = ("accepted", "failed", "blocked", "parked")
 # The ``origin`` kinds of a node added after define: ``repair:<root>`` and ``extend:<round>``.
 ADDED_ORIGIN_KINDS: Final = ("repair", "extend")
 PROMPT_MARKERS: Final = ("TASK", "DELIVERABLE", "SCOPE", "VERIFY", "STOP WHEN")
-# A run this wide whose critical path is this much of it is one chain wearing a graph's clothes.
+# A run this wide whose build nodes mostly sit on one chain is one chain wearing a graph's clothes (`build_chain`).
+# Baseline, review and verify nodes are serial by design, so they do not count toward the chain.
 SERIAL_GRAPH_NODES: Final = 5
 SERIAL_GRAPH_SHARE: Final = 0.8
 # Hermes' `subagent_stop` words that say the child did not finish (`delegation_graph._FAILED_STOPS` plus interrupted).
@@ -722,10 +723,10 @@ def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[s
         if missing:
             findings.append(f"missing_markers:{node['id']}:{','.join(marker.replace(' ', '_') for marker in missing)}")
     if len(nodes) >= SERIAL_GRAPH_NODES:
-        path_length = len(topology(nodes)["critical_path"])
-        if path_length >= SERIAL_GRAPH_SHARE * len(nodes):
-            findings.append(f"serial_graph:{len(nodes)} nodes, critical path {path_length}; "
-                            "most of the graph is one chain, so split it into parallel lanes where the work allows.")
+        builds, chain = build_chain(nodes)
+        if builds > 1 and chain >= SERIAL_GRAPH_SHARE * builds:
+            findings.append(f"serial_graph:{builds} build nodes, {chain} of them in one chain; most of the build work "
+                            "is one chain, so split it into parallel lanes where the work allows.")
     findings += [f"role_guess:{node['id']}={node['role_guess']}" for node in nodes if node.get("role_guess")]
     verifiers = [node for node in nodes if is_verification(node)]
     if len(nodes) > 1 and not verifiers:
@@ -755,6 +756,23 @@ def lint(nodes: Sequence[Mapping[str, Any]], *, defining: bool = True) -> list[s
     findings += [f"review_not_review_category:{node['id']}" for node in nodes
                  if node.get("role") == "review" and node["category"] != "review"]
     return findings
+
+
+def build_chain(nodes: Sequence[Mapping[str, Any]]) -> tuple[int, int]:
+    """(how many build nodes the graph has, the most of them on one dependency path) for `serial_graph`.
+
+    A path passes through baseline, review and verify nodes without counting them: they are serial by design, so a
+    baseline before two builds that run side by side, and a review and a verify after them, is no chain of work.
+    """
+    ids = [str(node["id"]) for node in nodes]
+    parents = {str(node["id"]): list(node["depends_on"]) for node in nodes}
+    builds = {str(node["id"]) for node in nodes if node_role(node) == DEFAULT_ROLE}
+    placed, _stuck = dag_core.layer_of(ids, parents)
+    depth: dict[str, int] = {}
+    for node_id in sorted(placed, key=lambda item: (placed[item], item)):
+        depth[node_id] = int(node_id in builds) + max((depth[parent] for parent in parents[node_id] if parent in depth),
+                                                      default=0)
+    return len(builds), max(depth.values(), default=0)
 
 
 def writes_code(node: Mapping[str, Any]) -> bool:

@@ -8,6 +8,12 @@ All notable changes will be documented here.
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.
 
+- **dag-ulw stops telling a parallel plan to split further.** Its advice to
+  split a run into parallel lanes now looks only at the build nodes: a run whose
+  builds already run side by side, with a baseline before them and a review and
+  verify after them, no longer gets it; a run whose build nodes form one chain
+  still does.
+
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
   nothing new), and the verify node marks each one met, not met or not

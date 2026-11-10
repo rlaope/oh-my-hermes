@@ -1303,11 +1303,74 @@ class PreflightTests(unittest.TestCase):
         chain = [node("n0")] + [node(f"n{index}", depends_on=(f"n{index - 1}",)) for index in range(1, 5)]
         wide = [node("n0"), node("n1"), node("n2"), node("n3"),
                 node("n4", depends_on=("n0", "n1", "n2", "n3"))]
-        self.assertIn("serial_graph:5 nodes, critical path 5; most of the graph is one chain, "
+        self.assertIn("serial_graph:5 build nodes, 5 of them in one chain; most of the build work is one chain, "
                       "so split it into parallel lanes where the work allows.",
                       dag_run.lint([dag_run._validated_node(item) for item in chain]))
         self.assertFalse([finding for finding in dag_run.lint([dag_run._validated_node(item) for item in wide])
                           if finding.startswith("serial_graph")])
+
+    def test_serial_graph_counts_the_chain_of_build_nodes_only(self) -> None:
+        """Baseline, review and verify nodes are serial by design: a graph as parallel as its build work allows gets no
+        advice, and a chain of build nodes still does. Mutations: count every node again, count every node on the
+        path, move the 80% share, or let one build node make a chain."""
+        def shape(*specs: tuple[str, str, tuple[str, ...]]) -> list[dict]:
+            return [dag_run._validated_node(node(node_id, role=role, depends_on=after,
+                                                 scope=(f"src/{node_id}.py",) if role == "build" else ()))
+                    for node_id, role, after in specs]
+
+        def serial(nodes: list[dict]) -> list[str]:
+            return [finding for finding in dag_run.lint(nodes) if finding.startswith("serial_graph")]
+
+        builds = lambda *ids, after=(): [(item, "build", after) for item in ids]  # noqa: E731
+        quiet = {
+            "(a) baseline, one build, verify": shape(("base", "baseline", ()), ("b1", "build", ("base",)),
+                                                     ("check", "verify", ("b1",))),
+            "(b) baseline, two builds side by side, review, verify": shape(
+                ("base", "baseline", ()), *builds("api", "ui", after=("base",)), ("rev", "review", ("api", "ui")),
+                ("check", "verify", ("rev",))),
+            "(c) baseline, three builds side by side, verify": shape(
+                ("base", "baseline", ()), *builds("b1", "b2", "b3", after=("base",)),
+                ("check", "verify", ("b1", "b2", "b3"))),
+            "(e) three chained builds and a verify: under five nodes": shape(
+                ("b1", "build", ()), ("b2", "build", ("b1",)), ("b3", "build", ("b2",)), ("check", "verify", ("b3",))),
+            "(f) four builds side by side, one after them, verify": shape(
+                *builds("b1", "b2", "b3", "b4"), ("wire", "build", ("b1", "b2", "b3", "b4")),
+                ("check", "verify", ("wire",))),
+            "(h) baseline, one build, review, two verifies in a row": shape(
+                ("base", "baseline", ()), ("b1", "build", ("base",)), ("rev", "review", ("b1",)),
+                ("check", "verify", ("rev",)), ("check2", "verify", ("check",))),
+            "(k) three of five builds in one chain: under 80%": shape(
+                ("b1", "build", ()), ("b2", "build", ("b1",)), ("b3", "build", ("b2",)), *builds("b4", "b5"),
+                ("check", "verify", ("b3", "b4", "b5"))),
+        }
+        for label, nodes in quiet.items():
+            with self.subTest(label):
+                self.assertEqual(serial(nodes), [])
+        fires = {
+            "(d) baseline, four chained builds, verify": (shape(
+                ("base", "baseline", ()), ("b1", "build", ("base",)), ("b2", "build", ("b1",)),
+                ("b3", "build", ("b2",)), ("b4", "build", ("b3",)), ("check", "verify", ("b4",))), 4, 4),
+            "(i) baseline, two chained builds, review, verify": (shape(
+                ("base", "baseline", ()), ("b1", "build", ("base",)), ("b2", "build", ("b1",)),
+                ("rev", "review", ("b2",)), ("check", "verify", ("rev",))), 2, 2),
+            "(j) four of five builds in one chain: exactly 80%": (shape(
+                ("b1", "build", ()), ("b2", "build", ("b1",)), ("b3", "build", ("b2",)), ("b4", "build", ("b3",)),
+                ("b5", "build", ()), ("check", "verify", ("b4", "b5"))), 5, 4),
+        }
+        for label, (nodes, total, chain) in fires.items():
+            with self.subTest(label):
+                self.assertEqual(serial(nodes), [
+                    f"serial_graph:{total} build nodes, {chain} of them in one chain; most of the build work is one "
+                    "chain, so split it into parallel lanes where the work allows."])
+        # Through the tool, as the reviewer measured it: shape (b) defines with no serial_graph advice.
+        with homes():
+            defined = call(action="define", run="feat", nodes=[
+                node("base", role="baseline"), node("api", depends_on=("base",), scope=("src/api.py",)),
+                node("ui", depends_on=("base",), scope=("src/ui.py",)),
+                node("rev", category="review", depends_on=("api", "ui"), role="review"),
+                node("check", depends_on=("rev",), role="verify")])
+        self.assertEqual(defined["status"], "ok", defined)
+        self.assertFalse([finding for finding in defined["lint"] if finding.startswith("serial_graph")], defined["lint"])
 
 
 def oneshot_config(home, limit: int, *, cap: int = 10) -> None:
