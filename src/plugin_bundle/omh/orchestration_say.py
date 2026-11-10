@@ -42,6 +42,7 @@ from typing import Any, Final
 # alias is the person's own word for a model, not OMH vocabulary.
 MODEL_DISPLAY_LABELS: Final[dict[str, str]] = {
     "claude-fable-5-1": "Claude Fable 5.1",
+    "claude-fable-5-2": "Claude Fable 5.2",
     "claude-haiku-4-5": "Claude Haiku 4.5",
     "claude-haiku-5-5": "Claude Haiku 5.5",
     "claude-opus-5": "Claude Opus 5",

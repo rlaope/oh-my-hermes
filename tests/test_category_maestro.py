@@ -296,7 +296,7 @@ class CategoryMaestroResolverTests(unittest.TestCase):
     def test_unconfigured_profile_keeps_the_builtin_basis(self) -> None:
         route = resolve_model_route("claude-code", role="brain", category_config=_CONFIG)
         # The built-in Claude chain heads on the pinned Opus 5.5 id (Opus 5.5
-        # before Fable 5.1, owner decision 2026-10-13).
+        # before Fable, owner decision 2026-10-13).
         self.assertEqual(route["selected_model"], "claude-opus-5-5")
         self.assertEqual(route["catalog_kind"], "built_in_defaults")
         self.assertNotIn("catalog_fingerprint", route)

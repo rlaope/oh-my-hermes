@@ -200,7 +200,9 @@ def _backend_route(
 # whats-new-opus-5-5, read 2026-09-23), and on Sonnet 5.5 (its migration
 # guide, read 2026-10-01: the API's one thinking-off mode, `between_tools`,
 # is a different request no Hermes build sends), and is dropped silently on
-# Fable 5.1, so an effort that means
+# Fable 5.1 (Fable 5.2 and Mythos 5.2 return the 400, per the Fable 5.2
+# migration guide, read 2026-11-10; the `claude-fable-` and
+# `claude-mythos-` prefixes already cover both ids), so an effort that means
 # "no thinking" never reaches delegation.reasoning_effort for these models.
 # Opus 5 and Sonnet 5 still accept it, so the Opus and Sonnet entries name
 # the 5.5 generation only; the dotted spellings are a gateway's (OpenRouter's
@@ -589,7 +591,7 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
                 "enum": sorted(HERMES_MIXTURE_CATEGORY_CHAINS),
                 "description": (
                     "Mixture category to route to; resolves to the chain head "
-                    "(e.g. ultrabrain -> claude-fable-5-1 xhigh). Required for set unless "
+                    "(e.g. ultrabrain -> claude-fable-5-2 xhigh). Required for set unless "
                     "an explicit model is given."
                 ),
             },

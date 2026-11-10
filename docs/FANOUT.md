@@ -776,7 +776,8 @@ Rules, all applied at freeze time:
   writes this entry only after the operator confirms a Claude Code
   subscription and only when none is set, and it writes the head of the
   Maestro lane's Claude chain: the pinned `claude-opus-5-5` since 2026-10-13
-  (the chain is `claude-opus-5-5`, then `claude-fable-5-1`, then `opus`). The
+  (the chain is `claude-opus-5-5`, then `claude-fable-5-2`, then `opus`; the
+  Fable entry needs Claude Code v2.1.290 or later, observed 2026-11-10). The
   preference has no fallback walk, so an account that does not serve the
   pinned id changes the entry to `opus`. `codex` has no
   recommended value either (no local `codex` CLI in this repo to confirm its

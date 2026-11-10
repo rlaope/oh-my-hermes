@@ -39,7 +39,7 @@ _GEMINI = _active("gemini-4-argon", "google", "gemini")
 # both since 2026-10-13, so each category is exercised on a model that only
 # its own chain ranks above Kimi K3.1 Pro, the companion every chain ends on.
 _GLM_FLASH = _active("glm-5.3-flash", "zai", "glm")
-_FABLE = _active("claude-fable-5-1", "ccapi", "claude")
+_FABLE = _active("claude-fable-5-2", "ccapi", "claude")
 _SONNET = _active("claude-sonnet-5-5", "ccapi", "claude")
 
 
