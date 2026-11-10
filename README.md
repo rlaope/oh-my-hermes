@@ -2,7 +2,7 @@
 
 ### omher, the desktop app
 
-<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami's chat holds replies from Discord #releases and Slack #design, then the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts; the Plans panel shows the graph with Claude Code, Codex, omp and pi marks on its parts" width="900">
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami's chat holds the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts, each a Hermes subagent; the Plans panel draws that plan as connected boxes, each part with the Hermes mark and its model, effort and category (Opus 5.5 · high · visual-engineering, GPT-5.5 · medium · quick, Sonnet 5.5, review), two lanes handed on via Codex and via Claude Code, and the open part's details under the graph" width="900">
 
 Your Hermes bots, coding sessions and `dag-ulw` runs, in one window.
 
