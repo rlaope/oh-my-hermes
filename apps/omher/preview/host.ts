@@ -32,7 +32,7 @@ export function kamiSeed(): Row[] {
     ["user", "Review #126 and merge it if it's clean.", 24 * MIN],
     ["assistant", "Reviewed **#126**: fixed two nits, CI is green. Merged into main, and Juno's deploy picks it up.", 21 * MIN],
     ["user", "Can the docs get a dark mode today? Mina keeps asking.", 3 * MIN],
-    ["assistant", "Yes. It's color tokens, a theme toggle, a contrast check, code colors and the page styles, then a final check and the PR. Say the word and I'll plan it.", 2.5 * MIN],
+    ["assistant", "Yes. It's color tokens, a theme toggle, code colors and the page styles, then a contrast check, a final check and the PR. Say the word and I'll plan it.", 2.5 * MIN],
   ]);
 }
 

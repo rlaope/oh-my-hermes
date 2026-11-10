@@ -13,6 +13,12 @@
 .side-sec:has(> .bot-list:not(.ss-list)) {
   flex: none;
 }
+/* The Plans panel at the width the promo film draws it (1280px window: 552px), not the 472px the app gives it in the
+   preview's 1200px layout: the two parts of a row stand side by side with "Opus 5.5 · high · via Claude" on one line,
+   the graph the owner picked. The chat keeps 400px. */
+html .window.panel-open:has(.pn-wide[data-tab="runs"]) {
+  --panel-w: 552px;
+}
 .pv-toast {
   position: fixed;
   left: 50%;
