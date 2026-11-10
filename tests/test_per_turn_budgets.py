@@ -714,6 +714,23 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
             target["description"] = target["description"].replace("write_scope, role)", "write_scope)", 1)
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
+        # The goal `criteria` parameter (+226, then +95 and +8 for its description; its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT
+        # entries) is stripped before all three, with the description clause, and `goal` reads "goal criteria" again.
+        def without_criteria(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            properties = target["parameters"]["properties"]
+            criteria = properties.pop("criteria")
+            self.assertEqual(criteria["items"], {"type": "object", "properties": {
+                "id": {"type": "string"}, "text": {"type": "string"}}})
+            clause = ("criteria (define, extend): the goal's checkable outcomes, each met only by a verify node's "
+                      "handoff line. ")
+            self.assertEqual(target["description"].count(clause), 1)
+            target["description"] = target["description"].replace(clause, "", 1)
+            self.assertEqual(properties["goal"]["description"], "define: the run's goal, one line.")
+            properties["goal"]["description"] = "define: the run's goal criteria, one line."
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        self.assertEqual(without_criteria(legacy), 226 + 95 + 8)
         self.assertEqual(without_local(legacy), 37)
         self.assertEqual(without_owner(legacy), 70)
         self.assertEqual(without_role(legacy), 85)
@@ -730,12 +747,14 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # category values, so category growth cannot spend the parked cap.
         live = copy.deepcopy(schema)
         del live["parameters"]["properties"]["nodes"]["items"]["properties"]["category"]["enum"][-len(recipe):]
+        self.assertEqual(without_criteria(live), 226 + 95 + 8)
         self.assertEqual(without_local(live), 37)
         self.assertEqual(without_owner(live), 70)
         self.assertEqual(without_role(live), 85)
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
-            per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta, 75 + 85 + 70 + 37
+            per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta,
+            75 + 85 + 70 + 37 + 226 + 95 + 8,
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.
