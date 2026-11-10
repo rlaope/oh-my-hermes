@@ -1766,7 +1766,7 @@ class ModelChainPickerTests(unittest.TestCase):
         self.assertIn("! deep: xhigh is not on gemini-4-argon's list; −/+ or d", written[-2])
         self.assertTrue(message.startswith("Saved 2 categories"), message)
         categories = json.loads((root / "omh" / "routing" / "model-chains.json").read_text(encoding="utf-8"))["categories"]
-        self.assertEqual(categories["ultrabrain"][0], {"model": "claude-fable-5-1", "reasoning_effort": "max"})
+        self.assertEqual(categories["ultrabrain"][0], {"model": "claude-fable-5-2", "reasoning_effort": "max"})
         self.assertEqual(categories["deep"][0], {"model": "gemini-4-argon", "reasoning_effort": "high"})
 
 

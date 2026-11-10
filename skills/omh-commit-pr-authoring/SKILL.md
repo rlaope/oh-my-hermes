@@ -54,10 +54,11 @@ Bad example:
 - Every prepared, skipped, or unobserved command is under `Not-tested:` (or "Not run" where the log has no trailers) with its reason.
 - The draft lists the paths to stage, and any state-claiming subject prefix maps to an observed ledger row.
 - Nothing was committed, pushed, or opened by OMH.
+- The commit text and the reply say what was not run in plain words; run record and evidence ledger are bookkeeping terms that stay out of both.
 
 ## Recovery Notes
 
-- If no run records exist, draft with an empty `Tested:` and every command under `Not-tested:`, and ask for the observed output.
+- If no command run was observed, draft with an empty `Tested:` and every command under `Not-tested:`, and ask for the observed output.
 - If the repository has no template or visible convention, say so and use a plain subject and body rather than importing one.
 
 ## Workflow Lane

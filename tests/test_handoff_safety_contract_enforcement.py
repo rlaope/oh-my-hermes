@@ -909,7 +909,9 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "omh_jev_ask -- the one opt-in bridge that POSTs typed questions to Jev with the user's own "
         "key; reached only from an explicit tool call, after the user named Jev in that turn and a "
         "route resolved; fixed route identities, TypeSafe host optionally configured through "
-        "TYPESAFE_BASE_URL as an HTTPS base URL without credentials/query/fragment, OpenRouter host fixed; "
+        "TYPESAFE_BASE_URL as an HTTPS base URL without credentials/query/fragment (plain HTTP only to a "
+        "loopback/private/link-local IP literal or localhost, behind the operator's local_http_endpoint "
+        "setting, sent direct and never through a proxy), OpenRouter host fixed; "
         "redirects refused, bounded both ways; "
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
@@ -924,7 +926,11 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
 }
-NETWORK_CLIENT_BRIDGE_URLLIB_NAMES = frozenset({"Request", "build_opener", "HTTPSHandler", "HTTPRedirectHandler"})
+# `ProxyHandler` is imported only to pass an empty mapping, which turns proxies
+# off for the Jev local plain-HTTP endpoint so no proxy reads the key in clear.
+NETWORK_CLIENT_BRIDGE_URLLIB_NAMES = frozenset(
+    {"Request", "build_opener", "HTTPSHandler", "HTTPRedirectHandler", "ProxyHandler"}
+)
 NETWORK_CLIENT_BRIDGE_IMPORTERS: dict[str, frozenset[str]] = {
     "src/plugin_bundle/omh/jev_ask_client.py": frozenset({"src/plugin_bundle/omh/tools/jev_ask_tool.py"}),
     "src/tui/update_notice.py": frozenset({"src/tui/app.py", "src/commands/setup.py"}),
