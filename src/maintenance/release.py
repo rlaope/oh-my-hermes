@@ -413,7 +413,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # reference. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base 0cba53d76.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72792
+# 72792 -> 72887: the `criteria` parameter gains a description saying a
+# criterion keeps the request's own condition, never weakened to "reported"
+# (+95, 3401 -> 3496): in the 2026-11-10 baseline runs the model shortened a
+# refused goal's "confirm it works on staging" into "staging check reported".
+# Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against
+# base d00be3a6e. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72887
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

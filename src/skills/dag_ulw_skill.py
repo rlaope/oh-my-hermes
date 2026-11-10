@@ -98,8 +98,10 @@ DEFINITION = SkillDefinition(
         "End every run with a `role: verify` node that depends on every producer, runs the real command, and is "
         "never the node that built the work; with criteria it writes one `CRITERION` line per criterion.",
         "Completion is a claim: report the goal met only when `omh_dag` says `verdict: verified`, and first check "
-        "each node against its SCOPE in both directions, nothing owed missing and nothing beyond it done. With "
-        "criteria, say how many were met and which were not met or not checked, in plain words.",
+        "each node against its SCOPE in both directions, nothing owed missing and nothing beyond it done. The reply "
+        "states the result in plain words (the goal is confirmed; part is not, and which; a check could not run "
+        "here, and why; how many criteria were met); verified, unverified, needs_repair, blocked, settle and node "
+        "ids are record words, not reply wording.",
         "Goal loop: verify, repair, extend, verify. A failed check gets repair nodes (`omh_dag action=repair`, two "
         "cycles per node, the last re-plans); when every node passed but the goal check finds work missing, add it to the same run "
         "(`omh_dag action=extend`, two rounds per run). Past either limit, report what is still open.",
@@ -120,7 +122,8 @@ DEFINITION = SkillDefinition(
     ),
     opening_steps=(
         "Start at once; there is no plan approval. Write the goal in one line, and pass each separately checkable "
-        "outcome the request names as `criteria` (id and one line); never ask the person to list them.",
+        "outcome the request names as `criteria` (id and one line) in the request's own condition, never weakened "
+        "to 'reported' or 'checked'; never ask the person to list them.",
         "When the conversation holds a plan the user accepted (from `plan`, `ralplan` or `refactor-plan`), build the graph "
         "from it instead of re-planning: each task becomes a node with its id, depends_on and write scope, its done check "
         "goes into VERIFY and STOP WHEN, and its closing verification task becomes the `role: verify` node; plan only what "
@@ -277,7 +280,10 @@ work. OMH starts no timer or poll. After three parks per node, another park is r
 ## Goal criteria
 
 Split the goal into the outcomes that can each be checked on their own, from what the request names, and
-pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short lowercase id and one line. Never
+pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short lowercase id and one line. Keep
+`goal` to one short line of what the request is for; its conditions go into criteria, not the goal. A
+criterion keeps the request's own condition: "it works on staging" stays that, never "staging check
+reported" or "staging checked", since the outcome asked for is what the verify node must confirm. Never
 ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
 refused as `invalid_criteria`. Leaving them out is allowed (lint `no_goal_criteria`), and the run then works
 as it did before criteria existed. Criteria are part of the run: the same run id defined with other criteria
@@ -297,15 +303,16 @@ does a criterion with no line. It keeps the status word only. Settling that veri
 - `accepted` with one `unobserved` is refused as `criteria_unobserved`: settle it failed and repair it so it
   checks them, or settle it blocked when they cannot be checked here.
 - `failed` and `blocked` record what the handoff marks; a missing handoff does not refuse them. A handoff
-  OMH could not read records nothing.
+  OMH could not read records nothing. The result still carries `criteria`, and its `say` counts them, so the
+  report says how far the goal got (11 of 12 confirmed, one could not be checked here, and why).
 
 `verified` also needs every criterion `met` by an accepted verify node whose handoff was read (the newest
 per criterion); otherwise the run is `unverified` with `criteria_unmet:<ids>` or `criteria_unobserved:<ids>`,
 so criteria an extend round added need a verify node that checks them. The result carries `criteria`
 (`total`, `met`, the `unmet` and `unobserved` ids, and each item with its status, `unchecked` before any
 read), and the status line and the done `say` add `2/3 criteria met`; `status` shows the same after
-compaction. In the report, say how many were met and which were not met or not checked, in plain words: the
-status words are the tool's, not the person's.
+compaction. In the report, say how many were met and which were not met or could not be checked, in plain
+words: the status words are the tool's, not the person's.
 
 ## When the path is unknown
 

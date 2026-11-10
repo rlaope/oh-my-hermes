@@ -164,7 +164,8 @@ OMH_DAG_SCHEMA = {
             "name": {"type": "string"},
             "goal": {"type": "string", "description": "define: the run's goal, one line."},
             "criteria": {"type": "array", "items": {"type": "object", "properties": {
-                "id": {"type": "string"}, "text": {"type": "string"}}}},
+                "id": {"type": "string"}, "text": {"type": "string"}}},
+                "description": "define/extend: in the request's own condition, never weakened to 'reported'."},
             "nodes": {
                 "type": "array",
                 "items": {
@@ -1068,6 +1069,10 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     elif state == "stopped":
         payload["open"] = dag_run.open_failures(record, derived)
         say = say or "The repair cycles are spent: report what is still open, and do not repair again."
+    if state in ("needs_repair", "stopped") and criteria is not None and any(
+            item["status"] != "unchecked" for item in criteria["items"]):
+        # A failed or blocked check read some criteria: the parent reports how far the goal got, not only the state.
+        say = " ".join(part for part in (say, _criteria_say(criteria)) if part)
     verdict, reasons = "", []
     if state in dag_run.FINISHED_STATES:
         # Whether a passing verify node covers the work (`dag_run.goal_verdict`): a done run may still be unverified.
@@ -1135,11 +1140,14 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
 
 
 def _criteria_say(view: Mapping[str, Any]) -> str:
-    """``Goal criteria: 2/3 criteria met; not met: c2; not checked yet: c3.`` in plain words, for a done run."""
-    unchecked = [item["id"] for item in view["items"] if item["status"] in ("unobserved", "unchecked")]
+    """``Goal criteria: 2/4 criteria met; not met: c2; could not be checked: c3; not checked yet: c4.``, in plain
+    words: for a done run, and for a run whose failed or blocked check read some of them."""
+    unchecked = [item["id"] for item in view["items"] if item["status"] == "unchecked"]
     parts = [f"Goal criteria: {dag_run.criteria_count(view)}"]
     if view["unmet"]:
         parts.append(f"not met: {', '.join(view['unmet'])}")
+    if view["unobserved"]:
+        parts.append(f"could not be checked: {', '.join(view['unobserved'])}")
     if unchecked:
         parts.append(f"not checked yet: {', '.join(unchecked)}")
     return "; ".join(parts) + "."

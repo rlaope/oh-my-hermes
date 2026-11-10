@@ -82,7 +82,10 @@ work. OMH starts no timer or poll. After three parks per node, another park is r
 ## Goal criteria
 
 Split the goal into the outcomes that can each be checked on their own, from what the request names, and
-pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short lowercase id and one line. Never
+pass them at define as `criteria=[{id, text}, ...]`: 1 to 12, each a short lowercase id and one line. Keep
+`goal` to one short line of what the request is for; its conditions go into criteria, not the goal. A
+criterion keeps the request's own condition: "it works on staging" stays that, never "staging check
+reported" or "staging checked", since the outcome asked for is what the verify node must confirm. Never
 ask the person to list them. A non-list, more than 12, a duplicate id, or a field other than id and text is
 refused as `invalid_criteria`. Leaving them out is allowed (lint `no_goal_criteria`), and the run then works
 as it did before criteria existed. Criteria are part of the run: the same run id defined with other criteria
@@ -102,15 +105,16 @@ does a criterion with no line. It keeps the status word only. Settling that veri
 - `accepted` with one `unobserved` is refused as `criteria_unobserved`: settle it failed and repair it so it
   checks them, or settle it blocked when they cannot be checked here.
 - `failed` and `blocked` record what the handoff marks; a missing handoff does not refuse them. A handoff
-  OMH could not read records nothing.
+  OMH could not read records nothing. The result still carries `criteria`, and its `say` counts them, so the
+  report says how far the goal got (11 of 12 confirmed, one could not be checked here, and why).
 
 `verified` also needs every criterion `met` by an accepted verify node whose handoff was read (the newest
 per criterion); otherwise the run is `unverified` with `criteria_unmet:<ids>` or `criteria_unobserved:<ids>`,
 so criteria an extend round added need a verify node that checks them. The result carries `criteria`
 (`total`, `met`, the `unmet` and `unobserved` ids, and each item with its status, `unchecked` before any
 read), and the status line and the done `say` add `2/3 criteria met`; `status` shows the same after
-compaction. In the report, say how many were met and which were not met or not checked, in plain words: the
-status words are the tool's, not the person's.
+compaction. In the report, say how many were met and which were not met or could not be checked, in plain
+words: the status words are the tool's, not the person's.
 
 ## When the path is unknown
 

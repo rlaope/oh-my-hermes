@@ -97,6 +97,12 @@ CRITERION_FIELDS: Final = frozenset({"id", "text"})
 CRITERION_STATUSES: Final = ("met", "unmet", "unobserved")
 # How much of a verify node's handoff is read for its criterion lines; the rest is ignored.
 MAX_HANDOFF_READ_BYTES: Final = 262_144
+# What a goal over `MAX_GOAL_CHARS` (or not text) is told: the conditions go into criteria, as the request says them.
+GOAL_REFUSED: Final = (
+    f"The goal is one short line of at most {MAX_GOAL_CHARS} characters: keep `goal` to what the request is for, and "
+    "put each checkable outcome in `criteria` ({id, text}, one line each), keeping the request's own condition (the "
+    "outcome asked for, never only that it was checked or reported)."
+)
 # The verify node's producer scope map and a repair node's `git diff` paths are cut at these lengths (per node turn).
 SCOPE_MAP_CHARS: Final = 600
 LEFTOVER_PATHS_CHARS: Final = 300
@@ -830,7 +836,7 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
     require_prompt_markers(nodes)
     _require_graph(nodes)
     title = _plain(name, MAX_NAME_CHARS, "invalid_name", "The run needs a short name.") if name else run
-    stated = _plain(goal, MAX_GOAL_CHARS, "invalid_goal", "The goal is one line.") if goal else ""
+    stated = _plain(goal, MAX_GOAL_CHARS, "invalid_goal", GOAL_REFUSED) if goal else ""
     checks = _validated_criteria(criteria) if criteria is not None else []
     record = {
         "schema_version": DAG_SCHEMA_VERSION,

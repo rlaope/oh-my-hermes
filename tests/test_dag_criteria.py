@@ -188,6 +188,21 @@ class DefineTests(unittest.TestCase):
                 self.assertEqual((refused["status"], refused["reason"]), ("refused", "invalid_criteria"), refused)
                 self.assertFalse(dag_run.record_path(home.omh, PARENT, "feat").exists())
 
+    def test_a_goal_over_the_limit_is_told_to_move_its_conditions_into_criteria(self) -> None:
+        """Measured on main: the model packed the request's conditions into `goal`, was refused, and shortened them
+        into a weaker one ("confirm it works on staging" became "staging check reported")."""
+        with homes() as home:
+            slots_table(home)
+            refused = call(action="define", run="feat", nodes=NODES, goal="x" * (dag_run.MAX_GOAL_CHARS + 1))
+            self.assertFalse(dag_run.record_path(home.omh, PARENT, "feat").exists())
+        self.assertEqual((refused["status"], refused["reason"]), ("refused", "invalid_goal"), refused)
+        self.assertEqual(refused["say"], dag_run.GOAL_REFUSED)
+        for words in ("one short line", "put each checkable outcome in `criteria`", "the request's own condition",
+                      "never only that it was checked or reported"):
+            self.assertIn(words, refused["say"])
+        schema = dag_tool.OMH_DAG_SCHEMA["parameters"]["properties"]["criteria"]["description"]
+        self.assertIn("request's own condition", schema)
+
     def test_criteria_are_part_of_the_definition(self) -> None:
         """Mutation: leave criteria out of the digest, so other criteria reuse the run."""
         self.assertEqual(dag_run.definition_digest(NODES), dag_run.definition_digest(NODES, ()))
@@ -217,6 +232,17 @@ class TaskTests(unittest.TestCase):
         self.assertIn("Goal criteria:\n- api: The export API returns CSV\n- docs: The docs page names the API\n", check)
         self.assertIn("CRITERION <id>: met | unmet | unobserved - <the command you ran and what it showed>", check)
         self.assertIn("producer claims are not verification evidence", check)
+
+
+class SkillTextTests(unittest.TestCase):
+    def test_the_reply_states_the_result_in_plain_words_and_criteria_keep_the_condition(self) -> None:
+        from omh.skills.dag_ulw_skill import DEFINITION, run_loop_reference
+
+        completion = next(line for line in DEFINITION.quality_bar if line.startswith("Completion is a claim"))
+        self.assertIn("The reply states the result in plain words", completion)
+        self.assertIn("verified, unverified, needs_repair, blocked, settle and node ids are record words", completion)
+        self.assertIn("in the request's own condition, never weakened", DEFINITION.opening_steps[0])
+        self.assertIn('never "staging check reported"', " ".join(run_loop_reference().split()))
 
 
 class LineParsingTests(unittest.TestCase):
@@ -294,6 +320,39 @@ class SettleTests(unittest.TestCase):
                 settled = call(action="settle", run="feat", node="check", outcome=outcome)
                 self.assertEqual(settled["status"], "ok", settled)
                 self.assertNotIn("criteria", last_attempt(record_of(home), "check"))
+
+    def test_a_check_that_could_not_run_everything_is_refused_accepted_and_counted_when_blocked(self) -> None:
+        """Measured on main: a verify node whose staging check could not run here was settled accepted with
+        "reported", and the run came out verified. With criteria that settle is refused, and the blocked settle
+        that follows still carries how far the goal got."""
+        criteria = [{"id": f"c{index}", "text": f"Outcome {index} holds"} for index in range(1, dag_run.MAX_CRITERIA)]
+        criteria.append({"id": "staging", "text": "It works on staging"})
+        marked = "".join(f"CRITERION c{index}: met - test {index} passed\n" for index in range(1, dag_run.MAX_CRITERIA))
+        marked += "CRITERION staging: unobserved - staging_check exit 3: no STAGING_TOKEN here\n"
+        with homes() as home:
+            to_check(home, criteria=criteria)
+            handoff(home, "feat", "check", marked)
+            refused = call(action="settle", run="feat", node="check", outcome="accepted",
+                           reason="staging_check exit 3, reported")
+            blocked = call(action="settle", run="feat", node="check", outcome="blocked", reason="no staging token")
+        total = dag_run.MAX_CRITERIA
+        self.assertEqual(refused["reason"], "criteria_unobserved", refused)
+        self.assertEqual(blocked["state"], "needs_repair", blocked)
+        self.assertEqual((blocked["criteria"]["total"], blocked["criteria"]["met"], blocked["criteria"]["unmet"],
+                          blocked["criteria"]["unobserved"]), (total, total - 1, [], ["staging"]))
+        self.assertEqual(blocked["criteria"]["items"][-1],
+                         {"id": "staging", "text": "It works on staging", "status": "unobserved"})
+        self.assertIn(f"{total - 1}/{total} criteria met", blocked["status_line"])
+        self.assertIn(f"Goal criteria: {total - 1}/{total} criteria met; could not be checked: staging.", blocked["say"])
+
+    def test_a_failed_producer_says_no_criteria_count_before_any_check(self) -> None:
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=NODES, criteria=CRITERIA)
+            failed = call(action="settle", run="feat", node="build", outcome="failed")
+        self.assertEqual(failed["state"], "needs_repair")
+        self.assertEqual(failed["criteria"]["met"], 0)
+        self.assertNotIn("Goal criteria", failed["say"])
 
     def test_a_linked_handoff_is_never_followed(self) -> None:
         with homes() as home:
