@@ -122,6 +122,17 @@ All notable changes will be documented here.
   stays current without a merge. In the browser, one code path in `app.js`
   updates the count, and a cached or fetched count can only raise the baked
   one, never lower it.
+- **The Desktop pane keeps a finished DAG and lets you switch between a
+  conversation's DAGs.** With two or more dag runs in one chat, a menu in the
+  DAG header picks which one to draw (the newest by default); a picked run is
+  drawn alone, without another run's children. A finished run keeps its
+  cards, node summaries and figures under a folding summary line instead of
+  collapsing to one line; the chat end post and the TUI keep their linger.
+  Edges are routed by the rows the cards actually wrap to, implied
+  dependency edges are hidden behind a toggle, and repair/extend edges are
+  drawn faint. USAGE is a token ring with cache in its middle, and can add
+  the drawn graph's subagent lanes; a sum with any unpriced part, the chat
+  included, shows as a lower bound (`≥$`). Thanks @yqm-307. (#2690)
 
 ## 4.0.7 - 2026-11-09
 

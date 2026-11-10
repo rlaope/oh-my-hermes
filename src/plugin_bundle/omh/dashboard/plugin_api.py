@@ -202,6 +202,7 @@ def hud_payload(
     session: str = "",
     *,
     cols: int = 0,
+    dag_run: str = "",
     bundle_root: str | Path = BUNDLE_ROOT,
 ) -> dict[str, Any]:
     """The HUD the pane renders, or the error record it shows instead.
@@ -218,6 +219,8 @@ def hud_payload(
     A named session's own recorded figures (`delegation_graph.session_usage`)
     come under ``session_usage``, where Hermes counted any; a failed read is a
     record there with ``error`` naming the exception, beside a HUD that still reads.
+    ``dag_run`` is the dag run the person switched to (empty: the newest, which the pane follows); the payload's
+    ``dag_runs`` lists the session's runs to switch between.
     """
     session_ref = str(session or "").strip()
     try:
@@ -229,6 +232,7 @@ def hud_payload(
             tui_session_ref=session_ref,
             session_scoped=True,
             tui_identity_expected=bool(session_ref),
+            dag_run=str(dag_run or "").strip(),
         )
     except Exception as exc:  # the failure becomes the record the pane shows
         return {
@@ -266,9 +270,9 @@ if APIRouter is not None:
     router = APIRouter()
 
     @router.get("/hud")
-    async def hud(session: str = "", cols: int = 0) -> dict[str, Any]:
+    async def hud(session: str = "", cols: int = 0, dag_run: str = "") -> dict[str, Any]:
         # The reader's file and sqlite reads run off the loop so a slow home
         # never stalls the stream. The home is the gateway's own; the
         # ``profile`` query is not read (see the module docstring).
         home = resolve_hermes_home()
-        return await run_in_threadpool(lambda: hud_payload(home, session, cols=cols))
+        return await run_in_threadpool(lambda: hud_payload(home, session, cols=cols, dag_run=dag_run))
