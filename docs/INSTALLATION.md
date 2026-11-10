@@ -1152,8 +1152,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   transcript`). Once you interrupt it (Esc or Ctrl+C on an empty composer)
   it reads `✻ interrupting… (12s)` until Hermes has stopped the turn. What you queued behind that turn is not sent then:
   it comes back into the composer, as Claude Code does it, joined in order;
-  a queued `!` line, which is never joined to a prompt, and what follows it
-  stay queued (`held · ↑ edit`) until you send your next
+  a queued `!` line or slash command, which is never joined to a prompt, and
+  what follows it stay queued (`held · ↑ edit`) until you send your next
   prompt or take them back with Up, and so does the whole queue if you typed
   something while the turn was stopping. Each turn ends with a dim line,
   `✻ 34s · 3 tools · ↓1.2k`, under the reply's words (a line too narrow for
@@ -1351,10 +1351,10 @@ Esc closes it):
 
 | Key | Does |
 | --- | --- |
-| Enter | Sends the composer |
+| Enter | Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (`/stop`, `/steer`, `/queue`, `/btw`, `/bg` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
 | `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
 | Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
-| Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, skill prompt or plan prompt waits its turn |
+| Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, slash command, skill prompt or plan prompt waits its turn |
 | Tab | Completes a slash command, or the `@` reference being typed; on an open menu, Enter takes the highlighted row too, and sends a command already typed in full |
 | Shift+Tab | Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan (prompts go as /plan); while Hermes itself has approvals off, turns plan on and off |
 | Ctrl+T | Steps the reasoning effort: low, medium, high, xhigh, max; the info line shows it as effort medium |
@@ -1445,8 +1445,8 @@ and the query on any terminal.
 Vim mode: with Hermes' `display.vim_mode` on, the composer edits modally, as
 `hermes --cli` does with that setting. Turn it on with
 `hermes config set display.vim_mode true` and start `omh` again. The OMH TUI
-reads it from the active profile's config, in the same settings it reads
-`display.busy_input_mode` from (at launch and after a gateway restart). Only
+reads it from the active profile's config (at launch and after a gateway
+restart). Only
 a true turns it on (a number other than 0 too, or, written by hand as a
 string, `true`, `yes`, `on` or `1`); off or absent, every key does what the
 rest of this page says.
@@ -1591,7 +1591,7 @@ or inside a streaming reply. A turn you stop before taking it in says so
 (`⧗ not read — the turn stopped first`). If Hermes does not take the steer
 while the turn still runs (an agent still starting, or one that takes no
 steer), the text joins the OMH TUI's own queue (`⧗`) and goes when the turn
-ends, whatever `display.busy_input_mode` says, so it never interrupts the
+ends, as everything sent during a turn does, so it never interrupts the
 turn; if the turn had already ended, it goes as an ordinary prompt. Either
 way the steer's row says so in amber (`⧗ queued — Hermes refused the steer
 (<why>) · <text>`). A steer Hermes has not answered in 120 s is never sent or
@@ -1616,8 +1616,17 @@ A skill command (`/<skill> <request>`) is one row: its echo gives way to the row
 once Hermes answers. That row shows the command, as Hermes names it for the turn (the row a resumed session shows)
 or else as you typed it, not the expanded skill prompt that is sent; an echo already written to the scrollback
 before Hermes answered stays, with the prompt's row under it.
-Typed during a turn, the echo and its output wait under what is running and are written after it, as a
-steer is, so a command never cuts off a running tool call or splits a reply; one Hermes has not finished
+Typed during a turn, a command waits in the queue (`⧗`, as a prompt does, whatever Hermes'
+`display.busy_input_mode` says) and runs when the turn ends, in the order you sent it: a prompt queued after a
+`/compress` goes once Hermes has answered the `/compress`, and the lines queued after a `/new` or a
+`/sessions <id>` go into the session it opens. Up takes a queued command back on its own, and the send-now key
+never sends one into the turn. Only these run at once during a turn: `/stop` and `/steer`, which are for the
+running turn, `/queue`, `/btw` and `/bg`, which Hermes runs beside it, the commands about this terminal (`/help`,
+`/keys`, `/whats-new`, `/redraw`, `/history`, `/todos`, `/details`, `/logs`, `/dag`, `/bots`, `/copy`, `/theme`,
+`/wallpaper`, `/image`, `/paste`), `/gateway restart`, which asks first and lets running turns finish, `/quit`,
+and the ones that only say where they run. Interrupting is Esc or
+`/stop`, never Enter. The echo and output of a command run during a turn wait under what is running and are
+written after it, as a steer is, so a command never cuts off a running tool call or splits a reply; one Hermes has not finished
 answering when the turn ends is written above that turn's done line with what it printed so far, and
 what it prints later goes under a repeat of its echo. In the transcript, a long output shows its
 first 12 rows and a count of the rest
@@ -1664,8 +1673,8 @@ call the gateway, `/image` and `/paste` included, wait in the composer. Your dra
 stays and nothing is sent again; a failure says why and the command to run
 in a terminal; bare `/gateway` stays Hermes' platform status). Claude Code's `/cost`, `/permissions` and
 `/compact` run Hermes' `/usage`, `/approvals` and `/compress` (`here [N]`, a
-focus topic, or `--preview`; Hermes refuses a compression while a turn runs,
-and the TUI says to run it again once the turn ends). Hermes' shared gateway,
+focus topic, or `--preview`; typed during a turn, it waits in the queue for
+the turn's end). Hermes' shared gateway,
 which a Hermes from v0.22 runs, does not take `/compress`, `/branch`,
 `/retry`, `/undo`, `/stop`, `/bg`, `/btw`, `/rollback`, `/reload`,
 `/reload-mcp`, `/tools`, bare `/plugins` or `/config` as a typed command. The
@@ -1833,8 +1842,8 @@ on the TUI's own request (exit 75 together with a file `omh` named for that
 launch and removes afterwards), so a 75 Hermes returns for a reason of its
 own ends the launch like any other exit code. If the gateway stops accepting a method or a key mid-session, the
 TUI leaves with the command that reopens the same session in `hermes`; on the
-three calls a session does without, reading Hermes' settings (for the busy
-mode, which then stays `queue`), reading the command list and the
+three calls a session does without, reading Hermes' settings (for the
+effort its config sets and Vim mode), reading the command list and the
 `/reload-skills` rescan, it says so instead and the session goes on. If
 the gateway itself exits mid-session with a failure, the TUI starts it again
 the way Hermes' launcher set it up and resumes the same session, saying so

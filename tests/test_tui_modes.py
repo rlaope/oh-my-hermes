@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import base64
+from collections import deque
 from pathlib import Path
 import tempfile
 import time
@@ -53,7 +54,7 @@ from omh.tui.modes import EFFORT_CYCLE
 from omh.tui.pager import Pager
 from omh.tui.screen import CLEAR_SCREEN_AND_SCROLLBACK
 from omh.tui.session_picker import SessionPicker, SessionRow
-from omh.tui.slash import parse_slash, plan_invocation
+from omh.tui.slash import RUNS_DURING_TURN, parse_slash, plan_invocation
 from omh.tui.style import Style
 from omh.tui.theme import DEFAULT_THEME
 from omh.tui.transcript import (
@@ -253,51 +254,47 @@ class SteerTests(unittest.TestCase):
         (warning,) = steers(app)
         self.assertEqual(warning, "⧗ queued — Hermes refused the steer (agent does not support steer) · keep this")
 
-    def test_a_steer_hermes_does_not_take_never_interrupts_the_turn_whatever_the_busy_mode(self) -> None:
-        # Under `interrupt` (Hermes' default) or `steer`, a prompt.submit mid-turn redirects the turn.
+    def test_a_steer_hermes_does_not_take_never_interrupts_the_turn(self) -> None:
+        # Sent as a prompt.submit mid-turn, Hermes' `interrupt` or `steer` busy mode would redirect the turn.
         refusals = {"rejected": {"result": {"status": "rejected", "text": "and the docs"}},
                     "4010": {"error": {"code": 4010, "message": "agent does not support steer"}}}
-        for mode in ("interrupt", "steer", "queue"):
-            for name, frame in refusals.items():
-                with self.subTest(mode=mode, refusal=name):
-                    app, client = make_app(busy=True)
-                    app.busy_mode = mode
-                    type_text(app, "and the docs")
-                    app._on_input(CTRL_ENTER)
-                    if name == "4010":
-                        answer(app, client, error=NO_REDIRECT)
-                    answer(app, client, frame.get("result"), frame.get("error"))
-                    self.assertEqual(client.named("prompt.submit"), [])
-                    self.assertEqual([text for text, *_ in app.queued], ["and the docs"])
-                    app._on_event(Event("message.complete", SID, {"text": "done"}))  # the turn ends: it goes now
-                    self.assertEqual(
-                        client.named("prompt.submit"), [{"session_id": SID, "text": "and the docs", "queued": True}]
-                    )
+        for name, frame in refusals.items():
+            with self.subTest(refusal=name):
+                app, client = make_app(busy=True)
+                type_text(app, "and the docs")
+                app._on_input(CTRL_ENTER)
+                if name == "4010":
+                    answer(app, client, error=NO_REDIRECT)
+                answer(app, client, frame.get("result"), frame.get("error"))
+                self.assertEqual(client.named("prompt.submit"), [])
+                self.assertEqual([text for text, *_ in app.queued], ["and the docs"])
+                app._on_event(Event("message.complete", SID, {"text": "done"}))  # the turn ends: it goes now
+                self.assertEqual(
+                    client.named("prompt.submit"), [{"session_id": SID, "text": "and the docs", "queued": True}]
+                )
 
     def test_a_steer_refused_once_the_session_is_idle_goes_as_a_prompt_at_once(self) -> None:
-        for mode in ("interrupt", "queue"):
-            with self.subTest(mode=mode):
-                app, client = make_app(busy=True)
-                app.busy_mode = mode
-                type_text(app, "too late")
-                app._on_input(CTRL_ENTER)
-                app.turn_pending = False
-                answer(app, client, error=NO_REDIRECT)
-                answer(app, client, error={"code": 4010, "message": "agent does not support steer"})
-                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "too late"}])
-                self.assertIn("sent as a prompt — Hermes refused the steer (agent", steers(app)[0])
-
-    def test_in_plan_mode_the_refused_steer_waits_as_the_plan_prompt(self) -> None:
         app, client = make_app(busy=True)
-        app.busy_mode = "interrupt"
+        type_text(app, "too late")
+        app._on_input(CTRL_ENTER)
+        app.turn_pending = False
+        answer(app, client, error=NO_REDIRECT)
+        answer(app, client, error={"code": 4010, "message": "agent does not support steer"})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "too late"}])
+        self.assertIn("sent as a prompt — Hermes refused the steer (agent", steers(app)[0])
+
+    def test_in_plan_mode_the_refused_steer_waits_as_the_plan_command(self) -> None:
+        app, client = make_app(busy=True)
         show_mode(app, MODE_PLAN)
         type_text(app, "fix the flaky test")
         app._on_input(CTRL_ENTER)
         answer(app, client, {"status": "rejected", "text": "fix the flaky test"})
+        self.assertEqual(client.named("slash.exec"), [])  # /plan waits for the turn's end, as any command does
+        self.assertEqual([text for text, *_ in app.queued], ["fix the flaky test"])
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
         self.assertEqual(client.calls[-1], ("slash.exec", {"command": "plan fix the flaky test", "session_id": SID}))
         answer(app, client, {"type": "send", "message": PLAN_PROMPT})
-        self.assertEqual(client.named("prompt.submit"), [])
-        self.assertEqual([text for text, *_ in app.queued], [PLAN_PROMPT])
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": PLAN_PROMPT, "queued": True}])
 
     def test_the_notice_for_a_taken_steer_is_true_of_both_things_hermes_means_by_queued(self) -> None:
         # Hermes 6c61c3e27d answers {"status": "queued", "text": ...} when the turn takes the steer
@@ -1163,6 +1160,182 @@ class SteerTests(unittest.TestCase):
         self.assertEqual(callers, {"_steer_or_submit", "_steer_command", "_send_queued_now"})
 
 
+class BusyQueueTests(unittest.TestCase):
+    """While a turn runs, Enter queues what it sends, slash commands too, whatever Hermes' busy mode says; only the
+    commands `slash.RUNS_DURING_TURN` names run at once, and only Esc or /stop interrupts."""
+
+    TURN_METHODS = ("session.interrupt", "session.redirect", "session.steer", "prompt.submit")
+
+    def settings(self, mode: str | None) -> tuple[App, RecordingClient]:
+        """A busy app whose `config.get` answered with `mode` as `display.busy_input_mode` (None: no key)."""
+        app, client = make_app(busy=True)
+        display = {} if mode is None else {"busy_input_mode": mode}
+        app._take_settings({"config": {"display": display}})
+        return app, client
+
+    def turn_calls(self, client: RecordingClient) -> list[tuple[str, dict]]:
+        return [(method, params) for method, params in client.calls if method in self.TURN_METHODS]
+
+    def end_turn(self, app: App) -> None:
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+
+    def test_enter_during_a_turn_queues_whatever_the_busy_mode_and_never_touches_the_turn(self) -> None:
+        for mode in ("queue", "steer", "interrupt", None):
+            with self.subTest(busy_input_mode=mode):
+                app, client = self.settings(mode)
+                type_text(app, "and the docs")
+                app._on_input(Key(ENTER))
+                self.assertEqual(self.turn_calls(client), [])  # no interrupt, redirect, steer or submit
+                self.assertFalse(app.stop_asked)
+                self.assertEqual([line.text for line in app.queued], ["and the docs"])
+                self.assertEqual(send_now_row(app), "  ctrl+j to send now · ↑ to edit")
+                self.end_turn(app)
+                self.assertEqual(self.turn_calls(client),
+                                 [("prompt.submit", {"session_id": SID, "text": "and the docs", "queued": True})])
+
+    def test_a_command_typed_during_a_turn_waits_and_runs_in_order_once_it_ends(self) -> None:
+        for mode in ("queue", "interrupt"):
+            with self.subTest(busy_input_mode=mode):
+                app, client = self.settings(mode)
+                type_text(app, "/compress")
+                app._on_input(Key(ENTER))
+                type_text(app, "and then this")
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("slash.exec"), [])
+                self.assertEqual([line.shown or line.text for line in app.queued], ["/compress", "and then this"])
+                self.assertIsNone(send_now_row(app))  # the oldest is a command: the send-now key has nothing to send
+                self.end_turn(app)
+                self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
+                self.assertEqual(client.named("prompt.submit"), [])  # the prompt waits for the compression's answer
+                self.assertEqual([line.text for line in app.queued], ["and then this"])
+                answer(app, client, {"output": "Compressed 40 messages."})  # no loop step: the answer drains
+                self.assertEqual(client.named("prompt.submit"),
+                                 [{"session_id": SID, "text": "and then this", "queued": True}])
+                self.assertEqual(app.queued, deque())
+                answer(app, client, {"status": "streaming"})  # the prompt's own answer sends nothing more
+                self.assertEqual(len(client.named("prompt.submit")), 1)
+                self.assertEqual(len(client.named("slash.exec")), 1)
+
+    def test_a_command_with_nothing_out_lets_the_next_line_go_at_once(self) -> None:
+        app, client = make_app(busy=True)
+        for text in ("/details", "/frobnicate", "next"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        self.assertEqual([line.text for line in app.queued], ["/frobnicate", "next"])  # /details ran at once
+        self.end_turn(app)
+        self.assertEqual(client.named("slash.exec"), [{"command": "frobnicate", "session_id": SID}])
+        self.assertEqual(client.named("prompt.submit"), [])
+        answer(app, client, error={"code": 4018, "message": "not mine"})  # falls back to command.dispatch
+        self.assertEqual(client.calls[-1], ("command.dispatch", {"name": "frobnicate", "arg": "", "session_id": SID}))
+        self.assertEqual(client.named("prompt.submit"), [])  # the fallback is the command's too: still out
+        answer(app, client, {"type": "exec", "output": "done"})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "next", "queued": True}])
+
+    def test_every_command_on_the_allow_list_runs_at_once_during_a_turn(self) -> None:
+        self.assertEqual(RUNS_DURING_TURN, frozenset({
+            "stop", "steer", "queue", "btw", "bg", "help", "keys", "whats-new", "redraw", "history", "todos",
+            "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
+        }))
+        # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
+        for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse"):
+            with self.subTest(name=name):
+                app, client = make_app(busy=True)
+                with patch.object(App, "_route_slash") as ran:
+                    type_text(app, f"/{name} x")
+                    app._on_input(Key(ENTER))
+                self.assertEqual(app.queued, deque())
+                (call,) = ran.call_args_list
+                self.assertEqual(call.args[0].name, name)
+
+    def test_stop_btw_and_bg_reach_hermes_during_the_turn(self) -> None:
+        for typed in ("/stop", "/btw what was that file", "/bg write the changelog"):
+            with self.subTest(typed=typed):
+                app, client = make_app(busy=True)
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("slash.exec"), [{"command": typed[1:], "session_id": SID}])
+                self.assertEqual(app.queued, deque())
+                self.assertEqual(app.stop_asked, typed == "/stop")
+
+    def test_every_other_command_queues_during_a_turn_and_runs_at_once_when_idle(self) -> None:
+        typed = ("/compress", "/compact here 4", "/new", "/clear", "/undo", "/retry", "/resume", "/sessions s-2",
+                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/yolo", "/effort high", "/usage", "/cost",
+                 "/status", "/omh-model", "/reload-skills", "/export", "/frobnicate",
+                 "/omh-codebase-uml map it", "/Compress")
+        for text in typed:
+            with self.subTest(text=text):
+                app, client = make_app(busy=True)
+                with patch.object(App, "_route_slash") as ran:
+                    type_text(app, text)
+                    app._on_input(Key(ENTER))
+                    self.assertEqual(ran.call_args_list, [])
+                    self.assertEqual([(line.text, line.command is not None) for line in app.queued], [(text, True)])
+                    self.assertEqual(self.turn_calls(client), [])
+                idle, _client = make_app()
+                with patch.object(App, "_route_slash") as ran:
+                    type_text(idle, text)
+                    idle._on_input(Key(ENTER))
+                self.assertEqual(idle.queued, deque())
+                self.assertEqual(len(ran.call_args_list), 1)
+
+    def test_the_send_now_key_never_steers_a_queued_command(self) -> None:
+        for data in (CTRL_ENTER_BYTES, b"\n"):
+            with self.subTest(data=data):
+                app, client = make_app(busy=True)
+                for text in ("/compress", "a prompt"):
+                    type_text(app, text)
+                    app._on_input(Key(ENTER))
+                for event in app.decoder.feed(data):
+                    app._on_input(event)
+                self.assertEqual(self.turn_calls(client), [])
+                self.assertEqual([line.text for line in app.queued], ["/compress", "a prompt"])
+                self.assertFalse(app._queue_head_steers())
+
+    def test_a_plan_mode_prompt_during_a_turn_waits_as_its_plan_command(self) -> None:
+        app, client = make_app(busy=True)
+        show_mode(app, MODE_PLAN)
+        type_text(app, "fix the flaky test")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [])
+        self.assertEqual([line.text for line in app.queued], ["fix the flaky test"])
+        self.assertFalse(app._queue_head_steers())  # a plan request never lands in a turn that can edit
+        self.end_turn(app)
+        self.assertEqual(client.calls[-1], ("slash.exec", {"command": "plan fix the flaky test", "session_id": SID}))
+        answer(app, client, {"type": "send", "message": PLAN_PROMPT})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": PLAN_PROMPT, "queued": True}])
+
+    def test_up_takes_a_queued_command_back_on_its_own(self) -> None:
+        app, _client = make_app(busy=True)
+        for text in ("/compress", "first", "second", "/usage", "third"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/compress")  # never joined: joined, the prompts would be its argument
+        app.composer.replace(0, len(app.composer.text), "")
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "first\nsecond")  # the prompts up to the next command
+        self.assertEqual([line.text for line in app.queued], ["/usage", "third"])
+
+    def test_lines_queued_after_a_new_session_command_go_into_the_session_it_opens(self) -> None:
+        app, client = make_app(busy=True)
+        for text in ("/new", "hello there"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        self.end_turn(app)
+        self.assertEqual(client.calls[-1][0], "session.create")
+        self.assertEqual(app.queued, deque())
+        self.assertEqual([line.text for line in app.switch_held], ["hello there"])
+        answer(app, client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {"model": "m"}})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": "live-2", "text": "hello there", "queued": True}])
+
+    def test_idle_a_command_runs_at_once(self) -> None:
+        app, client = make_app()
+        type_text(app, "/compress")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("slash.exec"), [{"command": "compress", "session_id": SID}])
+        self.assertEqual(app.queued, deque())
+
+
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class DocumentedSteerTests(unittest.TestCase):
     """What INSTALLATION and the OMH TUI boundary page say a steer does, held to the code."""
@@ -1175,13 +1348,14 @@ class DocumentedSteerTests(unittest.TestCase):
     def test_the_label_and_the_fallback_are_the_ones_the_code_uses(self) -> None:
         installation = self.prose("docs/INSTALLATION.md")
         self.assertIn("a dim prompt row (`❯ <text>`)", installation)
-        self.assertIn("joins the OMH TUI's own queue (`⧗`) and goes when the turn ends, whatever "
-                      "`display.busy_input_mode` says, so it never interrupts the turn", installation)
+        self.assertIn("joins the OMH TUI's own queue (`⧗`) and goes when the turn ends, as everything sent during a "
+                      "turn does, so it never interrupts the turn", installation)
         self.assertNotIn("`↪ steered:`", installation)
         unanswered = app_module.STEER_UNANSWERED_OUTCOME.format(seconds=app_module.CALL_ANSWER_SECONDS)
         self.assertIn(f"`⧗ {unanswered} · <text>`", installation)  # given back, never sent again
-        self.assertIn("A steer Hermes does not take waits in the TUI's own queue for the running turn to end, whatever "
-                      "the busy mode, so it never interrupts that turn.", self.prose("docs/OMH-TUI-BOUNDARY.md"))
+        self.assertIn("A steer Hermes does not take waits in the TUI's own queue for the running turn to end, as "
+                      "everything sent during a turn does, so it never interrupts that turn.",
+                      self.prose("docs/OMH-TUI-BOUNDARY.md"))
         seconds = f"{app_module.CALL_ANSWER_SECONDS:g}"
         self.assertIn(f"A steer Hermes does not answer within its answer budget ({seconds} s, longer when held behind a "
                       "/compress) goes back to the composer and is never re-sent.",
@@ -1996,7 +2170,7 @@ class LiveTailTickTests(unittest.TestCase):
 
 
 class StartupWaitsOnlyForTheSessionTests(unittest.TestCase):
-    """The first frame needs the session alone: the busy mode and the catalog are answered in the loop."""
+    """The first frame needs the session alone: the settings and the catalog are answered in the loop."""
 
     def test_only_the_session_call_is_awaited(self) -> None:
         class Blocking(RecordingClient):
@@ -2016,11 +2190,8 @@ class StartupWaitsOnlyForTheSessionTests(unittest.TestCase):
             [method for method, _params in client.calls],
             ["config.get", "commands.catalog", "session.list", "config.get", "model.options"],  # the default's two last
         )
-        self.assertEqual(app.busy_mode, "queue")  # Hermes' own default, until config.get answers
         type_text(app, "/")
         self.assertTrue(app._menu_rows())  # no catalog yet: the TUI's own commands still complete
-        app._on_response(Response(1, {"config": {"display": {"busy_input_mode": "interrupt"}}}, None))
-        self.assertEqual(app.busy_mode, "interrupt")
 
 
 class RedrawTailTests(unittest.TestCase):
@@ -2906,30 +3077,38 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(client.calls, [("slash.exec", {"command": "learn the build\nplain prompt", "session_id": SID})])
 
     def test_a_prompt_a_command_built_comes_back_as_what_was_typed(self) -> None:
-        # Plan mode wrote /plan around the prompt, so the prompt comes back; a typed command comes back as typed.
+        # Plan mode wrote /plan around the prompt, so the prompt comes back; a typed command comes back as typed, on
+        # its own: joined to the line before, it would be that prompt's text.
         app, client = make_app(busy=True)
         show_mode(app, MODE_PLAN)
         type_text(app, "fix the flaky test")
         app._on_input(Key(ENTER))
-        answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
-        answer(app, client, {"type": "send", "message": PLAN_PROMPT})
         show_mode(app, MODE_NORMAL)
         type_text(app, "/learn the build")
         app._on_input(Key(ENTER))
-        answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
-        answer(app, client, {"type": "skill", "message": "a long skill prompt", "display": "learn: the build"})
-        self.assertEqual(
-            list(app.queued),
-            [
-                QueuedLine(PLAN_PROMPT, "/plan fix the flaky test", "fix the flaky test"),
-                QueuedLine("a long skill prompt", "learn: the build", "/learn the build"),
-            ],
-        )
+        self.assertEqual(client.calls, [])  # both wait for the turn's end
+        self.assertEqual([(line.text, line.shown) for line in app.queued],
+                         [("fix the flaky test", "/plan fix the flaky test"), ("/learn the build", "/learn the build")])
         rows = [line_text(line) for line in app._slot_lines(80, 24)]
         self.assertEqual(rows[0], "⧗ /plan fix the flaky test")
-        self.assertTrue(rows[1].startswith("⧗ learn: the build"))
+        self.assertTrue(rows[1].startswith("⧗ /learn the build"))
         app._on_input(Key(UP))
-        self.assertEqual(app.composer.text, "fix the flaky test\n/learn the build")
+        self.assertEqual(app.composer.text, "fix the flaky test")
+        app.composer.replace(0, len(app.composer.text), "")
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/learn the build")
+
+    def test_a_skill_prompt_queued_behind_a_turn_comes_back_as_the_command_typed(self) -> None:
+        app, client = make_app()
+        type_text(app, "/learn the build")
+        app._on_input(Key(ENTER))  # no turn runs: it goes now
+        app.turn_pending = True  # a turn started before Hermes answered
+        answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
+        answer(app, client, {"type": "skill", "message": "a long skill prompt", "display": "learn: the build"})
+        self.assertEqual(list(app.queued), [QueuedLine("a long skill prompt", "learn: the build", "/learn the build")])
+        self.assertTrue(line_text(app._slot_lines(80, 24)[0]).startswith("⧗ learn: the build"))
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/learn the build")
 
 
 class InfoLineModeTests(unittest.TestCase):

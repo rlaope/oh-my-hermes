@@ -80,7 +80,9 @@ class CompressTests(unittest.TestCase):
             with self.subTest(line=line, busy=busy):
                 app, client = make_app(busy=busy)
                 send(app, line)
-                self.assertEqual(client.calls[-1][0], "slash.exec")
+                # During a turn it waits in the queue for the turn's end: nothing goes, so nothing is under way.
+                self.assertEqual(client.named("slash.exec"), [] if busy else [{"command": line[1:].replace(
+                    "compact", "compress"), "session_id": SID}])
                 self.assertNotIn(COMPRESS_STARTED_NOTICE, notices(app))
 
     def test_a_compress_is_waited_for_as_long_as_hermes_waits_and_never_sent_twice(self) -> None:
@@ -162,12 +164,12 @@ class CompressTests(unittest.TestCase):
         app.shared_gateway = True
         send(app, "/compress")
         now[0] += 10.0
-        send(app, "plain prompt please")
-        self.assertEqual(client.calls[-1][0], "prompt.submit")
-        self.assertEqual(app.pending[2].expires_at, 100.0 + COMPRESS_ANSWER_SECONDS + 120.0)
         send(app, "/myskill do it")  # a skill: slash.exec refuses it with 4018 and command.dispatch runs it
-        app._on_response(Response(3, None, {"code": contract.NOT_MINE, "message": "skill command"}))
+        app._on_response(Response(2, None, {"code": contract.NOT_MINE, "message": "skill command"}))
         self.assertEqual(client.calls[-1][0], "command.dispatch")
+        self.assertEqual(app.pending[3].expires_at, 100.0 + COMPRESS_ANSWER_SECONDS + 120.0)
+        send(app, "plain prompt please")  # no turn runs: it goes, and waits behind the compression at Hermes
+        self.assertEqual(client.calls[-1][0], "prompt.submit")
         self.assertEqual(app.pending[4].expires_at, 100.0 + COMPRESS_ANSWER_SECONDS + 120.0)
 
     def test_a_second_compress_waits_behind_the_first_but_never_past_the_cap(self) -> None:
@@ -200,9 +202,10 @@ class CompressTests(unittest.TestCase):
 
     def test_a_steer_held_behind_a_compress_names_the_seconds_it_was_waited_for(self) -> None:
         now = [100.0]
-        app, client = make_app(busy=True, clock=lambda: now[0])
+        app, client = make_app(clock=lambda: now[0])
         app.shared_gateway = True
         send(app, "/compress")
+        app.turn_pending = True  # a turn started while it was out
         now[0] += 60.0
         type_text(app, "use the other file")
         app._on_input(Key(ENTER, ctrl=True))
@@ -226,8 +229,8 @@ class CompressTests(unittest.TestCase):
                 self.assertEqual(notices(app, NOTICE_WARN), [COMPRESSION_BUSY_NOTICE.format(name=name)])
                 self.assertEqual(notices(app, NOTICE_ERROR), [])
 
-    def test_a_compress_during_a_turn_is_refused_in_words(self) -> None:
-        app, client = make_app(busy=True)
+    def test_a_compress_hermes_finds_a_turn_running_for_is_refused_in_words(self) -> None:
+        app, client = make_app()  # typed during a turn it waits for the end; one started meanwhile is Hermes' to refuse
         send(app, "/compress")
         answer(app, client, error=BUSY)
         self.assertIn(REFUSAL_SENTENCES["session_busy"], notices(app, NOTICE_ERROR))

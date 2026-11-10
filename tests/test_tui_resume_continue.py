@@ -277,12 +277,12 @@ class TurnEndRecordTests(Home):
         app._on_input(Key(ENTER))
         self.assertEqual(read_turn_end(self.home, STORED), TURN_STOPPED)
 
-    def test_a_prompt_in_busy_mode_interrupt_is_kept_as_a_stop(self) -> None:
+    def test_a_prompt_sent_during_a_turn_is_no_stop_whatever_the_busy_mode(self) -> None:
         app, _client, _now = self.app()
-        app.busy_mode = "interrupt"
+        app._take_settings({"config": {"display": {"busy_input_mode": "interrupt"}}})
         streaming(app, ours=True)
         app._send_prompt("do this instead")
-        self.assertEqual(read_turn_end(self.home, STORED), TURN_STOPPED)
+        self.assertEqual(read_turn_end(self.home, STORED), TURN_OPEN)  # it waits in the queue: the turn runs on
 
     def test_with_no_omh_home_nothing_is_written(self) -> None:
         app, _client = make_app()

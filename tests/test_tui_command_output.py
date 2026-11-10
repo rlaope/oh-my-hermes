@@ -330,12 +330,15 @@ class SkillCommandRowTests(unittest.TestCase):
         app, client = make_app(rows=40)
         run_skill(app, client)
         app._on_event(Event("message.start", SID, {}))
-        run_skill(app, client)  # the busy mode is queue: the prompt waits behind the turn
-        self.assertEqual(len(client.named("prompt.submit")), 1)
+        send(app, SKILL_LINE)  # the command waits behind the turn, whatever the busy mode
+        self.assertEqual(len(client.named("command.dispatch")), 1)
         self.assertEqual([line.shown for line in app.queued], [SKILL_LINE])
         app._on_event(Event("message.complete", SID, {"text": "done"}))
+        answer(app, client, error=SKILL_REFUSAL)
+        answer(app, client, SKILL_TURN)
         self.assertEqual(len(client.named("command.dispatch")), 2)
         self.assertEqual(len(client.named("prompt.submit")), 2)
+        self.assertTrue(client.named("prompt.submit")[1]["queued"])  # the queue ran it: Hermes holds it as one
         first, drained = prompt_rows(app)
         self.assertEqual(first, f"┃ ❯ {SKILL_LINE}")
         self.assertTrue(drained.startswith(f"┃ ❯ {SKILL_LINE}") and drained.endswith("from queue"), drained)
@@ -356,16 +359,17 @@ class SkillCommandRowTests(unittest.TestCase):
         app.turn_pending = True
         app._on_event(Event("message.start", SID, {}))
         app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal", "context": "make test"}))
-        run_skill(app, client, "/dag-ulw /review fix it", stacked)  # the busy mode is queue
-        self.assertEqual(client.named("prompt.submit"), [])
+        send(app, "/dag-ulw /review fix it")  # the command waits for the turn's end, whatever the busy mode
+        self.assertEqual(client.calls, [])
         self.assertEqual([line.shown for line in app.queued], ["/dag-ulw /review fix it"])
         group = app.transcript.blocks[-1]
         self.assertFalse(group.done)  # nothing closed the running call
         self.assertEqual(group.tools[0].status, "running")
         self.assertFalse([block for block in app.transcript.blocks if isinstance(block, (CommandBlock, NoticeBlock))])
-        self.assertEqual([line.notice for line in app.queued], [notice])  # it waits with its prompt, not in this turn
         app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal", "result": {"output": "ok"}}))
         app._on_event(Event("message.complete", SID, {"text": "done"}))
+        answer(app, client, error=SKILL_REFUSAL)
+        answer(app, client, stacked)  # its notice is said with its prompt, not in the turn before
         self.assertEqual(len(client.named("prompt.submit")), 1)
         self.assertEqual(notices(app), [notice])
         row, notice_block = app.transcript.blocks[-2:]  # the drained row, then what the dispatch said, under it
@@ -374,24 +378,28 @@ class SkillCommandRowTests(unittest.TestCase):
         (shown,) = prompt_rows(app)
         self.assertTrue(shown.startswith("┃ ❯ /dag-ulw /review fix it") and shown.endswith("from queue"), shown)
 
-    def test_two_skill_commands_of_one_line_answered_out_of_order_are_two_rows(self) -> None:
-        # Hermes runs slash.exec and command.dispatch on its RPC pool, so the second dispatch can answer first.
+    def test_two_skill_commands_sent_during_a_turn_run_one_after_the_other_as_two_rows(self) -> None:
+        # Hermes runs slash.exec and command.dispatch on its RPC pool, so two sent at once can answer out of order;
+        # queued behind the turn, the second runs only once the first's turn has ended.
         app, client = make_app(rows=40)
         app.turn_pending = True
         app._on_event(Event("message.start", SID, {}))
         app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal", "context": "make test"}))
         send(app, SKILL_LINE)
         send(app, SKILL_LINE)
-        app._on_response(Response(1, None, SKILL_REFUSAL))
-        app._on_response(Response(2, None, SKILL_REFUSAL))
-        self.assertEqual([method for method, _params in client.calls[2:]], ["command.dispatch"] * 2)
-        app._on_response(Response(4, SKILL_TURN, None))  # the second submission's dispatch
-        app._on_response(Response(3, SKILL_TURN, None))
-        self.assertFalse([block for block in app.transcript.blocks if isinstance(block, CommandBlock)])
+        self.assertEqual(client.calls, [])
         app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal", "result": {"output": "ok"}}))
-        end_turn(app)  # the first queued prompt's turn
-        end_turn(app)  # the second's
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        answer(app, client, error=SKILL_REFUSAL)
+        answer(app, client, SKILL_TURN)
+        self.assertEqual(len(client.named("prompt.submit")), 1)
+        self.assertEqual([line.shown for line in app.queued], [SKILL_LINE])  # waits for the first one's turn
+        end_turn(app)
+        answer(app, client, error=SKILL_REFUSAL)
+        answer(app, client, SKILL_TURN)
+        end_turn(app)
         self.assertEqual(len(client.named("prompt.submit")), 2)
+        self.assertEqual(len(client.named("slash.exec")), 2)
         self.assertFalse([block for block in app.transcript.blocks if isinstance(block, CommandBlock)])
         self.assertEqual(len(prompt_rows(app)), 2)
 

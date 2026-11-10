@@ -551,15 +551,17 @@ class HermesInterruptTests(unittest.TestCase):
         app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
         return notices(app), client
 
-    def test_a_prompt_sent_in_busy_mode_interrupt_is_the_persons_stop(self) -> None:
-        def replace(app: object) -> None:
-            app.busy_mode = "interrupt"  # type: ignore[attr-defined]
+    def test_a_prompt_sent_during_the_turn_is_no_stop_whatever_the_busy_mode(self) -> None:
+        def queue(app: object) -> None:
+            app._take_settings({"config": {"display": {"busy_input_mode": "interrupt"}}})  # type: ignore[attr-defined]
             app._send_prompt("replace it")  # type: ignore[attr-defined]
 
-        said, client = self.ended_after(replace)
-        self.assertEqual([params["text"] for params in client.named("prompt.submit")], ["replace it"])  # type: ignore[attr-defined]
-        self.assertIn(INTERRUPTED_NOTICE, said)
-        self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
+        said, client = self.ended_after(queue)
+        self.assertEqual(client.named("session.interrupt"), [])  # type: ignore[attr-defined]
+        # It waited in the queue and went at the turn's end, which nobody here asked for.
+        self.assertEqual(client.named("prompt.submit"),  # type: ignore[attr-defined]
+                         [{"session_id": SID, "text": "replace it", "queued": True}])
+        self.assertNotIn(INTERRUPTED_NOTICE, said)
 
     def test_stop_is_the_persons_stop(self) -> None:
         def stop(app: object) -> None:
@@ -571,14 +573,15 @@ class HermesInterruptTests(unittest.TestCase):
         self.assertIn(INTERRUPTED_NOTICE, said)
         self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
 
-    def test_a_prompt_in_busy_mode_steer_or_queue_asks_no_stop(self) -> None:
-        for mode in ("steer", "queue"):
-            with self.subTest(mode=mode):
+    def test_a_prompt_sent_during_a_turn_asks_no_stop_whatever_the_busy_mode(self) -> None:
+        for mode in ("queue", "steer", "interrupt", None):
+            with self.subTest(busy_input_mode=mode):
                 app, _client = make_app()
                 streaming(app)
-                app.busy_mode = mode
+                app._take_settings({"config": {"display": {} if mode is None else {"busy_input_mode": mode}}})
                 app._send_prompt("more")
                 self.assertFalse(app.stop_asked)
+                self.assertEqual([line.text for line in app.queued], ["more"])
 
     def test_stop_with_no_turn_asks_no_stop(self) -> None:
         app, client = make_app()
@@ -743,7 +746,6 @@ class AutoContinueTests(unittest.TestCase):
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
         streaming(app, ours=True)
-        app.busy_mode = "queue"
         app._send_prompt("after this")
         app._on_event(Event("message.complete", SID, dict(HERMES_STOPPED)))
         self.assertNotIn(RESUMING, notices(app))

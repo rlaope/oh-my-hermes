@@ -399,7 +399,6 @@ class RewindTests(unittest.TestCase):
         app._set_composer("an edited prompt")
         app._on_input(Key(ENTER))
         submit = len(client.calls)
-        app.busy_mode = "queue"
         type_text(app, "a queued prompt")
         app._on_input(Key(ENTER))
         app._on_response(Response(submit, None, {"code": 4018, "message": "rewind target not found"}))
@@ -436,7 +435,6 @@ class RewindTests(unittest.TestCase):
                 app._set_composer("an edited prompt")
                 app._on_input(Key(ENTER))
                 submit = len(client.calls)
-                app.busy_mode = "queue"
                 type_text(app, "a queued prompt")
                 app._on_input(Key(ENTER))
                 app._on_response(Response(submit, None, {"code": 4018, "message": "rewind target not found"}))
@@ -514,12 +512,14 @@ class RewindTests(unittest.TestCase):
         answer(app, client, HISTORY)
         self.assertIsNotNone(app.rewind_picker)
 
-    def test_rewind_waits_for_the_turn_to_end(self) -> None:
+    def test_rewind_waits_in_the_queue_for_the_turn_to_end(self) -> None:
         app, client = make_app(busy=True)
         type_text(app, "/rewind")
         app._on_input(Key(ENTER))
         self.assertEqual(client.calls, [])
-        self.assertIn("between turns", notices(app, NOTICE_WARN)[-1])
+        self.assertEqual([line.text for line in app.queued], ["/rewind"])
+        app._on_event(Event("message.complete", SID, {"text": "done", "status": "complete"}))
+        self.assertEqual(client.calls[-1], ("session.history", {"session_id": SID}))
 
     def test_a_session_with_no_prompt_yet_has_nothing_to_rewind_to(self) -> None:
         app, client = make_app()

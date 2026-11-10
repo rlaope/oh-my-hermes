@@ -17,7 +17,9 @@ from .theme import Theme
 from .width import cell_width, wrap_line
 
 SHORTCUTS: tuple[tuple[str, str], ...] = (
-    ("Enter", "Sends the composer"),
+    ("Enter", "Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (/stop, "
+              "/steer, /queue, /btw, /bg and the commands about this terminal run at once), whatever Hermes' "
+              "busy_input_mode says"),
     ("\\ then Enter, Alt+Enter, Shift+Enter, Ctrl+J", "Adds a line; with a list or menu focused, Ctrl+J moves down instead. "
                                                  "Alt+Enter and Shift+Enter still add a line in an open menu; "
                                                  "backslash then Enter may accept a completion"),
@@ -25,7 +27,8 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                    "sends as Enter does"),
     ("Ctrl+Enter, Ctrl+J", "While a turn runs, on an empty composer, send the oldest queued prompt into it now as a "
                            "steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it "
-                           "tells Ctrl+Enter from Enter). A queued ! line, skill prompt or plan prompt waits its turn"),
+                           "tells Ctrl+Enter from Enter). A queued ! line, slash command, skill prompt or plan prompt "
+                           "waits its turn"),
     ("Tab", "Completes a slash command, or the @ reference being typed; on an open menu, Enter takes the "
              "highlighted row too, and sends a command already typed in full"),
     ("Shift+Tab", "Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan "

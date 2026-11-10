@@ -587,7 +587,7 @@ class OutputWhileAViewIsOpenTests(unittest.TestCase):
 
     def test_behind_an_agents_log(self) -> None:
         app, client = agent_app()
-        self.sent(app, "/usage")
+        self.sent(app, "/btw what changed")  # a command that runs during the turn the agents are in
         app._on_input(Key(DOWN))
         app._on_input(Key(ENTER))
         view = drawn(app)
@@ -604,7 +604,7 @@ class OutputWhileAViewIsOpenTests(unittest.TestCase):
 
     def test_behind_the_key_list(self) -> None:
         app, client = agent_app()
-        self.sent(app, "/usage")
+        self.sent(app, "/btw what changed")  # a command that runs during the turn the agents are in
         app._on_input(Key(CHAR, "?"))
         view = drawn(app)
         answer(app, client, {"output": self.LONG})
@@ -613,7 +613,7 @@ class OutputWhileAViewIsOpenTests(unittest.TestCase):
 
     def test_behind_the_history_pager(self) -> None:
         app, client = agent_app()
-        self.sent(app, "/usage")
+        self.sent(app, "/btw what changed")  # a command that runs during the turn the agents are in
         app.transcript.add_notice("an earlier notice")
         self.sent(app, "/history")
         view = drawn(app)

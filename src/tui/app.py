@@ -40,7 +40,9 @@ whose envelope `session_id` is not the live session are dropped, except
 `gateway.*` and withdrawals, which match by request id; the stored session id
 is tracked from every `session.info` and written (id only, mode 0600) to
 `HERMES_TUI_ACTIVE_SESSION_FILE`; input sent while a turn runs is queued in
-memory unless Hermes' config explicitly asks for `interrupt` or `steer`.
+memory whatever Hermes' `display.busy_input_mode` says, a slash command too
+(only the ones `slash.RUNS_DURING_TURN` names run at once: `_run_slash`), and
+only Esc or `/stop` interrupts a turn.
 The queue is the TUI's own (the gateway has no call that withdraws a prompt):
 its prompts are listed above the composer's top rule, and Up on an empty
 composer takes them back into the composer (a `!` line on its own, never
@@ -55,9 +57,8 @@ redirect refused between a tool batch and the next model call), and
 `/steer <text>` sends Hermes' steer, read after the next tool call; on an
 empty composer Ctrl+Enter, or Ctrl+J, sends the oldest queued prompt instead, the
 person's own choice (`_send_queued_now`), and the TUI steers nothing on its
-own. Text Hermes does not take joins the TUI's queue while the turn runs,
-whatever the busy mode, and goes as a prompt once it ends; sent as a prompt
-at once, it would interrupt the turn it was meant to steer.
+own. Text Hermes does not take joins the TUI's queue while the turn runs, as
+anything sent then does, and goes as a prompt once it ends.
 A steer answered after its session was left goes back to the composer
 instead: the session now live never receives it.
 
@@ -307,6 +308,7 @@ from .slash import (
     hermes_notice,
     parse_slash,
     plan_invocation,
+    runs_during_turn,
 )
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
 from .subagents import Hit, Roster
@@ -742,10 +744,6 @@ BACKGROUND_AUTO = "auto"
 BACKGROUND_LIGHT = "light"
 BACKGROUND_DARK = "dark"
 BACKGROUND_MODES = (BACKGROUND_AUTO, BACKGROUND_LIGHT, BACKGROUND_DARK)
-
-BUSY_QUEUE = "queue"
-BUSY_INTERRUPT = "interrupt"  # a prompt sent during a turn replaces it: Hermes interrupts the turn for it
-BUSY_MODES = frozenset({"queue", "steer", "interrupt"})
 
 STATE_IDLE = "idle"
 STATE_RUNNING = "running"
@@ -1221,6 +1219,11 @@ YOLO_NOTE = (
 CLASSIC_HELP = "Only Hermes' classic CLI (`hermes --cli`) runs {names}; typed here, Hermes says where to run each."
 # The keys themselves are `shortcuts.SHORTCUTS`, drawn by `?` and /keys; /help only points there.
 HELP_KEYS = "Keys: ? on an empty composer, or /keys, lists every key."
+# What Enter does while a turn runs, whatever Hermes' `display.busy_input_mode` says (`App._run_slash`).
+BUSY_HELP = (
+    "During a turn, Enter queues what you send, a command too, for the turn's end; /stop, /steer, /queue, /btw, /bg "
+    "and the commands about this terminal run at once. Esc or /stop interrupts the turn."
+)
 SKILL_COMMANDS_NOTE = "{count} skill commands available: type / and part of a skill's name to find one."
 # Hermes 6c61c3e27d's note for a skill whose name a built-in command takes (`agent/skill_commands.py`,
 # `skill_command_collision_note`): the skill has no `/<name>` and runs as `/skill <name>`. `commands.catalog` joins
@@ -1232,8 +1235,8 @@ RELOAD_REFUSED_NOTICE = (
     "/<name> once it is restarted."
 )
 SETTINGS_REFUSED_NOTICE = (
-    "Hermes did not send its settings ({code}: {message}), so a prompt sent during a turn queues until the turn "
-    "ends (busy_input_mode queue, Hermes' default)."
+    "Hermes did not send its settings ({code}: {message}), so the info line shows no effort from its config and "
+    "the composer has no Vim mode."
 )
 CATALOG_REFUSED_NOTICE = (
     "Hermes did not send its command list ({code}: {message}), so completion and /help show only what the "
@@ -1320,7 +1323,6 @@ class SwitchHeld(NamedTuple):
     text: str
     shown: str = ""
     chips: tuple[tuple[str, str], ...] = ()
-    hold: bool = False
     images: tuple[Attachment, ...] = ()
 
 
@@ -1328,7 +1330,9 @@ class QueuedLine(NamedTuple):
     """A line waiting for the running turn: what is sent, what the queue rows show, what Up puts back.
 
     `shell` says it is a `!` line the person sent, which runs with `shell.exec`; only `_shell_line` sets it, so
-    a prompt whose text starts with `!` (a refused steer, a message Hermes composed) stays a prompt.
+    a prompt whose text starts with `!` (a refused steer, a message Hermes composed) stays a prompt. `command` says
+    it is a slash command sent during a turn (`_run_slash`), which runs as that command when it goes; `text` is
+    then what was typed for it.
     """
 
     text: str
@@ -1338,6 +1342,13 @@ class QueuedLine(NamedTuple):
     chips: tuple[tuple[str, str], ...] = ()  # the paste chips in `shown` (label, text), for Up to put back as chips
     notice: str = ""  # what the skill command that sent it said (Hermes' dispatch notice), shown under its row
     images: tuple[Attachment, ...] = ()  # the images it goes with, for Up to put back as tokens
+    command: SlashInvocation | None = None
+
+    @property
+    def alone(self) -> bool:
+        """Whether Up takes it back on its own, never joined to another line: a `!` line, or a command the person
+        typed (joined, a prompt would become its argument, or it a prompt's text)."""
+        return self.shell or (self.command is not None and not self.command.for_plan_mode)
 
 
 @dataclass(frozen=True)
@@ -1606,20 +1617,6 @@ def config_mtime(result: Mapping[str, Any]) -> float | None:
     """The config file's mtime from a `config.get {key: "mtime"}` answer; None when it names none."""
     mtime = result.get("mtime")
     return float(mtime) if isinstance(mtime, (int, float)) and not isinstance(mtime, bool) else None
-
-
-def busy_mode(config_result: Mapping[str, Any]) -> str:
-    """`display.busy_input_mode` from a `config.get {key: "full"}` answer; queue unless it says otherwise.
-
-    The `busy` getter cannot be used: it answers `interrupt` when the key is
-    unset (the server's default), which hides exactly the case the TUI must
-    read as `queue`, the default Hermes' own TUI applies.
-    """
-    config = config_result.get("config")
-    display = config.get("display") if isinstance(config, dict) else None
-    raw = display.get("busy_input_mode") if isinstance(display, dict) else None
-    value = raw.strip().lower() if isinstance(raw, str) else ""
-    return value if value in BUSY_MODES else BUSY_QUEUE
 
 
 # The words a `display.vim_mode` written as a string turns modal editing on with; `hermes config set` writes a YAML
@@ -2248,7 +2245,6 @@ class App(ModesMixin, AgentViewMixin):
         self.yolo_reported: bool | None = None  # `session.info`'s yolo since the last yolo call went out
         self.yolo_confirmed_at: float | None = None  # when Hermes confirmed the TUI's on; None once one session.info was held
         self.effort_asked = ""  # the newest effort still waiting for Hermes' answer; the next Ctrl+T steps on from it
-        self.busy_mode = BUSY_QUEUE
         # What `commands.catalog` last said, bound to the live session: completion and `/help` read it.
         self.catalog: list[tuple[str, str]] = []
         # Every name a typed `/name` resolves to (`slash.known_names`): drawn bold in its colour in the composer,
@@ -2288,8 +2284,12 @@ class App(ModesMixin, AgentViewMixin):
         self.hermes_next_due: float | None = None  # the queue waits for the turn Hermes runs next until then
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
         self.queue_held = False  # the queue waits for the person after an interrupt (`_hold_queue`)
+        # The calls a queued command made since the queue ran it, and the calls their answers made: the queue goes on
+        # once none is out (`_queued_command_out`); None when no queued command ran since the queue last went on.
+        self.queue_command_calls: set[int] | None = None
+        self.queue_command_open = False  # that command, or the answer to one of its calls, is running now
         self.interrupting = False  # the person interrupted the running turn and Hermes has not ended it yet
-        # The person asked for the running turn to stop another way (`/stop`, a prompt in busy mode `interrupt`):
+        # The person asked for the running turn to stop another way (`/stop`):
         # an `interrupted` end is theirs, not Hermes' own (`Transcript.hermes_interrupted`).
         self.stop_asked = False
         # The `continue` the TUI sends itself for a turn Hermes interrupted: the session it is for (its stored id) and
@@ -2501,17 +2501,16 @@ class App(ModesMixin, AgentViewMixin):
     # ── startup ──
 
     def startup(self, wait: Callable[[], bool] | None = None, timeout: float = CALL_ANSWER_SECONDS) -> None:
-        """Open or resume the session, then ask for the busy mode and for the session's command catalog.
+        """Open or resume the session, then ask for Hermes' settings and for the session's command catalog.
 
         `wait` and `timeout` are the session call's `cancel` and deadline (`_run` passes its `_LaunchWait`, which
         says on the shell's terminal what the launch waits for and never cancels).
 
         Only the session call is awaited: the first frame needs nothing else.
-        The busy mode (`config.get`) and the catalog (asked for after the
+        The settings (`config.get`) and the catalog (asked for after the
         session and naming it, because Hermes discovers project-local skills
         for the session's workspace) are answered in the loop like any call
-        made during the session; until the busy mode arrives it is
-        `BUSY_QUEUE`, Hermes' own default. The session call waits
+        made during the session. The session call waits
         `CALL_ANSWER_SECONDS`, as Hermes' own TUI waits for its calls. Raises
         `GatewayCallError`, `GatewayTimeout` or `GatewayUnavailable` from the
         session call; the caller turns each into `FALLBACK_EXIT`, except a
@@ -2706,13 +2705,13 @@ class App(ModesMixin, AgentViewMixin):
         self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
 
     def _take_settings(self, result: dict[str, Any]) -> None:
-        """`config.get`'s answer: the busy mode Hermes is set to, and the effort its config sets, shown until the
-        session says its own (Hermes sends it once it has built the session's agent, which it starts as the session
-        opens) and kept for the sessions opened later. A level the session said stays (`effort_said`), even one equal
-        to the config's; one the config set before is replaced. Vim mode (`display.vim_mode`) goes to the main
-        composer only, the one that holds the draft even while a question's or a tell row's own composer has the keys;
-        an answer that leaves it as it was leaves its editing mode as it was too."""
-        self.busy_mode = busy_mode(result)
+        """`config.get`'s answer: the effort its config sets, shown until the session says its own (Hermes sends it
+        once it has built the session's agent, which it starts as the session opens) and kept for the sessions opened
+        later. A level the session said stays (`effort_said`), even one equal to the config's; one the config set
+        before is replaced. Vim mode (`display.vim_mode`) goes to the main composer only, the one that holds the draft
+        even while a question's or a tell row's own composer has the keys; an answer that leaves it as it was leaves
+        its editing mode as it was too. `display.busy_input_mode` is not read: whatever it says, what is sent during a
+        turn waits in the TUI's queue (`_send_prompt`, `_run_slash`)."""
         self.effort_configured = configured_effort(result)
         if not self.effort_said:
             self.effort = self.effort_configured
@@ -2721,7 +2720,7 @@ class App(ModesMixin, AgentViewMixin):
             draft.set_vim(not draft.vim)
 
     def _on_settings_refused(self, error: dict[str, Any]) -> bool:
-        """A refused `config.get`, drift included (`contract.OPTIONAL_METHODS`): `BUSY_QUEUE` stays, and a notice says so."""
+        """A refused `config.get`, drift included (`contract.OPTIONAL_METHODS`): a notice says what goes without it."""
         message = as_text(error.get("message")) or "refused"
         self.transcript.add_notice(SETTINGS_REFUSED_NOTICE.format(code=error.get("code"), message=message), NOTICE_WARN)
         return True
@@ -2992,6 +2991,7 @@ class App(ModesMixin, AgentViewMixin):
         self._auto_continue_when_due()  # after the gateway's news: a turn started meanwhile drops it
         self._drain_when_hermes_next_missed()  # likewise: the turn Hermes runs next starting drops the wait
         self._expire_calls()
+        self._drain_after_queued_command()  # after the keys and the expiries: a pick or a call given up settles it
         self._release_previews()
         self._expire_notification()
         self._expire_escape()
@@ -3256,6 +3256,8 @@ class App(ModesMixin, AgentViewMixin):
             method, on_result, on_error, self.clock() + seconds, self.transcript.command, on_expiry, steer, seconds,
             compressing, switch, switch_seq,
         )
+        if self.queue_command_open and self.queue_command_calls is not None:
+            self.queue_command_calls.add(request_id)
         return request_id
 
     def _expire_calls(self) -> None:
@@ -3650,6 +3652,8 @@ class App(ModesMixin, AgentViewMixin):
         """
         calls = list(self.pending.values())
         self.pending.clear()
+        if self.queue_command_calls is not None:  # settled with the rest: the next gateway's ids start over
+            self.queue_command_calls.clear()
         steers = 0
         for call in calls:
             if call.steer is not None:
@@ -4040,12 +4044,17 @@ class App(ModesMixin, AgentViewMixin):
         pending = self.pending.pop(response.id, None)
         if pending is None:
             return
+        opened = self.queue_command_open
+        # A call its answer makes is the queued command's too, as `/compress`'s `command.dispatch` fallback is.
+        self.queue_command_open = opened or response.id in (self.queue_command_calls or ())
         try:
             with self._for_command(pending.command):  # a call made from here is the command's too
                 self._answer_call(pending, response)
         finally:
+            self.queue_command_open = opened
             self._command_call_done(pending)
             self._settle_switch_held()
+            self._drain_after_queued_command()
 
     def _answer_call(self, pending: _Pending, response: Response) -> None:
         if response.error is None:
@@ -4136,7 +4145,7 @@ class App(ModesMixin, AgentViewMixin):
             if event.type == "message.complete":  # before the reply closes: a steer row goes where it went before
                 status = as_text(payload.get("status")) if isinstance(payload, Mapping) else ""
                 steer_next = self._settle_steers_at_turn_end() and not self.stop_asked and status != "interrupted"
-                # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
+                # A stop the person asked for in no way (Esc, `/stop`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
                 self._note_turn(self._turn_end(payload))
                 self.transcript.hermes_resuming = self._arm_auto_continue(payload)
@@ -4521,15 +4530,15 @@ class App(ModesMixin, AgentViewMixin):
     ) -> None:
         """What the person sent after the tell row: the draft comes back and the text goes into the turn whose
         approval was denied as a steer, the way Ctrl+Enter sends it (`_steer_or_submit`). Once that turn has ended
-        it is an ordinary prompt, held behind any turn that started since (a queued prompt's) whatever the busy
-        mode, so it never steers another turn. An empty send leaves the composer waiting for the text."""
+        it is an ordinary prompt, queued behind any turn that started since (a queued prompt's), so it never steers
+        another turn. An empty send leaves the composer waiting for the text."""
         if not text.strip():
             return
         self._leave_tell()
         if self.tell_turn_runs:
             self._steer_or_submit(text, shown, chips, images)
         else:
-            self._submit(text, shown, chips, hold=True, images=images)
+            self._submit(text, shown, chips, images=images)
 
     def _turn_wait(self) -> float:
         """Seconds questions have waited on the person in the running (or just ended) turn, the open wait included."""
@@ -5782,14 +5791,13 @@ class App(ModesMixin, AgentViewMixin):
     # ── prompts ──
 
     def _submit(
-        self, text: str, shown: str = "", chips: tuple[tuple[str, str], ...] = (), hold: bool = False,
-        images: Sequence[Attachment] = (),
+        self, text: str, shown: str = "", chips: tuple[tuple[str, str], ...] = (), images: Sequence[Attachment] = (),
     ) -> None:
         """Send what the composer submitted; `shown` is its compact form (paste chips), which the transcript shows.
 
-        `chips` are the chips in `shown` (label, text): a prompt queued behind the turn keeps them for Up. `hold`
-        keeps a prompt behind a running turn whatever the busy mode (`_send_prompt`). `images` go with the prompt
-        it sends; a line that sends none (a `!` line, a subagent's steer) gives their tokens back (`_keep_images`).
+        `chips` are the chips in `shown` (label, text): a prompt queued behind the turn keeps them for Up. `images` go
+        with the prompt it sends; a line that sends none (a `!` line, a subagent's steer) gives their tokens back
+        (`_keep_images`).
 
         Whether the line is a `!` shell line or a slash command is read from
         what the composer showed, never from a chip's text: a paste that
@@ -5811,7 +5819,7 @@ class App(ModesMixin, AgentViewMixin):
             invocation = None if seen.startswith(SHELL_PREFIX) else parse_slash(seen)
             local = invocation is not None and invocation.command is not None and invocation.command.route == LOCAL
             if not local:
-                self.switch_held.append(SwitchHeld(text, shown, tuple(chips), hold, tuple(images)))
+                self.switch_held.append(SwitchHeld(text, shown, tuple(chips), tuple(images)))
                 return
         if seen.startswith(SHELL_PREFIX):
             self._keep_images(images, SHELL_PREFIX + " line")
@@ -5830,20 +5838,16 @@ class App(ModesMixin, AgentViewMixin):
         elif self.rewind is not None:
             self._send_rewind(text, shown, images=images)
         else:
-            self._send_typed(text, hold=hold, shown=shown, chips=chips, images=images)
+            self._send_typed(text, shown=shown, chips=chips, images=images)
 
     def _send_typed(
-        self, text: str, hold: bool = False, shown: str = "", chips: tuple[tuple[str, str], ...] = (),
-        images: Sequence[Attachment] = (),
+        self, text: str, shown: str = "", chips: tuple[tuple[str, str], ...] = (), images: Sequence[Attachment] = (),
     ) -> None:
-        """A prompt the person typed and sent: in plan mode as `/plan <text>`, the way a typed `/plan` goes.
-
-        `hold` keeps it behind a running turn whatever the busy mode (`_send_prompt`).
-        """
+        """A prompt the person typed and sent: in plan mode as `/plan <text>`, the way a typed `/plan` goes."""
         if self.plan_mode:
-            self._run_slash(replace(plan_invocation(text), held=hold, images=tuple(images)))
+            self._run_slash(replace(plan_invocation(text), images=tuple(images)))
         else:
-            self._send_prompt(text, shown=shown, hold=hold, chips=chips, images=images)
+            self._send_prompt(text, shown=shown, chips=chips, images=images)
 
     def _keep_images(self, images: Sequence[Attachment], what: str) -> None:
         """`what` sends no prompt, so it takes no image: the tokens of `images` go back to the draft, and a notice
@@ -5855,34 +5859,47 @@ class App(ModesMixin, AgentViewMixin):
         self.transcript.add_notice(IMAGES_KEPT_NOTICE.format(what=what, labels=labels))
 
     def _send_prompt(
-        self, text: str, shown: str = "", typed: str = "", hold: bool = False, chips: tuple[tuple[str, str], ...] = (),
-        notice: str = "", images: Sequence[Attachment] = (),
+        self, text: str, shown: str = "", typed: str = "", chips: tuple[tuple[str, str], ...] = (), notice: str = "",
+        images: Sequence[Attachment] = (),
     ) -> None:
         """Send `text`, or queue it behind the running turn; `typed` is what Up puts back in the composer.
 
-        `hold` queues it behind a running turn whatever the busy mode. `notice` goes under its row (`_submit_prompt`).
-        One that starts a turn waits for Hermes' default model to be checked (`_start_turn`), and one sent while
-        that wait is on queues behind it, as one sent while the queue waits for what Hermes runs next
-        (`hermes_next_due`) does; a queue the person holds (`queue_held`) waits for this very prompt to go on.
-        `images` go with it, queued too.
+        While a turn runs it always queues, whatever Hermes' `display.busy_input_mode` says: Enter never interrupts
+        or steers a turn (Esc and `/stop` interrupt it, the send-now key and `/steer` steer it). `notice` goes under
+        its row (`_submit_prompt`). One that starts a turn waits for Hermes' default model to be checked
+        (`_start_turn`), and what is sent while that wait is on queues behind it (`_queue_waits`); a queue the
+        person holds (`queue_held`) waits for this very prompt to go on. `images` go with it, queued too.
         """
         images = tuple(images)
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             self._keep_images(images, "A prompt with no session")
             return
-        if (self._busy() and (hold or self.busy_mode == BUSY_QUEUE)) or self.starting is not None \
-                or (self.hermes_next_due is not None and not self.queue_held):
+        if self._queue_waits():
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
-        if self._busy():  # the busy mode sends it into the running turn: no turn starts
-            if self.busy_mode == BUSY_INTERRUPT:
-                self.stop_asked = True
-                self._note_turn(TURN_STOPPED)
-            self._submit_prompt(text, shown, notice=notice, images=images)
-        else:
-            self._start_turn(typed or text, lambda: self._submit_prompt(text, shown, notice=notice, images=images),
+        # The prompt of a command the queue ran goes as the queue's lines go; from here the turn it starts holds the
+        # queue (`_busy`, `starting`), not its calls.
+        queued, self.queue_command_open = self.queue_command_open, False
+        try:
+            self._start_turn(typed or text,
+                             lambda: self._submit_prompt(text, shown, queued=queued, notice=notice, images=images),
                              images=images)
+        finally:
+            self.queue_command_open = queued
+
+    def _queue_waits(self) -> bool:
+        """Whether what is sent now goes behind the queue: a turn runs, a prompt waits for the default-model check
+        (`starting`), the queue waits for the turn Hermes runs next (`hermes_next_due`) or, with lines still queued,
+        for the queued command that ran to be answered (`_queued_command_out`), unless this is that command's own
+        prompt."""
+        if self._busy() or self.starting is not None:
+            return True
+        if self.queue_held:  # the person holds the queue: what they send now goes on, and the queue behind it
+            return False
+        return self.hermes_next_due is not None or (
+            bool(self.queued) and self.queue_command_calls is not None and not self.queue_command_open
+        )
 
     def _submit_prompt(
         self, text: str, shown: str = "", queued: bool = False, truncate: int | None = None,
@@ -6396,23 +6413,66 @@ class App(ModesMixin, AgentViewMixin):
         self.dirty = True
 
     def _drain_queue(self) -> None:
-        """Send the next queued line: a prompt starts the next turn; a `!` line runs, and the one after waits for it.
+        """Send the next queued line: a prompt starts the next turn; a `!` line runs, and the one after waits for it;
+        a slash command runs, and the one after waits until it is answered (`_queued_command_out`).
 
-        Which it is comes from the entry's `shell`, never from its text. A held queue waits (`_hold_queue`), and so
-        does one behind a prompt held for the default-model check (`starting`): that prompt starts the next turn.
+        Which it is comes from the entry's `shell` and `command`, never from its text. A held queue waits
+        (`_hold_queue`), and so does one behind a prompt held for the default-model check (`starting`): that prompt
+        starts the next turn.
         """
         if self.queued and self._switching():  # the session it was queued in is being left
             self.switch_drain_due = True
             return
-        if self.queued and self.sid and not self.queue_held and self.starting is None:
+        if self.queued and self.sid and not self.queue_held and self.starting is None \
+                and not self._queued_command_out():
             line = self.queued.popleft()
             self.auto_continues = 0  # a line the person queued
             if line.shell:
                 self._run_shell(line.text[len(SHELL_PREFIX) :].strip(), drain_after=True, echo=line.shown)
+            elif line.command is not None:
+                self._run_queued_command(line.command, line.shown)
             else:
                 self._start_turn(line.typed or line.text,
                                  lambda: self._submit_prompt(line.text, line.shown, queued=True, notice=line.notice,
                                                              images=line.images), line, line.images)
+
+    def _run_queued_command(self, invocation: SlashInvocation, echo: str) -> None:
+        """Run a command the queue held, as it would have run when typed; the queue goes on once it is answered.
+
+        A command that leaves for another session (`/new`, `/resume <id>`) takes what was queued after it there:
+        those lines were sent after it, so they go where it lands, as what is sent during a switch goes
+        (`switch_held`), and come back to the composer if it opens nothing.
+        """
+        self.queue_command_calls, self.queue_command_open = set(), True
+        try:
+            self._run_slash(invocation, echo=echo, drained=True)
+        finally:
+            self.queue_command_open = False
+        if self._switching():
+            for line in self.queued:
+                typed = line.typed or line.text
+                self.switch_held.append(SwitchHeld(typed, "" if line.typed else line.shown,
+                                                   () if line.typed else line.chips, line.images))
+            self.queued.clear()
+        elif not self._queued_command_out():
+            self._drain_unless_busy()
+
+    def _queued_command_out(self) -> bool:
+        """Whether the queued command that ran last is still out: a call it made (or one its answers made) waits for
+        Hermes, or a picker or a picked rewind it opened waits for the person. Once nothing is, it is over."""
+        calls = self.queue_command_calls
+        if calls is None:
+            return False
+        if any(request_id in self.pending for request_id in calls) or self._front_picker() is not None \
+                or self.picker is not None or self.rewind is not None:
+            return True
+        self.queue_command_calls = None
+        return False
+
+    def _drain_after_queued_command(self) -> None:
+        """The queue goes on once the queued command that ran is over (`_queued_command_out`)."""
+        if self.queue_command_calls is not None and not self._queued_command_out():
+            self._drain_unless_busy()
 
     # ── `!` shell lines ──
 
@@ -6477,7 +6537,8 @@ class App(ModesMixin, AgentViewMixin):
         return True
 
     def _recall_queue(self, event: Key | Paste) -> bool:
-        """Up on an empty composer takes the queued prompts back into it, one per line, up to a queued `!` line.
+        """Up on an empty composer takes the queued prompts back into it, one per line, up to a queued `!` line or
+        command, which comes back on its own as a `!` line does.
 
         Each comes back as what was typed for it: a prompt a slash command
         built as that command line, a prompt plan mode wrapped as the text
@@ -6509,7 +6570,7 @@ class App(ModesMixin, AgentViewMixin):
     def _take_back_queue(self, composer: Composer) -> None:
         """Put the queue's next lines into the empty `composer`, as `_recall_queue` says; the hold ends with the queue."""
         taken = [self.queued.popleft()]
-        while self.queued and not taken[0].shell and not self.queued[0].shell:
+        while self.queued and not taken[0].alone and not self.queued[0].alone:
             taken.append(self.queued.popleft())
         first = taken[0]
         if not first.shell and not first.typed and first.shown and first.text.startswith(SHELL_PREFIX):
@@ -6538,14 +6599,15 @@ class App(ModesMixin, AgentViewMixin):
     def _queue_head_steers(self) -> bool:
         """Whether the oldest queued line is a prompt the person typed as it is, which the send-now key can steer with.
 
-        A queued `!` line, a prompt a command built (a skill's) and one plan
-        mode wrapped (a plan request must not land in a turn that can edit)
-        wait for the turn's end, and the lines behind them too, so the queue
-        keeps its order: each of those has a `typed` form or is a shell line.
-        So does a prompt with images: a steer is text alone.
+        A queued `!` line, a slash command (one plan mode wrote included: a
+        plan request must not land in a turn that can edit) and a prompt a
+        command built (a skill's) wait for the turn's end, and the lines
+        behind them too, so the queue keeps its order: each of those is a
+        shell line, has a command or has a `typed` form. So does a prompt
+        with images: a steer is text alone.
         """
         head = self.queued[0] if self.queued else None
-        return head is not None and not head.shell and not head.typed and not head.images
+        return head is not None and not head.shell and head.command is None and not head.typed and not head.images
 
     def _send_queued_now(self) -> None:
         """The send-now key: the oldest queued prompt leaves the queue and goes into the running turn as a steer.
@@ -6754,7 +6816,7 @@ class App(ModesMixin, AgentViewMixin):
     def _steer_refused(self, block: SteerBlock, reason: str, queued: QueuedLine | None = None, turn: int = 0) -> None:
         """The steer says what became of its text (with Hermes' `reason`), which goes as the next prompt.
 
-        While a turn runs it waits in the TUI's queue, whatever the busy mode;
+        While a turn runs it waits in the TUI's queue, as anything sent then does;
         only an idle session gets it as a prompt at once. A sent-now steer
         (`queued`) goes back to the head of the queue as the line it was, its
         wrapper and chips kept, never wrapped again by the mode now on;
@@ -6782,7 +6844,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         fallback = STEER_FALLBACK_QUEUED if self._busy() else STEER_FALLBACK_SENT
         self.transcript.steer_answered(block, STEER_REFUSED, STEER_REFUSED_OUTCOME.format(fallback=fallback, reason=reason))
-        self._send_typed(block.text, hold=True)
+        self._send_typed(block.text)
 
     def _steer_back(self, text: str, notice: str = STEER_LEFT_NOTICE) -> None:
         """A steer settled after its session was left: the text returns to the person, never to the live session."""
@@ -6812,14 +6874,23 @@ class App(ModesMixin, AgentViewMixin):
 
     # ── slash commands ──
 
-    def _run_slash(self, invocation: SlashInvocation, depth: int = 0, echo: str = "") -> None:
+    def _run_slash(self, invocation: SlashInvocation, depth: int = 0, echo: str = "", drained: bool = False) -> None:
         """Run a slash command; one the person typed is echoed first, and stays open while its calls are out.
 
         Everything it says while open (a notice, its output) lands under the
         echo, which is `echo` when paste chips made the line shown differ. A
         command plan mode wrote around a prompt is no command the person ran,
         and an alias's target runs under the alias's echo.
+
+        Sent while a turn runs (`_queue_waits`), it waits in the queue as a
+        prompt does, whatever Hermes' busy mode, and runs in order once the
+        turn ends (`drained`: the queue runs it now); only the commands
+        `runs_during_turn` names run at once.
         """
+        if not depth and not drained and not runs_during_turn(invocation) and self._queue_waits():
+            self.queued.append(QueuedLine(invocation.typed, echo or invocation.shown, images=tuple(invocation.images),
+                                          command=invocation))
+            return
         command = invocation.command
         echoed = command is None or (command.echo and (bool(invocation.arg) or command.echo_bare))
         if depth or invocation.for_plan_mode or not echoed:
@@ -7041,14 +7112,13 @@ class App(ModesMixin, AgentViewMixin):
                 if rewinds:
                     self._send_rewind(message, shown, typed=invocation.typed, notice=notice, images=invocation.images)
                 else:
-                    self._send_prompt(message, shown, typed=invocation.typed, hold=invocation.held, notice=notice,
-                                      images=invocation.images)
+                    self._send_prompt(message, shown, typed=invocation.typed, notice=notice, images=invocation.images)
             return
         if notice:
             self.transcript.add_notice(notice)
         if sends:
             shown = display or invocation.shown
-            self._send_prompt(message, shown, typed=invocation.typed, hold=invocation.held, images=invocation.images)
+            self._send_prompt(message, shown, typed=invocation.typed, images=invocation.images)
             return
         if kind in ("send", "skill"):
             self.transcript.add_notice(f"/{invocation.name}: empty message", NOTICE_WARN)
@@ -7124,6 +7194,7 @@ class App(ModesMixin, AgentViewMixin):
             rows.append(COLLISION_NOTES_HEADING)
             rows += [f"  {note}" for note in self.catalog_collisions]
         rows.append(YOLO_NOTE)
+        rows.append(BUSY_HELP)
         rows.append(HELP_KEYS)
         rows.append(BARE_HERMES_NOTE)
         self._show_output("/help", "\n".join(rows), whole=True)
@@ -7358,7 +7429,7 @@ class App(ModesMixin, AgentViewMixin):
         mode prompt, a slash or skill command, a `!` line), as if sent there."""
         held, self.switch_held = self.switch_held, []
         for line in held:
-            self._submit(line.text, line.shown, line.chips, line.hold, line.images)
+            self._submit(line.text, line.shown, line.chips, line.images)
 
     def _stale_switch(self, seq: int, result: Mapping[str, Any]) -> bool:
         """Whether `seq` is an older switch than the newest; a session its answer opened is closed again, saying so."""

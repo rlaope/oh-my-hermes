@@ -13,6 +13,7 @@ transcript) and runs on the second try. Answers are the recorded Hermes
 
 from __future__ import annotations
 
+from collections import deque
 import unittest
 
 from _tui_lines import lines_text
@@ -300,11 +301,15 @@ class ModelCommandTests(unittest.TestCase):
         self.assertNotIn("unsupported", said.lower())
         self.assertIn("hermes model", said)
 
-    def test_bare_model_waits_for_the_turn_to_end(self) -> None:
+    def test_bare_model_waits_in_the_queue_and_opens_the_picker_once_the_turn_ends(self) -> None:
+        # A pick switches the session, which Hermes does between turns: the whole command waits for the turn's end.
         app, client = make_app(busy=True)
         send(app, "/model")
         self.assertEqual(client.calls, [])
-        self.assertIn("between turns", notices(app, NOTICE_WARN)[-1])
+        self.assertEqual([line.text for line in app.queued], ["/model"])
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.calls[-1], ("model.options", {"session_id": SID}))
+        self.assertEqual(app.queued, deque())
 
     def test_a_hermes_without_model_options_costs_the_picker_not_the_session(self) -> None:
         app, client = make_app()
