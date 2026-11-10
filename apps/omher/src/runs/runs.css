@@ -3,8 +3,10 @@
    Rules: a node is a 1px outline on the page with one 2px state line on its left edge. No fill, gradient, shadow,
    glow or shimmer on a node, a line or a header. 4px radii, 11-13px text, selection is gray. The only motion is
    the boxes appearing one by one and a slow dash on the lines into a running node. */
+/* the Plans panel is 460px, and up to 560px of what the window has beyond a 480px chat: three boxes to a row need
+   that to say "Opus 5.5 · high" on one line */
 .window.panel-open:has(.pn-wide[data-tab="runs"]) {
-  --panel-w: 460px;
+  --panel-w: clamp(460px, calc(100vw - var(--side-w) - 480px), 560px);
 }
 .rn,
 .rf {
@@ -272,13 +274,18 @@
   inset: 0;
   pointer-events: none;
 }
-/* a node: a 1px outline on the page, one 2px state line on its left edge, four lines of text */
+/* a node: a 1px neutral outline on the page and one 2px state line on its left edge. The colour of a state lives
+   in that line and in the status word, nowhere else. */
 .bx {
   position: absolute;
   box-sizing: border-box;
-  display: block;
-  padding: 5px calc(var(--bv-cw, 7.2px) * 2 - 1px);
-  border: 1px solid var(--bx-line, var(--line-strong));
+  /* its lines start at the top: the titles of a row stand on one line, whatever each box holds under it */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 5px calc(var(--bv-cw, 7.2px) * 1.5 - 1px);
+  border: 1px solid var(--line);
   border-radius: 4px;
   background-color: var(--bv-surface);
   background-image: none;
@@ -306,29 +313,34 @@
   white-space: pre;
   text-overflow: ellipsis;
 }
-.bx-head {
-  display: flex;
-  align-items: center;
+.bx-title {
+  display: block;
   font-weight: 600;
   color: var(--ink);
+}
+/* the marks of what ran the node, then its model, effort and category (on a second line when the box is narrow) */
+.bx-facts {
+  display: block;
+  color: var(--muted);
+}
+.bx-fl {
+  display: flex;
+  align-items: center;
 }
 .bx-mk {
   flex: none;
   display: inline-flex;
   align-items: center;
-  width: 12px;
-  height: 12px;
-  margin-right: 6px;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
   color: var(--body);
 }
-.bx-t {
+.bx-ft {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.bx-cat {
-  color: var(--body);
 }
 .bx-dim {
   color: var(--quiet);
@@ -336,34 +348,28 @@
 .bx-status {
   color: var(--bx-tone, var(--muted));
 }
-.bx.s-done {
+.bx.s-done,
+.bv-card.s-done {
   --bx-tone: rgb(var(--rn-green));
-  --bx-line: rgba(var(--rn-green), 0.4);
 }
-.bx.s-running {
+.bx.s-running,
+.bv-card.s-running {
   --bx-tone: rgb(var(--rn-pink));
-  --bx-line: rgba(var(--rn-pink), 0.6);
 }
-.bx.s-out {
+.bx.s-out,
+.bv-card.s-out {
   --bx-tone: rgb(var(--rn-violet));
-  --bx-line: rgba(var(--rn-violet), 0.5);
 }
 .bx.s-failed {
   --bx-tone: var(--danger);
-  --bx-line: rgba(var(--rn-red), 0.55);
 }
 .bx.s-repaired,
 .bx.s-retry {
   --bx-tone: var(--rn-amber);
-  --bx-line: color-mix(in srgb, var(--rn-amber) 50%, transparent);
 }
-/* not handed out yet: a dashed outline, no state line, quieter text */
-.bx.s-waiting,
-.bx.s-off {
-  border-style: dashed;
-}
-.bx.s-waiting .bx-head,
-.bx.s-off .bx-head {
+/* not handed out yet, or cancelled: no state line, quieter title */
+.bx.s-waiting .bx-title,
+.bx.s-off .bx-title {
   color: var(--muted);
   font-weight: 500;
 }
@@ -371,11 +377,10 @@
   color: var(--quiet);
 }
 .bx:hover {
-  border-color: var(--bx-tone, var(--muted));
+  border-color: var(--line-strong);
 }
 /* selected: gray, whatever the state */
 .bx.on {
-  border-style: solid;
   border-color: var(--muted);
   outline: 1px solid var(--muted);
 }
@@ -386,7 +391,7 @@
 .bx.dim {
   opacity: 0.45;
 }
-/* the lines between two frontiers: 1px, in the parent's state colour */
+/* the lines: one style everywhere, 1px solid in the parent's state colour, with a ▼ of the same colour */
 .bv-line {
   fill: none;
   stroke: var(--rn-edge);
@@ -428,48 +433,32 @@
 .bv-head.t-retry {
   fill: var(--rn-amber);
 }
-/* into a running node: a slow dash */
-.bv-line.flow {
-  stroke-dasharray: 4 4;
-  animation: bv-flow 1.8s linear infinite;
+/* into a running node: a short dash rides the solid line, slowly. The line under it stays whole. */
+.bv-flow {
+  fill: none;
+  stroke: rgb(var(--rn-pink));
+  stroke-width: 1;
+  stroke-dasharray: 5 19;
+  animation: bv-flow 2.4s linear infinite;
 }
 @keyframes bv-flow {
   to {
-    stroke-dashoffset: -16;
+    stroke-dashoffset: -24;
   }
 }
 .bv-edges.focus .bv-line:not(.lit),
 .bv-edges.focus .bv-head:not(.lit),
-.bv-edges.focus .bv-undrawn {
+.bv-edges.focus .bv-flow:not(.lit) {
   opacity: 0.25;
 }
-/* a gap whose edges are not drawn: one centred connector in its own marks (the TUI's ╎ over ▽) */
-.bv-dash {
-  fill: none;
-  stroke: var(--rn-edge);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
-}
-.bv-hollow {
-  fill: var(--bv-surface);
-  stroke: var(--rn-edge);
-  stroke-width: 1;
-}
-.bv-undrawn.flow .bv-dash,
-.bv-undrawn.flow .bv-hollow {
-  stroke: rgb(var(--rn-pink));
-}
-.bv-frontier,
+/* it stands over the lines that leave the row above it: opaque, so a line passes behind it and not through its text */
 .bv-more {
   position: absolute;
   z-index: 1;
-  height: var(--bv-line, 18px);
-  white-space: pre;
-  color: var(--quiet);
-}
-.bv-more {
-  font: inherit;
   height: 22px;
+  background-color: var(--bv-surface);
+  font: inherit;
+  white-space: pre;
   color: var(--muted);
   text-decoration: underline;
   text-decoration-color: var(--line-strong);
@@ -528,29 +517,21 @@
 .bv-card-l {
   padding-left: calc(var(--bv-cw, 7.2px) * 2);
 }
+/* the marks and what ran the node, on one centre line as in a box */
+.bv-card-l.bx-fl {
+  display: flex;
+  align-items: center;
+  height: var(--bv-line, 18px);
+}
 .bv-card .bx-g,
 .bv-card .bv-word {
   color: var(--bx-tone, var(--muted));
 }
-.bv-card.s-running {
-  --bx-tone: rgb(var(--rn-pink));
-}
-.bv-card.s-out {
-  --bx-tone: rgb(var(--rn-violet));
-}
-/* entrance: the boxes one by one, each gap's lines once the boxes under it are in */
-.bx.enter {
-  animation: bv-in 0.2s ease-out both;
-}
+/* entrance: the boxes one by one, each line once the boxes it joins are in */
+.bx.enter,
 .bv-line.enter,
-.bv-head.enter,
-.bv-undrawn.enter {
+.bv-head.enter {
   animation: bv-in 0.2s ease-out both;
-}
-.bv-line.flow.enter {
-  animation:
-    bv-in 0.2s ease-out both,
-    bv-flow 1.8s linear infinite;
 }
 @keyframes bv-in {
   from {
@@ -562,13 +543,19 @@
 .bv.still .bv-head {
   animation: none;
 }
+.bv.still .bv-flow {
+  display: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .bx,
   .bv-line,
   .bv-head,
-  .bv-undrawn,
   .rn-live::after {
     animation: none !important;
+  }
+  .bv-flow {
+    display: none;
+    animation: none;
   }
 }
 
@@ -746,6 +733,12 @@
 }
 .rn-reason b {
   font-weight: 600;
+}
+/* what ran the node, as its box says it: the agent marks, then model · effort · category */
+.rn-ran {
+  display: inline-flex;
+  align-items: center;
+  color: var(--body);
 }
 .rn-routeline {
   font-family: var(--mono);

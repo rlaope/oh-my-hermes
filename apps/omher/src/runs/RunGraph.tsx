@@ -1,16 +1,16 @@
-// A run drawn as the OMH TUI's box view (boxView.ts holds the layout): frontiers of equal boxes of four text
-// lines, connected by 1px lines with ▼ heads, in a monospace font. A box is a 1px outline on the page with one
-// 2px state line on its left edge: no fill, gradient, shadow or glow. Under the boxes, "Dependencies" and "Node
-// details" are plain text. Two sizes: "panel" flows in the side panel at its width (a frontier too wide for it
-// wraps, and a very long one shows its first rows and "Show all"); "full" is the same drawing over the chat
-// column, where you can drag a box (its position only, kept per run), pan, zoom and Fit. The only motion is the
-// boxes appearing one by one and a slow dash on the lines into a running node. Nothing here changes a run.
+// A run drawn after the OMH TUI's box view (boxView.ts holds the layout): one frontier to a row, equal boxes of
+// monospace text (title; the Hermes mark, model, effort and category; glyph, status and time; the first parent),
+// and every edge a 1px solid line with a ▼ head. A box is a 1px neutral outline on the page with one 2px state
+// line on its left edge: no fill, gradient, shadow or glow. Under the boxes, "Dependencies" and "Node details" are
+// plain text. Two sizes: "panel" flows in the side panel at its width (boxes shrink to put a frontier on one row;
+// a very long one wraps, shows its first rows and "Show all"); "full" is the same drawing over the chat column,
+// where you can drag a box (its position only, kept per run), pan, zoom and Fit. The only motion is the boxes
+// appearing one by one and a slow dash riding the lines into a running node. Nothing here changes a run.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPE, type ReactNode } from "react";
-import type { AgentRun, RunNode } from "../lib/runs";
-import { nodeModel } from "../lib/runs";
+import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
-import { markFor, ModelIcon } from "../ui";
-import { boxText, durationOf, factsOf, GEOMETRY, layoutBoxes, routeGroup, statusOf, titleOf, type BoxLayout, type EdgeHead, type EdgeLine, type Rect } from "./boxView";
+import { AgentIcon, HermesMark } from "../ui";
+import { boxText, durationOf, elbowNet, factsOf, GEOMETRY, layoutBoxes, statusOf, titleOf, type BoxLayout, type EdgeHead, type EdgeLine, type Rect } from "./boxView";
 import { reducedMotion } from "./format";
 
 export type GraphMode = "panel" | "full";
@@ -52,14 +52,17 @@ function cellWidth(px: number): number {
   return w;
 }
 
-/** The node's 12px mark: what it ran on, the agent CLI it went to, the model its route goes to, else the bot's. */
-function Mark({ node, bot }: { node: RunNode; bot?: BotModel }) {
-  const m = nodeModel(node, bot);
-  const mark = m && markFor(m.model, m.provider);
+/** The marks before a node's model: Hermes for a Hermes subagent, then the agent CLI its lane was handed to; a CLI
+ *  session's own sub-runs carry that CLI's mark. A node whose agent is not known has none. */
+export function Marks({ ids }: { ids: string[] }) {
   return (
-    <span className="bx-mk" data-testid="node-mark" data-mark={mark ?? "none"} data-source={m?.source ?? "none"}>
-      <ModelIcon model={m?.model} provider={m?.provider} size={12} />
-    </span>
+    <>
+      {ids.map((id) => (
+        <span key={id} className="bx-mk" data-testid="node-mark" data-mark={id}>
+          {id === "hermes" ? <HermesMark size={14} /> : <AgentIcon id={id} size={14} />}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -121,8 +124,10 @@ export function RunGraph({
         metrics: { cw, line: type.line },
         capRows: mode === "panel" ? PANEL_CAP_ROWS : undefined,
         opened,
+        bot,
       }),
-    [run, width, cw, type.line, mode, opened],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [run, width, cw, type.line, mode, opened, bot?.model, bot?.provider],
   );
   const byId = useMemo(() => new Map(run.nodes.map((n) => [n.id, n])), [run.nodes]);
 
@@ -131,26 +136,32 @@ export function RunGraph({
   useEffect(() => setOver(mode === "full" ? loadPos(run.id) : {}), [run.id, mode]);
   const rect = useCallback(
     (id: string): Rect => {
-      const p = over[id] ?? lay.at.get(id)!;
-      return { x: p.x, y: p.y, w: lay.boxW, h: lay.boxH };
+      const b = lay.at.get(id)!;
+      const p = over[id] ?? b;
+      return { x: p.x, y: p.y, w: b.w, h: b.h };
     },
     [over, lay],
   );
   const moved = Object.keys(over).some((id) => lay.at.has(id));
 
-  // the lines between the boxes as they stand now
+  // the lines: as the layout ran them; a net with a dragged box is drawn edge by edge between the boxes as they
+  // stand now
   const edges = useMemo(() => {
+    const dragged = new Set(Object.keys(over).filter((id) => lay.at.has(id)));
+    if (!dragged.size) return { lines: lay.lines, heads: lay.heads };
     const lines: EdgeLine[] = [];
     const heads: EdgeHead[] = [];
     const tone = (id: string) => statusOf(byId.get(id)!, run).tone;
     const running = (id: string) => byId.get(id)!.state === "running";
-    for (const g of lay.groups) {
-      const r = routeGroup(g, rect, tone, running);
+    for (const n of lay.nets) {
+      const r = [...n.parents, ...n.children].some((id) => dragged.has(id))
+        ? elbowNet(n, rect, tone, running)
+        : { lines: lay.lines.filter((l) => l.net === n.key), heads: lay.heads.filter((h) => h.net === n.key) };
       lines.push(...r.lines);
       heads.push(...r.heads);
     }
     return { lines, heads };
-  }, [lay, rect, byId, run]);
+  }, [lay, rect, over, byId, run]);
 
   // entrance: the boxes one by one in frontier order, each gap's lines once the boxes under it are in
   const still = useMemo(reducedMotion, []);
@@ -316,7 +327,6 @@ export function RunGraph({
   const deps = lay.shape.edges;
   const shownDeps = allDeps || deps.length <= DEPS_CAP + 2 ? deps : deps.slice(0, DEPS_CAP);
   const live = lay.boxes.map((b) => byId.get(b.id)!).filter((n) => n.state === "running" && n.id !== open);
-  const frontierRuns = (f: number) => lay.shape.rows[f]?.some((id) => byId.get(id)!.state === "running");
 
   const drawing = (
     <div className="bv-boxes" style={{ width: lay.w, height: lay.h }} data-testid="run-canvas">
@@ -324,14 +334,22 @@ export function RunGraph({
         {edges.lines.map((l) => (
           <path
             key={l.key}
-            className={`bv-line t-${l.tone ?? "mixed"}${l.flow ? " flow" : ""}${lit(l.from, l.to) ? " lit" : ""}${animate ? " enter" : ""}`}
+            className={`bv-line t-${l.tone ?? "mixed"}${lit(l.from, l.to) ? " lit" : ""}${animate ? " enter" : ""}`}
             style={animate ? ({ animationDelay: `${after([...l.from, ...l.to])}ms` } as CSSProperties) : undefined}
             d={l.d}
             data-testid="run-edge"
+            data-net={l.net}
             data-from={l.from.join(" ")}
             data-to={l.to.join(" ")}
           />
         ))}
+        {/* the one motion on a line: a short dash that rides the solid line into a running node, once the
+            lines have appeared */}
+        {(animate ? [] : edges.lines)
+          .filter((l) => l.flow)
+          .map((l) => (
+            <path key={`f:${l.key}`} className={`bv-flow${lit(l.from, l.to) ? " lit" : ""}`} d={l.d} data-testid="run-flow" data-to={l.to.join(" ")} />
+          ))}
         {edges.heads.map((h) => (
           <path
             key={h.key}
@@ -343,24 +361,7 @@ export function RunGraph({
             data-tip={`${h.x},${h.y}`}
           />
         ))}
-        {lay.undrawn.map((u) => (
-          <g
-            key={u.gap}
-            className={`bv-undrawn${frontierRuns(u.gap + 1) ? " flow" : ""}${animate ? " enter" : ""}`}
-            style={animate ? ({ animationDelay: `${after(lay.shape.rows[u.gap + 1] ?? [])}ms` } as CSSProperties) : undefined}
-            data-testid="run-undrawn"
-            data-gap={u.gap}
-          >
-            <path className="bv-dash" d={`M${u.x},${u.y1} V${u.y2 - GEOMETRY.arrow - 3}`} />
-            <path className="bv-hollow" d={`M${u.x},${u.y2 - 1} l-4,-${GEOMETRY.arrow} h8 Z`} />
-          </g>
-        ))}
       </svg>
-      {lay.labels.map((l) => (
-        <span key={l.frontier} className="bv-frontier" style={{ left: l.x, top: l.y }} data-testid="run-frontier">
-          · {t("graph.frontier")}
-        </span>
-      ))}
       {lay.more.map((m) => (
         <button
           key={m.frontier}
@@ -377,7 +378,7 @@ export function RunGraph({
       {lay.boxes.map((b) => {
         const n = byId.get(b.id)!;
         const r = rect(b.id);
-        const tx = boxText(n, run, lay.shape, lay.inner, nowS);
+        const tx = boxText(n, run, lay.shape, lay.inner, nowS, bot);
         const dim = !!hover && hover !== n.id && !near.has(n.id);
         return (
           <button
@@ -388,11 +389,12 @@ export function RunGraph({
             data-testid="run-node"
             data-node={n.id}
             data-frontier={b.frontier}
+            data-row={b.row}
             data-state={n.state}
             data-tone={tx.tone}
             data-appear={b.index}
             aria-pressed={n.id === open}
-            aria-label={`${titleOf(n)}, ${tx.status}`}
+            aria-label={[titleOf(n), tx.factsText, tx.status].filter(Boolean).join(", ")}
             title={titleOf(n)}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -404,24 +406,33 @@ export function RunGraph({
             onMouseEnter={() => setHover(n.id)}
             onMouseLeave={() => setHover(null)}
           >
-            <span className="bx-l bx-head">
-              <Mark node={n} bot={bot} />
-              <span className="bx-t" data-testid="node-title">
-                {tx.origin}
-                {tx.title}
-              </span>
+            <span className="bx-title" data-testid="node-title">
+              {tx.title.map((line, i) => (
+                <span key={i} className="bx-l">
+                  {line}
+                </span>
+              ))}
             </span>
-            <span className="bx-l" data-testid="node-facts">
-              <span className="bx-cat">{tx.cat}</span>
-              <span className="bx-dim">{tx.model}</span>
+            <span className="bx-facts" data-testid="node-facts" title={tx.factsText}>
+              <span className="bx-l bx-fl">
+                <Marks ids={tx.marks} />
+                <span className="bx-ft">{tx.facts[0]}</span>
+              </span>
+              {tx.facts[1] !== undefined && (
+                <span className="bx-l bx-ft" style={tx.hang ? { paddingLeft: tx.marks.length * 19 } : undefined}>
+                  {tx.facts[1]}
+                </span>
+              )}
             </span>
             <span className="bx-l bx-status" data-testid="node-status">
               <span className="bx-g">{tx.glyph}</span> {tx.status}
               {tx.after && <span className="bx-dim">{tx.after}</span>}
             </span>
-            <span className="bx-l bx-dim" data-testid="node-parents">
-              {tx.parents}
-            </span>
+            {tx.parents !== null && (
+              <span className="bx-l bx-dim" data-testid="node-parents">
+                {tx.parents}
+              </span>
+            )}
           </button>
         );
       })}
@@ -452,7 +463,7 @@ export function RunGraph({
           {detail}
           {live.map((n) => {
             const st = statusOf(n, run);
-            const facts = factsOf(n);
+            const facts = factsOf(n, run, bot);
             const time = st.timed ? durationOf(n, nowS) : "";
             const where = [t("graph.layer", { n: (lay.shape.layer.get(n.id) ?? 0) + 1 }), n.attempts.length > 1 ? t("graph.attempt", { n: n.attempts.length }) : "", n.lane ?? ""].filter(Boolean);
             return (
@@ -460,10 +471,10 @@ export function RunGraph({
                 <span className="bv-card-t">
                   <span className="bx-g">{st.glyph}</span> {titleOf(n)}
                 </span>
-                {(facts.cat || facts.model) && (
-                  <span className="bv-card-l">
-                    <span className="bx-cat">{facts.cat}</span>
-                    <span className="bx-dim">{facts.cat && facts.model ? " · " : ""}{facts.model}</span>
+                {(facts.text || facts.marks.length > 0) && (
+                  <span className="bv-card-l bx-fl">
+                    <Marks ids={facts.marks} />
+                    <span className="bx-ft">{facts.text}</span>
                   </span>
                 )}
                 <span className="bv-card-l">
@@ -484,8 +495,11 @@ export function RunGraph({
     "data-frontiers": lay.shape.rows.length,
     "data-per-row": lay.perRow,
     "data-inner": lay.inner,
-    "data-drawn": lay.groups.length,
-    "data-undrawn": lay.undrawn.length,
+    "data-nets": lay.nets.length,
+    // every edge between two boxes on screen has a line: these two are equal
+    "data-edges": lay.shape.edges.filter((e) => lay.at.has(e.from) && lay.at.has(e.to)).length,
+    "data-drawn": lay.drawn.size,
+    "data-crowded": lay.crowded,
   };
   if (mode === "panel")
     return (

@@ -3,7 +3,6 @@ import type { Key } from "./index";
 export const ja: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.start": "開始ノード",
-  "graph.frontier": "同じ段階",
   "graph.deps": "依存関係",
   "graph.details": "ノード詳細",
   "graph.untitled": "無題",
@@ -19,6 +18,7 @@ export const ja: Record<Key, string> = {
   "graph.waiting": "待機中",
   "graph.waits.one": "{n} 件待ち",
   "graph.waits": "{n} 件待ち",
+  "graph.waits.short": "{n} 件待ち",
   "graph.repaired": "修復済み",
   "graph.repair": "修復",
   "graph.layer": "レイヤー {n}",

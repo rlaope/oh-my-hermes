@@ -1,34 +1,42 @@
-// One node's detail, shared by the panel and the full view: attempt k of n, model, route, time, the last
-// reason, earlier attempts, the helper's summary and the handoff. Read-only: the one button only prefills the
+// One node's detail, shared by the panel and the full view: attempt k of n, what ran it as its box says it (the
+// agent marks, model · effort · category), time, why it was routed there, the last reason, earlier attempts, the
+// helper's summary and the handoff. Read-only: the one button only prefills the
 // chat composer so the person can ask the bot; it never sends.
 import { useEffect, useState } from "react";
-import type { RunNode } from "../lib/runs";
+import type { AgentRun, CliAgent, RunNode } from "../lib/runs";
 import { isCliRun, span } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
 import { CloseIcon, IconButton } from "../ui";
 import { getStore } from "../state/store";
-import { modelLine, runName, STATE_WORD } from "./format";
+import { factsOf } from "./boxView";
+import { modelName, runName, STATE_WORD } from "./format";
+import { Marks } from "./RunGraph";
 
 const PREVIEW = 1200;
 
 export function NodeDrawer({
-  runId,
+  run,
   node,
+  bot,
   text,
   nowS,
   onClose,
 }: {
-  runId: string;
+  run: Pick<AgentRun, "id" | "kind"> & { agent?: CliAgent };
   node: RunNode;
+  /** The bot's own model: what a node with nothing else recorded is taken to run on. */
+  bot?: { model: string; provider: string };
   text?: string;
   nowS: number;
   onClose: () => void;
 }) {
+  const runId = run.id;
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [node.id]);
   const last = node.attempts[node.attempts.length - 1];
   const t = node.started === undefined ? "" : span((node.ended ?? nowS) - node.started);
-  const facts = [modelLine(node), node.lane, t].filter(Boolean).join(" · ");
+  const ran = factsOf(node, run, bot);
+  const facts = [node.lane, t].filter(Boolean).join(" · ");
   const long = (text?.length ?? 0) > PREVIEW;
   const bad = node.state === "failed" || node.state === "blocked";
   const ask = () => {
@@ -49,13 +57,15 @@ export function NodeDrawer({
           {STATE_WORD[node.state]}
         </span>
         <span data-testid="run-attempt">{node.attempts.length ? `attempt ${last.n} of ${node.attempts.length}` : "not started"}</span>
-        {facts && <span>{facts}</span>}
-        {node.route && (
-          <span className="rn-routeline">
-            route {node.route}
-            {node.routeWhy ? ` · ${node.routeWhy}` : ""}
+        {(ran.text || ran.marks.length > 0) && (
+          <span className="rn-ran" data-testid="run-facts">
+            <Marks ids={ran.marks} />
+            {ran.text}
           </span>
         )}
+        {facts && <span>{facts}</span>}
+        {/* the category is in the facts; this line is why the node went out under it */}
+        {node.routeWhy && <span className="rn-routeline">route: {node.routeWhy}</span>}
       </div>
       {last?.reason && (
         <div className={`rn-reason${bad ? " bad" : ""}`} data-testid="run-reason">
@@ -68,7 +78,7 @@ export function NodeDrawer({
           {node.attempts.slice(0, -1).map((a) => (
             <li key={a.n}>
               #{a.n} {a.outcome || "open"}
-              {a.model ? ` · ${a.model}` : ""}
+              {a.model ? ` · ${modelName(a.model)}` : ""}
               {a.reason && <span> · {a.reason}</span>}
             </li>
           ))}

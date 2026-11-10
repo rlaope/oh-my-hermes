@@ -9,8 +9,7 @@ import type { Bot } from "../lib/protocol";
 import { cliName, isRepaired, span, type AgentRun, type AgentRunSummary } from "../lib/runs";
 import { getStore } from "../state/store";
 import { t } from "../i18n";
-import { shortModel } from "./boxView";
-import { runName } from "./format";
+import { modelName, runName } from "./format";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const folder = (cwd: string) => cwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? cwd;
@@ -47,7 +46,7 @@ export function PlanHeader({
   const name = runName(summary.id);
   const prefill = (text: string) => getStore().actions.prefill(text);
   // the bot's own runs name its model; a CLI session's names the folder it ran in
-  const where = summary.agent ? (summary.cwd ? folder(summary.cwd) : "") : bot.model ? `${t("graph.main")} ${shortModel(bot.model)}` : "";
+  const where = summary.agent ? (summary.cwd ? folder(summary.cwd) : "") : bot.model ? `${t("graph.main")} ${modelName(bot.model)}` : "";
   return (
     <div className="ph" data-testid="run-plan" data-state={summary.state}>
       <div className="ph-l">

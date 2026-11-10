@@ -252,7 +252,7 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
             detail={
               node && (
                 <div ref={drawer}>
-                  <NodeDrawer runId={run.id} node={node} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
+                  <NodeDrawer run={run} node={node} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
                 </div>
               )
             }
@@ -299,7 +299,7 @@ export function RunsFull({ bot }: { bot: Bot }) {
         )}
         {run && node && (
           <div className="rf-drawer">
-            <NodeDrawer runId={run.id} node={node} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
+            <NodeDrawer run={run} node={node} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
           </div>
         )}
       </div>

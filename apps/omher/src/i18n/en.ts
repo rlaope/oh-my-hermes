@@ -3,7 +3,6 @@
 export const en = {
   // graph (the dag box view and its header)
   "graph.start": "Start node",
-  "graph.frontier": "Same frontier",
   "graph.deps": "Dependencies",
   "graph.details": "Node details",
   "graph.untitled": "untitled",
@@ -19,6 +18,7 @@ export const en = {
   "graph.waiting": "Waiting",
   "graph.waits.one": "Waits on {n} lane",
   "graph.waits": "Waits on {n} lanes",
+  "graph.waits.short": "Waits on {n}",
   "graph.repaired": "repaired",
   "graph.repair": "repair",
   "graph.layer": "layer {n}",

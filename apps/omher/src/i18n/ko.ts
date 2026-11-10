@@ -3,7 +3,6 @@ import type { Key } from "./index";
 export const ko: Record<Key, string> = {
   // graph (the dag box view and its header)
   "graph.start": "시작 노드",
-  "graph.frontier": "같은 단계",
   "graph.deps": "의존 관계",
   "graph.details": "노드 상세",
   "graph.untitled": "제목 없음",
@@ -19,6 +18,7 @@ export const ko: Record<Key, string> = {
   "graph.waiting": "대기 중",
   "graph.waits.one": "선행 {n}개 대기",
   "graph.waits": "선행 {n}개 대기",
+  "graph.waits.short": "선행 {n}개",
   "graph.repaired": "복구됨",
   "graph.repair": "복구",
   "graph.layer": "{n}단계",
