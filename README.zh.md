@@ -37,6 +37,11 @@ omh setup
 
 <table>
 <tr>
+<td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent logo" width="64"></a></td>
+<td><b>OMH 运行在 <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> 之上</b>（由 <a href="https://nousresearch.com">Nous Research</a> 开发）。<br>
+你对话的是 Hermes。OMH 是叠加在其上的独立层，不是 Nous Research 的官方项目。</td>
+</tr>
+<tr>
 <td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
 <td><b>OMH 的 ultrawork 概念借鉴自 <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b>（作者 <a href="https://github.com/code-yeongyu">@code-yeongyu</a>）。<br>
 <code>ulw</code> 关键词和图式的 <code>dag-ulw</code> 运行都来自 OmO。OMH 是把它们带到 Hermes Agent 的独立项目。</td>

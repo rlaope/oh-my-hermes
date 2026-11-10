@@ -37,6 +37,11 @@ omh setup
 
 <table>
 <tr>
+<td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent logo" width="64"></a></td>
+<td><b>OMH は <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> の上で動きます</b>（開発 <a href="https://nousresearch.com">Nous Research</a>）。<br>
+話す相手は Hermes です。OMH はその上に載る独立したレイヤーで、Nous Research の公式プロジェクトではありません。</td>
+</tr>
+<tr>
 <td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
 <td><b>OMH の ultrawork コンセプトは <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a> から借りたものです</b>（作者 <a href="https://github.com/code-yeongyu">@code-yeongyu</a>）。<br>
 <code>ulw</code> キーワードとグラフ型の <code>dag-ulw</code> 実行は OmO 由来です。OMH はそれを Hermes Agent に持ち込んだ別プロジェクトです。</td>

@@ -59,6 +59,11 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 <table>
 <tr>
+<td width="88" align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="assets/hermes-agent-icon.png" alt="Hermes Agent logo" width="64"></a></td>
+<td><b>OMH tourne sur <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a></b>, de <a href="https://nousresearch.com">Nous Research</a>.<br>
+Hermes est l'agent à qui vous parlez. OMH est une couche indépendante par-dessus, pas un projet officiel de Nous Research.</td>
+</tr>
+<tr>
 <td width="88" align="center"><a href="https://github.com/code-yeongyu/oh-my-openagent"><img src="https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/a05f240727d985e574404430d8d40c80eb912bc2/.github/assets/omo-icon-light.svg" alt="OmO logo" width="64"></a></td>
 <td><b>OMH reprend le concept d'ultrawork de <a href="https://github.com/code-yeongyu/oh-my-openagent">OmO (oh-my-openagent)</a></b>, créé par <a href="https://github.com/code-yeongyu">@code-yeongyu</a>.<br>
 Le mot-clé <code>ulw</code> et les exécutions en graphe <code>dag-ulw</code> viennent d'OmO. OMH est un projet distinct qui les apporte à Hermes Agent.</td>
