@@ -543,16 +543,16 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
    The blooms are masked to outside the window, so nothing lies over the traffic lights or the app */
 .omher__rim{position:absolute;left:-12px;top:-12px;z-index:3;pointer-events:none;overflow:visible;fill:none;--hot:0;--glow:1;--off:0}
 .omher__rim rect{vector-effect:non-scaling-stroke}
-.omher__rim .r-base{stroke:rgba(255,255,255,.07);stroke-width:1}
+.omher__rim .r-base{stroke:rgba(255,214,232,.11);stroke-width:1}
 .omher__rim .r-hot{stroke:#ff5fa2;stroke-width:1;opacity:calc(var(--hot) * .7)}
 .omher__rim .r-spot{stroke-width:1.5;opacity:0}
 .omher__rim .r-c{stroke-linecap:round;stroke-dashoffset:calc(var(--d) - var(--off,0))}
-.omher__rim .r-b3{stroke:#ff5fa2;stroke-width:24;opacity:calc(.08 * var(--glow))}
-.omher__rim .r-b2{stroke:#ff6fae;stroke-width:12;opacity:calc(.17 * var(--glow))}
-.omher__rim .r-b1{stroke:#ffa3cc;stroke-width:5;opacity:calc(.38 * var(--glow))}
-.omher__rim .r-t{stroke:#ff5fa2;stroke-width:1.4;opacity:calc(.7 * var(--glow))}
+.omher__rim .r-b3{stroke:#ff5fa2;stroke-width:22;opacity:calc(.11 * var(--glow))}
+.omher__rim .r-b2{stroke:#ff6fae;stroke-width:11;opacity:calc(.24 * var(--glow))}
+.omher__rim .r-b1{stroke:#ffa3cc;stroke-width:5;opacity:calc(.55 * var(--glow))}
+.omher__rim .r-t{stroke:#ff5fa2;stroke-width:2;opacity:min(1,calc(.95 * var(--glow)))}
 .omher__rim .r-m{stroke:#ffd6e8;stroke-width:1.8;opacity:min(1,calc(.95 * var(--glow)))}
-.omher__rim .r-h{stroke:#fff;stroke-width:2.2;opacity:1}
+.omher__rim .r-h{stroke:#fff3f8;stroke-width:2.2;opacity:1}
 .omher__rim.still .r-c{display:none}
 .omher__rim.still .r-base{stroke:rgba(255,200,226,.16)}
 /* the live app (hero.js mounts it on desktop once the page is idle): CSS chrome with traffic lights, the real omher

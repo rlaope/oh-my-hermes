@@ -48,8 +48,8 @@
   const rects = [...svg.querySelectorAll('rect')];
   const comet = {b3: q('.r-b3', svg), b2: q('.r-b2', svg), b1: q('.r-b1', svg), t: q('.r-t', svg), m: q('.r-m', svg), h: q('.r-h', svg)};
   const spot = q('#rimSpot', svg), spotRect = q('.r-spot', svg);
-  // dash lengths in pathLength units (1000 = one lap): tail 200 (20% of the frame), mid 80, core 24; blooms ride the same head
-  const DASH = {b3: 150, b2: 130, b1: 90, t: 200, m: 80, h: 24};
+  // dash lengths in pathLength units (1000 = one lap): tail 260 (26% of the frame), mid 100, core 24; blooms ride the same head
+  const DASH = {b3: 200, b2: 170, b1: 120, t: 260, m: 100, h: 24};
   // the frame loop writes one number (--off); each layer's dash offset is computed from it in CSS
   for (const [k, el] of Object.entries(comet)) { el.setAttribute('pathLength', '1000'); el.setAttribute('stroke-dasharray', `${DASH[k]} ${1000 - DASH[k]}`); el.style.setProperty('--d', DASH[k]); }
   let RW = 0, RH = 0;
