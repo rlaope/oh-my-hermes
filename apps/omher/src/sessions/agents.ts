@@ -33,10 +33,11 @@ export function terminalNote(agent: AgentId): string {
 }
 
 /** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
- *  never runs it). Grok has no one-line install, so it points at its docs. */
+ *  never runs it). Grok has no one-line install, so it points at its docs. Codex also notes that the copy
+ *  inside the ChatGPT (or Codex) desktop app on macOS is detected. */
 export const INSTALL: Record<AgentId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
-  codex: "npm i -g @openai/codex",
+  codex: "npm i -g @openai/codex (the Codex bundled in the ChatGPT app is found too)",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
   pi: "npm i -g @mariozechner/pi-coding-agent",
   omp: "npm i -g @oh-my-pi/pi-coding-agent",
