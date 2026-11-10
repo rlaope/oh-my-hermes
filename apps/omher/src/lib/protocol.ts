@@ -1,7 +1,7 @@
 // UI <-> bridge protocol v1. Mirrors the protocol table in the omher briefs (01-protocol.md).
 // The UI only ever talks to the bridge (real: Python, mock: e2e/mock-bridge.mjs).
 
-import type { AgentRunSummary, CliAgent, CliAgentStatus, RunDetail } from "./runs";
+import type { AgentRunSummary, CliAgent, CliAgentStatus, NodePr, RunDetail } from "./runs";
 
 export type BotStatus = "online" | "offline" | "starting";
 
@@ -200,6 +200,8 @@ export interface OpMap {
   /** Runs tab, read-only: the bot's agent runs (OMH dag runs today) and one run with its handoffs. */
   "runs.list": { params: { bot: string }; result: { runs: AgentRunSummary[] } };
   "runs.get": { params: { bot: string; run: string }; result: RunDetail };
+  /** The GitHub state of each PR the run's nodes name, by node id; asked apart from `runs.get` (it waits on `gh`). */
+  "runs.prs": { params: { bot: string; run: string }; result: { prs: Record<string, NodePr> } };
   /** CLI agent sessions with sub-runs on this machine (Claude Code subagents, Codex sub-agents), read-only. A run's
    *  detail comes from `runs.get` with its id. `since` is epoch seconds (the last week when absent). */
   "runs.cli": {

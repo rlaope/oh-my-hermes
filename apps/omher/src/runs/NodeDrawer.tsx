@@ -6,14 +6,45 @@ import { useEffect, useState } from "react";
 import type { AgentRun, CliAgent, RunNode } from "../lib/runs";
 import { isCliRun, span } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
-import { CloseIcon, IconButton } from "../ui";
+import { CloseIcon, IconButton, PrIcon } from "../ui";
 import { getStore } from "../state/store";
 import { t as tr } from "../i18n";
 import { factsOf, titleOf } from "./boxView";
 import { modelName, runName, STATE_WORD } from "./format";
 import { NodeMark } from "./RunGraph";
+import { openPr, prLabel, prLink, prState, prText } from "./pr";
 
 const PREVIEW = 1200;
+
+/** "#2746 · Merged" after GitHub's state mark; the number links to the PR's page when it is known. */
+function DrawerPr({ pr }: { pr: NonNullable<RunNode["pr"]> }) {
+  const url = prLink(pr);
+  const state = prState(pr);
+  const body = (
+    <>
+      <PrIcon state={state} />
+      {prText(pr)}
+    </>
+  );
+  return (
+    <span className="rn-pr" data-testid="run-pr" data-state={state} data-number={pr.number}>
+      {url ? (
+        <a
+          href={url}
+          title={tr("pr.onGithub", { pr: prLabel(pr) })}
+          onClick={(e) => {
+            e.preventDefault();
+            openPr(pr);
+          }}
+        >
+          {body}
+        </a>
+      ) : (
+        body
+      )}
+    </span>
+  );
+}
 
 export function NodeDrawer({
   run,
@@ -68,6 +99,7 @@ export function NodeDrawer({
           </span>
         )}
         {facts && <span>{facts}</span>}
+        {node.pr && <DrawerPr pr={node.pr} />}
         {/* the category is in the facts; this line is why the node went out under it */}
         {node.routeWhy && <span className="rn-routeline">route: {node.routeWhy}</span>}
       </div>

@@ -756,7 +756,8 @@ class ReadOnlyRule(BridgeCase):
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
             self.assertIsNone(re.search(rf"\b{re.escape(needle)}\b", src), needle)
 
-    def test_the_only_program_it_runs_is_read_only_git(self):
+    def test_the_only_programs_it_runs_are_read_only_git_and_one_gh_read(self):
+        """BOUNDARY rules 10 and 21: `git` reads in _git, and `gh pr view` in gh_pr_view (RunsPr pins its argv)."""
         import ast
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         tree = ast.parse(src)
@@ -767,7 +768,7 @@ class ReadOnlyRule(BridgeCase):
                     if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "subprocess" \
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
-        self.assertEqual(uses, ["_git"])
+        self.assertEqual(uses, ["_git", "gh_pr_view"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),
@@ -2122,6 +2123,131 @@ class RunsOps(BridgeCase):
             self.assertEqual((await s.req("runs.get", bot="kami"))["error"]["code"], "bad_request")
             self.assertEqual((await s.req("runs.get", bot="kami", run="dag:x/y"))["error"]["code"], "not_found")
             self.assertEqual((await s.req("runs.list", bot="nobody"))["error"]["code"], "unknown_bot")
+
+
+class RunsPr(unittest.TestCase):
+    """The PR a node produced: parsed from its attempts' reasons, summary and handoff; its state from the person's own
+    `gh` (stubbed here), cached, with a hard timeout, and `unknown` whenever gh cannot say."""
+
+    def test_the_newest_reference_wins_and_a_url_names_its_repo(self):
+        self.assertIsNone(ob.find_pr(["no pull request here", None, "issue #12", "#99 alone"]))
+        self.assertEqual(ob.find_pr(["opened PR #2746"]), {"number": 2746})
+        self.assertEqual(ob.find_pr(["PR #2746 open", "merged https://github.com/rlaope/oh-my-hermes/pull/2750 as 4e68fd8b4"]),
+                         {"number": 2750, "repo": "rlaope/oh-my-hermes", "url": "https://github.com/rlaope/oh-my-hermes/pull/2750"})
+        # a bare number later in the texts is newer than an earlier URL; it takes the repo of the one repo named
+        self.assertEqual(ob.find_pr(["see https://github.com/rlaope/deepseek-bot/pull/87", "PR #88 open, gh pr checks green"]),
+                         {"number": 88, "repo": "rlaope/deepseek-bot", "url": "https://github.com/rlaope/deepseek-bot/pull/88"})
+        # two repos and a bare number that neither names: no repo is guessed
+        self.assertEqual(ob.find_pr(["https://github.com/a/b/pull/1 https://github.com/c/d/pull/2", "pull request #3"]), {"number": 3})
+        self.assertEqual(ob.find_pr(["PRs: #5"]), {"number": 5})
+        self.assertIsNone(ob.find_pr(["https://github.com/a/b/issues/4", "PR#"]))
+
+    def test_attach_prs_reads_reasons_summary_and_the_whole_handoff(self):
+        run = {"nodes": [
+            {"id": "a", "attempts": [{"reason": "PR #2712 + 6cb284636"}, {"reason": "opened https://github.com/o/r/pull/2713"}]},
+            {"id": "b", "attempts": [], "summary": "Opened PR #2714"},
+            {"id": "c", "attempts": [{"reason": "tests pass"}]},
+        ]}
+        ob.attach_prs(run, {"c": "x" * 9000 + "\nPR: https://github.com/o/r/pull/2715\n"})
+        prs = {n["id"]: n.get("pr") for n in run["nodes"]}
+        self.assertEqual(prs["a"], {"number": 2713, "repo": "o/r", "url": "https://github.com/o/r/pull/2713"})
+        self.assertEqual(prs["b"], {"number": 2714, "repo": "o/r", "url": "https://github.com/o/r/pull/2714"})  # the run's one repo
+        self.assertEqual(prs["c"]["number"], 2715)
+
+    def test_runs_get_carries_the_pr_and_reads_nothing_new(self):
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261028_093610_1b12a114"])
+            (dag / SMALL / "route-hint-dedup" / "verify.md").write_text(
+                "## Verify\n- gates green\n- opened https://github.com/rlaope/oh-my-hermes/pull/2341\n", encoding="utf-8")
+            before = _mtimes(dag, prof)
+            got = ob.DagRuns().get("kami", prof, "dag:20261028_093610_1b12a114/route-hint-dedup")
+            nodes = {n["id"]: n for n in got["run"]["nodes"]}
+            self.assertEqual(nodes["verify"]["pr"], {"number": 2341, "repo": "rlaope/oh-my-hermes",
+                                                     "url": "https://github.com/rlaope/oh-my-hermes/pull/2341"})
+            self.assertNotIn("pr", nodes["implement"])
+            # the list carries no node, so no PR either: it never waits on one
+            self.assertNotIn("nodes", ob.DagRuns().list("kami", prof)[0])
+            self.assertEqual(_mtimes(dag, prof), before)
+
+    def test_state_comes_from_github_not_from_words(self):
+        for view, want in (({"state": "OPEN", "isDraft": False}, "open"), ({"state": "OPEN", "isDraft": True}, "draft"),
+                           ({"state": "MERGED", "mergedAt": "2026-11-10T01:00:00Z"}, "merged"),
+                           ({"state": "CLOSED", "mergedAt": None}, "closed"), ({"state": "CLOSED", "mergedAt": "x"}, "merged"),
+                           ({}, "unknown"), ({"state": "WAT"}, "unknown")):
+            self.assertEqual(ob.pr_state_of(view), want, view)
+
+    def test_states_are_cached_for_five_minutes_and_a_miss_for_one(self):
+        calls, now = [], [1000.0]
+        answers = {101: {"state": "MERGED", "mergedAt": "t", "url": "https://github.com/o/r/pull/101"}, 102: None}
+
+        def view(repo, n):
+            calls.append((repo, n))
+            return answers[n]
+
+        prs = ob.PrStates(view=view, clock=lambda: now[0])
+        run = {"nodes": [{"id": "a", "pr": {"number": 101, "repo": "o/r"}}, {"id": "b", "pr": {"number": 102, "repo": "o/r"}},
+                         {"id": "c", "pr": {"number": 7}}, {"id": "d"}]}
+        got = prs.states(run)
+        self.assertEqual(got, {"a": {"number": 101, "repo": "o/r", "state": "merged", "url": "https://github.com/o/r/pull/101"},
+                               "b": {"number": 102, "repo": "o/r", "state": "unknown"},
+                               "c": {"number": 7, "state": "unknown"}})  # no repo: not asked
+        self.assertEqual(sorted(calls), [("o/r", 101), ("o/r", 102)])
+        now[0] += ob.PR_TTL_MISS + 1
+        prs.states(run)
+        self.assertEqual(sorted(calls), [("o/r", 101), ("o/r", 102), ("o/r", 102)])  # only the miss is asked again
+        now[0] += ob.PR_TTL
+        prs.states(run)
+        self.assertEqual(len(calls), 5)
+        self.assertEqual((ob.PR_TTL, ob.PR_TIMEOUT), (300.0, 3.0))
+
+    def test_gh_pr_view_runs_one_fixed_argv_with_a_timeout_and_fails_soft(self):
+        seen = {}
+
+        def run(argv, **kw):
+            seen.update(argv=argv, timeout=kw["timeout"], env=kw["env"])
+            return mock.Mock(returncode=0, stdout='{"state":"OPEN","isDraft":true,"mergedAt":null,"url":"u"}')
+
+        with mock.patch.object(ob.subprocess, "run", run):
+            self.assertEqual(ob.gh_pr_view("rlaope/oh-my-hermes", 2360, gh="/bin/gh")["isDraft"], True)
+        self.assertEqual(seen["argv"], ["/bin/gh", "pr", "view", "2360", "-R", "rlaope/oh-my-hermes", "--json", "state,isDraft,mergedAt,url"])
+        self.assertEqual(seen["timeout"], ob.PR_TIMEOUT)
+        self.assertEqual(seen["env"]["GH_PROMPT_DISABLED"], "1")
+
+        def slow(argv, **kw):
+            raise ob.subprocess.TimeoutExpired(argv, kw["timeout"])
+
+        for fake in (slow, lambda a, **k: mock.Mock(returncode=1, stdout=""), lambda a, **k: mock.Mock(returncode=0, stdout="nope")):
+            with mock.patch.object(ob.subprocess, "run", fake):
+                self.assertIsNone(ob.gh_pr_view("o/r", 1, gh="/bin/gh"))
+        with mock.patch.object(ob, "_gh_path", return_value=None):
+            self.assertIsNone(ob.gh_pr_view("o/r", 1))  # no gh: no state, nothing run
+        for repo, n in (("o/r; rm -rf /", 1), ("-R/x", 1), ("o/r", 0), ("o/r", True), ("o/r", "1")):
+            with self.assertRaises(ValueError):
+                ob.gh_pr_view(repo, n, gh="/bin/gh")
+
+
+class RunsPrOps(BridgeCase):
+    async def test_runs_prs_over_the_socket(self):
+        async with Env() as env:
+            kami = env.home / "profiles" / "kami"
+            (kami / "config.yaml").unlink()
+            _runs_profile(env.home / "r", ["20261028_093610_1b12a114"])
+            import shutil
+            for f in (env.home / "r" / "prof").iterdir():
+                shutil.move(str(f), str(kami / f.name))
+            dag = env.home / "r" / "omh" / "runtime" / "dag"
+            (dag / SMALL / "route-hint-dedup" / "verify.md").write_text("opened PR https://github.com/o/r/pull/9\n", encoding="utf-8")
+            env.bridge.prs = ob.PrStates(view=lambda repo, n: {"state": "OPEN", "isDraft": True})
+            s = await self.open(env)
+            run_id = "dag:20261028_093610_1b12a114/route-hint-dedup"
+            r = await s.req("runs.get", bot="kami", run=run_id)
+            self.assertEqual({n["id"]: n.get("pr", {}).get("number") for n in r["result"]["run"]["nodes"]}, {"implement": None, "verify": 9})
+            r = await s.req("runs.prs", bot="kami", run=run_id)
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"], {"prs": {"verify": {"number": 9, "repo": "o/r", "url": "https://github.com/o/r/pull/9", "state": "draft"}}})
+            self.assertEqual((await s.req("runs.prs", bot="kami"))["error"]["code"], "bad_request")
+            self.assertEqual((await s.req("runs.prs", bot="kami", run="dag:x/y"))["error"]["code"], "not_found")
+            self.assertEqual((await s.req("runs.prs", bot="kami", run="claude:abc"))["result"], {"prs": {}})
 
 
 CLI_FIX = HERE / "fixtures" / "cli"

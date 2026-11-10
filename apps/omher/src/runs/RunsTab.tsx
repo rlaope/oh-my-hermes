@@ -3,9 +3,9 @@
 // drawing at full size over the chat column (⌘⇧G). Below the bot's own, the CLI agents' on this machine (Claude Code subagents,
 // Codex sub-agents) in the same list style. A plan is a run in the code and the protocol (`runs.list`); only the
 // words on screen say "plan". Nothing here retries, settles or cancels.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
-import { cliName, sortRuns, span, type AgentRunSummary, type RunDetail } from "../lib/runs";
+import { cliName, sortRuns, span, type AgentRunSummary, type NodePr, type RunDetail } from "../lib/runs";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, ExpandIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
@@ -16,6 +16,7 @@ import { RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
 import { PlanHeader } from "./PlanHeader";
 import { runName } from "./format";
+import { withPrs } from "./pr";
 import "./runs.css";
 
 const act = () => getStore().actions;
@@ -129,7 +130,26 @@ function useDetail(bot: string, summary: AgentRunSummary | null) {
     };
     // re-read when the list shows the run changed
   }, [bot, summary?.id, summary?.updated]);
-  return { detail: detail && detail.run.id === summary?.id ? detail : null, error };
+  // the PRs' GitHub states come apart from the run (the bridge asks `gh`, cached, 3 s at most): the graph is drawn
+  // with the numbers first and takes their state marks when they come; a bridge that cannot say leaves them plain
+  const [prs, setPrs] = useState<{ run: string; prs: Record<string, NodePr> } | null>(null);
+  useEffect(() => {
+    if (!detail || !detail.run.nodes.some((n) => n.pr)) return;
+    let live = true;
+    const run = detail.run.id;
+    act()
+      .runsPrs(bot, run)
+      .then(
+        (r) => live && setPrs({ run, prs: r.prs }),
+        () => undefined,
+      );
+    return () => {
+      live = false;
+    };
+  }, [bot, detail]);
+  const mine = detail && detail.run.id === summary?.id ? detail : null;
+  const shown = useMemo(() => (mine && prs?.run === mine.run.id ? { ...mine, run: withPrs(mine.run, prs.prs) } : mine), [mine, prs]);
+  return { detail: shown, error };
 }
 
 /** The nodes `id` has a line from in the graph, for its detail's "after …" line. Worked out once a run as it was

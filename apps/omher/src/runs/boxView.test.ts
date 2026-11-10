@@ -506,7 +506,7 @@ describe("a box's lines", () => {
     // c waits on a (two rows up) and on b (the row above); a box is its title, its facts and its status, no more
     const r = dag([node("a", [], { label: "Theme toggle" }), node("b", ["a"]), node("c", ["a", "b"], { state: "waiting" }), node("d", ["c"], { state: "waiting" })]);
     const g = lay(r, 700);
-    for (const n of r.nodes) expect(Object.keys(boxText(n, r, g, g.inner, 0, M)).sort()).toEqual(["extras", "facts", "factsText", "hang", "icon", "mark", "repair", "time", "title", "titleLines", "tone", "via", "word"]);
+    for (const n of r.nodes) expect(Object.keys(boxText(n, r, g, g.inner, 0, M)).sort()).toEqual(["extras", "facts", "factsText", "hang", "icon", "mark", "pr", "repair", "time", "title", "titleLines", "tone", "via", "word"]);
     // so c, whose line from a passes a row, is no taller than d, whose only parent stands right above it
     expect(g.at.get("c")!.h).toBe(g.at.get("d")!.h);
     // the edge itself is drawn, past b's row

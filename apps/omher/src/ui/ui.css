@@ -230,3 +230,34 @@ button.ui-pill:hover {
     display: none;
   }
 }
+
+/* a pull request's state mark (PrIcon): GitHub's own colours, open green, merged purple, closed red, draft gray;
+   dark first, light under [data-theme="light"]. A state omher could not learn stays the muted text colour */
+.pr-ic {
+  flex: none;
+  color: var(--muted);
+}
+.pr-ic[data-state="open"] {
+  color: #3fb950;
+}
+.pr-ic[data-state="merged"] {
+  color: #a371f7;
+}
+.pr-ic[data-state="closed"] {
+  color: #f85149;
+}
+.pr-ic[data-state="draft"] {
+  color: #9198a1;
+}
+[data-theme="light"] .pr-ic[data-state="open"] {
+  color: #1a7f37;
+}
+[data-theme="light"] .pr-ic[data-state="merged"] {
+  color: #8250df;
+}
+[data-theme="light"] .pr-ic[data-state="closed"] {
+  color: #d1242f;
+}
+[data-theme="light"] .pr-ic[data-state="draft"] {
+  color: #59636e;
+}

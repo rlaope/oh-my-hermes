@@ -130,6 +130,9 @@ const counts = (nodes: Json[]) => ({
   failed: nodes.filter((n) => n.state === "failed").length,
 });
 const allRuns = () => [...(runs.live ? [runs.live] : []), ...runs.past];
+/** GitHub's state of the PRs the live plan's parts opened (the real bridge asks `gh`; staged here). */
+export const PR_REPO = "rlaope/oh-my-hermes";
+export const PR_STATES: Record<number, string> = { 2353: "merged", 2352: "merged", 2359: "open", 2360: "draft" };
 
 // ---- media: the before/after the story's last message names ----------------------------------------------------
 
@@ -218,6 +221,16 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const run = allRuns().find((r) => r.id === p.run);
     if (!run) throw new OpError("not_found", "no such plan");
     return { run: structuredClone(run), handoffs: { ...(runs.handoffs[String(run.id)] ?? {}) } };
+  },
+  "runs.prs": (p) => {
+    const run = allRuns().find((r) => r.id === p.run);
+    if (!run) throw new OpError("not_found", "no such plan");
+    const prs: Record<string, Json> = {};
+    for (const n of run.nodes as Json[]) {
+      const pr = n.pr as { number: number; repo?: string } | undefined;
+      if (pr) prs[String(n.id)] = { ...pr, state: (pr.repo === PR_REPO && PR_STATES[pr.number]) || "unknown" };
+    }
+    return { prs };
   },
   "runs.cli": () => ({ runs: [], agents: { claude: "found", codex: "found", pi: "found", omp: "found", grok: "not_installed" } }),
   "usage.read": () => ({

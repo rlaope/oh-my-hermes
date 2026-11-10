@@ -6,7 +6,9 @@
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
 // Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset,
-// mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
+// mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open),
+// mock.demo (Kami's live "Docs dark mode" plan on top of his list, its nodes' PRs in mixed states; `--demo` seeds it
+// at start and on every reset).
 import http from "node:http";
 import crypto from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
@@ -21,6 +23,7 @@ const arg = (name, dflt) => {
 const PORT = Number(arg("port", process.env.OMHER_MOCK_PORT || 5308));
 const TOKENS = new Set(arg("token", "") ? [arg("token", "")] : ["e2e", "dev"]);
 const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const DEMO = argv.includes("--demo");
 
 const now = () => Date.now() / 1000;
 const BOOT = now();
@@ -204,6 +207,57 @@ function runsSeed() {
   }
   return { kami: runs, friren: [], default: other };
 }
+// The demo plan (the site preview's and the promo's): Kami's docs dark mode, 9 minutes in. Three Hermes subagents on
+// GLM, Kimi and DeepSeek, and Claude Code, Codex and omp lanes. Each part that opened a pull request names it the
+// way a real helper does (a reason line or its handoff), and GitHub's state for it comes from `runs.prs`: two
+// merged, one open, one draft; the two parts still to come have none.
+const DEMO_RUN = "dag:20261110_091904_d4a1c7e2/docs-dark-mode";
+const DEMO_REPO = "rlaope/oh-my-hermes";
+const DEMO_PRS = { 2353: { state: "merged" }, 2352: { state: "merged" }, 2359: { state: "open" }, 2360: { state: "draft" } };
+function demoPlan() {
+  const t = now();
+  const url = (n) => `https://github.com/${DEMO_REPO}/pull/${n}`;
+  // [id, label, deps, model, provider, effort, category, executor, state, started (s ago), ended (s ago), pr]
+  const spec = [
+    ["color-tokens", "Color tokens", [], "z-ai/glm-5.3-ultrafast", "z-ai", "medium", "quick", null, "done", 520, 300, 2353],
+    ["theme-toggle", "Theme toggle", [], "kimi-k3", "moonshot", "high", "visual-engineering", null, "done", 520, 250, 2352],
+    ["contrast", "Contrast check", ["color-tokens"], "deepseek/deepseek-v4.1-flash", "deepseek", "high", "review", null, "running", 290, null, null],
+    ["page-styles", "Page styles", ["color-tokens", "theme-toggle"], "claude-opus-5-5", "claude-proxy", "high", "visual-engineering", "claude", "running", 240, null, 2359],
+    ["code-colors", "Code block colors", ["color-tokens", "theme-toggle"], "gpt-6.1-sol", "openai", "medium", "visual-engineering", "codex", "running", 235, null, 2360],
+    ["verify-pr", "Verify and open PR", ["page-styles", "code-colors", "contrast"], "claude-sonnet-5-5", "claude-proxy", "high", "review", "omp", "waiting", null, null, null],
+  ];
+  const handoffs = {};
+  const nodes = spec.map(([id, label, deps, model, provider, effort, route, executor, state, s0, s1, pr], i) => {
+    const started = s0 === null ? undefined : t - s0;
+    const ended = s1 === null ? undefined : t - s1;
+    const n = { id, label, deps, layer: 0, state, model, provider, effort, route, category: route, role: id === "verify-pr" ? "verify" : "build", attempts: [] };
+    if (executor) n.executor = executor;
+    if (started !== undefined) {
+      n.started = started;
+      n.attempts = [{ n: 1, outcome: state === "done" ? "accepted" : "open", started, ...(ended !== undefined ? { ended } : {}) }];
+    }
+    if (ended !== undefined) n.ended = ended;
+    if (pr) {
+      n.pr = { number: pr, repo: DEMO_REPO, url: url(pr) };
+      n.handoff = `${id}.md`;
+      // what the helper wrote: the merged ones in their accepting reason, the others at the end of their handoff
+      if (state === "done") n.attempts[0].reason = `merged ${url(pr)} (${["4e68fd8b4", "9471e35a8"][i]})`;
+      handoffs[id] = `- ${label}: done on its branch\n- Opened PR #${pr}: ${url(pr)}`;
+    }
+    return n;
+  });
+  nodes.find((n) => n.id === "contrast").layer = 1;
+  for (const id of ["page-styles", "code-colors"]) nodes.find((n) => n.id === id).layer = 1;
+  nodes.find((n) => n.id === "verify-pr").layer = 2;
+  const run = { id: DEMO_RUN, kind: "dag", owner: { type: "bot", id: "kami" }, title: "Docs dark mode", goal: "Add dark mode to the docs site and open a PR.", state: "running", started: t - 540, updated: t - 5, nodes };
+  return { run, handoffs };
+}
+function seedDemo() {
+  const { run, handoffs } = demoPlan();
+  runs.kami = [run, ...runs.kami.filter((r) => r.id !== DEMO_RUN)];
+  HANDOFFS[DEMO_RUN] = handoffs;
+}
+
 // T6: CLI agents' runs (runs.cli) - the real bridge's CliRuns output over the redacted Claude Code and Codex
 // fixtures (src/lib/__fixtures__/runs-cli.json, bridge/tests/fixtures/cli). Plus one live copy of the Claude
 // session moved to "now" with its last subagent still working (mock-only, so the running look can be checked).
@@ -397,6 +451,7 @@ function reset() {
   folders = new Map(); // folder chat id -> { bot, cwd, open }
   runs = runsSeed();
   cliRuns = cliSeed();
+  if (DEMO) seedDemo();
   pending = new Map();
   asked = new Map();
   idSeq = 0;
@@ -788,6 +843,22 @@ const OPS = {
       agents: CLI_FIXTURE.agents,
     };
   },
+  // the GitHub state of each PR the run's nodes name (the real bridge asks `gh`): the demo's from DEMO_PRS, any
+  // other `unknown` (no gh); a PR with no repo is never asked
+  "runs.prs": (p) => {
+    const b = needBot(p);
+    const id = needStr(p, "run");
+    if (cliRuns.some((r) => r.id === id)) return { prs: {} };
+    const run = (runs[b.name] ?? []).find((r) => r.id === id);
+    if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
+    const prs = {};
+    for (const n of run.nodes) {
+      if (!n.pr) continue;
+      const known = n.pr.repo === DEMO_REPO ? DEMO_PRS[n.pr.number] : undefined;
+      prs[n.id] = { ...n.pr, state: known?.state ?? "unknown" };
+    }
+    return { prs };
+  },
   "runs.get": (p) => {
     const b = needBot(p);
     const id = needStr(p, "run");
@@ -904,6 +975,10 @@ const OPS = {
   "mock.reset": () => {
     reset();
     return {};
+  },
+  "mock.demo": () => {
+    seedDemo();
+    return { run: DEMO_RUN };
   },
   // a bot whose main chat has no messages yet (first run)
   "mock.clearHistory": (p) => {

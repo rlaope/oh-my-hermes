@@ -44,7 +44,7 @@ RULES = (
     "The app runs only the CLIs' own status and sign-in commands, as fixed argv (`claude auth status --json`, `claude auth login`,",
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
-    "The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
+    "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
@@ -74,6 +74,12 @@ RULES = (
     "omher updates itself only through Tauri's updater, and only from one fixed address:",
     "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
     " and only after the person presses the update button; then it restarts omher.",
+    "For the Plans graph the bridge asks the person's own GitHub CLI for the state of a pull request a plan node names",
+    "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url`.",
+    "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
+    " reads none and changes nothing on GitHub.",
+    "An answer is kept 5 minutes, a call is stopped after 3 seconds,",
+    "The app opens such a pull request's page in the browser only when the person clicks its number.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -110,14 +116,15 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twenty_numbered_rules(self) -> None:
-        # 20: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+    def test_boundary_is_between_six_and_twenty_one_numbered_rules(self) -> None:
+        # 21: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
-        # (skills.list for the ./ picker) and rule 20 (the signed self-update) each widened the boundary on
-        # purpose; the rules stay numbered 1..n with no gap or repeat.
+        # (skills.list for the ./ picker), rule 20 (the signed self-update) and rule 21 (a plan node's PR state
+        # through the person's own `gh`) each widened the boundary on purpose; the rules stay numbered 1..n with
+        # no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 20, len(rules))
+        self.assertTrue(6 <= len(rules) <= 21, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -355,11 +362,34 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
                 imported.add(node.module or "")
         self.assertEqual(sorted(i for i in imported if i in banned or i.split(".")[0] in banned), [])
 
+    def test_the_only_gh_call_is_the_fixed_pr_view(self) -> None:
+        """Rule 21: one `gh` call site, in gh_pr_view, with a fixed argv, a 3 s timeout, no prompt, and a repo and
+        number checked before it runs; nothing passes a token to it."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
+        calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
+                 if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "gh_pr_view"])
+        fn = fns["gh_pr_view"]
+        body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
+        self.assertIn("timeout=timeout", body)
+        self.assertIn("PR_REPO.match(repo)", body)
+        self.assertIn("'GH_PROMPT_DISABLED': '1'", body)
+        for word in ("token", "GH_TOKEN", "GITHUB_TOKEN", "auth"):
+            self.assertNotIn(word, body)
+        self.assertIn("PR_TIMEOUT = 3.0", self.source)
+        self.assertIn("PR_TTL = 300.0", self.source)
+        refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "gh_pr_view"]
+        prstates = next(c for c in ast.walk(self.tree) if isinstance(c, ast.ClassDef) and c.name == "PrStates")
+        # one use: PrStates' default look-up; op_runs_prs reaches it only through PrStates
+        self.assertEqual(len(refs), 1)
+        self.assertIn(refs[0], list(ast.walk(prstates)))
+
     def test_bridge_never_posts_to_a_messenger(self) -> None:
         """Rule 2: a reply target is text handed to the bot. The bridge imports no sender (Hermes'
         send_message tool, its platform adapters, a Slack or Discord client), names no messenger API and
         runs no `hermes send`; the command appears only inside the block the bot reads."""
-        # subprocess is imported for rule 10's git reads only: its one call site runs `git` (checked below).
+        # subprocess is imported for rule 10's git reads and rule 21's one `gh pr view` (checked below and in
+        # test_the_only_gh_call_is_the_fixed_pr_view).
         banned_roots = {"slack_sdk", "slack_bolt", "discord", "telegram"}
         banned_parts = ("send_message", "gateway.platforms", "plugins.platforms", "gateway.delivery")
         imported = []
@@ -371,7 +401,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         offenders = [n for n in imported if n.split(".")[0] in banned_roots or any(p in n for p in banned_parts)]
         self.assertEqual(offenders, [])
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
-        self.assertEqual([ast.unparse(c.args[0]) for c in runs], ["['git', *pre, *args]"])
+        self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
+                         ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']"])
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
