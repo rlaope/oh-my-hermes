@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **dag-ulw plans fewer, larger nodes.** It splits where work can run side by
+  side and keeps a small follow-on step in the node it follows, so a run starts
+  fewer children; a job with nothing to run side by side still runs as a graph.
+
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
   nothing new), and the verify node marks each one met, not met or not

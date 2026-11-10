@@ -1048,7 +1048,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72895
 # 545258 -> 545272: merged with the plain-words branch, whose release-cut required inputs say "every file that
 # carries the version" where they said "every version surface", a skill term replies copied to people (+14, only
 # that row); that branch's pin was 545127 and main's 545258. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545272
+# 545272 -> 545582 (2026-11-10): dag-ulw's split quality bar says to split for work that can run side by side,
+# keep a small follow-on step in the node it follows, and still run a graph when nothing runs side by side (+310,
+# only the dag-ulw row, 4454 -> 4764); measured from the producer against main 7fb251ab6. No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 545582
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
