@@ -5,6 +5,7 @@ import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
 import { RunsFull } from "../runs/RunsTab";
 import { t } from "../i18n";
+import { FirstRun } from "../onboarding/FirstRun";
 
 /** The selected bot's one main chat: header, timeline, composer. */
 export function Chat() {
@@ -15,6 +16,7 @@ export function Chat() {
     const none = s.conn === "open" && s.bots.length === 0;
     return (
       <div className="chat-empty" data-testid="chat-empty">
+        <FirstRun />
         {none ? (
           <>
             <b>{t("chat.noBots")}</b>
@@ -38,6 +40,7 @@ export function Chat() {
     <>
       <Header bot={bot} chat={chat} />
       <div className={`pane${s.ui.runsFull ? " has-full" : ""}`} data-pane={bot.name}>
+        <FirstRun />
         <Timeline bot={bot} />
         {s.ui.runsFull && <RunsFull bot={bot} />}
         <Composer

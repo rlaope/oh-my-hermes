@@ -1,0 +1,69 @@
+/* First-run cards: two small flat cards over the thread, at the thread's width. No gradients; the one action per
+   card is the neutral ink fill (as .gate-primary). */
+.onb {
+  position: relative;
+  width: min(var(--thread-w), calc(100% - 48px));
+  margin: 18px auto 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: none;
+}
+.onb-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 11px 12px 12px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--side);
+}
+/* the × sits in the last card's corner and closes both: its title clears it */
+.onb-card:last-of-type .onb-t {
+  padding-right: 22px;
+}
+.onb-t {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.onb-p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.onb-btn {
+  height: 26px;
+  margin-top: auto;
+  padding: 0 11px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--ink);
+  color: var(--bg);
+}
+.onb-btn:hover:not(:disabled) {
+  background: var(--body);
+}
+.onb-btn:disabled {
+  opacity: 0.5;
+}
+.onb-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+}
+/* the line under an empty sidebar section */
+.onb-hint {
+  padding: 6px var(--side-x) 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  text-wrap: balance;
+}

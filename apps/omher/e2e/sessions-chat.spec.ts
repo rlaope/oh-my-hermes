@@ -200,8 +200,8 @@ test("Terminal toggle: Claude Code's terminal resumes the same conversation, and
   await expect(page.getByTestId("bubble-bot")).toBeVisible();
   await expect(page.getByTestId("activity")).toHaveAttribute("data-state", "done");
   const toggle = page.getByTestId("session-terminal-toggle");
-  await expect(toggle).toHaveText("Terminal");
-  await expect(toggle).toHaveAttribute("title", /continuing this conversation/);
+  await expect(toggle).toHaveAttribute("aria-label", "Open in Terminal");
+  await expect(toggle).toHaveAttribute("aria-description", /continuing this conversation/);
   await toggle.click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
@@ -223,7 +223,7 @@ test("Codex's terminal view starts its TUI fresh and the chat keeps running", as
   await open(page);
   await start(page, "codex");
   const toggle = page.getByTestId("session-terminal-toggle");
-  await expect(toggle).toHaveAttribute("title", /starts Codex fresh/);
+  await expect(toggle).toHaveAttribute("aria-description", /starts Codex fresh/);
   await toggle.click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   // xterm loads on this first terminal view, and the terminal starts after it

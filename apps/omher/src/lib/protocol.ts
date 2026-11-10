@@ -398,7 +398,8 @@ export type BridgeEvent =
     })
   /** An approval or question is no longer waiting (timed out, withdrawn, or answered somewhere else). */
   | (EventBase & { event: "prompt.expired"; request_id: string; reason: "timeout" | "cancelled" | "resolved" })
-  | (EventBase & { event: "turn.end"; outcome: "done" | "interrupted" | "error"; error?: string })
+  /** `ended`: a SESSIONS agent exited cleanly (code 0) in the middle of a turn. */
+  | (EventBase & { event: "turn.end"; outcome: "done" | "interrupted" | "ended" | "error"; error?: string })
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
