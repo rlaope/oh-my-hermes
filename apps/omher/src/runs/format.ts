@@ -2,7 +2,7 @@
 import type { RunNode } from "../lib/runs";
 
 /** A model's name as people say it: "claude-opus-5-5" -> "Opus 5.5", "gpt-5.5" -> "GPT-5.5", "gpt-6-astra" ->
- *  "GPT-6 Astra". What a provider puts around the id is dropped: a path in front ("anthropic/claude-haiku-5" ->
+ *  "GPT-6 Astra", "gemini-3-pro" -> "Gemini 3 Pro". What a provider puts around the id is dropped: a path in front ("anthropic/claude-haiku-5" ->
  *  "Haiku 5"), "us.anthropic." in front, and behind it a context tag ("[1m]"), an effort or revision (":high",
  *  "-v1:0") or a date ("-20261001", "-2026-08-01"). An id of neither shape stays as it is (a display name such
  *  as "Opus 5.5" passes through). */
@@ -20,6 +20,8 @@ export function modelName(model: string): string {
   if (claude) return `${cap(claude[1])} ${claude[2]}${claude[3] ? `.${claude[3]}` : ""}${words(claude[4])}`;
   const gpt = /^gpt-(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(id);
   if (gpt) return `GPT-${gpt[1]}${words(gpt[2])}`;
+  const gemini = /^gemini-(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(id);
+  if (gemini) return `Gemini ${gemini[1]}${words(gemini[2])}`;
   return raw;
 }
 

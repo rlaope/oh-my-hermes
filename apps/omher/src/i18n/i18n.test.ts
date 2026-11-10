@@ -24,10 +24,10 @@ describe("i18n", () => {
   });
 
   it("fills slots, and leaves a slot it has no value for as written", () => {
-    expect(t("graph.done", { done: 3, total: 7 })).toBe("Done 3/7");
-    expect(t("graph.done", { done: 3 })).toBe("Done 3/{total}");
+    expect(t("graph.done", { done: 3, total: 7 })).toBe("3 of 7 done");
+    expect(t("graph.done", { done: 3 })).toBe("3 of {total} done");
     setLang("ko");
-    expect(t("graph.done", { done: 3, total: 7 })).toBe("완료 3/7");
+    expect(t("graph.done", { done: 3, total: 7 })).toBe("7개 중 3개 완료");
   });
 
   it("shows English unless a known language is stored", () => {

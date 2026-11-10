@@ -1,6 +1,6 @@
 // Plans tab: the bot's plans (OMH dag runs, Hermes delegate fan-outs) as a list of plain text rows, and the
-// selected one as plain text and a read-only box graph (the OMH TUI's box view), plus the same drawing at full
-// size over the chat column (⌘⇧G). Below the bot's own, the CLI agents' on this machine (Claude Code subagents,
+// selected one as plain text and a read-only graph (frontiers of outlined boxes joined by lines), plus the same
+// drawing at full size over the chat column (⌘⇧G). Below the bot's own, the CLI agents' on this machine (Claude Code subagents,
 // Codex sub-agents) in the same list style. A plan is a run in the code and the protocol (`runs.list`); only the
 // words on screen say "plan". Nothing here retries, settles or cancels.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { CloseIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
+import { frontiers } from "./boxView";
 import { RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
 import { PlanHeader } from "./PlanHeader";
@@ -129,6 +130,16 @@ function useDetail(bot: string, summary: AgentRunSummary | null) {
     // re-read when the list shows the run changed
   }, [bot, summary?.id, summary?.updated]);
   return { detail: detail && detail.run.id === summary?.id ? detail : null, error };
+}
+
+/** The nodes `id` has a line from in the graph, for its detail's "after …" line. Worked out once a run as it was
+ *  read: an open node's detail renders every second. */
+const PARENTS = new WeakMap<object, Map<string, string[]>>();
+function parentsOf(run: RunDetail["run"], id: string) {
+  const byId = new Map(run.nodes.map((n) => [n.id, n]));
+  let all = PARENTS.get(run.nodes);
+  if (!all) PARENTS.set(run.nodes, (all = frontiers(run.nodes).parents));
+  return (all.get(id) ?? []).map((p) => byId.get(p)!);
 }
 
 const Chevron = ({ up }: { up: boolean }) => (
@@ -252,7 +263,7 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
             detail={
               node && (
                 <div ref={drawer}>
-                  <NodeDrawer run={run} node={node} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
+                  <NodeDrawer run={run} node={node} parents={parentsOf(run, node.id)} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
                 </div>
               )
             }
@@ -299,7 +310,7 @@ export function RunsFull({ bot }: { bot: Bot }) {
         )}
         {run && node && (
           <div className="rf-drawer">
-            <NodeDrawer run={run} node={node} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
+            <NodeDrawer run={run} node={node} parents={parentsOf(run, node.id)} bot={bot} text={detail!.handoffs[node.id]} nowS={nowS} onClose={() => setOpen(null)} />
           </div>
         )}
       </div>
