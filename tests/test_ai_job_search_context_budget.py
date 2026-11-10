@@ -179,8 +179,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was ad568c74...fce5.
             # 542159 -> 542186 and the digest re-derived: the same sentence gives `ultrabrain` only where the routes
             # serve it (+27); no other row moved.
-            (skill_capabilities, 542186, FULL_ROW_DELTA_CAP,
-             '8f6fb238f981d7fbfd42ca0d5c8732748a9b498337755e0f77c7aaf1e6669fa8',
+            # Merged with the plain-words branch: release-cut's required inputs say "every file that carries
+            # the version" instead of a version surface (+14); 542186 -> 542200. That branch's pin was
+            # 628aade6...6717, and main's was 8f6fb238...69fa8.
+            (skill_capabilities, 542200, FULL_ROW_DELTA_CAP,
+             '935a86d224a044e9eb6f03b93b39da7000fa97a15b275818e14e00bbab0ca5b7',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -466,7 +469,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # -> Opus 5.5; that branch's pin was b40a640d...731df, and this branch's was 88ddc8a4...71bf.
         # dag-ulw's ladder quality bar and run-loop lint then name the one judgement node that takes `ultrabrain`,
         # only where the routes serve it; only dag-ulw moves, and the pin before it was 0b3c71d9...1783.
-        self.assertEqual(_digest(legacy_hashes), '4713baa9f74ee17d9a945ec0084647a1639830fed1a95f7349d79b9948bc5447')
+        # Merged with the plain-words branch: build-failure-triage, code-review, commit-pr-authoring and
+        # release-cut read verdicts and labels in plain words; that branch's pin was d76164cd...91a7, and
+        # main's was 4713baa9...5447.
+        self.assertEqual(_digest(legacy_hashes), '60cd6ed24438d8f549e70755eb063feb4198c476e1109cc01d4b03afc328a81b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
