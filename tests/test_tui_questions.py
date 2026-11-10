@@ -679,23 +679,20 @@ class TellRowTests(unittest.TestCase):
         self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "use ./tmp instead"}])
 
     def test_after_the_denied_turn_ended_it_never_steers_the_queued_prompt_that_runs_now(self) -> None:
-        for mode in sorted(app_module.BUSY_MODES):
-            with self.subTest(busy_mode=mode):
-                app, client = make_app(busy=True)
-                app.busy_mode = mode
-                app.queued.append(app_module.QueuedLine("queued P"))
-                app._on_server_request(TELL_APPROVAL)
-                armed(app)
-                press(app, *[Key(DOWN)] * 3, Key(ENTER))
-                app._on_event(Event("message.complete", SID, {"text": "ok"}))  # the denied turn ends on its own
-                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "queued P", "queued": True}])
-                type_text(app, "use ./tmp instead")
-                press(app, Key(ENTER))
-                self.assertEqual(client.named("session.redirect"), [])
-                self.assertEqual([line.text for line in app.queued], ["use ./tmp instead"])  # behind P's turn
-                app._on_event(Event("message.complete", SID, {"text": "done"}))
-                self.assertEqual(client.named("prompt.submit")[-1],
-                                 {"session_id": SID, "text": "use ./tmp instead", "queued": True})
+        app, client = make_app(busy=True)
+        app.queued.append(app_module.QueuedLine("queued P"))
+        app._on_server_request(TELL_APPROVAL)
+        armed(app)
+        press(app, *[Key(DOWN)] * 3, Key(ENTER))
+        app._on_event(Event("message.complete", SID, {"text": "ok"}))  # the denied turn ends on its own
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "queued P", "queued": True}])
+        type_text(app, "use ./tmp instead")
+        press(app, Key(ENTER))
+        self.assertEqual(client.named("session.redirect"), [])
+        self.assertEqual([line.text for line in app.queued], ["use ./tmp instead"])  # behind P's turn
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.named("prompt.submit")[-1],
+                         {"session_id": SID, "text": "use ./tmp instead", "queued": True})
 
     def test_a_queue_taken_back_after_a_stopping_deny_goes_into_the_draft_behind_the_field(self) -> None:
         app, client = make_app(busy=True)

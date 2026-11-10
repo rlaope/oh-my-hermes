@@ -80,9 +80,11 @@ jobs:
       - name: Rust tests (Tauri shell)
         working-directory: apps/omher/src-tauri
         run: cargo test
+      # PRs have no updater signing key (forks never do), so the debug bundle skips the signed updater
+      # artifacts; the release workflow builds and signs them.
       - name: Build an unsigned debug bundle
         working-directory: apps/omher
-        run: pnpm tauri build --debug --bundles ${{ matrix.bundles }}
+        run: pnpm tauri build --debug --bundles ${{ matrix.bundles }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Check the bridge ships inside the macOS .app
         if: runner.os == 'macOS'
         working-directory: apps/omher/src-tauri/target/debug/bundle/macos

@@ -39,7 +39,7 @@ DRIFT_ERROR_CODES = frozenset({PARAM_REJECTED, METHOD_NOT_FOUND})
 # Calls a session does without: on these a drift error is a notice and the session goes on. On every other call
 # made during a session it ends the session (`App._on_response`). An older Hermes (0250c8bcae: SkillsReloadParams
 # takes no field) rejects `skills.reload {session_id}` with 4000, which must not cost the person their session.
-# `config.get` is answered after the first frame and only sets the busy mode, which has a default (queue).
+# `config.get` is answered after the first frame and only sets the configured effort and Vim mode, which have defaults.
 # `session.list` is asked unprompted at the start of a fresh session, only to name the last one, and
 # `model.options` only fills `/model`'s picker and reads Hermes' configured default model, while
 # `/model <name>` still switches. `image.render` only draws a preview under the prompt: a Hermes without it answers

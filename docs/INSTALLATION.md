@@ -270,7 +270,8 @@ install the same `omh` command from the published release.
 ### Universal installer (macOS/Linux)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://omher.app/install | sh
+# same as: curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
 OMH needs Python 3.11+, and the installer finds one itself: it probes `python3`
@@ -320,7 +321,8 @@ leaves its exit code in `$LASTEXITCODE`.
 ### Windows (PowerShell 5.1+)
 
 ```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+irm https://omher.app/install.ps1 | iex
+# same as: irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 ```
 
 Windows npm/Bun launcher support is gated by the Windows CI suite and is still
@@ -590,10 +592,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   to exit` for the 2 s a second one exits in, and writes nothing to the
   transcript; during a turn that first press also interrupts it, and the
   second leaves even while `interrupting…` still shows. The interrupt is offered in one place, the working row's `esc
-  to interrupt`, and only while Esc does it: in every mode, while the
-  composer is empty and nothing else takes Esc (a question, a picker, the
-  history search, the agent list, a picked steer or rewind, or the `@` menu
-  does), and not again while `interrupting…` shows, so Esc means one thing
+  to interrupt`, and only while Esc does it: in every mode, with or without a
+  draft, while nothing else takes Esc (a question, a picker, the history
+  search, the agent list, a picked steer or rewind, the `/` or `@` menu, or in
+  vim mode a draft, does), and not again while `interrupting…` shows, so Esc means one thing
   on the screen. When the OMH
   HUD sees a call repeating, or tool calls in flight during a turn, the right
   side says that first (`repeat x4`, `1 tool · 9s`). On a narrower terminal
@@ -1149,11 +1151,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
   reports arrives; the number never goes back during a turn, and the done
   line below carries Hermes' count. On a terminal 16 rows tall or more a tip sits
   under it, one a turn, each naming a key (`⎿  Tip: ctrl+o shows the whole
-  transcript`). Once you interrupt it (Esc or Ctrl+C on an empty composer)
-  it reads `✻ interrupting… (12s)` until Hermes has stopped the turn. What you queued behind that turn is not sent then:
+  transcript`). Once you interrupt it (Esc, with a draft typed too, which
+  stays; or Ctrl+C on an empty composer) it reads `✻ interrupting… (12s)` until Hermes has stopped the turn. What you queued behind that turn is not sent then:
   it comes back into the composer, as Claude Code does it, joined in order;
-  a queued `!` line, which is never joined to a prompt, and what follows it
-  stay queued (`held · ↑ edit`) until you send your next
+  a queued `!` line or slash command, which is never joined to a prompt, and
+  what follows it stay queued (`held · ↑ edit`) until you send your next
   prompt or take them back with Up, and so does the whole queue if you typed
   something while the turn was stopping. Each turn ends with a dim line,
   `✻ 34s · 3 tools · ↓1.2k`, under the reply's words (a line too narrow for
@@ -1351,10 +1353,10 @@ Esc closes it):
 
 | Key | Does |
 | --- | --- |
-| Enter | Sends the composer |
+| Enter | Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (`/stop`, `/steer`, `/queue`, `/btw`, `/bg`, `/yolo`, `/effort`, `/reasoning <level>` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
 | `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
 | Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
-| Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, skill prompt or plan prompt waits its turn |
+| Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, slash command, skill prompt or plan prompt waits its turn |
 | Tab | Completes a slash command, or the `@` reference being typed; on an open menu, Enter takes the highlighted row too, and sends a command already typed in full |
 | Shift+Tab | Cycles the input mode: normal, accept all (Hermes asks no approvals in this session), plan (prompts go as /plan); while Hermes itself has approvals off, turns plan on and off |
 | Ctrl+T | Steps the reasoning effort: low, medium, high, xhigh, max; the info line shows it as effort medium |
@@ -1374,9 +1376,9 @@ Esc closes it):
 | Ctrl+W, Alt+Backspace, Ctrl+Backspace | Deletes the word before the caret (Ctrl+Backspace where the terminal reports it apart from Backspace) |
 | Ctrl+U / Ctrl+K | Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead |
 | Ctrl+_ / Ctrl+Y | Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); a run of typed characters is one edit |
-| Esc | Closes the `/` or `@` menu; on an empty composer, interrupts a running turn (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to the composer unsent); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
-| Esc Esc | With text, clears it and keeps it in this session's history; on an empty composer between turns, lists your prompts to rewind to (`/rewind` does too) |
-| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `iw aw`, a quote object (`i` or `a` with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner `y` keeps the register and moves inside, `d` keeps register and caret, and `c` enters INSERT inside), or a bracket object (`i` or `a` with `(`, `)`, `[`, `]`, `{`, `}`; closing aliases identical; inner and around count selects enclosing ancestor; empty inner `y` keeps register and moves to interior, `d` keeps register and caret, and `c` enters INSERT at interior), `p P`, `u` and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
+| Esc | Closes the `/` or `@` menu; else interrupts a running turn, with a draft typed too, which stays in the composer (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to an empty composer unsent, or waits); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
+| Esc Esc | Between turns, with text, clears it and keeps it in this session's history; on an empty composer, lists your prompts to rewind to (`/rewind` does too) |
+| Esc (vim mode) | With `display.vim_mode` on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, `h l 0 ^ $ w b e j k gg G` move, `f F t T` and a character find on the line and `; ,` repeat the find, `i a I A o O` insert, `x X dd D C cc S s r`, `d c y` with a motion, `iw aw`, a quote object (`i` or `a` with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner `y` keeps the register and moves inside, `d` keeps register and caret, and `c` enters INSERT inside), or a bracket object (`i` or `a` with `(`, `)`, `[`, `]`, `{`, `}`; closing aliases identical; inner and around count selects enclosing ancestor; empty inner `y` keeps register and moves to interior, `d` keeps register and caret, and `c` enters INSERT at interior), `p P`, `u` and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt on an empty composer, and two clear a draft as between turns. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C takes the picker. The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed |
 | Ctrl+V | Attaches the clipboard image as an `[Image #N]` token at the caret |
 | Ctrl+O | Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, while Hermes asks something, the whole question (it answers nothing); q leaves it |
 | Ctrl+L | Redraws the screen |
@@ -1445,8 +1447,8 @@ and the query on any terminal.
 Vim mode: with Hermes' `display.vim_mode` on, the composer edits modally, as
 `hermes --cli` does with that setting. Turn it on with
 `hermes config set display.vim_mode true` and start `omh` again. The OMH TUI
-reads it from the active profile's config, in the same settings it reads
-`display.busy_input_mode` from (at launch and after a gateway restart). Only
+reads it from the active profile's config (at launch and after a gateway
+restart). Only
 a true turns it on (a number other than 0 too, or, written by hand as a
 string, `true`, `yes`, `on` or `1`); off or absent, every key does what the
 rest of this page says.
@@ -1557,7 +1559,12 @@ reports for it, and when Hermes reports approvals off for its own reasons
 (`approvals.mode` is off, it was started with `--yolo`, or `/yolo` turned them
 off) the info line shows accept all as well. Those approvals are not the OMH
 TUI's to turn back on: Shift+Tab then sends nothing and turns plan mode on and
-off beside accept all, and the transcript says so once per session. In plan
+off beside accept all, and the transcript says so once per session. A typed
+`/yolo` (or `/yolo on`, `/yolo off`) sends the same per-session switch and
+leaves plan mode as it is, and says the outcome under the command. Shift+Tab
+presses made before Hermes answers are kept: the info line shows the mode they
+lead to at once, dimmed with `…`, and the TUI goes there once Hermes answers.
+In plan
 mode each prompt you send goes to Hermes as `/plan <text>`, its prompt for a
 written plan instead of the work; that is an
 instruction to the model, not a restriction on its tools. An answer to a
@@ -1575,8 +1582,9 @@ its own replaces once Hermes names that one. Where none is configured, so
 the provider's own default applies, it says `effort default` and the
 first Ctrl+T sets `low`; where per-model overrides (`agent.reasoning_overrides`) may apply,
 it says `ctrl+t effort` until the session reports one. A level you set
-shows once Hermes confirms it; a level Hermes refuses leaves the line as it
-was and says so.
+shows dimmed with `…` until Hermes confirms it; a level Hermes refuses leaves
+the line as it was and says so. `/reasoning <level>` sets the level as
+`/effort <level>` does, and a typed command says the level set under it.
 
 A steer adds what you typed to the turn that is running, without interrupting
 it: Hermes reads it after its next tool call, or, while it is compressing the
@@ -1591,7 +1599,7 @@ or inside a streaming reply. A turn you stop before taking it in says so
 (`⧗ not read — the turn stopped first`). If Hermes does not take the steer
 while the turn still runs (an agent still starting, or one that takes no
 steer), the text joins the OMH TUI's own queue (`⧗`) and goes when the turn
-ends, whatever `display.busy_input_mode` says, so it never interrupts the
+ends, as everything sent during a turn does, so it never interrupts the
 turn; if the turn had already ended, it goes as an ordinary prompt. Either
 way the steer's row says so in amber (`⧗ queued — Hermes refused the steer
 (<why>) · <text>`). A steer Hermes has not answered in 120 s is never sent or
@@ -1616,8 +1624,21 @@ A skill command (`/<skill> <request>`) is one row: its echo gives way to the row
 once Hermes answers. That row shows the command, as Hermes names it for the turn (the row a resumed session shows)
 or else as you typed it, not the expanded skill prompt that is sent; an echo already written to the scrollback
 before Hermes answered stays, with the prompt's row under it.
-Typed during a turn, the echo and its output wait under what is running and are written after it, as a
-steer is, so a command never cuts off a running tool call or splits a reply; one Hermes has not finished
+Typed during a turn, a command waits in the queue (`⧗`, as a prompt does, whatever Hermes'
+`display.busy_input_mode` says) and runs when the turn ends, in the order you sent it: a prompt queued after a
+`/compress` goes once Hermes has answered the `/compress`, and the lines queued after a `/new` or a
+`/sessions <id>` go into the session it opens. A command that opens a picker or a question (bare `/model`, a
+guarded model's confirm) holds the queue until you answer it. Up takes a queued command back on its own, its paste
+chips as you typed them, and the send-now key
+never sends one into the turn. Only these run at once during a turn: `/stop` and `/steer`, which are for the
+running turn, `/queue`, `/btw` and `/bg`, which Hermes runs beside it, the commands about this terminal (`/help`,
+`/keys`, `/whats-new`, `/redraw`, `/history`, `/todos`, `/details`, `/logs`, `/dag`, `/bots`, `/copy`, `/theme`,
+`/wallpaper`, `/image`, `/paste`), `/gateway restart`, which asks first and lets running turns finish, `/quit`,
+`/yolo`, `/effort <level>` and `/reasoning <level>`, the typed forms of Shift+Tab and Ctrl+T, which set the session
+and leave the turn as it is, and the ones that only say where they run. Bare `/reasoning`, or with anything but a
+level, is Hermes' own and waits. Interrupting is Esc or
+`/stop`, never Enter. The echo and output of a command run during a turn wait under what is running and are
+written after it, as a steer is, so a command never cuts off a running tool call or splits a reply; one Hermes has not finished
 answering when the turn ends is written above that turn's done line with what it printed so far, and
 what it prints later goes under a repeat of its echo. In the transcript, a long output shows its
 first 12 rows and a count of the rest
@@ -1664,8 +1685,8 @@ call the gateway, `/image` and `/paste` included, wait in the composer. Your dra
 stays and nothing is sent again; a failure says why and the command to run
 in a terminal; bare `/gateway` stays Hermes' platform status). Claude Code's `/cost`, `/permissions` and
 `/compact` run Hermes' `/usage`, `/approvals` and `/compress` (`here [N]`, a
-focus topic, or `--preview`; Hermes refuses a compression while a turn runs,
-and the TUI says to run it again once the turn ends). Hermes' shared gateway,
+focus topic, or `--preview`; typed during a turn, it waits in the queue for
+the turn's end). Hermes' shared gateway,
 which a Hermes from v0.22 runs, does not take `/compress`, `/branch`,
 `/retry`, `/undo`, `/stop`, `/bg`, `/btw`, `/rollback`, `/reload`,
 `/reload-mcp`, `/tools`, bare `/plugins` or `/config` as a typed command. The
@@ -1833,8 +1854,8 @@ on the TUI's own request (exit 75 together with a file `omh` named for that
 launch and removes afterwards), so a 75 Hermes returns for a reason of its
 own ends the launch like any other exit code. If the gateway stops accepting a method or a key mid-session, the
 TUI leaves with the command that reopens the same session in `hermes`; on the
-three calls a session does without, reading Hermes' settings (for the busy
-mode, which then stays `queue`), reading the command list and the
+three calls a session does without, reading Hermes' settings (for the
+effort its config sets and Vim mode), reading the command list and the
 `/reload-skills` rescan, it says so instead and the session goes on. If
 the gateway itself exits mid-session with a failure, the TUI starts it again
 the way Hermes' launcher set it up and resumes the same session, saying so
@@ -3318,7 +3339,8 @@ answer, and the capability boundary.
 ### Install
 
 ```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+irm https://omher.app/install.ps1 | iex
+# same as: irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 omh setup
 omh doctor
 ```

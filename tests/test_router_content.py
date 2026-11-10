@@ -4131,7 +4131,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes", readme)
         self.assertIn("hermes skills tap add rlaope/oh-my-hermes", installation)
         self.assertIn("hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes", installation)
-        self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", readme)
+        self.assertIn("curl -fsSL https://omher.app/install | sh", readme)
         self.assertIn("https://omher.app/", readme)
         self.assertIn("[Documentation](docs/README.md)", readme)
         self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
@@ -4276,7 +4276,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertLess(readme.index("## Install"), readme.index("## What you get"))
         quick_start = readme.split("## Install", 1)[1].split("## What you get", 1)[0]
         self.assertIn(
-            "```sh\ncurl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh\nomh setup\n```",
+            "```sh\ncurl -fsSL https://omher.app/install | sh\nomh setup\n```",
             quick_start,
         )
         install_options = readme.split("<summary><b>Install options</b></summary>", 1)[1].split("</details>", 1)[0]
@@ -4497,19 +4497,25 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('src="assets/omh-logo-pinklight.png"', hero)
         self.assertIn("The ultrawork agent with", hero)
         self.assertIn(
-            "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
+            "curl -fsSL https://omher.app/install | sh",
             hero,
         )
         self.assertIn("omh setup", hero)
-        # Every image the landing page loads ships inside site/assets, and the
-        # one product capture, the real /dag-ulw TUI recording, is a <video>
-        # transcoded from assets/omh-dag-ulw-tui.gif.
+        # Every image the landing page loads ships inside site/assets. Two
+        # product captures are <video>s: the omher app film in the top block's
+        # window slot, and the real /dag-ulw TUI recording transcoded from
+        # assets/omh-dag-ulw-tui.gif.
         for src in re.findall(r'<img[^>]*\ssrc="([^"]+)"', site):
             with self.subTest(img=src):
                 self.assertTrue(src.startswith("assets/"), src)
                 self.assertTrue((Path("site") / src).is_file(), src)
         self.assertEqual(site.count('src="assets/sponsors/opengateway.svg"'), 1)
-        self.assertEqual(site.count("<video"), 1)
+        self.assertEqual(site.count("<video"), 2)
+        self.assertEqual(site.count('src="assets/omher-app.webm"'), 1)
+        self.assertEqual(site.count('src="assets/omher-app.mp4"'), 1)
+        for src in ("omher-app.webm", "omher-app.mp4", "omh-dag-ulw-tui.webm", "omh-dag-ulw-tui.mp4"):
+            with self.subTest(video=src):
+                self.assertTrue((Path("site") / "assets" / src).is_file(), src)
         self.assertEqual(site.count('src="assets/omh-dag-ulw-tui.webm"'), 1)
         self.assertEqual(site.count('src="assets/omh-dag-ulw-tui.mp4"'), 1)
         self.assertEqual(site.count('poster="assets/omh-dag-ulw-tui-poster.webp"'), 1)
@@ -4738,8 +4744,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="https://github.com/rlaope/oh-my-hermes"', docs_topbar)
         self.assertNotIn(">GitHub<", docs_topbar)
         install_section = site.split('id="install"', 1)[1].split("</section>", 1)[0]
-        self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", install_section)
-        self.assertIn("irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex", install_section)
+        self.assertIn("curl -fsSL https://omher.app/install | sh", install_section)
+        self.assertIn("irm https://omher.app/install.ps1 | iex", install_section)
         self.assertIn("omh setup", install_section)
         self.assertIn("omh update", install_section)
         self.assertIn("omh doctor", install_section)

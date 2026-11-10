@@ -259,7 +259,7 @@ class LostCallTests(unittest.TestCase):
                 if streaming:
                     app._on_event(Event("message.start", SID, {}))
                     app._on_event(Event("message.delta", SID, {"text": "still streaming"}))
-                type_text(app, "/usage")
+                type_text(app, "/btw what now")  # a command that runs during a turn too
                 app._on_input(Key(ENTER))
                 transcript = app.transcript
                 (echo,) = [block for block in transcript.blocks + transcript._held if isinstance(block, CommandBlock)]

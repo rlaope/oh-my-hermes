@@ -13,12 +13,14 @@ transcript) and runs on the second try. Answers are the recorded Hermes
 
 from __future__ import annotations
 
+from collections import deque
 import unittest
 
 from _tui_lines import lines_text
 from test_tui_gateway_contract import recorded_rows
 from test_tui_modes import SID, answer, drawn, make_app, notices, type_text
 from test_tui_panels import hud_payload
+from omh.tui import app as app_module
 from omh.tui import gateway_contract as contract
 from omh.tui import slash
 from omh.tui.app import MODEL_OPTIONS_REFUSED, PLACEHOLDER, REFUSAL_SENTENCES, SLOT_ARM_SECONDS, App
@@ -181,7 +183,7 @@ class ModelCommandTests(unittest.TestCase):
         self.assertIsNone(app.model_picker)
         value = "claude-opus-5-5 --provider anthropic --session"
         self.assertEqual(client.calls[-1], ("config.set", {"key": "model", "value": value, "session_id": SID}))
-        self.assertEqual(commands(app), [f"/model {value}"])  # one echo, the pick's
+        self.assertEqual(commands(app), ["/model claude-opus-5-5"])  # one echo, the pick's, as the row names it
         answer(app, client, {"key": "model", "value": "claude-opus-5-5", "scope": "session"})
         self.assertEqual(app.model, "claude-opus-5-5")
         self.assertIn("This session now runs claude-opus-5-5.", notices(app))
@@ -300,11 +302,59 @@ class ModelCommandTests(unittest.TestCase):
         self.assertNotIn("unsupported", said.lower())
         self.assertIn("hermes model", said)
 
-    def test_bare_model_waits_for_the_turn_to_end(self) -> None:
+    def test_bare_model_waits_in_the_queue_and_opens_the_picker_once_the_turn_ends(self) -> None:
+        # A pick switches the session, which Hermes does between turns: the whole command waits for the turn's end.
         app, client = make_app(busy=True)
         send(app, "/model")
         self.assertEqual(client.calls, [])
-        self.assertIn("between turns", notices(app, NOTICE_WARN)[-1])
+        self.assertEqual([line.text for line in app.queued], ["/model"])
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.calls[-1], ("model.options", {"session_id": SID}))
+        self.assertEqual(app.queued, deque())
+
+    def test_a_queued_guarded_model_holds_the_prompt_behind_it_until_its_confirm_is_settled(self) -> None:
+        # #2726 review: the confirm opened after config.set was answered, so the prompt went on the old model.
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        send(app, "/model claude-opus-5-5")
+        send(app, "go on with it")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        answer(app, client, {"key": "model", "value": "", "confirm_required": True, "confirm_message": "Opus costs 5x."})
+        self.assertIsNotNone(app.slot)
+        self.assertEqual(client.named("prompt.submit"), [])  # the confirm is open: the prompt waits
+        now[0] += SLOT_ARM_SECONDS
+        app._on_input(Key(DOWN))
+        app._on_input(Key(ENTER))  # switch anyway
+        self.assertEqual(client.calls[-1][1].get("confirm_expensive_model"), True)
+        self.assertEqual(client.named("prompt.submit"), [])  # the confirmed switch is still out
+        answer(app, client, {"key": "model", "value": "claude-opus-5-5"})
+        self.assertEqual(app.model, "claude-opus-5-5")
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
+
+    def test_a_queued_bare_model_holds_the_prompt_through_its_pick_and_the_confirm_it_asks(self) -> None:
+        now = [100.0]
+        app, client = make_app(busy=True, clock=lambda: now[0])
+        send(app, "/model")
+        send(app, "go on with it")
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+        answer(app, client, OPTIONS)
+        self.assertIsNotNone(app.model_picker)
+        self.assertEqual(client.named("prompt.submit"), [])  # the picker is open
+        for char in "opus-5-5":
+            app._on_input(Key(CHAR, char))
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        app._drain_after_queued_command()  # the loop's step after the pick: the switch it sent is the command's
+        self.assertEqual(client.named("prompt.submit"), [])  # the pick's switch is out
+        answer(app, client, {"key": "model", "value": "", "confirm_required": True, "confirm_message": "Opus costs 5x."})
+        self.assertEqual(client.named("prompt.submit"), [])  # its confirm is open
+        now[0] += SLOT_ARM_SECONDS
+        app._on_input(Key(ENTER))  # keep the model
+        self.assertIsNone(app.slot)
+        self.assertEqual(client.named("prompt.submit"), [])
+        app._drain_after_queued_command()  # the loop's step after that key: nothing of the command's is left
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
 
     def test_a_hermes_without_model_options_costs_the_picker_not_the_session(self) -> None:
         app, client = make_app()
@@ -615,6 +665,149 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(client.calls, [("slash.exec", {"command": "export -o profile.tar.gz", "session_id": SID})])
         send(app, "/export")
         self.assertEqual(client.calls[-1], ("slash.exec", {"command": "export", "session_id": SID}))
+
+
+
+def command_parts(app: App) -> list[list[str]]:
+    """Each command echo's rows under it, in order."""
+    blocks = [*app.transcript.blocks, *app.transcript._held]
+    return [[text for text, _level in block.parts] for block in blocks if isinstance(block, CommandBlock)]
+
+
+class ModelSwitchFeedbackTests(unittest.TestCase):
+    """A switch shows it is out under its echo until Hermes answers, and the answer says what Hermes did (audit A, 3
+    and 4; audit B, 7). The client here answers only when the test says, as a slow gateway would."""
+
+    SWITCHING = app_module.MODEL_SWITCHING_LINE.format(model="gpt-5.4")
+
+    def test_a_pending_row_stands_under_the_echo_until_the_answer_takes_its_place(self) -> None:
+        app, client = make_app()
+        send(app, "/model gpt-5.4")
+        self.assertEqual(command_parts(app), [[self.SWITCHING]])
+        self.assertTrue(any(self.SWITCHING in line for line in drawn(app)))  # drawn while Hermes has not answered
+        answer(app, client, {"key": "model", "value": "gpt-5.4", "scope": "session"})
+        self.assertEqual(command_parts(app), [[app_module.MODEL_SWITCHED_NOTICE.format(model="gpt-5.4")]])
+        self.assertFalse(any(self.SWITCHING in line for line in drawn(app)))
+
+    def test_a_refusal_or_no_answer_replaces_the_pending_row_too(self) -> None:
+        app, client = make_app()
+        send(app, "/model gpt-5.4")
+        answer(app, client, None, {"code": 4002, "message": "model 'gpt-5.4' not found"})
+        (parts,) = command_parts(app)
+        self.assertNotIn(self.SWITCHING, parts)
+        self.assertEqual(len(parts), 1)
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        send(app, "/model gpt-5.4")
+        now[0] += 3600
+        app._expire_calls()
+        seconds = app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS)
+        self.assertEqual(command_parts(app), [[app_module.CALL_EXPIRED_NOTICE.format(method="config.set", seconds=seconds)]])
+
+    def test_a_switch_hermes_made_global_says_it_is_the_default_for_new_sessions_too(self) -> None:
+        for scope, notice in (("global", app_module.MODEL_SWITCHED_GLOBAL_NOTICE),
+                              ("session", app_module.MODEL_SWITCHED_NOTICE), (None, app_module.MODEL_SWITCHED_NOTICE)):
+            with self.subTest(scope=scope):
+                app, client = make_app()
+                send(app, "/model gpt-5.4")
+                answer(app, client, {"key": "model", "value": "gpt-5.4", "scope": scope})
+                self.assertEqual(command_parts(app), [[notice.format(model="gpt-5.4")]])
+
+    def dropped(self, app: App) -> None:
+        app._on_event(Event("notification.show", SID, {
+            "text": "Stayed on m-a: switching to gpt-5.4 needs confirmation. Pick it again to confirm.",
+            "level": "warn", "kind": "ttl", "ttl_ms": 12000, "key": app_module.MODEL_SWITCH_DROPPED_KEY}))
+
+    def test_a_deferred_switch_hermes_drops_at_turn_start_is_a_lasting_row_naming_it(self) -> None:
+        # Typed during a turn, /model waits for its end (`RUNS_DURING_TURN`); Hermes still defers a switch for a
+        # session whose agent runs on a compute host, and for one that lands as a turn starts.
+        app, client = make_app()
+        send(app, "/model gpt-5.4")
+        answer(app, client, {"key": "model", "value": "gpt-5.4", "deferred": True, "scope": "session"})
+        self.assertIn(app_module.MODEL_DEFERRED_NOTICE.format(model="gpt-5.4"), notices(app))
+        self.dropped(app)
+        self.assertIsNone(app.notification)  # not the 12 s row above the composer
+        said = [block.text for block in [*app.transcript.blocks, *app.transcript._held] if hasattr(block, "text")]
+        self.assertIn(app_module.MODEL_DROPPED_NOTICE.format(
+            model="gpt-5.4",
+            reason="Stayed on m-a: switching to gpt-5.4 needs confirmation. Pick it again to confirm."), said)
+
+    def test_a_drop_two_turns_after_the_deferral_does_not_name_that_old_switch(self) -> None:
+        app, client = make_app()
+        send(app, "/model gpt-5.4")
+        answer(app, client, {"key": "model", "value": "gpt-5.4", "deferred": True, "scope": "session"})
+        app.turns_ended += 2  # the turn it was held for has come and gone
+        self.dropped(app)
+        said = [block.text for block in [*app.transcript.blocks, *app.transcript._held] if hasattr(block, "text")]
+        self.assertTrue(any(text.startswith("A model switch held for this turn did not happen") for text in said))
+        self.assertFalse(any(text.startswith("The switch to gpt-5.4") for text in said))
+
+    def test_a_drop_with_no_deferred_switch_of_this_tui_still_lands_and_other_notifications_do_not(self) -> None:
+        app, _client = make_app()
+        self.dropped(app)
+        self.assertTrue(any(block.text.startswith("A model switch held for this turn did not happen")
+                            for block in app.transcript.blocks if hasattr(block, "text")))
+        app._on_event(Event("notification.show", SID, {"text": "Indexing", "level": "info", "key": "other"}))
+        self.assertIsNotNone(app.notification)
+        self.assertFalse(any(getattr(block, "text", "") == "Indexing" for block in app.transcript.blocks))
+
+
+class ModelPickerLoadingTests(unittest.TestCase):
+    """Bare /model opens its picker at once: typing while the list loads filters it, Enter waits, Esc cancels
+    (audit A, 5); the current row switches nothing (6); the echo names the model, not the flags (audit B, 10)."""
+
+    def test_typing_while_the_list_loads_is_the_filter_and_enter_waits(self) -> None:
+        app, client = make_app()
+        send(app, "/model")
+        self.assertTrue(app.model_picker.loading)
+        self.assertTrue(any(app_module.LIST_WAIT_LINE in line for line in drawn(app)))
+        type_text(app, "opus-5-5")
+        app._on_input(Key(ENTER))  # before the list: nothing is sent, nothing goes as a prompt
+        self.assertEqual(client.calls, [("model.options", {"session_id": SID})])
+        self.assertEqual(app.composer.text, "")
+        answer(app, client, OPTIONS)
+        self.assertFalse(app.model_picker.loading)
+        self.assertEqual(app.model_picker.query, "opus-5-5")
+        self.assertEqual([row.model for row in app.model_picker.visible()], ["claude-opus-5-5"])
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1][1]["value"], "claude-opus-5-5 --provider anthropic --session")
+
+    def test_esc_while_the_list_loads_closes_it_and_the_list_opens_nothing(self) -> None:
+        app, client = make_app()
+        send(app, "/model")
+        app._on_input(Key(ESCAPE))
+        self.assertIsNone(app.model_picker)
+        self.assertFalse(any(app_module.LIST_WAIT_LINE in line for line in drawn(app)))
+        answer(app, client, OPTIONS)
+        self.assertIsNone(app.model_picker)
+        self.assertEqual(notices(app), [])
+
+    def test_a_refused_list_closes_the_loading_picker(self) -> None:
+        app, client = make_app()
+        send(app, "/model")
+        answer(app, client, None, {"code": 5001, "message": "boom"})
+        self.assertIsNone(app.model_picker)
+        self.assertEqual(len(notices(app)), 1)
+
+    def test_the_current_row_switches_nothing(self) -> None:
+        app, client = make_app()
+        send(app, "/model")
+        answer(app, client, OPTIONS)
+        self.assertTrue(app.model_picker.visible()[app.model_picker.index].current)
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("model.options", {"session_id": SID})])
+        self.assertIsNone(app.model_picker)
+        self.assertEqual(notices(app), [app_module.MODEL_ALREADY_NOTICE.format(model=OPTIONS["model"])])
+        self.assertEqual(commands(app), [])
+
+    def test_a_pick_echoes_the_model_and_sends_its_flags(self) -> None:
+        app, client = make_app()
+        send(app, "/model")
+        answer(app, client, OPTIONS)
+        app._on_input(Key(DOWN))
+        app._on_input(Key(ENTER))
+        self.assertEqual(commands(app), ["/model claude-fable-5.1"])
+        self.assertEqual(client.calls[-1][1]["value"], "claude-fable-5.1 --provider anthropic --session")
 
 
 if __name__ == "__main__":

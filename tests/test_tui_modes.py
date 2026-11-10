@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import base64
+from collections import deque
 from pathlib import Path
 import tempfile
 import time
@@ -53,7 +54,7 @@ from omh.tui.modes import EFFORT_CYCLE
 from omh.tui.pager import Pager
 from omh.tui.screen import CLEAR_SCREEN_AND_SCROLLBACK
 from omh.tui.session_picker import SessionPicker, SessionRow
-from omh.tui.slash import parse_slash, plan_invocation
+from omh.tui.slash import RUNS_DURING_TURN, parse_slash, plan_invocation
 from omh.tui.style import Style
 from omh.tui.theme import DEFAULT_THEME
 from omh.tui.transcript import (
@@ -253,51 +254,47 @@ class SteerTests(unittest.TestCase):
         (warning,) = steers(app)
         self.assertEqual(warning, "⧗ queued — Hermes refused the steer (agent does not support steer) · keep this")
 
-    def test_a_steer_hermes_does_not_take_never_interrupts_the_turn_whatever_the_busy_mode(self) -> None:
-        # Under `interrupt` (Hermes' default) or `steer`, a prompt.submit mid-turn redirects the turn.
+    def test_a_steer_hermes_does_not_take_never_interrupts_the_turn(self) -> None:
+        # Sent as a prompt.submit mid-turn, Hermes' `interrupt` or `steer` busy mode would redirect the turn.
         refusals = {"rejected": {"result": {"status": "rejected", "text": "and the docs"}},
                     "4010": {"error": {"code": 4010, "message": "agent does not support steer"}}}
-        for mode in ("interrupt", "steer", "queue"):
-            for name, frame in refusals.items():
-                with self.subTest(mode=mode, refusal=name):
-                    app, client = make_app(busy=True)
-                    app.busy_mode = mode
-                    type_text(app, "and the docs")
-                    app._on_input(CTRL_ENTER)
-                    if name == "4010":
-                        answer(app, client, error=NO_REDIRECT)
-                    answer(app, client, frame.get("result"), frame.get("error"))
-                    self.assertEqual(client.named("prompt.submit"), [])
-                    self.assertEqual([text for text, *_ in app.queued], ["and the docs"])
-                    app._on_event(Event("message.complete", SID, {"text": "done"}))  # the turn ends: it goes now
-                    self.assertEqual(
-                        client.named("prompt.submit"), [{"session_id": SID, "text": "and the docs", "queued": True}]
-                    )
+        for name, frame in refusals.items():
+            with self.subTest(refusal=name):
+                app, client = make_app(busy=True)
+                type_text(app, "and the docs")
+                app._on_input(CTRL_ENTER)
+                if name == "4010":
+                    answer(app, client, error=NO_REDIRECT)
+                answer(app, client, frame.get("result"), frame.get("error"))
+                self.assertEqual(client.named("prompt.submit"), [])
+                self.assertEqual([text for text, *_ in app.queued], ["and the docs"])
+                app._on_event(Event("message.complete", SID, {"text": "done"}))  # the turn ends: it goes now
+                self.assertEqual(
+                    client.named("prompt.submit"), [{"session_id": SID, "text": "and the docs", "queued": True}]
+                )
 
     def test_a_steer_refused_once_the_session_is_idle_goes_as_a_prompt_at_once(self) -> None:
-        for mode in ("interrupt", "queue"):
-            with self.subTest(mode=mode):
-                app, client = make_app(busy=True)
-                app.busy_mode = mode
-                type_text(app, "too late")
-                app._on_input(CTRL_ENTER)
-                app.turn_pending = False
-                answer(app, client, error=NO_REDIRECT)
-                answer(app, client, error={"code": 4010, "message": "agent does not support steer"})
-                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "too late"}])
-                self.assertIn("sent as a prompt — Hermes refused the steer (agent", steers(app)[0])
-
-    def test_in_plan_mode_the_refused_steer_waits_as_the_plan_prompt(self) -> None:
         app, client = make_app(busy=True)
-        app.busy_mode = "interrupt"
+        type_text(app, "too late")
+        app._on_input(CTRL_ENTER)
+        app.turn_pending = False
+        answer(app, client, error=NO_REDIRECT)
+        answer(app, client, error={"code": 4010, "message": "agent does not support steer"})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "too late"}])
+        self.assertIn("sent as a prompt — Hermes refused the steer (agent", steers(app)[0])
+
+    def test_in_plan_mode_the_refused_steer_waits_as_the_plan_command(self) -> None:
+        app, client = make_app(busy=True)
         show_mode(app, MODE_PLAN)
         type_text(app, "fix the flaky test")
         app._on_input(CTRL_ENTER)
         answer(app, client, {"status": "rejected", "text": "fix the flaky test"})
+        self.assertEqual(client.named("slash.exec"), [])  # /plan waits for the turn's end, as any command does
+        self.assertEqual([text for text, *_ in app.queued], ["fix the flaky test"])
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
         self.assertEqual(client.calls[-1], ("slash.exec", {"command": "plan fix the flaky test", "session_id": SID}))
         answer(app, client, {"type": "send", "message": PLAN_PROMPT})
-        self.assertEqual(client.named("prompt.submit"), [])
-        self.assertEqual([text for text, *_ in app.queued], [PLAN_PROMPT])
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": PLAN_PROMPT, "queued": True}])
 
     def test_the_notice_for_a_taken_steer_is_true_of_both_things_hermes_means_by_queued(self) -> None:
         # Hermes 6c61c3e27d answers {"status": "queued", "text": ...} when the turn takes the steer
@@ -1163,6 +1160,250 @@ class SteerTests(unittest.TestCase):
         self.assertEqual(callers, {"_steer_or_submit", "_steer_command", "_send_queued_now"})
 
 
+class BusyQueueTests(unittest.TestCase):
+    """While a turn runs, Enter queues what it sends, slash commands too, whatever Hermes' busy mode says; only the
+    commands `slash.RUNS_DURING_TURN` names run at once, and only Esc or /stop interrupts."""
+
+    TURN_METHODS = ("session.interrupt", "session.redirect", "session.steer", "prompt.submit")
+
+    def settings(self, mode: str | None) -> tuple[App, RecordingClient]:
+        """A busy app whose `config.get` answered with `mode` as `display.busy_input_mode` (None: no key)."""
+        app, client = make_app(busy=True)
+        display = {} if mode is None else {"busy_input_mode": mode}
+        app._take_settings({"config": {"display": display}})
+        return app, client
+
+    def turn_calls(self, client: RecordingClient) -> list[tuple[str, dict]]:
+        return [(method, params) for method, params in client.calls if method in self.TURN_METHODS]
+
+    def end_turn(self, app: App) -> None:
+        app._on_event(Event("message.complete", SID, {"text": "done"}))
+
+    def test_enter_during_a_turn_queues_whatever_the_busy_mode_and_never_touches_the_turn(self) -> None:
+        for mode in ("queue", "steer", "interrupt", None):
+            with self.subTest(busy_input_mode=mode):
+                app, client = self.settings(mode)
+                type_text(app, "and the docs")
+                app._on_input(Key(ENTER))
+                self.assertEqual(self.turn_calls(client), [])  # no interrupt, redirect, steer or submit
+                self.assertFalse(app.stop_asked)
+                self.assertEqual([line.text for line in app.queued], ["and the docs"])
+                self.assertEqual(send_now_row(app), "  ctrl+j to send now · ↑ to edit")
+                self.end_turn(app)
+                self.assertEqual(self.turn_calls(client),
+                                 [("prompt.submit", {"session_id": SID, "text": "and the docs", "queued": True})])
+
+    def test_a_command_typed_during_a_turn_waits_and_runs_in_order_once_it_ends(self) -> None:
+        for mode in ("queue", "interrupt"):
+            with self.subTest(busy_input_mode=mode):
+                app, client = self.settings(mode)
+                type_text(app, "/compress")
+                app._on_input(Key(ENTER))
+                type_text(app, "and then this")
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("slash.exec"), [])
+                self.assertEqual([line.shown or line.text for line in app.queued], ["/compress", "and then this"])
+                self.assertIsNone(send_now_row(app))  # the oldest is a command: the send-now key has nothing to send
+                self.end_turn(app)
+                self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
+                self.assertEqual(client.named("prompt.submit"), [])  # the prompt waits for the compression's answer
+                self.assertEqual([line.text for line in app.queued], ["and then this"])
+                answer(app, client, {"output": "Compressed 40 messages."})  # no loop step: the answer drains
+                self.assertEqual(client.named("prompt.submit"),
+                                 [{"session_id": SID, "text": "and then this", "queued": True}])
+                self.assertEqual(app.queued, deque())
+                answer(app, client, {"status": "streaming"})  # the prompt's own answer sends nothing more
+                self.assertEqual(len(client.named("prompt.submit")), 1)
+                self.assertEqual(len(client.named("slash.exec")), 1)
+
+    def compress_out_with_b_queued(self) -> tuple[App, RecordingClient]:
+        """[/compress, B] queued; the turn ended, so /compress went and is still out."""
+        app, client = make_app(busy=True)
+        for text in ("/compress", "B"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        self.end_turn(app)
+        self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
+        return app, client
+
+    def test_a_turn_that_ends_while_a_queued_command_is_out_sends_nothing_past_it(self) -> None:
+        app, client = self.compress_out_with_b_queued()
+        app._on_event(Event("message.start", SID, {}))  # a turn of Hermes' own, while /compress is out
+        self.end_turn(app)
+        self.assertEqual(client.named("prompt.submit"), [])
+        answer(app, client, {"output": "Compressed."})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "B", "queued": True}])
+
+    def test_what_is_sent_while_a_queued_command_is_out_goes_behind_the_queue(self) -> None:
+        app, client = self.compress_out_with_b_queued()
+        type_text(app, "C")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [])
+        self.assertEqual([line.text for line in app.queued], ["B", "C"])
+        answer(app, client, {"output": "Compressed."})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "B", "queued": True}])
+        self.assertEqual([line.text for line in app.queued], ["C"])  # behind B's turn
+
+    def test_up_takes_a_queued_command_back_with_its_paste_chips(self) -> None:
+        app, _client = make_app(busy=True)
+        type_text(app, "/compress ")
+        app._on_input(Paste("focus on the auth module\nand its tests\nand its fixtures\nand nothing else"))
+        typed = app.composer.text
+        self.assertIn("[Pasted", typed)
+        app._on_input(Key(ENTER))
+        (line,) = app.queued
+        self.assertEqual(line.shown, typed)
+        self.assertTrue(line.text.startswith("/compress focus on the auth module"))
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, typed)  # the chip again, not its text
+        self.assertEqual(app.composer.expanded(), line.text)
+
+    def test_a_command_with_nothing_out_lets_the_next_line_go_at_once(self) -> None:
+        app, client = make_app(busy=True)
+        for text in ("/details", "/frobnicate", "next"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        self.assertEqual([line.text for line in app.queued], ["/frobnicate", "next"])  # /details ran at once
+        self.end_turn(app)
+        self.assertEqual(client.named("slash.exec"), [{"command": "frobnicate", "session_id": SID}])
+        self.assertEqual(client.named("prompt.submit"), [])
+        answer(app, client, error={"code": 4018, "message": "not mine"})  # falls back to command.dispatch
+        self.assertEqual(client.calls[-1], ("command.dispatch", {"name": "frobnicate", "arg": "", "session_id": SID}))
+        self.assertEqual(client.named("prompt.submit"), [])  # the fallback is the command's too: still out
+        answer(app, client, {"type": "exec", "output": "done"})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "next", "queued": True}])
+
+    def test_every_command_on_the_allow_list_runs_at_once_during_a_turn(self) -> None:
+        self.assertEqual(RUNS_DURING_TURN, frozenset({
+            "stop", "steer", "queue", "btw", "bg", "help", "keys", "whats-new", "redraw", "history", "todos",
+            "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
+            "yolo", "effort",
+        }))
+        # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
+        for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse", "worktree",
+                     "snapshot"):
+            with self.subTest(name=name):
+                app, client = make_app(busy=True)
+                with patch.object(App, "_route_slash") as ran:
+                    type_text(app, f"/{name} x")
+                    app._on_input(Key(ENTER))
+                self.assertEqual(app.queued, deque())
+                (call,) = ran.call_args_list
+                self.assertEqual(call.args[0].name, name)
+
+    def test_yolo_effort_and_a_reasoning_level_set_the_session_at_once_during_a_turn_and_when_idle(self) -> None:
+        # The typed forms of Shift+Tab's and Ctrl+T's calls: one `config.set` each, which never touches the turn.
+        for typed, call in (("/yolo", YOLO_ON_CALL), ("/effort high", effort_call("high")),
+                            ("/reasoning high", effort_call("high")), ("/Reasoning HIGH", effort_call("high"))):
+            for busy in (True, False):
+                with self.subTest(typed=typed, busy=busy):
+                    app, client = make_app(busy=busy)
+                    type_text(app, typed)
+                    app._on_input(Key(ENTER))
+                    self.assertEqual(app.queued, deque())
+                    self.assertEqual(client.calls, [call])
+                    self.assertEqual(self.turn_calls(client), [])
+
+    def test_reasoning_without_a_level_waits_for_the_turn_as_hermes_own_command(self) -> None:
+        for typed in ("/reasoning", "/reasoning hide", "/reasoning show", "/reasoning high --global"):
+            with self.subTest(typed=typed):
+                app, client = make_app(busy=True)
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual([line.text for line in app.queued], [typed])
+                self.assertEqual(client.calls, [])
+                self.end_turn(app)
+                self.assertEqual(client.named("slash.exec"), [{"command": typed[1:], "session_id": SID}])
+
+    def test_stop_btw_and_bg_reach_hermes_during_the_turn(self) -> None:
+        for typed in ("/stop", "/btw what was that file", "/bg write the changelog"):
+            with self.subTest(typed=typed):
+                app, client = make_app(busy=True)
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("slash.exec"), [{"command": typed[1:], "session_id": SID}])
+                self.assertEqual(app.queued, deque())
+                self.assertEqual(app.stop_asked, typed == "/stop")
+
+    def test_every_other_command_queues_during_a_turn_and_runs_at_once_when_idle(self) -> None:
+        typed = ("/compress", "/compact here 4", "/new", "/clear", "/undo", "/retry", "/resume", "/sessions s-2",
+                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/reasoning", "/reasoning hide", "/usage", "/cost",
+                 "/status", "/omh-model", "/reload-skills", "/export", "/frobnicate",
+                 "/omh-codebase-uml map it", "/Compress")
+        for text in typed:
+            with self.subTest(text=text):
+                app, client = make_app(busy=True)
+                with patch.object(App, "_route_slash") as ran:
+                    type_text(app, text)
+                    app._on_input(Key(ENTER))
+                    self.assertEqual(ran.call_args_list, [])
+                    self.assertEqual([(line.text, line.command is not None) for line in app.queued], [(text, True)])
+                    self.assertEqual(self.turn_calls(client), [])
+                idle, _client = make_app()
+                with patch.object(App, "_route_slash") as ran:
+                    type_text(idle, text)
+                    idle._on_input(Key(ENTER))
+                self.assertEqual(idle.queued, deque())
+                self.assertEqual(len(ran.call_args_list), 1)
+
+    def test_the_send_now_key_never_steers_a_queued_command(self) -> None:
+        for data in (CTRL_ENTER_BYTES, b"\n"):
+            with self.subTest(data=data):
+                app, client = make_app(busy=True)
+                for text in ("/compress", "a prompt"):
+                    type_text(app, text)
+                    app._on_input(Key(ENTER))
+                for event in app.decoder.feed(data):
+                    app._on_input(event)
+                self.assertEqual(self.turn_calls(client), [])
+                self.assertEqual([line.text for line in app.queued], ["/compress", "a prompt"])
+                self.assertFalse(app._queue_head_steers())
+
+    def test_a_plan_mode_prompt_during_a_turn_waits_as_its_plan_command(self) -> None:
+        app, client = make_app(busy=True)
+        show_mode(app, MODE_PLAN)
+        type_text(app, "fix the flaky test")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [])
+        self.assertEqual([line.text for line in app.queued], ["fix the flaky test"])
+        self.assertFalse(app._queue_head_steers())  # a plan request never lands in a turn that can edit
+        self.end_turn(app)
+        self.assertEqual(client.calls[-1], ("slash.exec", {"command": "plan fix the flaky test", "session_id": SID}))
+        answer(app, client, {"type": "send", "message": PLAN_PROMPT})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": PLAN_PROMPT, "queued": True}])
+
+    def test_up_takes_a_queued_command_back_on_its_own(self) -> None:
+        app, _client = make_app(busy=True)
+        for text in ("/compress", "first", "second", "/usage", "third"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/compress")  # never joined: joined, the prompts would be its argument
+        app.composer.replace(0, len(app.composer.text), "")
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "first\nsecond")  # the prompts up to the next command
+        self.assertEqual([line.text for line in app.queued], ["/usage", "third"])
+
+    def test_lines_queued_after_a_new_session_command_go_into_the_session_it_opens(self) -> None:
+        app, client = make_app(busy=True)
+        for text in ("/new", "hello there"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        self.end_turn(app)
+        self.assertEqual(client.calls[-1][0], "session.create")
+        self.assertEqual(app.queued, deque())
+        self.assertEqual([line.text for line in app.switch_held], ["hello there"])
+        answer(app, client, {"session_id": "live-2", "stored_session_id": "stored-2", "info": {"model": "m"}})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": "live-2", "text": "hello there", "queued": True}])
+
+    def test_idle_a_command_runs_at_once(self) -> None:
+        app, client = make_app()
+        type_text(app, "/compress")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("slash.exec"), [{"command": "compress", "session_id": SID}])
+        self.assertEqual(app.queued, deque())
+
+
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class DocumentedSteerTests(unittest.TestCase):
     """What INSTALLATION and the OMH TUI boundary page say a steer does, held to the code."""
@@ -1175,13 +1416,14 @@ class DocumentedSteerTests(unittest.TestCase):
     def test_the_label_and_the_fallback_are_the_ones_the_code_uses(self) -> None:
         installation = self.prose("docs/INSTALLATION.md")
         self.assertIn("a dim prompt row (`❯ <text>`)", installation)
-        self.assertIn("joins the OMH TUI's own queue (`⧗`) and goes when the turn ends, whatever "
-                      "`display.busy_input_mode` says, so it never interrupts the turn", installation)
+        self.assertIn("joins the OMH TUI's own queue (`⧗`) and goes when the turn ends, as everything sent during a "
+                      "turn does, so it never interrupts the turn", installation)
         self.assertNotIn("`↪ steered:`", installation)
         unanswered = app_module.STEER_UNANSWERED_OUTCOME.format(seconds=app_module.CALL_ANSWER_SECONDS)
         self.assertIn(f"`⧗ {unanswered} · <text>`", installation)  # given back, never sent again
-        self.assertIn("A steer Hermes does not take waits in the TUI's own queue for the running turn to end, whatever "
-                      "the busy mode, so it never interrupts that turn.", self.prose("docs/OMH-TUI-BOUNDARY.md"))
+        self.assertIn("A steer Hermes does not take waits in the TUI's own queue for the running turn to end, as "
+                      "everything sent during a turn does, so it never interrupts that turn.",
+                      self.prose("docs/OMH-TUI-BOUNDARY.md"))
         seconds = f"{app_module.CALL_ANSWER_SECONDS:g}"
         self.assertIn(f"A steer Hermes does not answer within its answer budget ({seconds} s, longer when held behind a "
                       "/compress) goes back to the composer and is never re-sent.",
@@ -1996,7 +2238,7 @@ class LiveTailTickTests(unittest.TestCase):
 
 
 class StartupWaitsOnlyForTheSessionTests(unittest.TestCase):
-    """The first frame needs the session alone: the busy mode and the catalog are answered in the loop."""
+    """The first frame needs the session alone: the settings and the catalog are answered in the loop."""
 
     def test_only_the_session_call_is_awaited(self) -> None:
         class Blocking(RecordingClient):
@@ -2016,11 +2258,8 @@ class StartupWaitsOnlyForTheSessionTests(unittest.TestCase):
             [method for method, _params in client.calls],
             ["config.get", "commands.catalog", "session.list", "config.get", "model.options"],  # the default's two last
         )
-        self.assertEqual(app.busy_mode, "queue")  # Hermes' own default, until config.get answers
         type_text(app, "/")
         self.assertTrue(app._menu_rows())  # no catalog yet: the TUI's own commands still complete
-        app._on_response(Response(1, {"config": {"display": {"busy_input_mode": "interrupt"}}}, None))
-        self.assertEqual(app.busy_mode, "interrupt")
 
 
 class RedrawTailTests(unittest.TestCase):
@@ -2906,30 +3145,38 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(client.calls, [("slash.exec", {"command": "learn the build\nplain prompt", "session_id": SID})])
 
     def test_a_prompt_a_command_built_comes_back_as_what_was_typed(self) -> None:
-        # Plan mode wrote /plan around the prompt, so the prompt comes back; a typed command comes back as typed.
+        # Plan mode wrote /plan around the prompt, so the prompt comes back; a typed command comes back as typed, on
+        # its own: joined to the line before, it would be that prompt's text.
         app, client = make_app(busy=True)
         show_mode(app, MODE_PLAN)
         type_text(app, "fix the flaky test")
         app._on_input(Key(ENTER))
-        answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
-        answer(app, client, {"type": "send", "message": PLAN_PROMPT})
         show_mode(app, MODE_NORMAL)
         type_text(app, "/learn the build")
         app._on_input(Key(ENTER))
-        answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
-        answer(app, client, {"type": "skill", "message": "a long skill prompt", "display": "learn: the build"})
-        self.assertEqual(
-            list(app.queued),
-            [
-                QueuedLine(PLAN_PROMPT, "/plan fix the flaky test", "fix the flaky test"),
-                QueuedLine("a long skill prompt", "learn: the build", "/learn the build"),
-            ],
-        )
+        self.assertEqual(client.calls, [])  # both wait for the turn's end
+        self.assertEqual([(line.text, line.shown) for line in app.queued],
+                         [("fix the flaky test", "/plan fix the flaky test"), ("/learn the build", "/learn the build")])
         rows = [line_text(line) for line in app._slot_lines(80, 24)]
         self.assertEqual(rows[0], "⧗ /plan fix the flaky test")
-        self.assertTrue(rows[1].startswith("⧗ learn: the build"))
+        self.assertTrue(rows[1].startswith("⧗ /learn the build"))
         app._on_input(Key(UP))
-        self.assertEqual(app.composer.text, "fix the flaky test\n/learn the build")
+        self.assertEqual(app.composer.text, "fix the flaky test")
+        app.composer.replace(0, len(app.composer.text), "")
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/learn the build")
+
+    def test_a_skill_prompt_queued_behind_a_turn_comes_back_as_the_command_typed(self) -> None:
+        app, client = make_app()
+        type_text(app, "/learn the build")
+        app._on_input(Key(ENTER))  # no turn runs: it goes now
+        app.turn_pending = True  # a turn started before Hermes answered
+        answer(app, client, error={"code": contract.NOT_MINE, "message": "pending-input command"})
+        answer(app, client, {"type": "skill", "message": "a long skill prompt", "display": "learn: the build"})
+        self.assertEqual(list(app.queued), [QueuedLine("a long skill prompt", "learn: the build", "/learn the build")])
+        self.assertTrue(line_text(app._slot_lines(80, 24)[0]).startswith("⧗ learn: the build"))
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/learn the build")
 
 
 class InfoLineModeTests(unittest.TestCase):
@@ -3204,6 +3451,275 @@ class LeaderLabelTests(unittest.TestCase):
                 line = app._info_line(width)
                 self.assertIn("NORMAL · SPC", line_text(line))
                 self.assertLessEqual(line_width(line), width)
+
+
+
+def info_of(app: App) -> str:
+    return info_row_of(drawn(app))
+
+
+class YoloCommandTests(unittest.TestCase):
+    """`/yolo` goes through Shift+Tab's per-session call, never `slash.exec`: Hermes runs that in a worker apart from
+    the live agent, which then kept asking, and left a flag a later resume turned approvals off by (audit A, 1)."""
+
+    def run_yolo(self, app: App, arg: str = "") -> None:
+        type_text(app, f"/yolo {arg}".rstrip())
+        app._on_input(Key(ENTER))
+
+    def test_bare_yolo_turns_approvals_off_and_back_on_and_says_so_under_its_echo(self) -> None:
+        app, client = make_app()
+        self.run_yolo(app)
+        self.assertEqual(client.calls, [YOLO_ON_CALL])
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual((app.mode, app.yolo_by_tui), (MODE_ACCEPT, True))
+        self.assertEqual(notices(app), [modes_module.YOLO_ON_NOTICE])
+        self.run_yolo(app)
+        self.assertEqual(client.calls[-1], YOLO_OFF_CALL)
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(app.mode, MODE_NORMAL)  # /yolo leaves plan as it was; only Shift+Tab steps on to plan
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_OFF_NOTICE)
+        self.assertEqual([method for method, _params in client.calls], ["config.set", "config.set"])  # no slash.exec
+
+    def test_yolo_off_keeps_plan_on(self) -> None:
+        app, client = in_accept()
+        app.plan_mode = True
+        self.run_yolo(app, "off")
+        self.assertEqual(client.calls, [YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_yolo_on_already_on_an_unknown_word_and_a_call_out_send_nothing(self) -> None:
+        app, client = in_accept()
+        self.run_yolo(app, "on")
+        self.assertEqual(client.calls, [])
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_ALREADY_NOTICE.format(state="off"))
+        self.run_yolo(app, "maybe")
+        self.assertEqual(client.calls, [])
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_USAGE_NOTICE.format(arg="maybe"))
+        app, client = make_app()
+        self.run_yolo(app, "off")
+        self.assertEqual((client.calls, notices(app)[-1]), ([], modes_module.YOLO_ALREADY_NOTICE.format(state="on")))
+        app._on_input(SHIFT_TAB)
+        self.run_yolo(app)
+        self.assertEqual(client.calls, [YOLO_ON_CALL])
+        self.assertEqual(notices(app)[-1], modes_module.YOLO_WAIT_NOTICE)
+
+    def test_the_tui_turns_off_what_yolo_turned_on_before_it_leaves_the_session(self) -> None:
+        app, client = make_app()
+        self.run_yolo(app)
+        answer(app, client, YOLO_IS_ON)
+        app._new_session("")
+        answer(app, client, {"session_id": "live-2", "info": {}})
+        self.assertIn(YOLO_OFF_CALL, client.calls[1:])  # so a resume does not find approvals off
+
+    def test_a_refused_yolo_says_so_and_shows_accept_off(self) -> None:
+        app, client = make_app()
+        self.run_yolo(app)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        self.assertNotIn(modes_module.YOLO_ON_NOTICE, notices(app))
+        self.assertTrue(any("did not turn approvals off" in text for text in notices(app, NOTICE_ERROR)))
+        self.assertEqual(client.calls[-1], YOLO_OFF_CALL)  # the explicit switch-back
+
+
+class ReasoningCommandTests(unittest.TestCase):
+    """`/reasoning <level>` sets the live session's effort as `/effort` does (audit A, 1); its other forms are Hermes'."""
+
+    def test_a_level_goes_as_config_set_and_says_the_level_set(self) -> None:
+        app, client = make_app()
+        type_text(app, "/reasoning high")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [effort_call("high")])
+        answer(app, client, effort_set("high"))
+        self.assertEqual(app.effort, "high")
+        self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+
+    def test_anything_but_a_level_still_goes_to_hermes_as_typed(self) -> None:
+        for typed in ("/reasoning", "/reasoning hide", "/reasoning high --global", "/reasoning reset"):
+            with self.subTest(typed=typed):
+                app, client = make_app()
+                type_text(app, typed)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.calls, [("slash.exec", {"command": typed[1:], "session_id": SID})])
+
+
+class ShiftTabWhileYoloCallOutTests(unittest.TestCase):
+    """Presses made while a yolo call is out are counted, shown at once, and applied once it is answered (audit A, 2;
+    audit B, 8): never left on accept all when the person pressed past it."""
+
+    def test_two_quick_presses_end_in_plan(self) -> None:
+        app, client = make_app(cols=120)
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all on…", info_of(app))  # dimmed at once, before Hermes answers
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏸ plan mode on…", info_of(app))
+        self.assertEqual(client.calls, [YOLO_ON_CALL])  # one call out at a time
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # on its way to plan, not left in accept
+        self.assertIn("⏸ plan mode on…", info_of(app))
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(app.mode, MODE_PLAN)
+        self.assertIn("⏸ plan mode on (", info_of(app))
+        self.assertNotIn("…", info_of(app).split("  ")[0])
+        self.assertEqual(notices(app), [])
+
+    def test_three_quick_presses_end_in_normal_with_approvals_on(self) -> None:
+        app, client = make_app()
+        for _ in range(3):
+            app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all off…", info_of(app))
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual((app.mode, app.approvals_off), (MODE_NORMAL, False))
+
+    def test_a_press_from_accept_and_back_sends_nothing_more(self) -> None:
+        app, client = in_accept()
+        app._on_input(SHIFT_TAB)  # off, heading for plan
+        for _ in range(2):
+            app._on_input(SHIFT_TAB)  # plan → normal → accept again
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_OFF_CALL, YOLO_ON_CALL])
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+
+    def test_presses_after_a_call_that_confirms_nothing_are_dropped(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # only the switch-back
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_NORMAL)
+
+    def test_presses_kept_for_an_unanswered_call_are_dropped(self) -> None:
+        # Three presses lead back to normal; were that target kept past the expiry, the fresh press's plan would be
+        # carried on to normal once its off is answered.
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        for _ in range(3):
+            app._on_input(SHIFT_TAB)
+        now[0] += 3600
+        app._expire_calls()
+        self.assertEqual(app.mode, MODE_ACCEPT)  # unanswered: approvals may be off, shown as the TUI's own
+        self.assertEqual(notices(app), [modes_module.YOLO_UNANSWERED_NOTICE.format(
+            seconds=app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS))])
+        app._on_input(SHIFT_TAB)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])  # exactly one call for the fresh press
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_presses_while_the_switch_back_is_out_are_applied_once_it_is_confirmed(self) -> None:
+        app, client = make_app(cols=120)
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})  # refused: the switch-back goes
+        app._on_input(SHIFT_TAB)
+        self.assertIn("⏵⏵ accept all on…", info_of(app))
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL, YOLO_ON_CALL])  # the press the label showed
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+
+    def test_presses_while_a_failed_switch_back_was_out_are_dropped(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        answer(app, client, {"key": "yolo", "value": "1", "scope": "global"})
+        app._on_input(SHIFT_TAB)
+        answer(app, client, None, {"code": 5001, "message": "boom"})
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_ACCEPT)  # approvals may be off: shown, and nothing more is sent
+        self.assertNotIn("…", info_of(app))
+        # The press made during it (to accept all) is gone: a fresh press goes from accept to plan, and nothing after.
+        app._on_input(SHIFT_TAB)
+        answer(app, client, YOLO_IS_OFF)
+        self.assertEqual(client.calls, [YOLO_ON_CALL, YOLO_OFF_CALL, YOLO_OFF_CALL])
+        self.assertEqual(app.mode, MODE_PLAN)
+
+    def test_a_single_press_still_waits_for_hermes_before_the_mode_changes(self) -> None:
+        app, client = make_app()
+        app._on_input(SHIFT_TAB)
+        self.assertEqual(app.mode, MODE_NORMAL)  # what Shift+Tab gates on is still the confirmed mode
+        answer(app, client, YOLO_IS_ON)
+        self.assertEqual(app.mode, MODE_ACCEPT)
+        self.assertNotIn("…", info_of(app))
+
+
+class EffortFeedbackTests(unittest.TestCase):
+    """A typed `/effort <level>` says the outcome under its echo; Ctrl+T stays footer-only; both show the level asked
+    for, dimmed with `…`, until Hermes answers (audit B, 8 and 12)."""
+
+    def test_a_typed_effort_says_the_level_set_and_ctrl_t_says_nothing(self) -> None:
+        app, client = make_app()
+        type_text(app, "/effort high")
+        app._on_input(Key(ENTER))
+        self.assertIn("effort high…", info_of(app))
+        answer(app, client, effort_set("high"))
+        self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+        self.assertIn("effort high", info_of(app))
+        self.assertNotIn("effort high…", info_of(app))
+        app._on_input(CTRL_T)
+        self.assertIn("effort xhigh…", info_of(app))
+        answer(app, client, effort_set("xhigh"))
+        self.assertEqual(notices(app), [modes_module.EFFORT_SET_NOTICE.format("high")])
+
+    def test_an_unanswered_effort_stops_showing_as_asked_for(self) -> None:
+        for typed in (True, False):
+            with self.subTest(typed=typed):
+                now = [100.0]
+                app, client = make_app(clock=lambda: now[0])
+                app.effort = "medium"
+                if typed:
+                    type_text(app, "/effort high")
+                    app._on_input(Key(ENTER))
+                else:
+                    app._on_input(CTRL_T)
+                asked = client.calls[-1][1]["value"]
+                self.assertIn(f"effort {asked}…", info_of(app))
+                now[0] += 3600
+                app._expire_calls()
+                self.assertEqual(app.effort_asked, "")
+                self.assertIn("effort medium", info_of(app))
+                self.assertNotIn("…", info_of(app))
+                seconds = app_module.CALL_ANSWER_SECONDS_BY_METHOD.get("config.set", app_module.CALL_ANSWER_SECONDS)
+                self.assertEqual(notices(app), [app_module.CALL_EXPIRED_NOTICE.format(method="config.set",
+                                                                                      seconds=seconds)])
+
+    def test_an_expiry_leaves_a_newer_level_asked_for(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        app.effort = "low"
+        app._on_input(CTRL_T)  # medium
+        now[0] += 3600
+        app._on_input(CTRL_T)  # high, asked after the first went out
+        app._expire_calls()  # only the first has run out
+        self.assertEqual(app.effort_asked, "high")
+        self.assertIn("effort high…", info_of(app))
+
+    def test_a_refused_typed_effort_says_only_the_refusal(self) -> None:
+        app, client = make_app()
+        type_text(app, "/effort high")
+        app._on_input(Key(ENTER))
+        answer(app, client, None, {"code": 4002, "message": "unknown reasoning value: high"})
+        (said,) = notices(app)
+        self.assertIn("did not set the reasoning effort to high", said)
+        self.assertNotIn("…", info_of(app))
+
+
+class InfoLineKeepsTheModelTests(unittest.TestCase):
+    """At 120 columns a mode label used to leave no model on the line (audit B, 9): the context goes first."""
+
+    MODEL = "deepseek/deepseek-v4.1-flash-ultrafast"
+
+    def test_the_model_stays_beside_either_mode_label(self) -> None:
+        for mode in (MODE_NORMAL, MODE_ACCEPT, MODE_PLAN, MODE_ACCEPT_PLAN):
+            with self.subTest(mode=mode):
+                app, _client = make_app(cols=120)
+                app.model, app.effort = self.MODEL, "default"
+                app._take_usage({"context_used": 100, "context_max": 128_000, "context_percent": 0})
+                show_mode(app, mode)
+                app.yolo_by_tui = app.approvals_off
+                self.assertIn("v4.1-flash-ultrafast", info_of(app))
 
 
 if __name__ == "__main__":

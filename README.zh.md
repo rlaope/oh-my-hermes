@@ -27,7 +27,7 @@
 ## 安装
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://omher.app/install | sh
 omh setup
 ```
 
@@ -136,13 +136,13 @@ omh setup
 **macOS / Linux：**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://omher.app/install | sh
 ```
 
 **Windows（PowerShell 5.1+）：**
 
 ```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+irm https://omher.app/install.ps1 | iex
 ```
 
 **或者把下面这段粘贴给你的 AI 代理：**

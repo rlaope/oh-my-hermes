@@ -29,6 +29,26 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher updates itself.** When a new omher release is out, an "Update to
+  0.1.x" button appears at the bottom left of the sidebar; one click
+  downloads it, checks its signature and restarts omher on the new version.
+  The app looks once at launch and every 6 hours. People on omher 0.1.1 or
+  earlier have no button yet: install the next version once from the
+  Releases page (or the `omher@beta` one-liner), and every release after
+  that arrives through the button.
+
+- **The OMH TUI queues what you send during a turn, commands too.** Enter
+  during a turn now always waits for the turn's end, whatever Hermes'
+  `display.busy_input_mode` says, so a config set to `interrupt` no longer
+  stops the turn and the `ctrl+enter to send now · ↑ to edit` row shows
+  under a queued prompt. A slash command typed during a turn waits in the same
+  queue and runs in order when the turn ends (a prompt after a `/compress`
+  goes once Hermes has answered it); only `/stop`, `/steer`, `/queue`, `/btw`,
+  `/bg`, `/gateway`, `/quit` and the commands about this terminal run at once.
+  Interrupting is Esc or `/stop`, never Enter, and the send-now key never sends
+  a queued command into the turn. One Esc now stops a running turn even with a
+  draft typed, as in Claude Code, and the draft stays in the composer (vim
+  mode keeps Esc Esc; Ctrl+C still clears the draft first).
 
 - **omher 0.1.1.** The app shows SESSIONS: Claude Code, Codex, pi, omp and
   Grok open as chats in a folder you pick (or as a terminal), and their
@@ -130,6 +150,47 @@ All notable changes will be documented here.
   stays current without a merge. In the browser, one code path in `app.js`
   updates the count, and a cached or fetched count can only raise the baked
   one, never lower it.
+- **The Desktop pane keeps a finished DAG and lets you switch between a
+  conversation's DAGs.** With two or more dag runs in one chat, a menu in the
+  DAG header picks which one to draw (the newest by default); a picked run is
+  drawn alone, without another run's children. A finished run keeps its
+  cards, node summaries and figures under a folding summary line instead of
+  collapsing to one line; the chat end post and the TUI keep their linger.
+  Edges are routed by the rows the cards actually wrap to, implied
+  dependency edges are hidden behind a toggle, and repair/extend edges are
+  drawn faint. USAGE is a token ring with cache in its middle, and can add
+  the drawn graph's subagent lanes; a sum with any unpriced part, the chat
+  included, shows as a lower bound (`≥$`). Thanks @yqm-307. (#2690)
+- **A short install command: `curl -fsSL https://omher.app/install | sh`.** omher.app now serves
+  `install` and `install.ps1`, small wrappers that download `install.sh` (or `install.ps1`) from main and
+  run it with only the arguments you pass, so the short form installs exactly what the long
+  `raw.githubusercontent.com/.../install.sh | sh` one-liner does; on Windows,
+  `irm https://omher.app/install.ps1 | iex`. The README, its translations, the website and
+  docs/INSTALLATION.md show the short form; the install guide keeps the long one as "same as".
+
+- **OMH TUI settings changes say what they did, and do what they say.**
+  `/yolo` and `/reasoning <level>` went to Hermes' `slash.exec`, which runs
+  them in a worker apart from the live agent: `/reasoning high` said it was
+  set and changed nothing, and `/yolo` said approvals were off while Hermes
+  kept asking, then left a flag that turned them off at the next resume. Both
+  now go through the TUI's own per-session calls (Ctrl+T's and Shift+Tab's),
+  and say the outcome under the command; `/reasoning` with anything but a
+  level still goes to Hermes as typed. Typed during a turn, `/yolo`,
+  `/effort` and `/reasoning <level>` run at once, as Shift+Tab and Ctrl+T do;
+  bare `/reasoning` and its other forms wait for the turn's end. Shift+Tab presses made while Hermes
+  has not answered the last one are kept and shown at once, dimmed with `…`,
+  so two quick presses end in plan mode instead of in accept all; Ctrl+T's
+  level shows the same way until Hermes confirms it. `/model <name>` and the
+  picker show `switching to <model>…` under the command until Hermes
+  answers, say when Hermes also made the model the default for new sessions,
+  and a switch held for the next turn that Hermes drops as that turn starts
+  is now a lasting transcript row naming it. Bare `/model` opens its picker
+  at once: what is typed while the list loads filters it, Enter waits for the
+  list, and Esc cancels it; picking the current row switches nothing, and the
+  echo names the model without the flags sent. A typed `/effort <level>`
+  says the level set. The info line keeps the model's name beside the mode
+  label at 120 columns (the context goes first), and the launch look's file
+  is named as `~/…`.
 
 ## 4.0.7 - 2026-11-09
 

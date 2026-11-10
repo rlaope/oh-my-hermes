@@ -1879,6 +1879,17 @@ class Transcript:
             self._write_held()  # a steer sent with /steer goes under its echo; a held echo goes at a boundary
             self._version += 1
 
+    def drop_output(self, block: CommandBlock | None, text: str) -> None:
+        """Take the newest `text` back from under `block`'s echo while it is open: a row that only said a call was out,
+        which the answer replaces. Nothing once the echo has closed (it may have reached scrollback)."""
+        if block is None or block.done:
+            return
+        for index in range(len(block.parts) - 1, -1, -1):
+            if block.parts[index][0] == text:
+                del block.parts[index]
+                self._version += 1
+                return
+
     def withdraw_command(self) -> CommandBlock | None:
         """Take back the open command's echo, with nothing printed under it, for the row the command turned into.
 

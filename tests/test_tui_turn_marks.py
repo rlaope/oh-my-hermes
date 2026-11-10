@@ -511,21 +511,21 @@ class CommandPlacementTests(unittest.TestCase):
         self.assertEqual((block.command, block.done), ("/queue", True))
 
     def test_an_echo_still_waiting_for_hermes_stays_held_past_a_boundary_and_is_written_once(self) -> None:
-        app, client = self.mid_tool("/usage")
+        app, client = self.mid_tool("/btw cost so far")
         app._on_event(ev("tool.complete", tool_id="t1", name="terminal", result={"output": "1 passed"}))
-        app._on_event(ev("message.delta", text="Checking the cost."))  # a boundary while /usage is still out
+        app._on_event(ev("message.delta", text="Checking the cost."))  # a boundary while /btw is still out
         self.assertNotIn("CommandBlock", [type(block).__name__ for block in app.transcript.blocks])
         answer(app, client, {"output": "Session cost: $0.01"})
         app._on_event(ev("message.complete", text="Checking the cost.", status="complete"))
         echoes = [block for block in app.transcript.blocks if type(block).__name__ == "CommandBlock"]
-        self.assertEqual([(block.command, block.parts) for block in echoes], [("/usage", [("Session cost: $0.01", "info")])])
+        self.assertEqual([(block.command, block.parts) for block in echoes], [("/btw cost so far", [("Session cost: $0.01", "info")])])
 
     def test_a_commands_call_that_expires_mid_tool_says_so_under_its_echo_and_the_call_runs_on(self) -> None:
         clock = Clock()
         app, _client = make_app(busy=True, clock=clock)
         app._on_event(ev("message.start"))
         app._on_event(ev("tool.start", tool_id="t1", name="terminal", context="pytest -q"))
-        type_text(app, "/usage")
+        type_text(app, "/btw cost so far")
         app._on_input(Key(ENTER))
         clock.now += 3600
         app._expire_calls()
@@ -533,11 +533,11 @@ class CommandPlacementTests(unittest.TestCase):
         self.assertIsInstance(group, ToolGroup)
         self.assertEqual(group.tools[0].status, TOOL_RUNNING)
         self.assertEqual(lines_text(app.transcript.live_lines(140, THEME))[-2:],
-                         ["┃ ❯ /usage", "┃   ⎿  ⚠ Hermes has not answered slash.exec in 120 s; the OMH TUI stopped waiting for it."])
+                         ["┃ ❯ /btw cost so far", "┃   ⎿  ⚠ Hermes has not answered slash.exec in 120 s; the OMH TUI stopped waiting for it."])
 
     def usage_out_past_the_turn(self) -> tuple[object, object, int]:
-        """`/usage` typed over a running tool, the turn ended with it still out, and the next prompt streaming."""
-        app, client = self.mid_tool("/usage")
+        """`/btw` (a command that runs during a turn) typed over a running tool, the turn ended with it still out, and the next prompt streaming."""
+        app, client = self.mid_tool("/btw cost so far")
         usage = len(client.calls)
         app._on_event(ev("tool.complete", tool_id="t1", name="terminal", result={"output": "1 passed"}))
         app._on_event(ev("message.complete", text="done", status="complete"))
@@ -551,13 +551,13 @@ class CommandPlacementTests(unittest.TestCase):
         app, client, usage = self.usage_out_past_the_turn()
         kinds = [type(block).__name__ for block in app.transcript.blocks]
         self.assertEqual(kinds[:4], ["ToolGroup", "AssistantBlock", "CommandBlock", "TurnSummaryBlock"])
-        self.assertEqual(app.transcript.blocks[2].command, "/usage")  # dated in the turn it was typed in
+        self.assertEqual(app.transcript.blocks[2].command, "/btw cost so far")  # dated in the turn it was typed in
         app._on_response(Response(usage, {"output": "Session cost: $0.01"}, None))
         app._on_event(ev("message.complete", text="Second reply done.", status="complete"))
         replies = [block.text for block in app.transcript.blocks if isinstance(block, AssistantBlock)]
         self.assertEqual(replies, ["done", "Second reply done."])  # the late output did not split the reply
         echoes = [(block.command, block.parts) for block in app.transcript.blocks if isinstance(block, CommandBlock)]
-        self.assertEqual(echoes, [("/usage", []), ("/usage", [("Session cost: $0.01", "info")])])
+        self.assertEqual(echoes, [("/btw cost so far", []), ("/btw cost so far", [("Session cost: $0.01", "info")])])
         kinds = [type(block).__name__ for block in app.transcript.blocks]
         self.assertEqual(kinds[-3:], ["AssistantBlock", "CommandBlock", "TurnSummaryBlock"])  # under a repeat echo
 
@@ -568,7 +568,7 @@ class CommandPlacementTests(unittest.TestCase):
         replies = [block.text for block in app.transcript.blocks if isinstance(block, AssistantBlock)]
         self.assertEqual(replies, ["done", "Second reply goes on."])
         held = lines_text(app.transcript.live_lines(100, THEME))
-        self.assertEqual(held[-2:], ["┃ ❯ /usage", "┃   ⎿  ✗ Usage is unavailable."])
+        self.assertEqual(held[-2:], ["┃ ❯ /btw cost so far", "┃   ⎿  ✗ Usage is unavailable."])
 
     def test_output_for_an_echo_already_closed_waits_under_a_running_call(self) -> None:
         app, client = make_app()
