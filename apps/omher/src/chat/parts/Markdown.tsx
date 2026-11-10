@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MentionLink, useMentions } from "./Mention";
 import { remarkMentions } from "./remarkMentions";
+import { isBare, LinkChip } from "./LinkChip";
 
 const plain = [remarkGfm];
 
@@ -24,7 +25,15 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
     <ReactMarkdown
       remarkPlugins={plugins as typeof plain}
       components={{
-        a: ({ node: _n, ...p }) => <a {...p} target="_blank" rel="noreferrer" />,
+        // a bare URL becomes a chip (service mark + short label); a link with its own text keeps it, after the mark
+        a: ({ node: _n, href, children, ...p }) =>
+          href && /^https?:\/\//i.test(href) ? (
+            <LinkChip url={href}>{isBare(href, textOf(children)) ? undefined : children}</LinkChip>
+          ) : (
+            <a {...p} href={href} target="_blank" rel="noreferrer">
+              {children}
+            </a>
+          ),
         span: ({ node: _n, ...p }) => {
           const bot = (p as Record<string, unknown>)["data-mention"];
           return typeof bot === "string" ? <MentionLink bot={bot}>{p.children}</MentionLink> : <span {...p} />;

@@ -28,6 +28,12 @@ export interface BotInfo {
 }
 
 /** One of a bot's skills (a `SKILL.md` under `<profile>/skills`), for the composer's `./` picker. */
+/** `{slack: {C0BLC924P1P: "#docs-harness"}, discord: {1544…: "#cron"}}`: names for link chips. */
+export interface LinkPlaces {
+  slack: Record<string, string>;
+  discord: Record<string, string>;
+}
+
 export interface Skill {
   name: string;
   /** One line, clipped to about 120 characters; "" when the skill has none. */
@@ -189,6 +195,8 @@ export interface OpMap {
   "bots.info": { params: { bot: string }; result: BotInfo };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
+  /** Channel names the bot already knows from its own Slack / Discord sessions, by channel id (read-only). */
+  "links.places": { params: { bot: string }; result: { places: LinkPlaces } };
   /** Side panel, all read-only: the bot's latest terminal runs, the git worktrees it worked in, one diff. */
   "panel.terminal": { params: { bot: string }; result: { runs: TerminalRun[] } };
   "panel.worktrees": { params: { bot: string }; result: { worktrees: Worktree[] } };

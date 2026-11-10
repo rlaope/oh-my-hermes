@@ -251,3 +251,24 @@ test("without GitHub's answer the number shows with no state colour, and the gra
   await nodeOf(box, "color-tokens").getByTestId("node-title").click();
   await expect(page.getByTestId("run-drawer").getByTestId("run-pr")).toHaveText("#2353");
 });
+
+test("the drawer's Links block draws the node's own PR with GitHub's state mark, as its badge does", async ({ page }) => {
+  const { box } = await openDemo(page);
+  for (const [id, n, state] of [["page-styles", 2359, "open"], ["code-colors", 2360, "draft"]] as const) {
+    await nodeOf(box, id).click();
+    const chip = page.getByTestId("run-drawer").getByTestId("run-links").locator(`[data-testid=link-chip][data-kind=pr]`);
+    await expect(chip).toHaveCount(1);
+    await expect(chip.locator(".lk-t")).toHaveText(`rlaope/oh-my-hermes#${n}`);
+    await expect(chip).toHaveAttribute("data-pr-state", state);
+    await expect(chip.locator(`svg.pr-ic[data-state=${state}]`)).toHaveCount(1);
+    await expect(chip.locator("svg.brand-ic")).toHaveCount(0);
+    // the state mark sits like any chip mark: a gap before the label, centred on it
+    const g = await chip.evaluate((a) => {
+      const ic = a.querySelector("svg")!.getBoundingClientRect();
+      const t = a.querySelector(".lk-t")!.getBoundingClientRect();
+      return { gap: t.left - ic.right, mid: Math.abs(ic.top + ic.height / 2 - (t.top + t.height / 2)) };
+    });
+    expect(g.gap).toBeGreaterThanOrEqual(3);
+    expect(g.mid).toBeLessThanOrEqual(3);
+  }
+});

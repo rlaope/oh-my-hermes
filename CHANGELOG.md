@@ -313,6 +313,21 @@ All notable changes will be documented here.
   it starts, so the bridge no longer stops on `No module named 'websockets'`.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
+- **omher shows links as small service chips.** A bare link in a chat bubble,
+  a session chat or a plan handoff now reads as the service's mark and a short
+  label instead of a long URL: `rlaope/oh-my-hermes#2657`, `#2604`, a commit,
+  release, CI run or file line on GitHub; a Slack or Discord thread named by
+  its channel (`#docs-harness`) when the bot has been in that channel, else
+  "Slack message"; Google Docs, Sheets, Slides, Drive, Calendar, Meet, Forms,
+  Gmail and Maps; X and Twitter posts and profiles; LinkedIn; YouTube with its
+  start time (`YouTube · video · 1:23`); Notion, Linear, Figma and npm. The full
+  URL is in the tooltip, and a click opens it in your browser or the app. A
+  link with its own words keeps them, with the mark in front; any other site,
+  and a lookalike such as `github.com.evil.io`, stays a plain link showing its
+  real address. A plan node's drawer lists its links as a Links block, its own
+  pull request with GitHub's state mark like the node's badge. omher
+  reads all of this from the address and the bot's own channel names; it
+  fetches nothing from the link.
 
 ## 4.0.7 - 2026-11-09
 

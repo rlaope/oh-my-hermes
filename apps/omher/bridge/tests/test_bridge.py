@@ -1231,6 +1231,70 @@ class OriginLinks(unittest.TestCase):
             self.assertEqual(omher_bridge.read_origins(Path(d), ["x"]), {})
 
 
+class LinkPlaces(unittest.TestCase):
+    """links.places: channel names for Slack / Discord link chips, from the bot's own sessions' origins, read-only."""
+
+    def _db(self, d: Path, origins, messages=False):
+        import sqlite3
+        con = sqlite3.connect(d / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, origin_json TEXT)")
+        con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?)",
+                        [(f"s{i}", o if isinstance(o, str) or o is None else json.dumps(o)) for i, o in enumerate(origins)])
+        if messages:
+            con.execute("INSERT INTO messages (session_id, role, content) VALUES ('s0', 'user', '#secret-channel C9')")
+        con.commit()
+        con.close()
+
+    def test_names_slack_and_discord_channels_by_id(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self._db(Path(d), [
+                {"platform": "slack", "chat_id": "C0BLC924P1P", "chat_name": "docs-harness-ai-agent-loop", "thread_id": "1.2"},
+                {"platform": "slack", "chat_id": "C2", "chat_name": "#already-hashed"},
+                {"platform": "slack", "chat_id": "D0CDK7XJL72", "chat_name": "Slack", "chat_type": "dm"},
+                {"platform": "discord", "chat_id": "1564465746325545000", "parent_chat_id": "1544259371528232980",
+                 "chat_name": "Oh-My-Hermes Community / #cron / https://github.com/x 이 피알 확인"},
+                {"platform": "discord", "chat_id": "77", "chat_name": "#general"},
+                {"platform": "telegram", "chat_id": "5", "chat_name": "Reading"},
+                {"platform": "slack", "chat_id": "bad id!", "chat_name": "x"},
+                {"platform": "slack", "chat_id": "C3"},
+                "not json", None,
+            ], messages=True)
+            p = omher_bridge.read_link_places(Path(d))
+        self.assertEqual(p["slack"], {"C0BLC924P1P": "#docs-harness-ai-agent-loop", "C2": "#already-hashed"})
+        self.assertEqual(p["discord"], {"1564465746325545000": "#cron", "1544259371528232980": "#cron", "77": "#general"})
+        self.assertEqual(set(p), {"slack", "discord"})
+
+    def test_newest_session_wins_and_names_are_short(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self._db(Path(d), [{"platform": "slack", "chat_id": "C1", "chat_name": "old-name"},
+                               {"platform": "slack", "chat_id": "C1", "chat_name": "new-name"},
+                               {"platform": "slack", "chat_id": "C2", "chat_name": "x" * 200}])
+            p = omher_bridge.read_link_places(Path(d))
+        self.assertEqual(p["slack"]["C1"], "#new-name")
+        self.assertEqual(len(p["slack"]["C2"]), 60)
+
+    def test_read_only_missing_db_and_no_message_read(self):
+        import omher_bridge
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(omher_bridge.read_link_places(Path(d)), {"slack": {}, "discord": {}})
+            self._db(Path(d), [{"platform": "slack", "chat_id": "C1", "chat_name": "a"}], messages=True)
+            before = (Path(d) / "state.db").stat().st_mtime_ns
+            omher_bridge.read_link_places(Path(d))
+            self.assertEqual((Path(d) / "state.db").stat().st_mtime_ns, before)
+        src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
+        body = src[src.index("def read_link_places"):src.index("def reply_block")]
+        self.assertNotIn("messages", body.split('"""')[2])  # the query reads sessions only
+        for bad in ("urllib", "http", "socket", "subprocess", ".write", "INSERT", "UPDATE", "DELETE"):
+            self.assertNotIn(bad, body.split('"""')[2], bad)
+
+    def test_op_is_registered(self):
+        import omher_bridge as ob
+        self.assertIn("links.places", ob.Bridge(token=TOKEN, hermes_home=Path(tempfile.gettempdir())).ops)
+
+
 PNG_1PX = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/"
            "iZk9HQAAAABJRU5ErkJggg==")
 

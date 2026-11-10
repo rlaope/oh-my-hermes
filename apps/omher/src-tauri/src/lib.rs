@@ -37,14 +37,15 @@ async fn bridge_status(shell: State<'_, Shell>) -> Result<BridgeStatus, String> 
     Ok(shell.bridge.status())
 }
 
-/// Open a thread in its own app. Only Slack / Discord / Telegram links, and a plan node's GitHub pull request:
-/// omher never opens arbitrary URLs.
-/// The system opener (`open` on macOS, the shell's URL handler on Windows, `xdg-open` on Linux) hands the
-/// link to the person's own Slack / Discord / browser.
+/// Open a link the person clicked: a thread in its own app (Slack / Discord / Telegram), a plan node's GitHub
+/// pull request, or a message's http(s) link (a link chip) in the default browser. The system opener (`open`
+/// on macOS, the shell's URL handler on Windows, `xdg-open` on Linux) hands it to the person's own Slack /
+/// Discord / browser. Nothing else: no file, `javascript:` or other scheme, no address with a user name or
+/// password in it.
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
     if !allowed_external(&url) {
-        return Err("not a Slack, Discord or Telegram link".into());
+        return Err("not a thread or web link".into());
     }
     // A Discord web link opens the Discord app when it is installed, the browser otherwise.
     if let Some(app_url) = discord_app_url(&url) {
@@ -90,7 +91,7 @@ pub(crate) fn allowed_external(url: &str) -> bool {
         "https://t.me/",
     ];
     !url.chars().any(|c| c.is_whitespace() || c.is_control())
-        && (PREFIXES.iter().any(|p| url.starts_with(p)) || github_pr_url(url))
+        && (PREFIXES.iter().any(|p| url.starts_with(p)) || github_pr_url(url) || web_link(url))
 }
 
 /// `https://github.com/<owner>/<repo>/pull/<n>` and nothing after it: the pull request a plan node opened (the
@@ -112,6 +113,17 @@ pub(crate) fn github_pr_url(url: &str) -> bool {
         && !parts[3].is_empty()
         && parts[3].len() <= 7
         && parts[3].bytes().all(|b| b.is_ascii_digit())
+}
+
+/// An `http(s)://host/...` address with no user name or password before the host (`https://github.com@evil.io/`
+/// reads as GitHub but goes to evil.io), as a link chip carries it.
+pub(crate) fn web_link(url: &str) -> bool {
+    let rest = match url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")) {
+        Some(r) => r,
+        None => return false,
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    !host.is_empty() && !host.contains('@') && !host.contains('\\')
 }
 
 /// The line the first-run screen shows as what Install will run.
@@ -401,10 +413,14 @@ mod tests {
     use super::{allowed_external, media_target};
 
     #[test]
-    fn opens_only_thread_links() {
+    fn opens_thread_links_and_a_lookalike_only_as_a_web_page() {
         assert!(allowed_external("slack://channel?team=T1&id=C1&thread_ts=1.2"));
         assert!(allowed_external("https://discord.com/channels/1/2"));
-        assert!(!allowed_external("https://evil.example/discord.com/channels/1"));
+        // a lookalike is an ordinary web link: it opens in the browser, never in the Discord app
+        assert!(allowed_external("https://evil.example/discord.com/channels/1"));
+        assert_eq!(super::discord_app_url("https://evil.example/discord.com/channels/1"), None);
+        assert!(!allowed_external("slack://open?team=T1"));
+        assert!(!allowed_external("discord://evil.example/channels/1"));
         assert!(!allowed_external("file:///etc/passwd"));
         assert!(!allowed_external("https://discord.com/channels/1 --args"));
         assert!(!allowed_external("javascript:alert(1)"));
@@ -427,8 +443,28 @@ mod tests {
             "https://github.com/o/r/pull/1 --args",
             "https://github.com/settings/tokens",
         ] {
-            assert!(!allowed_external(bad), "{bad}");
+            assert!(!super::github_pr_url(bad), "{bad}");
         }
+        // a plan node's PR page is also a web link, so a chip opens the same address
+        assert!(allowed_external("https://github.com/rlaope/oh-my-hermes/pull/2746/files"));
+    }
+
+    #[test]
+    fn opens_web_links_from_link_chips_and_nothing_else() {
+        assert!(allowed_external("https://github.com/rlaope/oh-my-hermes/pull/2657"));
+        assert!(allowed_external("https://sionicai.slack.com/archives/C0BLC924P1P/p1794195216893139"));
+        assert!(allowed_external("http://example.com"));
+        assert!(allowed_external("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=83s"));
+        assert!(!allowed_external("https://github.com@evil.io/x"));
+        assert!(!allowed_external("https://user:pw@example.com/"));
+        assert!(!allowed_external("https:///etc/passwd"));
+        assert!(!allowed_external("https://"));
+        assert!(!allowed_external("ftp://example.com/x"));
+        assert!(!allowed_external("vscode://file/etc/passwd"));
+        assert!(!allowed_external("https://example.com/a b"));
+        assert!(!allowed_external("https://example.com/\nx"));
+        assert!(!allowed_external("HTTPS://example.com/"));
+        assert!(!allowed_external("https:\\\\evil.io\\x"));
     }
 
     #[test]

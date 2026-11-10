@@ -87,7 +87,7 @@ test("hello, bots and seeded data", async () => {
 
   const chat = await c.ok("chat.open", { bot: "kami" });
   expect(chat.messages.length).toBeGreaterThanOrEqual(2);
-  expect(chat.messages.length).toBeLessThanOrEqual(4);
+  expect(chat.messages.length).toBeLessThanOrEqual(7); // the mention answer and the three link-chip messages included
   expect(chat.messages[0]).toMatchObject({ role: "user" });
   expect(chat).toMatchObject({ model: "Opus 5.5", provider: "claude-proxy", running: false });
 
@@ -104,6 +104,12 @@ test("hello, bots and seeded data", async () => {
   const peek = await c.ok("elsewhere.peek", { bot: "kami", session_id: sessions[0].id });
   expect(peek.messages).toHaveLength(4);
   expect(peek.total).toBeGreaterThan(4);
+
+  // link chips: channel names by id, as the bridge reads them from the bot's own sessions
+  const { places } = await c.ok("links.places", { bot: "kami" });
+  expect(places.slack).toMatchObject({ C0BLC924P1P: "#docs-agent" });
+  expect(places.discord).toEqual({ "1544259371528232980": "#cron" });
+  expect((await c.ok("links.places", { bot: "friren" })).places).toEqual({ slack: {}, discord: {} });
 
   const { routines } = await c.ok("routines.list", { bot: "kami" });
   expect(routines.map((r: any) => [r.name, r.schedule])).toEqual([["Repo watch", "Daily 09:00"], ["OG digest", "Weekly (Mon 09:00)"]]);
