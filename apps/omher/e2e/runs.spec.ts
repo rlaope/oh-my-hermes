@@ -290,7 +290,8 @@ test("the run's header is three plain lines of text and its goal: no card, badge
   const head = panel(page).getByTestId("run-plan");
   await expect(head.getByTestId("run-plan-source")).toHaveText("OMH / DAG · 6 tasks");
   await expect(head.getByTestId("run-plan-title")).toHaveText("Codex coexistence (live)");
-  await expect(head).toContainText("· main ");
+  // the main agent's model and effort, named as on a node
+  await expect(head).toContainText("· main Opus 5.5 · high");
   await expect(head.getByTestId("run-plan-counts")).toHaveText(/^Running · Done 3\/6 · 1 repaired · 1 waiting · \d+(s|m)$/);
   await expect(head.getByTestId("run-plan-goal")).toContainText("OMH suggests its own skills to Codex fanouts");
   // lines of 18px monospace text, nothing drawn around or behind them

@@ -1,13 +1,13 @@
 // A run's header as the OMH TUI prints it: three plain lines of text, then the goal as one dim line.
 //   OMH / DAG · 7 tasks
-//   Checkout redesign · main opus-5-5
+//   Checkout redesign · main Opus 5.5 · high
 //   Running · Done 3/7 · 1 failed · 2 waiting · 12m
 // No card, badge, progress bar or chips. A run nobody has started says so ("Starts in 0:10" when it carries a start
 // time) and offers Start now / Edit as text; like "Ask in chat" they only put a request in the message box.
 import type { ReactNode } from "react";
 import type { Bot } from "../lib/protocol";
 import { cliName, isRepaired, span, type AgentRun, type AgentRunSummary } from "../lib/runs";
-import { getStore } from "../state/store";
+import { getStore, useStore } from "../state/store";
 import { t } from "../i18n";
 import { modelName, runName } from "./format";
 
@@ -45,8 +45,11 @@ export function PlanHeader({
     : t(`graph.run.${summary.state}`);
   const name = runName(summary.id);
   const prefill = (text: string) => getStore().actions.prefill(text);
-  // the bot's own runs name its model; a CLI session's names the folder it ran in
-  const where = summary.agent ? (summary.cwd ? folder(summary.cwd) : "") : bot.model ? `${t("graph.main")} ${modelName(bot.model)}` : "";
+  // the bot's own runs name the main agent's model and the effort it thinks at, as a node does ("Opus 5.5 · high");
+  // a CLI session's names the folder it ran in
+  const effort = useStore().chats[bot.name]?.reasoning ?? "";
+  const main = [modelName(bot.model), effort === "none" ? "" : effort].filter(Boolean).join(" · ");
+  const where = summary.agent ? (summary.cwd ? folder(summary.cwd) : "") : bot.model ? `${t("graph.main")} ${main}` : "";
   return (
     <div className="ph" data-testid="run-plan" data-state={summary.state}>
       <div className="ph-l">
