@@ -4501,15 +4501,21 @@ class RouterContentTests(unittest.TestCase):
             hero,
         )
         self.assertIn("omh setup", hero)
-        # Every image the landing page loads ships inside site/assets, and the
-        # one product capture, the real /dag-ulw TUI recording, is a <video>
-        # transcoded from assets/omh-dag-ulw-tui.gif.
+        # Every image the landing page loads ships inside site/assets. Two
+        # product captures are <video>s: the omher app film in the top block's
+        # window slot, and the real /dag-ulw TUI recording transcoded from
+        # assets/omh-dag-ulw-tui.gif.
         for src in re.findall(r'<img[^>]*\ssrc="([^"]+)"', site):
             with self.subTest(img=src):
                 self.assertTrue(src.startswith("assets/"), src)
                 self.assertTrue((Path("site") / src).is_file(), src)
         self.assertEqual(site.count('src="assets/sponsors/opengateway.svg"'), 1)
-        self.assertEqual(site.count("<video"), 1)
+        self.assertEqual(site.count("<video"), 2)
+        self.assertEqual(site.count('src="assets/omher-app.webm"'), 1)
+        self.assertEqual(site.count('src="assets/omher-app.mp4"'), 1)
+        for src in ("omher-app.webm", "omher-app.mp4", "omh-dag-ulw-tui.webm", "omh-dag-ulw-tui.mp4"):
+            with self.subTest(video=src):
+                self.assertTrue((Path("site") / "assets" / src).is_file(), src)
         self.assertEqual(site.count('src="assets/omh-dag-ulw-tui.webm"'), 1)
         self.assertEqual(site.count('src="assets/omh-dag-ulw-tui.mp4"'), 1)
         self.assertEqual(site.count('poster="assets/omh-dag-ulw-tui-poster.webp"'), 1)
