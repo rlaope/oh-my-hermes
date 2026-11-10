@@ -544,7 +544,7 @@ alias that is genuinely served somewhere else than the default.
 
 ```sh
 omh model-chains show
-omh model-chains set architect "claude-fable-5-1:xhigh, claude-fable-5:xhigh, ..."
+omh model-chains set architect "claude-fable-5-2:xhigh, claude-fable-5-1:xhigh, ..."
 ```
 
 `dispatch-models.json` (the Claude Code profile's `--model`) is gated on the

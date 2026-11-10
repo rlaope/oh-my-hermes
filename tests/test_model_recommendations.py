@@ -231,7 +231,7 @@ class RecommendationCatalogTests(unittest.TestCase):
         installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
         with self.subTest(surface="installation", contract="chains-file-example"):
             self.assertIn(seeded_cat_block, installation)
-            self.assertIn('"claude-fable-5-1", "reasoning_effort": "xhigh"', installation)
+            self.assertIn('"claude-fable-5-2", "reasoning_effort": "xhigh"', installation)
             self.assertIn('"gpt-6.1-sol", "reasoning_effort": "xhigh"', installation)
             self.assertIn('"deepseek-v4.1-flash-ultrafast", "reasoning_effort": "low"', installation)
             self.assertIn("omh model-chains show", installation)

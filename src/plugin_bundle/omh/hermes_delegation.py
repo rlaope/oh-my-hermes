@@ -1961,7 +1961,7 @@ _DEFAULT_CACHE_READ_RATIO = 0.1
 # follow ("Chain customization is a config edit, not a source edit").
 #
 #   {"schema_version": "model_price_overrides/v1",
-#    "models": {"claude-fable-5-1": {"input_per_mtok": 8.0,
+#    "models": {"claude-fable-5-2": {"input_per_mtok": 8.0,
 #                                    "output_per_mtok": 40.0,
 #                                    "cache_read_ratio": 0.025}}}
 #

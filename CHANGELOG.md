@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
+  visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
+  5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
+  first). A child on Fable 5.2 at `high` with no route record is labelled
+  `visual-engineering`, as before; a child on Opus 5.5 at `high` is still
+  labelled `deep`. The Maestro lane's chain is unchanged. The setup examples
+  in the installation guide now name Fable 5.2 instead of Fable 5.1, so no
+  shipped recommendation names Fable 5.1 any more. A chain you set yourself
+  in `~/.omh/routing/model-chains.json` is not touched.
+
 - **dag-ulw plans fewer, larger nodes.** It splits where work can run side by
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.

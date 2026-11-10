@@ -2565,7 +2565,7 @@ $ cat ~/.omh/routing/model-chains.json
   "schema_version": "mixture_chain_overrides/v1",
   "categories": {
     "architect": [
-      {"model": "claude-fable-5-1", "reasoning_effort": "xhigh"},
+      {"model": "claude-fable-5-2", "reasoning_effort": "xhigh"},
       {"model": "gpt-6.1-sol", "reasoning_effort": "xhigh"}
     ],
     "quick": [
@@ -3026,7 +3026,7 @@ nothing, and vendors reprice. Put your own rates in
 {
   "schema_version": "model_price_overrides/v1",
   "models": {
-    "claude-fable-5-1": {"input_per_mtok": 8.0, "output_per_mtok": 40.0},
+    "claude-fable-5-2": {"input_per_mtok": 8.0, "output_per_mtok": 40.0},
     "grok-build-0.1": {"input_per_mtok": 1.0, "output_per_mtok": 2.0},
     "my-free-tier-model": {"input_per_mtok": 0, "output_per_mtok": 0}
   }
