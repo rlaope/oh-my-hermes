@@ -2,7 +2,7 @@
 
 ### OMHER Desktop
 
-<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren, Juno and Pip and five SESSIONS on Claude Code, Codex, oh-my-pi, pi and Grok in the sidebar; Kami's chat holds the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts, each a Hermes subagent; the Plans panel draws that plan as connected boxes, each part with the Hermes mark and its model, effort and category (Opus 5.5 · high · visual-engineering, GPT-5.5 · medium · quick, Sonnet 5.5, review), two lanes handed on via Codex and via Claude Code, and the open part's details under the graph" width="900">
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: bots Kami, Friren and Juno and SESSIONS on Claude Code, Codex and oh-my-pi in the sidebar; Kami's chat holds the ask to add dark mode to the docs and open a PR, planned with dag-ulw in 6 parts: 3 Hermes subagents on GLM, Kimi and DeepSeek, plus Claude Code, Codex and omp lanes; the Plans panel draws that plan as a graph of rounded boxes, each with its model's logo and model, effort and category (GLM-5.3 · medium · quick, Kimi K3 · high · visual-engineering, Opus 5.5 · high via Claude, GPT-6.1 Sol · medium via Codex, DeepSeek V4.1 · high · review, Sonnet 5.5 · high via omp), two done, two running and two waiting, with the full dependency list under it" width="900">
 
 Your Hermes bots and coding agents, in one window.
 
