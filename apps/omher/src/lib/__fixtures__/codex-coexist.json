@@ -1,0 +1,243 @@
+{
+ "cancelled_at": null,
+ "claim_boundary": "The plan a parent agent declared for a dag-ulw run and the outcomes it settled. A settled outcome is the parent's judgement; a child's status is Hermes' report. Not execution, verification, review, CI or merge evidence.",
+ "defined_at": 1793681142.2275681,
+ "digest": "4bb742ccf3973b0b",
+ "goal": "OMH suggests its own skills to Codex fanouts, reports a stale Codex pack honestly, and refreshes it on update.",
+ "lint": [
+  "no_review_node"
+ ],
+ "name": "Codex coexistence fixes",
+ "nodes": [
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793681151.350927,
+     "lane": "fanout",
+     "n": 1,
+     "outcome": "failed",
+     "provider_error": false,
+     "reason": "Codex made no edit: fence denied zsh heredoc temp file and uv cache",
+     "settled_at": 1793681865.127282
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t1-discovery",
+   "label": "Codex skill discovery reads .agents/skills",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "src/coding/executor_skill_discovery.py",
+    "tests/test_executor_skill_discovery.py"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793681151.350927,
+     "lane": "fanout",
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "Codex staged diff; parent re-ran VERIFY (67 OK, ruff clean) and committed 9aac531bf",
+     "settled_at": 1793681865.072238
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t2-status-update",
+   "label": "Honest pack status + omh update refresh",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "codex-coexist-t2:src/commands/setup.py",
+    "codex-coexist-t2:src/install/agent_skills_projection.py",
+    "codex-coexist-t2:tests/test_agent_skills_projection.py",
+    "codex-coexist-t2:tests/test_update_agent_skills.py"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793681151.350927,
+     "lane": "fanout",
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "113478347; 114 OK; parent moved home lookup to agent_skills_user_home (ba4b3ae1e)",
+     "settled_at": 1793682829.018086
+    }
+   ],
+   "category": "unspecified-low",
+   "cycle": 0,
+   "depends_on": [
+    "t2-status-update"
+   ],
+   "found_by": "",
+   "id": "t3-doctor",
+   "label": "Doctor check for the Codex pack",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "build",
+   "write_scope": [
+    "codex-coexist-t2:src/maintenance/doctor.py",
+    "codex-coexist-t2:tests/test_doctor_agent_skills.py"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793682829.018086,
+     "n": 1,
+     "outcome": "retry",
+     "provider_error": true,
+     "reason": "openai-codex OAuth 401 mid-run; checks done, parent re-ran tests",
+     "settled_at": 1793684022.927134
+    },
+    {
+     "fallback": true,
+     "handed_out_at": 1793684022.927134,
+     "n": 2,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "2nd verifier HOLD (2 blockers) fixed in e400a5cf1, rechecked with its scripts",
+     "settled_at": 1793688259.688023
+    }
+   ],
+   "category": "review",
+   "cycle": 0,
+   "depends_on": [
+    "t1-discovery",
+    "t2-status-update",
+    "t3-doctor"
+   ],
+   "found_by": "",
+   "id": "t5-verify",
+   "label": "Independent verify vs base + live probes",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "role": "verify",
+   "write_scope": [
+    "/w/.hermes/profiles/kami/cache/scratch/codex-coexist/verify/"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793681934.135648,
+     "lane": "fanout",
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "7723d45f8 cherry-picked as e8708d5bd; 276 OK, ruff clean (child), reviewed diff",
+     "settled_at": 1793682828.9664419
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 1,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t1-hermes",
+   "label": "Codex skill discovery reads .agents/skills (Hermes)",
+   "origin": "repair:t1-discovery",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "t1-discovery",
+   "role": "build",
+   "write_scope": [
+    "codex-coexist-t1:src/coding/executor_skill_discovery.py",
+    "codex-coexist-t1:tests/test_executor_skill_discovery.py"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793681934.135648,
+     "lane": "fanout",
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "51b1f0b55 cherry-picked as b75a31af6; 252 OK, probe rc=0 for heredoc and uv",
+     "settled_at": 1793682828.991691
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 1,
+   "depends_on": [],
+   "found_by": "",
+   "id": "t4-fence",
+   "label": "Fence allows zsh heredocs and uv cache",
+   "origin": "repair:t1-discovery",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "t1-discovery",
+   "role": "build",
+   "write_scope": [
+    "codex-coexist-fence:src/coding/fanout_confinement.py",
+    "codex-coexist-fence:tests/test_fanout_confinement.py"
+   ]
+  }
+ ],
+ "repairs": {
+  "t1-discovery": [
+   [
+    "t1-hermes",
+    "t4-fence"
+   ]
+  ]
+ },
+ "run": "codex-coexist",
+ "schema_version": "omh_dag/v1",
+ "session_id": "20261102_235818_fcfb1bdd",
+ "topology": {
+  "bottlenecks": [
+   {
+    "blocks": 2,
+    "node": "t2-status-update"
+   },
+   {
+    "blocks": 1,
+    "node": "t1-discovery"
+   },
+   {
+    "blocks": 1,
+    "node": "t3-doctor"
+   }
+  ],
+  "critical_path": [
+   "t2-status-update",
+   "t3-doctor",
+   "t5-verify"
+  ],
+  "layers": [
+   [
+    "t1-discovery",
+    "t2-status-update",
+    "t1-hermes",
+    "t4-fence"
+   ],
+   [
+    "t3-doctor"
+   ],
+   [
+    "t5-verify"
+   ]
+  ]
+ },
+ "updated_at": 1793688259.688023
+}

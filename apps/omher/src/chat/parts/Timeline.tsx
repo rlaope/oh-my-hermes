@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { Bot } from "../../lib/protocol";
 import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
@@ -39,6 +39,17 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
     lastBot.current = bot.name;
   }, [bot.name, items, streaming, typing]);
 
+  // Files the bot sent load after the row is drawn and make it taller: stay at the bottom if pinned.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (pinned.current) el.scrollTop = el.scrollHeight;
+    });
+    for (const row of el.querySelectorAll(".row-assistant")) ro.observe(row);
+    return () => ro.disconnect();
+  }, [bot.name, items]);
+
   const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {
       case "user":
@@ -63,6 +74,12 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
         const C = slots.routineLine ?? RoutineFallback;
         return <C bot={bot.name} item={it} />;
       }
+      case "system":
+        return (
+          <div className="line sys" data-testid="system-line">
+            <span className="line-t">{it.text}</span>
+          </div>
+        );
     }
   };
 
@@ -78,14 +95,14 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
     >
       {!chat?.loaded && items.length === 0 && <div className="day">Loading…</div>}
       {chat?.openError && (
-        <div className="day" data-testid="chat-error">
+        <div className="day note" data-testid="chat-error">
           {bot.display_name} is not reachable ({chat.openError}). Start Hermes for this profile, then pick it again.
         </div>
       )}
       {/* A Hermes installed from the setup screen has no model yet: the first chat screen says where to pick one,
           never a terminal command. */}
       {chat?.loaded && !chat.openError && !(chat.model || bot.model) && (
-        <div className="day" data-testid="chat-no-model">
+        <div className="day note" data-testid="chat-no-model">
           {bot.display_name} has no model yet. Pick one from the model menu at the top right to start.
         </div>
       )}

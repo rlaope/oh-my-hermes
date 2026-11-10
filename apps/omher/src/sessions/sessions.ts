@@ -6,7 +6,8 @@
 // composer draw them. Grok has no verifiable chat mode, so it stays a terminal (xterm on a pseudo-terminal),
 // and every chat can switch to its agent's terminal view.
 //
-// Sessions live only while the app runs; the last few agent+folder pairs are remembered on this computer.
+// Sessions live only while the app runs; the last few folders (with the agent that used each) are remembered on
+// this computer.
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
@@ -468,6 +469,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     patchRec(id, { view });
   };
 
+  /**
+   * Start an ended chat session's agent again in the same chat. Claude Code and Codex continue their
+   * conversation (Claude Code `--resume`, Codex `thread/resume`); pi and oh-my-pi start a new one.
+   */
+  const restart = async (id: string) => {
+    const r = rec(id);
+    if (!r || procs.has(id) || modeOf(state.agents, r.agent) !== "chat" || (r.status !== "exited" && r.status !== "failed")) return;
+    const resume = (r.agent === "claude" || r.agent === "codex") && r.agentSession ? r.agentSession : undefined;
+    patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat" });
+    note(id, null);
+    await startAgentChat(id, resume);
+  };
+
   /** Stop the program(s) and remove the session. */
   const close = (id: string) => {
     disposeTerm(id);
@@ -528,6 +542,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore)
     setTheme,
     setView,
     setModel,
+    restart,
     send,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),

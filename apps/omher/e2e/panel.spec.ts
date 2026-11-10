@@ -1,4 +1,4 @@
-// Right panel tabs: Details · Terminal · Schedule · Worktrees · Diff, all read-only. Plus the default faces.
+// Right panel tabs: Details · Terminal · Schedule · Worktrees · Diff · Runs, all read-only. Plus the default faces.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -34,16 +34,17 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("the panel header is five tabs; the header keeps one control", async ({ page }) => {
+test("the panel header is six tabs; the header keeps one control", async ({ page }) => {
   await open(page);
   const tabs = page.getByRole("tablist", { name: "Panel" }).getByRole("tab");
-  await expect(tabs).toHaveCount(5);
+  await expect(tabs).toHaveCount(6);
   expect(await tabs.evaluateAll((els) => els.map((e) => e.getAttribute("title")))).toEqual([
     "Details",
     "Terminal",
     "Schedule",
     "Worktrees",
     "Diff",
+    "Plans",
   ]);
   await expect(page.getByTestId("panel-tab-details")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);

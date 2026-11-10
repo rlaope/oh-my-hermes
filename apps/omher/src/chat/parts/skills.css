@@ -1,0 +1,94 @@
+/* Skill tokens (`./name`): the picker above the composer, the composer's mirror layer, the sent bubble's pill. */
+
+/* the textarea and its mirror share one box; the mirror sits under it and draws only the token pills */
+.cm-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.cm-field > textarea {
+  position: relative;
+}
+.cm-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: transparent;
+  /* the textarea's own type and wrapping (.composer textarea), so every line breaks at the same place */
+  font: inherit;
+  font-size: var(--fs-msg);
+  line-height: 20px;
+  padding: 5px 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+/* the same-font text gets a gray ground; the side shadows widen it without moving a single glyph */
+.cm-tok {
+  --tok: color-mix(in srgb, var(--ink) 11%, transparent);
+  color: transparent;
+  background: var(--tok);
+  border-radius: 4px;
+  box-shadow: -3px 0 0 var(--tok), 3px 0 0 var(--tok);
+}
+
+/* monospace pill: picker rows and sent bubbles (text drawn as HTML, so the width may differ) */
+.sk-pill {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+
+.sk-pop {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: min(440px, 100%);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.14s ease both;
+}
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  cursor: default;
+}
+.sk-row.on {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.sk-row .sk-pill {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-d {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sk-none {
+  padding: 5px 6px;
+  font-size: 12px;
+  color: var(--quiet);
+}

@@ -1,0 +1,26 @@
+{
+  "delegation_id": "deleg_e8b94630",
+  "started": "2026-11-09 19:48:43",
+  "task_count": 2,
+  "model": "claude-opus-5-5",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in the rlaope/oh-my-hermes repo), add search and provider-category filtering to the model picker, then open a PR (do NOT merge it).",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_e8b94630/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    },
+    {
+      "index": 1,
+      "goal": "In the omher desktop app (Tauri 2 + React 19 + Vite 7, at apps/omher in rlaope/oh-my-hermes), add a SESSIONS section to the sidebar under BOTS where the user starts NEW terminal agent sessions — exactly like typing `claude`, `codex`, `omh`, `pi` or `omp` in a terminal — and works with them inside omher. Open a PR (do NOT merge).",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_e8b94630/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    }
+  ],
+  "completed": "2026-11-09 20:35:16"
+}

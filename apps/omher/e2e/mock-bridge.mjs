@@ -9,6 +9,9 @@
 // mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open).
 import http from "node:http";
 import crypto from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
 const arg = (name, dflt) => {
@@ -41,8 +44,25 @@ const HISTORY_SEED = {
     ["user", "Summarise the Tauri 2 updater docs.", 5 * 3600],
     ["assistant", "The updater checks a signed manifest, downloads the bundle and swaps it on restart.", 5 * 3600 - 30],
   ],
-  default: [["assistant", "Hi, I'm Hermes. Ask me anything.", 24 * 3600]],
+  default: [
+    ["assistant", "Hi, I'm Hermes. Ask me anything.", 24 * 3600],
+    ["user", "Send me the chart, the clip and the report.", 2 * 3600],
+    ["assistant", "Here they are.\n\nMEDIA:/w/media/chart.png\nMEDIA:/w/media/clip.mp4\nMEDIA:/w/media/report.zip", 2 * 3600 - 20],
+    ["user", "Now the new chart, and both side by side.", 2 * 3600 - 60],
+    // files only, no caption: still gets the face, on the bubble column
+    ["assistant", "MEDIA:/w/media/chart-after.png", 2 * 3600 - 80],
+    ["assistant", "Before and after:\nMEDIA:/w/media/chart.png\nMEDIA:/w/media/chart-after.png", 2 * 3600 - 81],
+  ],
 };
+
+// media.read serves these tiny real files (e2e/fixtures/media) for the paths the seeded answers name.
+const MEDIA_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media");
+const MEDIA_TYPES = { png: "image/png", mp4: "video/mp4", zip: "application/zip" };
+const mediaLines = (text) =>
+  text
+    .split(/\r?\n/)
+    .map((l) => /^[ \t]*MEDIA:[ \t]*(.+?)[ \t]*$/.exec(l)?.[1])
+    .filter(Boolean);
 
 // Away sessions are stored as offsets from "now" so the timeline always looks fresh.
 const AWAY_SEED = {
@@ -131,6 +151,114 @@ const PANEL_DIFF = {
   "/w/gateway": { scope: "last commit", files: [{ path: "README.md", add: 1, del: 0 }], patch: "a91b0c2 docs: note the 60s upstream limit\n\ndiff --git a/README.md b/README.md\n@@ -1 +1,2 @@\n # gateway\n+Upstream closes idle connections after 60s." },
 };
 
+// Runs tab: what the real bridge's dag_to_run returns for three real (redacted) dag runs plus a live variant
+// (src/lib/__fixtures__/runs-bridge.json). The live one is moved to "now" so its times read like a running run.
+const RUNS_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-bridge.json", import.meta.url), "utf-8"));
+// T4/T5: the same runs with their helpers' models and routes joined (runs-routed.json, real bridge output), the
+// omher-v02 run and two plain delegate fan-outs for "default", and a synthetic 40-node run for the layout.
+const ROUTED = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-routed.json", import.meta.url), "utf-8"));
+const BIG = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/big-run.json", import.meta.url), "utf-8"));
+const HANDOFFS = { ...RUNS_FIXTURE.handoffs, ...ROUTED.handoffs };
+function runsSeed() {
+  const runs = structuredClone(ROUTED.kami);
+  for (const r of runs) {
+    if (r.state !== "running") continue;
+    const shift = now() - 90 - r.updated;
+    const move = (o) => {
+      for (const k of ["started", "ended", "updated"]) if (typeof o[k] === "number") o[k] += shift;
+    };
+    move(r);
+    for (const n of r.nodes) {
+      move(n);
+      n.attempts.forEach(move);
+    }
+  }
+  // "default" keeps its runs at their real times, except the live ones, moved to "now" like kami's. It also has
+  // one run nobody has started (the live fan-out's plan with no attempts; `startsAt` is a mock-only field, OMH
+  // records no start timer), for the plan card's "Starts in" / Start now / Edit.
+  const planned = structuredClone(ROUTED.kami.find((r) => r.id.endsWith("/codex-coexist-live")));
+  planned.id = "dag:20261102_235818_fcfb1bdd/codex-coexist-next";
+  planned.title = "Codex coexistence (next)";
+  planned.owner = { type: "bot", id: "default" };
+  planned.state = "running";
+  for (const n of planned.nodes) {
+    n.state = "waiting";
+    n.attempts = [];
+    for (const k of ["started", "ended", "handoff", "model", "summary"]) delete n[k];
+  }
+  planned.started = planned.updated = now() - 5;
+  planned.startsAt = now() + 10;
+  delete planned.ended;
+  const other = structuredClone([...ROUTED.default, BIG, planned]);
+  for (const r of other) {
+    if (r.state !== "running") continue;
+    const shift = now() - 120 - r.updated;
+    const move = (o) => {
+      for (const k of ["started", "ended", "updated"]) if (typeof o[k] === "number") o[k] += shift;
+    };
+    move(r);
+    for (const n of r.nodes) {
+      move(n);
+      n.attempts.forEach(move);
+    }
+  }
+  return { kami: runs, friren: [], default: other };
+}
+// T6: CLI agents' runs (runs.cli) - the real bridge's CliRuns output over the redacted Claude Code and Codex
+// fixtures (src/lib/__fixtures__/runs-cli.json, bridge/tests/fixtures/cli). Plus one live copy of the Claude
+// session moved to "now" with its last subagent still working (mock-only, so the running look can be checked).
+const CLI_FIXTURE = JSON.parse(readFileSync(new URL("../src/lib/__fixtures__/runs-cli.json", import.meta.url), "utf-8"));
+function cliSeed() {
+  const runs = structuredClone(CLI_FIXTURE.runs);
+  const live = structuredClone(runs.find((r) => r.agent === "claude"));
+  live.id = "claude:live-session";
+  live.owner = { type: "session", id: "live-session" };
+  live.title = "Fix the flaky login test";
+  live.state = "running";
+  // the session opened 4 minutes ago; its three calls went out 3m30s, 3m and 1m30s ago
+  live.started = now() - 240;
+  live.updated = now() - 20;
+  delete live.ended;
+  live.nodes.forEach((n, i) => {
+    const at = now() - [210, 180, 90][i];
+    const dur = (n.ended ?? n.started) - n.started;
+    n.started = at;
+    if (typeof n.ended === "number") n.ended = at + Math.min(dur, 150);
+    for (const a of n.attempts) {
+      a.started = at;
+      if (typeof a.ended === "number") a.ended = n.ended;
+    }
+    if (i === 0) {
+      // the failed call, retried with the right agent type: done
+      n.state = "done";
+      n.attempts = [{ n: 1, outcome: "completed", started: n.started, ended: n.started + 40 }];
+      n.ended = n.started + 40;
+      n.summary = "Reviewed the login flow: the test waited on a stale selector; fixed.";
+    }
+    if (i === live.nodes.length - 1) {
+      n.state = "running";
+      n.attempts = [{ n: 1, outcome: "open", started: n.started }];
+      delete n.ended;
+      delete n.summary;
+    }
+  });
+  return [live, ...runs];
+}
+
+// the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
+const runCounts = (r) => {
+  const fixed = r.nodes.filter(
+    (n) => (n.state === "failed" || n.state === "blocked") && r.nodes.some((m) => m.repairOf === n.id) && r.nodes.filter((m) => m.repairOf === n.id).every((m) => m.state === "done"),
+  ).length;
+  return {
+    nodes: r.nodes.length,
+    done: r.nodes.filter((n) => n.state === "done").length,
+    running: r.nodes.filter((n) => n.state === "running").length,
+    failed: r.nodes.filter((n) => n.state === "failed" || n.state === "blocked").length - fixed,
+    ...(fixed ? { repaired: fixed } : {}),
+  };
+};
+
 const PROVIDERS = [
   { slug: "claude-proxy", name: "Claude (proxy)", models: ["Opus 5.5", "Sonnet 5.5", "Haiku 5"] },
   { slug: "openai", name: "OpenAI", models: ["gpt-5.5", "gpt-5.5-mini"] },
@@ -149,7 +277,9 @@ const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars, folders;
+let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns;
+// Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
+let asked;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -158,7 +288,100 @@ const INFO_SEED = {
   default: { places: {}, first: null, skills: 41 },
 };
 
+// Every bot's skills (skills.list), sorted by name as the bridge sends them: plan and review, one that only
+// contains "pl", and one long name with a long description.
+const SKILL_SEED = [
+  { name: "deep-interview", description: "Ask the questions that settle what to build before any code is written." },
+  { name: "explain-code", description: "Walk through a piece of code and say what each part does." },
+  {
+    name: "long-document-reading-and-summarising",
+    description: "Read a document far larger than the context in passes, keep a running outline, and answer with page refe…",
+  },
+  { name: "plan", description: "Break the work into steps and agree on them before doing it." },
+  { name: "research", description: "Find sources, read them and answer with citations." },
+  { name: "review", description: "Review a diff for correctness, tests and risk, worst first." },
+];
+
+// Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (no %), Grok on PATH only.
+// "stale": the same Codex record after both reset times passed (no numbers). Switch with mock.usage {fixture}.
+let usageFixture = "default";
+const USAGE = {
+  default: () => [
+    { id: "codex", plan: "pro", state: "near", source_mtime: now() - 120,
+      windows: [
+        { label: "5 hours", used_percent: 73, resets_at: now() + 107 * MIN },
+        { label: "Weekly", used_percent: 60, resets_at: now() + (4 * 24 + 23) * 3600 },
+      ] },
+    { id: "claude", state: "limited", source_mtime: now() - 600,
+      windows: [{ label: "Weekly", resets_at: now() + 3 * 3600 + 12 * MIN }] },
+    { id: "grok", state: "connected", source_mtime: null, windows: [] },
+  ],
+  stale: () => [
+    { id: "codex", plan: "pro", state: "stale", source_mtime: now() - 9 * 24 * 3600,
+      windows: [
+        { label: "5 hours", resets_at: now() - 8 * 24 * 3600, stale: true },
+        { label: "Weekly", resets_at: now() - 2 * 24 * 3600, stale: true },
+      ] },
+  ],
+};
+
+// Accounts (accounts.*), shaped like the real bridge: every coding CLI, the CLI's own login first ("default").
+// Claude: signed in on this computer (owner@example.com), plus a local CLIProxyAPI holding 5 logins (counted
+// only). Codex: this computer + "Work", this computer in use. pi: on this computer, signed in. oh-my-pi, Grok,
+// Gemini: not installed. mock.accounts {limit: id, cli?} marks an account limited (as its usage record would).
+const ACCT_CLIS = ["claude", "codex", "pi", "omp", "grok", "gemini"];
+const ACCT_INSTALLED = { claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false };
+let acct, acctActive, acctLimited, acctLabels;
+const ACCT_ID = /^[a-z0-9][a-z0-9._-]{0,39}$/;
+function accountsList() {
+  return {
+    groups: ACCT_CLIS.map((cli) => {
+      const rows = acct[cli].map((a) => {
+        const limited = acctLimited[`${cli}:${a.id}`];
+        const state = !a.logged_in ? "login" : limited ? "limited" : a.id === acctActive[cli] ? "active" : "ready";
+        return {
+          id: a.id,
+          label: a.id === "default" ? acctLabels[cli] ?? "" : a.label,
+          email: a.email ?? "",
+          state,
+          dir: a.id === "default" ? null : `/mock/.omher/accounts/${cli}/${a.id}`,
+          usage: cli === "codex" && a.id === "default" ? USAGE.default()[0] : null,
+          ...(limited ? { resets_at: limited } : {}),
+        };
+      });
+      return {
+        cli,
+        installed: ACCT_INSTALLED[cli],
+        active: acctActive[cli],
+        accounts: rows,
+        ...(cli === "claude" ? { also: { name: "CLIProxyAPI", accounts: 5 } } : {}),
+      };
+    }),
+  };
+}
+const acctUpdate = () => setTimeout(() => broadcast({ event: "accounts.update", bot: "" }), 0);
+function acctFind(p) {
+  if (!ACCT_CLIS.includes(p.cli)) throw new OpError("bad_request", "unknown cli");
+  const id = p.account;
+  if (typeof id !== "string" || (id !== "default" && !ACCT_ID.test(id))) throw new OpError("bad_request", "bad account id");
+  const a = acct[p.cli].find((x) => x.id === id);
+  if (!a) throw new OpError("not_found", "no such account");
+  return a;
+}
+
 function reset() {
+  usageFixture = "default";
+  acct = {
+    claude: [{ id: "default", label: "", email: "owner@example.com", logged_in: true }],
+    codex: [{ id: "default", label: "", logged_in: true }, { id: "work", label: "Work", logged_in: true }],
+    pi: [{ id: "default", label: "", logged_in: true }],
+    omp: [{ id: "default", label: "", logged_in: false }],
+    grok: [{ id: "default", label: "", logged_in: false }],
+    gemini: [{ id: "default", label: "", logged_in: false }],
+  };
+  acctActive = Object.fromEntries(ACCT_CLIS.map((c) => [c, "default"]));
+  acctLimited = {};
+  acctLabels = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
   bots = Object.fromEntries(BOT_SEED.map((b) => [b.name, { ...b }]));
   history = Object.fromEntries(
@@ -172,7 +395,10 @@ function reset() {
   queues = {};
   avatars = {};
   folders = new Map(); // folder chat id -> { bot, cwd, open }
+  runs = runsSeed();
+  cliRuns = cliSeed();
   pending = new Map();
+  asked = new Map();
   idSeq = 0;
   calls = [];
   submits = [];
@@ -344,6 +570,9 @@ const OPS = {
   "chat.open": (p) => {
     const b = needBot(p);
     const m = models[b.name];
+    // asks still waiting on the person go out again after the reply (the bridge's replay)
+    const waiting = [...pending.keys()].map((id) => asked.get(id)).filter((e) => e && e.bot === b.name && !e.session);
+    if (waiting.length) setTimeout(() => waiting.forEach(broadcast), 0);
     return {
       session_id: `main-${b.name}`,
       messages: history[b.name],
@@ -497,6 +726,7 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "skills.list": (p) => (needBot(p), { skills: SKILL_SEED.map((x) => ({ ...x })) }),
   "panel.terminal": (p) => ({
     runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
   }),
@@ -508,6 +738,64 @@ const OPS = {
     const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
     if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
     return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
+  },
+  "media.read": (p) => {
+    const b = needBot(p);
+    const path = needStr(p, "path");
+    const named = history[b.name].some((m) => m.role === "assistant" && mediaLines(m.text).includes(path));
+    const name = path.split("/").pop();
+    const file = join(MEDIA_DIR, name);
+    let size;
+    try {
+      if (!named || !path.startsWith("/w/media/")) throw new Error("not named");
+      size = statSync(file).size;
+    } catch {
+      throw new OpError("not_found", "not a file this bot sent");
+    }
+    const out = { path, name, mime: MEDIA_TYPES[name.split(".").pop()] ?? "application/octet-stream", size };
+    if (p.info === true) return out;
+    return { ...out, data_base64: readFileSync(file).toString("base64") };
+  },
+  // Stages a file for the next chat.send, like Hermes' image.attach_bytes / pdf.attach / file.attach.
+  // A name starting with "fail" is refused, so the e2e can check that nothing is sent after a failed attach.
+  "chat.attach": (p) => {
+    needBot(p);
+    const kind = needStr(p, "kind");
+    const name = needStr(p, "name");
+    const data = needStr(p, "data_base64");
+    if (!["image", "pdf", "file"].includes(kind)) throw new OpError("bad_request", "need kind image|pdf|file");
+    if (name.startsWith("fail")) throw new OpError("attach_failed", `unsupported ${kind}`);
+    const bytes = Buffer.from(data, "base64").length;
+    if (kind === "image") return { kind, name, text: `[User attached image: ${name}]`, ref_text: "", bytes };
+    if (kind === "pdf") return { kind, name, text: `[User attached PDF: ${name} (1 page(s))]`, ref_text: "", bytes };
+    return { kind, name, text: "", ref_text: `@file:.hermes/attachments/${name}`, bytes };
+  },
+  "runs.list": (p) => ({
+    runs: (runs[needBot(p).name] ?? [])
+      .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
+      .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
+  }),
+  "runs.cli": (p) => {
+    const AGENTS = ["claude", "codex", "pi", "omp", "grok"];
+    if (p.agent !== undefined && !AGENTS.includes(p.agent)) throw new OpError("bad_request", `agent must be one of ${AGENTS.join(", ")}`);
+    if (p.cwd !== undefined && (typeof p.cwd !== "string" || !p.cwd)) throw new OpError("bad_request", "cwd must be a folder path");
+    if (p.since !== undefined && typeof p.since !== "number") throw new OpError("bad_request", "since must be epoch seconds");
+    return {
+      runs: cliRuns
+        .filter((r) => (p.agent === undefined || r.agent === p.agent) && (p.cwd === undefined || r.cwd === p.cwd) && r.started >= (p.since ?? 0))
+        .map(({ nodes, ...r }) => ({ ...r, counts: runCounts({ nodes }) }))
+        .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
+      agents: CLI_FIXTURE.agents,
+    };
+  },
+  "runs.get": (p) => {
+    const b = needBot(p);
+    const id = needStr(p, "run");
+    const cli = cliRuns.find((r) => r.id === id);
+    if (cli) return { run: cli, handoffs: {} };
+    const run = (runs[b.name] ?? []).find((r) => r.id === id);
+    if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
+    return { run, handoffs: HANDOFFS[id] ?? {} };
   },
   "routines.list": (p) => ({
     routines: (ROUTINE_SEED[needBot(p).name] ?? []).map((r) => ({
@@ -542,7 +830,70 @@ const OPS = {
     };
     return { ...models[b.name] };
   },
+  "usage.read": () => ({ providers: USAGE[usageFixture]() }),
+  "accounts.list": () => accountsList(),
+  "accounts.add": (p) => {
+    if (!ACCT_CLIS.includes(p.cli)) throw new OpError("bad_request", "unknown cli");
+    const label = String(p.label ?? "").trim().slice(0, 40);
+    const list = acct[p.cli];
+    let id = label.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+    if (!id || id === "default") {
+      let n = 2;
+      while (list.some((a) => a.id === `account-${n}`)) n += 1;
+      id = `account-${n}`;
+    }
+    if (list.some((a) => a.id === id)) throw new OpError("exists", `an account named ${id} already exists`);
+    list.push({ id, label, logged_in: false });
+    acct[p.cli] = [list[0], ...list.slice(1).sort((a, b) => a.id.localeCompare(b.id))];
+    acctUpdate();
+    return { id, dir: `/mock/.omher/accounts/${p.cli}/${id}` };
+  },
+  "accounts.set_active": (p) => {
+    acctFind(p);
+    acctActive[p.cli] = p.account;
+    acctUpdate();
+    return {};
+  },
+  "accounts.label": (p) => {
+    const a = acctFind(p);
+    const label = String(p.label ?? "").trim().slice(0, 40);
+    if (a.id === "default") acctLabels[p.cli] = label;
+    else a.label = label;
+    acctUpdate();
+    return {};
+  },
+  "accounts.remove": (p) => {
+    const a = acctFind(p);
+    if (a.id === "default") throw new OpError("bad_request", "bad account id");
+    acct[p.cli] = acct[p.cli].filter((x) => x !== a);
+    if (acctActive[p.cli] === a.id) acctActive[p.cli] = "default";
+    acctUpdate();
+    return {};
+  },
+  "accounts.discard": (p) => {
+    const a = acctFind(p);
+    if (a.id === "default") throw new OpError("bad_request", "bad account id");
+    if (a.logged_in) throw new OpError("signed_in", "this account is signed in; remove it from its menu");
+    acct[p.cli] = acct[p.cli].filter((x) => x !== a);
+    acctUpdate();
+    return {};
+  },
   // ---- test control (not part of the protocol)
+  "mock.usage": (p) => {
+    if (!(p.fixture in USAGE)) throw new OpError("bad_request", "unknown usage fixture");
+    usageFixture = p.fixture;
+    return {};
+  },
+  "mock.accounts": (p) => {
+    const cli = typeof p.cli === "string" ? p.cli : "codex";
+    if (typeof p.limit === "string") acctLimited[`${cli}:${p.limit}`] = now() + 2 * 3600;
+    if (p.signed_in && typeof p.signed_in === "object") {
+      const a = acct[cli]?.find((x) => x.id === p.signed_in.id);
+      if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });
+    }
+    broadcast({ event: "accounts.update", bot: "" });
+    return {};
+  },
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
   "mock.submits": () => ({ submits: submits.map((x) => ({ ...x })) }),
   "mock.emit": (p) => {
@@ -599,7 +950,9 @@ function handleFrame(sock, text) {
 const ev = (bot, event, fields = {}) => {
   const [b, session] = bot.split("\u0000");
   if (session !== undefined && event === "bot.status") return; // a folder chat never moves the bot's status
-  broadcast(session !== undefined ? { event, bot: b, session, ...fields } : { event, bot, ...fields });
+  const out = session !== undefined ? { event, bot: b, session, ...fields } : { event, bot, ...fields };
+  if (event === "approval.request" || event === "clarify.request") asked.set(fields.request_id, out);
+  broadcast(out);
 };
 const hangul = /[\u3131-\u318e\uac00-\ud7a3]/;
 
@@ -657,6 +1010,7 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
+  if (text.startsWith("/delegate")) return scriptDelegate(bot);
   scriptNormal(bot, text);
 }
 
@@ -679,6 +1033,20 @@ function scriptNormal(bot, text) {
     [2300, () => ev(bot, "delta", { text: parts[2] })],
     [2400, () => say(bot, answer)],
     [2500, () => endTurn(bot, "done")],
+  ]);
+}
+
+// A delegate_task that hands out two parts of the codex-coexist dag run (one returns, one keeps working).
+function scriptDelegate(bot) {
+  const dag = [
+    { run: "codex-coexist-live", node: "t3-doctor" },
+    { run: "codex-coexist-live", node: "t5-verify" },
+  ];
+  schedule(bot, [
+    [80, () => ev(bot, "tool.start", { tool_id: "d1", name: "delegate_task", detail: "Doctor check for the Codex pack (+1 more)", dag })],
+    [400, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 320 })],
+    [500, () => say(bot, "Both helpers are on it.")],
+    [600, () => endTurn(bot, "done")],
   ]);
 }
 

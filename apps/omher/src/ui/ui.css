@@ -230,3 +230,22 @@ button.ui-pill:hover {
     display: none;
   }
 }
+
+/* Hermes Agent's icon: its light tile on a light theme, its dark tile on a dark one */
+.hermes-ic {
+  display: inline-flex;
+  flex: none;
+}
+.hermes-ic img {
+  display: block;
+  border-radius: 22%;
+}
+.hermes-ic .on-light {
+  display: none;
+}
+[data-theme="light"] .hermes-ic .on-light {
+  display: block;
+}
+[data-theme="light"] .hermes-ic .on-dark {
+  display: none;
+}

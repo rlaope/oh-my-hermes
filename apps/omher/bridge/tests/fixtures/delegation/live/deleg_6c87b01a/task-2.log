@@ -1,0 +1,8 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_6c87b01a   task: 2
+goal: Hands-on usability review of the integrated omher PR stack
+started: 2026-11-09 21:22:02
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)
+21:46:08 final    | status=completed duration=1446.24s summary: I walked all seven tasks on the integ branch (mock bridge plus Playwright) in dark and light, at 1440×900, 1024×700 and 900×700. 900 is the app's smallest allowed window width. Every task can be finished: I found 0 blockers, 9 should-fix and 12 minor issues, and no console errors. The servers on :5531 and :5532 are stopped. **Top 5:** 1. **Keyboard focus starts inside the hidden right panel (#2695 …(+98 chars)

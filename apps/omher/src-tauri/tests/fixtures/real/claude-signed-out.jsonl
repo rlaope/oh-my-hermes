@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","cwd":"/w/proj","session_id":"bc03da85-b58e-4e10-81a0-6a7ee39a6d01","model":"claude-opus-5-5","permissionMode":"default"}
+{"type":"assistant","parent_tool_use_id":null,"error":"authentication_failed","message":{"id":"37a25e50-f8ce-41e7-b873-224dbdc8daf9","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Not logged in · Please run /login"}]}}
+{"type":"result","subtype":"success","is_error":true,"num_turns":1,"terminal_reason":"api_error","stop_reason":"stop_sequence","result":"Not logged in · Please run /login","session_id":"bc03da85-b58e-4e10-81a0-6a7ee39a6d01"}

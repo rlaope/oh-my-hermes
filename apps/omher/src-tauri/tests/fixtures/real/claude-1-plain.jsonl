@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","cwd":"/w/proj","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57","model":"claude-fable-5-2","permissionMode":"default"}
+{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"2+2 is 4."}}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"id":"msg_011CgtcdP1Sx8Bh7mvQU6F3R","role":"assistant","model":"claude-fable-5-2","content":[{"type":"text","text":"2+2 is 4."}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"terminal_reason":"completed","stop_reason":"end_turn","result":"2+2 is 4.","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57"}

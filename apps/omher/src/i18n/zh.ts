@@ -1,0 +1,93 @@
+import type { Key } from "./index";
+
+export const zh: Record<Key, string> = {
+  // graph (the dag box view and its header)
+  "graph.start": "起始节点",
+  "graph.deps": "依赖关系",
+  "graph.details": "节点详情",
+  "graph.untitled": "未命名",
+  "graph.accepted": "已接受",
+  "graph.finished": "完成",
+  "graph.running": "运行中",
+  "graph.handed": "已分派",
+  "graph.failed": "失败",
+  "graph.blocked": "受阻",
+  "graph.parked": "搁置",
+  "graph.cancelled": "已取消",
+  "graph.retry": "重试",
+  "graph.waiting": "等待中",
+  "graph.waits.one": "等待 {n} 项",
+  "graph.waits": "等待 {n} 项",
+  "graph.waits.short": "等待 {n} 项",
+  "graph.repaired": "已修复",
+  "graph.repair": "修复",
+  "graph.layer": "第 {n} 层",
+  "graph.attempt": "第 {n} 次尝试",
+  "graph.more": "+{n} 项",
+  "graph.all": "显示全部 {n} 项",
+  "graph.fewer": "收起",
+  "graph.fit": "适应",
+  "graph.reset": "重置布局",
+  "graph.zoomIn": "放大",
+  "graph.zoomOut": "缩小",
+  "graph.hint": "仅查看 · 拖动节点可移动 · Esc 关闭",
+  "graph.full": "全屏视图",
+  "graph.close": "关闭图",
+  "graph.dag": "OMH / DAG",
+  "graph.helpers": "Hermes / 助手",
+  "graph.subagents": "{agent} / 子代理",
+  "graph.tasks.one": "{n} 个任务",
+  "graph.tasks": "{n} 个任务",
+  "graph.main": "main",
+  "graph.run.running": "运行中",
+  "graph.run.done": "已完成",
+  "graph.run.failed": "失败",
+  "graph.run.cancelled": "已取消",
+  "graph.done": "完成 {done}/{total}",
+  "graph.nfailed": "{n} 项失败",
+  "graph.nrepaired": "{n} 项已修复",
+  "graph.nwaiting": "{n} 项等待",
+  "graph.notStarted": "未开始",
+  "graph.startsIn": "{t} 后开始",
+  "graph.startNow": "立即开始",
+  "graph.edit": "编辑",
+  "graph.prefill": "会把请求放入消息框，不会发送。",
+
+  // plans (the Plans tab: the list of a bot's runs)
+  "plans.tab": "计划",
+  "plans.of": "{bot}的计划",
+  "plans.all": "全部 {n} 个计划",
+  "plans.none": "还没有计划。",
+  "plans.noneHint": "{bot}把工作拆成并行部分后，计划会显示在这里。",
+  "plans.cli": "CLI 代理",
+  "plans.showAll": "显示全部 ({n})",
+  "plans.fewer": "收起",
+  "plans.refresh": "刷新",
+  "plans.open": "打开计划 {name}",
+  "plans.graph": "计划图",
+
+  // chat (the chat column's own words)
+  "chat.noBots": "还没有机器人",
+  "chat.noBotsHint": "机器人就是一个 Hermes 配置档。用左上角的 + 添加，或新建一个：",
+  "chat.pick": "选择一个机器人",
+  "chat.connecting": "正在连接 Hermes…",
+
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n} 项",
+
+  // skills (the composer's ./ picker)
+  "skills.label": "技能",
+  "skills.none": "没有匹配的技能",
+
+  // sessions (SESSIONS in the sidebar)
+  "sessions.choose": "选择文件夹…",
+  "sessions.recent": "最近",
+  "sessions.back": "返回",
+
+  // sounds (Settings › General)
+  "sounds.title": "声音",
+  "sounds.hint": "发送、机器人回答或提问、出错时的轻声提示",
+  "sounds.play": "播放",
+  "sounds.on": "开",
+  "sounds.off": "关",
+};

@@ -48,6 +48,7 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
 async function startClaude(page: Page) {
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-claude").click();
+  await page.getByTestId("session-choose").click();
   await expect(page.getByTestId("session-chat")).toBeVisible();
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
   return page.locator("[data-testid=session-list] .ss-row").first();
@@ -174,6 +175,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
     await page.getByTestId("session-new").click();
     await page.getByTestId("session-agent-codex").click();
+    await page.getByTestId("session-choose").click();
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
     await page.getByTestId("composer").fill("/slow");
     await page.keyboard.press("Enter");

@@ -1,0 +1,181 @@
+{
+ "cancelled_at": 1793281500.3679621,
+ "claim_boundary": "The plan a parent agent declared for a dag-ulw run and the outcomes it settled. A settled outcome is the parent's judgement; a child's status is Hermes' report. Not execution, verification, review, CI or merge evidence.",
+ "defined_at": 1793257616.167948,
+ "digest": "1ced44be7ad715eb",
+ "goal": "Opt-in debug_python (omh-dap) tool via debugpy DAP, merged only if the pre-registered 8-model A/B gate passes",
+ "lint": [
+  "serial_graph:5 nodes, critical path 4; most of the graph is one chain, so split it into parallel lanes where the work allows."
+ ],
+ "name": "omh-dap",
+ "nodes": [
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793257616.167948,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "3 commits + parent merge d9f0b36a9: real-debugpy 39 passed, policy Ran 137 OK",
+     "settled_at": 1793263068.886291
+    }
+   ],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "tool",
+   "label": "debug_python tool + registration",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": [
+    "src/",
+    "tests/"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793257616.167948,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "54ef5c7f2; 55 passed, corpus ok, fake 9/9; parent checked 3 fixtures fail with value-only asserts",
+     "settled_at": 1793258330.069538
+    }
+   ],
+   "category": "unspecified-low",
+   "cycle": 0,
+   "depends_on": [],
+   "found_by": "",
+   "id": "bench",
+   "label": "bench dap surface + dap-ab split",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": [
+    "benchmarks/live-model-tools/v1/"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793263068.886291,
+     "n": 1,
+     "outcome": "accepted",
+     "provider_error": false,
+     "reason": "a-i pass; j's 2 defects fixed by parent 67b3a5c6a, rerun j 7/7 d 6/6 f 13/13",
+     "settled_at": 1793264111.802546
+    }
+   ],
+   "category": "unspecified-low",
+   "cycle": 0,
+   "depends_on": [
+    "tool"
+   ],
+   "found_by": "",
+   "id": "adversarial",
+   "label": "break the tool before paying",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": [
+    "/w/.hermes/profiles/kami/cache/scratch/dap-adv/"
+   ]
+  },
+  {
+   "attempts": [
+    {
+     "fallback": false,
+     "handed_out_at": 1793264111.802546,
+     "handle": "proc_d0e07e55bc44 run_all.sh pid 86481, log scratch/dap-bench/run_all.log",
+     "n": 1,
+     "outcome": "parked",
+     "provider_error": false,
+     "reason": "parent launched 144-run A/B detached (138 paid + 6 seeded)",
+     "settled_at": 1793272244.384185,
+     "wake_at": 1793277000.0
+    }
+   ],
+   "category": "unspecified-low",
+   "cycle": 0,
+   "depends_on": [
+    "adversarial",
+    "bench"
+   ],
+   "found_by": "",
+   "id": "measure",
+   "label": "8-model patch vs dap A/B",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": [
+    "/w/.hermes/profiles/kami/cache/scratch/dap-bench/",
+    "benchmarks/live-model-tools/v1/artifacts/dap-ab/"
+   ]
+  },
+  {
+   "attempts": [],
+   "category": "unspecified-high",
+   "cycle": 0,
+   "depends_on": [
+    "measure"
+   ],
+   "found_by": "",
+   "id": "verify",
+   "label": "independent recompute + re-test",
+   "origin": "define",
+   "prompt": "(prompt left out of the fixture)",
+   "repairs": "",
+   "write_scope": [
+    "/w/.hermes/profiles/kami/cache/scratch/dap-verify/"
+   ]
+  }
+ ],
+ "repairs": {},
+ "run": "omh-dap",
+ "schema_version": "omh_dag/v1",
+ "session_id": "20261026_134438_3ae70257",
+ "topology": {
+  "bottlenecks": [
+   {
+    "blocks": 3,
+    "node": "tool"
+   },
+   {
+    "blocks": 2,
+    "node": "adversarial"
+   },
+   {
+    "blocks": 2,
+    "node": "bench"
+   }
+  ],
+  "critical_path": [
+   "tool",
+   "adversarial",
+   "measure",
+   "verify"
+  ],
+  "layers": [
+   [
+    "tool",
+    "bench"
+   ],
+   [
+    "adversarial"
+   ],
+   [
+    "measure"
+   ],
+   [
+    "verify"
+   ]
+  ]
+ },
+ "updated_at": 1793281500.3679621
+}

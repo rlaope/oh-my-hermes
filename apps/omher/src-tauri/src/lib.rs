@@ -1,3 +1,4 @@
+mod accounts;
 mod agent_chat;
 mod bridge;
 mod sessions;
@@ -19,6 +20,7 @@ struct Shell {
     bridge: Arc<Bridge>,
     resource_dir: Option<PathBuf>,
     installing: Arc<AtomicBool>,
+    logins: Arc<accounts::Logins>,
     sessions: Arc<Sessions>,
     chats: Arc<ChatSessions>,
 }
@@ -124,6 +126,55 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
     Ok(code)
 }
 
+fn user_home() -> Result<PathBuf, String> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "no home folder".to_string())
+}
+
+/// The env a new session of `cli` starts with to use omher account `id` (`default` = the CLI's own home).
+/// SESSIONS calls this when it starts an agent with the account picked for new sessions.
+#[tauri::command]
+async fn account_env(cli: String, id: String) -> Result<Vec<(String, String)>, String> {
+    accounts::account_env(&user_home()?, &cli, &id)
+}
+
+/// Which coding CLIs are on this computer (PATH and the install folders a Dock-started app does not see).
+#[tauri::command]
+async fn account_clis() -> Result<Vec<(&'static str, bool)>, String> {
+    tauri::async_runtime::spawn_blocking(accounts::clis_on_this_computer).await.map_err(|e| e.to_string())
+}
+
+/// The CLI's own login status for account `id`, through its fixed status command (Claude Code, Codex). Only
+/// signed in / email / plan / method come back; `null` for CLIs that have no status command.
+#[tauri::command]
+async fn account_status(cli: String, id: String) -> Result<Option<accounts::LoginStatus>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || accounts::status(&home, &cli, &id)).await.map_err(|e| e.to_string())?
+}
+
+/// Start the CLI's own sign-in (`claude auth login`, `codex login`) with omher account `id` as its home. The
+/// browser part happens in the CLI; its plain output lines and then its exit arrive on `on_event`.
+#[tauri::command]
+async fn account_login_start(
+    shell: State<'_, Shell>,
+    cli: String,
+    id: String,
+    on_event: tauri::ipc::Channel<accounts::LoginEvent>,
+) -> Result<u32, String> {
+    shell.logins.start(&user_home()?, &cli, &id, move |ev| {
+        let _ = on_event.send(ev);
+    })
+}
+
+/// Cancel a sign-in started above. Its exit still arrives on its channel.
+#[tauri::command]
+async fn account_login_cancel(shell: State<'_, Shell>, login: u32) -> Result<(), String> {
+    shell.logins.cancel(login);
+    Ok(())
+}
+
 /// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
 /// was found, if anywhere.
 #[tauri::command]
@@ -148,7 +199,10 @@ async fn session_start(
 ) -> Result<u32, String> {
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), cols, rows, move |ev| match ev {
+        // The account Settings › Accounts picked for new sessions of this agent's CLI: its home variable, or
+        // nothing ("This computer"). chat_start passes the same.
+        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        sessions.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -194,7 +248,9 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
 async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     let chats = shell.chats.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), move |out| {
+        // The same account as a terminal session of this agent: its home variable, or nothing ("This computer").
+        let account_env = user_home().map(|h| accounts::session_env(&h, &agent)).unwrap_or_default();
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, move |out| {
             let _ = on_event.send(match out {
                 ChatOut::Event(e) => e,
                 ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),
@@ -227,6 +283,28 @@ async fn chat_close_all(shell: State<'_, Shell>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || chats.close_all()).await.map_err(|e| e.to_string())
 }
 
+/// Open a file the bot sent, with the system's default app, or show it in Finder / Explorer
+/// (`reveal: true`). Only a file the bridge just served through `media.read` (the bot named it in a
+/// `MEDIA:` line) may be opened; any other path is refused.
+#[tauri::command]
+async fn open_media(shell: State<'_, Shell>, path: String, reveal: Option<bool>) -> Result<(), String> {
+    let path = media_target(&path, |p| shell.bridge.served_media(p))?;
+    if reveal.unwrap_or(false) {
+        tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
+    } else {
+        tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+    }
+}
+
+/// The path to open, when `served` knows it and it is still a plain file.
+pub(crate) fn media_target<S: Fn(&str) -> bool>(path: &str, served: S) -> Result<PathBuf, String> {
+    let p = PathBuf::from(path);
+    if path.is_empty() || !p.is_absolute() || !served(path) || !p.is_file() {
+        return Err("not a file this bot sent".into());
+    }
+    Ok(p)
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -250,6 +328,11 @@ pub fn run() {
             open_external,
             install_engine,
             install_engine_command,
+            account_env,
+            account_clis,
+            account_status,
+            account_login_start,
+            account_login_cancel,
             sessions_agents,
             session_start,
             session_write,
@@ -259,7 +342,8 @@ pub fn run() {
             chat_start,
             chat_input,
             chat_close,
-            chat_close_all
+            chat_close_all,
+            open_media
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -269,6 +353,7 @@ pub fn run() {
                 bridge,
                 resource_dir,
                 installing: Arc::new(AtomicBool::new(false)),
+                logins: accounts::Logins::new(),
                 sessions: Sessions::new(),
                 chats: ChatSessions::new(),
             });
@@ -282,6 +367,7 @@ pub fn run() {
             if let Some(shell) = handle.try_state::<Shell>() {
                 shell.sessions.close_all();
                 shell.chats.close_all();
+                shell.logins.cancel_all();
                 shell.bridge.stop();
             }
         }
@@ -290,7 +376,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::allowed_external;
+    use super::{allowed_external, media_target};
 
     #[test]
     fn opens_only_thread_links() {
@@ -312,5 +398,25 @@ mod tests {
         assert!(allowed_external(&discord_app_url("https://discord.com/channels/1/2").unwrap()));
         assert_eq!(discord_app_url("slack://channel?team=T1&id=C1"), None);
         assert_eq!(discord_app_url("https://t.me/x"), None);
+    }
+
+    #[test]
+    fn open_media_refuses_paths_the_bridge_did_not_serve() {
+        let dir = std::env::temp_dir().join(format!("omher-open-media-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.png");
+        std::fs::write(&file, b"x").unwrap();
+        let served = file.to_string_lossy().to_string();
+        let known = |p: &str| p == served;
+        assert_eq!(media_target(&served, known).unwrap(), file);
+        let other = dir.join("b.png");
+        std::fs::write(&other, b"x").unwrap();
+        assert!(media_target(&other.to_string_lossy(), known).is_err(), "unknown file");
+        assert!(media_target(&dir.to_string_lossy(), |_| true).is_err(), "a folder");
+        assert!(media_target("a.png", |_| true).is_err(), "relative");
+        assert!(media_target("", |_| true).is_err(), "empty");
+        std::fs::remove_file(&file).unwrap();
+        assert!(media_target(&served, known).is_err(), "gone since it was served");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

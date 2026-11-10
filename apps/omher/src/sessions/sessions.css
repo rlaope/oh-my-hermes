@@ -1,9 +1,11 @@
 /* SESSIONS: sidebar section, + menu, terminal view. */
 
-/* BOTS and SESSIONS share the sidebar height half and half; each list scrolls on its own. */
+/* BOTS and SESSIONS each take the room their rows need and share what is left; when both are long, each gives
+   way in proportion and scrolls on its own. Neither is squeezed under its header and a row or two: twelve bots
+   beside an empty SESSIONS no longer stop at five with a blank half under them. */
 .side-sec {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 96px;
   display: flex;
   flex-direction: column;
 }
@@ -40,6 +42,11 @@
 .ss-plus[aria-expanded="true"] {
   background: var(--raise2);
   color: var(--ink);
+}
+/* the header's + menu opens on the row's own bottom edge, 2px above the "New session" button under it, so the
+   button's top edge and corners never show above the menu as a second edge */
+.side-sh-row .ss-pop {
+  top: 100%;
 }
 .ss-pop {
   left: calc(-1 * var(--side-x) + 8px);
@@ -95,6 +102,30 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* an agent row: the menu is at most the sidebar less 8px a side, too narrow for "Claude Code as work@…" and the
+   command on one line, so the account gets its own muted line under the agent; each ellipsizes only if it must
+   (the row's title has both) */
+.ss-n-as {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+.ss-l,
+.ss-as {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-item:has(.ss-as) {
+  height: 40px;
+}
+.ss-as {
+  /* which account the session will use: muted, read-only */
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+}
 .ss-cmd {
   font-size: 10.5px;
   color: var(--muted);
@@ -120,6 +151,34 @@
   height: 1px;
   background: var(--line);
   margin: 6px 0 4px;
+}
+/* step 2 of the menu: ← and the agent picked, over its folder choices */
+.ss-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px 0 2px;
+  margin-bottom: 2px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.ss-back {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex: none;
+}
+.ss-back svg {
+  transform: scaleX(-1);
+}
+.ss-back:hover {
+  background: var(--raise2);
+  color: var(--ink);
 }
 
 /* agent marks */
@@ -235,25 +294,17 @@
   place-items: center;
   flex: none;
 }
-/* SESSIONS owns its live dot: the bot row's dot styles may change (the answer ring replaced them) */
+/* SESSIONS owns its live dot: the bot row's dot styles may change (the answer ring replaced them). A terminal row
+   says "running" only with it, so it is solid and inside the tile's corner: a pulse fading to 30% or a dot astride
+   the tile's edge read as nothing. */
 .ss-row .live-dot {
   position: absolute;
-  left: 26px;
-  top: 26px;
-  width: 9px;
-  height: 9px;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--spin);
-  border: 2px solid var(--side);
-  animation: pulse 1.4s infinite;
-}
-.ss-row.active .live-dot {
-  border-color: var(--active-row);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ss-row .live-dot {
-    animation: none;
-  }
 }
 .ss-x {
   position: absolute;
@@ -406,11 +457,32 @@
   margin: 0 auto 8px;
   font-size: 11.5px;
   color: var(--quiet);
-  text-align: center;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ss-ended-t {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+.ss-restart {
+  flex: none;
+  font: inherit;
+  font-weight: 560;
+  color: var(--body);
+  background: var(--raise2);
+  border: 0;
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.ss-restart:hover {
+  color: var(--ink);
 }
 /* an approval or question waits: amber, the app's "needs attention" colour (never the brand gradient) */
 :root {
@@ -418,10 +490,6 @@
 }
 [data-theme="light"] {
   --needs: #9a6200;
-}
-.bot-p.ss-needs {
-  color: var(--needs-text, var(--needs));
-  font-weight: 600;
 }
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {

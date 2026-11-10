@@ -1,0 +1,93 @@
+import type { Key } from "./index";
+
+export const ko: Record<Key, string> = {
+  // graph (the dag box view and its header)
+  "graph.start": "시작 노드",
+  "graph.deps": "의존 관계",
+  "graph.details": "노드 상세",
+  "graph.untitled": "제목 없음",
+  "graph.accepted": "승인됨",
+  "graph.finished": "완료",
+  "graph.running": "실행 중",
+  "graph.handed": "전달됨",
+  "graph.failed": "실패",
+  "graph.blocked": "막힘",
+  "graph.parked": "보류",
+  "graph.cancelled": "취소됨",
+  "graph.retry": "재시도",
+  "graph.waiting": "대기 중",
+  "graph.waits.one": "선행 {n}개 대기",
+  "graph.waits": "선행 {n}개 대기",
+  "graph.waits.short": "선행 {n}개",
+  "graph.repaired": "복구됨",
+  "graph.repair": "복구",
+  "graph.layer": "{n}단계",
+  "graph.attempt": "{n}번째 시도",
+  "graph.more": "+{n}개 더",
+  "graph.all": "전체 {n}개 보기",
+  "graph.fewer": "접기",
+  "graph.fit": "맞춤",
+  "graph.reset": "배치 초기화",
+  "graph.zoomIn": "확대",
+  "graph.zoomOut": "축소",
+  "graph.hint": "보기 전용 · 노드를 끌어 옮기기 · Esc로 닫기",
+  "graph.full": "전체 보기",
+  "graph.close": "그래프 닫기",
+  "graph.dag": "OMH / DAG",
+  "graph.helpers": "Hermes / 헬퍼",
+  "graph.subagents": "{agent} / 서브에이전트",
+  "graph.tasks.one": "작업 {n}개",
+  "graph.tasks": "작업 {n}개",
+  "graph.main": "main",
+  "graph.run.running": "실행 중",
+  "graph.run.done": "완료됨",
+  "graph.run.failed": "실패",
+  "graph.run.cancelled": "취소됨",
+  "graph.done": "완료 {done}/{total}",
+  "graph.nfailed": "실패 {n}",
+  "graph.nrepaired": "복구 {n}",
+  "graph.nwaiting": "대기 {n}",
+  "graph.notStarted": "시작 전",
+  "graph.startsIn": "{t} 후 시작",
+  "graph.startNow": "지금 시작",
+  "graph.edit": "수정",
+  "graph.prefill": "메시지 입력창에 요청을 넣습니다. 전송하지 않습니다.",
+
+  // plans (the Plans tab: the list of a bot's runs)
+  "plans.tab": "계획",
+  "plans.of": "{bot}의 계획",
+  "plans.all": "계획 {n}개 전체",
+  "plans.none": "아직 계획이 없습니다.",
+  "plans.noneHint": "{bot}이(가) 작업을 병렬로 나누면 그 계획이 여기에 표시됩니다.",
+  "plans.cli": "CLI 에이전트",
+  "plans.showAll": "전체 보기 ({n})",
+  "plans.fewer": "접기",
+  "plans.refresh": "새로 고침",
+  "plans.open": "계획 {name} 열기",
+  "plans.graph": "계획 그래프",
+
+  // chat (the chat column's own words)
+  "chat.noBots": "아직 봇이 없습니다",
+  "chat.noBotsHint": "봇은 Hermes 프로필입니다. 왼쪽 위 +로 추가하거나 새로 만드세요:",
+  "chat.pick": "봇을 선택하세요",
+  "chat.connecting": "Hermes에 연결하는 중…",
+
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n}개 더",
+
+  // skills (the composer's ./ picker)
+  "skills.label": "스킬",
+  "skills.none": "일치하는 스킬 없음",
+
+  // sessions (SESSIONS in the sidebar)
+  "sessions.choose": "폴더 선택…",
+  "sessions.recent": "최근",
+  "sessions.back": "뒤로",
+
+  // sounds (Settings › General)
+  "sounds.title": "소리",
+  "sounds.hint": "보낼 때, 봇이 답하거나 물을 때, 오류가 날 때 작은 소리",
+  "sounds.play": "재생",
+  "sounds.on": "켬",
+  "sounds.off": "끔",
+};

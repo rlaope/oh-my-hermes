@@ -1,0 +1,26 @@
+{
+  "units": [
+    {
+      "category": "unspecified-high",
+      "depends_on": [],
+      "file_scope": [
+        "codex-coexist-t1:src/coding/executor_skill_discovery.py",
+        "codex-coexist-t1:tests/test_executor_skill_discovery.py"
+      ],
+      "owner": "codex",
+      "title": "Codex skill discovery reads .agents/skills (Hermes)",
+      "unit_id": "t1-hermes"
+    },
+    {
+      "category": "unspecified-high",
+      "depends_on": [],
+      "file_scope": [
+        "codex-coexist-fence:src/coding/fanout_confinement.py",
+        "codex-coexist-fence:tests/test_fanout_confinement.py"
+      ],
+      "owner": "codex",
+      "title": "Fence allows zsh heredocs and uv cache",
+      "unit_id": "t4-fence"
+    }
+  ]
+}

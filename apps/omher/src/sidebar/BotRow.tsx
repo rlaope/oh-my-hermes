@@ -5,6 +5,7 @@ import { Avatar, LiveRing, Ticker, TypingDots } from "../ui";
 import { AskLine } from "./Needs";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
+import { fileName, splitMedia } from "../chat/parts/mediaLines";
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
@@ -40,8 +41,12 @@ function LiveStep({ chat, text }: { chat: Chat | undefined; text: string }) {
   );
 }
 
-/** Markdown-ish text to one plain line. */
-export const plain = (t: string) =>
+/** Markdown-ish text to one plain line; a file the bot sent shows as its name. */
+export const plain = (raw: string) => {
+  const { text, paths } = splitMedia(raw);
+  return text ? flat(text) : paths.map(fileName).join(", ");
+};
+const flat = (t: string) =>
   t
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[`*_>#]/g, "")

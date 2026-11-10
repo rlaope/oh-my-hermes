@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_57ba6014",
+  "started": "2026-11-09 21:09:16",
+  "task_count": 1,
+  "model": "claude-opus-5-5",
+  "provider": "claude-proxy",
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Accounts: stacked, switch, auto-switch [dag:omher-v02/t11-accounts]",
+      "log": "/w/.hermes/profiles/kami/cache/delegation/live/deleg_57ba6014/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "claude-opus-5-5"
+    }
+  ],
+  "completed": "2026-11-09 22:08:30"
+}

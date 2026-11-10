@@ -3,8 +3,23 @@
   flex: 1;
   display: grid;
   place-items: center;
-  color: var(--quiet);
-  font-size: 12px;
+  align-content: center;
+  gap: 6px;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.chat-empty b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.chat-empty code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--body);
 }
 /* The name keeps its natural width and ellipsizes only below ~120px of button: `width` sets that floor
    through the flex item's automatic minimum (min(width, content)), `flex-basis` keeps short names short. */
@@ -77,6 +92,12 @@
   font-size: 11px;
   letter-spacing: 0.01em;
 }
+/* a notice in the date dividers' place (the bot is not reachable, has no model): it carries information, so it
+   reads as text, not as a divider */
+.thread > .day.note {
+  color: var(--muted);
+  font-size: 12px;
+}
 /* consecutive messages from the same side sit close; a new turn gets air */
 .row-user + .row-user,
 .row-assistant + .row-assistant,
@@ -121,8 +142,21 @@
 .msg.a.face > .msg-face.blank {
   visibility: hidden;
 }
-.msg.a.face > .b {
-  max-width: min(80%, 760px);
+/* the bubble column beside the face: the caption, then the files the bot sent under it (6px), all on the
+   bubble's left edge. A definite width so a picture can size against it; the bubble still hugs its text. */
+.msg-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: min(80%, 760px);
+  min-width: 0;
+}
+.msg.a .msg-col > .b {
+  max-width: 100%;
+}
+[data-bubbles="open"] .msg-col {
+  width: 100%;
 }
 .msg .b {
   border-radius: var(--r-bubble);
@@ -140,13 +174,15 @@
 .msg.u .b {
   background: var(--bub-me);
   color: var(--ink);
-  max-width: min(70%, 640px);
+  /* 70% of the column, up to 640px; in a narrow column (a side panel open) it may use all but 40px of it */
+  max-width: min(100% - 40px, max(70%, 380px), 640px);
   white-space: pre-wrap;
 }
 .msg.a .b {
   background: var(--bub-bot);
   color: var(--body);
-  max-width: 80%;
+  /* 80% of the column; in a narrow column the whole of it, so a sentence is not five lines beside empty room */
+  max-width: min(100%, max(80%, 440px));
 }
 
 /* bubble styles (Settings > Appearance) */
@@ -212,10 +248,10 @@
   line-height: 1.35;
 }
 .md h1 {
-  font-size: calc(var(--fs-msg) + 6px);
+  font-size: calc(var(--fs-msg) + 3px);
 }
 .md h2 {
-  font-size: calc(var(--fs-msg) + 4px);
+  font-size: calc(var(--fs-msg) + 2px);
 }
 .md h3 {
   font-size: calc(var(--fs-msg) + 1px);
@@ -281,6 +317,8 @@
 /* tables: scroll inside the bubble when wide; numbers and short cells stay on one line */
 .md table {
   display: block;
+  /* as wide as its cells need before any cell breaks a word; past the bubble it scrolls sideways */
+  width: max-content;
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
@@ -377,7 +415,12 @@
 [data-bubbles="open"] .msg.a.typing .b {
   padding: 0 2px;
 }
-.msg.streaming .b::after {
+/* the caret ends the last line of text: after the closing paragraph or heading, or the last item of a closing list
+   (on a line of its own at bullet indent it read as an empty bullet); after a code block or a table, or with no
+   text yet, it ends the bubble */
+.msg.streaming .b > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+.msg.streaming .b > :is(ul, ol):last-child > li:last-child::after,
+.msg.streaming .b:not(:has(> :is(p, h1, h2, h3, h4, h5, h6, ul, ol):last-child))::after {
   content: "";
   display: inline-block;
   width: 6px;
@@ -413,6 +456,19 @@
 }
 .line-t.strong {
   color: var(--body);
+}
+/* one quiet line from omher itself (account / model auto-switch) */
+.line.sys {
+  justify-content: center;
+  font-size: 11.5px;
+  color: var(--quiet);
+}
+.line.sys::before,
+.line.sys::after {
+  content: "";
+  flex: 0 1 48px;
+  height: 1px;
+  background: var(--line-strong);
 }
 .line-src {
   flex: none;
@@ -464,10 +520,15 @@
   background: var(--side);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.composer-row {
+  display: flex;
   align-items: flex-end;
   gap: 4px;
-  padding: 7px 7px 7px 14px;
-  transition: border-color 0.2s, background 0.2s;
 }
 .composer:focus-within {
   border-color: var(--line-strong);

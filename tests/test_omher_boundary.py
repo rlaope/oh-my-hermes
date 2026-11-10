@@ -29,12 +29,21 @@ RULES = (
     "omher sends, answers and interrupts only in the bot's main chat, the session titled `Bot Chat`,",
     "and in folder chats the bridge created itself for an oh-my-hermes session (`folder.open`);",
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's.",
+    "Files the person attaches go to that same chat only, as bytes through Hermes' own `image.attach_bytes`,",
+    "the bridge never opens the person's files.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
     "omher makes no LLM or API call itself. Every model call is Hermes'.",
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
     "The app starts the bridge as a child process and stops it when the app exits.",
     "The Python `omh` package never imports omher, and nothing under `src/` refers to `apps/omher`.",
     "omher writes to a Hermes profile only its display name (`profile.yaml` `display_name`) and its picture",
+    "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",
+    "it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.",
+    "Accounts (Settings › Accounts) are the one exception to rules 4, 10 and 17.",
+    "a local CLIProxyAPI is only counted by its auth file names.",
+    "The app runs only the CLIs' own status and sign-in commands, as fixed argv (`claude auth status --json`, `claude auth login`,",
+    "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
+    "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "The only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
@@ -47,6 +56,21 @@ RULES = (
     "The process is stopped when its session is closed and when the app exits.",
     "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
     "The command is fixed in the shell; nothing from the page reaches it.",
+    "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
+    "the desktop app opens only a file the bridge just served this way.",
+    "omher reads OMH dag run records (`<omh home>/runtime/dag/*/*.json`) and their handoff files only for runs whose\n    session is in the bot's own `state.db`",
+    "never settles, retries or cancels a run; the Plans tab (these runs, listed as plans) is read-only.",
+    "For the Plans graph omher also reads, never writes, Hermes' delegate_task folders",
+    "and uses only the records written by the bot's own sessions.",
+    "the CLI agents' own session files on this machine",
+    "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
+    "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
+    "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
+    "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
+    "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
+    "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
+    "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
+    "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
     "omher updates itself only through Tauri's updater, and only from one fixed address:",
     "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
     " and only after the person presses the update button; then it restarts omher.",
@@ -86,13 +110,14 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_thirteen_numbered_rules(self) -> None:
-        # 13: rule 10 (the bridge's read-only git), rule 11 (SESSIONS' allow-listed agents), rule 12
-        # (the one installer) and rule 13 (the signed self-update) each widened the boundary on purpose; the
-        # rules stay numbered 1..n with no gap or repeat.
-        text = DOC.read_text(encoding="utf-8")
-        rules = re.findall(r"^(\d+)\. ", text, re.M)
-        self.assertTrue(6 <= len(rules) <= 13, len(rules))
+    def test_boundary_is_between_six_and_twenty_numbered_rules(self) -> None:
+        # 20: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
+        # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
+        # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
+        # (skills.list for the ./ picker) and rule 20 (the signed self-update) each widened the boundary on
+        # purpose; the rules stay numbered 1..n with no gap or repeat.
+        rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
+        self.assertTrue(6 <= len(rules) <= 20, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -104,7 +129,7 @@ class DocPins(unittest.TestCase):
 
 
 class SignedSelfUpdateFromOneAddress(unittest.TestCase):
-    """Rule 13: the updater reads one fixed endpoint, verifies against a pinned key, and is driven from one
+    """Rule 20: the updater reads one fixed endpoint, verifies against a pinned key, and is driven from one
     UI module after a click."""
 
     def test_the_updater_has_one_fixed_endpoint_and_a_pinned_key(self) -> None:
@@ -164,13 +189,15 @@ class TheOneInstaller(unittest.TestCase):
     def test_only_three_places_in_the_shell_start_a_process(self) -> None:
         spawns = {}
         for path in sorted(SHELL_SRC.glob("*.rs")):
-            n = path.read_text(encoding="utf-8").count("Command::new(")
+            text = path.read_text(encoding="utf-8")
+            n = (text[: text.index("#[cfg(test)]")] if "#[cfg(test)]" in text else text).count("Command::new(")
             if n:
                 spawns[path.name] = n
-        # bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed installer; agent_chat.rs
-        # starts a chat session's allow-listed agent (rule 11). Terminal sessions start theirs through the
-        # PTY's `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"agent_chat.rs": 1, "bridge.rs": 1, "setup.rs": 1})
+        # Production code only. bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed
+        # installer; agent_chat.rs starts a chat session's allow-listed agent (rule 11); accounts.rs runs the
+        # CLIs' fixed status / sign-in argv (rule 18). Terminal sessions start theirs through the PTY's
+        # `spawn_command`, not `Command::new`.
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "setup.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -271,6 +298,53 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("'session.create'", ast.unparse(opener))
         self.assertIn("cwd=cwd", ast.unparse(opener))
 
+    def test_media_read_checks_the_bots_own_messages_read_only(self) -> None:
+        """`media.read` serves a path only after looking it up in state.db (opened with ``ro_uri``)."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, ast.FunctionDef)}
+        named = ast.unparse(fns["media_named"])
+        self.assertIn("ro_uri(db)", named)
+        self.assertIn("role = 'assistant'", named)
+        self.assertIn("media_named(profile_dir, path)", ast.unparse(fns["read_media"]))
+        lib = (ROOT / "apps" / "omher" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn("media_target(&path, |p| shell.bridge.served_media(p))", lib)
+
+    def test_skills_list_reads_frontmatter_only_and_follows_links_once(self) -> None:
+        """Rule 19: `skills.list` is `read_skills` on the bot's own profile folder. The reader follows symlinked
+        folders as Hermes does but reads each real folder once, skips hidden folders, opens only `SKILL.md` for
+        reading and only its first 8 KB, writes nothing and calls nothing in Hermes."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        self.assertIn("'skills.list': self.op_skills_list", ast.unparse(fns["__init__"]))
+        op = ast.unparse(fns["op_skills_list"])
+        self.assertIn("asyncio.to_thread(read_skills, bot['path'])", op)
+        self.assertNotIn("conn", op)  # no gateway call: a file read
+        reader = "\n".join(ast.unparse(fns[n]) for n in ("read_skills", "read_skill_head", "_frontmatter_value"))
+        self.assertIn("os.walk(root, followlinks=True)", reader)
+        self.assertIn("real = os.path.realpath(dirpath)", reader)
+        self.assertIn("if real in seen:", reader)
+        self.assertIn("n.startswith('.')", reader)
+        self.assertIn("skill = here / 'SKILL.md'", reader)
+        self.assertIn("read_skill_head(skill)", reader)
+        self.assertIn("fh.read(SKILL_HEAD_MAX)", reader)
+        self.assertIn("SKILL_HEAD_MAX = 8 * 1024", self.source)
+        opens = [c for n in ("read_skills", "read_skill_head", "_frontmatter_value") for c in ast.walk(fns[n])
+                 if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
+        self.assertEqual([ast.unparse(c) for c in opens], ["open(path, 'rb')"])
+        for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self."):
+            self.assertNotIn(banned, reader, banned)
+
+    def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
+        """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""
+        fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, ast.AsyncFunctionDef)}
+        attach = fns["op_chat_attach"]
+        body = ast.unparse(attach)
+        self.assertIn("main = await self._main(conn)", body)
+        self.assertIn("session_id=main", body)
+        self.assertNotIn("path", body)
+        self.assertNotIn("open(", body)
+        for name in ("image.attach_bytes", "pdf.attach", "file.attach", "image.attach"):
+            users = [f.name for f in fns.values() if any(isinstance(c, ast.Constant) and c.value == name for c in ast.walk(f))]
+            self.assertEqual(users, [] if name == "image.attach" else ["op_chat_attach"], name)
+
     def test_bridge_has_no_http_or_llm_client(self) -> None:
         banned = {"requests", "httpx", "aiohttp", "urllib3", "openai", "anthropic", "urllib.request", "http.client"}
         imported = set()
@@ -308,6 +382,103 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             if isinstance(call, ast.Call):
                 self.assertFalse(any(isinstance(a, ast.Constant) and a.value in {"send_message", "send.message"}
                                      for a in call.args), ast.unparse(call))
+
+
+class AccountsNeverCarryAToken(unittest.TestCase):
+    """Rule 13: fake CLI homes, omher account folders and CLIProxyAPI auth files full of token-like keys; no accounts
+    payload the bridge returns may name one, and the app runs only the CLIs' own fixed status / sign-in argv."""
+
+    TOKEN_KEYS = ("access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY", "tokens", "primaryApiKey")
+    ACCOUNTS_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "accounts.rs"
+    LIB_RS = ROOT / "apps" / "omher" / "src-tauri" / "src" / "lib.rs"
+
+    def test_fuzzed_auth_files_never_reach_an_accounts_payload(self) -> None:
+        import importlib.util
+        import json
+        import random
+        import sys
+        import tempfile
+
+        spec = importlib.util.spec_from_file_location("omher_bridge_boundary", BRIDGE)
+        ob = importlib.util.module_from_spec(spec)
+        sys.modules["omher_bridge_boundary"] = ob
+        spec.loader.exec_module(ob)
+        rnd = random.Random(12)
+        secret = "sk-SECRET-boundary"
+        for round_ in range(25):
+            with tempfile.TemporaryDirectory() as d:
+                home = Path(d)
+                cpa = home / ".cli-proxy-api"
+                cpa.mkdir()
+                (cpa / "config.yaml").write_text('server:\n  port: 8317\nmanagement:\n  secret-key: "k"\n', encoding="utf-8")
+                for i in range(rnd.randint(1, 5)):
+                    body = {"email": rnd.choice([f"a{i}@example.com", {"access_token": secret}])}
+                    body.update({k: secret for k in rnd.sample(self.TOKEN_KEYS, rnd.randint(1, len(self.TOKEN_KEYS)))})
+                    (cpa / f"claude-a{i}@example.com.json").write_text(json.dumps(body), encoding="utf-8")
+                # the CLIs' own homes on this computer
+                (home / ".codex").mkdir()
+                (home / ".codex" / "auth.json").write_text(json.dumps(
+                    {"OPENAI_API_KEY": secret, "auth_mode": rnd.choice(["chatgpt", secret, {"id_token": secret}]),
+                     "tokens": {k: secret for k in self.TOKEN_KEYS}}), encoding="utf-8")
+                (home / ".claude.json").write_text(json.dumps({"oauthAccount": rnd.choice(
+                    [{"emailAddress": "owner@example.com"}, {"emailAddress": {"refresh_token": secret}}, secret]),
+                    "primaryApiKey": secret}), encoding="utf-8")
+                for rel in (".pi/agent/auth.json", ".omp/agent/agent.db"):
+                    (home / rel).parent.mkdir(parents=True)
+                    (home / rel).write_text(json.dumps({k: secret for k in self.TOKEN_KEYS}), encoding="utf-8")
+                for cli in ob.ACCOUNT_CLIS:
+                    folder = home / ".omher" / "accounts" / cli / f"acct-{round_}"
+                    folder.mkdir(parents=True)
+                    (folder / "account.json").write_text(json.dumps(
+                        {"label": rnd.choice(["Work", {"access_token": secret}, 3]), "api_key": secret}), encoding="utf-8")
+                    (folder / "auth.json").write_text(json.dumps({k: secret for k in self.TOKEN_KEYS}), encoding="utf-8")
+                    (folder / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "w@example.com"},
+                                                                     "primaryApiKey": secret}), encoding="utf-8")
+                (home / ".omher" / "accounts" / "labels.json").write_text(
+                    json.dumps({"claude": {"id_token": secret}, "codex": secret[:3]}), encoding="utf-8")
+                for which in (lambda c: f"/bin/{c}", lambda c: None):
+                    text = json.dumps(ob.read_accounts(home, now=1.0, which=which))
+                    for needle in self.TOKEN_KEYS + (secret, "SECRET"):
+                        self.assertNotIn(needle, text)
+
+    def test_the_app_runs_only_the_fixed_status_and_sign_in_argv(self) -> None:
+        src = self.ACCOUNTS_RS.read_text(encoding="utf-8")
+        prod = src[: src.index("#[cfg(test)]")]
+        fixed = prod[prod.index("pub fn fixed_args"):]
+        fixed = fixed[: fixed.index("\n}\n")]
+        argv = re.findall(r'\("(\w+)", Step::(\w+)\) => Some\(&\[([^\]]*)\]\)', fixed)
+        self.assertEqual(
+            [(cli, step, [a.strip().strip('"') for a in args.split(",")]) for cli, step, args in argv],
+            [("claude", "Status", ["auth", "status", "--json"]), ("claude", "Login", ["auth", "login"]),
+             ("codex", "Help", ["--help"]), ("codex", "Status", ["login", "status"]), ("codex", "Login", ["login"])])
+        self.assertIn("_ => None", fixed)
+        # every spawn goes through `command(program, args, …)`, whose args come from `fixed_args` only
+        self.assertEqual(prod.count("Command::new("), 2)  # the CLI itself, or cmd.exe /c for a Windows npm shim
+        # the second argument of every `run_to_end(…)` / `command(…)` call is a `fixed_args` result
+        calls = re.findall(r"\b(?:run_to_end|command)\(&?program, (\w+)", prod)
+        self.assertEqual(len(calls), 5, calls)
+        self.assertEqual(set(calls), {"args", "help_args"})
+        self.assertNotIn(".arg(", prod.replace('c.arg("/c").arg(program)', ""))
+        # the page names a CLI and an account id; no Tauri command takes a program or an argument
+        lib = self.LIB_RS.read_text(encoding="utf-8")
+        for cmd in ("account_status", "account_login_start", "account_login_cancel", "account_clis", "account_env"):
+            sig = lib[lib.index(f"async fn {cmd}("):]
+            sig = sig[: sig.index(")")]
+            self.assertNotRegex(sig, r"\b(argv|args|program|command|path)\b", cmd)
+        self.assertNotIn("keyring", lib + src)
+        self.assertNotIn("cpa_send", lib)
+
+    def test_rust_spawns_only_in_bridge_and_accounts(self) -> None:
+        spawns = {}
+        for path in sorted((ROOT / "apps" / "omher" / "src-tauri" / "src").glob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            prod = text[: text.index("#[cfg(test)]")] if "#[cfg(test)]" in text else text
+            n = prod.count("Command::new(")
+            if n:
+                spawns[path.name] = n
+        # bridge.rs starts the bridge with Hermes' Python; accounts.rs runs the CLIs' fixed status / sign-in argv;
+        # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "setup.rs": 1})
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
@@ -367,12 +538,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
 
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
-        rule 12) and once in agent_chat.rs (the chat spawner);
-        `spawn_command` only in sessions.rs."""
+        rule 12), once in agent_chat.rs (the chat spawner) and in accounts.rs (rule 18's fixed status /
+        sign-in argv); `spawn_command` only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "accounts.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
@@ -388,6 +559,35 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref()", body)
         self.assertNotIn(".spawn(", body)
+
+    def test_a_session_gets_only_the_chosen_account_home(self) -> None:
+        """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env` and nothing else;
+        that reads only omher's `active.json` and yields at most the CLI's home variable; the PTY and the chat's
+        pipes add it as env only."""
+        for command in ("session_start", "chat_start"):
+            sig = re.search(rf"async fn {command}\((.*?)\) -> ", self.lib, re.S)
+            body = self.lib[sig.end():].split("\n}\n", 1)[0]
+            self.assertEqual(body.count("accounts::session_env(&h, &agent)"), 1, command)
+            self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env,", body)
+        accounts = (SHELL / "accounts.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cli = accounts.split("pub fn session_cli", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"(\w+)" => Some\("(\w+)"\)', cli), [("claude", "claude"), ("codex", "codex"), ("grok", "grok")])
+        self.assertIn("_ => None", cli)
+        active = accounts.split("pub fn active_account", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'join\("([^"]+)"\)', active), [".omher", "accounts", "active.json"])
+        self.assertEqual(active.count("read_to_string("), 1)
+        env = accounts.split("pub fn session_env", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("account_env(home, cli, &active_account(home, cli))", env)
+        for word in ("read", "token", "auth", "Command"):
+            self.assertNotIn(word, env)
+        for src in (self.prod, self.chat):
+            build = src.split("fn command_for(", 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("for (k, v) in account_env {\n        cmd.env(k, v);\n    }", build)
+            self.assertNotIn(".arg(", build)
+        # the chat's spawn builds its command there and the allow-listed start hands the account through
+        self.assertIn("command_for(&argv, cwd, path_env, account_env)?", self.chat.split("pub(crate) fn spawn<F>", 1)[1])
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)", start)
 
     def test_start_agent_resolves_argv_from_the_allow_list_only(self) -> None:
         start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]

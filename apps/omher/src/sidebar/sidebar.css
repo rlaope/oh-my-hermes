@@ -89,8 +89,9 @@
 .search input::-webkit-search-cancel-button {
   display: none;
 }
+/* the app's text-field focus: a 1px edge in --muted (the model picker's search has the same) */
 .search:focus-within {
-  box-shadow: 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 0 0 1px var(--muted);
 }
 
 .bot-list {
@@ -270,10 +271,39 @@
   row-gap: 4px;
   align-items: center;
   gap: 10px;
-  padding: 8px var(--side-x) 2px;
-  margin-top: 6px;
+  width: 100%;
+  padding: 6px var(--side-x);
+  margin-top: 4px;
+  border-radius: var(--r);
   color: var(--ink);
   font-size: 12.5px;
+  text-align: left;
+}
+/* The user row holds two controls side by side: the Accounts button (avatar and name) and the update pill. */
+.me-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.me-btn:focus-visible {
+  outline: 2px solid var(--focus, var(--line));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.me:hover {
+  background: var(--hover);
+}
+.me.on {
+  background: var(--raise2);
 }
 /* Update: a quiet pill at the right end of the user row, shown only when a newer release exists. */
 .upd {
@@ -317,6 +347,182 @@ button.upd:hover {
   font-size: 9.5px;
   color: var(--muted);
   flex: none;
+}
+
+/* usage meters: one agent mark per CLI with a ring (only when the source gives a %) */
+.side {
+  --usage-amber: #e3a54a;
+  --usage-red: #f08a8a;
+}
+[data-theme="light"] .side {
+  --usage-amber: #c4801c;
+  --usage-red: #d64545;
+}
+/* the marks sit on the nav icons' column: each 26px mark is centred where the 18px nav icons and the 20px
+   user initial are (--side-x + 9..10px) */
+.usage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px calc(var(--side-x) - 4px);
+  margin-top: 4px;
+}
+/* round, so the gray hover disc and the usage ring are one shape */
+.usage-m {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.usage-m:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+/* the mark whose card is open: the gray selection, like an open nav row */
+.usage-m.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.usage-m > * {
+  grid-area: 1 / 1;
+}
+.usage-ring {
+  pointer-events: none;
+}
+.usage-track {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.usage-fill {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.usage-fill.lv-gray {
+  stroke: var(--muted);
+}
+.usage-fill.lv-amber {
+  stroke: var(--usage-amber);
+}
+.usage-fill.lv-red {
+  stroke: var(--usage-red);
+}
+/* a dot only for a state worth a glance (limited, near, stale); a CLI with nothing to report shows just its mark */
+.usage-dot {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--side);
+  background: var(--quiet);
+}
+.usage-dot.st-near {
+  background: var(--usage-amber);
+}
+.usage-dot.st-limited {
+  background: var(--usage-red);
+}
+/* the card: from the first mark's edge to the same inset on the right, so it covers the nav rows it sits on whole
+   (a narrower card left their "Soon" tags peeking out beside it); a caret points at its mark (--caret, the mark's
+   centre) */
+.usage-card {
+  left: calc(var(--side-x) - 4px);
+  right: calc(var(--side-x) - 4px);
+  width: auto;
+  padding: 10px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  color: var(--body);
+  overflow: visible;
+  /* the shadow goes up, away from the marks: the popovers' usual drop shadow dimmed the open mark under it */
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+[data-theme="light"] .usage-card {
+  box-shadow: 0 -6px 20px rgba(40, 20, 40, 0.12);
+}
+.usage-card::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: calc(var(--caret, 20px) - 5px);
+  width: 9px;
+  height: 9px;
+  background: var(--pop);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: rotate(45deg);
+}
+.uc-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.uc-head b {
+  font-weight: 600;
+}
+.uc-plan {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.uc-w {
+  margin-top: 8px;
+}
+.uc-r1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+}
+.uc-label {
+  color: var(--body);
+}
+.uc-pct {
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.uc-bar {
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.uc-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.uc-bar > i.lv-amber {
+  background: var(--usage-amber);
+}
+.uc-bar > i.lv-red {
+  background: var(--usage-red);
+}
+.uc-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.uc-state {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.uc-state.st-limited {
+  color: var(--usage-red);
 }
 
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
@@ -420,6 +626,19 @@ button.upd:hover {
 .needs-w.open .needs-chev {
   transform: rotate(180deg);
 }
+/* a command in the row preview is one unit: it never breaks across lines (`git status --short` split at `--`
+   read as a different command); the line around it wraps and clamps as a whole, and a command longer than the
+   row ellipsizes itself */
+.bot-p code {
+  white-space: nowrap;
+}
+.bot-p.ask code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
 .bot-p.ask code,
 .needs-q code {
   font-family: var(--mono);
@@ -452,8 +671,20 @@ button.upd:hover {
   margin-top: 1px;
 }
 .needs-item:hover,
-.needs-item:focus-visible {
+.needs-item:focus-visible,
+.needs-more:hover,
+.needs-more:focus-visible {
   background: var(--raise2);
+}
+/* past three asks: one plain row that says how many more, on the asks' text column */
+.needs-more {
+  width: 100%;
+  padding: 4px 4px 4px 32px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  text-align: left;
 }
 .needs-m {
   flex: 1;

@@ -2,9 +2,11 @@
 // ("2 need you"); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
 // view): each ask with the bot's face, a type tag (Approve / Question), the ask on up to two lines, and its age. An
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
-// or a click outside closes the list.
+// or a click outside closes the list. Past three asks the list ends on the third, whole, and a "+2 more" row shows
+// the rest (then the list scrolls).
 import { useEffect, useRef, useState } from "react";
 import { useNow } from "../elsewhere/useNow";
+import { t } from "../i18n";
 import { askFrom, askText, isSessionChat, useStore, type Ask } from "../state/store";
 import { SessionFace } from "../sessions/SessionFace";
 import { Avatar, ChevronDown } from "../ui";
@@ -25,11 +27,22 @@ export function age(ts: number, nowMs: number): string {
   return `${Math.floor(s / 3600)}h`;
 }
 
+/** Asks the list shows before its "+N more" row: three two-line entries fit without cutting one. */
+const SHOW = 3;
+
 export function NeedsStrip({ asks }: { asks: Ask[] }) {
   const s = useStore();
   const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const now = useNow(asks.length > 0, 5_000);
+  useEffect(() => {
+    if (!open) setAll(false);
+  }, [open]);
+  // "+N more" leaves with the click: the focus goes to the first ask it showed
+  useEffect(() => {
+    if (all) ref.current?.querySelectorAll<HTMLButtonElement>(".needs-item")[SHOW]?.focus();
+  }, [all]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -44,6 +57,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
   if (!asks.length) return null;
   const name = (bot: string) => askFrom(s, bot);
   const n = asks.length;
+  const shown = all || n <= SHOW ? asks : asks.slice(0, SHOW);
   return (
     <div
       className={`needs-w${open ? " open" : ""}`}
@@ -79,7 +93,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
           aria-label="Waiting for your answer"
           data-testid="needs-list"
         >
-          {asks.map((a) => (
+          {shown.map((a) => (
             <button
               key={`${a.bot}:${a.item.id}`}
               type="button"
@@ -106,6 +120,11 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
               </span>
             </button>
           ))}
+          {shown.length < n && (
+            <button type="button" className="needs-more" onClick={() => setAll(true)} data-testid="needs-more">
+              {t("needs.more", { n: n - shown.length })}
+            </button>
+          )}
         </div>
       )}
     </div>

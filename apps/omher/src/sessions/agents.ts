@@ -105,10 +105,10 @@ export function rowModel(s: SessionRec, chat?: ChatLive): { title: string; sub: 
   const label = agentDef(s.agent).label;
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
-  // While running the ring (chat) or the live dot (terminal) says it, so the line is just the agent.
-  const state = needsYou
-    ? "Needs you"
-    : s.status === "running"
+  // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
+  // the amber dot say it, so the line is just the agent.
+  const state =
+    needsYou || s.status === "running"
       ? ""
       : s.status === "starting"
         ? "Starting…"
@@ -138,7 +138,7 @@ export interface Recent {
 }
 
 export const RECENT_KEY = "omher.sessions.recent";
-export const RECENT_MAX = 4;
+export const RECENT_MAX = 5;
 
 /** Saved recents, defensively: anything malformed is dropped. */
 export function parseRecent(raw: string | null): Recent[] {
@@ -154,7 +154,14 @@ export function parseRecent(raw: string | null): Recent[] {
   }
 }
 
-/** `next` first, the same agent+folder only once, at most RECENT_MAX. */
+/** `next` first, each folder only once (whichever agent used it last), at most RECENT_MAX. */
 export function pushRecent(list: Recent[], next: Recent): Recent[] {
-  return [next, ...list.filter((r) => !(r.agent === next.agent && r.cwd === next.cwd))].slice(0, RECENT_MAX);
+  return [next, ...list.filter((r) => r.cwd !== next.cwd)].slice(0, RECENT_MAX);
+}
+
+/** The folders the new-session menu offers, for any agent: distinct, newest first, at most RECENT_MAX. */
+export function recentFolders(list: Recent[]): string[] {
+  const out: string[] = [];
+  for (const r of [...list].sort((a, b) => b.at - a.at)) if (!out.includes(r.cwd)) out.push(r.cwd);
+  return out.slice(0, RECENT_MAX);
 }

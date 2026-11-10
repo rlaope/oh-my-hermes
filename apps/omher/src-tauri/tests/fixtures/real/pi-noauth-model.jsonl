@@ -1,0 +1,2 @@
+{"id":"omher-5","type":"response","command":"set_model","success":false,"error":"Model not found: anthropic/claude-sonnet-4-5"}
+{"type":"response","command":"bogus_command","success":false,"error":"Unknown command: bogus_command"}

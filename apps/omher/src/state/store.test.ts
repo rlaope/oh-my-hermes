@@ -280,6 +280,9 @@ function fakeBridge() {
           return { providers: [], current: { model: "Opus 5.5", provider: "claude-proxy", reasoning: "high" }, reasoning_levels: ["low"] };
         case "chat.send":
           return { input_id: "i1" };
+        case "skills.list":
+          if (params.bot === "friren") throw { code: "unknown_op", message: "no such op: skills.list" };
+          return { skills: [{ name: "plan", description: "Plan it" }, { name: "review", description: "" }] };
         default:
           return {};
       }
@@ -318,6 +321,60 @@ describe("store", () => {
     const send = f.calls.find((c) => c.op === "chat.send")!;
     expect(send.params).toEqual({ bot: "kami", text: "hello" });
     expect(store.getState().chats.kami.messages.at(-1)).toMatchObject({ role: "user", text: "hello" });
+  });
+
+  it("send hoists skill tokens to the front on the wire; the row keeps the typed text, also after a re-read", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    await store.actions.send("before the list ./plan"); // names not read yet: sent as typed
+    expect(await store.actions.skills("kami")).toHaveLength(2);
+    await store.actions.skills("kami");
+    expect(f.calls.filter((c) => c.op === "skills.list")).toHaveLength(1); // read once per bot
+    await store.actions.send(" fix ./review this ./plan now ");
+    const sends = f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.text);
+    expect(sends).toEqual(["before the list ./plan", "/review /plan fix this now"]);
+    const row = () => store.getState().chats.kami.items.filter((i) => i.kind === "user").at(-1)!;
+    expect(row()).toMatchObject({ text: "fix ./review this ./plan now", sent: "/review /plan fix this now" });
+
+    f.setHistory([{ id: "h9", role: "user", text: "/review /plan fix this now", ts: T0 / 1000 }]);
+    f.status("closed");
+    f.status("open");
+    await new Promise((r) => setTimeout(r, 0));
+    const users = store.getState().chats.kami.items.filter((i) => i.kind === "user");
+    expect(users.filter((i) => "sent" in i && i.sent === "/review /plan fix this now")).toHaveLength(1);
+    expect(users.find((i) => i.id === "h9")).toMatchObject({ text: "fix ./review this ./plan now" });
+
+    // a bridge without the op: an empty list, no error, asked again next time
+    expect(await store.actions.skills("friren")).toEqual([]);
+    expect(store.getState().lastError).toBeNull();
+    await store.actions.skills("friren");
+    expect(f.calls.filter((c) => c.op === "skills.list" && c.params.bot === "friren")).toHaveLength(2);
+  });
+
+  it("sendWithFiles attaches each file in order, then sends once; a failed attach sends nothing", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const file = (name: string, attach: "image" | "pdf" | "file", read = async () => "QUJD") =>
+      ({ name, size: 3, kind: "file" as const, url: null, attach, read });
+    await store.actions.sendWithFiles(" look ", [file("a.png", "image"), file("r.pdf", "pdf")]);
+    const ops = f.calls.map((c) => c.op).filter((o) => o === "chat.attach" || o === "chat.send");
+    expect(ops).toEqual(["chat.attach", "chat.attach", "chat.send"]);
+    expect(f.calls.filter((c) => c.op === "chat.attach").map((c) => c.params)).toEqual([
+      { bot: "kami", kind: "image", name: "a.png", data_base64: "QUJD" },
+      { bot: "kami", kind: "pdf", name: "r.pdf", data_base64: "QUJD" },
+    ]);
+    const row = store.getState().chats.kami.items.at(-1)!;
+    expect(row).toMatchObject({ kind: "user", text: "look", files: [{ name: "a.png" }, { name: "r.pdf" }] });
+
+    const before = f.calls.length;
+    const bad = file("b.png", "image", async () => {
+      throw new Error("unreadable");
+    });
+    await expect(store.actions.sendWithFiles("x", [file("ok.png", "image"), bad])).rejects.toThrow("Couldn't attach b.png");
+    expect(f.calls.slice(before).map((c) => c.op)).toEqual(["chat.attach"]); // no chat.send
+    expect(store.getState().chats.kami.items.at(-1)).toBe(row); // no new bubble
   });
 
   it("reconnect keeps state and re-reads the chat without duplicating it", async () => {

@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","cwd":"/w/proj","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57","model":"claude-haiku-5-5","permissionMode":"default"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":0,"stop_reason":null,"result":"","session_id":"cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57","origin":{"kind":"task-notification"}}

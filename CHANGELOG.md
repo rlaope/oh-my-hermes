@@ -42,6 +42,24 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.0.** Your bots, coding sessions and plans in one window.
+  - **Plans.** A dag-ulw run and a coding agent's sub-runs open as a plan. Its
+    graph shows each part with the model, effort and category it ran on, the
+    parts it waits on, and the latest lines of the one you pick. There is a
+    full view (⌘⇧G).
+  - **SESSIONS.** Claude Code, Codex, pi and oh-my-pi sessions read their real
+    command, approval and question events. Approvals go Deny, Allow once,
+    Allow for session. Stop works, and an ended session can Restart. A new
+    session asks for its folder and offers the five recent ones.
+  - **Accounts and usage.** Settings › Accounts lists the coding-CLI logins
+    on this computer, adds one through the CLI's own sign-in and switches
+    between them. The sidebar shows each CLI's usage.
+  - **Files.** You can attach files to a message, and files a bot sends show
+    as images, video, audio or file cards.
+  - **More.** A `./` skill picker in the composer, official agent marks, and
+    four short sounds (Settings › Sounds).
+  - **Updating.** From this version, later releases arrive through the
+    sidebar's Update button.
 - **omher updates itself.** When a new omher release is out, an "Update to
   0.1.x" button appears at the bottom left of the sidebar; one click
   downloads it, checks its signature and restarts omher on the new version.

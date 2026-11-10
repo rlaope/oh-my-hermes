@@ -1,0 +1,3 @@
+{"type":"ready","protocolVersion":1,"supportedProtocolVersions":[1,2],"maxFrameBytes":1048576,"maxReassembledFrameBytes":67108864,"supportsBashExcludeFromContext":true}
+{"type":"extension_ui_request","id":"15c83d5b86b4cc29","method":"setWidget","widgetKey":"autoresearch"}
+{"type":"advisor_cost_changed"}

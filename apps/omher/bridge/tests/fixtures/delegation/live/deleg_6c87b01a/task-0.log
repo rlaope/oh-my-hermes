@@ -1,0 +1,7 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_6c87b01a   task: 0
+goal: Bug-first code review of the integrated omher PR stack (#2695 #2702 #2703 #2704 #2706 #2707)
+started: 2026-11-09 21:22:02
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+(transcript left out of the fixture)

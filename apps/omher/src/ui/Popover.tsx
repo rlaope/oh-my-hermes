@@ -19,7 +19,8 @@ export function Popover({
   children: ReactNode;
   align?: "left" | "right";
   side?: "top" | "bottom";
-  width?: number;
+  /** px, or any CSS width (e.g. a `min()` that keeps a menu inside the sidebar) */
+  width?: number | string;
   className?: string;
   label?: string;
 }) {

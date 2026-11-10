@@ -1,0 +1,93 @@
+import type { Key } from "./index";
+
+export const ja: Record<Key, string> = {
+  // graph (the dag box view and its header)
+  "graph.start": "開始ノード",
+  "graph.deps": "依存関係",
+  "graph.details": "ノード詳細",
+  "graph.untitled": "無題",
+  "graph.accepted": "承認済み",
+  "graph.finished": "完了",
+  "graph.running": "実行中",
+  "graph.handed": "引き渡し済み",
+  "graph.failed": "失敗",
+  "graph.blocked": "ブロック",
+  "graph.parked": "保留",
+  "graph.cancelled": "キャンセル",
+  "graph.retry": "再試行",
+  "graph.waiting": "待機中",
+  "graph.waits.one": "{n} 件待ち",
+  "graph.waits": "{n} 件待ち",
+  "graph.waits.short": "{n} 件待ち",
+  "graph.repaired": "修復済み",
+  "graph.repair": "修復",
+  "graph.layer": "レイヤー {n}",
+  "graph.attempt": "試行 {n}",
+  "graph.more": "+{n} 件",
+  "graph.all": "すべて表示 ({n})",
+  "graph.fewer": "折りたたむ",
+  "graph.fit": "フィット",
+  "graph.reset": "配置をリセット",
+  "graph.zoomIn": "拡大",
+  "graph.zoomOut": "縮小",
+  "graph.hint": "表示のみ · ノードをドラッグで移動 · Esc で閉じる",
+  "graph.full": "全体表示",
+  "graph.close": "グラフを閉じる",
+  "graph.dag": "OMH / DAG",
+  "graph.helpers": "Hermes / ヘルパー",
+  "graph.subagents": "{agent} / サブエージェント",
+  "graph.tasks.one": "タスク {n}件",
+  "graph.tasks": "タスク {n}件",
+  "graph.main": "main",
+  "graph.run.running": "実行中",
+  "graph.run.done": "完了",
+  "graph.run.failed": "失敗",
+  "graph.run.cancelled": "キャンセル",
+  "graph.done": "完了 {done}/{total}",
+  "graph.nfailed": "失敗 {n}",
+  "graph.nrepaired": "修復 {n}",
+  "graph.nwaiting": "待機 {n}",
+  "graph.notStarted": "未開始",
+  "graph.startsIn": "{t} 後に開始",
+  "graph.startNow": "今すぐ開始",
+  "graph.edit": "編集",
+  "graph.prefill": "メッセージ欄に依頼を入れます。送信はしません。",
+
+  // plans (the Plans tab: the list of a bot's runs)
+  "plans.tab": "計画",
+  "plans.of": "{bot}の計画",
+  "plans.all": "全{n}件の計画",
+  "plans.none": "計画はまだありません。",
+  "plans.noneHint": "{bot}が作業を並列に分けると、その計画がここに表示されます。",
+  "plans.cli": "CLI エージェント",
+  "plans.showAll": "すべて表示 ({n})",
+  "plans.fewer": "折りたたむ",
+  "plans.refresh": "更新",
+  "plans.open": "計画 {name} を開く",
+  "plans.graph": "計画グラフ",
+
+  // chat (the chat column's own words)
+  "chat.noBots": "ボットはまだありません",
+  "chat.noBotsHint": "ボットは Hermes のプロファイルです。左上の + で追加するか、新しく作成します:",
+  "chat.pick": "ボットを選択してください",
+  "chat.connecting": "Hermes に接続中…",
+
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n} 件",
+
+  // skills (the composer's ./ picker)
+  "skills.label": "スキル",
+  "skills.none": "一致するスキルなし",
+
+  // sessions (SESSIONS in the sidebar)
+  "sessions.choose": "フォルダを選択…",
+  "sessions.recent": "最近",
+  "sessions.back": "戻る",
+
+  // sounds (Settings › General)
+  "sounds.title": "サウンド",
+  "sounds.hint": "送信、ボットの回答や質問、エラーのときに小さな音",
+  "sounds.play": "再生",
+  "sounds.on": "オン",
+  "sounds.off": "オフ",
+};

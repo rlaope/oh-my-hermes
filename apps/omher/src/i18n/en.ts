@@ -1,0 +1,93 @@
+// English: the source. Keep a feature's keys together under its comment; ko.ts, ja.ts and zh.ts mirror this file
+// key for key.
+export const en = {
+  // graph (the dag box view and its header)
+  "graph.start": "Start node",
+  "graph.deps": "Dependencies",
+  "graph.details": "Node details",
+  "graph.untitled": "untitled",
+  "graph.accepted": "Accepted",
+  "graph.finished": "Done",
+  "graph.running": "Running",
+  "graph.handed": "Handed out",
+  "graph.failed": "Failed",
+  "graph.blocked": "Blocked",
+  "graph.parked": "Parked",
+  "graph.cancelled": "Cancelled",
+  "graph.retry": "Retry",
+  "graph.waiting": "Waiting",
+  "graph.waits.one": "Waits on {n} lane",
+  "graph.waits": "Waits on {n} lanes",
+  "graph.waits.short": "Waits on {n}",
+  "graph.repaired": "repaired",
+  "graph.repair": "repair",
+  "graph.layer": "layer {n}",
+  "graph.attempt": "attempt {n}",
+  "graph.more": "+{n} more",
+  "graph.all": "Show all {n}",
+  "graph.fewer": "Show fewer",
+  "graph.fit": "Fit",
+  "graph.reset": "Reset layout",
+  "graph.zoomIn": "Zoom in",
+  "graph.zoomOut": "Zoom out",
+  "graph.hint": "View only · drag a node to move it · Esc closes",
+  "graph.full": "Full view",
+  "graph.close": "Close graph",
+  "graph.dag": "OMH / DAG",
+  "graph.helpers": "Hermes / helpers",
+  "graph.subagents": "{agent} / subagents",
+  "graph.tasks.one": "{n} task",
+  "graph.tasks": "{n} tasks",
+  "graph.main": "main",
+  "graph.run.running": "Running",
+  "graph.run.done": "Completed",
+  "graph.run.failed": "Failed",
+  "graph.run.cancelled": "Cancelled",
+  "graph.done": "Done {done}/{total}",
+  "graph.nfailed": "{n} failed",
+  "graph.nrepaired": "{n} repaired",
+  "graph.nwaiting": "{n} waiting",
+  "graph.notStarted": "Not started",
+  "graph.startsIn": "Starts in {t}",
+  "graph.startNow": "Start now",
+  "graph.edit": "Edit",
+  "graph.prefill": "Puts a request in the message box. Nothing is sent.",
+
+  // plans (the Plans tab: the list of a bot's runs)
+  "plans.tab": "Plans",
+  "plans.of": "{bot}'s plans",
+  "plans.all": "All {n} plans",
+  "plans.none": "No plans yet.",
+  "plans.noneHint": "When {bot} splits work into parallel parts, the plan shows here.",
+  "plans.cli": "CLI agents",
+  "plans.showAll": "Show all ({n})",
+  "plans.fewer": "Show fewer",
+  "plans.refresh": "Refresh",
+  "plans.open": "Open plan {name}",
+  "plans.graph": "Plan graph",
+
+  // chat (the chat column's own words)
+  "chat.noBots": "No bots yet",
+  "chat.noBotsHint": "A bot is a Hermes profile. Add one with + at the top left, or create one:",
+  "chat.pick": "Pick a bot",
+  "chat.connecting": "Connecting to Hermes…",
+
+  // sidebar (the Needs-you list above BOTS)
+  "needs.more": "+{n} more",
+
+  // skills (the composer's ./ picker)
+  "skills.label": "Skills",
+  "skills.none": "No skill matches",
+
+  // sessions (SESSIONS in the sidebar)
+  "sessions.choose": "Choose folder…",
+  "sessions.recent": "Recent",
+  "sessions.back": "Back",
+
+  // sounds (Settings › General)
+  "sounds.title": "Sounds",
+  "sounds.hint": "Quiet sounds when you send, a bot answers or asks, or a turn fails",
+  "sounds.play": "Play",
+  "sounds.on": "On",
+  "sounds.off": "Off",
+};

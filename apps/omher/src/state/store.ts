@@ -3,6 +3,9 @@
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
+import { promptText } from "../chat/parts/attachFiles";
+import { toWire } from "../chat/parts/skillTokens";
 import type {
   Away,
   ApprovalChoice,
@@ -21,10 +24,18 @@ import type {
   BotInfo,
   TerminalRun,
   Worktree,
+  UsageProvider,
   WorktreeDiff,
+  MediaFile,
+  AttachKind,
+  AttachResult,
+  AccountCli,
+  AccountGroup,
+  Skill,
 } from "../lib/protocol";
+import type { AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
 
-export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff";
+export type PanelTabId = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
 // ---- view model types -----------------------------------------------------------------------
 
@@ -35,6 +46,8 @@ export interface Step {
   startedAt: number; // ms
   endedAt?: number; // ms
   ok?: boolean;
+  /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
+  dag?: { run: string; node: string }[];
 }
 
 export interface Turn {
@@ -61,7 +74,25 @@ export type MessageItem = {
   error?: string;
   /** user rows only: sent with "Reply there" (where the person pointed the bot). */
   reply?: { source: string; label: string };
+  /** user rows only: files sent with it, shown from the local copies (never read back). */
+  files?: SentFile[];
+  /** user rows only: the prompt text actually sent when it differs from `text` (files add `@file:` refs). */
+  sent?: string;
 };
+
+/** A file the person sent, as their own bubble shows it. `url` is a blob URL for pictures and video. */
+export interface SentFile {
+  name: string;
+  size: number;
+  kind: "image" | "video" | "file";
+  url: string | null;
+}
+
+/** One file to send: the Hermes attach call it takes, its bytes, and how the bubble shows it. */
+export interface OutFile extends SentFile {
+  attach: AttachKind;
+  read: () => Promise<string>;
+}
 export type ActivityItem = { kind: "activity"; id: string; ts: number; turn: Turn };
 /** Why an ask stopped waiting without an answer from omher: the gateway timed it out, withdrew it, or it was
  *  answered somewhere else (another Hermes window, Slack). */
@@ -74,6 +105,8 @@ export type ApprovalItem = {
   title: string;
   command: string;
   choices: ApprovalChoice[];
+  /** The folder the command runs in, when the agent says. */
+  cwd?: string;
   resolved?: ApprovalChoice;
   expired?: AskExpiry;
 };
@@ -102,7 +135,9 @@ export type RoutineItem = {
   name: string;
   status: string;
 };
-export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem;
+/** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
+export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
+export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem | SystemItem;
 export type TimelineItem = ChatItem | AwayItem;
 
 export interface Chat {
@@ -155,6 +190,12 @@ export const PALETTES: Palette[] = ["omh", "graphite", "ocean", "forest", "sunse
 export interface Ui {
   panelOpen: boolean;
   panelTab: PanelTabId;
+  /** The run the Runs tab shows (a full id, or a dag run name from a chat line); null = the first in its list. */
+  runId: string | null;
+  /** The Runs graph fills the chat column (⌘⇧G); the side panel stays. */
+  runsFull: boolean;
+  /** Text put into a bot's composer for the person to edit and send (never sent by omher). */
+  draft: { bot: string; text: string; n: number } | null;
   theme: Theme;
   look: Look;
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
@@ -278,7 +319,7 @@ function saveList(key: string, v: string[]): void {
   }
 }
 
-function readTheme(): Theme {
+export function readTheme(): Theme {
   try {
     const v = typeof localStorage !== "undefined" ? localStorage.getItem("omher.theme") : null;
     if (v === "dark" || v === "light" || v === "system") return v;
@@ -305,6 +346,9 @@ export function initialState(): AppState {
     ui: {
       panelOpen: false,
       panelTab: "details",
+      runId: null,
+      runsFull: false,
+      draft: null,
       theme: readTheme(),
       look: readLook(),
       view: "chat",
@@ -401,7 +445,11 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     if (i.kind !== "user" && i.kind !== "assistant") return true;
     if (ids.has(i.id)) return false;
     if (i.id.startsWith("local-")) {
-      return !server.some((s) => s.kind === "user" && s.text === i.text && s.ts >= i.ts - 120);
+      const sent = i.sent ?? i.text;
+      const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
+      // keep the local pictures, and the text as typed (skill tokens go out hoisted)
+      if (twin && (i.files || i.sent)) Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}) });
+      return !twin;
     }
     return i.ts >= lastServerTs;
   });
@@ -431,7 +479,16 @@ export type Action =
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number }
-  | { type: "local.user"; bot: string; id: string; text: string; now: number; reply?: { source: string; label: string } }
+  | {
+      type: "local.user";
+      bot: string;
+      id: string;
+      text: string;
+      now: number;
+      reply?: { source: string; label: string };
+      files?: SentFile[];
+      sent?: string;
+    }
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | { type: "send.failed"; bot: string; id: string; error: string }
   | { type: "event"; ev: BridgeEvent; now: number }
@@ -446,10 +503,14 @@ export type Action =
   | { type: "model.set"; bot: string; current: ModelCurrent }
   | { type: "ui.panel"; open?: boolean }
   | { type: "ui.panelTab"; tab: PanelTabId }
+  | { type: "ui.run"; run: string | null }
+  | { type: "ui.runsFull"; open: boolean }
+  | { type: "ui.draft"; bot: string; text: string }
   | { type: "ui.theme"; theme: Theme }
   | { type: "ui.look"; look: Partial<Look> }
   | { type: "ui.settings"; page?: string }
   | { type: "ui.closeSettings" }
+  | { type: "system.note"; bot: string; text: string; now: number }
   | { type: "ui.pin"; bot: string; on: boolean }
   | { type: "ui.hide"; bot: string; on: boolean }
   | { type: "ui.focusAsk"; bot: string; id: string }
@@ -509,7 +570,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
-          steps: [...t.steps, { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now }],
+          steps: [
+            ...t.steps,
+            { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
+          ],
         })),
       );
     case "tool.end":
@@ -555,6 +619,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           title: ev.title,
           command: ev.command,
           choices: ev.choices,
+          ...(ev.cwd ? { cwd: ev.cwd } : {}),
         };
         return withItems(base, [...base.items, item]);
       });
@@ -604,6 +669,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       };
     case "elsewhere.update":
     case "bots.update":
+    case "accounts.update":
       return state; // the store refetches; nothing to change here
     case "routine.ran": {
       const next = touchChat(state, bot, (c) =>
@@ -656,7 +722,15 @@ export function reduce(state: AppState, a: Action): AppState {
       return touchChat(state, a.bot, (c) =>
         withItems(c, [
           ...c.items,
-          { kind: "user", id: a.id, ts: a.now / 1000, text: a.text, ...(a.reply ? { reply: a.reply } : {}) },
+          {
+            kind: "user",
+            id: a.id,
+            ts: a.now / 1000,
+            text: a.text,
+            ...(a.reply ? { reply: a.reply } : {}),
+            ...(a.files?.length ? { files: a.files } : {}),
+            ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
+          },
         ]),
       );
     case "reply.set":
@@ -738,6 +812,12 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, panelOpen: a.open ?? !state.ui.panelOpen } };
     case "ui.panelTab":
       return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: a.tab } };
+    case "ui.run":
+      return { ...state, ui: { ...state.ui, panelOpen: true, panelTab: "runs", runId: a.run } };
+    case "ui.runsFull":
+      return { ...state, ui: { ...state.ui, runsFull: a.open, ...(a.open ? { panelOpen: true, panelTab: "runs" as const } : {}) } };
+    case "ui.draft":
+      return { ...state, ui: { ...state.ui, draft: { bot: a.bot, text: a.text, n: (state.ui.draft?.n ?? 0) + 1 } } };
     case "ui.theme":
       return { ...state, ui: { ...state.ui, theme: a.theme } };
     case "ui.look":
@@ -746,6 +826,10 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "settings", settingsPage: a.page ?? state.ui.settingsPage } };
     case "ui.closeSettings":
       return { ...state, ui: { ...state.ui, view: "chat" } };
+    case "system.note":
+      return touchChat(state, a.bot, (c) =>
+        withItems(c, [...c.items, { kind: "system", id: `system-${a.now}-${c.items.length}`, ts: a.now / 1000, text: a.text }]),
+      );
     case "ui.session":
       return a.id
         ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
@@ -870,10 +954,13 @@ export function selectUnreadTotal(state: AppState): number {
 export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
-  /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. */
+  /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. Skill tokens
+   *  (`./name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
   send(text: string): Promise<void>;
   /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
+  /** Attach each file in order (`chat.attach`), then send. Rejects, sending nothing, if any attach fails. */
+  sendWithFiles(text: string, files: OutFile[]): Promise<void>;
   interrupt(): Promise<void>;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
   /** A text answer for one question, or every answer of an interview at once (one `clarify.respond`). */
@@ -886,6 +973,12 @@ export interface Actions {
   togglePanel(open?: boolean): void;
   /** Open the side panel on one tab (Details, Terminal, Schedule, Worktrees, Diff). */
   setPanelTab(tab: PanelTabId): void;
+  /** Open the Runs tab on one run (null: the first in the list). */
+  openRun(run: string | null): void;
+  /** Show or hide the full-size Runs graph over the chat column. */
+  setRunsFull(open: boolean): void;
+  /** Put text in the selected bot's composer and focus it. Never sends. */
+  prefill(text: string): void;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -911,11 +1004,33 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
+  /** The bot's skills for the composer's `./` picker, read once per bot; [] when the bridge cannot list them. */
+  skills(bot: string): Promise<Skill[]>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
   /** Side panel reads (never cached in the store; the panel keeps its own copy). */
   panelTerminal(bot: string): Promise<{ runs: TerminalRun[] }>;
   panelWorktrees(bot: string): Promise<{ worktrees: Worktree[] }>;
   panelDiff(bot: string, path: string): Promise<WorktreeDiff>;
+  /** A file the bot sent (`MEDIA:` line); never cached in the store. */
+  readMedia(bot: string, path: string, info?: boolean): Promise<MediaFile>;
+  /** Runs tab reads (read-only: nothing here retries or cancels a run). */
+  runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
+  runsGet(bot: string, run: string): Promise<RunDetail>;
+  runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
+  /** Subscription usage meters (sidebar); the meter keeps its own copy. */
+  usage(): Promise<{ providers: UsageProvider[] }>;
+  /** Settings › Accounts (the page keeps its own copy). */
+  accounts(): Promise<{ groups: AccountGroup[] }>;
+  addAccount(cli: AccountCli, label: string): Promise<{ id: string; dir: string }>;
+  setActiveAccount(cli: AccountCli, id: string): Promise<void>;
+  removeAccount(cli: AccountCli, id: string): Promise<void>;
+  labelAccount(cli: AccountCli, id: string, label: string): Promise<void>;
+  /** A cancelled sign-in: the new, still empty folder goes. */
+  discardAccount(cli: AccountCli, id: string): Promise<void>;
+  /** A quiet omher line in a bot's main chat (the selected bot when none is given). */
+  systemNote(text: string, bot?: string): void;
+  /** Every bridge event, for views that keep their own copy (Accounts listens for `accounts.update`). */
+  onBridgeEvent(fn: (ev: BridgeEvent) => void): () => void;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -945,6 +1060,10 @@ export interface StoreOptions {
   now?: () => number;
   /** Called for every bridge event after it is applied; the app uses it for system notifications. */
   onEvent?: (ev: BridgeEvent, state: AppState) => void;
+  /** Called for every action after it is applied, and once the first state (or a reconnect's re-read) has
+   *  loaded; the app uses them for sounds. */
+  onAction?: (a: Action, state: AppState) => void;
+  onSettled?: () => void;
 }
 
 /** Every bridge event, after the store applied it (SESSIONS listens for `folder.closed`). */
@@ -961,6 +1080,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   let localSeq = 0;
   let snapshot: (AppState & Actions) | null = null;
   let started = false;
+  const eventFns = new Set<(ev: BridgeEvent) => void>();
+  // skills.list per bot: the promise (asked once) and the names, for hoisting tokens when a message is sent
+  const skillLists = new Map<string, Promise<Skill[]>>();
+  const skillNames = new Map<string, string[]>();
 
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
@@ -968,6 +1091,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     state = next;
     snapshot = null;
     for (const l of [...listeners]) l();
+    opts.onAction?.(a, state);
   };
   const fail = (e: unknown) => dispatch({ type: "error", message: errText(e) });
   const botArg = (bot?: string) => bot ?? state.selectedBot;
@@ -1052,7 +1176,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       bridge.onStatus((status) => {
         dispatch({ type: "conn", status, now: now() });
         if (status === "open") {
-          if (opened) void resync();
+          if (opened) void resync().then(() => opts.onSettled?.());
           opened = true;
         }
       });
@@ -1060,6 +1184,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         dispatch({ type: "event", ev, now: now() });
         for (const l of [...bridgeListeners]) l(ev);
         opts.onEvent?.(ev.session ? { ...ev, bot: folderKey(ev.bot, ev.session) } : ev, state);
+        for (const fn of [...eventFns]) fn(ev);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
@@ -1080,6 +1205,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       } catch (e) {
         fail(e);
       }
+      opts.onSettled?.();
     },
     selectBot,
     async send(text) {
@@ -1089,10 +1215,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const id = `local-${++localSeq}`;
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
-      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply });
+      const wire = toWire(t, skillNames.get(bot) ?? []);
+      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire });
       if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
-        await bridge.request("chat.send", chip ? { bot, text: t, reply_to: chip.session_id } : { bot, text: t });
+        await bridge.request("chat.send", chip ? { bot, text: wire, reply_to: chip.session_id } : { bot, text: wire });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
       }
@@ -1100,6 +1227,28 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setReplyTo(chip, bot) {
       const b = botArg(bot);
       if (b) dispatch({ type: "reply.set", bot: b, chip });
+    },
+    async sendWithFiles(text, files) {
+      const bot = state.selectedBot;
+      if (!bot) return;
+      if (!files.length) return actions.send(text);
+      const results: AttachResult[] = [];
+      for (const f of files) {
+        try {
+          results.push(await bridge.request("chat.attach", { bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
+        } catch (e) {
+          throw new Error(`Couldn't attach ${f.name} · ${errText(e)}`);
+        }
+      }
+      const sent = toWire(promptText(text, results), skillNames.get(bot) ?? []);
+      const id = `local-${++localSeq}`;
+      const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
+      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent });
+      try {
+        await bridge.request("chat.send", { bot, text: sent });
+      } catch (e) {
+        dispatch({ type: "send.failed", bot, id, error: errText(e) });
+      }
     },
     async interrupt() {
       const bot = state.selectedBot;
@@ -1174,6 +1323,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     togglePanel: (open) => dispatch({ type: "ui.panel", open }),
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
+    openRun: (run) => dispatch({ type: "ui.run", run }),
+    setRunsFull: (open) => dispatch({ type: "ui.runsFull", open }),
+    prefill(text) {
+      const bot = state.selectedBot;
+      if (!bot) return;
+      if (state.ui.view !== "chat") dispatch({ type: "ui.closeSettings" });
+      dispatch({ type: "ui.draft", bot, text });
+    },
     setTheme(theme) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem("omher.theme", theme);
@@ -1238,10 +1395,54 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
+    skills(bot) {
+      let list = skillLists.get(bot);
+      if (!list) {
+        list = bridge
+          .request("skills.list", { bot })
+          .then((r) => {
+            skillNames.set(bot, r.skills.map((x) => x.name));
+            return r.skills;
+          })
+          .catch(() => {
+            skillLists.delete(bot); // an older bridge without the op, or a failed read: no picker, no toast
+            return [];
+          });
+        skillLists.set(bot, list);
+      }
+      return list;
+    },
     avatarOf: (bot) => bridge.request("bots.avatar", { bot }),
     panelTerminal: (bot) => bridge.request("panel.terminal", { bot }),
     panelWorktrees: (bot) => bridge.request("panel.worktrees", { bot }),
     panelDiff: (bot, path) => bridge.request("panel.diff", { bot, path }),
+    readMedia: (bot, path, info) => bridge.request("media.read", info ? { bot, path, info } : { bot, path }),
+    runsList: (bot) => bridge.request("runs.list", { bot }),
+    runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
+    runsCli: (params = {}) => bridge.request("runs.cli", params),
+    usage: () => bridge.request("usage.read", {}),
+    accounts: () => bridge.request("accounts.list", {}),
+    addAccount: (cli, label) => bridge.request("accounts.add", { cli, label }),
+    async setActiveAccount(cli, id) {
+      await bridge.request("accounts.set_active", { cli, account: id });
+    },
+    async removeAccount(cli, id) {
+      await bridge.request("accounts.remove", { cli, account: id });
+    },
+    async labelAccount(cli, id, label) {
+      await bridge.request("accounts.label", { cli, account: id, label });
+    },
+    async discardAccount(cli, id) {
+      await bridge.request("accounts.discard", { cli, account: id });
+    },
+    systemNote(text, bot) {
+      const b = bot ?? state.selectedBot ?? state.bots[0]?.name;
+      if (b) dispatch({ type: "system.note", bot: b, text, now: now() });
+    },
+    onBridgeEvent(fn) {
+      eventFns.add(fn);
+      return () => eventFns.delete(fn);
+    },
   };
 
   return {
@@ -1281,18 +1482,39 @@ export function getStore(): Store {
     onEvent(ev, state) {
       notifySessionEvent(ev, state);
     },
+    onAction: (a, state) => soundOf(a, state, appSounds()),
+    onSettled: () => appSounds().settle(),
   }));
+}
+
+/** True while the person sees chat `key`: the window has focus and shows that bot's chat or that session. */
+function watchingChat(state: AppState, key: string): boolean {
+  if (!windowWatched()) return false;
+  if (isSessionChat(key)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === key;
+  return state.ui.view === "chat" && state.selectedBot === key;
+}
+
+/** Sounds: your own send (any chat), and a bot's or SESSIONS chat's events. A chat's (re)load and a dropped
+ *  connection tell the board which asks are replays. */
+export function soundOf(a: Action, state: AppState, board: SoundBoard): void {
+  if (a.type === "local.user") board.offer("send");
+  else if (a.type === "chat.opened") board.opened(a.bot);
+  else if (a.type === "conn" && a.status !== "open") board.unsettle();
+  else if (a.type === "event") {
+    const ev = a.ev.session ? { ...a.ev, bot: folderKey(a.ev.bot, a.ev.session) } : a.ev;
+    const s = soundFor(ev, {
+      watching: (key) => watchingChat(state, key),
+      open: (key, id) => selectAsks(state).some((x) => x.bot === key && x.item.request_id === id),
+    });
+    if (s) board.offer(s.sound, s.ask ? { chat: ev.bot, id: s.ask } : undefined);
+  }
 }
 
 /** A system notification for a chat event, unless the person is looking at that chat. SESSIONS chats
  *  (`fold:` / `agent:` keys) name themselves through their route and open their own view. */
 export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
   if (!notifyEnabled()) return;
-  const watching = (bot: string) => {
-    if (!windowWatched()) return false;
-    if (isSessionChat(bot)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === bot;
-    return state.ui.view === "chat" && state.selectedBot === bot;
-  };
+  const watching = (bot: string) => watchingChat(state, bot);
   const name = (bot: string) => chatRoute(bot)?.label ?? state.bots.find((b) => b.name === bot)?.display_name ?? bot;
   const note = noteFor(ev, { name, watching });
   if (note) void showNote(note, () => {

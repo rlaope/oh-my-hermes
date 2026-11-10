@@ -5,6 +5,7 @@
 //! open for the life of the app: the bridge runs with `--exit-on-stdin-eof`, so it also stops if this
 //! process dies without cleaning up. The app makes no model or network call of its own.
 
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -16,6 +17,10 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 
 pub const READY_PREFIX: &str = "OMHER_BRIDGE_READY ";
+/// The bridge prints `OMHER_MEDIA_SERVED {"path": "/abs/file"}` each time `media.read` serves a file the
+/// bot named. Those paths, and only those, may be opened by `open_media`.
+pub const MEDIA_PREFIX: &str = "OMHER_MEDIA_SERVED ";
+const MEDIA_REMEMBERED: usize = 2000;
 pub const READY_TIMEOUT: Duration = Duration::from_secs(20);
 pub const HERMES_NOT_FOUND: &str = "Hermes not found: install Hermes Agent first";
 const STDERR_TAIL_LINES: usize = 6;
@@ -34,6 +39,17 @@ pub fn parse_ready_line(line: &str) -> Option<u16> {
     } else {
         None
     }
+}
+
+/// `OMHER_MEDIA_SERVED {"path": "/a/b.png"}` -> `Some("/a/b.png")`. Anything else -> `None`.
+pub fn parse_media_line(line: &str) -> Option<String> {
+    let rest = line.trim_end().strip_prefix(MEDIA_PREFIX)?;
+    let v: serde_json::Value = serde_json::from_str(rest.trim()).ok()?;
+    let path = v.get("path")?.as_str()?;
+    if path.is_empty() || path.contains('\0') || !Path::new(path).is_absolute() {
+        return None;
+    }
+    Some(path.to_string())
 }
 
 /// Lower-case hex of `bytes`.
@@ -231,6 +247,8 @@ impl BridgeStatus {
 pub struct Bridge {
     inner: Mutex<Inner>,
     changed: Condvar,
+    /// Files `media.read` served this launch (from the bridge's stdout).
+    served: Mutex<HashSet<String>>,
 }
 
 impl Bridge {
@@ -244,6 +262,7 @@ impl Bridge {
                 generation: 0,
             }),
             changed: Condvar::new(),
+            served: Mutex::new(HashSet::new()),
         })
     }
 
@@ -316,6 +335,7 @@ impl Bridge {
         });
 
         let (tx, rx) = mpsc::channel::<Result<u16, ()>>();
+        let me = Arc::clone(self);
         thread::spawn(move || {
             let mut sent = false;
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -324,6 +344,8 @@ impl Bridge {
                         sent = true;
                         let _ = tx.send(Ok(port));
                     }
+                } else if let Some(path) = parse_media_line(&line) {
+                    me.remember_media(path);
                 }
             }
             if !sent {
@@ -384,6 +406,19 @@ impl Bridge {
         }
         drop(g);
         self.changed.notify_all();
+    }
+
+    pub fn remember_media(&self, path: String) {
+        let mut set = self.served.lock().unwrap();
+        if set.len() >= MEDIA_REMEMBERED && !set.contains(&path) {
+            set.clear();
+        }
+        set.insert(path);
+    }
+
+    /// True only for a file the bridge served through `media.read` since the app started.
+    pub fn served_media(&self, path: &str) -> bool {
+        self.served.lock().unwrap().contains(path)
     }
 
     pub fn status(&self) -> BridgeStatus {
@@ -484,6 +519,34 @@ mod tests {
         ] {
             assert_eq!(parse_ready_line(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn media_line_names_one_absolute_file() {
+        let abs = if cfg!(windows) { r"C:\w\a.png" } else { "/w/a.png" };
+        let line = format!("OMHER_MEDIA_SERVED {}", serde_json::json!({ "path": abs }));
+        assert_eq!(parse_media_line(&line), Some(abs.to_string()));
+        for bad in [
+            "",
+            "OMHER_MEDIA_SERVED",
+            "OMHER_MEDIA_SERVED {}",
+            "OMHER_MEDIA_SERVED {\"path\": \"\"}",
+            "OMHER_MEDIA_SERVED {\"path\": \"rel/a.png\"}",
+            "OMHER_MEDIA_SERVED {\"path\": 3}",
+            "WARN OMHER_MEDIA_SERVED {\"path\": \"/w/a.png\"}",
+        ] {
+            assert_eq!(parse_media_line(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn only_served_media_is_known() {
+        let b = Bridge::new();
+        assert!(!b.served_media("/w/a.png"));
+        b.remember_media("/w/a.png".into());
+        assert!(b.served_media("/w/a.png"));
+        assert!(!b.served_media("/w/b.png"));
+        assert!(!b.served_media("/w"));
     }
 
     fn env_of(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {

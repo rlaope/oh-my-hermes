@@ -1,0 +1,189 @@
+/* Attaching files: the + at the composer's left edge, its menu, chips, the drop overlay, sent files. */
+.att-wrap {
+  position: static;
+  flex: none;
+  /* centred on the last line of text (textarea: 5px padding + 20px line), level with the send button however
+     many lines the message has */
+  align-self: flex-end;
+  margin: 0 6px 2px 2px;
+}
+.att-plus {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+.att-plus:not(:disabled):hover,
+.att-plus[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.att-plus:disabled {
+  opacity: 0.5;
+}
+
+/* menu: above the whole composer, from the composer's left edge */
+.att-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  min-width: 228px;
+  padding: 4px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.14s ease both;
+}
+.att-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  color: var(--body);
+  text-align: left;
+}
+.att-menu button:hover {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.att-menu kbd {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--quiet);
+}
+
+/* chips row above the input */
+.att-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.att-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  height: 32px;
+  padding: 3px 4px 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--raise);
+  font-size: 12px;
+}
+.att-chip.bad {
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--raise));
+}
+.att-thumb {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--raise2);
+  overflow: hidden;
+}
+.att-badge {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.att-vid {
+  position: relative;
+  display: block;
+}
+.att-vid video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.att-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 9px;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+.att-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+.att-size {
+  flex: none;
+  color: var(--quiet);
+  font-size: 11px;
+}
+.att-chip.bad .att-size,
+.att-chip.bad .att-badge {
+  color: var(--danger);
+}
+.att-x {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-sm);
+  color: var(--quiet);
+  font-size: 14px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.att-x:hover {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.att-err {
+  font-size: 11.5px;
+  color: var(--danger);
+  padding: 0 2px;
+}
+
+/* drop overlay over the chat area */
+.pane {
+  position: relative;
+}
+.att-drop {
+  position: absolute;
+  inset: 10px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-bubble);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* files in the person's own bubble */
+/* the person's files: under their bubble (6px), on its right edge */
+.msg.u .att-sent {
+  --media-edge: end;
+  align-items: flex-end;
+}
+.msg.u > .b + .att-sent {
+  margin-top: 6px;
+}
