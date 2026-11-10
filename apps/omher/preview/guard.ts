@@ -1,7 +1,7 @@
 // The preview inside the omher.app hero: page scroll, inert actions, and the visitor's first click.
 // - Wheel: until the visitor clicks into the window, every wheel scrolls the page (the window never traps it).
 //   After a click it scrolls the pane under the cursor when that pane can move that way, else the page.
-// - Things that would start real work (add a bot, a new session, attachments, Automations, Plugins) show one small
+// - Things that would start real work (add a bot, attachments, Automations, Plugins) show one small
 //   note instead: "Download omher to …". Nothing is started anywhere.
 const W = window as unknown as { __omherPreviewToasts?: string[] };
 
@@ -38,8 +38,9 @@ export function toast(text: string): void {
   toastTimer = window.setTimeout(() => toastEl?.classList.remove("on"), 2600);
 }
 
+// SESSIONS + opens a New session draft (from 0.2.3 nothing runs until its first message), so it stays live here;
+// the mock agent answers that first message with the preview note (vite.config.ts hook).
 const INERT: [string, string][] = [
-  ['[data-testid="session-new"], [data-testid="session-start"]', "This is a preview. Download omher to start a real session."],
   ['[aria-label="Add a bot"]', "This is a preview. Download omher to connect your Hermes bots."],
   ['[data-testid="attach"]', "This is a preview. Download omher to send files to your bots."],
   ['[data-testid="nav-automations"], [data-testid="nav-plugins"]', "Coming in a later version of omher."],
