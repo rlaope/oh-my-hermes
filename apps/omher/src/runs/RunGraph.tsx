@@ -1,14 +1,18 @@
-// The Runs graph, in two sizes. "panel": cards that fit the 440px side panel; a run wider than the panel is scaled to
-// fit (down to 0.8), else drawn with compact cards (title, logo, state) scaled down to 0.6, else it scrolls with a
-// "‹ 3 more" cue on the clipped side; − / Fit / + in the legend row zoom it. "full": the whole
-// run large over the chat column, with titles in full, model marks, durations, attempts and a handoff snippet on
-// hover; there you can drag a card (its position only, kept per run), pan, zoom and Fit. Nothing here changes a
-// run: no connecting, deleting, reordering, retrying or cancelling.
+// The Runs graph, in two sizes. "panel": the 460px side panel. A card there is never narrower than PANEL_FLOOR
+// (132px) and its title never set under 11px: the panel never shrinks a run past that. A run with more layers than
+// fit side by side at the floor shows whole columns (one width for all) and scrolls sideways, with a "‹ 3 more" cue
+// on the clipped side and the edges to it faded; a layer with more parallel parts than the box is tall folds into one
+// group card ("9 parallel", "5 done · 2 running · 1 failed", stacked logos) that opens in place; a run of one layer
+// (a CLI session's sub-runs, a fan-out) is a grid across the width, running first, with a summary line and "Show
+// all" past GRID_CAP. − / Fit / + in the legend row zoom it. "full": the whole run large over the chat column, with
+// titles in full, model marks, durations, attempts and a handoff snippet on hover; there you can drag a card (its
+// position only, kept per run), pan, zoom and Fit. Nothing here changes a run: no connecting, deleting,
+// reordering, retrying or cancelling.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPE } from "react";
 import type { AgentRun, RunNode } from "../lib/runs";
 import { isRepaired, nodeModel, span } from "../lib/runs";
 import { markFor, ModelIcon } from "../ui";
-import { distinctLabels, layerName, layoutRun, routeEdge, type Box, type Lane, type Layout, type Size } from "./layout";
+import { columnLabel, distinctLabels, layerName, layoutRun, linksOf, orderLayers, routeEdge, sizeKind, type Box, type Column, type Lane, type Layout, type Size } from "./layout";
 import { clampWords, modelLabel, plainSnippet, reducedMotion, STATE_WORD, textWidth } from "./format";
 
 export type GraphMode = "panel" | "full";
@@ -16,10 +20,7 @@ export type GraphMode = "panel" | "full";
 // card heights carry the node's weight: a lead (plans, or unblocks several parts) is tallest, a leaf compact, the
 // closing gate sits in a wider column
 const SIZE = {
-  panel: { cardH: 80, heights: { lead: 90, normal: 80, leaf: 64, gate: 80 }, gateW: 1.15, gutter: 30, rowGap: 14, pad: 16, minCard: 100, maxCard: 406, labelH: 24, mark: 14 },
-  // the panel's compact cards: the title (up to COMPACT_LINES lines) over the logo and the state, no chips; the
-  // card is as tall as the longest title needs
-  compact: { cardH: 50, heights: {}, gateW: 1, ports: true, gutter: 18, rowGap: 20, pad: 16, minCard: 64, maxCard: 150, labelH: 22, mark: 12 },
+  panel: { cardH: 80, heights: { lead: 90, normal: 80, leaf: 64, gate: 80 }, gateW: 1.15, gutter: 30, rowGap: 14, pad: 16, minCard: 132, maxCard: 406, labelH: 24, mark: 14 },
   full: { cardH: 160, heights: { lead: 180, normal: 160, leaf: 140, gate: 168 }, gateW: 1.2, loose: true, gutter: 88, rowGap: 36, pad: 24, minCard: 220, maxCard: 280, labelH: 32, mark: 18 },
 };
 const STAGGER = { panel: 50, full: 70 };
@@ -29,46 +30,261 @@ const MAX_ENTRANCE = { panel: 950, full: 1500 };
 const DRAG_PX = 4;
 const DRAWER_W = 392;
 const MIN_FIT = 0.72; // below this the cards stop being readable: Fit keeps this scale and shows the open card
-const PANEL_MIN_FIT = 0.8; // the panel shrinks a run with full cards down to this; past it the cards go compact
-const COMPACT_MIN_FIT = 0.6; // compact cards shrink down to this; past it they keep COMPACT_SCROLL and the box scrolls
-const COMPACT_SCROLL = 0.8;
-const COMPACT_LINES = 6;
-const COMPACT_LINE_H = 13;
-const COMPACT_CHROME = 32; // a compact card's padding, gap and its logo + state row
-const COMPACT_FONT = () => `550 10px ${FONT()}`;
-/** A compact card's title: up to `lines` lines at word breaks in a card `w` wide. */
-// (the room is the card less its padding and borders, a failed card's 3px rail included: 4 + 3 | 5 + 1)
-const compactTitle = (label: string, w: number, lines = COMPACT_LINES) => clampWords(label, w - 13, lines, (s) => textWidth(s, COMPACT_FONT()));
 const PANEL_MARGIN = 16; // the panel graph's inner margin, on screen, at any scale
+/** The panel's floor: no card narrower, no title type smaller. */
+export const PANEL_FLOOR = { cardW: 132, font: 11 };
 export const PANEL_ZOOM = { min: 0.4, max: 1.6, step: 1.2 };
+/** A one-layer run's grid shows this many cards (running, then failed, then the rest) before "Show all". */
+export const GRID_CAP = 24;
+const GRID_GAP = 8;
+const BAND_LABEL = 22; // a stacked layer's name row
+const BAND_GAP = 14;
+const GROUP_H = 52;
+const GRID_HEAD = 28; // the grid's summary line ("88 sub-runs · 3 running · 85 done")
+const GRID_FOOT = 40; // the grid's "Show all 88" row
+const ROW_LINE = 15;
+const TITLE_FONT = (weight = 550) => `${weight} ${PANEL_FLOOR.font}px ${FONT()}`;
+/** A grid card's time slot: one width on every card ("23h 59m", the longest a duration reads under a day), so the
+ *  times line up as a column and a title wraps for its own length, never for its neighbour's time. */
+export const ROW_TIME_W = () => Math.ceil(textWidth("23h 59m", `400 10.5px ${FONT()}`));
+/** A grid card's title, between its logo and its time + state: up to 2 lines at word breaks. The room is the card
+ *  less its padding, borders and failed rail (8 + 8, 2, 2), the logo (14), the state (12), the time and the gaps. */
+const rowRoom = (w: number, gate: boolean) => w - 20 - 14 - 12 - 3 * 6 - ROW_TIME_W() - 1 - (gate ? 11 + 6 : 0);
+const rowTitle = (n: RunNode, label: string, w: number) => clampWords(label, rowRoom(w, sizeKind(n, 0) === "gate"), 2, (s) => textWidth(s, TITLE_FONT()));
+const ROW_TITLE_LINE = 14;
+const rowH = (lines: number) => lines * ROW_TITLE_LINE + 14; // the title, 6px padding above and below, the borders
+const GRID_ROW_GAP = 6;
 
-/** How the panel draws a run: full cards at 1, else full cards scaled to fit (down to PANEL_MIN_FIT), else compact
- *  cards at 1 or scaled to fit (down to COMPACT_MIN_FIT), else compact at COMPACT_SCROLL (the box scrolls). A scaled
- *  layout is laid out at width/k with a margin of PANEL_MARGIN/k, so the margin on screen stays PANEL_MARGIN. */
-export function panelPlan(nodes: RunNode[], width: number, maxH = Infinity): { compact: boolean; k: number; lay: Layout; lines: number } {
-  const M = PANEL_MARGIN;
-  // compact cards are as tall as the longest of their titles at the width they get (at most COMPACT_LINES lines),
-  // as long as the run still fits the box's height
-  const labels = distinctLabels(nodes);
-  const probe = layoutRun(nodes, { ...SIZE.compact, width, pad: M });
-  const need = Math.max(2, ...nodes.map((n) => compactTitle(labels.get(n.id) ?? n.label, probe.cardW).split("\n").length));
-  let compactO = { ...SIZE.compact, cardH: need * COMPACT_LINE_H + COMPACT_CHROME, lines: need };
-  for (let l = need; l > 2; l--) {
-    compactO = { ...SIZE.compact, cardH: l * COMPACT_LINE_H + COMPACT_CHROME, lines: l };
-    if (layoutRun(nodes, { ...compactO, width, pad: M }).h <= maxH) break;
-  }
-  for (const [compact, o, min] of [
-    [false, SIZE.panel, PANEL_MIN_FIT],
-    [true, compactO, COMPACT_MIN_FIT],
-  ] as const) {
-    const lay = layoutRun(nodes, { ...o, width, pad: M });
-    if (lay.w <= width + 0.5 && lay.h <= maxH + 0.5) return { compact, k: 1, lay, lines: compactO.lines };
-    const k = Math.floor(Math.min(1, (width - 2 * M) / (lay.w - 2 * M), (maxH - 2 * M) / (lay.h - 2 * M)) * 1000) / 1000;
-    if (k >= min) return { compact, k, lay: layoutRun(nodes, { ...o, width: width / k, pad: M / k }), lines: compactO.lines };
-  }
-  const k = COMPACT_SCROLL;
-  return { compact: true, k, lay: layoutRun(nodes, { ...compactO, width: width / k, pad: M / k }), lines: compactO.lines };
+/** A layer folded into one card in the panel: its parts. */
+export interface Group {
+  layer: number;
+  members: RunNode[];
 }
+export interface PanelPlan {
+  /** "graph": the layered graph (its layers fit side by side at the floor); "stack": its layers top to bottom, each
+   *  a grid; "grid": a run of one layer, as a grid across the width. */
+  kind: "graph" | "grid" | "stack";
+  lay: Layout;
+  /** What is drawn: the run's nodes with each folded layer as one stand-in node (`group:<layer>`), or the grid's. */
+  nodes: RunNode[];
+  groups: Map<string, Group>;
+  /** Layers the box is too short for: folded unless the person opened them. */
+  tall: Set<number>;
+  grid?: { total: number; shown: number; head: boolean; foot: boolean };
+}
+
+const RANK: Record<RunNode["state"], number> = { running: 0, failed: 1, blocked: 1, waiting: 2, parked: 2, done: 3, cancelled: 4 };
+const openFailure = (n: RunNode, all: RunNode[]) => (n.state === "failed" || n.state === "blocked") && !isRepaired(n, all);
+export const GROUP = "group:";
+
+/** The card standing in for a folded layer: running if a part runs, else failed if one failed (and was not
+ *  repaired), else waiting if one waits, else done (cancelled when all were). */
+function groupNode(layer: number, members: RunNode[], all: RunNode[]): RunNode {
+  const state: RunNode["state"] = members.some((m) => m.state === "running")
+    ? "running"
+    : members.some((m) => openFailure(m, all))
+      ? "failed"
+      : members.some((m) => m.state === "waiting" || m.state === "parked")
+        ? "waiting"
+        : members.every((m) => m.state === "cancelled")
+          ? "cancelled"
+          : "done";
+  const node: RunNode = { id: `${GROUP}${layer}`, label: `${members.length} parallel`, deps: [], layer, state, attempts: [] };
+  const starts = members.map((m) => m.started).filter((t): t is number => t !== undefined);
+  const ends = members.map((m) => m.ended).filter((t): t is number => t !== undefined);
+  if (starts.length) node.started = Math.min(...starts);
+  if (starts.length && ends.length === members.length && state !== "running") node.ended = Math.max(...ends);
+  return node;
+}
+
+/** The run with the given layers folded into group cards: a link into or out of a part becomes the group's. */
+function foldLayers(nodes: RunNode[], fold: Set<number>): { nodes: RunNode[]; groups: Map<string, Group> } {
+  const groups = new Map<string, Group>();
+  const gid = new Map<string, string>();
+  for (const l of fold) {
+    const members = nodes.filter((n) => n.layer === l);
+    groups.set(`${GROUP}${l}`, { layer: l, members });
+    for (const m of members) gid.set(m.id, `${GROUP}${l}`);
+  }
+  if (!groups.size) return { nodes, groups };
+  const map = (id: string) => gid.get(id) ?? id;
+  const out: RunNode[] = [];
+  for (const n of nodes) {
+    const g = gid.get(n.id);
+    if (!g) {
+      const m: RunNode = { ...n, deps: [...new Set(n.deps.map(map))] };
+      if (n.repairOf !== undefined) m.repairOf = map(n.repairOf);
+      out.push(m);
+      continue;
+    }
+    if (out.some((x) => x.id === g)) continue;
+    const grp = groups.get(g)!;
+    const deps = new Set<string>();
+    for (const m of grp.members) for (const d of [...m.deps, ...(m.repairOf ? [m.repairOf] : [])]) if (map(d) !== g) deps.add(map(d));
+    out.push({ ...groupNode(grp.layer, grp.members, nodes), deps: [...deps] });
+  }
+  return { nodes: out, groups };
+}
+
+/** How the panel draws a run, at the floor (the person's zoom comes on top of it):
+ *  - one layer: a grid across the width (`gridPlan`);
+ *  - layers that fit side by side at PANEL_FLOOR: the layered graph with its links, where a layer of 2+ parts whose
+ *    column is taller than the box folds into a group card, unless the person opened it;
+ *  - wider: the stack (`stackPlan`). Measured on real runs, scrolling whole columns sideways showed 2 of the live
+ *    run's 11 parts and 10 of the biggest run's 14; the stack shows all of both. */
+export function panelPlan(nodes: RunNode[], width: number, maxH = Infinity, opts: { opened?: Set<number>; all?: boolean } = {}): PanelPlan {
+  const M = PANEL_MARGIN;
+  if (new Set(nodes.map((n) => n.layer)).size <= 1) return gridPlan(nodes, width, opts.all ?? false);
+  const o = { ...SIZE.panel, width, pad: M };
+  const first = layoutRun(nodes, o);
+  if (first.w > width + 0.5) return stackPlan(nodes, width, maxH, opts.opened ?? new Set());
+  // a column taller than the box (its label band and margins aside) folds into a group card
+  const room = maxH - 2 * M - o.labelH;
+  const tall = new Set<number>();
+  for (const c of first.columns) {
+    const ids = nodes.filter((n) => n.layer === c.layer).map((n) => n.id);
+    if (ids.length < 2) continue;
+    const top = Math.min(...ids.map((id) => first.pos.get(id)!.y));
+    const bottom = Math.max(...ids.map((id) => first.pos.get(id)!.y + first.size.get(id)!.h));
+    if (bottom - top > room + 0.5) tall.add(c.layer);
+  }
+  const fold = new Set([...tall].filter((l) => !opts.opened?.has(l)));
+  if (!fold.size) return { kind: "graph", lay: first, nodes, groups: new Map(), tall };
+  const folded = foldLayers(nodes, fold);
+  const lay = layoutRun(folded.nodes, o);
+  // a folded column keeps the name of what its parts do
+  lay.columns = lay.columns.map((c) => {
+    const members = nodes.filter((n) => n.layer === c.layer);
+    return { ...c, label: columnLabel(members, c.layer), count: members.length };
+  });
+  return { kind: "graph", lay, nodes: folded.nodes, groups: folded.groups, tall };
+}
+
+/** A run too wide for the panel at the floor: its layers top to bottom, each layer a band whose cards wrap into a
+ *  grid across the width (a short last row shares the width, so no cell stays empty). While the stack is taller
+ *  than the box, its biggest finished layer (then one with a failure, last a running one) folds into a group card,
+ *  unless the person opened it. Links are not drawn here: hovering a card lights the parts it waits on and the parts
+ *  waiting on it, and the full view draws every edge. */
+function stackPlan(nodes: RunNode[], width: number, maxH: number, opened: Set<number>): PanelPlan {
+  const t0 = performance.now();
+  const M = PANEL_MARGIN;
+  const inner = width - 2 * M;
+  const most = Math.max(1, Math.floor((inner + GRID_GAP) / (PANEL_FLOOR.cardW + GRID_GAP)));
+  const layers: RunNode[][] = [];
+  for (const n of nodes) (layers[n.layer] ??= []).push(n);
+  const { order } = orderLayers(nodes);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = new Map<string, number>();
+  for (const e of linksOf(nodes)) out.set(e.from, (out.get(e.from) ?? 0) + 1);
+  const labels = distinctLabels(nodes);
+  // a band card is the panel card: a title of up to 2 lines over its meta line
+  const tileH = (n: RunNode, w: number, gate: boolean) =>
+    clampWords(labels.get(n.id) ?? n.label, w - 16 - 3 - (gate ? 16 : 0), 2, (s) => textWidth(s, TITLE_FONT())).split("\n").length * ROW_LINE + 35;
+  const build = (fold: Set<number>) => {
+    const pos = new Map<string, Box>();
+    const size = new Map<string, Size>();
+    const columns: Column[] = [];
+    const drawn: RunNode[] = [];
+    const groups = new Map<string, Group>();
+    let y = M;
+    order.forEach((ids, l) => {
+      if (!ids.length) return;
+      const members = ids.map((id) => byId.get(id)!);
+      columns.push({ layer: l, x: M, y, label: columnLabel(members, l), count: members.length });
+      y += BAND_LABEL;
+      if (fold.has(l)) {
+        const g = groupNode(l, members, nodes);
+        drawn.push(g);
+        groups.set(g.id, { layer: l, members });
+        pos.set(g.id, { x: M, y });
+        size.set(g.id, { w: inner, h: GROUP_H, kind: "normal", unblocks: 0 });
+        y += GROUP_H + BAND_GAP;
+        return;
+      }
+      const cols = Math.min(most, members.length);
+      for (let r = 0; r * cols < members.length; r++) {
+        const row = members.slice(r * cols, r * cols + cols);
+        const cw = Math.floor((inner - (row.length - 1) * GRID_GAP) / row.length);
+        const kinds = row.map((n) => sizeKind(n, out.get(n.id) ?? 0));
+        const h = Math.max(...row.map((n, i) => tileH(n, cw, kinds[i] === "gate")));
+        row.forEach((n, i) => {
+          drawn.push(n);
+          pos.set(n.id, { x: M + i * (cw + GRID_GAP), y });
+          size.set(n.id, { w: cw, h, kind: kinds[i], unblocks: out.get(n.id) ?? 0 });
+        });
+        y += h + GRID_GAP;
+      }
+      y += BAND_GAP - GRID_GAP;
+    });
+    return { pos, size, columns, drawn, groups, h: y - BAND_GAP + M };
+  };
+  const rank = (ms: RunNode[]) => (ms.some((n) => n.state === "running") ? 2 : ms.some((n) => openFailure(n, nodes)) ? 1 : 0);
+  const candidates = layers
+    .map((ms, l) => ({ l, n: ms?.length ?? 0, r: rank(ms ?? []) }))
+    .filter((c) => c.n >= 2)
+    .sort((a, b) => a.r - b.r || b.n - a.n || a.l - b.l);
+  const tall = new Set<number>();
+  let b = build(tall);
+  for (const c of candidates) {
+    if (b.h <= maxH + 0.5) break;
+    tall.add(c.l);
+    b = build(tall);
+  }
+  const fold = new Set([...tall].filter((l) => !opened.has(l)));
+  if (fold.size !== tall.size) b = build(fold);
+  const cardW = Math.floor((inner - (most - 1) * GRID_GAP) / most);
+  const lay: Layout = { pos: b.pos, size: b.size, edges: [], columns: b.columns, w: width, h: b.h, cardW, cardH: ROW_LINE + 35, crossings: 0, ms: performance.now() - t0 };
+  return { kind: "stack", lay, nodes: b.drawn, groups: b.groups, tall };
+}
+
+/** One layer as a grid: cards at the floor or wider, as many across as fit, running → failed → waiting → done, each
+ *  row as tall as its longest title (at most 2 lines). */
+function gridPlan(nodes: RunNode[], width: number, all: boolean): PanelPlan {
+  const t0 = performance.now();
+  const M = PANEL_MARGIN;
+  const inner = width - 2 * M;
+  const cols = Math.max(1, Math.min(nodes.length, Math.floor((inner + GRID_GAP) / (PANEL_FLOOR.cardW + GRID_GAP))));
+  const cw = Math.floor((inner - (cols - 1) * GRID_GAP) / cols);
+  const sorted = nodes
+    .map((n, i) => [n, i] as const)
+    .sort((a, b) => RANK[a[0].state] - RANK[b[0].state] || a[1] - b[1])
+    .map(([n]) => n);
+  // "Show all" only when it hides more than a few cards
+  const capped = sorted.length > GRID_CAP + 4;
+  const shown = capped && !all ? sorted.slice(0, GRID_CAP) : sorted;
+  const labels = distinctLabels(nodes);
+  const head = nodes.length > 8;
+  const pos = new Map<string, Box>();
+  const size = new Map<string, Size>();
+  let y = M + (head ? GRID_HEAD : 0);
+  // one row height for the whole grid (its longest title, at most 2 lines): it reads as a table, not a ragged wall
+  const rh = rowH(Math.max(1, ...shown.map((n) => rowTitle(n, labels.get(n.id) ?? n.label, cw).split("\n").length)));
+  for (let r = 0; r * cols < shown.length; r++) {
+    shown.slice(r * cols, r * cols + cols).forEach((n, i) => {
+      pos.set(n.id, { x: M + i * (cw + GRID_GAP), y });
+      size.set(n.id, { w: cw, h: rh, kind: sizeKind(n, 0) === "gate" ? "gate" : "leaf", unblocks: 0 });
+    });
+    y += rh + GRID_ROW_GAP;
+  }
+  const h = y - GRID_ROW_GAP + (capped ? GRID_FOOT : 0) + M;
+  const lay: Layout = { pos, size, edges: [], columns: [], w: width, h, cardW: cw, cardH: rowH(1), crossings: 0, ms: performance.now() - t0 };
+  return { kind: "grid", lay, nodes: shown, groups: new Map(), tall: new Set(), grid: { total: nodes.length, shown: shown.length, head, foot: capped } };
+}
+
+/** A grid's or a group's counts in the grid's order, zero counts left out: [[3, "running"], [85, "done"]]. */
+export function stateCounts(nodes: RunNode[], all: RunNode[] = nodes): [number, string][] {
+  const c = (f: (n: RunNode) => boolean) => nodes.filter(f).length;
+  const parts: [number, string][] = [
+    [c((n) => n.state === "running"), "running"],
+    [c((n) => openFailure(n, all)), "failed"],
+    [c((n) => n.state === "waiting" || n.state === "parked"), "waiting"],
+    [c((n) => n.state === "done" || isRepaired(n, all)), "done"],
+    [c((n) => n.state === "cancelled"), "cancelled"],
+  ];
+  return parts.filter(([n]) => n > 0);
+}
+/** What a run's parts are called: a dag's "parts", a fan-out's "helpers", a CLI session's "sub-runs". */
+export const partsNoun = (kind: AgentRun["kind"]) => (kind === "dag" ? "parts" : kind === "delegate" ? "helpers" : "sub-runs");
 
 const GLYPH: Record<RunNode["state"], string> = {
   done: "✓",
@@ -152,8 +368,9 @@ function edgePath(a: Box, sa: Size, b: Box, sb: Size, lanes: Lane[], rowGap: num
 }
 
 /** The legend as a slim row (under the panel graph); `extra` sits at its right end (the full-view hint). */
-export function Legend({ run, extra, tools }: { run: AgentRun; extra?: React.ReactNode; tools?: React.ReactNode }) {
-  const lay = layoutRun(run.nodes, { width: 400, ...SIZE.panel });
+export function Legend({ run, extra, tools, lines = true }: { run: AgentRun; extra?: React.ReactNode; tools?: React.ReactNode; lines?: boolean }) {
+  // a panel that draws no links (stacked layers, a grid) names no kinds of line
+  const lay = lines ? layoutRun(run.nodes, { width: 400, ...SIZE.panel }) : { edges: [] };
   return (
     <div className="rg-legend row" aria-label="Legend" data-testid="run-legend">
       {legend(run, lay.edges).map(([cls, word]) => (
@@ -188,6 +405,7 @@ export function RunGraph({
   nowS,
   bot,
   onOverflow,
+  onMode,
   maxH,
   zoom = 1,
 }: {
@@ -197,6 +415,8 @@ export function RunGraph({
   /** Panel: told whether the run is larger than the box and how many parts are not whole on screen (the panel
    *  then offers the full view). */
   onOverflow?: (over: boolean, hidden: number) => void;
+  /** Panel: told how the run is drawn ("graph" draws its links; "stack" and "grid" do not). */
+  onMode?: (mode: PanelPlan["kind"]) => void;
   /** Panel: the box's height cap (what the side panel has left under the plan card). */
   maxH?: number;
   /** Panel: the person's zoom over the fitted scale (1 = Fit; the legend row's − / Fit / +). */
@@ -209,14 +429,37 @@ export function RunGraph({
   onOpen: (id: string | null) => void;
   nowS: number;
 }) {
-  // panel: full cards, scaled to fit, else compact cards (panelPlan); the full view lays out at its own size
-  const plan = useMemo(() => (mode === "panel" ? panelPlan(run.nodes, Math.max(width, 200), maxH ?? 460) : null), [run.nodes, width, mode, maxH]);
-  const compact = !!plan?.compact;
-  const z = mode === "full" ? SIZE.full : compact ? SIZE.compact : SIZE.panel;
+  // panel: the run at the floor (panelPlan): the layered graph with tall layers folded, or a grid for one layer. The
+  // person opens a folded layer in place, and a long grid with "Show all"; both reset with the run.
+  const [opened, setOpened] = useState<Set<number>>(() => new Set());
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    setOpened(new Set());
+    setAll(false);
+  }, [run.id]);
+  const plan = useMemo(
+    () => (mode === "panel" ? panelPlan(run.nodes, Math.max(width, 200), maxH ?? 460, { opened, all }) : null),
+    [run.nodes, width, mode, maxH, opened, all],
+  );
+  const z = mode === "full" ? SIZE.full : SIZE.panel;
   const lay: Layout = useMemo(() => plan?.lay ?? layoutRun(run.nodes, { width: Math.max(width, 200), ...SIZE.full }), [plan, run.nodes, width]);
-  // the panel's scale: the plan's, times the person's zoom
-  const pk = plan ? Math.min(PANEL_ZOOM.max, Math.max(PANEL_ZOOM.min, Math.round(plan.k * zoom * 1000) / 1000)) : 1;
-  const byId = useMemo(() => new Map(run.nodes.map((n) => [n.id, n])), [run.nodes]);
+  // what is drawn: the run's nodes, a folded layer as its group card (panel), the grid's cards
+  const drawn = plan?.nodes ?? run.nodes;
+  // the panel's scale: the floor, times the person's zoom
+  const pk = plan ? Math.min(PANEL_ZOOM.max, Math.max(PANEL_ZOOM.min, Math.round(zoom * 1000) / 1000)) : 1;
+  const byId = useMemo(() => new Map(drawn.map((n) => [n.id, n])), [drawn]);
+  useEffect(() => {
+    if (plan) onMode?.(plan.kind);
+  }, [plan, onMode]);
+  // what a card waits on and what waits on it (hovering lights them; the stack draws no lines)
+  const near = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const e of linksOf(drawn)) {
+      (m.get(e.from) ?? m.set(e.from, new Set()).get(e.from)!).add(e.to);
+      (m.get(e.to) ?? m.set(e.to, new Set()).get(e.to)!).add(e.from);
+    }
+    return m;
+  }, [drawn]);
 
   // full view: dragged positions override the layout's, per run
   const [over, setOver] = useState<Record<string, Box>>(() => (mode === "full" ? loadPos(run.id) : {}));
@@ -226,7 +469,7 @@ export function RunGraph({
 
   // entrance: cards in layer order (top to bottom inside a layer), then each edge once both ends are in
   const appear = useMemo(() => {
-    const ids = lay.columns.flatMap((c) => [...lay.pos.entries()].filter(([id]) => byId.get(id)!.layer === c.layer).sort((a, b) => a[1].y - b[1].y).map(([id]) => id));
+    const ids = [...lay.pos.entries()].sort((a, b) => byId.get(a[0])!.layer - byId.get(b[0])!.layer || a[1].y - b[1].y || a[1].x - b[1].x).map(([id]) => id);
     const step = Math.min(STAGGER[mode], Math.max(12, (MAX_ENTRANCE[mode] - APPEAR[mode] - DRAW[mode]) / Math.max(1, ids.length)));
     return new Map(ids.map((id, i) => [id, { i, delay: Math.round(i * step) }]));
   }, [lay, byId, mode]);
@@ -401,8 +644,10 @@ export function RunGraph({
       const s = lay.size.get(id)!;
       const left = p.x < x0 - e;
       const right = p.x + s.w > x1 + e;
-      if (left) l++;
-      else if (right) r++;
+      // the side cues count the cards beside the window; a group card spans its band, so it is under, not beside
+      const side = !plan?.groups.has(id);
+      if (left && side) l++;
+      else if (right && side) r++;
       if (left || right || p.y < y0 - e || p.y + s.h > y1 + e) h++;
       if (p.x + s.w < x0 + 8 || p.x > x1 - 8 || p.y + s.h < y0 + 8 || p.y > y1 - 8) off.add(id);
     }
@@ -411,6 +656,7 @@ export function RunGraph({
     setHid(h);
     setOffIds((p) => (p.size === off.size && [...off].every((id) => p.has(id)) ? p : off));
     setWin((p) => (p && Math.abs(p[0] - x0) < 0.5 && Math.abs(p[1] - x1) < 0.5 ? p : [x0, x1]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lay, pk]);
   const focusedFor = useRef<string | null>(null);
   useLayoutEffect(() => {
@@ -420,7 +666,7 @@ export function RunGraph({
     if (focusedFor.current !== key) {
       // once per run, box height and scale: later refreshes keep wherever the person scrolled to
       focusedFor.current = key;
-      const f = focusNode(run, lay.pos);
+      const f = focusNode({ ...run, nodes: drawn }, lay.pos);
       if (f && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) {
         const p = lay.pos.get(f.id)!;
         const s = lay.size.get(f.id)!;
@@ -452,7 +698,7 @@ export function RunGraph({
   // keep the click-to-open for the node the person opened in the panel
   // lanes from the drawn positions (dragged cards included): one per distinct card x
   const lanes: Lane[] = [];
-  for (const n of run.nodes) {
+  for (const n of drawn) {
     const p = at(n.id);
     const s = sz(n.id);
     const lane = lanes.find((l) => Math.abs(l.x - p.x) < lay.cardW / 2);
@@ -462,7 +708,13 @@ export function RunGraph({
     } else lanes.push({ x: p.x, w: s.w, spans: [[p.y, s.h]] });
   }
   const edges = moved ? lay.edges.map((e) => ({ ...e, ...edgePath(at(e.from), sz(e.from), at(e.to), sz(e.to), lanes, z.rowGap) })) : lay.edges;
-  const labels = useMemo(() => distinctLabels(run.nodes), [run.nodes]);
+  const labels = useMemo(() => distinctLabels(drawn), [drawn]);
+  // a stacked band of repairs names the layer it fixes ("· fixes L4"), since the stack draws no repair links
+  const fixes = (layer: number) => {
+    const ms = run.nodes.filter((n) => n.layer === layer);
+    const of = new Set(ms.map((n) => (n.repairOf ? run.nodes.find((m) => m.id === n.repairOf)?.layer : undefined)));
+    return ms.length && !of.has(undefined) && of.size === 1 ? ` · fixes L${[...of][0]! + 1}` : "";
+  };
   // edges meeting at one card share one arrowhead (the last solid one wins, so a dashed edge never colours it)
   // (edges meeting a card at their own ports each keep their arrowhead)
   const arrowFor = new Map<string, string>();
@@ -482,17 +734,67 @@ export function RunGraph({
       style={mode === "full" ? { width: lay.w, height: lay.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` } : { width: lay.w, height: lay.h }}
       data-testid="run-canvas"
     >
-      {lay.columns.map((c) => (
-        <div
-          key={c.layer}
-          className="rg-col"
-          style={{ left: c.x, top: c.y, width: lay.cardW, ...(mode === "panel" ? { maxWidth: lay.cardW + z.gutter - 4 } : {}) }}
-          title={mode === "panel" ? `${layerName(c.layer, c.label)} · ${c.count} ${c.count === 1 ? "part" : "parts"}` : undefined}
-          data-testid="run-col"
-        >
-          {mode === "panel" ? (lay.columns.length > 1 ? layerName(c.layer, c.label) : c.label.replace(/ · \d+$/, "")) : c.label}
+      {lay.columns.map((c) => {
+        const stack = plan?.kind === "stack";
+        const name = mode === "panel" ? (lay.columns.length > 1 ? layerName(c.layer, c.label) : c.label.replace(/ · \d+$/, "")) : c.label;
+        // a layer the box is too short for, opened by the person: its label folds it back
+        const refold = !!plan?.tall.has(c.layer) && opened.has(c.layer);
+        return (
+          <div
+            key={c.layer}
+            className={`rg-col${stack ? " band" : ""}`}
+            style={{ left: c.x, top: c.y, width: stack ? lay.w - 2 * PANEL_MARGIN : lay.cardW, ...(mode === "panel" && !stack ? { maxWidth: lay.cardW + z.gutter - 4 } : {}) }}
+            title={mode === "panel" ? `${layerName(c.layer, c.label)} · ${c.count} ${c.count === 1 ? "part" : "parts"}` : undefined}
+            data-testid="run-col"
+          >
+            {stack ? (
+              <>
+                <span className="rg-coln">{name}</span>
+                <span className="rg-colc">
+                  {` · ${c.count} ${c.count === 1 ? "part" : "parts"}${fixes(c.layer)}`}
+                </span>
+              </>
+            ) : (
+              name
+            )}
+            {refold && (
+              <button
+                type="button"
+                className="rg-refold"
+                data-testid="run-group-fold"
+                onClick={() => setOpened((o) => new Set([...o].filter((l) => l !== c.layer)))}
+                title="Fold this layer back into one card"
+              >
+                Fold
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {plan?.grid?.head && (
+        <div className="rg-gridhead" data-testid="run-sub-summary" style={{ left: PANEL_MARGIN, top: PANEL_MARGIN, width: lay.w - 2 * PANEL_MARGIN }}>
+          <b>
+            {plan.grid.total} {partsNoun(run.kind)}
+          </b>
+          {stateCounts(run.nodes).map(([n, w]) => (
+            <span key={w} className={`t-${w}`}>
+              {" · "}
+              {n} {w}
+            </span>
+          ))}
         </div>
-      ))}
+      )}
+      {plan?.grid?.foot && (
+        <button
+          type="button"
+          className="rg-gridall"
+          data-testid="run-grid-all"
+          style={{ left: PANEL_MARGIN, top: lay.h - PANEL_MARGIN - 30, width: lay.w - 2 * PANEL_MARGIN }}
+          onClick={() => setAll((v) => !v)}
+        >
+          {all ? "Show fewer" : `Show all ${plan.grid.total} · ${plan.grid.total - plan.grid.shown} more`}
+        </button>
+      )}
       <svg className={`rg-edges${hover ? " focus" : ""}`} width={lay.w} height={lay.h} aria-hidden overflow="visible">
         <defs>
           {fadeMask && (
@@ -555,16 +857,34 @@ export function RunGraph({
           ))}
         </g>
       </svg>
-      {run.nodes.map((n) => {
+      {drawn.map((n) => {
         const p = at(n.id);
         const a = appear.get(n.id)!;
+        const g = plan?.groups.get(n.id);
+        if (g)
+          return (
+            <GroupCard
+              key={n.id}
+              n={n}
+              group={g}
+              all={run.nodes}
+              p={p}
+              w={sz(n.id).w}
+              h={sz(n.id).h}
+              bot={bot}
+              appear={a.i}
+              delay={animate ? a.delay : null}
+              nowS={nowS}
+              onOpen={() => setOpened((o) => new Set([...o, g.layer]))}
+            />
+          );
         return (
           <Card
             key={n.id}
             n={n}
             label={labels.get(n.id)!}
             mode={mode}
-            compact={compact ? plan!.lines : undefined}
+            row={plan?.kind === "grid"}
             p={p}
             w={sz(n.id).w}
             h={sz(n.id).h}
@@ -577,7 +897,7 @@ export function RunGraph({
             note={mode === "full" ? handoffs[n.id] : undefined}
             on={n.id === open}
             hov={n.id === hover}
-            dim={!!hover && n.id !== hover && !edges.some((e) => (e.from === hover && e.to === n.id) || (e.to === hover && e.from === n.id))}
+            dim={!!hover && n.id !== hover && !edges.some((e) => (e.from === hover && e.to === n.id) || (e.to === hover && e.from === n.id)) && !near.get(hover)?.has(n.id)}
             appear={a.i}
             delay={animate ? a.delay : null}
             nowS={nowS}
@@ -599,14 +919,15 @@ export function RunGraph({
       <>
         <div
           ref={pbox}
-          className={`rg rg-panel${compact ? " compact" : ""}${still ? " still" : ""}`}
+          className={`rg rg-panel k-${plan!.kind}${still ? " still" : ""}`}
           data-testid="run-graph"
-          data-cols={lay.columns.length}
+          data-mode={plan!.kind}
+          data-cols={plan!.kind === "graph" ? lay.columns.length : plan!.kind === "grid" ? 1 : lay.columns.length}
           data-layout-ms={lay.ms.toFixed(2)}
           data-crossings={lay.crossings}
           data-overflow={overflows ? "true" : "false"}
           data-fit={pk !== 1 ? pk.toFixed(2) : undefined}
-          data-compact={compact ? "true" : "false"}
+          data-groups={plan!.groups.size}
           style={{ height: H, ...(maxH ? { maxHeight: maxH } : {}) }}
           onScroll={measure}
         >
@@ -786,6 +1107,100 @@ const firstLine = (md: string) => {
 };
 const FONT = () => (typeof document !== "undefined" ? getComputedStyle(document.body).fontFamily : "system-ui");
 
+/** A folded layer: "9 parallel", its counts ("5 done · 2 running · 1 failed") and up to 4 stacked logos; a click
+ *  opens the layer in place (its label then folds it back). The full view always shows every part. */
+function GroupCard({
+  n,
+  group,
+  all,
+  p,
+  w,
+  h,
+  bot,
+  appear,
+  delay,
+  nowS,
+  onOpen,
+}: {
+  n: RunNode;
+  nowS: number;
+  group: Group;
+  all: RunNode[];
+  p: Box;
+  w: number;
+  h: number;
+  bot?: BotModel;
+  appear: number;
+  delay: number | null;
+  onOpen: () => void;
+}) {
+  const counts = stateCounts(group.members, all);
+  // one logo per distinct model, most used first
+  const marks = new Map<string, { node: RunNode; n: number }>();
+  for (const m of group.members) {
+    const k = nodeModel(m, bot);
+    const key = k ? `${k.model}|${k.provider ?? ""}` : m.id;
+    const e = marks.get(key);
+    if (e) e.n++;
+    else marks.set(key, { node: m, n: 1 });
+  }
+  // a stack of up to 4: each model once (most used first), then more of the same, so the stack says "several"
+  const kinds = [...marks.values()].sort((a, b) => b.n - a.n);
+  const logos = kinds.slice(0, 4).map((k) => k.node);
+  for (let i = 0; logos.length < Math.min(4, group.members.length); i++) {
+    const k = kinds[i % kinds.length];
+    const more = group.members.filter((m) => m !== k.node && !logos.includes(m) && nodeModel(m, bot)?.model === nodeModel(k.node, bot)?.model);
+    if (!more.length) break;
+    logos.push(more[0]);
+  }
+  const word = counts.map(([c, s]) => `${c} ${s}`).join(" · ");
+  const t = n.started === undefined ? "" : span((n.ended ?? nowS) - n.started);
+  return (
+    <button
+      type="button"
+      className={`rg-card rg-group s-${n.state}${n.state === "failed" ? " bad" : ""}${delay !== null ? " enter" : ""}`}
+      style={{ left: p.x, top: p.y, width: w, height: h, ...(delay !== null ? { animationDelay: `${delay}ms` } : {}) }}
+      data-testid="run-group"
+      data-node={n.id}
+      data-layer={n.layer}
+      data-state={n.state}
+      data-count={group.members.length}
+      data-appear={appear}
+      title={`${group.members.map((m) => m.label).join("\n")}\n\nClick to show all ${group.members.length}`}
+      aria-label={`${group.members.length} parallel parts: ${word}. Show them`}
+      aria-expanded={false}
+      onClick={onOpen}
+    >
+      <span className="rg-gt">
+        <span className="rg-glogos" aria-hidden data-n={logos.length}>
+          {logos.map((l) => (
+            <Mark key={l.id} node={l} size={12} bot={bot} />
+          ))}
+        </span>
+        <span className="rg-gn">{group.members.length} parallel</span>
+        <span className="rg-gopen" data-testid="run-group-open">
+          Show all
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </span>
+      </span>
+      <span className="rg-gc">
+        <span data-testid="run-group-counts">
+          {counts.map(([c, s], i) => (
+            <span key={s} className={`t-${s}`}>
+              {i > 0 && " · "}
+              {c} {s}
+            </span>
+          ))}
+        </span>
+        {t && <span className="rg-mt">{t}</span>}
+        <StateMark state={n.state} word={STATE_WORD[n.state]} />
+      </span>
+    </button>
+  );
+}
+
 function StateMark({ state, word, fixed }: { state: RunNode["state"]; word: string; fixed?: boolean }) {
   return (
     <i className="rg-st" aria-label={word}>
@@ -798,7 +1213,7 @@ function Card({
   n,
   label,
   mode,
-  compact,
+  row,
   p,
   w,
   h,
@@ -822,8 +1237,8 @@ function Card({
   n: RunNode;
   label: string;
   mode: GraphMode;
-  /** Panel: the compact card (title of up to this many lines, logo, state; no chips). */
-  compact?: number;
+  /** Panel grid: the row card (logo, a title of up to 2 lines, time, state; no chips). */
+  row?: boolean;
   p: Box;
   w: number;
   h: number;
@@ -849,11 +1264,12 @@ function Card({
   const t = n.started === undefined ? "" : span((n.ended ?? nowS) - n.started);
   const title = useMemo(() => {
     // the panel shows two lines of title (the card's height), so the "…" lands on the second; the full view three
-    if (compact) return compactTitle(label, w, compact);
+    if (row) return rowTitle(n, label, w);
     const font = mode === "panel" ? `550 11px ${FONT()}` : `600 13px ${FONT()}`;
     const room = mode === "panel" ? w - 16 - 3 - (kind === "gate" ? 16 : 0) : w - 28 - 3 - 18 - 12 - 12 - 6 - (kind === "gate" ? 22 : 0);
     return clampWords(label, room, mode === "panel" || kind === "leaf" ? 2 : 3, (s) => textWidth(s, font));
-  }, [label, mode, w, kind, compact]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [label, mode, w, kind, row, n.started, n.ended]);
   const tries = n.attempts.length > 1 ? `×${n.attempts.length}` : "";
   const m = nodeModel(n, bot);
   const model = m ? modelLabel(m, n.effort ?? n.planned?.effort) : "";
@@ -884,13 +1300,14 @@ function Card({
   }, [pill, w]);
   useLayoutEffect(() => {
     const el = pillRef.current;
-    if (el && !pillCut && el.scrollWidth > el.clientWidth + 1) setPillCut(true);
+    // exact: a pill one pixel short already shows "visual-engineeri…"
+    if (el && !pillCut && el.scrollWidth > el.clientWidth) setPillCut(true);
   });
-  const pillFits = mode === "panel" && !compact && !!pill && !pillCut;
+  const pillFits = mode === "panel" && !row && !!pill && !pillCut;
   return (
     <button
       type="button"
-      className={`rg-card s-${retry ? "retry" : n.state} k-${kind}${n.state === "failed" ? " bad" : ""}${repaired ? " repaired" : ""}${on ? " on" : ""}${hov ? " hov" : ""}${dim ? " dim" : ""}${delay !== null ? " enter" : ""}`}
+      className={`rg-card${row ? " row" : ""} s-${retry ? "retry" : n.state} k-${kind}${n.state === "failed" ? " bad" : ""}${repaired ? " repaired" : ""}${on ? " on" : ""}${hov ? " hov" : ""}${dim ? " dim" : ""}${delay !== null ? " enter" : ""}`}
       style={{ left: p.x, top: p.y, width: w, height: h, ...(delay !== null ? { animationDelay: `${delay}ms` } : {}) }}
       data-testid="run-node"
       data-node={n.id}
@@ -906,14 +1323,15 @@ function Card({
       onMouseEnter={onHover ? () => onHover(n.id) : undefined}
       onMouseLeave={onHover ? () => onHover(null) : undefined}
     >
-      {compact ? (
+      {row ? (
         <>
+          <Mark node={n} size={mark} bot={bot} />
           <span className="rg-t">{title}</span>
-          <span className="rg-meta">
-            <Mark node={n} size={mark} bot={bot} />
-            {kind === "gate" && <GateIcon size={11} />}
-            <StateMark state={n.state} word={word} fixed={repaired} />
+          {kind === "gate" && <GateIcon size={11} />}
+          <span className="rg-mt" style={{ width: ROW_TIME_W() }}>
+            {t}
           </span>
+          <StateMark state={n.state} word={word} fixed={repaired} />
         </>
       ) : mode === "panel" ? (
         <>
