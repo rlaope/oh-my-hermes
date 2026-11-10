@@ -27,11 +27,15 @@ observation is also kept under a key for the session it came from
 session id. That key is pseudonymous, not anonymous: anyone holding a
 session id can compute it and find that session's entry. A reader naming
 its session reads only that entry: the newest tick of whichever session
-ran last says nothing about the session a pane shows. Where the ledger
-holds no entry for that session yet (it has not ticked since the install,
-or other sessions pushed it out) while the gateway's newest observation
-is a fresh ON, the reader answers ON for the gateway: a wrong ON only
-shows a chip, a wrong OFF hides that approvals are bypassed.
+ran last says nothing about the session a pane shows. An entry older than
+the freshness window is dropped at the next write, then the OFF entries
+go before the ON ones, oldest first. The record also keeps the newest
+moment any session was observed ON (``on_observed_ts``). Where the ledger
+holds no entry for the named session (it has not ticked since the install,
+or other sessions pushed it out) and that moment is fresh, the reader
+answers ON for the gateway, whoever wrote last: a wrong ON only shows a
+chip, and lasts at most the freshness window after the last ON any session
+was observed in; a wrong OFF would hide that approvals are bypassed.
 """
 from __future__ import annotations
 
@@ -108,9 +112,10 @@ def approval_bypass_path(omh_home: str = "") -> Path:
 def session_digest(session_id: str) -> str:
     """The key a session's observation is kept under: a truncated unsalted sha256 of the id, pseudonymous.
 
-    ``surrogatepass`` so an id carrying a lone surrogate still has a key instead of raising in the hook.
+    ``surrogatepass`` so an id carrying a lone surrogate still has a key instead of raising in the hook, and
+    ``str`` so an id that arrives as another type does too.
     """
-    return hashlib.sha256(session_id.encode("utf-8", "surrogatepass")).hexdigest()[:16]
+    return hashlib.sha256(str(session_id).encode("utf-8", "surrogatepass")).hexdigest()[:16]
 
 
 def record_approval_bypass(*, omh_home: str = "", session_id: str = "", now: float | None = None) -> None:
@@ -144,23 +149,35 @@ def record_approval_bypass(*, omh_home: str = "", session_id: str = "", now: flo
     try:
         with _awareness_delivery_lock(path):
             # Read again under the lock: another session's hook may have written since.
-            sessions = _sessions(_read_record(path))
+            before = _read_record(path)
+            # An entry that can no longer answer (no readable flag or stamp, or older than the freshness window)
+            # goes first, so a week-old ON can never push out a session ticking now.
+            sessions = {
+                key: entry for key, entry in _sessions(before).items()
+                if isinstance(entry, dict) and isinstance(entry.get("enabled"), bool)
+                and (stamp := _tick(entry.get("observed_ts"))) is not None
+                and tick - stamp <= APPROVAL_BYPASS_FRESH_SECONDS
+            }
             if digest:
                 sessions[digest] = {"enabled": enabled, "observed_ts": tick}
             # The record is written key-sorted, so age is the stamp, not the order. An ON outranks every OFF.
             newest = sorted(
                 sessions.items(),
-                key=lambda item: (isinstance(item[1], dict) and item[1].get("enabled") is True, _stamp(item[1])),
+                key=lambda item: (item[1]["enabled"] is True, _stamp(item[1])),
                 reverse=True,
             )
             kept = dict(newest[:APPROVAL_BYPASS_SESSION_LIMIT])
-            _write_delivery_record(path, {
+            last_on = tick if enabled else _last_on(before)
+            record: dict[str, Any] = {
                 "schema_version": APPROVAL_BYPASS_SCHEMA_VERSION,
                 "enabled": enabled,
                 "observed_ts": tick,
                 "sessions": kept,
                 "claim_boundary": APPROVAL_BYPASS_CLAIM_BOUNDARY,
-            })
+            }
+            if last_on is not None:
+                record["on_observed_ts"] = last_on
+            _write_delivery_record(path, record)
     except (OSError, ValueError, TypeError):
         return
 
@@ -195,6 +212,19 @@ def _tick(value: object) -> float | None:
     except OverflowError:
         return None
     return tick if math.isfinite(tick) and abs(tick) <= APPROVAL_BYPASS_STAMP_LIMIT else None
+
+
+def _last_on(record: object) -> float | None:
+    """The newest moment any session was observed ON, whoever wrote last; None where none was.
+
+    A record written before ``on_observed_ts`` existed carries only the last writer's observation: its stamp
+    counts where that observation is an ON.
+    """
+    if not isinstance(record, dict):
+        return None
+    if "on_observed_ts" in record:
+        return _tick(record.get("on_observed_ts"))
+    return _tick(record.get("observed_ts")) if record.get("enabled") is True else None
 
 
 def _stamp(entry: object) -> float:
@@ -380,10 +410,14 @@ def latest_approval_bypass(omh_home: str = "", *, session_id: str = "", now: flo
         own = _sessions(record).get(session_digest(session_id))
         if isinstance(own, dict):
             record = own
-        elif record.get("enabled") is True:
-            scope = "gateway"
         else:
-            return idle
+            # No entry for this session: the gateway's newest ON answers while it is fresh, whatever the session
+            # that wrote last observed, so a session pushed out of the ledger never reads a wrong OFF.
+            last_on = _last_on(record)
+            if last_on is None:
+                return idle
+            record = {"enabled": True, "observed_ts": last_on}
+            scope = "gateway"
     tick = _tick(record.get("observed_ts"))
     enabled = record.get("enabled")
     if tick is None or not isinstance(enabled, bool):

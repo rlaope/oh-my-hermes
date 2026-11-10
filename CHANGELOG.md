@@ -6,9 +6,9 @@ All notable changes will be documented here.
 
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
-  session's hook ticked last (a subagent or a cron run); where OMH has not yet
-  observed that chat while the gateway's newest observation is a fresh ON,
-  the chip still shows. In its DAG section, a pane that names its chat no
+  session's hook ticked last (a subagent or a cron run); where OMH holds no
+  observation of that chat while some session of the gateway was observed ON
+  within the ledger's freshness window, the chip still shows. In its DAG section, a pane that names its chat no
   longer draws a fanout whose record names another chat as its origin; one
   with no recorded origin, which includes any fanout still running, is drawn
   as before.

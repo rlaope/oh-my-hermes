@@ -2161,9 +2161,11 @@ does not draw a fanout whose record names another chat as its origin, draws
 one that names this chat as this chat's, and draws one with no recorded origin
 as the home's, as before; that includes any fanout still running, whichever
 chat started it, since the origin is recorded when the dispatch ends.
-The yolo chip follows the focused chat too; where OMH has not yet observed that
-chat while the gateway's newest observation is a fresh ON, the chip still
-shows, since a wrong ON is the safer error. The pane reads idle when nothing is
+The yolo chip follows the focused chat too. Where OMH holds no observation of
+that chat (it has not ticked yet, or other sessions pushed it out of the
+ledger) and some session of the gateway was observed ON within the ledger's
+freshness window, the chip still shows, whichever session ticked last, since a wrong ON
+is the safer error. The pane reads idle when nothing is
 running and keeps the plan and status bar in agreement. A failed lane reads as
 failed (red), apart from blocked (yellow), and done DAG work is green.
 The pane keeps Desktop's own look (its sans, components and theme tokens) with the
