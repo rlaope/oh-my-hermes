@@ -294,10 +294,11 @@ class RecommendationCatalogTests(unittest.TestCase):
         # Qwen3-Coder with no Qwen successor. A chain names the current
         # generation of each line; an older id lives on only in a
         # machine-level override. Inside a chain Claude Opus 5.5 comes before
-        # Claude Fable 5.1 (owner decision, 2026-10-13, reversing 2026-09-06),
-        # except ultrabrain, which Fable 5.1 heads (owner decision, 2026-11-09).
+        # Claude Fable (owner decision, 2026-10-13, reversing 2026-09-06),
+        # except ultrabrain, which Fable heads (owner decision, 2026-11-09).
+        # Fable 5.2 took every Fable 5.1 slot on 2026-11-10 (owner decision).
         self.assertEqual(aliases("role_suggestions", "main"), [
-            "gpt-6.1-sol", "claude-opus-5-5", "claude-fable-5-1", "gpt-6-astra", "kimi-k3.1-pro",
+            "gpt-6.1-sol", "claude-opus-5-5", "claude-fable-5-2", "gpt-6-astra", "kimi-k3.1-pro",
         ])
         # `main` keeps its convention: Sol names `high`, Astra carries its
         # candidate default, and the rest leave the effort to the session.
@@ -307,14 +308,14 @@ class RecommendationCatalogTests(unittest.TestCase):
         # an entry with none leaves the level to the executor CLI's default.
         self.assertEqual(catalog["last_resort"]["any"][0]["reasoning_effort"], "medium")
         expected = {
-            # Fable 5.1 heads ultrabrain ahead of Astra (owner decision,
-            # 2026-11-09); Astra alone left a user without OpenAI access no
-            # fallback before the parent model.
-            "ultrabrain": (["claude-fable-5-1", "gpt-6-astra", "claude-opus-5-5"], "xhigh"),
+            # Fable heads ultrabrain ahead of Astra (owner decision,
+            # 2026-11-09; Fable 5.2 since 2026-11-10); Astra alone left a user
+            # without OpenAI access no fallback before the parent model.
+            "ultrabrain": (["claude-fable-5-2", "gpt-6-astra", "claude-opus-5-5"], "xhigh"),
             # DeepSeek V4.1 Flash left `deep`: a Flash budget model does not
             # fit the strong tier; Opus 5.5 and Kimi K3.1 Pro carry the fallback.
             "deep": (["claude-opus-5-5", "gpt-6.1-sol", "kimi-k3.1-pro"], "high"),
-            "architect": (["claude-opus-5-5", "gpt-6-astra", "claude-fable-5-1", "kimi-k3.1-pro"], "xhigh"),
+            "architect": (["claude-opus-5-5", "gpt-6-astra", "claude-fable-5-2", "kimi-k3.1-pro"], "xhigh"),
             # The GPT head rests on the 2026-09-05 live-model-tools run.
             "unspecified-high": (["gpt-6.1-sol", "claude-opus-5-5", "kimi-k3.1-pro"], "medium"),
             # A chain that would otherwise sit in one provider ecosystem ends
@@ -324,16 +325,16 @@ class RecommendationCatalogTests(unittest.TestCase):
             "unspecified-low": (
                 ["glm-5.3", "deepseek-flash", "gpt-6.1-sol", "claude-sonnet-5-5"], "low",
             ),
-            # Fable 5.1 left the tail of `quick` for the same reason.
+            # Fable left the tail of `quick` for the same reason.
             "quick": (["glm-5.3-flash", "gpt-6-luna", "claude-haiku-5-5", "kimi-k3.1-pro"], "low"),
             "writing": (
                 ["claude-opus-5-5", "claude-sonnet-5-5", "kimi-k3.1-pro", "gemini-4-argon"], "medium",
             ),
             "visual-engineering": (
-                ["claude-opus-5-5", "claude-fable-5-1", "gemini-4-argon", "kimi-k3.1-pro"], "high",
+                ["claude-opus-5-5", "claude-fable-5-2", "gemini-4-argon", "kimi-k3.1-pro"], "high",
             ),
-            "artistry": (["gemini-4-argon", "claude-opus-5-5", "claude-fable-5-1", "kimi-k3.1-pro"], "high"),
-            "capable": (["claude-opus-5-5", "gpt-6.1-sol", "claude-fable-5-1", "kimi-k3.1-pro"], "medium"),
+            "artistry": (["gemini-4-argon", "claude-opus-5-5", "claude-fable-5-2", "kimi-k3.1-pro"], "high"),
+            "capable": (["claude-opus-5-5", "gpt-6.1-sol", "claude-fable-5-2", "kimi-k3.1-pro"], "medium"),
             "simple-work": (["gpt-6-luna", "claude-haiku-5-5", "deepseek-flash"], "low"),
             # `max` keeps deep-work's head distinct from deep's (owner choice).
             "deep-work": (["claude-opus-5-5", "gpt-6.1-sol"], "max"),

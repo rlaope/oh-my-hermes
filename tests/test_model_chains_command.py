@@ -84,7 +84,7 @@ class ModelChainsSetTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertIn("quick: kimi-k3-ultrafast:low, glm-5.2-ultrafast:low (override)", stdout)
             # Untouched categories keep the shipped default.
-            self.assertNotIn("architect: claude-fable-5-1:xhigh, gpt-6-astra:xhigh, kimi-k3.1-pro:xhigh (override)", stdout)
+            self.assertNotIn("architect: claude-fable-5-2:xhigh, gpt-6-astra:xhigh, kimi-k3.1-pro:xhigh (override)", stdout)
 
     def test_clear_returns_the_category_to_the_shipped_default(self) -> None:
         with TemporaryDirectory() as tmp:

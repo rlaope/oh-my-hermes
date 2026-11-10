@@ -270,6 +270,8 @@ class PickerModelTests(unittest.TestCase):
         # Recognition-only and superseded aliases sit in the price table, not
         # in a shipped chain, and must not be offered as a step.
         self.assertNotIn("claude-mythos-5-1", joined)
+        self.assertNotIn("claude-mythos-5-2", joined)
+        self.assertNotIn("claude-fable-5-1", joined)
 
     def test_ring_puts_served_aliases_first_and_marks_unserved(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -631,13 +633,13 @@ class PickerNavigationTests(unittest.TestCase):
         payload = _payload(self.root)
         lines = render_frame(payload, _chains(payload), 0, use_color=False, width=200)
         ultrabrain = next(line for line in lines if " ultrabrain " in line)
-        self.assertEqual(payload["categories"][0]["chain"][0]["model"], "claude-fable-5-1")
-        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['claude-fable-5-1']} ! ▸", ultrabrain)
+        self.assertEqual(payload["categories"][0]["chain"][0]["model"], "claude-fable-5-2")
+        self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['claude-fable-5-2']} ! ▸", ultrabrain)
         self.assertEqual(sum("is not served by this machine's providers" in line for line in lines), 1)
         # Off the cursor the mark stays on the row and the explanation goes
         # (row 4, unspecified-low, heads with GLM, which zai does serve).
         lines = render_frame(payload, _chains(payload), 4, use_color=False, width=200)
-        self.assertIn(f"  {MODEL_DISPLAY_LABELS['claude-fable-5-1']} !", next(line for line in lines if " ultrabrain " in line))
+        self.assertIn(f"  {MODEL_DISPLAY_LABELS['claude-fable-5-2']} !", next(line for line in lines if " ultrabrain " in line))
         self.assertEqual(sum("is not served by" in line for line in lines), 0)
 
 
@@ -720,12 +722,12 @@ class EffortPickerTests(unittest.TestCase):
         self.assertEqual(result["quick"][0], ("glm-5.3-flash", "medium"))
 
     def test_contracted_grok_and_fable_step_their_own_ladders_unmarked(self) -> None:
-        # Grok 4.7's ladder is the shared four, now checked; Fable 5.1 reaches
+        # Grok 4.7's ladder is the shared four, now checked; Fable 5.2 reaches
         # `max`, which the shared steps never offered.
         payload = _payload(self.root)
         for alias, efforts in (
             ("grok-4.7", ["low", "medium", "high", "xhigh"]),
-            ("claude-fable-5-1", ["low", "medium", "high", "xhigh", "max"]),
+            ("claude-fable-5-2", ["low", "medium", "high", "xhigh", "max"]),
         ):
             with self.subTest(alias=alias):
                 row = next(row for row in payload["models"] if row["alias"] == alias)
@@ -737,12 +739,12 @@ class EffortPickerTests(unittest.TestCase):
         self.assertNotIn("high?", row)
         result, _ = _drive(payload, _down_to(payload, "x-search") + [KEY_PLUS, KEY_ENTER])
         self.assertEqual(result["x-search"][0], ("grok-4.7", "xhigh"))
-        _write_overrides(self.root, {"swarm": (("claude-fable-5-1", "xhigh"),)})
+        _write_overrides(self.root, {"swarm": (("claude-fable-5-2", "xhigh"),)})
         payload = _payload(self.root)
         row = _row_of(_frame(payload, "swarm"), "swarm")
         self.assertNotIn("xhigh?", row)
         result, _ = _drive(payload, _down_to(payload, "swarm") + [KEY_PLUS, KEY_ENTER])
-        self.assertEqual(result, {"swarm": (("claude-fable-5-1", "max"),)})
+        self.assertEqual(result, {"swarm": (("claude-fable-5-2", "max"),)})
 
     def test_an_unconfigured_value_is_marked_not_known_and_never_called_wrong(self) -> None:
         for stored in ("low", "xhigh", "max", "auto"):
@@ -808,7 +810,7 @@ class EffortPickerTests(unittest.TestCase):
     def test_a_model_switch_onto_an_always_thinking_head_warns_and_still_saves(self) -> None:
         # Model-only edits are not rechecked, so the row must say what the
         # route will do with the `none` the switch carried along.
-        for target in ("claude-fable-5-1", "claude-opus-5-5"):
+        for target in ("claude-fable-5-2", "claude-opus-5-5"):
             with self.subTest(target=target):
                 _write_overrides(self.root, {"swarm": (("gpt-6-luna", "none"),)})
                 payload = _payload(self.root)
@@ -961,7 +963,7 @@ class EnterStaysOpenTests(unittest.TestCase):
         # Only the head's effort moves; the rest of the shipped chain stays.
         self.assertEqual(
             result["ultrabrain"],
-            (("claude-fable-5-1", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")),
+            (("claude-fable-5-2", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh")),
         )
         self.assertEqual(result.effort_edits, frozenset({"deep", "ultrabrain"}))
 
@@ -971,7 +973,7 @@ class EnterStaysOpenTests(unittest.TestCase):
         result, _ = _drive(payload, keys)
         self.assertEqual(
             result,
-            {"ultrabrain": (("claude-fable-5-1", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh"))},
+            {"ultrabrain": (("claude-fable-5-2", "max"), ("gpt-6-astra", "xhigh"), ("claude-opus-5-5", "xhigh"))},
         )
 
     def test_switching_the_head_onto_a_list_holding_the_value_also_saves(self) -> None:

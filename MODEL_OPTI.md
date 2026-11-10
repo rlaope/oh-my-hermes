@@ -56,7 +56,7 @@ identical prompt. Nothing else about the pipeline changes per model.
 | Family | Matched by | Example ids |
 | --- | --- | --- |
 | `gpt` | `gpt-`; design-qualified alias `openai-gpt-` | `gpt-6-astra`, `gpt-6.1-terra`, `gpt-5.6-sol`, `digitalocean/openai-gpt-5.6-sol` |
-| `claude` | `claude-`; design-qualified alias `anthropic-claude-`; bare tiers `opus`/`sonnet`/`haiku`/`fable`/`mythos` | `claude-fable-5-1`, `claude-mythos-5-1`, `digitalocean/anthropic-claude-opus-5` |
+| `claude` | `claude-`; design-qualified alias `anthropic-claude-`; bare tiers `opus`/`sonnet`/`haiku`/`fable`/`mythos` | `claude-fable-5-2`, `claude-mythos-5-2`, `claude-fable-5-1`, `digitalocean/anthropic-claude-opus-5` |
 | `gemini` | `gemini-` | `gemini-4-argon`, `google/gemini-4-argon`, `gemini-3.1-pro` |
 | `kimi` | `kimi-` | `kimi-k3`, `kimi-k3-ultrafast`, `kimi-k3.1-pro`, `kimi-k3.1-pro-highspeed`, `moonshotai/kimi-k3.1-pro` |
 | `glm` | `glm-` | `glm-5.3`, `glm-5.3-flash`, `glm-5.2-ultrafast` |
@@ -839,7 +839,7 @@ pairing so a benchmark claim can never mix in other prompt changes.
   corpus tops out at 18 / 30 and has no read or lsp passes, so it says
   nothing about the hardest coding, where the vendor still points to Sol.
   Full tables are in the benchmark README.
-### `claude` (Fable 5.1, Mythos 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku)
+### `claude` (Fable 5.2, Mythos 5.2, Fable 5.1, Mythos 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku)
 
 - **Model trait:** conscientious to a fault. Left alone it grows the
   checklist mid-run ("while I'm here…"), adds just-to-be-sure verification
@@ -951,7 +951,50 @@ pairing so a benchmark claim can never mix in other prompt changes.
   pass stays. `claude-mythos-5-1` is the same model as `claude-fable-5-1`
   served only to Project Glasswing-approved organizations; it takes the same
   calibration, and no shipped chain names it — a user who asks for it by
-  name is still recognized and routed.
+  name is still recognized and routed. `claude-mythos-5-2` stands to
+  `claude-fable-5-2` the same way (served only to organizations verified
+  through Anthropic's verification programs, such as the Cyber Verification
+  Program), on the same terms.
+- **Fable 5.2 (2026-11-10): no new counter, family blocks byte-stable.**
+  Claude Fable 5.2 takes every Fable 5.1 slot at the same effort, heads
+  `ultrabrain` at `xhigh`, and gets its own exact contract; the `claude`
+  family blocks above apply to it unchanged. Documented traits, all
+  official (the Fable 5.2 what's-new page, migration guide, and prompting
+  guide, read 2026-11-10): at `high` and above it thinks before almost
+  every reply, and a prompt line asking it to answer directly does not stop
+  it thinking at `medium` and above; on long multistep tasks it sometimes
+  ends a turn before the work is done, more often at `low` and `medium`;
+  long runs of tool calls can pass with little user-facing text; at `xhigh`
+  and `max` it can start subagents to review its own work, which Fable 5.1
+  did not; it follows cautious instructions, approval rules, and style rules
+  closely, so caution carried in notes and agent messages piles up; what
+  the prompt says about code ownership changes whether it restructures or
+  only adds; and it works well as a planner and orchestrator for other
+  models. How the existing blocks read for it:
+  - "every progress claim points at a tool result" covers the quiet
+    tool runs, as it did for Opus 5.5's empty between-tool thinking blocks.
+  - The composer's "no speculative units" and "no unit whose only job is
+    re-checking the split itself" already counter the self-review-subagent
+    trait, and the subagent block's single verification pass keeps a
+    review subagent from becoming a second pass.
+  - The "answer directly" trait is handled by effort, not by prompt text:
+    the guide says to lower effort, and every shipped Fable 5.2 slot
+    declares its rung.
+  - The guide's "Finish the whole task" text is **not adopted**: it tells
+    the model to keep going ("Be persistent and do not stop unless
+    needed"), which `docs/MODEL-ONBOARDING.md` §2 forbids, and the same
+    kind of sentence was removed from this block on the 2026-09-23
+    measurement. Its "code is yours" ownership sentence is not adopted
+    either: OMH units edit code the user owns, and the block's "fix only
+    what the criteria name and report adjacent findings" is the scope the
+    user asked for.
+  - No caution sentence is added: the guide's cure for piled-up caution is
+    fewer standing cautions, not more.
+
+  Editorial and **unmeasured**. The named follow-up pair is
+  `claude-fable-5-1` vs `claude-fable-5-2` at `xhigh` on
+  `benchmarks/live-model-tools/v1` with the family block; it is optional and
+  not run (owner decision, 2026-11-10: no paid runs for this onboarding).
 - **Opus 5.5 (2026-09-23): no new counter, family blocks byte-stable.**
   Anthropic says "Existing Claude Opus 5 prompts should perform well without
   changes" (official, the Opus 5.5 prompting guide). Three documented traits
@@ -1808,7 +1851,9 @@ gate requires a completed paired run on the intended execution surface.
   never a fabricated number. Cache reads are priced at a
   tenth of input unless `APPROX_CACHE_READ_RATIO` names the model: Claude
   Fable 5.1 lists $10 / $50 per MTok with cache reads at $0.25 (0.025x) and
-  cache writes at $12.50 (5-minute TTL) / $20 (1-hour TTL); Opus 5 reads at
+  cache writes at $12.50 (5-minute TTL) / $20 (1-hour TTL); Fable 5.2 and
+  Mythos 5.2 list $8 / $40 with cache reads at $0.20 (the same 0.025x) and
+  cache writes at $10 / $16; Opus 5 reads at
   the tenth; Opus 5.5 lists $4 / $20 with cache reads at $0.20 (0.05x) and
   cache writes at $5 / $8. Mythos 5.1 carries the Fable figure because its cache-read rate
   was open at launch — approximate, like every number in the table. DeepSeek
@@ -1985,6 +2030,7 @@ choose models by, not a guarantee for another persona or skill.
 | `deepseek-flash` (declared pointer alias) | yes → `deepseek` | yes, inherited from canonical `deepseek-v4.1-flash` | the vendor's moving "current Flash" id, declared with a read date; `deepseek-v4-flash`, `deepseek-v4-pro`, and every other DeepSeek id keep the family block |
 | `gpt-6.1-sol` (exact-model override) | yes → `gpt` | yes, both override tables (Astra's wording, byte for byte), resolved before the family block | exact documented contract (Astra's `low`-floor ladder, no `none`; the Codex client's ladder recorded beside it without the Codex-only `ultra`); `gpt-6.1-sol-pro` inherits through a declared projection; editorial for 6.1 Sol, the `family` vs `optimized` pair is the named follow-up |
 | `gpt-6-sol` (exact contract, no exact calibration; retired from the shipped chains 2026-10-01) | yes → `gpt` | yes, through the family block | exact documented contract (the API `none`-to-`max` ladder; the Codex client's ladder recorded beside it without `none` and without the Codex-only `ultra`); no exact counter: while it held `deep@high` and `main` (until 2026-10-01) those slots reached the calibrated tiers, and none was added because the Codex Sol prompt's keep-working sentence is not importable and no `family` vs `optimized` pair has run; the three generation pairs are the named follow-up |
+| `claude-fable-5-2` (exact contract, no exact calibration) | yes → `claude` | yes, through the family block | exact documented contract (Fable 5.1's request shape: always-on thinking, `low` floor, `high` default, no prefill, sampling parameters, or forced tool choice; $8 / $40 and 0.025x cache reads); heads `ultrabrain` and holds every former Fable 5.1 slot since 2026-11-10; `claude-fable-5.2` is a declared projection; Claude Code needs v2.1.290 or newer for it (observed); `claude-mythos-5-2` is recognized and priced without a contract and in no shipped chain; the 5.1-vs-5.2 pair is the named, unrun follow-up |
 | `gpt-6-luna`, `claude-opus-5-5` (exact contracts, no exact calibration) | yes → `gpt` / `claude` | yes, through the family block | exact documented contracts (Luna's `none`-to-`max` ladder; Opus 5.5's always-on thinking, forced-`tool_choice` 400, and 0.05x cache reads); no exact counter because neither shipped placement reaches the high-effort tier on the subagent side and the Opus composer block is kept byte-stable per the vendor's Opus 5.5 prompting guide; the old-vs-new generation pairs are the named follow-up |
 | `gpt-6.1-terra` (exact contract, no exact calibration) | yes → `gpt` | yes, through the family block | exact documented contract (Luna's `none`-to-`max` ladder, `-pro` projection, 5% cache reads); recognized, priced, and provider-mapped but in no shipped chain; Hermes' Codex route clamps its `max` to `xhigh` until Hermes adds the id to its GPT-6 tier tables |
 | `gpt-6-cyber` (exact-model override, access-gated) | yes → `gpt` | yes, both override tables (Astra's wording, byte for byte), resolved before the family block | exact documented contract (its own limits, endpoints, and price; Astra's `low`-floor ladder inherited and labeled `effort_ladder_source`); Daybreak Red only, in no shipped chain; editorial and unmeasured, because no route this repo can reach serves it |

@@ -3742,7 +3742,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
             units = [
                 # The alternative is held on the Claude Code brain chain
-                # (Opus 5.5 -> Fable 5.1 -> opus since 2026-10-13, at the
+                # (Opus 5.5 -> Fable -> opus since 2026-10-13, Fable 5.2 since 2026-11-10, at the
                 # ultrabrain head's xhigh since 2026-11-09).
                 {"unit_id": "core", "title": "Core", "owner": "claude-code", "file_scope": ["src/r/"], "role": "brain"},
                 {"unit_id": "docs", "title": "Docs", "owner": "codex", "file_scope": ["docs/"], "role": "docs"},
@@ -3761,7 +3761,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             core = by_unit["core"]
             self.assertEqual(core["model"], "claude-opus-5-5")
             self.assertEqual(core["model_label"], "claude-opus-5-5 xhigh")
-            self.assertEqual(core["model_alternative"], "claude-fable-5-1")
+            self.assertEqual(core["model_alternative"], "claude-fable-5-2")
             # Single-entry chain (docs on codex): no alternative, empty string.
             self.assertEqual(by_unit["docs"]["model_alternative"], "")
 
@@ -3772,7 +3772,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             # Owner and model read as ONE field, matching the status board's
             # bullet convention; a standalone "— (model)" field doubled the
             # separator around a parenthetical.
-            self.assertIn("claude-code (claude-opus-5-5 xhigh, alt: claude-fable-5-1)", stdout)
+            self.assertIn("claude-code (claude-opus-5-5 xhigh, alt: claude-fable-5-2)", stdout)
             self.assertNotIn(" — (", stdout)
             self.assertNotIn("(gpt-6.1-sol, alt:", stdout)
 

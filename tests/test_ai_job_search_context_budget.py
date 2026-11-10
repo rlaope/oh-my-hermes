@@ -485,7 +485,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # A criterion then names the state the person asked for, not that a check ran or was reported (First Steps,
         # run-loop), and the completion bar names a criterion by what it says, not its id; only dag-ulw moves, and the
         # pin before it was 823b8374...bc51.
-        self.assertEqual(_digest(legacy_hashes), '9f18a8fcbc069ed7fef59afd512f128d3e5275d2ea26256f8c39662dbf01c7db')
+        # model-setup's chain sentence then names Fable 5.2 in every Fable 5.1 slot and lists Fable 5.1 among
+        # the superseded generations; only model-setup moves, and the pin before it was 60cd6ed2...a81b (main after the plain-words merge).
+        # Merged with main after #2718 (Fable 5.2): main's pin was 36307b12...69c2, and this branch's was
+        # 9f18a8fc...c7db.
+        self.assertEqual(_digest(legacy_hashes), '1f3c01fa681ce440db5ba45ed0ee3a9ec7970d9d31c1fbc8a8c3aef51232fbf4')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -66,6 +66,11 @@ class ParityTests(unittest.TestCase):
     # same reason: a machine-level chain override may still name them.
     _RECOGNITION_ONLY_ALIAS_FAMILIES: dict[str, tuple[str, ...]] = {
         "claude-mythos-5-1": ("ccapi", "anthropic", "openrouter"),
+        # Mythos 5.2 is Fable 5.2 served only to verified organizations
+        # (onboarded 2026-11-10), on the Mythos 5.1 terms.
+        "claude-mythos-5-2": ("ccapi", "anthropic", "openrouter"),
+        # Retired 2026-11-10 when Claude Fable 5.2 took every Fable 5.1 slot.
+        "claude-fable-5-1": ("ccapi", "anthropic", "openrouter"),
         # Onboarded 2026-10-27 ahead of any chain placement.
         "gpt-6.1-terra": ("openai-codex", "openai", "openrouter"),
         # Onboarded 2026-11-06, access-gated (Daybreak Red), so never chained:
@@ -299,10 +304,10 @@ class ChainSurfaceConsistencyTests(unittest.TestCase):
             self.assertTrue(architect["entitlement_shaped"])
             # The one GPT entry is served by the confirmed openai-codex
             # provider and leads; the Claude and Kimi entries follow as
-            # unserved in shipped order (Opus 5.5 before Fable 5.1).
+            # unserved in shipped order (Opus 5.5 before Fable 5.2).
             self.assertEqual(architect["chain"][0]["model"], "gpt-6-astra")
             self.assertEqual(architect["chain"][1]["model"], "claude-opus-5-5")
-            self.assertEqual(architect["chain"][2]["model"], "claude-fable-5-1")
+            self.assertEqual(architect["chain"][2]["model"], "claude-fable-5-2")
             self.assertTrue(architect["chain"][0]["served"])
             for entry in architect["chain"][1:]:
                 self.assertFalse(entry["served"], entry)
@@ -310,7 +315,7 @@ class ChainSurfaceConsistencyTests(unittest.TestCase):
             with redirect_stdout(out):
                 _print_state(state)
             self.assertIn(
-                "architect: gpt-6-astra:xhigh, claude-opus-5-5:xhigh, claude-fable-5-1:xhigh, kimi-k3.1-pro:xhigh",
+                "architect: gpt-6-astra:xhigh, claude-opus-5-5:xhigh, claude-fable-5-2:xhigh, kimi-k3.1-pro:xhigh",
                 out.getvalue(),
             )
             self.assertIn("(reordered by this machine's providers)", out.getvalue())
@@ -333,7 +338,7 @@ class ChainSurfaceConsistencyTests(unittest.TestCase):
             )
             self.assertEqual(routed["status"], "routed", routed)
             self.assertEqual(routed["applied"]["alias"], "gpt-6-astra")
-            for expected in ("claude-opus-5-5", "claude-fable-5-1", "kimi-k3.1-pro"):
+            for expected in ("claude-opus-5-5", "claude-fable-5-2", "kimi-k3.1-pro"):
                 fallback = json.loads(
                     omh_delegate_route_handler({"action": "fallback", "category": "architect", **common}, **host)
                 )
