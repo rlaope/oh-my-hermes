@@ -4,7 +4,8 @@ import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "..
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
-import { TypingRow, awaitingFirstToken } from "./Typing";
+import { LiveFace, TypingRow, awaitingFirstToken } from "./Typing";
+import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { t } from "../../i18n";
@@ -29,6 +30,8 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const chat = s.chats[bot.name];
   const streaming = chat?.turn?.streaming ?? "";
   const typing = awaitingFirstToken(chat);
+  // the one row of the live run that carries the bot's ringed face
+  const faceRow = liveFaceRow(items, chat?.turn, typing);
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const lastBot = useRef<string | null>(null);
@@ -117,10 +120,15 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
         // the live activity line with nothing to say yet: the typing bubble below stands in for it
         if (it.kind === "activity" && chat?.turn?.id === it.turn.id && !turnHasActivity(it.turn)) return null;
         const label = divider(items[i - 1], it);
+        // the live activity line holds the face between the typing bubble and the answer, and keeps the typing
+        // bubble's height until the turn ends, so neither hand-over moves it
+        const liveLine = it.kind === "activity" && chat?.turn?.id === it.turn.id && (faceRow === "activity" || faceRow === "streaming");
+        const liveFace = liveLine && faceRow === "activity";
         return (
           <Fragment key={it.id}>
             {label && <div className="day">{label}</div>}
-            <div className={`row row-${it.kind}`} data-kind={it.kind}>
+            <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind}>
+              {liveFace && <LiveFace bot={bot.name} face={face} />}
               {render(it, label ? undefined : items[i - 1])}
             </div>
           </Fragment>
@@ -139,6 +147,7 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
             bot={bot.name}
             face={!botSpoke(items[items.length - 1])}
             faceEl={face}
+            live={faceRow === "streaming"}
           />
         </div>
       )}
