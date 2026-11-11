@@ -10,12 +10,10 @@ import { AgentIcon, Popover } from "../../ui";
 import { Ring } from "../../sidebar/Usage";
 import { accountHost, type LoginStatus, type SignInEvent } from "./native";
 import {
-  AUTO_SWITCH_LINE,
   CLI_NAME,
-  CPA_USAGE,
-  HEADER_LINE,
   SIGN_IN,
   autoSwitchOn,
+  cpaUsage,
   isCpa,
   mergeRow,
   pill,
@@ -27,6 +25,8 @@ import {
   type Row,
 } from "./rules";
 import { reloadAccounts, useAccounts } from "./useAccounts";
+import { t, tx } from "../../i18n";
+import { holdImeEnter } from "../../lib/ime";
 
 const errText = (e: unknown) => (typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 const NOTE_MS = 8000;
@@ -46,24 +46,26 @@ export function AccountsPage() {
   const split = groups ? splitGroups(groups, onComputer) : null;
   return (
     <div className="st-page acc" data-testid="accounts-page">
-      <div className="st-gh st-gh0">Accounts</div>
+      <div className="st-gh st-gh0">{t("nav.accounts")}</div>
       <p className="acc-lead" data-testid="accounts-lead">
-        {/* the last word opens Settings › Bots */}
-        {HEADER_LINE.replace(/Bots\.$/, "")}
-        <button type="button" className="acc-link" onClick={() => getStore().actions.openSettings("bots")} data-testid="accounts-to-bots">
-          Bots
-        </button>
-        .
+        {/* "Bots" opens Settings › Bots */}
+        {tx("acc.headerLine", {
+          bots: (
+            <button type="button" className="acc-link" onClick={() => getStore().actions.openSettings("bots")} data-testid="accounts-to-bots">
+              {t("set.bots")}
+            </button>
+          ),
+        })}
       </p>
-      {error && <p className="st-note">Could not read accounts: {error}</p>}
-      {groups === null && !error && <p className="st-note">Loading…</p>}
-      {split?.shown.length === 0 && <p className="st-note">No coding CLI found on this computer.</p>}
+      {error && <p className="st-note">{t("acc.readFailed", { error })}</p>}
+      {groups === null && !error && <p className="st-note">{t("acc.loading")}</p>}
+      {split?.shown.length === 0 && <p className="st-note">{t("acc.noCli")}</p>}
       {split?.shown.map((g) => (
         <CliGroup key={g.cli} g={g} status={status} note={fresh && note.cli === g.cli ? note.text : null} />
       ))}
       {split && split.missing.length > 0 && (
         <p className="acc-missing" data-testid="accounts-missing">
-          Not on this computer: {split.missing.join(", ")}.
+          {t("acc.missing", { list: split.missing.join(t("list.sep")) })}
         </p>
       )}
     </div>
@@ -165,7 +167,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
       /* already gone, or the CLI did write a login after all: the next read shows it */
     }
     setSignIn(null);
-    setMsg("Sign-in cancelled. Nothing was added.");
+    setMsg(t("acc.cancelled"));
     await reloadAccounts();
   };
 
@@ -216,7 +218,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
         {rows.map((r, i) => {
           const cpa = isCpa(r);
           const inUse = !cpa && r.id === g.active && r.signedIn;
-          const lines = cpa ? [CPA_USAGE] : usageLines(r.usage, now);
+          const lines = cpa ? [cpaUsage()] : usageLines(r.usage, now);
           const p = pill(r, inUse, now, rows.length - cpaRows);
           return (
             <div className="acc-row" key={r.id} data-testid="account-row" data-id={r.id} data-state={r.state} data-in-use={inUse}
@@ -250,11 +252,11 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
                 <span />
               ) : (
                 <RowMenu
-                  label={`Actions for ${rowTitle(r, i)}`}
+                  label={t("acc.actionsFor", { name: rowTitle(r, i) })}
                   items={[
-                    { label: "Use for new sessions", on: () => void run(() => s.setActiveAccount(g.cli, r.id)), disabled: inUse || !r.signedIn },
-                    { label: r.label ? "Rename…" : "Add a name…", on: () => setRenaming(r.id) },
-                    ...(r.id === "default" ? [] : [{ label: "Remove…", on: () => setConfirm(r), danger: true }]),
+                    { label: t("acc.useForNew"), on: () => void run(() => s.setActiveAccount(g.cli, r.id)), disabled: inUse || !r.signedIn },
+                    { label: r.label ? t("acc.rename") : t("acc.addName"), on: () => setRenaming(r.id) },
+                    ...(r.id === "default" ? [] : [{ label: t("acc.remove"), on: () => setConfirm(r), danger: true }]),
                   ]}
                 />
               )}
@@ -265,9 +267,9 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
           <div className="acc-signin" role="status" data-testid="signin-panel">
             <span className="acc-spin" aria-hidden="true" />
             <span className="acc-signin-t">
-              <b>{signIn.ending ? "Checking the sign-in…" : `Finish signing in to ${CLI_NAME[g.cli]} in your browser.`}</b>
+              <b>{signIn.ending ? t("acc.checking") : t("acc.finishIn", { cli: CLI_NAME[g.cli] })}</b>
               <span className="acc-sub" data-testid="signin-lines">
-                {signIn.lines[signIn.lines.length - 1] ?? "Starting the sign-in…"}
+                {signIn.lines[signIn.lines.length - 1] ?? t("acc.starting")}
               </span>
             </span>
             <button
@@ -277,7 +279,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
               onClick={() => (signIn.login !== null ? void host.cancel(signIn.login) : void finish(signIn.id))}
               data-testid="signin-cancel"
             >
-              Cancel
+              {t("acc.cancel")}
             </button>
           </div>
         )}
@@ -288,7 +290,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
             type="button"
             role="switch"
             aria-checked={auto}
-            aria-label={`Auto-switch ${CLI_NAME[g.cli]}`}
+            aria-label={t("acc.autoSwitchOf", { cli: CLI_NAME[g.cli] })}
             className="acc-switch"
             data-testid={`autoswitch-${g.cli}`}
             onClick={() => {
@@ -299,14 +301,14 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
             <span />
           </button>
           <span>
-            <b>Auto-switch</b> {AUTO_SWITCH_LINE}
+            <b>{t("acc.autoSwitch")}</b> {t("acc.autoSwitchLine")}
           </span>
         </div>
       )}
       {g.also && (
         <p className="acc-also" data-testid="accounts-also">
-          {g.also.accounts} {g.also.accounts === 1 ? "login comes" : "logins come"} from {g.also.name}, which signs in and switches them itself.
-          {cpaRows > 0 && " The ones only it holds are read-only here, and nothing on this computer records their usage."}
+          {g.also.accounts === 1 ? t("acc.also1", { name: g.also.name }) : t("acc.alsoN", { n: g.also.accounts, name: g.also.name })}
+          {cpaRows > 0 && t("acc.alsoCpa")}
         </p>
       )}
       {msg && (
@@ -315,15 +317,13 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
         </p>
       )}
       {confirm && (
-        <div className="acc-confirm" role="alertdialog" aria-label="Remove account" data-testid="remove-confirm">
-          <span>
-            Remove <b>{rowTitle(confirm, g.accounts.findIndex((a) => a.id === confirm.id))}</b> from omher? Its sign-in on this computer is deleted too.
-          </span>
+        <div className="acc-confirm" role="alertdialog" aria-label={t("acc.removeAccount")} data-testid="remove-confirm">
+          <span>{tx("acc.removeConfirm", { name: <b>{rowTitle(confirm, g.accounts.findIndex((a) => a.id === confirm.id))}</b> })}</span>
           <button type="button" className="st-btn danger" onClick={() => void run(() => s.removeAccount(g.cli, confirm.id)).then(() => setConfirm(null))}>
-            Remove
+            {t("acc.removeBtn")}
           </button>
           <button type="button" className="st-btn" onClick={() => setConfirm(null)}>
-            Cancel
+            {t("acc.cancel")}
           </button>
         </div>
       )}
@@ -333,10 +333,10 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
             type="button"
             className="acc-addbtn"
             disabled
-            title={`Adding a ${CLI_NAME[g.cli]} account opens a ${CLI_NAME[g.cli]} session where you type /login. It comes with Sessions.`}
+            title={t("acc.addSoonTip", { cli: CLI_NAME[g.cli] })}
             data-testid={`add-account-${g.cli}`}
           >
-            + Add account <span className="nav-soon">Soon</span>
+            {t("acc.add")} <span className="nav-soon">{t("acc.soon")}</span>
           </button>
         </div>
       )}
@@ -345,6 +345,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
           {adding ? (
             <form
               className="acc-add"
+              onKeyDown={holdImeEnter}
               onSubmit={(e) => {
                 e.preventDefault();
                 void start();
@@ -352,23 +353,23 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
             >
               <input
                 autoFocus
-                placeholder="Name, optional (e.g. Work)"
-                aria-label="Account name"
+                placeholder={t("acc.namePh")}
+                aria-label={t("acc.name")}
                 maxLength={40}
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 data-testid={`add-label-${g.cli}`}
               />
               <button type="submit" className="st-btn primary" data-testid={`add-confirm-${g.cli}`}>
-                Sign in
+                {t("acc.signIn")}
               </button>
               <button type="button" className="st-btn" onClick={() => setAdding(false)}>
-                Cancel
+                {t("acc.cancel")}
               </button>
             </form>
           ) : (
             <button type="button" className="acc-addbtn" onClick={() => setAdding(true)} data-testid={`add-account-${g.cli}`}>
-              + Add account
+              {t("acc.add")}
             </button>
           )}
         </div>
@@ -382,6 +383,7 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (text: stri
   return (
     <form
       className="acc-rename"
+      onKeyDown={holdImeEnter}
       onSubmit={(e) => {
         e.preventDefault();
         onDone(v.trim());
@@ -389,8 +391,8 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (text: stri
     >
       <input
         autoFocus
-        aria-label="Account name"
-        placeholder="Name (e.g. Work)"
+        aria-label={t("acc.name")}
+        placeholder={t("acc.renamePh")}
         maxLength={40}
         value={v}
         onChange={(e) => setV(e.target.value)}

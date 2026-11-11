@@ -7,7 +7,7 @@ import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
 import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
 import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
-import { LANG_NAMES, LANGS, t, type Lang } from "../i18n";
+import { LANG_NAMES, LANGS, t, type Key, type Lang } from "../i18n";
 import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
@@ -18,13 +18,15 @@ import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotIn
 
 export const slot = "settings";
 
-const APP_PAGES = [
-  { id: "general", label: "General" },
-  { id: "providers", label: "Providers" },
-  { id: "computer", label: "Computer" },
+const APP_PAGES: { id: string; label: Key }[] = [
+  { id: "general", label: "set.general" },
+  { id: "providers", label: "set.providers" },
+  { id: "computer", label: "set.computer" },
 ];
 
-const STATUS: Record<string, string> = { online: "Connected", offline: "Not connected", starting: "Starting…" };
+const STATUS: Record<string, Key> = { online: "bot.online", offline: "bot.offline", starting: "bot.starting" };
+/** A bot's status in words; a status omher does not know stays as the bridge wrote it. */
+export const statusText = (status: string) => (STATUS[status] ? t(STATUS[status]) : status);
 
 export default function Settings({ page }: SlotProps["settings"]) {
   const s = useStore();
@@ -38,17 +40,17 @@ export default function Settings({ page }: SlotProps["settings"]) {
 
   return (
     <div className="st" data-testid="settings-view">
-      <nav className="st-nav" aria-label="Settings sections">
-        <div className="st-sh">You</div>
+      <nav className="st-nav" aria-label={t("set.sections")}>
+        <div className="st-sh">{t("set.you")}</div>
         <NavItem id="accounts" current={current} onPick={s.openSettings}>
-          Accounts
+          {t("nav.accounts")}
         </NavItem>
-        <div className="st-sh st-sh2">Bots</div>
+        <div className="st-sh st-sh2">{t("set.bots")}</div>
         <NavItem id="bots" current={current} onPick={s.openSettings}>
           <span className="st-nav-i" aria-hidden="true">
             <GridIcon />
           </span>
-          All bots<span className="st-count">{s.bots.length}</span>
+          {t("set.allBots")}<span className="st-count">{s.bots.length}</span>
         </NavItem>
         {s.bots.map((b) => (
           <NavItem key={b.name} id={`bot:${b.name}`} current={current} onPick={s.openSettings}>
@@ -56,10 +58,10 @@ export default function Settings({ page }: SlotProps["settings"]) {
             <span className="st-nav-n">{b.display_name}</span>
           </NavItem>
         ))}
-        <div className="st-sh st-sh2">App</div>
+        <div className="st-sh st-sh2">{t("set.app")}</div>
         {APP_PAGES.map((p) => (
           <NavItem key={p.id} id={p.id} current={current} onPick={s.openSettings}>
-            {p.label}
+            {t(p.label)}
           </NavItem>
         ))}
       </nav>
@@ -169,12 +171,12 @@ function BotPage({ bot }: { bot: Bot }) {
           <NameEditor bot={bot} />
           <span className="be-sub">
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
-            {live ? "Working" : STATUS[bot.status] ?? bot.status}
+            {live ? t("bot.working") : statusText(bot.status)}
           </span>
           {bot.description && <p className="be-desc">{bot.description}</p>}
           <div className="be-acts">
             <button type="button" className="st-btn" onClick={() => void s.selectBot(bot.name)} data-testid="bot-open-chat">
-              Open chat
+              {t("set.openChat")}
             </button>
             <PictureActions ed={picture} />
           </div>
@@ -182,53 +184,52 @@ function BotPage({ bot }: { bot: Bot }) {
       </div>
       <BotFacts info={info} />
 
-      <div className="st-gh">Profile</div>
+      <div className="st-gh">{t("set.profile")}</div>
       <div className="st-grp">
-        <Row
-          title="Profile id"
-          hint={bot.is_default ? "The default Hermes profile. Name and picture are saved here" : "Name and picture are saved in this Hermes profile"}
-        >
+        <Row title={t("set.profileId")} hint={bot.is_default ? t("set.profileDefault") : t("set.profileHere")}>
           <Value mono>{bot.name}</Value>
         </Row>
       </div>
 
-      <div className="st-gh">Model</div>
+      <div className="st-gh">{t("set.model")}</div>
       <div className="st-grp">
-        <Row title="Model" hint="Used by this bot’s main chat">
+        <Row title={t("set.model")} hint={t("set.modelHint")}>
           <Value>
             {model || "—"}
             {provider && <small>{providerName(opts, provider)}</small>}
           </Value>
         </Row>
-        <Row title="Reasoning" hint="How long it thinks before answering">
+        <Row title={t("set.reasoning")} hint={t("set.reasoningHint")}>
           <Value>{reasoning ? reasoningLabel(reasoning) : "—"}</Value>
         </Row>
-        <Row title="Change" hint="Pick a model and reasoning from the pill in the chat header">
+        <Row title={t("set.change")} hint={t("set.changeHint")}>
           <button type="button" className="st-btn" onClick={() => void s.selectBot(bot.name)} disabled={offline}>
-            Change in chat
+            {t("set.changeInChat")}
           </button>
         </Row>
       </div>
 
-      <div className="st-gh">Work</div>
+      <div className="st-gh">{t("set.work")}</div>
       <div className="st-grp">
-        <Row title="Main chat" hint="One chat per bot; other places stay read-only here">
-          <Value>{chat?.loaded ? `${chat.messages.length} messages` : "—"}</Value>
+        <Row title={t("set.mainChat")} hint={t("set.mainChatHint")}>
+          <Value>
+            {chat?.loaded ? (chat.messages.length === 1 ? t("set.messages1") : t("set.messages", { n: chat.messages.length })) : "—"}
+          </Value>
         </Row>
-        <Row title="Routines" hint="Scheduled jobs from this profile">
+        <Row title={t("set.routines")} hint={t("set.routinesHint")}>
           <Value>
             {(() => {
               const n = routines?.length ?? info?.routines;
-              return n === undefined ? "—" : `${n} ${n === 1 ? "routine" : "routines"}`;
+              return n === undefined ? "—" : n === 1 ? t("set.routine1") : t("set.routinesN", { n });
             })()}
           </Value>
         </Row>
-        <Row title="Ask before" hint="Approvals follow this profile’s Hermes settings">
-          <Value>Set in Hermes</Value>
+        <Row title={t("set.askBefore")} hint={t("set.askBeforeHint")}>
+          <Value>{t("set.inHermes")}</Value>
         </Row>
-        <Row title="Use this computer" hint="Click and type in your apps">
+        <Row title={t("set.useComputer")} hint={t("set.useComputerHint")}>
           <Value>
-            <span className="st-soon">Soon</span>
+            <span className="st-soon">{t("set.soon")}</span>
           </Value>
         </Row>
       </div>
@@ -252,17 +253,17 @@ function BotsPage() {
     <div className="st-page st-wide">
       <div className="bots-h">
         <div>
-          <b>Bots</b>
+          <b>{t("set.bots")}</b>
           <span>
-            {s.bots.length} {s.bots.length === 1 ? "bot" : "bots"} · {online} connected
-            {working > 0 && ` · ${working} working`}
+            {s.bots.length === 1 ? t("set.botsCount1", { online }) : t("set.botsCount", { n: s.bots.length, online })}
+            {working > 0 && t("set.botsWorking", { n: working })}
           </span>
         </div>
         <input
           type="search"
           className="bots-q"
-          placeholder="Find a bot"
-          aria-label="Find a bot"
+          placeholder={t("set.findBot")}
+          aria-label={t("set.findBot")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           data-testid="bots-search"
@@ -272,7 +273,7 @@ function BotsPage() {
         {bots.map((b) => (
           <BotCard key={b.name} bot={b} />
         ))}
-        {needle && bots.length === 0 && <div className="bots-empty">No bot matches “{q.trim()}”</div>}
+        {needle && bots.length === 0 && <div className="bots-empty">{t("set.noBotMatch", { q: q.trim() })}</div>}
       </div>
     </div>
   );
@@ -296,7 +297,7 @@ function BotCard({ bot }: { bot: Bot }) {
           <b>{bot.display_name}</b>
           <span>
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
-            {live ? "Working" : STATUS[bot.status] ?? bot.status}
+            {live ? t("bot.working") : statusText(bot.status)}
             {bot.name !== bot.display_name.toLowerCase() && <code>{bot.name}</code>}
           </span>
         </span>
@@ -308,7 +309,7 @@ function BotCard({ bot }: { bot: Bot }) {
           {bot.model || "—"}
         </span>
         {places.map(([src, n]) => (
-          <span key={src} className="bc-place" title={`${n} ${placeName(src)} sessions`}>
+          <span key={src} className="bc-place" title={t("set.placeSessions", { n, place: placeName(src) })}>
             <SourceIcon source={src} size={11} />
             {n}
           </span>
@@ -319,14 +320,14 @@ function BotCard({ bot }: { bot: Bot }) {
 }
 
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
-const SHORTCUTS: [string, string][] = [
-  [`${MOD}1 … ${MOD}9`, "Open bot 1 to 9"],
-  [`${MOD}K`, "Search bots"],
-  [`${MOD}.`, "Show or hide Details"],
-  [`${MOD},`, "Settings"],
-  [`${MOD}J`, "Next approval or question"],
-  ["1 · 2 · 3", "Deny · Allow once · Allow for session (focused card)"],
-  ["Esc", "Stop the running answer"],
+const SHORTCUTS: [string, Key][] = [
+  [`${MOD}1 … ${MOD}9`, "key.openBot"],
+  [`${MOD}K`, "key.search"],
+  [`${MOD}.`, "key.details"],
+  [`${MOD},`, "key.settings"],
+  [`${MOD}J`, "key.nextAsk"],
+  ["1 · 2 · 3", "key.cardKeys"],
+  ["Esc", "key.stop"],
 ];
 
 function NotifySeg() {
@@ -334,11 +335,11 @@ function NotifySeg() {
   return (
     <Seg
       small
-      label="Notify me"
+      label={t("set.notify")}
       value={on ? "on" : "off"}
       options={[
-        { value: "on", label: "On" },
-        { value: "off", label: "Off" },
+        { value: "on", label: t("set.on") },
+        { value: "off", label: t("set.off") },
       ]}
       onChange={(v) => {
         setNotifyEnabled(v === "on");
@@ -379,7 +380,7 @@ function GeneralPage() {
   const h = s.hello;
   return (
     <div className="st-page">
-      <div className="st-gh st-gh0">Appearance</div>
+      <div className="st-gh st-gh0">{t("set.appearance")}</div>
       <Appearance />
       <div className="st-grp st-grp-lang">
         <Row title={t("lang.title")} hint={t("lang.hint")}>
@@ -392,19 +393,19 @@ function GeneralPage() {
           />
         </Row>
       </div>
-      <div className="st-gh">Notifications</div>
+      <div className="st-gh">{t("set.notifications")}</div>
       <div className="st-grp">
-        <Row title="Notify me" hint="When a bot answers, needs an approval or asks you something while omher is in the background">
+        <Row title={t("set.notify")} hint={t("set.notifyHint")}>
           <NotifySeg />
         </Row>
         <Row title={t("sounds.title")} hint={t("sounds.hint")}>
           <SoundsSeg />
         </Row>
       </div>
-      <div className="st-gh">Keyboard</div>
+      <div className="st-gh">{t("set.keyboard")}</div>
       <div className="st-grp" data-testid="shortcuts">
         {SHORTCUTS.map(([keys, what]) => (
-          <Row key={keys} title={what}>
+          <Row key={keys} title={t(what)}>
             <Value>
               <kbd className="st-kbd">{keys}</kbd>
             </Value>
@@ -413,16 +414,16 @@ function GeneralPage() {
       </div>
       <div className="st-gh">Hermes</div>
       <div className="st-grp">
-        <Row title="Hermes home">
+        <Row title={t("set.hermesHome")}>
           <Value mono>{h?.hermes.home ?? "—"}</Value>
         </Row>
-        <Row title="Hermes version">
+        <Row title={t("set.hermesVersion")}>
           <Value>{h?.hermes.version ?? "—"}</Value>
         </Row>
-        <Row title="Connection" hint={h?.bridge === "mock" ? "Test bridge (no Hermes)" : undefined}>
+        <Row title={t("set.connection")} hint={h?.bridge === "mock" ? t("set.testBridge") : undefined}>
           <Value>
             <i className={`st-dot ${s.conn === "open" ? "online" : "offline"}`} aria-hidden="true" />
-            {s.conn === "open" ? "Connected" : s.conn === "connecting" ? "Connecting…" : "Not connected"}
+            {s.conn === "open" ? t("bot.online") : s.conn === "connecting" ? t("bot.connecting") : t("bot.offline")}
           </Value>
         </Row>
       </div>
@@ -433,11 +434,11 @@ function GeneralPage() {
 function ComputerPage() {
   return (
     <div className="st-page">
-      <div className="st-gh st-gh0">Computer</div>
+      <div className="st-gh st-gh0">{t("set.computer")}</div>
       <div className="st-grp">
-        <Row title="Use this computer" hint="Let a bot click and type in your apps">
+        <Row title={t("set.useComputer")} hint={t("set.useComputerHint2")}>
           <Value>
-            <span className="st-soon">Soon</span>
+            <span className="st-soon">{t("set.soon")}</span>
           </Value>
         </Row>
       </div>

@@ -2,10 +2,12 @@
 // and Sessions are, each with one quiet button of the same look ("Message a bot" focuses the first bot's composer,
 // "New session" opens the SESSIONS + menu), and an empty Bots section carries one muted line. The cards show
 // only where there is no conversation yet (the empty main area, a chat with no messages), never above a chat's
-// history; one × closes both.
+// history; one × closes both. A Language row under the cards shows the language picked from the system (or
+// English) and changes it on the spot, the same control as Settings › General › Language.
 import { useSyncExternalStore } from "react";
 import "./firstrun.css";
-import { t } from "../i18n";
+import { LANG_NAMES, LANGS, t, type Lang } from "../i18n";
+import { Seg } from "../chat/model/Seg";
 import { selectSidebarBots, useStore } from "../state/store";
 import { openNewSessionMenu } from "../sessions/SessionsSection";
 import { CloseIcon, IconButton } from "../ui";
@@ -72,6 +74,17 @@ export function FirstRun() {
         <button type="button" className="onb-btn" onClick={openNewSessionMenu} data-testid="onb-session">
           {t("onb.sessions.action")}
         </button>
+      </div>
+      <div className="onb-lang" data-testid="onb-lang">
+        <span className="onb-lang-t">{t("lang.title")}</span>
+        <Seg
+          small
+          label={t("lang.title")}
+          value={s.ui.lang}
+          onChange={(v) => s.setLanguage(v as Lang)}
+          options={LANGS.map((l) => ({ value: l, label: LANG_NAMES[l] }))}
+          testId="onb-language"
+        />
       </div>
       <IconButton label={t("onb.dismiss")} className="onb-x" onClick={dismissOnboarding} data-testid="onb-dismiss">
         <CloseIcon />

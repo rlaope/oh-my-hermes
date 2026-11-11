@@ -2,6 +2,7 @@
 // text that goes with them. Pure, so it is tested without a DOM.
 import type { AttachKind, AttachResult } from "../../lib/protocol";
 import { extOf } from "./mediaLines";
+import { t } from "../../i18n";
 
 export const MAX_FILES = 20;
 export const MAX_BYTES = 100 * 1024 * 1024;
@@ -27,8 +28,8 @@ export function previewKind(name: string, mime = ""): "image" | "video" | "file"
 
 /** Why a file cannot go, or null. `index` is its place among the chips (0-based). */
 export function limitReason(size: number, index: number): string | null {
-  if (index >= MAX_FILES) return `Over ${MAX_FILES} files`;
-  if (size > MAX_BYTES) return "Over 100 MB";
+  if (index >= MAX_FILES) return t("att.tooMany", { n: MAX_FILES });
+  if (size > MAX_BYTES) return t("att.tooBig");
   return null;
 }
 

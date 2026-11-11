@@ -52,6 +52,7 @@ export function Sidebar() {
           type="search"
           placeholder={t("nav.search")}
           aria-label={t("nav.searchBots")}
+          data-testid="bot-search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && setQ("")}
@@ -83,10 +84,10 @@ export function Sidebar() {
             />
             );
           })}
-          {needle && bots.length === 0 && <div className="bot-empty">No bot named “{q.trim()}”</div>}
+          {needle && bots.length === 0 && <div className="bot-empty">{t("side.noBot", { q: q.trim() })}</div>}
           {!needle && bots.length === 0 && hiddenCount > 0 && (
             <button type="button" className="bot-empty bot-unhide" onClick={() => setShowHidden(true)}>
-              Show hidden bots ({hiddenCount})
+              {t("side.showHidden", { n: hiddenCount })}
             </button>
           )}
           {!needle && listed.length === 0 && <FirstRunHint text={t("onb.botsHint")} testId="onb-hint-bots" />}

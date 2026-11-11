@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Chat } from "../../state/store";
 import { askOpen, turnHasActivity } from "../../state/store";
 import { Avatar, LiveRing, TypingDots } from "../../ui";
+import { t } from "../../i18n";
 
 /** True while the bot works on an answer and nothing of it shows yet: a turn is running with no step or status
  *  for the activity line (one live indicator in the chat: the line takes over at the first tool), no delta, no
@@ -21,7 +22,7 @@ export function awaitingFirstToken(chat: Chat | undefined): boolean {
  *  the streaming bubble. Face 28px + 10px gap: the same column as the face beside bot bubbles. */
 export function TypingRow({ bot, name, face }: { bot: string; name: string; face?: ReactNode }) {
   return (
-    <div className="msg a typing" data-testid="typing" role="status" aria-label={`${name} is writing`}>
+    <div className="msg a typing" data-testid="typing" role="status" aria-label={t("ty.writing", { name })}>
       <LiveRing on size={28} gap={3} testId="typing-ring" seed={bot}>
         {face ?? <Avatar bot={bot} size={28} className="msg-face" />}
       </LiveRing>

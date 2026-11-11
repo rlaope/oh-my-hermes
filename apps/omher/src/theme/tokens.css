@@ -78,7 +78,11 @@
   --side-w: 248px;
   --panel-w: 300px;
   --thread-w: 920px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  /* Latin first, then CJK: Simplified Chinese (PingFang SC on macOS, Microsoft YaHei on Windows, Noto on Linux),
+     Japanese and Korean. `<html lang>` (zh-CN / ja / ko) picks the right glyphs for the shared Han characters. */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo",
+    "Noto Sans CJK JP", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, monospace;
 
   --shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);

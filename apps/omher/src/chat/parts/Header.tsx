@@ -4,9 +4,10 @@ import { useStore } from "../../state/store";
 import { slots } from "../../features";
 import { Avatar, Pill } from "../../ui";
 import { isMac } from "../../app/shortcuts";
+import { reasoningLabel } from "../model/levels";
+import { t } from "../../i18n";
 
-const REASONING: Record<string, string> = { none: "Off", low: "Low", medium: "Med", high: "High", xhigh: "Max" };
-export const reasoningLabel = (r: string) => REASONING[r] ?? (r ? r[0].toUpperCase() + r.slice(1) : "");
+export { reasoningLabel };
 
 /** Header: avatar + name (toggles Details), the places chip slot, and ONE control on the right. */
 export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
@@ -22,7 +23,7 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
         className="who-btn"
         onClick={() => s.togglePanel()}
         aria-expanded={s.ui.panelOpen}
-        title={`Details (${isMac() ? "⌘." : "Ctrl+."})`}
+        title={t("head.details", { key: isMac() ? "⌘." : "Ctrl+." })}
         data-testid="who"
       >
         <Avatar bot={bot.name} size={26} />

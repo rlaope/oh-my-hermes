@@ -3,6 +3,7 @@
 // (dev, e2e) there is no app: e2e injects a stand-in as `window.__omherAccountHost`; otherwise the page says
 // signing in needs the desktop app and shows what the bridge read.
 import type { AccountCli } from "../../lib/protocol";
+import { t } from "../../i18n";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -70,7 +71,7 @@ const noHost: AccountHost = {
   clis: async () => null,
   status: async () => null,
   signIn: async () => {
-    throw new Error("Signing in needs the omher desktop app.");
+    throw new Error(t("acc.needsApp"));
   },
   cancel: async () => {},
 };

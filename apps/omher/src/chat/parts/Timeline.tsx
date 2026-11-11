@@ -7,6 +7,7 @@ import { Bubble } from "./Bubble";
 import { TypingRow, awaitingFirstToken } from "./Typing";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
+import { t } from "../../i18n";
 
 /** A time label goes in when the day changes, or after a quiet gap within the same day. */
 const GAP = 30 * 60;
@@ -98,20 +99,20 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
         pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
     >
-      {!chat?.loaded && items.length === 0 && <div className="day">Loading…</div>}
+      {!chat?.loaded && items.length === 0 && <div className="day">{t("tl.loading")}</div>}
       {chat?.openError && (
         <div className="day note" data-testid="chat-error">
-          {bot.display_name} is not reachable ({chat.openError}). Start Hermes for this profile, then pick it again.
+          {t("tl.unreachable", { bot: bot.display_name, error: chat.openError })}
         </div>
       )}
       {/* A Hermes installed from the setup screen has no model yet: the first chat screen says where to pick one,
           never a terminal command. */}
       {chat?.loaded && !chat.openError && !(chat.model || bot.model) && (
         <div className="day note" data-testid="chat-no-model">
-          {bot.display_name} has no model yet. Pick one from the model menu at the top right to start.
+          {t("tl.noModel", { bot: bot.display_name })}
         </div>
       )}
-      {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">Say hi to {bot.display_name}</div>}
+      {chat?.loaded && !chat.openError && items.length === 0 && <div className="day">{t("tl.sayHi", { bot: bot.display_name })}</div>}
       {items.map((it, i) => {
         // the live activity line with nothing to say yet: the typing bubble below stands in for it
         if (it.kind === "activity" && chat?.turn?.id === it.turn.id && !turnHasActivity(it.turn)) return null;

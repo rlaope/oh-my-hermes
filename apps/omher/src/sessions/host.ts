@@ -4,6 +4,7 @@
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
 import { AGENTS, agentDef, type AgentId, type AgentInfo } from "./agents";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
+import { t } from "../i18n";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. */
 export type ChatInput =
@@ -72,7 +73,7 @@ export class TauriHost implements SessionHost {
   }
   async pickFolder(defaultPath: string) {
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const r = await open({ directory: true, multiple: false, defaultPath, title: "Choose a folder for the session" });
+    const r = await open({ directory: true, multiple: false, defaultPath, title: t("ss.pickFolder") });
     return typeof r === "string" ? r : null;
   }
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {

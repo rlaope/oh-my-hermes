@@ -5,6 +5,7 @@ import { canOpenFiles, openMedia, revealLabel } from "../../lib/openMedia";
 import { useStore } from "../../state/store";
 import { fileName, fileSize, mediaKind, type MediaKind } from "./mediaLines";
 import "./media.css";
+import { t } from "../../i18n";
 
 type Loaded =
   | { state: "loading" }
@@ -56,11 +57,11 @@ export function MediaList({ bot, paths }: { bot: string; paths: string[] }) {
 function MediaItem({ bot, path }: { bot: string; path: string }) {
   const kind = mediaKind(path);
   const m = useMedia(bot, path, kind);
-  if (m.state === "loading") return <div className={`media-skel media-skel-${kind}`} data-testid="media-loading" aria-label="Loading file" />;
+  if (m.state === "loading") return <div className={`media-skel media-skel-${kind}`} data-testid="media-loading" aria-label={t("md.loading")} />;
   if (m.state === "error")
     return (
       <div className="media-err" data-testid="media-error" title={path}>
-        Couldn't load file <span>· {fileName(path)}</span>
+        {t("md.failed")} <span>· {fileName(path)}</span>
       </div>
     );
   const { file, url } = m;
@@ -75,7 +76,7 @@ export function ImageTile({ url, name }: { url: string; name: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="media-img" data-testid="media-image" onClick={() => setOpen(true)} aria-label={`Open ${name}`}>
+      <button type="button" className="media-img" data-testid="media-image" onClick={() => setOpen(true)} aria-label={t("md.openOf", { name })}>
         <img src={url} alt={name} draggable={false} />
       </button>
       {open && <Lightbox url={url} name={name} onClose={() => setOpen(false)} />}
@@ -133,7 +134,7 @@ function FileCard({ file }: { file: MediaFile }) {
     <FileRow name={file.name} size={file.size} title={file.path} testId="media-file">
       <span className="media-acts">
         <button type="button" data-testid="media-open" onClick={() => void openMedia(file.path).catch(() => {})}>
-          Open
+          {t("md.open")}
         </button>
         {canOpenFiles() && (
           <button type="button" data-testid="media-reveal" onClick={() => void openMedia(file.path, true).catch(() => {})}>

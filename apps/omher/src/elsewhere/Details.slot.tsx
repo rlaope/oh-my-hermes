@@ -14,6 +14,7 @@ import { DiffTab, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type P
 import { useNow } from "./useNow";
 import { RunsTab } from "../runs/RunsTab";
 import "./elsewhere.css";
+import { t as tr } from "../i18n";
 
 export const slot = "detailsPanel";
 
@@ -25,7 +26,7 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
   const [diffPath, setDiffPath] = useState<string | null>(null);
   useEffect(() => setDiffPath(null), [bot.name]);
   const head = (
-    <div className="details-h pn-tabs" role="tablist" aria-label="Panel">
+    <div className="details-h pn-tabs" role="tablist" aria-label={tr("pn.panel")}>
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -41,7 +42,7 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
           {tab === t.id && <span>{t.label}</span>}
         </button>
       ))}
-      <IconButton label="Close details" onClick={onClose}>
+      <IconButton label={tr("pn.close")} onClick={onClose}>
         <CloseIcon />
       </IconButton>
     </div>
@@ -99,7 +100,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
         <Avatar bot={bot.name} size={40} />
         <div>
           <b>{bot.display_name}</b>
-          <span className="details-sub">Hermes profile · {bot.name}</span>
+          <span className="details-sub">{tr("pn.profile", { name: bot.name })}</span>
           <span className="details-sub mono" title={model}>
             {model}
           </span>
@@ -108,19 +109,20 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
           type="button"
           className="details-edit"
           onClick={() => s.openSettings(`bot:${bot.name}`)}
-          title="Picture, name and profile"
+          title={tr("pn.editTip")}
           data-testid="details-edit"
         >
-          Edit
+          {tr("pn.edit")}
         </button>
       </div>
       <div className="ew-scroll">
         <div className="ew-sec" data-testid="where-sec">
-          Where {bot.display_name} is<span>{away.length + 1}</span>
+          {tr("pn.where", { bot: bot.display_name })}
+          <span>{away.length + 1}</span>
         </div>
         <ul className="ew-sess" data-testid="where-list">
           <li className="ew-ss here" data-testid="where-row" data-session="main">
-            <span className="t1">This chat</span>
+            <span className="t1">{tr("pn.thisChat")}</span>
             <span className="st">{hereTime}</span>
             <span className="t2">
               <span className="ew-src">
@@ -155,7 +157,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
                   <a
                     className="ew-ss link"
                     href={a.url}
-                    title={`Open in ${src}`}
+                    title={tr("pn.openIn", { app: src })}
                     onClick={(e) => {
                       e.preventDefault();
                       void openExternal(a.url!);
@@ -164,7 +166,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
                     {row}
                   </a>
                 ) : (
-                  <div className="ew-ss" title={`Read-only here · reply in ${src}`}>
+                  <div className="ew-ss" title={tr("pn.readOnly", { app: src })}>
                     {row}
                   </div>
                 )}
@@ -174,20 +176,20 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
           {sorted.length > SHOW && (
             <li>
               <button type="button" className="ew-more" data-testid="where-more" onClick={() => setAll((v) => !v)}>
-                {all ? "Show fewer" : `Show all ${sorted.length}`}
+                {all ? tr("pn.fewer") : tr("pn.all", { n: sorted.length })}
               </button>
             </li>
           )}
         </ul>
         <div className="ew-note" data-testid="where-note">
-          Talk to {bot.display_name} here — it knows what it did in {sources || "Slack and Discord"}. Replies to those
-          threads go in their own apps.
+          {tr("pn.note", { bot: bot.display_name, places: sources || tr("pn.slackDiscord") })}
         </div>
         <div className="ew-sec" data-testid="routines-sec">
-          Routines<span>{routines.length}</span>
+          {tr("pn.routines")}
+          <span>{routines.length}</span>
         </div>
         {routines.length === 0 ? (
-          <div className="ew-empty">No routines yet.</div>
+          <div className="ew-empty">{tr("pn.noRoutines")}</div>
         ) : (
           <ul className="ew-sess" data-testid="routine-list">
             {routines.map((r) => (
@@ -196,7 +198,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
                 <span className="st">{nextRun(r, now)}</span>
                 <span className="t2">
                   <span className="ew-src">{cadence(r.schedule)}</span>
-                  {r.last_status && r.last_status !== "ok" && <span className="st bad">last run {r.last_status}</span>}
+                  {r.last_status && r.last_status !== "ok" && <span className="st bad">{tr("pn.lastRun", { status: r.last_status })}</span>}
                 </span>
               </li>
             ))}

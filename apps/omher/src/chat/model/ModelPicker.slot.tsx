@@ -11,6 +11,8 @@ import { Seg } from "./Seg";
 import { CheckIcon } from "./CheckIcon";
 import { levelOptions, reasoningLabel } from "./levels";
 import { filterRows, modelRows, vendorsPresent, type ModelRow } from "./modelSearch";
+import { t, tx } from "../../i18n";
+import { composing } from "../../lib/ime";
 
 export const slot = "modelPicker";
 
@@ -86,6 +88,8 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
       setActive((i) => (i + step + shown.length) % shown.length);
     } else if (e.key === "Enter") {
       e.preventDefault();
+      // Enter that commits an IME composition (pinyin, kana, hangul) is not a pick
+      if (composing(e)) return;
       const r = shown[active];
       if (r) pick(r);
     }
@@ -107,15 +111,15 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title="Model and reasoning"
+        title={t("mp.title")}
         data-testid="model-pill"
       >
-        <span className="mp-mk" title={offline ? "Not connected" : "Connected"}>
+        <span className="mp-mk" title={offline ? t("bot.offline") : t("bot.online")}>
           <ModelIcon model={model} provider={provider} size={14} />
           <span className={`mp-d${offline ? "" : " live"}`} aria-hidden="true" />
         </span>
         <span className="mp-l" title={model || undefined} data-testid="model-label">
-          {model || "Pick a model"}
+          {model || t("mp.pick")}
         </span>
         {reasoning && (
           <>
@@ -134,7 +138,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
           // Esc hands focus back to the model button instead of dropping it on the page.
           if (why === "escape") pillRef.current?.focus();
         }}
-        label="Model and reasoning"
+        label={t("mp.title")}
         width={320}
         className="mp-pop"
       >
@@ -143,8 +147,8 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
             <SearchIcon />
             <input
               type="search"
-              placeholder="Search models"
-              aria-label="Search models"
+              placeholder={t("mp.search")}
+              aria-label={t("mp.search")}
               autoFocus
               autoComplete="off"
               spellCheck={false}
@@ -155,8 +159,8 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
             />
           </label>
           {vendors.length > 1 && (
-            <div className="mp-chips" role="group" aria-label="Model makers" data-testid="model-chips">
-              {[{ id: "all", label: "All" }, ...vendors].map((v) => {
+            <div className="mp-chips" role="group" aria-label={t("mp.makers")} data-testid="model-chips">
+              {[{ id: "all", label: t("mp.all") }, ...vendors].map((v) => {
                 const on = v.id === vendor;
                 return (
                   <button
@@ -168,7 +172,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
                     data-testid={`model-chip-${v.id}`}
                   >
                     {v.id !== "all" && <ModelIcon model={v.id === "other" ? undefined : v.label} size={12} />}
-                    {v.label}
+                    {v.id === "other" ? t("mp.other") : v.label}
                   </button>
                 );
               })}
@@ -176,10 +180,10 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
           )}
           <div className="mp-list" ref={listRef}>
             {!opts ? (
-              <div className="mp-empty">{offline ? `${bot.display_name} is offline` : "Loading models…"}</div>
+              <div className="mp-empty">{offline ? t("mp.offline", { bot: bot.display_name }) : t("mp.loading")}</div>
             ) : !shown.length ? (
               <div className="mp-empty" data-testid="model-empty">
-                No models match
+                {t("mp.none")}
               </div>
             ) : (
               groups.map((g) => (
@@ -211,9 +215,9 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
               ))
             )}
           </div>
-          <div className="mp-h mp-h2">Reasoning</div>
+          <div className="mp-h mp-h2">{t("mp.reasoning")}</div>
           <Seg
-            label="Reasoning"
+            label={t("mp.reasoning")}
             value={reasoning}
             options={levelOptions(opts?.reasoning_levels)}
             onChange={(r) => void apply({ reasoning: r })}
@@ -222,21 +226,24 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
           />
           {note !== null && (
             <div className="mp-note" role="status" title={note || undefined} data-testid="model-note">
-              Change it in Hermes for now
+              {t("mp.inHermes")}
             </div>
           )}
           <div className="mp-f">
-            Applies to this chat ·{" "}
-            <button
-              type="button"
-              className="mp-link"
-              onClick={() => {
-                setOpen(false);
-                s.openSettings(`bot:${bot.name}`);
-              }}
-            >
-              Bot settings
-            </button>
+            {tx("mp.appliesChat", {
+              link: (
+                <button
+                  type="button"
+                  className="mp-link"
+                  onClick={() => {
+                    setOpen(false);
+                    s.openSettings(`bot:${bot.name}`);
+                  }}
+                >
+                  {t("mp.botSettings")}
+                </button>
+              ),
+            })}
           </div>
         </div>
       </Popover>

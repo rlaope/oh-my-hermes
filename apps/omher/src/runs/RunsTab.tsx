@@ -177,7 +177,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
   const [listOpen, setListOpen] = useState(false);
   const { runs, cli, error } = useRuns(bot.name, n);
   const nowMs = useNow(!!runs?.some((r) => r.state === "running") || cli.some((r) => r.state === "running"));
-  if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>;
+  if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>;
   const selected = pickRun([...runs, ...cli], s.ui.runId);
   const nowS = nowMs / 1000;
   const lists = !selected || listOpen;
@@ -277,7 +277,7 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
       />
       <div className="rn-gwrap" ref={ref}>
         {!run || !width ? (
-          <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label="Loading" />}</div>
+          <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>
         ) : (
           <RunGraph
             run={run}
@@ -325,12 +325,12 @@ export function RunsFull({ bot }: { bot: Bot }) {
       </div>
       <div className="rf-body" ref={ref}>
         {!runs ? (
-          <div className="pn-empty">{error ?? <Spinner size={12} label="Loading" />}</div>
+          <div className="pn-empty">{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>
         ) : !selected ? (
           <div className="pn-empty">{t("plans.none")}</div>
         ) : !run || !width ? (
           <div className="pn-empty">
-            <Spinner size={12} label="Loading" />
+            <Spinner size={12} label={t("pn.loading")} />
           </div>
         ) : (
           <RunGraph key={run.id} run={run} mode="full" width={width} open={open} onOpen={setOpen} nowS={nowS} bot={bot} />

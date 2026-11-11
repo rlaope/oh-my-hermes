@@ -59,6 +59,20 @@
 .onb-btn:disabled {
   opacity: 0.5;
 }
+/* the Language row under both cards: label left, the segmented control right */
+.onb-lang {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+}
+.onb-lang-t {
+  font-size: 12px;
+  color: var(--muted);
+}
 .onb-x {
   position: absolute;
   top: 6px;

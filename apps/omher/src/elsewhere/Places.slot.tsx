@@ -5,6 +5,7 @@ import { useStore } from "../state/store";
 import { SourceIcon } from "../ui";
 import { sourceName } from "./format";
 import "./elsewhere.css";
+import { t } from "../i18n";
 
 export const slot = "headerPlaces";
 
@@ -20,7 +21,7 @@ export default function Places({ bot }: SlotProps["headerPlaces"]) {
       className={`ew-places${open ? " on" : ""}`}
       onClick={() => s.togglePanel()}
       aria-expanded={open}
-      title={`Where ${bot.display_name} is`}
+      title={t("pl.where", { bot: bot.display_name })}
       data-testid="places"
     >
       <span className="ew-pd" title={sources.map(sourceName).join(", ")}>
@@ -29,7 +30,7 @@ export default function Places({ bot }: SlotProps["headerPlaces"]) {
         ))}
       </span>
       <span data-testid="places-label">
-        {away.length} other place{away.length === 1 ? "" : "s"}
+        {away.length === 1 ? t("pl.one") : t("pl.many", { n: away.length })}
       </span>
     </button>
   );
