@@ -106,6 +106,11 @@ Rules the code keeps:
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omh`, `pi`, `omp` or `grok`,
   with no arguments, in the folder you picked; stopped when the session is closed or the app quits.
+- **Automations and plugins change only through the bot.** The Automations page reads each profile's
+  `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
+  Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
+  a plugin only with the bot's `plugins.manage`; installs are catalog-only, inspected first and confirmed.
+- **Four languages.** English, Korean, Japanese and Chinese (`src/i18n/`), picked in Settings › General › Language.
 
 ## Develop
 
