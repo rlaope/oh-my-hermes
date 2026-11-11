@@ -156,7 +156,7 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
   const canOpen = n > 0;
 
   let summary = "";
-  if (state === "done") summary = n === 1 ? tr("act.worked1", { t: total }) : tr("act.worked", { t: total, n });
+  if (state === "done") summary = n === 0 ? tr("act.worked0", { t: total }) : n === 1 ? tr("act.worked1", { t: total }) : tr("act.worked", { t: total, n });
   else if (state === "interrupted") summary = tr("act.stopped", { t: total });
   else if (state === "ended") summary = tr("act.ended", { t: total });
   else if (state === "error") summary = `${tr("act.failedAfter", { t: total })}${t.error ? ` · ${t.error}` : ""}`;
