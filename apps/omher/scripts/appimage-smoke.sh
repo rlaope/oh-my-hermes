@@ -110,7 +110,7 @@ if [ -n "$bridge" ]; then
   echo "OBSERVED bridge: pid ${bridge%% *} ${bridge#* }" | sed 's/--token [^ ]*/--token <redacted>/'
 else
   echo "NOT OBSERVED bridge: no process running $bridge_script"; fail=1
-  pgrep -a python | sed 's/^/python process: /; s/--token [^ ]*/--token <redacted>/' 
+  pgrep -a python | sed 's/^/python process: /; s/--token [^ ]*/--token <redacted>/'
 fi
 grep -E '^omher: bridge (pid|ready|failed)' "$work/app.err" | sed 's/^/app log: /'
 
