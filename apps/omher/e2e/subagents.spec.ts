@@ -127,3 +127,38 @@ test("dark and light: the card has no fill and 6px corners, its text is readable
     expect(st).toEqual({ bg: "rgba(0, 0, 0, 0)", img: "none", r: "6px", fs: "12px" });
   }
 });
+
+test("the chat stays at the bottom as the panel opens and the card grows after its turn; scrolling up lets go", async ({ page }) => {
+  // a returning person (a tab picked before) in light: the panel opens by itself mid-turn and narrows the column
+  await page.addInitScript(() => {
+    localStorage.setItem("omher.panelPicked", "1");
+    localStorage.setItem("omher.theme", "light");
+    localStorage.removeItem("omher.resume");
+  });
+  await send(page, "/delegate two lookups");
+  const card = page.getByTestId("fanout-card");
+  await expect(card).toHaveAttribute("data-state", "done");
+  await page.waitForTimeout(300);
+  const gap = () => page.getByTestId("timeline").evaluate((el) => Math.round(el.scrollHeight - el.scrollTop - el.clientHeight));
+  expect(await gap()).toBeLessThan(2);
+  // both rows sit above the composer, uncovered
+  const rows = await card.getByTestId("subagent-row").evaluateAll((els) =>
+    els.map((e) => {
+      const b = e.getBoundingClientRect();
+      return document.elementFromPoint(b.left + 40, b.top + b.height / 2)?.closest('[data-testid="fanout-card"]') !== null;
+    }),
+  );
+  expect(rows).toEqual([true, true]);
+  // the person scrolls up: a later card update does not pull them down
+  await page.getByTestId("composer").fill("/delegate again");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("fanout-card")).toHaveCount(2);
+  // once the turn is over (its own messages are in), the person scrolls up while the subagents still work
+  await expect(page.getByTestId("activity").last()).toHaveAttribute("data-state", "done");
+  await expect(page.getByTestId("fanout-card").last()).toHaveAttribute("data-state", "running");
+  await page.getByTestId("timeline").hover();
+  await page.mouse.wheel(0, -500);
+  await expect.poll(gap).toBeGreaterThan(300);
+  await expect(page.getByTestId("fanout-card").last()).toHaveAttribute("data-state", "done");
+  expect(await gap()).toBeGreaterThan(300);
+});

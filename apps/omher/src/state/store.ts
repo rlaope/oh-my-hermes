@@ -477,20 +477,26 @@ function patchTurnById(chat: Chat, id: string, fn: (t: Turn) => Turn): Chat {
 const SUB_DONE: SubagentState[] = ["done", "failed", "cancelled"];
 export const subagentEnded = (s: Pick<SubagentRow, "state">) => SUB_DONE.includes(s.state);
 
-/** A subagent event into its fan-out: the turn that already shows it (by subagent or delegation id), else the
- *  running turn, else the latest turn that ran a delegate_task (a background fan-out outlives its turn). An
- *  event no turn can take (the chat was opened after the turn) is left to Plans. */
+/** A subagent event into its fan-out. A fan-out is named by its delegation id once Hermes gives one; the turn that
+ *  already shows that delegation takes the event. Otherwise the running turn takes it, and with none running, the
+ *  latest turn whose fan-out holds that subagent still out, else the latest turn that ran a delegate_task (a
+ *  background fan-out outlives its turn). An event no turn can take (the chat opened afterwards) is left to Plans. */
 function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
-  const acts = chat.items.filter((i): i is ActivityItem => i.kind === "activity");
-  const has = (t: Turn) => t.fanouts?.some((f) => f.subs.some((s) => s.id === ev.id) || (!!ev.delegation && f.delegation === ev.delegation));
+  const acts = [...chat.items.filter((i): i is ActivityItem => i.kind === "activity")].reverse();
+  const byDeleg = (t: Turn) => !!ev.delegation && !!t.fanouts?.some((f) => f.delegation === ev.delegation);
+  const outHere = (t: Turn) => !!t.fanouts?.some((f) => f.subs.some((s) => s.id === ev.id && !subagentEnded(s)));
   const target =
-    [...acts].reverse().find((i) => has(i.turn))?.id ??
+    acts.find((i) => byDeleg(i.turn))?.id ??
     chat.turn?.id ??
-    [...acts].reverse().find((i) => i.turn.steps.some((s) => s.name === "delegate_task"))?.id;
+    acts.find((i) => outHere(i.turn))?.id ??
+    acts.find((i) => i.turn.steps.some((s) => s.name === "delegate_task"))?.id;
   if (!target) return chat;
   return patchTurnById(chat, target, (t) => {
     const fanouts = [...(t.fanouts ?? [])];
-    let fi = fanouts.findIndex((f) => f.subs.some((s) => s.id === ev.id) || (!!ev.delegation && f.delegation === ev.delegation));
+    // its fan-out by delegation id; a subagent id is matched only inside a fan-out with no other delegation id
+    let fi = fanouts.findIndex(
+      (f) => (!!ev.delegation && f.delegation === ev.delegation) || (f.subs.some((s) => s.id === ev.id) && (!f.delegation || !ev.delegation)),
+    );
     // a first event names no delegation yet: it joins the newest fan-out still filling with that many children
     if (fi < 0) fi = fanouts.findIndex((f) => !f.delegation && f.count === ev.count && f.subs.length < f.count && !f.subs.some((s) => s.index === ev.index));
     if (fi < 0) {

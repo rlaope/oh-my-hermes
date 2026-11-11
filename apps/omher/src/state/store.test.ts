@@ -607,6 +607,25 @@ describe("subagent events: one fan-out per delegate_task, one row per subagent",
     expect(f[0].subs[1].state).toBe("done");
   });
 
+  it("a second turn's fan-out with the same subagent ids lands in that turn, by its delegation id", () => {
+    const again: BridgeEvent[] = [
+      { event: "turn.start", bot },
+      { event: "tool.start", bot, tool_id: "t2", name: "delegate_task", detail: "2 tasks" },
+      sub("sa-0", 0, g0, "queued"),
+      sub("sa-1", 1, g1, "queued"),
+      sub("sa-0", 0, g0, "running", { delegation: "deleg_second" }),
+      sub("sa-1", 1, g1, "running", { delegation: "deleg_second" }),
+      { event: "turn.end", bot, outcome: "done" },
+      sub("sa-0", 0, g0, "done", { delegation: "deleg_second", summary: "again", seconds: 1 }),
+    ];
+    const s = run(initialState(), [...turn, ...again]);
+    const turns = s.chats[bot].items.flatMap((i) => (i.kind === "activity" ? [i.turn] : []));
+    expect(turns.map((t) => t.fanouts?.map((f) => [f.delegation, f.subs.map((r) => r.state).join(",")]))).toEqual([
+      [["deleg_40dc82e8", "done,done"]],
+      [["deleg_second", "done,running"]],
+    ]);
+  });
+
   it("a subagent event with no turn to take it (chat opened afterwards) changes nothing", () => {
     const s0 = run(initialState(), [{ event: "message", bot, id: "m0", text: "hi" }]);
     expect(run(s0, [sub("sa-9", 0, "x", "running", d)])).toBe(s0);
