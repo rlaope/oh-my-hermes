@@ -1,0 +1,71 @@
+name: omher linux
+
+# omher on Linux x86_64: the same UI and Rust checks as the macOS and Windows jobs in omher.yml, then an
+# unsigned debug AppImage (and .deb) built on Ubuntu 22.04, the release's build host, uploaded as an artifact
+# so a PR's Linux build can be tried by hand. The release workflow builds and signs the real one.
+
+on:
+  pull_request:
+    paths:
+      - "apps/omher/**"
+      - "tests/test_omher_boundary.py"
+      - ".github/workflows/omher-ci.yml"
+      - ".github/workflows/omher-release.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: omher-linux-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Install pnpm
+        run: npm install --global pnpm@11
+      - name: Install the Linux build libraries (WebKitGTK 4.1, tray, SVG, patchelf for the AppImage)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libssl-dev libgtk-3-dev file
+      - name: Install dependencies
+        working-directory: apps/omher
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        working-directory: apps/omher
+        run: pnpm typecheck
+      - name: Unit tests (vitest)
+        working-directory: apps/omher
+        run: pnpm test
+      - name: Rust tests (Tauri shell)
+        working-directory: apps/omher/src-tauri
+        run: cargo test
+      # PRs have no updater signing key, so the debug bundle skips the signed updater artifacts.
+      - name: Build an unsigned debug AppImage and .deb
+        working-directory: apps/omher
+        run: pnpm tauri build --debug --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Check the AppImage starts its runtime and carries the bridge
+        working-directory: apps/omher/src-tauri/target/debug/bundle
+        run: |
+          img=$(ls appimage/*.AppImage)
+          chmod +x "$img"
+          file "$img" | grep -q ELF
+          "$img" --appimage-extract >/dev/null
+          find squashfs-root -path '*bridge/omher_bridge.py' | grep -q .
+          rm -rf squashfs-root
+          ls -la appimage deb
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: omher-linux-x64-debug
+          path: |
+            apps/omher/src-tauri/target/debug/bundle/appimage/*.AppImage
+            apps/omher/src-tauri/target/debug/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
