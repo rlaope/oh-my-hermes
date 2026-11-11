@@ -1,4 +1,5 @@
 import { useStore } from "../state/store";
+import { t } from "../i18n";
 import { slots } from "../features";
 import { CloseIcon, IconButton } from "../ui";
 
@@ -9,9 +10,9 @@ export function SettingsView() {
   return (
     <>
       <header className="head" data-testid="header">
-        <span className="head-title">Settings</span>
+        <span className="head-title">{t("set.title")}</span>
         <div className="head-right" data-testid="head-right">
-          <IconButton label="Close settings" onClick={() => s.closeSettings()}>
+          <IconButton label={t("set.close")} onClick={() => s.closeSettings()}>
             <CloseIcon />
           </IconButton>
         </div>
@@ -20,7 +21,7 @@ export function SettingsView() {
         {Settings ? (
           <Settings page={s.ui.settingsPage} onClose={() => s.closeSettings()} />
         ) : (
-          <p className="plain-note">Settings are not available in this build.</p>
+          <p className="plain-note">{t("set.unavailable")}</p>
         )}
       </div>
     </>

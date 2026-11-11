@@ -9,6 +9,7 @@ import { ChevronRight, Popover } from "../../ui";
 import { ProviderMark } from "./ProviderMark";
 import { PROVIDER_ID, authCommand, authHost, keyProviders } from "./authHost";
 import { countLabel, filterGroups, groupModels } from "./group";
+import { t, tx } from "../../i18n";
 
 /** More models than this get a filter box. */
 const FILTER_AT = 20;
@@ -54,11 +55,11 @@ export function ProvidersPage() {
   }, []);
   return (
     <div className="st-page">
-      <div className="st-gh st-gh0">Providers</div>
+      <div className="st-gh st-gh0">{t("set.providers")}</div>
       <SetupLine />
       <div className="st-grp pv-list" data-testid="providers-list">
         {!opts ? (
-          <div className="pv-empty">{bot?.status === "offline" ? "Not connected" : "Loading…"}</div>
+          <div className="pv-empty">{bot?.status === "offline" ? t("bot.offline") : t("pv.loading")}</div>
         ) : (
           opts.providers.map((p) => (
             <ProviderItem
@@ -75,19 +76,11 @@ export function ProvidersPage() {
       <AddKey slugs={opts?.providers.map((p) => p.slug) ?? []} onPick={addKey} />
       {key && (
         <p className="st-note pv-keynote" data-testid="providers-key-note" role="status">
-          {key.state === "opened" ? (
-            <>
-              Terminal opened with <code>{authCommand(key.provider)}</code>. Enter the key there; this list refreshes when you come back.
-            </>
-          ) : key.state === "manual" ? (
-            <>
-              Run <code>{authCommand(key.provider)}</code> in a terminal.
-            </>
-          ) : (
-            <>
-              Couldn’t open a terminal ({key.error}). Run <code>{authCommand(key.provider)}</code> yourself.
-            </>
-          )}
+          {key.state === "opened"
+            ? tx("pv.opened", { cmd: <code>{authCommand(key.provider)}</code> })
+            : key.state === "manual"
+              ? tx("pv.manual", { cmd: <code>{authCommand(key.provider)}</code> })
+              : tx("pv.openFailed", { error: key.error ?? "", cmd: <code>{authCommand(key.provider)}</code> })}
         </p>
       )}
     </div>
@@ -108,10 +101,10 @@ function AddKey({ slugs, onPick }: { slugs: string[]; onPick: (provider: string)
         onClick={() => setOpen((v) => !v)}
         data-testid="providers-add-key"
       >
-        <span aria-hidden="true">+</span> Add key
+        <span aria-hidden="true">+</span> {t("pv.addKey")}
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} align="left" width={208} label="Add a key for" className="pv-menu">
-        <div className="pv-menu-h">Add an API key for</div>
+      <Popover open={open} onClose={() => setOpen(false)} align="left" width={208} label={t("pv.addKeyFor")} className="pv-menu">
+        <div className="pv-menu-h">{t("pv.addApiKeyFor")}</div>
         <div role="menu" data-testid="providers-key-menu">
           {ids.map((id) => (
             <button
@@ -141,15 +134,15 @@ function SetupLine() {
   const [copied, setCopied] = useState(false);
   return (
     <p className="st-note pv-setup" data-testid="providers-setup">
-      Set up in Hermes · <code>{SETUP_CMD}</code>
+      {tx("pv.setup", { cmd: <code>{SETUP_CMD}</code> })}
       <button
         type="button"
         className="pv-copy"
-        aria-label="Copy command"
+        aria-label={t("pv.copyCmd")}
         data-testid="providers-copy"
         onClick={() => void navigator.clipboard?.writeText(SETUP_CMD).then(() => setCopied(true), () => {})}
       >
-        {copied ? "Copied" : "Copy"}
+        {copied ? t("pv.copied") : t("pv.copy")}
       </button>
     </p>
   );
@@ -190,7 +183,7 @@ function ProviderItem({
           <code className="pv-slug" title={p.slug}>
             {p.slug}
           </code>
-          {inUse && <small className="st-tag pv-use">in use</small>}
+          {inUse && <small className="st-tag pv-use">{t("pv.inUse")}</small>}
           <span className="pv-count">{countLabel(p.models.length)}</span>
           <span className="pv-chev" aria-hidden="true">
             <ChevronRight size={9} />
@@ -200,12 +193,12 @@ function ProviderItem({
           <button
             type="button"
             className="pv-key"
-            aria-label={`Add a ${p.name} API key`}
+            aria-label={t("pv.addApiKey", { name: p.name })}
             title={authCommand(p.slug)}
             onClick={() => onAddKey(p.slug)}
             data-testid={`provider-key-${p.slug}`}
           >
-            Add key
+            {t("pv.addKey")}
           </button>
         )}
       </div>
@@ -224,15 +217,15 @@ function ProviderModels({ id, p, current }: { id: string; p: ModelProvider; curr
         <input
           type="search"
           className="pv-q"
-          placeholder={`Filter ${p.models.length} models`}
-          aria-label={`Filter ${p.name} models`}
+          placeholder={t("pv.filter", { n: p.models.length })}
+          aria-label={t("pv.filterOf", { name: p.name })}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           data-testid={`provider-filter-${p.slug}`}
         />
       )}
-      {p.models.length === 0 && <div className="pv-none">No models</div>}
-      {q.trim() && shown.length === 0 && <div className="pv-none">No model matches “{q.trim()}”</div>}
+      {p.models.length === 0 && <div className="pv-none">{t("pv.noModels")}</div>}
+      {q.trim() && shown.length === 0 && <div className="pv-none">{t("pv.noMatch", { q: q.trim() })}</div>}
       <div className="pv-scroll" data-testid={`provider-scroll-${p.slug}`}>
         {shown.map((g) => (
           <div className="pv-g" key={g.vendor || "-"} data-testid="provider-group">
@@ -249,12 +242,12 @@ function ProviderModels({ id, p, current }: { id: string; p: ModelProvider; curr
                 <span
                   key={e.id}
                   className={`pv-m${e.id === current ? " on" : ""}`}
-                  title={e.id === current ? `${e.id} · in use` : e.id}
+                  title={e.id === current ? `${e.id} · ${t("pv.inUse")}` : e.id}
                   data-testid="provider-model"
                   data-id={e.id}
                 >
                   {e.id === current && (
-                    <svg className="pv-on" width="9" height="9" viewBox="0 0 12 12" aria-label="in use" role="img">
+                    <svg className="pv-on" width="9" height="9" viewBox="0 0 12 12" aria-label={t("pv.inUse")} role="img">
                       <path d="M2.5 6.5l2.3 2.3L9.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}

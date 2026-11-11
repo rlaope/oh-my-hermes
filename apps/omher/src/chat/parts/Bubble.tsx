@@ -6,6 +6,7 @@ import { MediaList } from "./Media";
 import { splitMedia } from "./mediaLines";
 import { SentFiles } from "./Attach";
 import { SkillText } from "./Skills";
+import { t } from "../../i18n";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
  * sent (`MEDIA:` lines) leave the text and show under it in the same column as the bubble, in order; while
@@ -37,10 +38,10 @@ export const Bubble = memo(function Bubble({
         {item.files?.length ? <SentFiles files={item.files} /> : null}
         {item.reply && (
           <div className="msg-reply" data-testid="bubble-reply">
-            Reply target <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
+            {t("bub.replyTarget")} <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
           </div>
         )}
-        {item.error && <div className="msg-err">Not sent · {item.error}</div>}
+        {item.error && <div className="msg-err">{t("bub.notSent", { error: item.error })}</div>}
       </div>
     );
   }

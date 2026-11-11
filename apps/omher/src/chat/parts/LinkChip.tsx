@@ -12,6 +12,7 @@ import { openExternal } from "../../lib/openExternal";
 import { getStore } from "../../state/store";
 import { classifyLink, findUrls, type LinkInfo } from "./linkKinds";
 import "./links.css";
+import { t } from "../../i18n";
 
 // ---- channel names the bot already knows (links.places, read once per bot) ---------------------------
 
@@ -61,7 +62,7 @@ function usePlaces(needed: boolean): LinkPlaces {
 export function placedLabel(info: LinkInfo, p: LinkPlaces): string {
   if (info.service === "slack" && info.meta.channel) {
     const name = p.slack[info.meta.channel];
-    if (name) return info.kind === "thread" ? `${name} · thread` : name;
+    if (name) return info.kind === "thread" ? t("lk.thread", { name }) : name;
   }
   if (info.service === "discord" && info.meta.channel) {
     const name = p.discord[info.meta.channel];
@@ -164,14 +165,14 @@ export function LinksBlock({ urls, pr }: { urls: string[]; pr?: NodePr }) {
   const shown = all ? urls : urls.slice(0, BLOCK_FIRST);
   return (
     <div className="lk-block" data-testid="run-links">
-      <div className="lk-bt">Links</div>
+      <div className="lk-bt">{t("lk.links")}</div>
       <div className="lk-list">
         {shown.map((u) => (
           <LinkChip key={u} url={u} prState={prStateFor(u, pr)} />
         ))}
         {shown.length < urls.length && (
           <button type="button" className="lk-more" onClick={() => setAll(true)} data-testid="run-links-more">
-            Show all {urls.length}
+            {t("lk.showAll", { n: urls.length })}
           </button>
         )}
       </div>

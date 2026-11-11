@@ -8,10 +8,11 @@ import type { Bot } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { Avatar, Popover, Spinner } from "../ui";
 import { connectProfile, refreshBots } from "./bots";
+import { t } from "../i18n";
+import { statusText } from "../settings/Settings.slot";
 
 export const slot = "addBot";
 
-const STATUS: Record<string, string> = { online: "Connected", offline: "Not connected", starting: "Starting…" };
 
 export default function AddBot({ onClose }: SlotProps["addBot"]) {
   const s = useStore();
@@ -27,7 +28,7 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
     setFailed((f) => ({ ...f, [b.name]: "" }));
     try {
       const after = await connectProfile(getStore(), b.name);
-      if (after?.status === "offline") setFailed((f) => ({ ...f, [b.name]: "Hermes could not start it" }));
+      if (after?.status === "offline") setFailed((f) => ({ ...f, [b.name]: t("ab.couldNotStart") }));
     } catch (e) {
       const msg = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
       setFailed((f) => ({ ...f, [b.name]: msg }));
@@ -37,12 +38,12 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
   };
 
   return (
-    <Popover open onClose={onClose} align="left" width={272} label="Add a bot" className="ab-pop">
+    <Popover open onClose={onClose} align="left" width={272} label={t("ab.label")} className="ab-pop">
       <div data-testid="addbot">
-        <div className="ab-h">Connect a Hermes profile</div>
-        <p className="ab-sub">Each Hermes profile is one bot. Nothing is copied.</p>
+        <div className="ab-h">{t("ab.title")}</div>
+        <p className="ab-sub">{t("ab.sub")}</p>
         <div className="ab-list" data-testid="addbot-list">
-          {s.bots.length === 0 && <div className="ab-empty">No Hermes profiles found</div>}
+          {s.bots.length === 0 && <div className="ab-empty">{t("ab.none")}</div>}
           {s.bots.map((b) => {
             const err = failed[b.name];
             return (
@@ -52,13 +53,13 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
                   <span className="ab-n">{b.display_name}</span>
                   <span className="ab-s" title={err || undefined}>
                     <i className={`ab-dot ${b.status}`} aria-hidden="true" />
-                    {err ? "Could not connect" : STATUS[b.status] ?? b.status}
+                    {err ? t("ab.failed") : statusText(b.status)}
                     <span className="ab-p"> · {b.name}</span>
                   </span>
                 </span>
                 {b.status !== "online" &&
                   (busy === b.name ? (
-                    <Spinner size={12} label="Connecting" />
+                    <Spinner size={12} label={t("ab.connecting")} />
                   ) : (
                     <button
                       type="button"
@@ -66,7 +67,7 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
                       onClick={() => void connect(b)}
                       disabled={busy !== null || b.status === "starting"}
                     >
-                      Connect
+                      {t("ab.connect")}
                     </button>
                   ))}
               </div>
@@ -74,8 +75,9 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
           })}
         </div>
         <div className="ab-sep" />
-        <button type="button" className="ab-new" disabled title="Coming in a later version" data-testid="addbot-create">
-          Create a new bot<span className="ab-soon">Soon</span>
+        <button type="button" className="ab-new" disabled title={t("ab.later")} data-testid="addbot-create">
+          {t("ab.create")}
+          <span className="ab-soon">{t("set.soon")}</span>
         </button>
       </div>
     </Popover>

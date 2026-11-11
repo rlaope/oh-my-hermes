@@ -97,11 +97,11 @@ export function PlanHeader({
       )}
       {!started && (
         <div className="ph-act" title={t("graph.prefill")}>
-          <button type="button" onClick={() => prefill(`Start run \`${name}\` now`)} data-testid="run-plan-start">
+          <button type="button" onClick={() => prefill(t("graph.startMsg", { run: `\`${name}\`` }))} data-testid="run-plan-start">
             {t("graph.startNow")}
           </button>
           <span className="ph-dim"> · </span>
-          <button type="button" onClick={() => prefill(`Edit the plan of run \`${name}\`: `)} data-testid="run-plan-edit">
+          <button type="button" onClick={() => prefill(t("graph.editMsg", { run: `\`${name}\`` }))} data-testid="run-plan-edit">
             {t("graph.edit")}
           </button>
           <span className="ph-dim ph-note"> · {t("graph.prefill")}</span>

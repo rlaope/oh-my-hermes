@@ -1,8 +1,9 @@
 // Accounts rules, pure so vitest pins them: row names, plan words, the usage line, the in-use account, and the
 // fill-first auto-switch.
 import type { Account, AccountCli, AccountGroup, UsageProvider } from "../../lib/protocol";
-import { clock } from "../../sidebar/usageFormat";
+import { clock, limitName } from "../../sidebar/usageFormat";
 import type { LoginStatus } from "./native";
+import { t } from "../../i18n";
 
 export const CLIS: AccountCli[] = ["claude", "codex", "pi", "omp", "grok", "gemini"];
 export const CLI_NAME: Record<AccountCli, string> = {
@@ -24,8 +25,6 @@ export const SIGN_IN: Record<AccountCli, "run" | "session" | null> = {
   gemini: null,
 };
 
-export const HEADER_LINE = "Logins omher uses when it runs Claude Code, Codex or pi for you. Bots are set up under Bots.";
-export const AUTO_SWITCH_LINE = "When this account hits its limit, new turns use the next one.";
 
 /** "max_20x" -> "Max 20x", "pro" -> "Pro", "chatgpt" -> "" (a login method is not a plan). */
 export function planName(plan?: string | null): string {
@@ -43,55 +42,57 @@ export function planName(plan?: string | null): string {
  *  the CLI's own login is "This computer", an added one its label, else "Account n". */
 export function rowTitle(a: Account, index: number): string {
   if (a.email) return a.email;
-  if (a.id === "default") return "This computer";
-  if (isCpa(a)) return `CLIProxyAPI login ${index + 1}`;
-  return a.label || `Account ${index + 1}`;
+  if (a.id === "default") return t("acc.thisComputer");
+  if (isCpa(a)) return t("acc.cpaLogin", { n: index + 1 });
+  return a.label || t("acc.accountN", { n: index + 1 });
 }
 
-const METHOD: Record<string, string> = { chatgpt: "ChatGPT login", api_key: "API key", "claude.ai": "Claude login" };
+const METHOD: Record<string, () => string> = {
+  chatgpt: () => t("acc.chatgptLogin"),
+  api_key: () => t("acc.apiKey"),
+  "claude.ai": () => t("acc.claudeLogin"),
+};
 
 /** Where the login lives, the same words for every CLI: "This computer" (the CLI's own) or "Added in omher". When
  *  the title already says "This computer", the login method stands in ("ChatGPT login"). */
 export function rowSource(a: Account & { method?: string | null }): string {
   if (a.source === "cpa") return "CLIProxyAPI";
-  if (a.id !== "default") return "Added in omher";
-  if (a.email) return "This computer";
-  return (a.method && METHOD[a.method]) || "";
+  if (a.id !== "default") return t("acc.addedHere");
+  if (a.email) return t("acc.thisComputer");
+  return (a.method && METHOD[a.method]?.()) || "";
 }
 
 /** The line under the title: the person's own name for the login (when the title is the email or "This computer"),
  *  then source · plan. */
 export function rowSub(a: Account & { method?: string | null; plan?: string }): string {
   const named = a.label && (a.email || a.id === "default") ? a.label : "";
-  return [named, rowSource(a), a.in_cpa ? "also in CLIProxyAPI" : "", a.plan ?? ""].filter(Boolean).join(" · ");
+  return [named, rowSource(a), a.in_cpa ? t("acc.alsoInCpa") : "", a.plan ?? ""].filter(Boolean).join(" · ");
 }
 
 /** A login a local CLIProxyAPI holds (listed from its file name): shown, never used for a session or switched to. */
 export const isCpa = (a: Pick<Account, "source">): boolean => a.source === "cpa";
 
 /** What a CLIProxyAPI row says where a usage line would be: nothing on this computer records its usage. */
-export const CPA_USAGE = "No usage record on this computer";
+export const cpaUsage = () => t("acc.noUsageRecord");
 
 /** The name used outside this page (chat line, session menu): label, else the email, else "#n". */
 export function accountName(a: Account, index: number): string {
   if (a.label) return a.label;
   if (a.email) return a.email;
-  return a.id === "default" ? "This computer" : `#${index + 1}`;
+  return a.id === "default" ? t("acc.thisComputer") : `#${index + 1}`;
 }
-
-const SHORT_WINDOW: Record<string, string> = { "5 hours": "5-hour limit", Weekly: "Weekly limit" };
 
 /** One line per usage window: "5-hour limit: 62% used · resets 21:00". A % only when the record gave one. */
 export function usageLines(u: UsageProvider | null | undefined, now: number): string[] {
   if (!u) return [];
   return u.windows.map((w) => {
-    const name = SHORT_WINDOW[w.label] ?? w.label;
-    if (w.stale) return `${name}: no recent record`;
-    const pct = typeof w.used_percent === "number" ? `${Math.round(w.used_percent)}% used` : "";
+    const name = limitName(w.label);
+    if (w.stale) return t("acc.noRecent", { name });
+    const pct = typeof w.used_percent === "number" ? t("acc.pctUsed", { n: Math.round(w.used_percent) }) : "";
     if (typeof w.resets_at !== "number") return pct ? `${name}: ${pct}` : name;
     const when = clock(w.resets_at, now);
-    if (!pct) return u.state === "limited" ? `${name}: limited until ${when}` : `${name}: resets ${when}`;
-    return `${name}: ${pct} · resets ${when}`;
+    if (!pct) return u.state === "limited" ? t("acc.limitedUntilOf", { name, when }) : t("acc.resetsOf", { name, when });
+    return t("acc.pctResets", { name, pct, when });
   });
 }
 
@@ -118,9 +119,9 @@ export function mergeRow(a: Account, st: LoginStatus | null | undefined): Row {
 /** The pill on a row: "In use" (only when the CLI has two or more logins to choose from), "Limited until 14:00",
  *  "Not signed in", or nothing. */
 export function pill(r: Row, inUse: boolean, now: number, logins = 2): string {
-  if (!r.signedIn) return "Not signed in";
-  if (r.state === "limited") return typeof r.resets_at === "number" && r.resets_at > now ? `Limited until ${clock(r.resets_at, now)}` : "Limited";
-  return inUse && logins > 1 ? "In use" : "";
+  if (!r.signedIn) return t("acc.notSignedIn");
+  if (r.state === "limited") return typeof r.resets_at === "number" && r.resets_at > now ? t("acc.limitedUntil", { when: clock(r.resets_at, now) }) : t("acc.limited");
+  return inUse && logins > 1 ? t("acc.inUse") : "";
 }
 
 /** The account a new session of `cli` starts with, for the SESSIONS agent menu (null: the CLI's own login). */
@@ -154,8 +155,8 @@ export function nextAccount(
 export function switchNote(g: AccountGroup, from: number, to: number, now: number): string {
   const a = g.accounts[from];
   const b = g.accounts[to];
-  const reset = typeof a.resets_at === "number" && a.resets_at > now ? `, resets ${clock(a.resets_at, now)}` : "";
-  return `Switched ${CLI_NAME[g.cli]} to ${accountName(b, to)} for new sessions (limit on ${accountName(a, from)}${reset})`;
+  const reset = typeof a.resets_at === "number" && a.resets_at > now ? t("acc.resetsAt", { when: clock(a.resets_at, now) }) : "";
+  return t("acc.switched", { cli: CLI_NAME[g.cli], to: accountName(b, to), from: accountName(a, from), reset });
 }
 
 /** Per-CLI auto-switch, on unless turned off (saved on this computer). */

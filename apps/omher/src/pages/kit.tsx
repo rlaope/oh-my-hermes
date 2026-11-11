@@ -5,6 +5,7 @@ import "./pages.css";
 import type { Bot } from "../lib/protocol";
 import { hhmm } from "../app/time";
 import { lang, t } from "../i18n";
+import { composing } from "../lib/ime";
 import { ArrowUp, Avatar, ChevronDown, Popover } from "../ui";
 
 /** The bot chip: its face and name; a click lists every bot to pick from. */
@@ -97,7 +98,7 @@ export function AskBox({
         aria-label={bot ? t("ask.to", { bot: bot.display_name }) : t("ask.pickBot")}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing && ready) {
+          if (e.key === "Enter" && !composing(e) && ready) {
             e.preventDefault();
             onSend();
           }

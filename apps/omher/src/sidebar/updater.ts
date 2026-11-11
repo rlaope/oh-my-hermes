@@ -2,6 +2,7 @@
 // the `omher-latest` release's latest.json on GitHub) and installs only a build signed with the key whose
 // public half is pinned there. Outside Tauri (browser dev, e2e) there is no updater, unless the page sets
 // `window.__omherUpdateHost`, the e2e stand-in.
+import { t } from "../i18n";
 
 /** Download progress: bytes so far and the total when the server sent one. */
 export type UpdateProgress = { done: number; total: number | null };
@@ -63,6 +64,6 @@ export function percent(p: UpdateProgress): number | null {
 export function shortError(e: unknown): string {
   const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";
   const line = raw.split("\n")[0].trim();
-  if (!line) return "Update failed";
+  if (!line) return t("upd.failed");
   return line.length > 80 ? `${line.slice(0, 79)}…` : line;
 }

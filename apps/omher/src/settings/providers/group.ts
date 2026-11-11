@@ -2,6 +2,7 @@
 // vendor groups for the Providers page: one group per `vendor/` prefix in first-seen order, the prefix stripped
 // inside the group and a `:free`-style suffix split off as a tag. The current model leads its group, and its
 // group leads the list.
+import { t } from "../../i18n";
 
 export interface ModelEntry {
   /** the full id as the provider lists it */
@@ -57,4 +58,4 @@ export function filterGroups(groups: ModelGroup[], q: string): ModelGroup[] {
     .filter((g) => g.models.length > 0);
 }
 
-export const countLabel = (n: number) => (n === 0 ? "No models" : `${n} ${n === 1 ? "model" : "models"}`);
+export const countLabel = (n: number) => (n === 0 ? t("pv.noModels") : n === 1 ? t("pv.model1") : t("pv.models", { n }));

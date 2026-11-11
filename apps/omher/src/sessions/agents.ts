@@ -1,4 +1,5 @@
 import { pickTitle, type TitleSource } from "./titles";
+import { t } from "../i18n";
 
 // The agent programs a session can run, and the pure helpers the sidebar and the session views share.
 // The list is fixed and mirrors `AGENTS` in src-tauri/src/sessions.rs (the shell refuses anything else).
@@ -31,9 +32,9 @@ export const AGENTS: readonly AgentDef[] = [
 /** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
  *  conversation or starts the agent's own terminal UI fresh. */
 export function terminalNote(agent: AgentId): string {
-  if (agent === "claude") return "Terminal view: Claude Code's own terminal, continuing this conversation (--resume). Back to chat continues it too.";
-  if (agent === "omh") return "Terminal view: starts oh-my-hermes in a new terminal; this chat stays as it is.";
-  return `Terminal view: starts ${agentDef(agent).label} fresh in its own terminal; this chat stays as it is.`;
+  if (agent === "claude") return t("ss.termClaude");
+  if (agent === "omh") return t("ss.termOmh");
+  return t("ss.termFresh", { agent: agentDef(agent).label });
 }
 
 /** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
@@ -41,7 +42,7 @@ export function terminalNote(agent: AgentId): string {
  *  inside the ChatGPT (or Codex) desktop app on macOS is detected. */
 export const INSTALL: Record<AgentId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
-  codex: "npm i -g @openai/codex (the Codex bundled in the ChatGPT app is found too)",
+  codex: "npm i -g @openai/codex",
   omo: "npm i -g omo-ai",
   dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
@@ -53,7 +54,8 @@ export const INSTALL: Record<AgentId, string> = {
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. */
 export function missingNote(agent: AgentId): string {
   const how = INSTALL[agent];
-  return `${agentDef(agent).program} was not found on this computer · ${how.startsWith("see ") ? how : `install: ${how}`}`;
+  const install = how.startsWith("see ") ? t("ss.seeDocs", { agent }) : t("ss.installHow", { cmd: how }) + (agent === "codex" ? t("ss.codexBundled") : "");
+  return t("ss.missing", { program: agentDef(agent).program, how: install });
 }
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
@@ -172,7 +174,7 @@ export function rowModel(
   // a draft: "New session" over the folder it will start in; it has no name yet and nothing runs, so nothing is live
   if (s.status === "draft")
     return {
-      title: "New session",
+      title: t("ss.newTitle"),
       titleSource: "folder",
       folder: folderName(s.cwd),
       sub: s.cwd ? tildePath(s.cwd, ctx?.home ?? null) : label,
@@ -188,14 +190,14 @@ export function rowModel(
     needsYou || s.status === "running"
       ? ""
       : s.paused
-        ? "Paused"
+        ? t("ss.paused")
         : s.status === "starting"
-        ? "Starting…"
+        ? t("ss.starting")
         : s.status === "failed"
-          ? "Could not start"
+          ? t("ss.couldNotStart")
           : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
-            ? "Ended"
-            : `Ended · exit ${s.exitCode}`;
+            ? t("ss.ended")
+            : t("ss.endedExit", { code: s.exitCode });
   // A chat is live while a turn runs; a terminal while its program runs.
   const live = s.view === "chat" && chat ? alive && chat.turn : alive;
   const folder = folderName(s.cwd);

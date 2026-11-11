@@ -6,10 +6,11 @@ import type { SlotProps } from "../features";
 import { useStore } from "../state/store";
 import { hhmm } from "../app/time";
 import { ChevronDown, ChevronRight } from "../ui";
+import { t, type Key } from "../i18n";
 
 export const slot = "routineLine";
 
-const WORD: Record<string, string> = {
+const WORD: Record<string, "done" | "failed"> = {
   ok: "done",
   success: "done",
   done: "done",
@@ -18,9 +19,15 @@ const WORD: Record<string, string> = {
   failed: "failed",
   failure: "failed",
 };
+const WORD_KEY: Record<"done" | "failed", Key> = { done: "rt.done", failed: "rt.failed" };
 
 export const statusWord = (status: string): string => WORD[status.trim().toLowerCase()] ?? (status.trim() || "done");
 export const isFailure = (status: string): boolean => statusWord(status) === "failed";
+/** The status word in the current language; a status omher does not know stays as Hermes wrote it. */
+const statusText = (status: string) => {
+  const w = WORD[status.trim().toLowerCase()] ?? (status.trim() ? null : "done");
+  return w ? t(WORD_KEY[w]) : status.trim();
+};
 
 export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
   const s = useStore();
@@ -28,7 +35,7 @@ export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
   // The freshest last_status the bridge knows for this routine, else what the event carried.
   const known = s.routines[bot]?.find((r) => r.id === item.routine_id)?.last_status;
   const last = (known ?? item.status ?? "").toString();
-  const word = statusWord(item.status);
+  const word = statusText(item.status);
   const at = hhmm(new Date(item.ts * 1000));
 
   return (
@@ -38,13 +45,13 @@ export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
         className="routine-row"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        title={open ? "Hide last status" : "Show last status"}
+        title={open ? t("rt.hide") : t("rt.show")}
       >
         <span className="routine-ic" aria-hidden>
           ⏱
         </span>
         <span className="routine-t">
-          Routine · <span className="routine-name">{item.name}</span> ·{" "}
+          {t("rt.routine")} · <span className="routine-name">{item.name}</span> ·{" "}
           <span className={isFailure(item.status) ? "routine-bad" : undefined}>{word}</span> {at}
         </span>
         <span className="routine-chev" aria-hidden>
@@ -53,8 +60,8 @@ export default function RoutineLine({ bot, item }: SlotProps["routineLine"]) {
       </button>
       {open && (
         <div className="routine-detail" data-testid="routine-detail">
-          <span className="routine-k">Last status</span>
-          <span className={isFailure(last) ? "routine-bad" : undefined}>{last || "unknown"}</span>
+          <span className="routine-k">{t("rt.last")}</span>
+          <span className={isFailure(last) ? "routine-bad" : undefined}>{last || t("rt.unknown")}</span>
         </div>
       )}
     </div>

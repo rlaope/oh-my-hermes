@@ -9,6 +9,7 @@ import { Avatar, LiveRing, Popover, SourceIcon } from "../ui";
 import { sourceName, workingFor } from "./format";
 import { useNow } from "./useNow";
 import "./elsewhere.css";
+import { t } from "../i18n";
 
 export const slot = "elsewhereLine";
 
@@ -37,7 +38,7 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
   const a = item.away;
   const now = useNow(a.running);
   const src = sourceName(a.source);
-  const title = a.label?.trim() || a.title?.trim() || `${src} session`;
+  const title = a.label?.trim() || a.title?.trim() || t("aw.session", { app: src });
   // cron has no thread to open: name the job instead ("Cron · superagent-observe")
   const job = a.source === "cron" ? (a.label || a.title || "").split(" · ")[0].trim() : "";
   const where = a.place ? `${src} ${a.place}` : job ? `${src} · ${job}` : src;
@@ -49,7 +50,7 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
   };
   // still working there: the same live ring as the sidebar, around the place's mark
   const mark = (
-    <LiveRing on={a.running} size={12} gap={4} label={`${src} session working`} testId="away-ring" seed={a.id}>
+    <LiveRing on={a.running} size={12} gap={4} label={t("aw.ringWorking", { app: src })} testId="away-ring" seed={a.id}>
       <SourceIcon source={a.source} size={12} />
     </LiveRing>
   );
@@ -57,7 +58,7 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
     <a
       className="ew-link"
       href={a.url}
-      title={`Open in ${src}`}
+      title={t("pn.openIn", { app: src })}
       data-testid="away-link"
       onClick={(e) => {
         e.preventDefault();
@@ -84,7 +85,7 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
           {link}
           {a.running && (
             <span className="ew-working" data-testid="away-time">
-              working · {workingFor(a.started_at, now)}
+              {t("aw.working", { t: workingFor(a.started_at, now) })}
             </span>
           )}
         </div>
@@ -96,27 +97,27 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
                 className="ew-act"
                 onClick={replyThere}
                 data-testid="reply-there"
-                title="Point your next message at this thread"
+                title={t("aw.replyTip")}
               >
-                <ReplyIcon /> Reply there
+                <ReplyIcon /> {t("aw.reply")}
               </button>
             )}
             <span className="ew-menu-w">
               <button
                 type="button"
                 className="ew-act ew-act-ic"
-                aria-label="More"
+                aria-label={t("aw.more")}
                 aria-expanded={menu}
-                title="More"
+                title={t("aw.more")}
                 onClick={() => setMenu((v) => !v)}
                 data-testid="away-more"
               >
                 <MoreIcon />
               </button>
-              <Popover open={menu} onClose={() => setMenu(false)} align="right" width={176} label="Thread actions" className="ew-menu">
+              <Popover open={menu} onClose={() => setMenu(false)} align="right" width={176} label={t("aw.actions")} className="ew-menu">
                 {chip && (
                   <button type="button" className="ew-mi" onClick={replyThere} data-testid="menu-reply-there">
-                    <ReplyIcon /> Reply there
+                    <ReplyIcon /> {t("aw.reply")}
                   </button>
                 )}
                 {a.url && (
@@ -129,7 +130,7 @@ const AwayBubble = memo(function AwayBubble({ bot, item, face }: SlotProps["else
                     }}
                     data-testid="menu-open"
                   >
-                    <SourceIcon source={a.source} size={12} /> Open in {src}
+                    <SourceIcon source={a.source} size={12} /> {t("pn.openIn", { app: src })}
                   </button>
                 )}
               </Popover>

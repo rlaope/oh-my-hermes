@@ -81,21 +81,21 @@ export function NodeDrawer({
   const ask = () => {
     const s = getStore();
     if (s.getState().ui.runsFull) s.actions.setRunsFull(false);
-    s.actions.prefill(`Retry \`${node.id}\` in run \`${runName(runId)}\``);
+    s.actions.prefill(tr("rn.retryMsg", { node: `\`${node.id}\``, run: `\`${runName(runId)}\`` }));
   };
   return (
     <div className={`rn-drawer${bad ? " bad" : ""}`} data-testid="run-drawer" data-node={node.id}>
       <div className="rn-dh">
         <b title={node.label}>{node.label}</b>
-        <IconButton label="Close node" onClick={onClose}>
+        <IconButton label={tr("rn.close")} onClick={onClose}>
           <CloseIcon />
         </IconButton>
       </div>
       <div className="rn-df">
         <span className={`rn-word s-${node.state}`} data-testid="run-state-word">
-          {STATE_WORD[node.state]}
+          {tr(STATE_WORD[node.state])}
         </span>
-        <span data-testid="run-attempt">{node.attempts.length ? `attempt ${last.n} of ${node.attempts.length}` : "not started"}</span>
+        <span data-testid="run-attempt">{node.attempts.length ? tr("rn.attempt", { n: last.n, total: node.attempts.length }) : tr("rn.notStarted")}</span>
         {ran.text && (
           <span className="rn-ran" data-testid="run-facts">
             <NodeMark mark={ran.mark} />
@@ -105,7 +105,7 @@ export function NodeDrawer({
         {facts && <span>{facts}</span>}
         {node.pr && <DrawerPr pr={node.pr} />}
         {/* the category is in the facts; this line is why the node went out under it */}
-        {node.routeWhy && <span className="rn-routeline">route: {node.routeWhy}</span>}
+        {node.routeWhy && <span className="rn-routeline">{tr("rn.route", { why: node.routeWhy })}</span>}
       </div>
       {parents.length > 0 && (
         <div className="rn-df rn-after" data-testid="run-after">
@@ -114,7 +114,7 @@ export function NodeDrawer({
       )}
       {last?.reason && (
         <div className={`rn-reason${bad ? " bad" : ""}`} data-testid="run-reason">
-          {bad && <b>Why: </b>}
+          {bad && <b>{tr("rn.why")}</b>}
           {last.reason}
         </div>
       )}
@@ -122,7 +122,7 @@ export function NodeDrawer({
         <ol className="rn-atts">
           {node.attempts.slice(0, -1).map((a) => (
             <li key={a.n}>
-              #{a.n} {a.outcome || "open"}
+              #{a.n} {a.outcome || tr("rn.open")}
               {a.model ? ` · ${modelName(a.model)}` : ""}
               {a.reason && <span> · {a.reason}</span>}
             </li>
@@ -138,19 +138,19 @@ export function NodeDrawer({
           </div>
           {long && (
             <button type="button" className="pn-more" onClick={() => setAll((v) => !v)} data-testid="run-handoff-more">
-              {all ? "Show less" : "Show all"}
+              {all ? tr("pn.less") : tr("pn.showAll")}
             </button>
           )}
         </>
       ) : (
-        !node.summary && <div className="rn-none">No handoff written.</div>
+        !node.summary && <div className="rn-none">{tr("rn.noHandoff")}</div>
       )}
       {bad && !isCliRun(runId) && (
         <div className="rn-ask">
           <button type="button" className="rn-askb" onClick={ask} data-testid="run-ask">
-            Ask in chat
+            {tr("rn.ask")}
           </button>
-          <span>Puts a retry request in the message box. Nothing is sent.</span>
+          <span>{tr("rn.askHint")}</span>
         </div>
       )}
     </div>

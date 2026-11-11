@@ -12,6 +12,7 @@ import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
+import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, folderName, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
@@ -118,7 +119,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         }}
       >
         <div className="ss-h">{t("sessions.new")}</div>
-        {agents === null && <div className="ss-empty">Looking for agents…</div>}
+        {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
         {(agents ?? []).map((a) => {
           const def = agentDef(a.id);
           const account = sessionAccountSuffix(accounts.groups, a.id);
@@ -226,7 +227,7 @@ export function SessionList() {
             key={rec.id}
             className="ss-row ss-confirm"
             role="group"
-            aria-label={`Stop ${agentDef(rec.agent).label} in ${folderName(rec.cwd)}?`}
+            aria-label={t("ss.stopIn", { agent: agentDef(rec.agent).label, folder: folderName(rec.cwd) })}
             data-testid={`session-confirm-${rec.id}`}
             onKeyDown={(e) => {
               if (e.key !== "Escape") return;
@@ -236,10 +237,10 @@ export function SessionList() {
             }}
           >
             <span className="ss-q" title={rec.cwd}>
-              Stop {agentDef(rec.agent).label}?
+              {t("ss.stopQ", { agent: agentDef(rec.agent).label })}
             </span>
             <button type="button" className="ss-btn" onClick={() => cancel(rec.id)} autoFocus>
-              Cancel
+              {t("ss.cancel")}
             </button>
             <button
               type="button"
@@ -250,7 +251,7 @@ export function SessionList() {
               }}
               data-testid="session-stop"
             >
-              Stop
+              {t("ss.stop")}
             </button>
           </div>
         ) : (
@@ -280,8 +281,8 @@ function SessionMenu({ at, name, onRename, onClose, onDismiss }: { at: { x: numb
     return () => document.removeEventListener("mousedown", onDown);
   }, [onDismiss]);
   const items: [string, string, () => void][] = [
-    ["Rename", "session-rename", onRename],
-    ["Close session", "session-menu-close", onClose],
+    [t("ss.rename"), "session-rename", onRename],
+    [t("ss.close"), "session-menu-close", onClose],
   ];
   return (
     <div
@@ -289,7 +290,7 @@ function SessionMenu({ at, name, onRename, onClose, onDismiss }: { at: { x: numb
       className="row-menu"
       style={{ left: at.x, top: at.y }}
       role="menu"
-      aria-label={`${name} actions`}
+      aria-label={t("ss.actions", { name })}
       data-testid="session-row-menu"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -348,13 +349,13 @@ function NameInput({ initial, auto, onDone }: { initial: string; auto: boolean; 
       className="ss-name-in"
       defaultValue={initial}
       maxLength={80}
-      aria-label="Session name"
-      placeholder="Automatic name"
+      aria-label={t("ss.name")}
+      placeholder={t("ss.autoName")}
       spellCheck={false}
       data-testid="session-rename-input"
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+        if (e.key === "Enter" && !composing(e)) {
           e.preventDefault();
           finish(true);
         } else if (e.key === "Escape") {
@@ -387,10 +388,10 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
   };
   const body = (
     <>
-      <LiveRing on={ring} size={34} gap={3.5} label="Answering" seed={rec.id}>
+      <LiveRing on={ring} size={34} gap={3.5} label={t("ss.answering")} seed={rec.id}>
         <span className="ss-av">
           <AgentMark agent={rec.agent} size={18} />
-          {dot && <span className="live-dot" data-testid="live-dot" aria-label="running" />}
+          {dot && <span className="live-dot" data-testid="live-dot" aria-label={t("ss.liveDot")} />}
         </span>
       </LiveRing>
       <span className="bot-m">
@@ -419,7 +420,7 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
           )}
           {m.needsYou ? (
             <span className="bot-t wait" data-testid="bot-time">
-              waiting
+              {t("ss.waiting")}
             </span>
           ) : busySince !== null ? (
             <span className="bot-t busy" data-testid="bot-time">
@@ -438,7 +439,7 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
           {ring && <TypingDots size={3} testId="bot-typing" />}
           {m.needsYou && (
             // the bot row's plain amber dot: no number (the strip carries the count)
-            <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />
+            <span className="needs-dot" data-testid="needs" role="status" aria-label={t("ss.needsAnswer")} title={t("ss.needsAnswer")} />
           )}
         </span>
       </span>
@@ -478,7 +479,7 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
         </button>
       )}
       {!editing && (
-        <button type="button" className="ss-x" aria-label="Close session" title="Close session" onClick={onClose} data-testid="session-close">
+        <button type="button" className="ss-x" aria-label={t("ss.close")} title={t("ss.close")} onClick={onClose} data-testid="session-close">
           <CloseIcon />
         </button>
       )}

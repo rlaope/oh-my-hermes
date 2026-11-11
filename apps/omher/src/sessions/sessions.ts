@@ -27,6 +27,7 @@ import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, s
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
+import { t as tr } from "../i18n";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -309,7 +310,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const proc: ChatProc = { kind: "folder", bot };
     procs.set(id, proc);
     try {
-      if (!bot) throw new Error("No Hermes bot to run oh-my-hermes on");
+      if (!bot) throw new Error(tr("ss.noBot"));
       const res = await store().actions.folderOpen(bot, r.cwd);
       proc.fid = res.session;
       if (procs.get(id) !== proc) {
@@ -330,16 +331,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const input = async (id: string, i: ChatInput) => {
     const proc = procs.get(id);
     const r = rec(id);
-    if (!proc || !r) throw new Error(`${r ? agentDef(r.agent).label : "The agent"} is not running`);
+    if (!proc || !r) throw new Error(tr("ss.agentNotRunning", { agent: r ? agentDef(r.agent).label : tr("ss.theAgent") }));
     if (proc.kind === "agent") {
-      if (proc.hostId === undefined) throw new Error("still starting");
+      if (proc.hostId === undefined) throw new Error(tr("ss.stillStarting"));
       await host.chatInput(proc.hostId, i);
       return;
     }
     const a = store().actions;
     const bot = proc.bot!;
     const fid = proc.fid;
-    if (!fid) throw new Error("still starting");
+    if (!fid) throw new Error(tr("ss.stillStarting"));
     if (i.kind === "send") await a.folderSend(bot, fid, i.text);
     else if (i.kind === "interrupt") await a.folderInterrupt(bot, fid);
     else if (i.kind === "approve") await a.folderApprove(bot, fid, i.request_id, i.choice);
@@ -372,7 +373,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     setChatRoute(key, {
       // folder first: it tells sessions apart, and a narrow Needs-you row keeps it when the name is cut
-      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentDef(r.agent).label}` : "Session",
+      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentDef(r.agent).label}` : tr("ss.session"),
       open: () => store().actions.openSession(id),
       send: (text) => send(id, text),
       interrupt: () => input(id, { kind: "interrupt" }),
@@ -393,7 +394,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     for (const [id, p] of procs) {
       if (p.kind === "folder" && p.bot === ev.bot && p.fid === ev.session) {
         procs.delete(id);
-        patchRec(id, { status: "exited", exitCode: null, error: ev.reason || "Hermes closed this chat" });
+        patchRec(id, { status: "exited", exitCode: null, error: ev.reason || tr("ss.hermesClosed") });
       }
     }
   });
@@ -532,7 +533,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         (code) => {
           t.closed = true;
           if (!ofChat) patchRec(id, { status: "exited", exitCode: code });
-          t.term.write(`\r\n\x1b[2m[${agentDef(r.agent).label} ended${code ? ` with exit ${code}` : ""}]\x1b[0m\r\n`);
+          t.term.write(`\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: agentDef(r.agent).label, code }) : tr("ss.termEnded", { agent: agentDef(r.agent).label })}]\x1b[0m\r\n`);
         },
         resume,
         accountOf(r),
@@ -809,7 +810,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         await input(id, { kind: "model", model: option.id });
       }
     } catch (e) {
-      note(id, `Model not changed: ${errText(e)}`);
+      note(id, tr("ss.modelNotChanged", { error: errText(e) }));
     }
   };
 

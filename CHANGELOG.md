@@ -12,6 +12,23 @@ All notable changes will be documented here.
   the agent CLIs, sign-ins, the installer) now gets the host environment, and
   the PR CI starts the built AppImage under Xvfb and fails unless the app, its
   window and its bridge are all up. (#2778)
+- **omher reads fully in Chinese, Korean and Japanese, and typing in them is
+  safe.** Every word omher itself shows (Settings and its pages, Accounts,
+  Providers, the sidebar, the composer and model picker, approval and question
+  cards, the activity line, the right panel, SESSIONS, the setup screen, link
+  chip words, time units and dates) is now a key in all four dictionaries
+  (285 -> 873 keys), with Simplified Chinese written for a developer in
+  mainland China; brand, model, CLI and command names stay in Latin, and what
+  the bots say is never translated. Hard-coded UI literals in `src/**/*.tsx`
+  went from 451 to 0, and a vitest guard now fails on a new one. Enter that
+  commits an IME composition (pinyin, kana, hangul) no longer saves a bot
+  rename, picks a model, or submits any other field. A first run with no
+  language chosen takes it from the system's languages (any `zh-*` is
+  Chinese) and shows a Language row on the first-run card; an install that
+  already ran stays English until the person picks one. `<html lang>` follows
+  the language (`zh-CN`, `ja`, `ko`), dates follow it too, and `--font` falls
+  back to PingFang SC, Hiragino Sans GB, Microsoft YaHei and Noto Sans CJK
+  (and their Japanese and Korean siblings).
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt

@@ -25,6 +25,7 @@ import qwen from "../assets/agents/qwen-color.svg?raw";
 import roocode from "../assets/agents/roocode.svg?raw";
 import trae from "../assets/agents/trae-color.svg?raw";
 import windsurf from "../assets/agents/windsurf.svg?raw";
+import { t } from "../i18n";
 
 export type AgentMark =
   | { kind: "svg"; id: string; title: string; viewBox: string; body: string; mono: boolean; evenodd: boolean }
@@ -110,7 +111,7 @@ export function agentIcon(id: string | null | undefined): AgentMark {
   const mark = MARKS[ALIASES[key] ?? key];
   if (mark) return mark;
   const name = (id ?? "").trim();
-  return { kind: "letter", id: null, title: name || "Unknown", letter: (name.match(/[a-z0-9]/i)?.[0] ?? "?").toUpperCase() };
+  return { kind: "letter", id: null, title: name || t("mark.unknown"), letter: (name.match(/[a-z0-9]/i)?.[0] ?? "?").toUpperCase() };
 }
 
 export function AgentIcon({

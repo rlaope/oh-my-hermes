@@ -5,26 +5,28 @@ import type { Bot, BotInfo } from "../lib/protocol";
 import { useStore } from "../state/store";
 import { Avatar, SourceIcon, Spinner } from "../ui";
 import { shortTime } from "../app/time";
+import { lang, t, tx } from "../i18n";
+import { composing } from "../lib/ime";
 
 const SIDE = 256;
 const KINDS = ["image/png", "image/jpeg", "image/webp"];
 
 /** Center-crop to a square and scale to 256px PNG, so any photo fits Hermes' 2 MB cap and reads round. */
 export async function squarePicture(file: Blob): Promise<string> {
-  if (!KINDS.includes(file.type)) throw new Error("Use a PNG, JPEG or WebP picture");
+  if (!KINDS.includes(file.type)) throw new Error(t("id.picKinds"));
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((res, rej) => {
       const i = new Image();
       i.onload = () => res(i);
-      i.onerror = () => rej(new Error("Could not read that picture"));
+      i.onerror = () => rej(new Error(t("id.picUnreadable")));
       i.src = url;
     });
     const side = Math.min(img.naturalWidth, img.naturalHeight);
     const c = document.createElement("canvas");
     c.width = c.height = SIDE;
     const ctx = c.getContext("2d");
-    if (!ctx) throw new Error("Could not read that picture");
+    if (!ctx) throw new Error(t("id.picUnreadable"));
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, SIDE, SIDE);
     return c.toDataURL("image/png");
@@ -104,13 +106,13 @@ export function AvatarEditor({ bot, ed }: { bot: Bot; ed: ReturnType<typeof useP
           void apply(e.dataTransfer.files?.[0]);
         }}
         disabled={busy}
-        title="Change picture"
-        aria-label={`Change ${bot.display_name}'s picture`}
+        title={t("id.changePic")}
+        aria-label={t("id.changePicOf", { bot: bot.display_name })}
         data-testid="avatar-edit"
       >
         <Avatar bot={bot.name} size={64} />
         <span className="be-av-cover" aria-hidden="true">
-          {busy ? <Spinner size={14} label="Saving picture" /> : <CameraIcon />}
+          {busy ? <Spinner size={14} label={t("id.savingPic")} /> : <CameraIcon />}
         </span>
       </button>
       {ed.fileInput}
@@ -123,11 +125,11 @@ export function PictureActions({ ed }: { ed: ReturnType<typeof usePictureEditor>
   return (
     <>
       <button type="button" className="be-link" onClick={ed.pick} disabled={ed.busy} data-testid="avatar-change">
-        Change picture
+        {t("id.changePic")}
       </button>
       {ed.own && (
         <button type="button" className="be-link" onClick={() => void ed.reset()} disabled={ed.busy} data-testid="avatar-reset">
-          Use default face
+          {t("id.defaultFace")}
         </button>
       )}
       {ed.err && (
@@ -177,7 +179,7 @@ export function NameEditor({ bot }: { bot: Bot }) {
     return (
       <div className="be-name">
         <b data-testid="bot-name">{bot.display_name}</b>
-        <button type="button" className="be-pen" onClick={() => setEditing(true)} aria-label="Rename" title="Rename" data-testid="rename">
+        <button type="button" className="be-pen" onClick={() => setEditing(true)} aria-label={t("id.rename")} title={t("id.rename")} data-testid="rename">
           <PenIcon />
         </button>
       </div>
@@ -189,12 +191,13 @@ export function NameEditor({ bot }: { bot: Bot }) {
         value={value}
         maxLength={64}
         placeholder={bot.name}
-        aria-label="Bot name"
+        aria-label={t("id.botName")}
         data-testid="rename-input"
         disabled={busy}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") void save();
+          // Enter that commits an IME composition (Chinese, Japanese, Korean input) is not a save
+          if (e.key === "Enter" && !composing(e)) void save();
           if (e.key === "Escape") {
             setEditing(false);
             setErr("");
@@ -202,10 +205,10 @@ export function NameEditor({ bot }: { bot: Bot }) {
         }}
       />
       <button type="button" className="st-btn" onClick={() => void save()} disabled={busy} data-testid="rename-save">
-        {busy ? "Saving…" : "Save"}
+        {busy ? t("id.saving") : t("id.save")}
       </button>
       <button type="button" className="be-link quiet" onClick={() => setEditing(false)} disabled={busy}>
-        Cancel
+        {t("id.cancel")}
       </button>
       <div className="be-hint">
         {err ? (
@@ -213,9 +216,7 @@ export function NameEditor({ bot }: { bot: Bot }) {
             {err}
           </span>
         ) : (
-          <>
-            Only the name apps show changes. The profile stays <code>{bot.name}</code>; leave it empty to use that.
-          </>
+          tx("id.nameHint", { id: <code>{bot.name}</code> })
         )}
       </div>
     </div>
@@ -228,7 +229,7 @@ export const placeName = (src: string) => SOURCE[src] ?? src.charAt(0).toUpperCa
 export function sinceLabel(ts: number | null): string {
   if (!ts) return "—";
   const d = new Date(ts * 1000);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(lang(), { month: "short", day: "numeric", year: "numeric" });
 }
 
 /** Read-only facts for the bot page: where it works (sessions per place), skills, routines, since when. */
@@ -254,19 +255,19 @@ export function BotFacts({ info }: { info: BotInfo | null | undefined }) {
   if (info === undefined)
     return (
       <div className="be-facts" data-testid="bot-facts">
-        <Spinner size={12} label="Loading" />
+        <Spinner size={12} label={t("id.loading")} />
       </div>
     );
-  if (info === null) return <div className="be-facts muted">Could not read this profile.</div>;
+  if (info === null) return <div className="be-facts muted">{t("id.unreadable")}</div>;
   const places = Object.entries(info.places);
   const total = places.reduce((a, [, n]) => a + n, 0);
   return (
     <div className="be-facts" data-testid="bot-facts">
       <div className="be-stats">
-        <Stat n={total} label={total === 1 ? "session elsewhere" : "sessions elsewhere"} />
-        <Stat n={info.skills} label={info.skills === 1 ? "skill" : "skills"} />
-        <Stat n={info.routines} label={info.routines === 1 ? "routine" : "routines"} />
-        <Stat text={info.last_active ? shortTime(info.last_active) : "—"} label="last active" />
+        <Stat n={total} label={total === 1 ? t("id.elsewhere1") : t("id.elsewhere")} />
+        <Stat n={info.skills} label={info.skills === 1 ? t("id.skill1") : t("id.skills")} />
+        <Stat n={info.routines} label={info.routines === 1 ? t("id.routine1") : t("id.routines")} />
+        <Stat text={info.last_active ? shortTime(info.last_active) : "—"} label={t("id.lastActive")} />
       </div>
       {places.length > 0 && (
         <div className="be-places" data-testid="bot-places">
@@ -277,7 +278,7 @@ export function BotFacts({ info }: { info: BotInfo | null | undefined }) {
               <b>{n}</b>
             </span>
           ))}
-          {info.first_active && <span className="be-since">since {sinceLabel(info.first_active)}</span>}
+          {info.first_active && <span className="be-since">{t("id.since", { date: sinceLabel(info.first_active) })}</span>}
         </div>
       )}
     </div>
@@ -287,7 +288,7 @@ export function BotFacts({ info }: { info: BotInfo | null | undefined }) {
 function Stat({ n, text, label }: { n?: number; text?: string; label: string }) {
   return (
     <div className="be-stat">
-      <b>{text ?? (n ?? 0).toLocaleString("en-US")}</b>
+      <b>{text ?? (n ?? 0).toLocaleString(lang())}</b>
       <span>{label}</span>
     </div>
   );

@@ -3,6 +3,7 @@
 // goes through the Tauri notification plugin (macOS Notification Center, Windows toasts); in a plain
 // browser (dev, e2e) through the Web Notification API.
 import type { BridgeEvent } from "./protocol";
+import { t } from "../i18n";
 
 export interface Note {
   title: string;
@@ -31,16 +32,16 @@ export function noteFor(
       return ev.text.trim() ? { title: who, body: clip(ev.text), bot, tag: `${bot}:message` } : null;
     case "approval.request":
       return {
-        title: `${who} needs your approval`,
-        body: clip(ev.command || ev.title || "Allow this command?"),
+        title: t("note.approval", { bot: who }),
+        body: clip(ev.command || ev.title || t("ask.allowThis")),
         bot,
         tag: `${bot}:approval`,
       };
     case "clarify.request":
-      return { title: `${who} has a question`, body: clip(ev.question), bot, tag: `${bot}:clarify` };
+      return { title: t("note.question", { bot: who }), body: clip(ev.question), bot, tag: `${bot}:clarify` };
     case "turn.end":
       return ev.outcome === "error"
-        ? { title: `${who} stopped with an error`, body: clip(ev.error || "The turn failed."), bot, tag: `${bot}:error` }
+        ? { title: t("note.error", { bot: who }), body: clip(ev.error || t("note.failed")), bot, tag: `${bot}:error` }
         : null;
     default:
       return null;
