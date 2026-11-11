@@ -178,6 +178,7 @@ const BANNER: Record<AgentId, string> = {
   pi: "\x1b[1mπ pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   grok: "\x1b[1m𝕏 Grok\x1b[0m \x1b[2m(mock)\x1b[0m",
+  opencode: "\x1b[1mopencode\x1b[0m \x1b[2m(mock)\x1b[0m",
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
@@ -349,6 +350,10 @@ const MOCK_MODELS: Record<string, { id: string; label: string; provider?: string
     { id: "opengateway/gpt-6", label: "GPT-6 (gateway)", provider: "opengateway" },
     { id: "opengateway/gemini-4-carbon", label: "Gemini 4 Carbon (gateway)", provider: "opengateway" },
   ],
+  opencode: [
+    { id: "opencode/big-pickle", label: "OpenCode/Big Pickle" },
+    { id: "opencode/beam-free", label: "OpenCode/Beam Free" },
+  ],
 };
 
 /** What each mock agent reports about its controls, as the real CLIs do (see agent_chat.rs). */
@@ -419,6 +424,7 @@ class MockChat {
       this.model = "";
     }
     if (how.gone) this.session = `codex-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
+    if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
   }
   private at(ms: number, fn: () => void) {
     this.timers.push(setTimeout(fn, ms));
@@ -448,6 +454,9 @@ class MockChat {
         this.emit({ event: "session.commands", commands: c.commands });
         this.emit({ event: "session.usage", used: this.used, max: c.max });
       }
+      // the agent's own commands and skills (ACP `available_commands_update`), as acp_chat.rs sends them
+      if (this.agent === "opencode")
+        this.emit({ event: "session.commands", commands: ["init", "review"].map((name) => ({ name, description: "", hint: "", kind: "command", prefix: "/" })) });
     });
   }
   stop() {
@@ -529,7 +538,9 @@ class MockChat {
         this.at(60, () => this.emit({ event: "tool.start", tool_id: "t-rm", name: "terminal", detail: "rm -rf ./build" }));
         this.at(140, () => {
           this.waiting = rid;
-          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices: ["deny", "once", "session"] });
+          // an ACP agent (OpenCode) offers Deny and Allow once only: its "always" is a saved project rule
+          const choices = this.agent === "opencode" ? ["deny", "once"] : ["deny", "once", "session"];
+          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices });
         });
         return;
       }
