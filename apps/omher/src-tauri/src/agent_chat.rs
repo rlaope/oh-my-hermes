@@ -157,6 +157,104 @@ fn clip(t: &str, n: usize) -> String {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Subagents: one agent-neutral event for every agent
+// ---------------------------------------------------------------------------------------------
+
+/// The subagents a session's agent started, as ONE event shape whatever the agent (Claude Code's Agent/Task tool,
+/// Codex sub-agent threads, OmO's `task`; later any ACP agent): `{"event": "subagent", id, agent, name, goal,
+/// delegation, index, count, state, model?, tool?, step?, summary?, seconds?}`. `id` is stable for the subagent
+/// (a later event with the same id updates its row); `delegation` groups the subagents started together (one fan-out);
+/// `state` is queued | running | thinking | done | failed | cancelled. omher only shows these: it never assigns,
+/// steers or stops a subagent.
+#[derive(Default)]
+struct Subagents {
+    agent: &'static str,
+    subs: HashMap<String, Sub>,
+    /// the fan-out filling now: its key and how many it has
+    fanout: (String, usize),
+}
+
+struct Sub {
+    name: String,
+    goal: String,
+    model: String,
+    delegation: String,
+    index: usize,
+    /// its last message so far: its answer when it ends without one of its own
+    text: String,
+    ended: bool,
+}
+
+impl Subagents {
+    fn new(agent: &'static str) -> Subagents {
+        Subagents { agent, ..Subagents::default() }
+    }
+    fn has(&self, id: &str) -> bool {
+        self.subs.contains_key(id)
+    }
+    /// Registers `id` in fan-out `delegation` (a new key starts a new fan-out), or returns it as it is.
+    fn add(&mut self, id: &str, delegation: &str, name: &str, goal: &str, model: &str) -> &mut Sub {
+        if !self.subs.contains_key(id) {
+            if self.fanout.0 != delegation {
+                self.fanout = (delegation.to_string(), 0);
+            }
+            let index = self.fanout.1;
+            self.fanout.1 += 1;
+            self.subs.insert(id.to_string(), Sub { name: clip(name, 80), goal: clip(goal, 160), model: String::new(), delegation: delegation.to_string(), index, text: String::new(), ended: false });
+        }
+        let s = self.subs.get_mut(id).unwrap();
+        if !model.is_empty() {
+            s.model = model.to_string();
+        }
+        if s.goal.is_empty() && !goal.is_empty() {
+            s.goal = clip(goal, 160);
+        }
+        s
+    }
+    /// The event for `id` in `state`, with `extra` fields (tool, step, summary, seconds). Unknown ids give none.
+    fn event(&self, id: &str, state: &str, extra: Value) -> Option<Event> {
+        let s = self.subs.get(id)?;
+        let count = if self.fanout.0 == s.delegation { self.fanout.1 } else { s.index + 1 };
+        let mut f = json!({"id": id, "agent": self.agent, "name": s.name, "goal": s.goal, "delegation": s.delegation, "index": s.index, "count": count, "state": state});
+        if !s.model.is_empty() {
+            f["model"] = Value::String(s.model.clone());
+        }
+        if let (Value::Object(m), Value::Object(x)) = (&mut f, extra) {
+            m.extend(x.into_iter().filter(|(_, v)| !v.is_null() && v.as_str() != Some("")));
+        }
+        Some(ev("subagent", f))
+    }
+    /// A step the subagent runs now.
+    fn step(&self, st: &mut Step, id: &str, tool: &str, step: &str) {
+        st.events.extend(self.event(id, "running", json!({"tool": tool, "step": clip(step, 120)})));
+    }
+    /// Ends `id` once: done (its answer, else its last message), failed (the error) or cancelled.
+    fn end(&mut self, st: &mut Step, id: &str, state: &str, answer: &str, secs: Option<f64>) {
+        let Some(s) = self.subs.get_mut(id) else { return };
+        if s.ended {
+            return;
+        }
+        s.ended = true;
+        let text = if answer.trim().is_empty() { s.text.clone() } else { answer.to_string() };
+        // one plain line: a fenced answer ("```\nalpha line\n```") reads as its text
+        let mut f = json!({"summary": clip(&text.replace("```", " "), 200)});
+        if let Some(x) = secs {
+            f["seconds"] = json!((x * 10.0).round() / 10.0);
+        }
+        st.events.extend(self.event(id, state, f));
+    }
+}
+
+/// The ask (approval or question) events in `st` from index `from` on carry who asked: `subagent: {id, name}`.
+fn tag_asks(st: &mut Step, from: usize, id: &str, name: &str) {
+    for e in &mut st.events[from..] {
+        if matches!(s(e, "event").as_str(), "approval.request" | "clarify.request") {
+            e["subagent"] = json!({"id": id, "name": name});
+        }
+    }
+}
+
 /// A conversation name an agent reported, as the session row shows it: one line, at most 80 characters.
 fn title_of(t: &str) -> String {
     let t: String = t.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
@@ -449,11 +547,63 @@ pub struct Claude {
     labels: HashMap<String, String>,
     /// the last assistant message carried an error kind (`authentication_failed`, …)
     error_kind: String,
+    /// its subagents (Agent/Task calls) by tool_use id
+    subs: Subagents,
+    /// Claude Code's agent / task id -> the tool_use id of its Agent call (asks and task events name the agent id)
+    agent_ids: HashMap<String, String>,
+    /// background tasks Claude Code says are still running (`background_tasks_changed`)
+    background: usize,
+    /// subagents that run in the background: their task notification ends them (a foreground one ends with its
+    /// tool result, which carries its own words and model)
+    bg_subs: std::collections::HashSet<String>,
 }
 
 impl Claude {
     pub fn new(cwd: &str) -> Claude {
-        Claude { cwd: cwd.into(), ..Claude::default() }
+        Claude { cwd: cwd.into(), subs: Subagents::new("claude"), ..Claude::default() }
+    }
+    /// The tool_use id of the subagent a line or request names (`parent_tool_use_id`, `tool_use_id`, an agent id).
+    fn sub_of(&self, v: &Value) -> Option<String> {
+        for k in ["parent_tool_use_id", "tool_use_id"] {
+            let id = s(v, k);
+            if self.subs.has(&id) {
+                return Some(id);
+            }
+        }
+        for k in ["agent_id", "task_id"] {
+            if let Some(id) = self.agent_ids.get(&s(v, k)) {
+                return Some(id.clone());
+            }
+        }
+        None
+    }
+    /// A line of a subagent's own conversation: its steps; its text is held as its answer, never shown as Claude's.
+    fn on_sub_line(&mut self, st: &mut Step, id: &str, v: &Value) {
+        let aid = s(v, "agent_id");
+        if !aid.is_empty() {
+            self.agent_ids.insert(aid, id.to_string());
+        }
+        if s(v, "type") != "assistant" {
+            return;
+        }
+        for b in v["message"].get("content").and_then(Value::as_array).into_iter().flatten() {
+            match s(b, "type").as_str() {
+                "tool_use" => {
+                    let name = s(b, "name");
+                    let input = b.get("input").cloned().unwrap_or(Value::Null);
+                    self.subs.step(st, id, tool_kind(&name), &call_detail(&name, &input, &self.cwd));
+                }
+                "text" => {
+                    let t = s(b, "text");
+                    if !t.trim().is_empty() {
+                        if let Some(sub) = self.subs.subs.get_mut(id) {
+                            sub.text = t;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
     fn next_id(&mut self, p: &str) -> String {
         self.seq += 1;
@@ -487,6 +637,27 @@ impl Claude {
     }
 }
 
+/// A subagent's answer from Claude Code's hand-back: the text blocks of `tool_use_result.content` without the
+/// `<tools-used-before-summary>` block; else the tool_result's own text after the frame's "The report follows:".
+fn claude_answer(tur: &Value, block: &Value) -> String {
+    let texts = |c: &Value| -> Vec<String> {
+        match c {
+            Value::String(t) => vec![t.clone()],
+            Value::Array(a) => a.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).collect(),
+            _ => vec![],
+        }
+    };
+    let own: Vec<String> = texts(&tur["content"]).into_iter().filter(|t| !t.trim_start().starts_with("<tools-used-before-summary>")).collect();
+    let text = if own.iter().any(|t| !t.trim().is_empty()) {
+        own.join("\n")
+    } else {
+        let all = texts(&block["content"]).join("\n");
+        let body = all.split("The report follows:").nth(1).unwrap_or(&all);
+        body.split("\nagentId:").next().unwrap_or(body).to_string()
+    };
+    text.replace("```", "").trim().to_string()
+}
+
 const CLAUDE_SIGNED_OUT: &str = "Claude Code is not signed in. Sign in from Settings › Accounts (or open Terminal and run /login), then Restart.";
 
 impl Adapter for Claude {
@@ -513,6 +684,36 @@ impl Adapter for Claude {
                     f["approval"] = Value::String(mode);
                 }
                 st.emit(ev("session.info", f));
+            }
+            // a subagent (Agent/Task) or a background command started or ended; what still runs in the background
+            "system" if s(&v, "subtype") == "task_started" => {
+                if let Some(id) = self.sub_of(&v) {
+                    self.agent_ids.insert(s(&v, "task_id"), id);
+                }
+            }
+            "system" if s(&v, "subtype") == "task_notification" => {
+                if let Some(id) = self.sub_of(&v).filter(|id| self.bg_subs.contains(id)) {
+                    let state = match s(&v, "status").as_str() {
+                        "failed" | "error" => "failed",
+                        "stopped" | "killed" | "cancelled" | "interrupted" => "cancelled",
+                        _ => "done",
+                    };
+                    let secs = v.get("usage").and_then(|u| u.get("duration_ms")).and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                    self.subs.end(&mut st, &id, state, &s(&v, "summary"), secs);
+                }
+            }
+            "system" if s(&v, "subtype") == "background_tasks_changed" => {
+                let n = v.get("tasks").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+                if n != self.background {
+                    self.background = n;
+                    st.emit(ev("session.info", json!({"background": n})));
+                }
+            }
+            // a subagent's own conversation
+            _ if sub => {
+                if let Some(id) = self.sub_of(&v) {
+                    self.on_sub_line(&mut st, &id, &v);
+                }
             }
             // the conversation's name changed (a rename in Claude Code); Claude Code says it on its own
             "system" if s(&v, "subtype") == "session_title_changed" => {
@@ -585,6 +786,11 @@ impl Adapter for Claude {
                         if !qs.is_empty() {
                             self.pending.insert(rid.clone(), ClaudeAsk::Question(input, ids));
                             st.emit(clarify_event(&rid, &qs));
+                            if let Some(id) = self.sub_of(req) {
+                                let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
+                                let n = st.events.len() - 1;
+                                tag_asks(&mut st, n, &id, &name);
+                            }
                             return st;
                         }
                     }
@@ -599,6 +805,12 @@ impl Adapter for Claude {
                     };
                     self.pending.insert(rid.clone(), ClaudeAsk::Tool(name, input, req.get("permission_suggestions").cloned().unwrap_or(Value::Null)));
                     st.emit(ev("approval.request", with_cwd(json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES}), &self.cwd)));
+                    // asked inside a subagent (`agent_id`): the card says which one
+                    if let Some(id) = self.sub_of(req) {
+                        let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
+                        let n = st.events.len() - 1;
+                        tag_asks(&mut st, n, &id, &name);
+                    }
                 } else {
                     // hooks, MCP messages …: omher registers none of them
                     st.out(json!({"type": "control_response", "response": {"subtype": "error", "request_id": rid, "error": "not supported by omher"}}));
@@ -657,6 +869,17 @@ impl Adapter for Claude {
                             }
                             self.begin(&mut st, true);
                             st.emit(ev("tool.start", json!({"tool_id": s(b, "id"), "name": tool_kind(&name), "detail": call_detail(&name, &input, &self.cwd)})));
+                            // a subagent: one Agent/Task call; the calls of one message start together (one fan-out)
+                            if tool_kind(&name) == "delegate_task" {
+                                let id = s(b, "id");
+                                let kind = s(&input, "subagent_type");
+                                let goal = if s(&input, "description").is_empty() { s(&input, "prompt") } else { s(&input, "description") };
+                                self.subs.add(&id, &format!("claude-{mid}"), if kind.is_empty() { "subagent" } else { &kind }, &goal, &s(&input, "model"));
+                                if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
+                                    self.bg_subs.insert(id.clone());
+                                }
+                                st.events.extend(self.subs.event(&id, "running", json!({})));
+                            }
                             if name == "Skill" {
                                 let sk = s(&input, "skill");
                                 if !sk.is_empty() {
@@ -669,10 +892,27 @@ impl Adapter for Claude {
                 }
             }
             "user" if !sub => {
+                let tur = v.get("tool_use_result").or_else(|| v.get("toolUseResult")).cloned().unwrap_or(Value::Null);
                 for b in v["message"].get("content").and_then(Value::as_array).into_iter().flatten() {
                     if s(b, "type") == "tool_result" {
                         let ok = !b.get("is_error").and_then(Value::as_bool).unwrap_or(false);
-                        st.emit(ev("tool.end", json!({"tool_id": s(b, "tool_use_id"), "name": "", "ok": ok, "ms": 0})));
+                        let tid = s(b, "tool_use_id");
+                        st.emit(ev("tool.end", json!({"tool_id": tid, "name": "", "ok": ok, "ms": 0})));
+                        // a subagent's hand-back: its own words (`tool_use_result.content`), not the frame around them;
+                        // a background one only launched here and ends with its task notification
+                        if self.subs.has(&tid) && matches!(s(&tur, "status").as_str(), "async_launched" | "teammate_spawned") {
+                            self.bg_subs.insert(tid.clone());
+                        } else if self.subs.has(&tid) {
+                            let answer = claude_answer(&tur, b);
+                            let secs = tur.get("totalDurationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                            let model = s(&tur, "resolvedModel");
+                            if !model.is_empty() {
+                                if let Some(x) = self.subs.subs.get_mut(&tid) {
+                                    x.model = model;
+                                }
+                            }
+                            self.subs.end(&mut st, &tid, if ok { "done" } else { "failed" }, &answer, secs);
+                        }
                     }
                 }
             }
@@ -814,21 +1054,8 @@ pub struct Codex {
     /// Stop was pressed before Codex named the turn: interrupt it as soon as it does
     stop_asked: bool,
     /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
-    /// events become `subagent` lines and never touch the person's turn, its answer or its Stop.
-    helpers: HashMap<String, CodexHelper>,
-    /// the fan-out the latest helpers belong to (the person's turn that started them) and how many it has
-    fanout: (String, usize),
-}
-
-/// One sub-agent thread, as its latest events left it.
-struct CodexHelper {
-    name: String,
-    model: String,
-    index: usize,
-    delegation: String,
-    /// its latest message: its answer once its turn completes
-    text: String,
-    ended: bool,
+    /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
+    helpers: Subagents,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -851,8 +1078,7 @@ impl Codex {
             changes: HashMap::new(),
             unauthorized: false,
             stop_asked: false,
-            helpers: HashMap::new(),
-            fanout: (String::new(), 0),
+            helpers: Subagents::new("codex"),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -916,10 +1142,10 @@ impl Codex {
     /// A sub-agent's thread: one Codex named as a sub-agent (`subAgentActivity`), or one whose turn belongs to
     /// another turn (`rootTurnId`). Any other thread id is the session's own.
     fn is_helper(&self, thread: &str) -> bool {
-        self.helpers.contains_key(thread)
+        self.helpers.has(thread)
     }
     /// A turn of another thread that belongs to a running turn (a sub-agent of a sub-agent, or one Codex did not
-    /// announce): registered as a helper.
+    /// announce): registered as a sub-agent.
     fn adopt(&mut self, thread: &str, method: &str, p: &Value) {
         if thread.is_empty() || self.is_helper(thread) || self.thread.as_deref() == Some(thread) || !method.starts_with("turn/") {
             return;
@@ -930,61 +1156,28 @@ impl Codex {
             self.helper(thread, "", "");
         }
     }
-    /// The helper of `thread`, registered on first sight (`subAgentActivity` names it; a thread first seen
-    /// elsewhere, such as a helper of a resumed turn, starts unnamed).
-    fn helper(&mut self, thread: &str, path: &str, model: &str) -> &mut CodexHelper {
-        if !self.helpers.contains_key(thread) {
-            let delegation = format!("codex-{}", self.turn_id.clone().unwrap_or_default());
-            if self.fanout.0 != delegation {
-                self.fanout = (delegation.clone(), 0);
-            }
-            let index = self.fanout.1;
-            self.fanout.1 += 1;
-            // "/root/read_first_line" -> "read first line"
-            let name = path.rsplit('/').next().unwrap_or("").replace('_', " ");
-            self.helpers.insert(thread.to_string(), CodexHelper { name: clip(&name, 120), model: String::new(), index, delegation, text: String::new(), ended: false });
-        }
-        let h = self.helpers.get_mut(thread).unwrap();
-        if !model.is_empty() {
-            h.model = model.to_string();
-        }
-        h
+    /// The sub-agent of `thread`, registered on first sight in the fan-out of the person's running turn
+    /// ("/root/read_first_line" -> "read first line"). Codex streams no task text for it: its goal stays empty.
+    fn helper(&mut self, thread: &str, path: &str, model: &str) -> &mut Sub {
+        let delegation = format!("codex-{}", self.turn_id.clone().unwrap_or_default());
+        let name = path.rsplit('/').next().unwrap_or("").replace('_', " ");
+        self.helpers.add(thread, &delegation, &name, "", model)
     }
-    /// The `subagent` event of a helper (the bot chat's shape: id, fan-out, index of count, goal, state).
-    fn helper_event(&self, thread: &str, state: &str, extra: Value) -> Event {
-        let h = &self.helpers[thread];
-        let count = if self.fanout.0 == h.delegation { self.fanout.1 } else { h.index + 1 };
-        // the agent-neutral subagent shape every session adapter emits: Codex names a sub-agent (its agentPath) but
-        // streams no task text, so `goal` stays empty
-        let mut f = json!({"id": thread, "agent": "codex", "name": h.name, "goal": "", "delegation": h.delegation, "index": h.index, "count": count, "state": state});
-        if !h.model.is_empty() {
-            f["model"] = Value::String(h.model.clone());
-        }
-        if let (Value::Object(m), Value::Object(x)) = (&mut f, extra) {
-            m.extend(x);
-        }
-        ev("subagent", f)
-    }
-    /// `subAgentActivity` (on the session's thread, or a helper's for a nested one): a helper started or ended.
+    /// `subAgentActivity` (on the session's thread, or a sub-agent's for a nested one): one started or ended.
     fn helper_activity(&mut self, st: &mut Step, item: &Value, done: bool) {
         let thread = s(item, "agentThreadId");
         if thread.is_empty() || self.thread.as_deref() == Some(thread.as_str()) {
             return;
         }
-        let model = s(item, "model");
-        let h = self.helper(&thread, &s(item, "agentPath"), &model);
-        let (ended, summary) = (h.ended, clip(&h.text, 200));
+        self.helper(&thread, &s(item, "agentPath"), &s(item, "model"));
         match (s(item, "kind").as_str(), done) {
-            ("started", false) => st.emit(self.helper_event(&thread, "running", json!({}))),
+            ("started", false) => st.events.extend(self.helpers.event(&thread, "running", json!({}))),
             // its thread's own turn/completed normally says so first, with its time
-            ("completed", true) if !ended => {
-                self.helper(&thread, "", "").ended = true;
-                st.emit(self.helper_event(&thread, "done", if summary.is_empty() { json!({}) } else { json!({"summary": summary}) }));
-            }
+            ("completed", true) => self.helpers.end(st, &thread, "done", "", None),
             _ => {}
         }
     }
-    /// A line of a helper's own thread: its steps and its end. Its text is held as its answer, never shown as
+    /// A line of a sub-agent's own thread: its steps and its end. Its text is held as its answer, never shown as
     /// Codex's; its deltas, reasoning and warnings are dropped.
     fn on_helper_line(&mut self, st: &mut Step, thread: &str, method: &str, p: &Value) {
         let item = p.get("item").cloned().unwrap_or(Value::Null);
@@ -994,8 +1187,7 @@ impl Codex {
                     return self.helper_activity(st, &item, false);
                 }
                 if let Some((tool, step)) = self.item_step(&item) {
-                    self.helper(thread, "", "");
-                    st.emit(self.helper_event(thread, "running", json!({"tool": tool, "step": clip(&step, 120)})));
+                    self.helpers.step(st, thread, &tool, &step);
                 }
             }
             "item/completed" => match s(&item, "type").as_str() {
@@ -1010,25 +1202,15 @@ impl Codex {
             },
             "turn/completed" => {
                 let t = &p["turn"];
-                let h = self.helper(thread, "", "");
-                if h.ended {
-                    return;
+                let secs = t.get("durationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                match s(t, "status").as_str() {
+                    "interrupted" => self.helpers.end(st, thread, "cancelled", "", secs),
+                    "failed" => {
+                        let e = t.get("error").map(|e| s(e, "message")).unwrap_or_default();
+                        self.helpers.end(st, thread, "failed", if e.is_empty() { "failed" } else { &e }, secs)
+                    }
+                    _ => self.helpers.end(st, thread, "done", "", secs),
                 }
-                h.ended = true;
-                let (state, text) = match s(t, "status").as_str() {
-                    "interrupted" => ("cancelled", h.text.clone()),
-                    "failed" => ("failed", t.get("error").map(|e| s(e, "message")).unwrap_or_default()),
-                    _ => ("done", h.text.clone()),
-                };
-                let mut f = json!({});
-                let summary = clip(&text, 200);
-                if !summary.is_empty() {
-                    f["summary"] = Value::String(summary);
-                }
-                if let Some(ms) = t.get("durationMs").and_then(Value::as_u64) {
-                    f["seconds"] = json!((ms as f64 / 100.0).round() / 10.0);
-                }
-                st.emit(self.helper_event(thread, state, f));
             }
             _ => {}
         }
@@ -1203,13 +1385,10 @@ impl Adapter for Codex {
                 }
                 _ => st.out(json!({"id": rpc_id, "error": {"code": -32601, "message": "not supported by omher"}})),
             }
-            // asked inside a helper: the card says which one
-            if self.is_helper(&thread) && st.events.len() > n {
-                let h = self.helper(&thread, "", "");
-                let who = json!({"id": thread, "name": h.name});
-                for e in &mut st.events[n..] {
-                    e["subagent"] = who.clone();
-                }
+            // asked inside a sub-agent: the card says which one
+            if self.is_helper(&thread) {
+                let name = self.helper(&thread, "", "").name.clone();
+                tag_asks(&mut st, n, &thread, &name);
             }
             return st;
         }
@@ -1435,6 +1614,13 @@ pub struct Pi {
     last_stop: String,
     last_error: String,
     pending: HashMap<String, PiAsk>,
+    /// OmO's subagents (`task` tool), by task id once OmO names them (`st_…`), else `<call id>:<n>`
+    subs: Subagents,
+    /// OmO's task id -> our subagent id; a `task` call id -> its subagents in order
+    task_ids: HashMap<String, String>,
+    calls_subs: HashMap<String, Vec<String>>,
+    /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
+    background: usize,
 }
 
 /// oh-my-pi's tool approval as a select (`Allow tool: bash\nCommand: ls -la` with Approve / Approve bash for this
@@ -1460,7 +1646,84 @@ fn pi_approval(title: &str, options: &[String]) -> Option<(String, String, PiAsk
 
 impl Pi {
     pub fn new(cwd: &str, label: &str) -> Pi {
-        Pi { cwd: cwd.into(), label: label.into(), ..Pi::default() }
+        let agent = match label {
+            "OmO" => "omo",
+            "oh-my-pi" => "omp",
+            _ => "pi",
+        };
+        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), ..Pi::default() }
+    }
+    /// A `task` call: one subagent per entry of `tasks` (or the call itself with one task), one fan-out per call.
+    fn task_start(&mut self, st: &mut Step, call: &str, args: &Value) {
+        let one = [args.clone()];
+        let tasks: &[Value] = args.get("tasks").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&one);
+        let kind = s(args, "subagent_type");
+        let mut ids = vec![];
+        for (i, t) in tasks.iter().enumerate() {
+            let id = format!("{call}:{i}");
+            let name = [s(t, "name"), s(t, "subagent_type"), kind.clone()].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
+            let goal = [s(t, "task_summary"), s(t, "description"), s(t, "prompt")].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
+            self.subs.add(&id, &format!("pi-{call}"), &name, &goal, "");
+            st.events.extend(self.subs.event(&id, "queued", json!({})));
+            ids.push(id);
+        }
+        self.calls_subs.insert(call.to_string(), ids);
+    }
+    /// The `task` call's result names each subagent's task id, model and state (a background one runs on).
+    fn task_end(&mut self, st: &mut Step, call: &str, v: &Value) {
+        let Some(ids) = self.calls_subs.remove(call) else { return };
+        let d = &v["result"]["details"];
+        let one = [d.clone()];
+        let items: &[Value] = d.get("items").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&one);
+        let failed = v.get("isError").and_then(Value::as_bool).unwrap_or(false);
+        for (i, id) in ids.iter().enumerate() {
+            let it = items.get(i).cloned().unwrap_or(Value::Null);
+            let tid = s(&it, "task_id");
+            if !tid.is_empty() {
+                self.task_ids.insert(tid, id.clone());
+            }
+            let model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            if let Some(x) = self.subs.subs.get_mut(id) {
+                if !model.is_empty() {
+                    x.model = model;
+                }
+            }
+            match s(&it, "status").as_str() {
+                _ if failed => {
+                    let e = v["result"]["content"].as_array().and_then(|a| a.first()).map(|b| s(b, "text")).unwrap_or_default();
+                    self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, None)
+                }
+                "completed" => self.subs.end(st, id, "done", &s(&it, "final_response"), None),
+                "failed" | "error" => self.subs.end(st, id, "failed", &s(&it, "error"), None),
+                "cancelled" | "aborted" => self.subs.end(st, id, "cancelled", "", None),
+                _ => st.events.extend(self.subs.event(id, "running", json!({}))),
+            }
+        }
+    }
+    /// OmO's notice that a background subagent finished (`senpi-task.completion` in a wake message's details).
+    fn task_done(&mut self, st: &mut Step, m: &Value) {
+        for p in m["details"].get("producerDetails").and_then(Value::as_array).into_iter().flatten() {
+            if s(p, "customType") != "senpi-task.completion" {
+                continue;
+            }
+            for d in p.get("details").and_then(Value::as_array).into_iter().flatten() {
+                let Some(id) = self.task_ids.get(&s(d, "task_id")).cloned() else { continue };
+                let model = s(d, "model");
+                if let Some(x) = self.subs.subs.get_mut(&id) {
+                    if !model.is_empty() {
+                        x.model = model.rsplit('/').next().unwrap_or(&model).to_string();
+                    }
+                }
+                let secs = d.get("duration_ms").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                let state = match s(d, "status").as_str() {
+                    "completed" => "done",
+                    "cancelled" | "aborted" => "cancelled",
+                    _ => "failed",
+                };
+                let answer = if state == "failed" { s(d, "error") } else { s(d, "final_response") };
+                self.subs.end(st, &id, state, if state == "failed" && answer.is_empty() { "failed" } else { &answer }, secs);
+            }
+        }
     }
     fn cmd(&mut self, st: &mut Step, kind: &'static str, mut fields: Value) {
         self.seq += 1;
@@ -1582,6 +1845,10 @@ impl Adapter for Pi {
                     _ => {}
                 }
             }
+            "message_start" if s(&v["message"], "role") == "custom" => {
+                let m = v["message"].clone();
+                self.task_done(&mut st, &m);
+            }
             "message_end" => {
                 let m = &v["message"];
                 if s(m, "role") == "assistant" {
@@ -1601,11 +1868,33 @@ impl Adapter for Pi {
             "tool_execution_start" => {
                 let name = s(&v, "toolName");
                 let args = v.get("args").cloned().unwrap_or(Value::Null);
-                st.emit(ev("tool.start", json!({"tool_id": s(&v, "toolCallId"), "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                let call = s(&v, "toolCallId");
+                if name == "task" {
+                    // the step names its subagents, never the call's raw JSON; each one gets its own row
+                    let names: Vec<String> = args.get("tasks").and_then(Value::as_array).into_iter().flatten().map(|t| s(t, "name")).filter(|n| !n.is_empty()).collect();
+                    let detail = if names.is_empty() { tool_detail(&args) } else { names.join(", ") };
+                    st.emit(ev("tool.start", json!({"tool_id": call, "name": "delegate_task", "detail": clip(&detail, 160)})));
+                    self.task_start(&mut st, &call, &args);
+                } else {
+                    st.emit(ev("tool.start", json!({"tool_id": call, "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                }
             }
             "tool_execution_end" => {
                 let ok = !v.get("isError").and_then(Value::as_bool).unwrap_or(false);
-                st.emit(ev("tool.end", json!({"tool_id": s(&v, "toolCallId"), "name": "", "ok": ok, "ms": 0})));
+                let call = s(&v, "toolCallId");
+                st.emit(ev("tool.end", json!({"tool_id": call, "name": "", "ok": ok, "ms": 0})));
+                self.task_end(&mut st, &call, &v);
+            }
+            // what still runs after the turn: background commands (subagents have their own rows)
+            "session_lifecycle" => {
+                let w = &v["lifecycle"]["waitingOn"];
+                let n: usize = w.get("background").and_then(Value::as_array).into_iter().flatten()
+                    .filter(|b| !s(b, "source").starts_with("delivery:"))
+                    .map(|b| b.get("activeCount").and_then(Value::as_u64).unwrap_or(1) as usize).sum();
+                if n != self.background {
+                    self.background = n;
+                    st.emit(ev("session.info", json!({"background": n})));
+                }
             }
             // Both end a run with agent_end. oh-my-pi then adds prompt_result and session_settled, which can arrive
             // after the person's next prompt was sent, so they never end a turn, except a prompt no agent ran for.
@@ -3467,6 +3756,10 @@ mod tests {
         out.push(("codex-4-stop.jsonl", "codex", vec![Send, File("codex-4-stop.jsonl"), Stop, File("codex-4-stopped.jsonl")]));
         out.push(("codex-7-model.jsonl", "codex", vec![Model("gpt-6-astra"), Send, File("codex-7-model.jsonl")]));
         out.push(("codex-8-resume.jsonl", "codex-resume", vec![File("codex-8-resume-init.jsonl"), File("codex-8-resume.jsonl"), Send, File("codex-8-resume-turn.jsonl")]));
+        // two subagents in parallel (Claude Code 2.1.322, real run), then a subagent whose command needs approval
+        out.push(("claude-9-subagents.jsonl", "claude", vec![Send, File("claude-9-subagents.jsonl"), Send, File("claude-9-subagent-ask.jsonl")]));
+        // OmO 5.1.56: two background subagents (`task`), then the next turn during which their completions arrive
+        out.push(("omo-9-subagents.jsonl", "omo", vec![Send, File("omo-9-subagents.jsonl"), Send, File("omo-9-subagents-after.jsonl")]));
         // two sub-agents in parallel (their threads stream on the same connection), then Stop while one runs
         out.push(("codex-9-helpers.jsonl", "codex-helpers", vec![Send, File("codex-9-helpers.jsonl")]));
         out.push(("codex-10-helper-stop.jsonl", "codex-helper-stop", vec![Send, File("codex-10-helper-stop.jsonl"), Stop, File("codex-10-helper-stopped.jsonl")]));
@@ -3631,6 +3924,101 @@ mod tests {
         x.start();
         run(&mut x, &real("codex-9-helpers-init.jsonl"));
         x
+    }
+
+    fn subs_of<'a>(events: &'a [Event], id: &str) -> Vec<&'a Event> {
+        events.iter().filter(|e| s(e, "event") == "subagent" && s(e, "id").ends_with(id)).collect()
+    }
+
+    #[test]
+    fn claude_subagents_come_out_as_one_row_each_with_their_own_answer() {
+        // claude-9-subagents: one message, two Agent calls in parallel (Claude Code 2.1.322, a real run)
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-9-subagents.jsonl"));
+        let a = subs_of(&st.events, "NdJyEL");
+        let b = subs_of(&st.events, "4hw1eo");
+        assert_eq!((s(a[0], "agent"), s(a[0], "name"), s(a[0], "goal")), ("claude".into(), "general-purpose".into(), "Read a.txt first line".into()));
+        assert_eq!(s(b[0], "goal"), "Count lines of b.txt");
+        // one fan-out of two (the same message), its steps, then done with its own words and time
+        assert_eq!(s(a[0], "delegation"), s(b[0], "delegation"));
+        assert_eq!((a[0]["index"].clone(), b[0]["index"].clone(), b[0]["count"].clone()), (json!(0), json!(1), json!(2)));
+        assert!(a.iter().any(|e| s(e, "tool") == "read_file" && s(e, "step").ends_with("a.txt")), "{a:?}");
+        let end = a.last().unwrap();
+        assert_eq!((s(end, "state"), s(end, "summary")), ("done".into(), "alpha line".into()));
+        assert_eq!(end["seconds"], json!(3.7));
+        assert_eq!(s(end, "model"), "claude-fable-5-2");
+        assert_eq!(s(b.last().unwrap(), "state"), "done");
+        // a subagent's own text and steps are never Claude's: one answer bubble, steps only of the main thread
+        assert_eq!(text_of(&st.events, "message").len(), 1);
+        assert!(st.events.iter().filter(|e| s(e, "event") == "tool.start").all(|e| s(e, "name") == "delegate_task"));
+        assert_eq!(names(&st.events).iter().filter(|n| *n == "turn.end").count(), 1);
+    }
+
+    #[test]
+    fn a_claude_subagents_approval_names_the_subagent() {
+        // claude-9-subagent-ask: the subagent's Bash needs permission; Claude Code sends `agent_id` on can_use_tool
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        run(&mut c, &real("claude-9-subagents.jsonl"));
+        c.on_input(Input::send("again")).unwrap();
+        let st = replay(&mut c, &["claude-9-subagent-ask.jsonl"], &[]);
+        let ask = st.events.iter().find(|e| s(e, "event") == "approval.request").unwrap();
+        assert_eq!(ask["subagent"], json!({"id": "toolu_016YS2cG1AUHFFq9nBfbkv9e", "name": "Write c.txt via echo"}));
+        assert!(s(ask, "command").starts_with("echo three"));
+        let sub = subs_of(&st.events, "fbkv9e");
+        assert_eq!(s(sub.last().unwrap(), "summary"), "done");
+    }
+
+    #[test]
+    fn claude_says_how_much_still_runs_in_the_background() {
+        // claude-4-background: background_tasks_changed with one task, then with none (audit O10)
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let mut st = run(&mut c, &real("claude-4-background.jsonl"));
+        // the same event when the task ended (claude-A in the audit's capture): its list is empty
+        st.events.extend(c.on_line(r#"{"type":"system","subtype":"background_tasks_changed","tasks":[]}"#).events);
+        let bg: Vec<Value> = st.events.iter().filter(|e| s(e, "event") == "session.info" && e.get("background").is_some()).map(|e| e["background"].clone()).collect();
+        assert_eq!(bg, [json!(1), json!(0)]);
+    }
+
+    #[test]
+    fn omo_subagents_come_out_as_rows_and_end_when_omo_says_they_finished() {
+        // omo-9: one `task` call with two background subagents (OmO 5.1.56, a real run); their completions arrive in
+        // OmO's next turn as `senpi-task.completion`
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::send("go")).unwrap();
+        let st = run(&mut p, &real("omo-9-subagents.jsonl"));
+        let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        assert_eq!((s(subs[0], "agent"), s(subs[0], "name"), s(subs[0], "goal"), s(subs[0], "state")), ("omo".into(), "first-line".into(), "Report the first line of a.txt".into(), "queued".into()));
+        assert_eq!(s(subs[1], "name"), "line-count");
+        // the call's result: both running in the background, on their resolved model
+        let running: Vec<&&Event> = subs.iter().filter(|e| s(e, "state") == "running").collect();
+        assert_eq!(running.len(), 2);
+        assert_eq!(s(running[0], "model"), "gpt-6-luna-fast");
+        // the `task` step names them, never the raw call JSON
+        let step = st.events.iter().find(|e| s(e, "event") == "tool.start" && s(e, "name") == "delegate_task").unwrap();
+        assert_eq!(s(step, "detail"), "first-line, line-count");
+        p.on_input(Input::send("next")).unwrap();
+        let st = replay(&mut p, &["omo-9-subagents-after.jsonl"], &[]);
+        let done: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        assert_eq!(done.iter().map(|e| (s(e, "name"), s(e, "state"), s(e, "summary"))).collect::<Vec<_>>(), [
+            ("first-line".into(), "done".into(), "alpha line".into()),
+            ("line-count".into(), "done".into(), "2".into()),
+        ]);
+        assert_eq!(done[0]["seconds"], json!(9.9));
+        assert_eq!(s(done[0], "model"), "claude-haiku-5-5");
+    }
+
+    #[test]
+    fn omo_says_what_still_runs_in_the_background() {
+        // omo-B: session_lifecycle waiting_background with one bash (audit O10); subagents are not counted here
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let st = p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"waiting_background","waitingOn":{"children":0,"background":[{"source":"terminal-background-sessions","activeCount":1,"items":[{"id":"bash_1","label":"sleep 20"}]}],"human":[]}}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "background": 1})]);
+        assert!(p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"waiting_background","waitingOn":{"children":0,"background":[{"source":"terminal-background-sessions","activeCount":1}],"human":[]}}}"#).events.is_empty());
+        let st = p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"done","waitingOn":{"children":0,"background":[{"source":"delivery:omo-senpi:wake:x","activeCount":1}],"human":[]}}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "background": 0})]);
     }
 
     #[test]
