@@ -196,7 +196,8 @@ describe("a New session chat", () => {
     await wait(10);
     expect(ss.getState().list).toEqual([]);
     expect(store.getState().ui.view).not.toBe("session");
-    expect(calls().filter((c) => c.op !== "reset")).toEqual([]);
+    // nothing started; only the draft's (empty) attachment folder is let go
+    expect(calls().filter((c) => c.op !== "reset")).toEqual([{ op: "file.remove", session: id }]);
     expect(await ss.start(id, "late")).toBe(false);
   });
 

@@ -430,14 +430,15 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
 
 test("loading the page stops sessions an earlier load left running, before anything starts", async ({ page }) => {
   await open(page);
-  await expect.poll(async () => (await calls(page)).map((c) => c.op)).toEqual(["reset"]);
+  // (the startup prune of saved attachments is housekeeping, not a start)
+  await expect.poll(async () => (await calls(page)).map((c) => c.op).filter((o) => !o.startsWith("file."))).toEqual(["reset"]);
   await startSession(page, "grok");
   const ops = (await calls(page)).map((c) => c.op);
   expect(ops.filter((o) => o === "reset")).toHaveLength(1);
   expect(ops.indexOf("reset")).toBeLessThan(ops.indexOf("start"));
   // a reload is a new page load: it resets again
   await page.reload();
-  await expect.poll(async () => (await calls(page)).map((c) => c.op)).toEqual(["reset"]);
+  await expect.poll(async () => (await calls(page)).map((c) => c.op).filter((o) => !o.startsWith("file."))).toEqual(["reset"]);
 });
 
 test("xterm loads only when a session opens", async ({ page }) => {

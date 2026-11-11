@@ -155,7 +155,8 @@ describe("sessions restore", () => {
     ss.restore(saved());
     ss.restore(saved()); // a second restore in the same page load does nothing
     await new Promise((r) => setTimeout(r, 30));
-    const calls = (g.__omherSessionCalls as { op: string; agent?: string; cwd?: string; resume?: string; account?: string }[]).filter((c) => c.op !== "reset");
+    // file housekeeping (the saved attachments of sessions that are gone) starts no program
+    const calls = (g.__omherSessionCalls as { op: string; agent?: string; cwd?: string; resume?: string; account?: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file."));
     expect(calls.map(({ op, agent, cwd, resume, account }) => ({ op, agent, cwd, resume, account }))).toEqual([
       { op: "chat.start", agent: "claude", cwd: "/w/web-app", resume: "11111111-2222-4333-8444-555555555555", account: "work" },
       { op: "chat.start", agent: "codex", cwd: "/w/api", resume: "codex-thread-1", account: undefined },
@@ -223,7 +224,7 @@ describe("sessions restore", () => {
     await ss2.loadAgents();
     await new Promise((res) => setTimeout(res, 30));
     expect(ss2.getState().list).toEqual([expect.objectContaining({ id, status: "draft", agent: "codex", cwd: "/w/api" })]);
-    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset")).toEqual([]);
+    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
     // + reuses it rather than opening a second one
     expect(ss2.draft()).toBe(id);
   });

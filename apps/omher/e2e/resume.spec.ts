@@ -350,7 +350,9 @@ test("a New session chat that never started comes back as a draft after a restar
   await expect(page.getByTestId("composer")).toHaveValue("half a thought");
   await expect(page.locator("[data-testid=session-list] .ss-row .bot-n")).toHaveText(["New session"]);
   await page.waitForTimeout(200);
-  expect((await sessionCalls(page)).filter((c) => c.op !== "reset")).toEqual([]);
+  // nothing starts; the startup prune keeps the draft's attachment folder
+  expect((await sessionCalls(page)).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
+  expect((await sessionCalls(page)).filter((c) => c.op === "file.prune")).toEqual([expect.objectContaining({ keep: ["s1"] })]);
   // the update confirm does not count it as running
   await page.getByTestId("update-btn").click();
   await expect(page.getByTestId("update-running")).toHaveCount(0);
