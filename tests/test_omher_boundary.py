@@ -93,6 +93,18 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
+    "The two exceptions are a bot's automations and plugins, which omher changes only by asking that bot's own gateway"
+    " (rules 24 and 25); omher writes no file of either itself.",
+    "omher changes a bot's automations only through Hermes' own `cron.manage` on that bot's gateway (`add`, `pause`,"
+    " `resume`, `remove`), only when the person presses a button.",
+    "It reads `cron/jobs.json` and never writes it;",
+    "Running or editing an automation is a chat message to the bot:",
+    "omher never imitates an edit by removing and adding a job.",
+    "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
+    " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
+    "`install` carries the pin `inspect` returned.",
+    "never installs from a Git URL or `owner/repo`, and never edits config itself.",
+    "A refused install is read from Hermes' reason code (`exists`, `source_moved`), never from its message.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -129,16 +141,18 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twenty_three_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_twenty_five_numbered_rules(self) -> None:
         # 22: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
         # (skills.list for the ./ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
         # through the person's own `gh`), rule 22 (link chips: channel names read, web links opened on a
-        # click) and rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
-        # the key) each widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
+        # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
+        # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
+        # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
+        # boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 23, len(rules))
+        self.assertTrue(6 <= len(rules) <= 25, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -735,6 +749,60 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         host = (self.UI / "authHost.ts").read_text(encoding="utf-8")
         self.assertIn('invoke("open_hermes_auth", { provider })', host)
         self.assertIn("/^[a-z0-9][a-z0-9_-]{0,40}$/", host)
+
+
+class AutomationsAndPlugins(unittest.TestCase):
+    """Rules 24 and 25: a bot's automations and plugins change only through that bot's own `cron.manage` and
+    `plugins.manage`, with a closed list of actions; jobs.json is read, never written; installs take a catalog
+    name, so a Git URL or `owner/repo` never reaches Hermes."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+
+    def _fn(self, name: str) -> ast.AST:
+        found = [f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) and f.name == name]
+        self.assertEqual(len(found), 1, name)
+        return found[0]
+
+    def _const(self, name: str):
+        for node in self.tree.body:
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+                return node.value
+        self.fail(name)
+
+    def test_each_manage_rpc_has_one_call_site_behind_an_allow_list(self) -> None:
+        owners: dict[str, set[str]] = {}
+        for fn in ast.walk(self.tree):
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for c in ast.walk(fn):
+                    if isinstance(c, ast.Constant) and c.value in ("cron.manage", "plugins.manage"):
+                        owners.setdefault(c.value, set()).add(fn.name)
+        self.assertEqual(owners, {"cron.manage": {"_cron"}, "plugins.manage": {"_plugins"}})
+        self.assertEqual(ast.literal_eval(self._const("CRON_ACTIONS").args[0]), {"add", "pause", "resume", "remove"})
+        self.assertEqual(ast.literal_eval(self._const("PLUGIN_ACTIONS").args[0]),
+                         {"list", "toggle", "inspect", "install", "update", "remove"})
+        for name, allow in (("_cron", "CRON_ACTIONS"), ("_plugins", "PLUGIN_ACTIONS")):
+            self.assertIn(f"if action not in {allow}:", ast.unparse(self._fn(name)))
+
+    def test_no_install_source_but_a_catalog_name(self) -> None:
+        body = ast.unparse(self._fn("op_plugins_install")) + ast.unparse(self._fn("op_plugins_inspect"))
+        for key in ("identifier", "repo", "force", "ref"):
+            self.assertNotIn(f"{key}=", body, key)
+        pattern = ast.literal_eval(self._const("CATALOG_NAME").args[0])
+        for bad in ("https://github.com/x/y", "x/y", "git@github.com:x/y.git", "../x"):
+            self.assertIsNone(re.fullmatch(pattern, bad), bad)
+        self.assertIn("inspected_sha=sha", ast.unparse(self._fn("op_plugins_install")))
+
+    def test_jobs_json_is_only_read(self) -> None:
+        readers = {f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and any(isinstance(c, ast.Constant) and c.value == "jobs.json" for c in ast.walk(f))}
+        self.assertEqual(readers, {"_read_jobs", "poll_routines"})
+        for name in readers:
+            body = ast.unparse(self._fn(name))
+            for write in ("write_text", "write_bytes", "open(", "unlink", "rename", "replace(", "os.remove", "dump("):
+                self.assertNotIn(write, body, f"{name}: {write}")
 
 
 if __name__ == "__main__":
