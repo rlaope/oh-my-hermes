@@ -418,6 +418,16 @@ function withItems(chat: Chat, items: ChatItem[]): Chat {
   return { ...chat, items, messages };
 }
 
+/** The person answered a card: the running turn's "Waiting for approval / your answer" goes back to what the turn
+ *  was doing (its latest step), or to the plain working line, unless another card still waits. */
+function doneWaiting(c: Chat): Chat {
+  const t = c.turn;
+  if (!t || (t.status !== tr("live.waitApproval") && t.status !== tr("live.waitAnswer"))) return c;
+  if (c.items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(c.items, i))) return c;
+  const last = t.steps[t.steps.length - 1];
+  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail) : "" }));
+}
+
 /** How long a status that came before its turn still opens that turn (Hermes sends it right before). */
 const EARLY_STATUS_MS = 5_000;
 
@@ -828,21 +838,25 @@ export function reduce(state: AppState, a: Action): AppState {
       return reduceEvent(state, a.ev, a.now);
     case "approval.resolved":
       return touchChat(state, a.bot, (c) =>
-        withItems(
-          c,
-          c.items.map((i) =>
-            i.kind === "approval" && i.request_id === a.request_id ? { ...i, resolved: a.choice } : i,
+        doneWaiting(
+          withItems(
+            c,
+            c.items.map((i) =>
+              i.kind === "approval" && i.request_id === a.request_id ? { ...i, resolved: a.choice } : i,
+            ),
           ),
         ),
       );
     case "clarify.resolved":
       return touchChat(state, a.bot, (c) =>
-        withItems(
-          c,
-          c.items.map((i) =>
-            i.kind === "clarify" && i.request_id === a.request_id
-              ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
-              : i,
+        doneWaiting(
+          withItems(
+            c,
+            c.items.map((i) =>
+              i.kind === "clarify" && i.request_id === a.request_id
+                ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
+                : i,
+            ),
           ),
         ),
       );

@@ -449,7 +449,10 @@ All notable changes will be documented here.
   start, an agent's status shows only while its turn runs, a turn with no
   steps reads `Worked for 13s`, an agent that dies or is stopped mid-turn ends
   its turn, Stop before Codex names a turn still stops it, and an OmO chat
-  that was running continues by itself after omher restarts. DSH and Grok
+  that was running continues by itself after omher restarts. A stopped OmO
+  turn reads Stopped, Terminal and back during a Claude Code turn leaves the
+  chat idle, the live line drops `Waiting for approval` once you answer, and
+  a CLI's config warning is no longer shown as the reason it ended. DSH and Grok
   sessions that exit get the same Ended line and Restart as a chat, whose
   tooltip says whether the conversation continues.
 

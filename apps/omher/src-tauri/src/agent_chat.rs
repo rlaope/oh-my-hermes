@@ -199,8 +199,6 @@ fn unwrap_shell(cmd: &str) -> String {
     body.to_string()
 }
 
-/// The first useful line of what a program wrote to stderr: log lines (`2026-11-10T05:09:59Z ERROR …`) and
-/// blank lines skipped, else the last line.
 /// How a turn ends when its program exits in the middle of it: a clean exit (code 0, nothing on stderr) is
 /// "ended", which the UI shows in grey; any other exit is an "error" carrying the reason.
 pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
@@ -211,10 +209,38 @@ pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
     ev("turn.end", json!({"outcome": "error", "error": e}))
 }
 
+/// The first useful line of what a program wrote to stderr: colour codes removed, warnings dropped (`Warning: …`,
+/// a `WARN`/`INFO` log line, Codex's "ignoring 1 unrecognized configuration setting"), then the first line that
+/// is not a log line (`2026-11-10T05:09:59Z ERROR …`), else the last log line, else nothing.
 pub(crate) fn exit_reason(tail: &str) -> String {
     let is_log = |l: &str| l.len() > 11 && l.as_bytes()[..4].iter().all(u8::is_ascii_digit) && l.as_bytes()[4] == b'-' && l.as_bytes()[10] == b'T';
-    let lines: Vec<&str> = tail.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let warning = |l: &str| {
+        let low = l.to_ascii_lowercase();
+        low.starts_with("warning:") || low.starts_with("warn:") || (is_log(l) && [" WARN ", " INFO ", " DEBUG ", " TRACE "].iter().any(|w| l.contains(w))) || low.contains("unrecognized configuration setting")
+    };
+    let lines: Vec<String> = tail.lines().map(|l| strip_ansi(l).trim().to_string()).filter(|l| !l.is_empty() && !warning(l)).collect();
     lines.iter().find(|l| !is_log(l)).or(lines.last()).map(|l| clip(l, 200)).unwrap_or_default()
+}
+
+/// `text` without terminal colour and cursor codes (`ESC [ … letter`).
+fn strip_ansi(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut it = text.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '\u{1b}' {
+            if it.peek() == Some(&'[') {
+                it.next();
+                for d in it.by_ref() {
+                    if d.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// What a tool call is about, for the progress line and the approval card: the command, path, pattern,
@@ -1366,7 +1392,14 @@ impl Adapter for Pi {
             }
             // Both end a run with agent_end. oh-my-pi then adds prompt_result and session_settled, which can arrive
             // after the person's next prompt was sent, so they never end a turn, except a prompt no agent ran for.
-            "agent_end" => self.end(&mut st),
+            "agent_end" => {
+                // a Stop that hit a running tool leaves the last message at stopReason "toolUse": agent_end itself
+                // says the run was aborted
+                if v.get("aborted").and_then(Value::as_bool) == Some(true) {
+                    self.last_stop = "aborted".into();
+                }
+                self.end(&mut st)
+            }
             "prompt_result" if v.get("agentInvoked").and_then(Value::as_bool) == Some(false) => self.end(&mut st),
             "extension_ui_request" => {
                 let id = s(&v, "id");
@@ -3367,6 +3400,37 @@ mod tests {
         assert!(raw.starts_with("No default model selected."), "{raw}");
         assert_eq!(Pi::new("/w", "oh-my-pi").explain(&raw), "oh-my-pi is not signed in. Open Terminal and run /login, then Restart.");
         assert_eq!(Claude::new("/w").explain("boom"), "boom");
+    }
+
+    #[test]
+    fn exit_reasons_drop_colour_codes_and_config_warnings() {
+        // Codex 0.167 (audit O8): a coloured log line that only warns about a config setting is no reason
+        let codex = "\u{1b}[2m2026-11-11T10:25:23.520926Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m \u{1b}[2mcodex_app_server\u{1b}[2m:\u{1b}[0m Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.";
+        assert_eq!(exit_reason(codex), "");
+        let codex = format!("{codex}\n\u{1b}[2m2026-11-11T10:25:24Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m codex_api: failed to connect");
+        assert_eq!(exit_reason(&codex), "2026-11-11T10:25:24Z ERROR codex_api: failed to connect");
+        // OmO's skills-catalog warning, then the real reason
+        let omo = "Warning: The skills catalog uses one-line descriptions to limit request size (above 100 skills, 16 KiB of descriptions, or 48 KiB rendered). Remove unused skills to shrink every request.";
+        assert_eq!(exit_reason(omo), "");
+        assert_eq!(exit_reason(&format!("{omo}\nError: model not found")), "Error: model not found");
+        assert_eq!(exit_turn_end(Some(0), &exit_reason(omo)), json!({"event": "turn.end", "outcome": "ended"}));
+    }
+
+    #[test]
+    fn omo_stop_during_a_command_ends_interrupted() {
+        // omo (audit O4): the abort hit the tool, so the last message ended with stopReason "toolUse"; agent_end
+        // carries aborted: true
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        p.on_line(r#"{"type":"agent_start"}"#);
+        p.on_line(r#"{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"toolUse"}}"#);
+        let st = p.on_line(r#"{"type":"agent_end","messages":[],"willRetry":false,"aborted":true,"abortSource":"user"}"#);
+        assert_eq!(ends(&st.events), [("interrupted".into(), "".into())]);
+        // an ordinary end stays done
+        p.on_input(Input::Send { text: "hi".into() }).unwrap();
+        p.on_line(r#"{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}],"stopReason":"stop"}}"#);
+        let st = p.on_line(r#"{"type":"agent_end","messages":[],"willRetry":false}"#);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
     }
 
     #[test]
