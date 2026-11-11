@@ -6,10 +6,12 @@ import { Avatar, Pill } from "../../ui";
 import { isMac } from "../../app/shortcuts";
 import { reasoningLabel } from "../model/levels";
 import { t } from "../../i18n";
+import { PanelButton } from "./PanelButton";
 
 export { reasoningLabel };
 
-/** Header: avatar + name (toggles Details), the places chip slot, and ONE control on the right. */
+/** Header: avatar + name (toggles Details), the places chip slot, and on the right the model control plus the
+ *  right panel's button. */
 export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
   const s = useStore();
   const Places = slots.headerPlaces;
@@ -46,6 +48,7 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
             )}
           </Pill>
         )}
+        <PanelButton bot={bot} />
       </div>
     </header>
   );

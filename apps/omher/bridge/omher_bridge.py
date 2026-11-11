@@ -41,7 +41,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "0.2.4"
+VERSION = "0.2.5"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -1542,6 +1542,8 @@ DELEG_LIMIT = 40        # newest delegation folders read per bot
 LOG_HEAD = 2048         # bytes read from the top of a task log (goal, started)
 LOG_TAIL = 6144         # bytes read from its end (the `final` lines)
 STALE_AFTER = 3600.0    # a "running" task whose log has not moved for this long has stopped reporting
+QUIET_RUN = 86400.0     # a "running" dag run whose record has not changed for this long, with no helper log moving
+                        # (STALE_AFTER), is no longer live: `stale` (nothing settled it; omher never does either)
 ROUTE_FRESH = 900.0     # OMH's own window: a route record older than this no longer describes a dispatch
 _FINAL = re.compile(r"^\d\d:\d\d:\d\d final\s+\|\s*(.*)$")
 _TASK_STATE = {"running": "running", "completed": "done", "failed": "failed", "error": "failed",
@@ -1874,6 +1876,24 @@ def attach_delegations(run: dict, delegs: list[dict]) -> dict:
     return run
 
 
+def mark_stale(run: dict, path: Path | None, delegs: list[dict], now: float) -> dict:
+    """`stale: true` on a running dag run that is not live any more: its record (the `updated_at` it carries, and
+    the file's own mtime) did not change for QUIET_RUN, and none of its helpers is still reporting (a task log
+    that has not moved for STALE_AFTER already reads as stalled). The state stays as the record says."""
+    if run["state"] != "running":
+        return run
+    changed = run["updated"]
+    try:
+        changed = max(changed, path.stat().st_mtime) if path is not None else changed
+    except OSError:
+        pass
+    name = run["id"].rsplit("/", 1)[-1]
+    reporting = any(t.get("dag", {}).get("run") == name and t["status"] == "running" for d in delegs for t in d["tasks"])
+    if now - changed > QUIET_RUN and not reporting:
+        run["stale"] = True
+    return run
+
+
 class DagRuns:
     """Reads `<omh home>/runtime/dag/*/*.json` for one bot: a run belongs to the bot when its `session_id` is a
     session in the bot's own state.db. A record caught mid-write keeps its last good parse (cache keyed by
@@ -1917,15 +1937,16 @@ class DagRuns:
         except sqlite3.Error:
             return set()
 
-    def _owned(self, bot: str, profile_dir: Path):
+    def _owned(self, bot: str, profile_dir: Path, now: float | None = None):
         """(json path or None, record or None, AgentRun) for each of the bot's runs: its dag runs with their
         helpers' models and routes filled in, then its delegate_task fan-outs that belong to no dag run."""
+        now = time.time() if now is None else now
         mine = self._sessions(profile_dir)
         home = omh_home_for(profile_dir)
         records = load_route_records(home)
-        delegs = attach_routes(self.delegations.list(profile_dir), records, mine)
+        delegs = attach_routes(self.delegations.list(profile_dir, now=now), records, mine)
         table = route_table(records, mine)
-        out = [(path, rec, attach_planned(attach_delegations(run, delegs), table))
+        out = [(path, rec, mark_stale(attach_planned(attach_delegations(run, delegs), table), path, delegs, now))
                for path, rec, run in self._dag(bot, profile_dir, mine)]
         for d in delegs:
             if d["tasks"] and not any(t.get("dag") for t in d["tasks"]):
@@ -1969,9 +1990,9 @@ class DagRuns:
         ids = [str(n["id"]) for n in rec.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
         return {i for i in ids if self._handoff_file(root, path, i) is not None}
 
-    def list(self, bot: str, profile_dir: Path) -> list[dict]:
-        runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir)]
-        runs.sort(key=lambda r: (r["state"] != "running", -r["updated"]))
+    def list(self, bot: str, profile_dir: Path, now: float | None = None) -> list[dict]:
+        runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir, now)]
+        runs.sort(key=lambda r: (r["state"] != "running" or bool(r.get("stale")), -r["updated"]))
         return runs
 
     def get(self, bot: str, profile_dir: Path, run_id: str) -> dict:
@@ -2973,6 +2994,52 @@ def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
     return line if len(line) <= n else line[: n - 1] + "…"
 
 
+# Hermes' `subagent.*` events of the bot's own turn (tui_gateway/tool_progress.py `_progress_subagent`), as one
+# `subagent` UI event each: who the child is, what it works on, its state, its current step or its result line.
+# Every text is clipped; a child's thinking text is never forwarded, only that it is thinking. Read-only: omher
+# never assigns, steers or stops a subagent.
+SUBAGENT_STATE = {"subagent.spawn_requested": "queued", "subagent.start": "running", "subagent.thinking": "thinking",
+                  "subagent.tool": "running", "subagent.progress": "running"}
+SUBAGENT_DONE = {"completed": "done", "complete": "done", "success": "done", "failed": "failed", "error": "failed",
+                 "timeout": "failed", "stalled": "failed", "interrupted": "cancelled", "cancelled": "cancelled"}
+SUBAGENT_GOAL, SUBAGENT_STEP, SUBAGENT_SUMMARY = 120, 120, 200
+
+
+def subagent_fields(typ: str, p: dict) -> dict | None:
+    """The UI fields of one `subagent.*` event, or None for one omher does not show (`subagent.text`, no id)."""
+    sid = p.get("subagent_id")
+    if typ not in SUBAGENT_STATE and typ != "subagent.complete" or not isinstance(sid, str) or not sid:
+        return None
+    goal = p.get("goal") if isinstance(p.get("goal"), str) else ""
+    mark = DAG_MARK.search(goal)
+    out: dict = {"id": _one_line(sid, 64), "index": p["task_index"] if isinstance(p.get("task_index"), int) else 0,
+                 "count": p["task_count"] if isinstance(p.get("task_count"), int) else 1,
+                 "goal": _one_line(DAG_MARK.sub("", goal), SUBAGENT_GOAL)}
+    if mark:
+        out["dag"] = {"run": mark.group(1), "node": mark.group(2)}
+    for key, dst, n in (("delegation_id", "delegation", 64), ("model", "model", 80)):
+        if isinstance(p.get(key), str) and p[key]:
+            out[dst] = _one_line(p[key], n)
+    if typ == "subagent.complete":
+        out["state"] = SUBAGENT_DONE.get(str(p.get("status") or "completed"), "done")
+        text = p.get("summary") or p.get("text")
+        if isinstance(text, str) and text.strip():
+            out["summary"] = _one_line(text, SUBAGENT_SUMMARY)
+        if isinstance(p.get("duration_seconds"), (int, float)) and not isinstance(p.get("duration_seconds"), bool):
+            out["seconds"] = round(float(p["duration_seconds"]), 1)
+        return out
+    out["state"] = SUBAGENT_STATE[typ]
+    if typ == "subagent.tool":
+        if isinstance(p.get("tool_name"), str) and p["tool_name"]:
+            out["tool"] = _one_line(p["tool_name"], 40)
+        step = p.get("tool_preview") or p.get("text")
+        if isinstance(step, str) and step.strip():
+            out["step"] = _one_line(step, SUBAGENT_STEP)
+    elif typ == "subagent.progress" and isinstance(p.get("text"), str) and p["text"].strip():
+        out["step"] = _one_line(p["text"].lstrip("🔀 "), SUBAGENT_STEP)
+    return out
+
+
 def dag_parts(args: dict) -> list[dict]:
     """The `[dag:<run>/<node>]` parts a delegate_task call hands out (its `goal` or each task's), in order."""
     goals = [args.get("goal")] + [t.get("goal") for t in args.get("tasks") or [] if isinstance(t, dict)]
@@ -3680,6 +3747,11 @@ class Bridge:
             await out("tool.end", tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
                       name=str(p.get("name") or p.get("tool_name") or "tool"),
                       ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
+        elif typ.startswith("subagent."):
+            # a background fan-out outlives the turn that started it: these never open a turn
+            fields = subagent_fields(typ, p)
+            if fields is not None:
+                await out("subagent", **fields)
         elif typ == "session.title" and chat is not None:
             # Hermes named a folder chat (its own titler, or /title); the name omher gave it at create is not news
             title = p.get("title")

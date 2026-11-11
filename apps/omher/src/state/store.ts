@@ -14,6 +14,7 @@ import type {
   ApprovalChoice,
   Bot,
   BridgeEvent,
+  EventOf,
   ChatOpenResult,
   ClarifyAnswers,
   ClarifyQuestion,
@@ -30,6 +31,7 @@ import type {
   UsageProvider,
   WorktreeDiff,
   MediaFile,
+  SubagentState,
   AttachKind,
   AttachResult,
   AccountCli,
@@ -70,6 +72,37 @@ export interface Turn {
   skills: string[];
   /** Answer text streamed so far (cleared when the final `message` lands). */
   streaming: string;
+  /** The fan-outs (delegate_task children) this turn started, as Hermes' subagent events tell them. */
+  fanouts?: Fanout[];
+}
+
+/** One subagent of a fan-out, as its latest event left it. */
+export interface SubagentRow {
+  id: string;
+  index: number;
+  goal: string;
+  model?: string;
+  dag?: { run: string; node: string };
+  state: SubagentState;
+  tool?: string;
+  step?: string;
+  summary?: string;
+  /** Its own run time when it ended (Hermes'), else counted from `startedAt`. */
+  seconds?: number;
+  startedAt: number; // ms
+  endedAt?: number; // ms
+}
+
+/** One fan-out of a turn: the children of one delegate_task call. */
+export interface Fanout {
+  /** The delegation id once Hermes names it; until then a local key. */
+  key: string;
+  delegation?: string;
+  count: number;
+  startedAt: number; // ms
+  /** When its last event came (ms): a fan-out no event moved for a while is not shown as running. */
+  updatedAt: number;
+  subs: SubagentRow[];
 }
 
 /** Timeline items. `ts` is seconds since epoch so chat rows and away lines sort together. */
@@ -448,6 +481,67 @@ function patchTurn(chat: Chat, fn: (t: Turn) => Turn): Chat {
   return { ...withItems(chat, items), turn };
 }
 
+/** Applies `fn` to the turn of activity item `id`, wherever it is (the running turn, the last one, or older). */
+function patchTurnById(chat: Chat, id: string, fn: (t: Turn) => Turn): Chat {
+  let next: Turn | null = null;
+  const items = chat.items.map((i) => (i.kind === "activity" && i.id === id ? { ...i, turn: (next = fn(i.turn)) } : i));
+  if (!next) return chat;
+  return {
+    ...withItems(chat, items),
+    turn: chat.turn?.id === id ? next : chat.turn,
+    lastTurn: chat.lastTurn?.id === id ? next : chat.lastTurn,
+  };
+}
+
+const SUB_DONE: SubagentState[] = ["done", "failed", "cancelled"];
+export const subagentEnded = (s: Pick<SubagentRow, "state">) => SUB_DONE.includes(s.state);
+
+/** A subagent event into its fan-out. A fan-out is named by its delegation id once Hermes gives one; the turn that
+ *  already shows that delegation takes the event. Otherwise the running turn takes it, and with none running, the
+ *  latest turn whose fan-out holds that subagent still out, else the latest turn that ran a delegate_task (a
+ *  background fan-out outlives its turn). An event no turn can take (the chat opened afterwards) is left to Plans. */
+function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
+  const acts = [...chat.items.filter((i): i is ActivityItem => i.kind === "activity")].reverse();
+  const byDeleg = (t: Turn) => !!ev.delegation && !!t.fanouts?.some((f) => f.delegation === ev.delegation);
+  const outHere = (t: Turn) => !!t.fanouts?.some((f) => f.subs.some((s) => s.id === ev.id && !subagentEnded(s)));
+  const target =
+    acts.find((i) => byDeleg(i.turn))?.id ??
+    chat.turn?.id ??
+    acts.find((i) => outHere(i.turn))?.id ??
+    acts.find((i) => i.turn.steps.some((s) => s.name === "delegate_task"))?.id;
+  if (!target) return chat;
+  return patchTurnById(chat, target, (t) => {
+    const fanouts = [...(t.fanouts ?? [])];
+    // its fan-out by delegation id; a subagent id is matched only inside a fan-out with no other delegation id
+    let fi = fanouts.findIndex(
+      (f) => (!!ev.delegation && f.delegation === ev.delegation) || (f.subs.some((s) => s.id === ev.id) && (!f.delegation || !ev.delegation)),
+    );
+    // a first event names no delegation yet: it joins the newest fan-out still filling with that many children
+    if (fi < 0) fi = fanouts.findIndex((f) => !f.delegation && f.count === ev.count && f.subs.length < f.count && !f.subs.some((s) => s.index === ev.index));
+    if (fi < 0) {
+      fanouts.push({ key: ev.delegation ?? `${t.id}-f${fanouts.length}`, count: ev.count, startedAt: now, updatedAt: now, subs: [] });
+      fi = fanouts.length - 1;
+    }
+    const f = fanouts[fi];
+    const old = f.subs.find((s) => s.id === ev.id);
+    const ended = SUB_DONE.includes(ev.state);
+    const row: SubagentRow = {
+      ...(old ?? { id: ev.id, startedAt: now }),
+      index: ev.index,
+      goal: ev.goal || old?.goal || "",
+      state: old && subagentEnded(old) && !ended ? old.state : ev.state,
+      ...(ev.model ? { model: ev.model } : {}),
+      ...(ev.dag ? { dag: ev.dag } : {}),
+      // the step line is the current tool's; it goes when the child ends (its result line takes its place)
+      ...(ev.step !== undefined ? { step: ev.step, tool: ev.tool } : {}),
+      ...(ended ? { endedAt: old?.endedAt ?? now, summary: ev.summary, seconds: ev.seconds, step: undefined, tool: undefined } : {}),
+    } as SubagentRow;
+    const subs = old ? f.subs.map((s) => (s.id === ev.id ? row : s)) : [...f.subs, row].sort((a, b) => a.index - b.index);
+    fanouts[fi] = { ...f, subs, updatedAt: now, count: Math.max(f.count, ev.count), ...(ev.delegation ? { delegation: ev.delegation } : {}) };
+    return { ...t, fanouts };
+  });
+}
+
 /** Closes the running turn (if any) and moves it to lastTurn. */
 function endTurn(chat: Chat, now: number, outcome: NonNullable<Turn["outcome"]>, error?: string): Chat {
   if (!chat.turn) return chat;
@@ -660,6 +754,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
         })),
       );
+    case "subagent": {
+      const c = state.chats[bot];
+      const next = c && withSubagent(c, ev, now);
+      return next && next !== c ? { ...state, chats: { ...state.chats, [bot]: next } } : state;
+    }
     case "skill":
       return touchChat(state, bot, (c) =>
         patchTurn(c, (t) => (t.skills.includes(ev.name) ? t : { ...t, skills: [...t.skills, ev.name] })),
