@@ -158,7 +158,7 @@ export function forBots(snap: ResumeSnap, bots: readonly string[]): ResumeSnap {
 export interface ResumeInput {
   bot: string | null;
   bots: readonly string[];
-  view: "chat" | "settings" | "session";
+  view: "chat" | "settings" | "session" | "automations" | "plugins";
   session: string | null;
   panelOpen: boolean;
   panelTab: PanelTabId;

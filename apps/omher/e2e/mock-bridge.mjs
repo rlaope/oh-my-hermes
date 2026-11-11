@@ -9,7 +9,9 @@
 // mock.cliTitle {agent, session, title} (the title a CLI wrote in its own session files),
 // mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open),
 // mock.demo (Kami's live "Docs dark mode" plan on top of his list, its nodes' PRs in mixed states; `--demo` seeds it
-// at start and on every reset).
+// at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
+// plugin from its chat: the bridge's poll would emit routines.update + routine.added, or plugin.added + plugins.update),
+// mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes).
 import http from "node:http";
 import crypto from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
@@ -126,6 +128,118 @@ const ROUTINE_SEED = {
   friren: [],
   default: [],
 };
+
+
+// Automations (automations.*): every bot's cron jobs as `read_automations` returns them. Times are offsets from
+// BOOT (seconds), worked out from each schedule on this computer's clock so a row's last and next runs match its
+// cron line; one failed, one paused, one that never ran; delivered to the bot's own chat, to Discord and Slack via
+// origin, and kept local.
+const DAY = 24 * 3600;
+/** Offset from BOOT of the local time `h:m` on the day `days` from today. */
+const clockAt = (days, h, m = 0) => {
+  const d = new Date(BOOT * 1000);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, h, m).getTime() / 1000 - BOOT;
+};
+/** {last, next} offsets of a job that runs at `h:00` on the days `ok(weekday)` allows. */
+function runTimes(h, ok = () => true) {
+  let last = null, next = null;
+  for (let i = 0; i <= 8 && last === null; i++) if (ok(new Date((BOOT + clockAt(-i, h)) * 1000).getDay()) && clockAt(-i, h) <= 0) last = clockAt(-i, h);
+  for (let i = 0; i <= 8 && next === null; i++) if (ok(new Date((BOOT + clockAt(i, h)) * 1000).getDay()) && clockAt(i, h) > 0) next = clockAt(i, h);
+  return { last, next };
+}
+const WEEKDAY = (d) => d >= 1 && d <= 5;
+const r9 = runTimes(9, WEEKDAY), r0 = runTimes(0), r10 = runTimes(10, (d) => d === 1);
+const firstOfMonth = (() => {
+  const d = new Date(BOOT * 1000);
+  return new Date(d.getFullYear(), d.getMonth(), 1, 18).getTime() / 1000 - BOOT;
+})();
+const gemini = Math.max(new Date(2026, 11, 1, 9).getTime() / 1000 - BOOT, 20 * DAY);
+const AUTOMATION_SEED = [
+  { bot: "kami", id: "a1f0c2d9e801", name: "PR morning digest", schedule: "0 9 * * 1-5", next: r9.next, last: r9.last, status: "ok",
+    prompt: "Go through the open PRs in rlaope/oh-my-hermes and sort them into: needs review, CI broken, ready to merge.\nFive lines at most, newest first.",
+    deliver: "bot-chat:kami", created: -8 * 24 * 3600, repeat: { times: null, completed: 6 } },
+  // a script job: Hermes runs the file itself, so there is no prompt to show
+  { bot: "kami", id: "b7e41d0c22aa", name: "SSO token refresh", schedule: "every 30m", next: 14 * MIN, last: -16 * MIN, status: "ok",
+    prompt: "", script: "sso_refresh.sh", deliver: "local", created: -20 * 24 * 3600,
+    repeat: { times: null, completed: 912 } },
+  { bot: "kami", id: "c93a7f1e0b55", name: "Nightly disk cleanup", schedule: "0 0 * * *", next: r0.next, last: r0.last, status: "error",
+    error: "rm: /w/cache/build: Permission denied", prompt: "Clear caches and old build output in /w, then report only what was freed.",
+    deliver: "origin", origin: { platform: "discord", place: "#cron" }, created: -15 * 24 * 3600, repeat: { times: null, completed: 15 } },
+  { bot: "kami", id: "d01be6a4c7f3", name: "Gemini price tier check", schedule: "once at 2026-12-01 09:00", next: gemini, last: null, status: null,
+    prompt: "On December 1 check whether Gemini Argon moved to its paid tier and open a PR updating the price table if it did.",
+    deliver: "bot-chat:kami", created: -2 * 24 * 3600, repeat: { times: 1, completed: 0 } },
+  { bot: "friren", id: "e5c2a9b81d40", name: "Weekly product-ab report", schedule: "0 10 * * 1", next: r10.next, last: r10.last, status: "ok",
+    prompt: "Summarise last week's product-ab experiments: winner, effect size, anything to stop.", deliver: "origin",
+    origin: { platform: "slack", place: "#product" }, created: -30 * 24 * 3600, repeat: { times: null, completed: 4 } },
+  { bot: "default", id: "f8d3e0a27c61", name: "Monthly cost close", schedule: "0 18 1 * *", next: null, last: firstOfMonth, status: "ok",
+    prompt: "On the 1st of each month, total last month's model and cloud spend by provider.", deliver: "bot-chat:default",
+    created: -60 * 24 * 3600, repeat: { times: null, completed: 2 }, paused: true },
+];
+// What `mock.botMade {kind: "routine"}` adds: a job the bot made from its chat.
+const BOT_MADE_JOB = { id: "a9c1e7f30d12", name: "CI watch on my PRs", schedule: "every 15m", next: 15 * MIN, last: null, status: null,
+  prompt: "Check my open PRs in rlaope/oh-my-hermes. If a CI run failed since the last check, tell me which and why.",
+  deliver: "bot-chat:kami", created: 0, repeat: { times: null, completed: 0 } };
+const CRON_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const automationRow = (j) => ({
+  id: j.id, name: j.name, schedule: j.schedule, bot: j.bot,
+  next_run_at: j.paused || j.next === null ? null : BOOT + j.next,
+  last_run_at: j.last === null ? null : BOOT + j.last,
+  last_status: j.status, enabled: !j.paused, paused: Boolean(j.paused), prompt: j.prompt, script: j.script ?? null, deliver: j.deliver,
+  origin: j.origin ?? null, created_at: BOOT + j.created, last_error: j.error ?? null, repeat: j.repeat,
+});
+
+// Plugins (plugins.*): Kami's installs as `plugin_row` returns them (4 of his own, one that needs a key it does not
+// have yet, plus Hermes' bundled ones), and the curated catalog cache (`read_catalog`'s compact entries).
+const PLUGIN_SEED = [
+  { name: "homeassistant", key: "homeassistant", title: "Home Assistant", version: "2.0.1", source: "user", enabled: true, tier: "official",
+    category: "platform", catalog_name: "homeassistant", tools: 4, hooks: 0, update_available: true, needs_env: [],
+    description: "Home Assistant as a gateway platform: state changes come in as events, and the bot can switch devices and send notifications." },
+  { name: "omh", key: "omh", title: "", version: "0.9.4", source: "user", enabled: true, tier: "user", category: "tools", catalog_name: null,
+    tools: 23, hooks: 6, update_available: false, needs_env: [], description: "oh-my-hermes for Hermes: dag runs, status and evidence gathering." },
+  { name: "elevenlabs-music", key: "elevenlabs-music", title: "ElevenLabs Music", version: "1.0.0", source: "user", enabled: false, tier: "official",
+    category: "voice", catalog_name: "elevenlabs-music", tools: 8, hooks: 0, update_available: false, needs_env: ["ELEVENLABS_API_KEY"],
+    description: "Describe a song or paste lyrics and the bot writes, generates and saves the track." },
+  { name: "herdr", key: "herdr", title: "Herdr status", version: "0.3.0", source: "user", enabled: false, tier: "community", category: "desktop",
+    catalog_name: "herdr", tools: 0, hooks: 2, update_available: false, needs_env: [], description: "Shows what the bot is doing in the Herdr panel." },
+  { name: "browserbase", key: "browser/browserbase", title: "", version: "", source: "bundled", enabled: false, tier: "bundled", category: "web",
+    catalog_name: null, tools: 0, hooks: 0, update_available: false, needs_env: ["BROWSERBASE_API_KEY"], description: "Cloud browser backend for the browser tools." },
+  { name: "fal", key: "image_gen/fal", title: "", version: "", source: "bundled", enabled: true, tier: "bundled", category: "tools", catalog_name: null,
+    tools: 1, hooks: 0, update_available: false, needs_env: [], description: "Image generation through fal.ai." },
+  { name: "holographic", key: "memory/holographic", title: "", version: "", source: "bundled", enabled: true, tier: "bundled", category: "memory",
+    catalog_name: null, tools: 2, hooks: 1, update_available: false, needs_env: [], description: "Local memory provider: facts kept in a SQLite store on this computer." },
+];
+const cat = (name, title, category, tier, version, tools, hooks, env, description, platforms = []) => ({
+  name, title, description, tier, category, version, repo: `https://github.com/${tier === "official" ? "NousResearch" : name + "-dev"}/${name}`,
+  maintainer: tier === "official" ? "Nous Research" : `${name}-dev`, platforms, tools, hooks, requires_env: env,
+});
+const CATALOG_SEED = [
+  cat("babysit", "babysit", "automation", "community", "0.2.0", ["watch_log", "stop_watch", "list_watches"], ["on_session_end"], [],
+    "Watches the log of a long job (training, a build, a migration) and tells the bot when it ends or breaks."),
+  cat("brownout", "brownout", "automation", "community", "0.1.4", [], ["on_shutdown"], [], "When the power drops, saves the work in progress and stops cleanly."),
+  cat("atlas", "Atlas", "tools", "verified", "1.3.0", ["atlas_goal", "atlas_sync", "atlas_status"], ["pre_llm_call", "on_session_end"], [],
+    "Keeps one goal current across Claude Code, Codex and other agents."),
+  cat("afterimage", "afterimage", "desktop", "community", "0.5.2", ["record_flow", "replay_flow", "list_flows", "edit_flow", "delete_flow", "export_flow"],
+    ["on_tool_call", "on_session_end"], [], "Show the bot a click-through on screen once and it repeats it after that.", ["macos"]),
+  cat("homeassistant", "Home Assistant", "platform", "official", "2.0.1", ["ha_state", "ha_call", "ha_notify", "ha_history"], [], ["HASS_TOKEN"],
+    "Home Assistant as a gateway platform: state changes come in as events, and the bot can switch devices and send notifications."),
+  cat("elevenlabs-music", "ElevenLabs Music", "voice", "official", "1.0.0", ["music_compose", "music_plan", "music_status", "music_save", "music_list", "music_lyrics", "music_stems", "music_remix"],
+    [], ["ELEVENLABS_API_KEY"], "Describe a song or paste lyrics and the bot writes, generates and saves the track."),
+  cat("spotify", "Spotify", "tools", "official", "2.1.0", ["spotify_play", "spotify_devices", "spotify_queue", "spotify_search", "spotify_playlists", "spotify_albums", "spotify_library"],
+    [], [], "Playback, devices, queue, search, playlists, albums and your library."),
+  cat("camofox", "Camofox", "web", "official", "1.1.0", ["browse", "click", "type", "scroll", "screenshot"], [], ["CAMOFOX_URL"],
+    "Browse with a self-hosted anti-detection Firefox as the browser backend."),
+  cat("langfuse", "Langfuse", "general", "official", "2.0.0", [], ["post_llm_call", "on_session_end"], ["HERMES_LANGFUSE_PUBLIC_KEY", "HERMES_LANGFUSE_SECRET_KEY"],
+    "One trace per turn and one generation per model call, sent to your Langfuse."),
+  cat("xchat", "X Chat", "platform", "official", "0.1.0", [], [], ["XCHAT_ACCESS_TOKEN"], "Talk to the bot in X's end-to-end encrypted DMs."),
+  cat("honcho-memory", "Honcho memory", "memory", "verified", "0.8.1", ["honcho_recall", "honcho_note"], ["pre_llm_call"], ["HONCHO_API_KEY"],
+    "Long-term memory of people and preferences through Honcho."),
+  cat("whisper-local", "Whisper (local)", "voice", "community", "0.4.0", ["transcribe"], [], [], "Transcribes voice notes on this computer with whisper.cpp.", ["macos", "linux"]),
+  cat("openrouter-picker", "OpenRouter picker", "models", "community", "1.2.0", ["pick_model"], ["pre_llm_call"], [], "Picks an OpenRouter model per turn by cost and task."),
+];
+const CATALOG_CATEGORIES = ["automation", "tools", "memory", "voice", "web", "desktop", "models", "platform", "general"];
+const CATALOG_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const PLUGIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/;
+const TIER_RANK = { official: 0, verified: 1, community: 2 };
 
 const PANEL_RUNS = {
   kami: [
@@ -357,6 +471,8 @@ let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
 let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns, cliTitles;
+// Automations and plugins: what the pages read and change (reset with everything else).
+let automations, plugins, inspected, offlineWrites;
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 
@@ -492,6 +608,11 @@ function reset() {
   cliRuns = cliSeed();
   cliTitles = new Map(); // `<agent>:<session id>` -> the title in the agent's own files (cli.title)
   if (DEMO) seedDemo();
+  automations = structuredClone(AUTOMATION_SEED);
+  plugins = { kami: structuredClone(PLUGIN_SEED), friren: structuredClone(PLUGIN_SEED.filter((x) => x.source === "bundled")),
+    default: structuredClone(PLUGIN_SEED.filter((x) => x.source === "bundled")), "omh-tui": structuredClone(PLUGIN_SEED.filter((x) => x.source === "bundled")) };
+  inspected = new Map(); // `<bot>:<catalog name>` -> the sha plugins.inspect handed out
+  offlineWrites = new Set();
   pending = new Map();
   asked = new Map();
   idSeq = 0;
@@ -637,6 +758,35 @@ const folderTurnKey = (bot, session) => `${bot}\u0000${session}`;
 function needStr(p, k) {
   if (typeof p[k] !== "string" || !p[k]) throw new OpError("bad_request", `missing ${k}`);
   return p[k];
+}
+
+// A write needs the bot's gateway: a bot marked with mock.offline answers the way the bridge does.
+function needWritable(p) {
+  const b = needBot(p);
+  if (offlineWrites.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline: gateway not running`);
+  return b;
+}
+function jobAction(p, change) {
+  const b = needWritable(p);
+  if (typeof p.job !== "string" || !CRON_ID.test(p.job)) throw new OpError("bad_request", "need the automation's id");
+  const j = automations.find((x) => x.bot === b.name && x.id === p.job);
+  if (!j) throw new OpError("not_found", `${b.name} has no automation ${p.job}`);
+  change(j);
+  setTimeout(() => broadcast({ event: "routines.update", bot: b.name }), 0);
+  return { job: p.job };
+}
+function catalogEntry(p) {
+  if (typeof p.catalog_name !== "string" || !CATALOG_NAME.test(p.catalog_name)) throw new OpError("bad_request", "plugins install from the catalog by name only");
+  const entry = CATALOG_SEED.find((e) => e.name === p.catalog_name);
+  if (!entry) throw new OpError("not_found", `${p.catalog_name} is not in the plugin catalog`);
+  return entry;
+}
+function pluginOf(p, key) {
+  const b = needWritable(p);
+  if (typeof p[key] !== "string" || !PLUGIN_NAME.test(p[key])) throw new OpError("bad_request", `need a plugin ${key}`);
+  const row = (plugins[b.name] ?? []).find((x) => x.key === p[key] || x.name === p[key]);
+  if (!row) throw new OpError("gateway_error", `plugin '${p[key]}' not found`);
+  return row;
 }
 
 const awayFor = (bot) =>
@@ -926,6 +1076,81 @@ const OPS = {
       enabled: r.enabled,
     })),
   }),
+  // ---- automations: read from every bot's jobs.json; changes only through the bot's cron.manage
+  "automations.list": () => ({ automations: automations.map(automationRow) }),
+  "automations.add": (p) => {
+    const b = needWritable(p);
+    for (const [k, n] of [["name", 120], ["schedule", 200], ["prompt", 8000]])
+      if (typeof p[k] !== "string" || !p[k].trim() || p[k].length > n) throw new OpError("bad_request", `${k} must be text (up to ${n} characters)`);
+    if (p.deliver !== undefined && p.deliver !== `bot-chat:${b.name}`) throw new OpError("bad_request", "deliver is the bot's own chat or left out");
+    // what Hermes' own schedule parser answers for text it cannot read
+    if (!/^(every \d+\s*[mhd]|\d+[mhd]|once at .+|(\S+\s+){4}\S+|every (day|weekday|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*|daily.*|weekly.*)$/i.test(p.schedule.trim()))
+      throw new OpError("cron_refused", `Invalid schedule '${p.schedule.trim()}'. Use: 30m, every 2h, 0 9 * * *, or once at 2026-12-01 09:00`);
+    const id = crypto.randomBytes(6).toString("hex");
+    automations.push({ bot: b.name, id, name: p.name.trim(), schedule: p.schedule.trim(), next: 3600, last: null, status: null,
+      prompt: p.prompt.trim(), deliver: p.deliver ?? "local", created: now() - BOOT, repeat: { times: null, completed: 0 } });
+    setTimeout(() => broadcast({ event: "routines.update", bot: b.name }), 0);
+    return { job: id, name: p.name.trim() };
+  },
+  "automations.pause": (p) => jobAction(p, (j) => { j.paused = true; }),
+  "automations.resume": (p) => jobAction(p, (j) => { j.paused = false; if (j.next === null) j.next = 3 * 24 * 3600; }),
+  "automations.remove": (p) => jobAction(p, (j) => { automations = automations.filter((x) => x !== j); }),
+  // ---- plugins: the catalog is a file read; everything else is the bot's plugins.manage
+  "plugins.list": (p) => ({ plugins: structuredClone(plugins[needWritable(p).name] ?? []) }),
+  "plugins.catalog": (p) => {
+    needBot(p);
+    const q = typeof p.query === "string" ? p.query.trim().toLowerCase() : "";
+    const category = p.category || "";
+    if ((p.query !== undefined && typeof p.query !== "string") || (category && !CATALOG_CATEGORIES.includes(category)))
+      throw new OpError("bad_request", "query is text, category one of the catalog's");
+    const hits = CATALOG_SEED.filter((e) => (!category || e.category === category) &&
+      (!q || e.name.toLowerCase().includes(q) || e.title.toLowerCase().includes(q) || e.description.toLowerCase().includes(q)))
+      .sort((a, b) => (TIER_RANK[a.tier] ?? 3) - (TIER_RANK[b.tier] ?? 3) || a.name.localeCompare(b.name));
+    const categories = Object.fromEntries(CATALOG_CATEGORIES.map((c) => [c, CATALOG_SEED.filter((e) => e.category === c).length]));
+    return { total: CATALOG_SEED.length, matched: hits.length, entries: structuredClone(hits), categories, generated_at: new Date(BOOT * 1000).toISOString() };
+  },
+  "plugins.inspect": (p) => {
+    const b = needBot(p);
+    const entry = catalogEntry(p);
+    needWritable(p);
+    const sha = crypto.createHash("sha1").update(entry.name).digest("hex").slice(0, 12);
+    inspected.set(`${b.name}:${entry.name}`, sha);
+    return { entry: structuredClone(entry), sha, agent: true, desktop: entry.category === "desktop",
+      warnings: entry.tier === "community" ? ["Community plugin: reviewed for the catalog, not maintained by Nous Research."] : [] };
+  },
+  "plugins.install": (p) => {
+    const b = needBot(p);
+    const entry = catalogEntry(p);
+    if (typeof p.inspected_sha !== "string" || !/^[0-9a-f]{7,64}$/.test(p.inspected_sha)) throw new OpError("bad_request", "install needs the sha its inspect returned");
+    needWritable(p);
+    const list = plugins[b.name] ?? (plugins[b.name] = []);
+    // Hermes' refusals carry a reason, never a message the client has to read
+    if (list.some((x) => x.name === entry.name)) throw new OpError("exists", "exists");
+    if (entry.name === "brownout" || inspected.get(`${b.name}:${entry.name}`) !== p.inspected_sha) throw new OpError("source_moved", "source_moved");
+    inspected.delete(`${b.name}:${entry.name}`);
+    list.push({ name: entry.name, key: entry.name, title: entry.title === entry.name ? "" : entry.title, version: entry.version, source: "user",
+      enabled: entry.requires_env.length === 0, tier: entry.tier, category: entry.category, catalog_name: entry.name, tools: entry.tools.length,
+      hooks: entry.hooks.length, update_available: false, needs_env: [...entry.requires_env] });
+    return { name: entry.name, enabled: entry.requires_env.length === 0, restart_required: entry.hooks.length > 0, warnings: [], missing_env: [...entry.requires_env] };
+  },
+  "plugins.toggle": (p) => {
+    const row = pluginOf(p, "key");
+    if (typeof p.enable !== "boolean") throw new OpError("bad_request", "enable is true or false");
+    row.enabled = p.enable;
+    return { name: row.key, restart_required: false };
+  },
+  "plugins.update": (p) => {
+    const row = pluginOf(p, "name");
+    const unchanged = !row.update_available;
+    row.update_available = false;
+    return { name: row.name, unchanged, restart_required: !unchanged };
+  },
+  "plugins.remove": (p) => {
+    const row = pluginOf(p, "name");
+    if (row.source === "bundled") throw new OpError("gateway_error", "bundled plugins cannot be removed");
+    plugins[p.bot] = plugins[p.bot].filter((x) => x !== row);
+    return { name: row.name };
+  },
   "models.options": (p) => {
     const b = needBot(p);
     if (providerFixture === "long") {
@@ -1018,6 +1243,36 @@ const OPS = {
       if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });
     }
     broadcast({ event: "accounts.update", bot: "" });
+    return {};
+  },
+  "mock.botMade": (p) => {
+    const b = needBot(p);
+    if (p.kind === "routine") {
+      const j = { ...structuredClone(BOT_MADE_JOB), bot: b.name, created: now() - BOOT, deliver: `bot-chat:${b.name}` };
+      automations = automations.filter((x) => x.id !== j.id);
+      automations.push(j);
+      const row = automationRow(j);
+      broadcast({ event: "routines.update", bot: b.name });
+      broadcast({ event: "routine.added", bot: b.name, routine_id: j.id, name: j.name, schedule: j.schedule, next_run_at: row.next_run_at,
+        deliver: j.deliver, origin: null, ts: now() });
+      return { id: j.id };
+    }
+    if (p.kind === "plugin") {
+      const entry = CATALOG_SEED.find((e) => e.name === "babysit");
+      const list = plugins[b.name] ?? (plugins[b.name] = []);
+      if (!list.some((x) => x.name === entry.name))
+        list.push({ name: entry.name, key: entry.name, title: "", version: entry.version, source: "user", enabled: true, tier: entry.tier,
+          category: entry.category, catalog_name: entry.name, tools: entry.tools.length, hooks: entry.hooks.length, update_available: false, needs_env: [] });
+      broadcast({ event: "plugin.added", bot: b.name, name: entry.name, title: entry.title, tools: entry.tools.length, hooks: entry.hooks.length, ts: now() });
+      broadcast({ event: "plugins.update", bot: b.name });
+      return { name: entry.name };
+    }
+    throw new OpError("bad_request", "kind is routine or plugin");
+  },
+  "mock.offline": (p) => {
+    needStr(p, "bot");
+    if (p.on === false) offlineWrites.delete(p.bot);
+    else offlineWrites.add(p.bot);
     return {};
   },
   "mock.cliTitle": (p) => {
