@@ -137,9 +137,9 @@ test("the + menu lists the agent CLIs with their marks; missing ones are dimmed 
   const menu = page.getByTestId("session-menu");
   await expect(menu).toBeVisible();
   const rows = menu.locator("[data-testid^=session-agent-]");
-  await expect(rows).toHaveCount(8);
+  await expect(rows).toHaveCount(9);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok", "opencode"].map((a) => `session-agent-${a}`),
   );
   await expect(menu.getByTestId("session-agent-claude")).toContainText("Claude Code");
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
@@ -319,7 +319,7 @@ for (const theme of ["dark", "light"] as const) {
     for (const opener of [start, plus]) {
       await opener.click();
       const menu = page.getByTestId("session-menu");
-      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(8);
+      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(9);
       await expect(page.getByTestId("session-chat")).toHaveCount(0);
       const popBg = await menu.locator("..").evaluate((e) => getComputedStyle(e).backgroundColor);
       const sec = await contrast(page, [".ss-pop .ss-missing", ".ss-pop .ss-item.off .ss-n"], popBg);

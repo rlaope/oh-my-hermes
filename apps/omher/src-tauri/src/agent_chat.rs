@@ -31,6 +31,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 use crate::dsh_chat::DshChat;
+use crate::acp_chat::{acp_agent, is_acp_session_id, Acp};
 use crate::session_files;
 use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
@@ -147,6 +148,7 @@ pub fn adapter_for(id: &str, cwd: &str, resume: Option<&str>) -> Option<Box<dyn 
         "codex" => Some(Box::new(Codex::new(cwd, resume))),
         // OmO speaks pi's RPC (senpi engine): the same adapter, under its own name
         "pi" | "omp" | "omo" => Some(Box::new(Pi::new(cwd, label))),
+        _ if acp_agent(id).is_some() => Some(Box::new(Acp::new(acp_agent(id)?, cwd, resume))),
         _ => None,
     }
 }
@@ -2328,9 +2330,13 @@ impl ChatSessions {
         let args = chat_args(agent_id).ok_or("no chat mode")?;
         // Codex continues a thread over its own protocol (`thread/resume`), not by an argument; the id must
         // still be one Codex reported (a UUID). Claude Code takes `--resume <uuid>` ([`resume_args`]).
+        // An ACP agent (`acp_chat`) continues over its protocol too (`session/resume`), with an id it reported.
+        let acp = acp_agent(agent_id);
         let thread = match (agent_id, resume) {
             ("codex", Some(r)) if is_uuid(r) => Some(r),
             ("codex", Some(_)) => return Err("not a Codex thread id".into()),
+            (_, Some(r)) if acp.is_some() && is_acp_session_id(r) => Some(r),
+            (_, Some(_)) if acp.is_some() => return Err("not a conversation id".into()),
             _ => None,
         };
         let mut adapter = adapter_for(agent_id, &cwd.to_string_lossy(), thread).ok_or("no chat adapter")?;
@@ -2342,7 +2348,10 @@ impl ChatSessions {
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
         }
-        self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)
+        // the agent's own fixed environment from its table row (OpenCode: ask before edits and commands)
+        let mut env = account_env.to_vec();
+        env.extend(acp.map(|a| a.env).unwrap_or(&[]).iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)
     }
 
     /// Start `argv` on pipes in `cwd` with `adapter`. Crate-internal: the app reaches it only through
@@ -2900,7 +2909,7 @@ mod tests {
 
     #[test]
     fn only_chat_agents_have_adapters() {
-        for id in ["claude", "codex", "omo", "pi", "omp"] {
+        for id in ["claude", "codex", "omo", "pi", "omp", "opencode"] {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
         // DSH has no adapter: its chat is a run per message (dsh_chat)
@@ -2914,6 +2923,7 @@ mod tests {
             assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
         }
         assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
+        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 

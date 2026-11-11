@@ -158,7 +158,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
 }
 
 /** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
-const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok"];
+const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode"];
 
 /** The empty section: one "New session" row built like the sidebar's nav rows, opening the same + menu under it.
  *  What it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */
