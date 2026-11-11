@@ -943,6 +943,8 @@ export const zh: Record<Key, string> = {
   "ss.termEndedExit": "{agent} 已结束（退出码 {code}）",
   "ss.seeDocs": "参见 {agent} 文档",
   "ss.codexBundled": "（也会找到 ChatGPT 应用内置的 Codex）",
+  "ss.dshOld": "这个 DSH 会话运行的是 deepseek-bot（omher 0.2.4）。DSH 现在是 DeepSeek Harness：点 Restart 会在此文件夹中启动它。",
+  "ss.dshApp": "（或自带 CLI 的 DeepSeek Harness 应用）",
   "lk.svcKind": "{svc} {kind}",
   "lk.k.channel": "频道",
   "lk.k.message": "消息",

@@ -2,6 +2,7 @@ mod accounts;
 mod agent_chat;
 mod appimage;
 mod bridge;
+mod dsh_chat;
 mod git_branch;
 mod hermes_auth;
 mod session_files;

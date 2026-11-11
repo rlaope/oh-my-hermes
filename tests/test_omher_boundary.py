@@ -16,7 +16,7 @@ BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
 SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
 UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
 SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok")
-SESSION_MODES = ("Chat", "Chat", "Chat", "Terminal", "Hermes", "Chat", "Chat", "Terminal")
+SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal")
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages")
 CONTEXT = ROOT / "CONTEXT.md"
@@ -54,7 +54,12 @@ RULES = (
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
     " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`) on pipes;",
     "the only other argument continues a conversation, with an id the shell checks is a UUID:",
-    "`--resume <id>` for Claude Code and DSH, `--session <id>` for OmO.",
+    "`--resume <id>` for Claude Code, `--session <id>` for OmO.",
+    "DSH is DeepSeek Harness only:",
+    "never another `dsh` on PATH.",
+    "A DSH chat runs one `dsh --profile headless --patch <home>/.omher/dsh/headless.patch.yml --json -` per message on pipes,",
+    "and continues with `--session-id session-<uuid>`, an id the harness reported (when the harness no longer has that session, the same message is sent once more without it, as a new session, and the chat says so); it has no terminal view.",
+    "omher never reads a key and never changes `~/.dsh`.",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
     "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
@@ -73,7 +78,7 @@ RULES = (
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
-    "a Claude Code or Codex chat that was running starts again by itself in the same folder, continuing its own conversation,",
+    "a Claude Code, Codex, OmO or DSH chat that was running starts again by itself in the same folder, continuing its own conversation,",
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
     "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
@@ -258,9 +263,10 @@ class TheOneInstaller(unittest.TestCase):
         # Production code only. bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed
         # installer; agent_chat.rs starts a chat session's allow-listed agent (rule 11); accounts.rs runs the
         # CLIs' fixed status / sign-in argv (rule 18); hermes_auth.rs opens the system terminal with
-        # `hermes auth add <id> --type api-key` (rule 23). Terminal sessions start theirs through the PTY's
+        # `hermes auth add <id> --type api-key` (rule 23); dsh_chat.rs runs a DSH chat's message through DeepSeek
+        # Harness's headless profile (rule 11). Terminal sessions start theirs through the PTY's
         # `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -629,8 +635,8 @@ class AccountsNeverCarryAToken(unittest.TestCase):
                 spawns[path.name] = n
         # bridge.rs starts the bridge with Hermes' Python; accounts.rs runs the CLIs' fixed status / sign-in argv;
         # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11); hermes_auth.rs opens the
-        # system terminal for `hermes auth add` (rule 23).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+        # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
@@ -669,14 +675,59 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         resume = self.prod.split("pub fn resume_args", 1)[1].split("\n}\n", 1)[0]
         # exactly two flags, each for named agents only; every other agent is refused
         self.assertEqual(re.findall(r'^\s+(.+?) => ("--[a-z-]+"|return Err)', resume, re.M),
-                         [('"claude" | "dsh"', '"--resume"'), ('"omo"', '"--session"'), ("_", "return Err")])
-        self.assertIn("if !is_uuid(session)", resume)
-        self.assertEqual(re.findall(r'"(--[a-z-]+)"', resume), ["--resume", "--session"])
+                         [('"claude"', '"--resume"'), ('"omo"', '"--session"'), ('"dsh"', '"--session-id"'), ("_", "return Err")])
+        self.assertIn('let ok = if id == "dsh" { session.strip_prefix("session-").is_some_and(is_uuid) } else { is_uuid(session) };', resume)
+        self.assertIn("if !ok {", resume)
+        self.assertEqual(re.findall(r'"(--[a-z-]+)"', resume), ["--resume", "--session", "--session-id"])
         # the chat spawner takes its argv only from launch_for + chat_args (+ resume_args) and is crate-internal
         start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
         for needle in ("launch_for(agent_id)?", "chat_args(agent_id)", "resume_args(agent_id, r)?", "\n        if a.mode != Mode::Chat {\n            return Err("):
             self.assertIn(needle, start)
         self.assertIn("pub(crate) fn spawn<F>", self.chat)
+
+    def test_dsh_is_deepseek_harness_run_headless_with_fixed_arguments(self) -> None:
+        """Rule 11's DSH sentences: the CLI is DeepSeek Harness's own, each message is one fixed headless run
+        continued by the harness's session id, and the one file written is the fixed credentials overlay."""
+        turn = self.prod.split("pub fn dsh_turn_args", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"([^"]*)"\.into\(\)', turn), ["--profile", "headless", "--patch", "--json", "-"])
+        self.assertIn('a.extend(resume_args("dsh", s)?);', turn)
+        self.assertIn('home.join(".omher").join("dsh").join("headless.patch.yml")', self.prod)
+        patch = re.search(r'pub const DSH_HEADLESS_PATCH: &str = "(.*?)";', self.prod, re.S).group(1)
+        self.assertEqual(re.findall(r"- id: ([a-z-]+)", patch), ["credentials", "authorization", "deepseek-account"])
+        for bad in ("!!js", "name:", "insert", "sandbox", "config"):
+            self.assertNotIn(bad, patch)
+        # found only where DeepSeek Harness installs it; the plain PATH lookup is not used for dsh
+        find = self.prod.split("fn find_agent", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if a.id == "dsh" {', find)
+        self.assertIn("return dsh_harness(", find)
+        harness = self.prod.split("pub fn is_dsh_harness", 1)[1].split("\n}\n", 1)[0]
+        for marker in ('"DeepSeek Harness.app"', '"@deepseek-ai"', '"dsh"'):
+            self.assertIn(marker, harness)
+        self.assertIn('if agent_id == "dsh" {\n            return Err(', self.prod.split("pub fn start_agent", 1)[1])
+        dsh = (SHELL / "dsh_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        self.assertEqual(dsh.count("Command::new("), 1)
+        send = dsh.split("fn launch(&self", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("let mut argv = inner.launch.clone();", send)
+        self.assertIn("argv.extend(dsh_turn_args(&inner.patch,", send)
+        self.assertIn('let (launch, path_env) = launch_for("dsh")?;', dsh)
+        # inside a Linux AppImage the run gets the host environment, as every other spawn does (#2778)
+        self.assertIn("command_with(argv, cwd, path_env, crate::appimage::host_env)", dsh.split("fn command_for(", 1)[1].split("\n}\n", 1)[0])
+        build = dsh.split("fn command_with(", 1)[1].split("\n}\n", 1)[0]
+        self.assertTrue(build.rstrip().endswith("host(&mut cmd);\n    Ok(cmd)"))
+        self.assertEqual(re.findall(r'cmd\.env\("([A-Z_]+)"', build), ["PATH", "DSH_PERMISSION_MODE", "LANG"])
+        self.assertIn('cmd.env("DSH_PERMISSION_MODE", "workspace-write");', build)
+        self.assertNotIn(".arg(", build)
+        # its only file write is the overlay, never through a link, and nothing under ~/.dsh
+        self.assertEqual(dsh.count("std::fs::write("), 1)
+        self.assertIn("std::fs::write(path, DSH_HEADLESS_PATCH)", dsh)
+        self.assertIn("path.is_symlink()", dsh)
+        self.assertNotIn(".dsh\"", dsh)
+        for word in ("plugin", "from-default-profile", "approval-policy", "permission-mode", "api_key", "apiKey"):
+            self.assertNotIn(word, dsh)
+        # the shared chat entry hands dsh to it and nothing else
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn('if agent_id == "dsh" {\n            // DeepSeek Harness', start)
+        self.assertIn("DshChat::start(cwd, resume, sink)?", start)
 
     def test_chat_commands_take_an_agent_id_folder_and_resume_only(self) -> None:
         sig = re.search(r"async fn chat_start\((.*?)\) -> ", self.lib, re.S)
@@ -701,7 +752,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "accounts.rs", "hermes_auth.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)

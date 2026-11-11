@@ -25,12 +25,12 @@ describe("session agents", () => {
     for (const a of AGENTS) expect(a.program).toBe(a.id);
   });
 
-  it("opens claude, codex, omo, pi and omp as chats, omh as a Hermes chat, dsh and grok as terminals (same as the Rust list)", () => {
+  it("opens claude, codex, omo, dsh, pi and omp as chats, omh as a Hermes chat, grok as a terminal (same as the Rust list)", () => {
     expect(AGENTS.map((a) => [a.id, a.mode])).toEqual([
       ["claude", "chat"],
       ["codex", "chat"],
       ["omo", "chat"],
-      ["dsh", "terminal"],
+      ["dsh", "chat"],
       ["omh", "hermes"],
       ["pi", "chat"],
       ["omp", "chat"],
@@ -213,6 +213,6 @@ describe("mock session host", () => {
     const list = await new MockHost({}).agents();
     expect(list.filter((a) => a.path).map((a) => a.id)).toEqual(["claude", "codex", "omh"]);
     expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["omo", "dsh", "pi", "omp", "grok"]);
-    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "terminal", "hermes", "chat", "chat", "terminal"]);
+    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "chat", "hermes", "chat", "chat", "terminal"]);
   });
 });

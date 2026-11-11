@@ -54,10 +54,10 @@ pub const AGENTS: [Agent; 8] = [
     // OmO (`omo-ai`, oh-my-openagent on the senpi engine) speaks pi's RPC: `omo --mode rpc`, checked against omo
     // 5.0.0-beta.65 (get_state, prompt, agent_end; `--session <id>` continues a conversation).
     Agent { id: "omo", program: "omo", label: "OmO", mode: Mode::Chat },
-    // DSH (deepseek-bot's `dsh`) is a terminal client of a running gateway and refuses to run without a TTY;
-    // its headless mode is the DeepSeek Harness's one-shot runner, not this conversation, so it opens in its
-    // terminal. `--resume <id>` names (or continues) the conversation.
-    Agent { id: "dsh", program: "dsh", label: "DSH", mode: Mode::Terminal },
+    // DSH is DeepSeek Harness (deepseek-ai/deepseek-harness), found only where the harness installs its CLI
+    // ([`dsh_harness`]), never another `dsh` on PATH. It ships no terminal profile, so its chat runs one
+    // `dsh --profile headless --json` per message ([`dsh_turn_args`], crate::dsh_chat), continued by `--session-id`.
+    Agent { id: "dsh", program: "dsh", label: "DSH", mode: Mode::Chat },
     Agent { id: "omh", program: "omh", label: "oh-my-hermes", mode: Mode::Hermes },
     Agent { id: "pi", program: "pi", label: "pi", mode: Mode::Chat },
     Agent { id: "omp", program: "omp", label: "oh-my-pi", mode: Mode::Chat },
@@ -98,19 +98,44 @@ pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
 }
 
 /// The argument that continues a conversation: `--resume <id>` for Claude Code (so its terminal view and its
-/// chat continue one conversation) and for DSH (the conversation id omher gave it when it started), `--session
-/// <id>` for OmO (the session id it reported). The id must be a UUID; every other agent and any other text is
-/// refused.
+/// chat continue one conversation), `--session <id>` for OmO (the session id it reported), `--session-id <id>`
+/// for DSH (the `session-<uuid>` DeepSeek Harness reported). The id must be a UUID (DSH: `session-` and a UUID);
+/// every other agent and any other text is refused.
 pub fn resume_args(id: &str, session: &str) -> Result<Vec<OsString>, String> {
     let flag = match id {
-        "claude" | "dsh" => "--resume",
+        "claude" => "--resume",
         "omo" => "--session",
+        "dsh" => "--session-id",
         _ => return Err(format!("{id} sessions cannot be resumed")),
     };
-    if !is_uuid(session) {
+    let ok = if id == "dsh" { session.strip_prefix("session-").is_some_and(is_uuid) } else { is_uuid(session) };
+    if !ok {
         return Err("not a conversation id".into());
     }
     Ok(vec![flag.into(), session.into()])
+}
+
+/// The overlay DSH's chat passes with `--patch`: DeepSeek Harness's shipped headless profile turns off its own
+/// saved-credentials store, and these three rows (upstream dsh-headless README, "Credentials") turn it back on
+/// for that one run, so the harness uses the keys and sign-in saved in its own app. omher writes this fixed text
+/// to [`dsh_patch_path`] and never reads a key; the person's `~/.dsh` is not changed.
+pub const DSH_HEADLESS_PATCH: &str = "# omher: DeepSeek Harness's headless runs use the harness's own saved credentials\n\
+- id: credentials\n  disabled: false\n- id: authorization\n  disabled: false\n- id: deepseek-account\n  disabled: false\n";
+
+/// `<home>/.omher/dsh/headless.patch.yml`, the one file omher writes for DSH.
+pub fn dsh_patch_path(home: &Path) -> PathBuf {
+    home.join(".omher").join("dsh").join("headless.patch.yml")
+}
+
+/// The arguments of one DSH chat turn, all fixed apart from the overlay path and a checked session id:
+/// `--profile headless --patch <overlay> --json [--session-id session-<uuid>] -` (the message goes on stdin).
+pub fn dsh_turn_args(patch: &Path, session: Option<&str>) -> Result<Vec<OsString>, String> {
+    let mut a: Vec<OsString> = vec!["--profile".into(), "headless".into(), "--patch".into(), patch.as_os_str().to_owned(), "--json".into()];
+    if let Some(s) = session {
+        a.extend(resume_args("dsh", s)?);
+    }
+    a.push("-".into());
+    Ok(a)
 }
 
 /// `8-4-4-4-12` hex digits, nothing else.
@@ -214,6 +239,67 @@ pub fn resolve<X: Fn(&Path) -> bool>(program: &str, dirs: &[PathBuf], is_program
     dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| is_program(p))
 }
 
+/// Where DeepSeek Harness puts its CLI, in order: inside the macOS app (`/Applications`, then `~/Applications`),
+/// inside the Windows app (its per-user NSIS install, `%LOCALAPPDATA%\\Programs\\DeepSeek Harness`). Linux has no
+/// fixed place: the npm package `@deepseek-ai/dsh` on PATH ([`is_dsh_harness`]) is how it is found there.
+pub fn dsh_app_clis<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> {
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    let cli = |root: PathBuf, name: &str| ["Resources", "runtime", "cli", "bin", name].iter().fold(root, |p, c| p.join(c));
+    match os {
+        Os::Unix => {
+            let mut roots = vec![PathBuf::from("/Applications")];
+            roots.extend(set("HOME").map(|h| Path::new(&h).join("Applications")));
+            roots.into_iter().map(|r| cli(r.join("DeepSeek Harness.app").join("Contents"), "dsh")).collect()
+        }
+        Os::Windows => set("LOCALAPPDATA")
+            .map(|l| {
+                let app = Path::new(&l).join("Programs").join("DeepSeek Harness");
+                ["resources", "runtime", "cli", "bin", "dsh.cmd"].iter().fold(app, |p, c| p.join(c))
+            })
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// Whether a `dsh` found on PATH is DeepSeek Harness: its real path (links followed) is inside the harness app
+/// (`DeepSeek Harness.app`, or `DeepSeek Harness/resources/runtime/cli` on Windows, which is what the app's
+/// "Manage dsh Command" installs) or inside the npm package `@deepseek-ai/dsh`; an npm `.cmd` shim counts when
+/// that package sits next to it (`node_modules/@deepseek-ai/dsh`). Any other `dsh` (deepseek-bot's launcher in
+/// `~/.local/bin` is one) is not.
+pub fn is_dsh_harness<X: Fn(&Path) -> bool>(found: &Path, real: &Path, exists: X) -> bool {
+    let parts: Vec<String> = real.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
+    let has = |i: usize, s: &str| parts.get(i).is_some_and(|p| p.eq_ignore_ascii_case(s));
+    let inside_app = parts.iter().any(|p| p == "DeepSeek Harness.app")
+        || (0..parts.len()).any(|i| has(i, "DeepSeek Harness") && has(i + 1, "resources") && has(i + 2, "runtime") && has(i + 3, "cli"));
+    let npm = parts.windows(2).any(|w| w[0] == "@deepseek-ai" && w[1] == "dsh");
+    let shim = found.parent().is_some_and(|d| exists(&d.join("node_modules").join("@deepseek-ai").join("dsh").join("package.json")));
+    inside_app || npm || shim
+}
+
+/// The DeepSeek Harness CLI on this machine: the app's own CLI first, then a `dsh` in `dirs` that
+/// [`is_dsh_harness`] accepts. `real` resolves links. Never the first `dsh` on PATH just because it is first.
+pub fn dsh_harness<E, X, R>(env: &E, dirs: &[PathBuf], is_program: X, real: R, os: Os) -> Option<PathBuf>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+    R: Fn(&Path) -> PathBuf,
+{
+    if let Some(p) = dsh_app_clis(env, os).into_iter().find(|p| is_program(p)) {
+        return Some(p);
+    }
+    let names = file_names("dsh", os);
+    dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| is_program(p) && is_dsh_harness(p, &real(p), |q| is_program(q) || q.is_file()))
+}
+
+/// Where allow-listed agent `a` is on this machine: `resolve` over `dirs`, except DSH ([`dsh_harness`]).
+fn find_agent(a: &Agent, dirs: &[PathBuf]) -> Option<PathBuf> {
+    if a.id == "dsh" {
+        let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        return dsh_harness(&host_env, dirs, is_program_file, real, Os::current());
+    }
+    resolve(a.program, dirs, is_program_file, Os::current())
+}
+
 /// argv for a resolved program. A Windows `.cmd`/`.bat` shim runs through `cmd.exe /c`, because
 /// CreateProcess does not start batch files on its own. No other argument is ever added.
 pub fn argv_for(path: &Path, os: Os) -> Result<Vec<OsString>, String> {
@@ -304,7 +390,7 @@ pub fn agents_on_this_machine() -> Vec<AgentInfo> {
             id: a.id,
             label: a.label,
             mode: a.mode,
-            path: resolve(a.program, &dirs, is_program_file, Os::current()).map(|p| p.to_string_lossy().into_owned()),
+            path: find_agent(a, &dirs).map(|p| p.to_string_lossy().into_owned()),
         })
         .collect()
 }
@@ -315,8 +401,10 @@ pub fn agents_on_this_machine() -> Vec<AgentInfo> {
 pub fn launch_for(id: &str) -> Result<(Vec<OsString>, OsString), String> {
     let a = agent(id).ok_or_else(|| format!("unknown agent \"{id}\""))?;
     let dirs = host_dirs();
-    let path = resolve(a.program, &dirs, is_program_file, Os::current())
-        .ok_or_else(|| format!("{} is not installed (no `{}` found)", a.label, a.program))?;
+    let path = find_agent(a, &dirs).ok_or_else(|| match a.id {
+        "dsh" => "DeepSeek Harness is not installed (no DeepSeek Harness `dsh` found)".to_string(),
+        _ => format!("{} is not installed (no `{}` found)", a.label, a.program),
+    })?;
     let mut child_dirs: Vec<PathBuf> = path.parent().map(|p| vec![p.to_path_buf()]).unwrap_or_default();
     child_dirs.extend(dirs);
     let joined = std::env::join_paths(child_dirs.iter().filter(|d| d.is_dir())).map_err(|e| e.to_string())?;
@@ -439,7 +527,7 @@ impl Sessions {
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
-    /// or nothing. `resume` (Claude Code, DSH) continues that conversation in the agent's own terminal UI.
+    /// or nothing. `resume` (Claude Code) continues that conversation in the agent's own terminal UI.
     pub fn start_agent<F>(
         &self,
         agent_id: &str,
@@ -453,6 +541,10 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
+        // DeepSeek Harness ships no terminal profile: DSH runs only as a chat
+        if agent_id == "dsh" {
+            return Err("DeepSeek Harness has no terminal view here".into());
+        }
         let (mut argv, path_env) = launch_for(agent_id)?;
         if let Some(r) = resume {
             argv.extend(resume_args(agent_id, r)?);
@@ -655,7 +747,7 @@ mod tests {
                 ("claude", Mode::Chat),
                 ("codex", Mode::Chat),
                 ("omo", Mode::Chat),
-                ("dsh", Mode::Terminal),
+                ("dsh", Mode::Chat),
                 ("omh", Mode::Hermes),
                 ("pi", Mode::Chat),
                 ("omp", Mode::Chat),
@@ -670,8 +762,24 @@ mod tests {
         assert_eq!(chat_args("pi").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
+        // DSH's chat takes its arguments per message (dsh_turn_args), not here
         for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
             assert!(chat_args(none).is_none(), "{none}");
+        }
+        let p = Path::new("/h/.omher/dsh/headless.patch.yml");
+        assert_eq!(dsh_turn_args(p, None).unwrap(), ["--profile", "headless", "--patch", "/h/.omher/dsh/headless.patch.yml", "--json", "-"].map(OsString::from));
+        let sid = "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8";
+        assert_eq!(
+            dsh_turn_args(p, Some(sid)).unwrap(),
+            ["--profile", "headless", "--patch", "/h/.omher/dsh/headless.patch.yml", "--json", "--session-id", sid, "-"].map(OsString::from)
+        );
+        for bad in ["", "8c11e2bc-9f55-4bcb-a597-19ea472184e8", "session-x", "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8 --approval-policy", "--from-default-profile"] {
+            assert!(dsh_turn_args(p, Some(bad)).is_err(), "{bad:?}");
+        }
+        // no turn argument widens permissions, names another profile or touches the harness's own setup
+        for a in dsh_turn_args(p, Some(sid)).unwrap() {
+            let a = a.to_string_lossy();
+            assert!(!a.contains("permission") && !a.contains("approval") && !a.contains("plugin") && !a.contains("default-profile"), "{a}");
         }
         // no allow-listed argument can run a shell, skip permissions or load extra config
         for a in AGENTS.iter().filter_map(|a| chat_args(a.id)).flatten() {
@@ -687,9 +795,13 @@ mod tests {
             assert!(resume_args("claude", bad).is_err(), "{bad:?}");
         }
         assert!(resume_args("codex", id).is_err());
-        // OmO continues with --session, DSH with --resume, each only with a UUID
+        // OmO continues with --session, only with a UUID
         assert_eq!(resume_args("omo", id).unwrap(), [OsString::from("--session"), OsString::from(id)]);
-        assert_eq!(resume_args("dsh", id).unwrap(), [OsString::from("--resume"), OsString::from(id)]);
+        // DSH continues DeepSeek Harness's own `session-<uuid>` with --session-id; a bare UUID (a 0.2.4 deepseek-bot
+        // conversation id) is refused
+        let sid = format!("session-{id}");
+        assert_eq!(resume_args("dsh", &sid).unwrap(), [OsString::from("--session-id"), OsString::from(&sid)]);
+        assert!(resume_args("dsh", id).is_err());
         for agent in ["omo", "dsh"] {
             for bad in ["", "default", "--yolo", "eee5079a-c52e-4526-b633-f3d8cb7d6394 --x", "../x"] {
                 assert!(resume_args(agent, bad).is_err(), "{agent} {bad:?}");
@@ -700,6 +812,63 @@ mod tests {
         }
         let s = Sessions::default();
         assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert_eq!(s.count(), 0);
+    }
+
+    /// The DeepSeek Harness CLI is found where the harness installs it, never as "the first `dsh` on PATH":
+    /// deepseek-bot's launcher in ~/.local/bin, first on PATH, is skipped.
+    #[test]
+    fn dsh_is_deepseek_harness_not_the_first_dsh_on_path() {
+        let env = env_of(&[("PATH", "/Users/k/.local/bin:/usr/bin"), ("HOME", "/Users/k")]);
+        let dirs = search_dirs(&env, Os::Unix);
+        let bot = PathBuf::from("/Users/k/.local/bin/dsh");
+        let app = PathBuf::from("/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh");
+        let user_app = PathBuf::from("/Users/k/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh");
+        let same = |p: &Path| p.to_path_buf();
+        // the plain lookup would start deepseek-bot
+        assert_eq!(resolve("dsh", &dirs, fs_of(&[&bot, &app]), Os::Unix), Some(bot.clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &app]), same, Os::Unix), Some(app.clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &user_app]), same, Os::Unix), Some(user_app));
+        // deepseek-bot alone: DSH is not installed
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot]), same, Os::Unix), None);
+        // the app's "Manage dsh Command" link in /usr/local/bin and the npm package count, by where they lead
+        let link = PathBuf::from("/usr/local/bin/dsh");
+        let to_app = |p: &Path| if p == link { app.clone() } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &link]), to_app, Os::Unix), Some(link.clone()));
+        let npm = PathBuf::from("/opt/homebrew/bin/dsh");
+        let to_npm = |p: &Path| if p == npm { PathBuf::from("/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/lib/bin.js") } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &npm]), to_npm, Os::Unix), Some(npm));
+        // a `dsh` that leads anywhere else is not the harness
+        let other = |p: &Path| if p == link { PathBuf::from("/Users/k/Desktop/deepseek-bot/dist/tui/main.js") } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &link]), other, Os::Unix), None);
+        // Linux: npm only (no app folder)
+        let lin = env_of(&[("PATH", "/home/k/.local/bin:/home/k/.npm-global/bin"), ("HOME", "/home/k")]);
+        let ldirs = search_dirs(&lin, Os::Unix);
+        let lnpm = PathBuf::from("/home/k/.npm-global/bin/dsh");
+        let lbot = PathBuf::from("/home/k/.local/bin/dsh");
+        let to_lnpm = |p: &Path| if p == lnpm { PathBuf::from("/home/k/.npm-global/lib/node_modules/@deepseek-ai/dsh/lib/bin.js") } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&lin, &ldirs, fs_of(&[&lbot, &lnpm]), to_lnpm, Os::Unix), Some(lnpm));
+    }
+
+    #[test]
+    fn dsh_on_windows_is_the_app_cli_or_the_npm_shim() {
+        let env = env_of(&[("PATH", r"C:\Users\k\.local\bin;C:\Users\k\AppData\Roaming\npm"), ("LOCALAPPDATA", r"C:\Users\k\AppData\Local"), ("APPDATA", r"C:\Users\k\AppData\Roaming"), ("USERPROFILE", r"C:\Users\k")]);
+        let dirs = search_dirs(&env, Os::Windows);
+        let app = dsh_app_clis(&env, Os::Windows);
+        assert_eq!(app, [Path::new(r"C:\Users\k\AppData\Local").join("Programs").join("DeepSeek Harness").join("resources").join("runtime").join("cli").join("bin").join("dsh.cmd")]);
+        let same = |p: &Path| p.to_path_buf();
+        let bot = Path::new(r"C:\Users\k\.local\bin").join("dsh.cmd");
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &app[0]]), same, Os::Windows), Some(app[0].clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot]), same, Os::Windows), None);
+        // the npm shim counts when @deepseek-ai/dsh sits next to it
+        let npm_dir = Path::new(r"C:\Users\k\AppData\Roaming\npm");
+        let shim = npm_dir.join("dsh.cmd");
+        let pkg = npm_dir.join("node_modules").join("@deepseek-ai").join("dsh").join("package.json");
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &shim, &pkg]), same, Os::Windows), Some(shim.clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &shim]), same, Os::Windows), None);
+        // and DeepSeek Harness never opens in a terminal session
+        let s = Sessions::default();
+        assert!(s.start_agent("dsh", &std::env::temp_dir(), None, &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
     }
 

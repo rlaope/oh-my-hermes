@@ -22,7 +22,7 @@ export const AGENTS: readonly AgentDef[] = [
   { id: "claude", program: "claude", label: "Claude Code", mode: "chat" },
   { id: "codex", program: "codex", label: "Codex", mode: "chat" },
   { id: "omo", program: "omo", label: "OmO", mode: "chat" },
-  { id: "dsh", program: "dsh", label: "DSH", mode: "terminal" },
+  { id: "dsh", program: "dsh", label: "DSH", mode: "chat" },
   { id: "omh", program: "omh", label: "oh-my-hermes", mode: "hermes" },
   { id: "pi", program: "pi", label: "pi", mode: "chat" },
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
@@ -44,24 +44,26 @@ export const INSTALL: Record<AgentId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
   omo: "npm i -g omo-ai",
-  dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
+  dsh: "npm i -g @deepseek-ai/dsh",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
   pi: "npm i -g @mariozechner/pi-coding-agent",
   omp: "npm i -g @oh-my-pi/pi-coding-agent",
   grok: "see grok docs",
 };
 
-/** Tooltip of an agent that is not installed: what is missing, then how to install it. */
+/** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
+ *  (another `dsh` on PATH, such as deepseek-bot's, does not count) and its desktop app, which carries the CLI. */
 export function missingNote(agent: AgentId): string {
   const how = INSTALL[agent];
-  const install = how.startsWith("see ") ? t("ss.seeDocs", { agent }) : t("ss.installHow", { cmd: how }) + (agent === "codex" ? t("ss.codexBundled") : "");
-  return t("ss.missing", { program: agentDef(agent).program, how: install });
+  const install = how.startsWith("see ") ? t("ss.seeDocs", { agent }) : t("ss.installHow", { cmd: how }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
+  return t("ss.missing", { program: agent === "dsh" ? "DeepSeek Harness (dsh)" : agentDef(agent).program, how: install });
 }
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
 
-/** Agents whose Restart (and Resume) continues the conversation: Claude Code `--resume`, Codex `thread/resume`,
- *  OmO `--session`, DSH `--resume <id>` (its terminal). pi, oh-my-pi and Grok start a new one. */
+/** Agents whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
+ *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session). pi, oh-my-pi and Grok (a
+ *  terminal) start a new one. */
 export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
