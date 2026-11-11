@@ -107,7 +107,8 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
     name: chatKey,
     display_name: label,
     is_default: false,
-    model: rec.model ?? "",
+    // DeepSeek Harness keeps its model in its own app and its headless stream names none: nothing to pick here
+    model: rec.model || (rec.agent === "dsh" ? "dsh" : ""),
     provider: "",
     description: "",
     status: rec.status === "running" ? "online" : rec.status === "starting" ? "starting" : "offline",

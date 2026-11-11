@@ -321,6 +321,8 @@ test("OmO opens as a chat that answers; DSH opens DeepSeek Harness as a chat wit
   // a chat, never a terminal: no Terminal toggle, no PTY start, and one chat that the second message continued
   await expect(page.getByTestId("session-terminal-toggle")).toHaveCount(0);
   await expect(page.getByTestId("terminal")).toHaveCount(0);
+  // its model lives in DeepSeek Harness's own app: no "pick a model" note for a menu it does not have
+  await expect(page.getByTestId("chat-no-model")).toHaveCount(0);
   const all = await calls(page);
   expect(all.filter((c) => c.op === "start")).toHaveLength(0);
   const dsh = all.filter((c) => c.op === "chat.start" && c.agent === "dsh");
