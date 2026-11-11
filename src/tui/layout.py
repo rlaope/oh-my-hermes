@@ -2,7 +2,6 @@
 
 Top to bottom the region holds:
 
-    sticky prompt   "↳ you: …" while a turn runs
     streaming tail  the last rows of the live transcript block
     pad rows        blank rows that keep a region on the screen's last row from shrinking
     working rows    the tail's last rows that say a turn runs (`tail_floor`), drawn under the pad rows
@@ -31,10 +30,9 @@ the app gives the agent view a row that comes free (the working row's, once a
 turn ends) only when the view wants more rows than it did
 (`agent_view.AgentViewMixin._held_view_rows`).
 The one frame where the composer rises there is the one a turn ends with: the
-rows only a running turn had and nothing in that frame takes (the sticky
-prompt, the blank row over it, the blank row over the plan) are left out of
-`min_height`, since pad rows for them would stand between the turn's done line
-and the composer (the owner's report of 2026-10-28; `App._render`).
+row only a running turn had and nothing in that frame takes (the blank row
+over the plan) is left out of `min_height`, since a pad row for it would stand
+between the turn's done line and the composer (the owner's report of 2026-10-28; `App._render`).
 
 - The region is never taller than `rows - 1`. `LiveRegion` moves only
   relative to its own top and cursor-up stops at the top of the screen, so a
@@ -49,8 +47,7 @@ and the composer (the owner's report of 2026-10-28; `App._render`).
 - Then the top rule, then the menu below (at most `rows // 3`), then the
   slot (at most `rows // 3` less the menu below's rows), then the agent view
   (its producer sizes it to `agent_view_cap`), leaving the tail its last
-  `tail_floor` rows (the working row while a turn runs), then the sticky
-  prompt (only when asked and a row is left), and the tail takes whatever
+  `tail_floor` rows (the working row while a turn runs), and the tail takes whatever
   remains, keeping its last rows. So a question or a picker keeps its whole
   cap beside the agent view, and the tail gives way first, never below its
   floor.
@@ -89,7 +86,6 @@ BLANK: Line = ()
 
 @dataclass(frozen=True)
 class Budget:
-    sticky: int
     tail: int
     slot: int
     rule: int
@@ -101,13 +97,11 @@ class Budget:
     below: int = 0  # the menu below: between the bottom rule and the info line
     agents: int = 0  # the agent view: under the info line, the region's last rows
     gaps: tuple[int, int] = (0, 0)  # blank rows above the slot and under it
-    sticky_gap: int = 0  # a blank row above the sticky prompt, so it never reads as the reply's last line
 
     @property
     def total(self) -> int:
         return (
             self.pad
-            + self.sticky
             + self.tail
             + self.slot
             + self.rule
@@ -117,13 +111,12 @@ class Budget:
             + self.info
             + self.agents
             + sum(self.gaps)
-            + self.sticky_gap
         )
 
     @property
     def slot_top(self) -> int:
         """Region row of the slot's first row."""
-        return self.sticky_gap + self.pad + self.sticky + self.tail + self.gaps[0]
+        return self.pad + self.tail + self.gaps[0]
 
     @property
     def composer_top(self) -> int:
@@ -193,7 +186,6 @@ def allocate(
     rows: int,
     cols: int,
     *,
-    sticky: bool,
     tail_rows: int,
     slot_rows: int,
     composer_rows: int,
@@ -204,7 +196,6 @@ def allocate(
     agents_rows: int = 0,
     tail_floor: int = 0,
     gaps: tuple[bool, bool] = (False, False),
-    sticky_gap: bool = False,
     gap_reserve: int = 0,
 ) -> Budget:
     """Rows for each part of the region (see the module docstring for the rules)."""
@@ -215,9 +206,8 @@ def allocate(
     if composer_hidden:
         composer = bottom_rule = 0  # their rows, and the top rule's, go to the slot (`choice_cap`)
     left = room - composer - info - bottom_rule
-    rule = slot = sticky_rows = tail = below = agents = 0
+    rule = slot = tail = below = agents = 0
     spaced = (0, 0)
-    over_sticky = 0
     if composer_hidden:
         slot = min(max(slot_rows, 0), choice_cap(rows, cols), left)
         left -= slot
@@ -234,8 +224,6 @@ def allocate(
             left -= slot
         agents = min(max(agents_rows, 0), max(left - min(max(tail_floor, 0), tail_rows), 0))
         left -= agents
-        sticky_rows = 1 if sticky and left > 0 else 0
-        left -= sticky_rows
         # The blank rows asked for above and under a slot that has rows: only from what the slot, the agent view and
         # the whole tail leave, so they give way before any of those does and never cost a live tool row (#2342
         # review). They stand above the composer, so on the bottom rows they push the transcript up, never the
@@ -246,14 +234,12 @@ def allocate(
         spare = max(left - floor, 0)
         above = int(gaps[0] and slot > 0 and spare > 0)
         spaced = (above, int(gaps[1] and slot > 0 and spare > above))
-        over_sticky = int(sticky_gap and sticky_rows > 0 and spare > sum(spaced))  # the same rule, last
-        left -= sum(spaced) + over_sticky
+        left -= sum(spaced)
         tail = min(max(tail_rows, 0), left)
-    content = sticky_rows + tail + slot + rule + composer + bottom_rule + below + info + agents + sum(spaced) + over_sticky
+    content = tail + slot + rule + composer + bottom_rule + below + info + agents + sum(spaced)
     return Budget(
         pad=min(max(min_height - content, 0), room - content),
         floor=min(max(tail_floor, 0), tail),
-        sticky=sticky_rows,
         tail=tail,
         slot=slot,
         rule=rule,
@@ -263,7 +249,6 @@ def allocate(
         below=below,
         agents=agents,
         gaps=spaced,
-        sticky_gap=over_sticky,
     )
 
 
@@ -282,7 +267,6 @@ def _first(lines: Sequence[Line], count: int) -> list[Line]:
 def compose(
     budget: Budget,
     *,
-    sticky: Line | None,
     tail: Sequence[Line],
     slot: Sequence[Line],
     rule: Line,
@@ -299,9 +283,7 @@ def compose(
     rows (their producers size them to `slot_cap`, `composer_cap` and
     `agent_view_cap`).
     """
-    region: list[Line] = [BLANK] * budget.sticky_gap
-    if budget.sticky:
-        region.append(sticky if sticky is not None else BLANK)
+    region: list[Line] = []
     shown = _last(tail, budget.tail)
     split = len(shown) - budget.floor
     region.extend([*shown[:split], *[BLANK] * budget.pad, *shown[split:]])

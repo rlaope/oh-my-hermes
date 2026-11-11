@@ -42,7 +42,7 @@ from omh.tui.app import (
     queue_lines,
     working_verb,
 )
-from omh.tui.frame import MODE_ACCEPT, MODE_PLAN, sticky_line
+from omh.tui.frame import MODE_ACCEPT, MODE_PLAN
 from omh.tui.diff_view import DIFF_ADDED, DIFF_FILE, DIFF_HUNK, DIFF_INDENT, DiffLine, diff_rows
 from omh.tui.gateway import Event
 from omh.tui.composer import PROMPT
@@ -457,11 +457,10 @@ class PromptRowTests(unittest.TestCase):
         self.assertEqual(line_text(row), "┃ ❯ next one  ⧗ from queue")
         self.assertEqual(row[-1].style, THEME.muted)
 
-    def test_the_sticky_reminder_and_the_queue_read_apart_from_a_prompt(self) -> None:
+    def test_the_queue_reads_apart_from_a_prompt(self) -> None:
         prompt = line_text(block_rows(UserBlock("fix it"), 40, THEME)[0])
-        sticky = line_text(sticky_line("fix it", 40, THEME))
         (queued,) = lines_text(queue_lines(["fix it"], 40, 3, THEME))
-        self.assertEqual([prompt[:4], sticky[:7], queued[:2]], ["┃ ❯ ", "↳ you: ", "⧗ "])
+        self.assertEqual([prompt[:4], queued[:2]], ["┃ ❯ ", "⧗ "])
 
     def test_a_command_echoes_as_a_prompt_does_in_the_hint_colour(self) -> None:
         rows = block_rows(CommandBlock("/model", [("Current model: x", NOTICE_INFO)], done=True), 40, THEME)

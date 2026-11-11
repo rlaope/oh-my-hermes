@@ -1,7 +1,7 @@
 """The region follows the content until the screen is full, then stays on the bottom rows.
 
-`build_frame` + `LiveRegion` driven into a VT screen model. The region (sticky
-prompt, streaming tail, slot, composer box, info line) is drawn right
+`build_frame` + `LiveRegion` driven into a VT screen model. The region (streaming
+tail, slot, composer box, info line) is drawn right
 under the output and is as tall as its content, the way Claude Code's input
 box follows what was printed: no blank rows between the transcript and the
 composer at the start, after a turn or around a question. Once its last row is
@@ -64,7 +64,7 @@ from _vt_screen import VTScreen
 
 from _tui_lines import rule_edges
 from omh.tui.composer import PROMPT, SUBMIT, Composer
-from omh.tui.frame import MODE_ACCEPT, MODE_NORMAL, MODE_PLAN, build_frame, sticky_line
+from omh.tui.frame import MODE_ACCEPT, MODE_NORMAL, MODE_PLAN, build_frame
 from omh.tui.keys import BACKSPACE, CHAR, ENTER, ESCAPE, Key, Paste
 from omh.tui.layout import AGENT_VIEW_ROWS, agent_view_cap, choice_cap, composer_cap, slot_cap
 from omh.tui.modes import info_line
@@ -122,7 +122,6 @@ class Session:
         self.region = LiveRegion(self.screen.feed, at_top=at_top)  # at_top: told it starts on row 0
         self.known_rows: list[int | None] = []  # what the region said its last row was, at every check
         self.composer = Composer()
-        self.sticky: Line | None = None
         self.tail: list[Line] = []
         self.slot: list[Line] = []
         self.flushed: list[str] = []
@@ -163,7 +162,6 @@ class Session:
             rows=self.rows,
             composer=None,
             info=self.info_row(),
-            sticky=self.sticky,
             tail=self.tail,
             slot=self.slot,
             mode=self.mode,
@@ -200,7 +198,6 @@ class Session:
             rows=self.rows,
             composer=self.composer,
             info=self.info_row(),
-            sticky=self.sticky,
             tail=self.tail,
             slot=self.slot,
             mode=self.mode,
@@ -295,7 +292,6 @@ def run_scenario(session: Session) -> None:
     session.keys("typing Hangul", typed("한글 입력"))
     action = session.composer.handle(Key(ENTER))
     assert action.kind == SUBMIT
-    session.sticky = sticky_line(action.text, session.cols)
     session.paint("submit flushes the user line", flush=[f"you: {action.text}"])
 
     # the streaming tail grows past the screen while stable lines flush
@@ -342,16 +338,14 @@ def run_scenario(session: Session) -> None:
     session.keys("multi-line paste", [Paste("first\nsecond\nthird\nfourth\nfifth")])
     session.keys("Ctrl+C clears", [Key(CHAR, "c", ctrl=True)])
 
-    # the turn ends: the tail flushes, the sticky prompt goes
+    # the turn ends: the tail flushes
     stable = [text_of(line) for line in session.tail]
     session.tail = []
-    session.sticky = None
     session.paint("turn complete flushes the tail", flush=stable)
     session.switch(MODE_NORMAL)
     session.paint("a big flush", flush=[f"history line {next(counter)}" for _ in range(rows + 5)])
 
     # a second turn with a panel, a shrink, and a small flush into the pad rows
-    session.sticky = sticky_line("second prompt", session.cols)
     session.tail = [plain(f"stream {next(counter)}") for _ in range(4)]
     session.slot = [plain(f"agent {n}") for n in range(slot_cap(rows, session.cols))]
     session.paint("second turn with a panel")
@@ -651,13 +645,11 @@ class AppBottomRowsTests(unittest.TestCase):
         self.assertFalse(any(after[live + 2 : rule - 2]), after)  # the freed rows: under the live calls only
 
     def test_a_long_turn_ends_with_one_blank_row_between_its_done_line_and_the_composer(self) -> None:
-        # The owner's report (2026-10-28): after a long turn, three blank rows stood between `✻ 7m 11s · 12 tools`
-        # and the composer. Once the prompt scrolled off, its sticky echo and the blank row over it took two rows on
-        # the bottom rows, scrolling two transcript rows away for good, and at the turn's end they stayed as pad rows.
-        # With the plan shown, the blank row over it went the same way in every turn, short or long: the running
-        # turn had it, and the idle tail's own spacer stands in for it. The region gives those rows up as the turn
-        # ends: the composer rises by them, and the next turn's output takes it back down to the bottom rows. A short
-        # turn without the plan, its prompt still on screen, had none of them: nothing moves.
+        # The owner's report (2026-10-28): after a long turn, blank rows stood between `✻ 7m 11s · 12 tools` and
+        # the composer. With the plan shown, the blank row over it went the same way in every turn, short or long:
+        # the running turn had it, and the idle tail's own spacer stands in for it. The region gives that row up as
+        # the turn ends: the composer rises by it, and the next turn's output takes it back down to the bottom rows.
+        # Without the plan nothing moves, long turn or short (no `↳ you:` echo since 2026-11-11).
         from test_tui_agent_view import relay, STARTS
         from test_tui_live_region_pass import PLAN
         from test_tui_modes import drawn, make_app, type_text
@@ -698,8 +690,7 @@ class AppBottomRowsTests(unittest.TestCase):
                         drawn(app)
                     event("message.delta", text="Every listing matched.")
                     busy = drawn(app)
-                    sticky = [row for row in busy if row.startswith("↳ you: check the tree")]
-                    self.assertEqual(bool(sticky), tools == 12)
+                    self.assertFalse([row for row in busy if row.startswith("↳ you:")])  # no echo of the prompt
                     self.assertEqual((app.frame_budget.slot > 0, app.frame_budget.agents > 0),
                                      (extra == "plan", extra == "agents"))
                     self.assertEqual(app.region.last_row(rows), rows - 1)
@@ -707,8 +698,8 @@ class AppBottomRowsTests(unittest.TestCase):
                     ended = drawn(app)
                     self.assertEqual(blank_under_done(ended), 1, ended)  # the spacing between any two blocks
                     rose = self.where(busy)[0] - self.where(ended)[0]
-                    # the sticky and the blank row over it, the plan's blank row, no more
-                    self.assertEqual(rose, 2 * bool(sticky) + (extra == "plan"))
+                    # the plan's blank row, no more
+                    self.assertEqual(rose, int(extra == "plan"))
                     self.assertFalse(any(ended[rows - rose :]), ended)  # the rows given up: under the region
                     type_text(app, "and again")
                     app._on_input(Key(ENTER))
@@ -717,9 +708,9 @@ class AppBottomRowsTests(unittest.TestCase):
                     drawn(app)
                     self.assertEqual(app.region.last_row(rows), rows - 1)  # the next turn is on the bottom rows again
 
-    def test_a_menu_closing_mid_turn_under_the_sticky_prompt_leaves_the_composer_on_the_bottom_rows(self) -> None:
+    def test_a_menu_closing_mid_turn_leaves_the_composer_on_the_bottom_rows(self) -> None:
         # Only the frame a turn ends with gives rows up (#2370 review): a running turn's frames keep the region's
-        # height whatever closes in them, so the composer never climbs while the sticky prompt shows.
+        # height whatever closes in them, so the composer never climbs mid-turn.
         from test_tui_modes import drawn, make_app, type_text
 
         from omh.tui.gateway import Event
@@ -745,7 +736,7 @@ class AppBottomRowsTests(unittest.TestCase):
             drawn(app)
         event("message.delta", text="Every listing matched so far.")
         before = drawn(app)
-        self.assertTrue([row for row in before if row.startswith("↳ you: check the tree")])
+        self.assertEqual(app.region.last_row(24), 23)  # a long turn: the region is on the bottom rows
         type_text(app, "/")  # the completion menu opens over the composer, then closes
         drawn(app)
         app._on_input(Key(BACKSPACE))

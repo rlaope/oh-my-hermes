@@ -1632,7 +1632,6 @@ class Transcript:
         self.dropped = 0  # blocks BLOCK_CAP dropped from the front
         # Where the last take's lines hold the first row of the newest prompt in them (not the blank row above it);
         # None when that take held no prompt.
-        self.prompt_row: int | None = None
         # Blocks about a live one (a steer, an answer to Hermes, a command's echo), waiting for a block boundary
         # (`add_steer`, `add_command`).
         self._held: list[Block] = []
@@ -2258,7 +2257,6 @@ class Transcript:
     ) -> list[Line]:
         """Lines that will never change, each returned once: print them above the live region.
 
-        `prompt_row` says where among them the newest prompt's first row is.
         `final` is the take at exit: it also releases the `|` rows held back for a divider.
         `live_rows` is the height of the live region: a held table taller than half of it is released as it grows.
         A table released that way keeps the column widths it had when released; `/history` and redraws
@@ -2266,7 +2264,6 @@ class Transcript:
         """
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
-        self.prompt_row = None
         measured, self._measured = self._measured, None
         held = measured[3] if measured and measured[:2] == (self._version, width) and measured[2] is theme else []
         first = self._cursor  # the block `held` starts at
@@ -2290,8 +2287,6 @@ class Transcript:
             elif block.done:
                 # A done reply taken from its first line is the rows `block_rows` gives it, as measured.
                 rows = held[index] if index < len(held) else block_rows(block, width, theme)
-                if isinstance(block, UserBlock) and rows:
-                    self.prompt_row = len(taken) + (1 if self._taken_any else 0)  # after the spacer `_spaced` adds
                 taken.extend(self._spaced(rows, opens_block=True))
             if not block.done:
                 break

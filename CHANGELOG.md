@@ -21,6 +21,13 @@ All notable changes will be documented here.
   the language (`zh-CN`, `ja`, `ko`), dates follow it too, and `--font` falls
   back to PingFang SC, Hiragino Sans GB, Microsoft YaHei and Noto Sans CJK
   (and their Japanese and Korean siblings).
+- **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
+  long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
+  working row once it had scrolled off; the owner found it noise. The prompt
+  stays in the transcript and scrolls off with it (scroll up to read it), and
+  the two rows the echo and the blank row over it took go to the turn's own
+  output.
+
 - **Enter steers a running turn in the OMH TUI, as Claude Code does.** Text
   you type and send with Enter while Hermes is working now goes into that turn
   at once (`session.redirect`, read at the next tool call) and shows as your
