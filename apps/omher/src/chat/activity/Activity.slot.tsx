@@ -151,7 +151,8 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
 
   const now = Date.now();
   const total = elapsed((t.endedAt ?? now) - t.startedAt);
-  const n = t.steps.length;
+  // what the details show: a delegate_task that handed out dag parts is one row per part
+  const n = t.steps.reduce((k, st) => k + (st.name === "delegate_task" && st.dag?.length ? st.dag.length : 1), 0);
   const state = live ? "live" : t.outcome === "interrupted" || t.outcome === "ended" || t.outcome === "error" ? t.outcome : "done";
   const canOpen = n > 0;
 

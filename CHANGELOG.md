@@ -442,6 +442,19 @@ All notable changes will be documented here.
   Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
   Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
 
+- **omher's subagents are visible without knowing a shortcut.** The bot chat's
+  header has one panel button right of the model control: it opens the right
+  panel (on Plans when the bot has live work or the panel was never used, else
+  on the last tab) and closes it, and while subagents work it carries the live
+  dot and says how many in its tooltip. A turn that starts a `delegate_task`
+  opens Plans on that run by itself once (windows 1100px and wider; a close
+  sticks for that turn). Plans re-reads on its own every 3 s while a run is
+  live and right after each fan-out step, stops while the window is hidden,
+  says plainly what it is for when empty, no longer opens a bot with no plans
+  on a CLI agent's run, and the turn summary counts the rows its details show.
+  A dag run nothing changed for a day, with no helper still writing, reads
+  "no update for 9d" instead of pulsing as live.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

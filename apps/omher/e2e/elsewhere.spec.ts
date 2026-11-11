@@ -56,8 +56,8 @@ test("header chip counts the other places and toggles the panel", async ({ page 
   await expect(chip.locator(".src-ic-slack")).toHaveCount(1);
   await expect(chip.locator(".src-ic-discord")).toHaveCount(1);
   await expect(chip.locator(".src-sq")).toHaveCount(0);
-  // the header right keeps exactly one control
-  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);
+  // the header right keeps the model control and the panel button, nothing else
+  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(2);
 
   const details = page.getByTestId("details");
   await chip.click();

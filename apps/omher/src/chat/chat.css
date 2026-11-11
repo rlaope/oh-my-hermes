@@ -671,3 +671,24 @@
   font-size: 11px;
   color: var(--quiet);
 }
+
+/* the right panel's button, right of the model control: borderless, gray while the panel is open, no accent; the
+   live dot sits on its corner while subagents work. The model control gives way first (it can shrink, this cannot) */
+.head-right > .head-pb {
+  position: relative;
+  flex: none;
+}
+.head-pb.on {
+  background: var(--raise);
+  color: var(--ink);
+}
+.head-pb-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--g-accent);
+  box-shadow: 0 0 0 1.5px var(--bg);
+}

@@ -129,14 +129,15 @@ test("slash shows the skill hint", async ({ page }) => {
   await expect(page.getByTestId("skill-hint")).toHaveCount(0);
 });
 
-test("header right holds only the model pill; name toggles the details column", async ({ page }) => {
+test("header right holds the model pill and the panel button; name toggles the details column", async ({ page }) => {
   await open(page);
   const right = page.getByTestId("head-right");
-  await expect(right.locator(":scope > *")).toHaveCount(1);
+  await expect(right.locator(":scope > *")).toHaveCount(2);
   await expect(right).toContainText("Opus 5.5");
   await expect(right).toContainText("High");
-  // at most one interactive control (the model picker slot renders one button; the fallback none)
-  expect(await right.locator("button, a, [role=button], input, select").count()).toBeLessThanOrEqual(1);
+  // two controls: the model picker's one button and the panel button
+  expect(await right.locator("button, a, [role=button], input, select").count()).toBeLessThanOrEqual(2);
+  await expect(right.locator(":scope > *").last()).toHaveAttribute("data-testid", "panel-button");
   const details = page.getByTestId("details");
   expect((await details.boundingBox())?.width ?? 0).toBeLessThan(2);
   await page.getByTestId("who").click();

@@ -1290,6 +1290,17 @@ const OPS = {
     reset();
     return {};
   },
+  // a node of a run changes (a helper returned): its state, and the run's `updated`, as the next runs.list reads it
+  "mock.runNode": (p) => {
+    const run = (runs[needBot(p).name] ?? []).find((r) => r.id === needStr(p, "run"));
+    if (!run) throw new OpError("not_found", "no such run");
+    const node = run.nodes.find((n) => n.id === needStr(p, "node"));
+    if (!node) throw new OpError("not_found", "no such node");
+    node.state = needStr(p, "state");
+    if (node.state !== "running" && node.state !== "waiting") node.ended = now();
+    run.updated = now();
+    return {};
+  },
   "mock.demo": () => {
     seedDemo();
     return { run: DEMO_RUN };
