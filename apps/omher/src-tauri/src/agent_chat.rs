@@ -1550,6 +1550,7 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, accoun
     for (k, v) in account_env {
         cmd.env(k, v);
     }
+    crate::appimage::host_env(&mut cmd);
     Ok(cmd)
 }
 

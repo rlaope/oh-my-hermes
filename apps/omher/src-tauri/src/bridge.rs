@@ -364,6 +364,7 @@ impl Bridge {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         no_console_window(&mut cmd);
+        crate::appimage::host_env(&mut cmd); // AppRun's PYTHONHOME would send the host Python into the image
         let mut child = cmd
             .spawn()
             .map_err(|e| format!("could not start the bridge ({}): {e}", python.display()))?;
