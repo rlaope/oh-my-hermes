@@ -209,7 +209,7 @@ from .keys import (
 )
 from .generation_watch import GenerationWatch, watch_for
 from .launch import (
-    BOTS_HOME_ENV, CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE,
+    CLOSED_EXIT, PICK_SESSION_ENV, RELAUNCH_EXIT, RELAUNCH_FILE_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE,
     SESSION_FILE_ENV, UPDATED_ENV, UPDATED_PLAIN, UPDATED_PLAN, request_fallback, request_relaunch,
 )
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
@@ -10129,10 +10129,10 @@ def _run(
                     open_terminal(),
                     client,
                     environ,
-                    # The bot board reads the bots' home: the launcher's `HERMES_HOME`, or on the TUI's own runtime
-                    # the home `omh` named beside it (`BOTS_HOME_ENV`).
-                    poller=make_poller(environ.get("OMH_HOME") or None,
-                                       environ.get(BOTS_HOME_ENV) or environ.get("HERMES_HOME") or None),
+                    # The HUD reads the home the session runs on: its state database and the `processes.json` its
+                    # background terminals land in. On the TUI's own runtime that is the TUI home, never the bots'
+                    # (`BOTS_HOME_ENV`, which only the bot board reads).
+                    poller=make_poller(environ.get("OMH_HOME") or None, environ.get("HERMES_HOME") or None),
                     theme=initial_theme(ready.payload, environ.get("OMH_HOME") or None),
                     make_client=make_client,
                     # The session's directory as the launcher names it; with none named, no branch (never the TUI's

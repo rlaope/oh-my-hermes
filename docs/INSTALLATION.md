@@ -1900,8 +1900,11 @@ there. A new profile is built whole under a dot name and renamed into place,
 so the host gateway never sees it half-built. A root `config.yaml` that
 connects a messaging platform under `platforms:` keeps bare `omh` on the
 shared gateway, with a line naming the entry. Sessions, Hermes' own memory,
-cron and kanban are the profile's. The bot board keeps reading the bots' home
-and never lists the TUI profile. `omh --hermes-home` and `omh -p <profile>`
+cron and kanban are the profile's, and so is what the TUI's own reads follow:
+the background-process row, the `✳ Waiting…` row over the composer and the
+info line's HUD read the profile's `state.db` and `processes.json`. The bot
+board alone keeps reading the bots' home, and never lists the TUI profile.
+`omh --hermes-home` and `omh -p <profile>`
 stay on the home they name; `omh --resume <id>` opens where that session is,
 whichever runtime is chosen, and says so when that differs (the id as the exit
 card printed it; a title is not looked up). `omh-tui-home.json` in the profile
