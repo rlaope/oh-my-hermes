@@ -46,9 +46,9 @@ import unicodedata
 
 from .escapes import strip_escapes
 from .highlight import highlight_line, highlights
-from .style import Line, Span, Style
+from .style import WRAP_VERBATIM, Line, Span, Style, wrap_mark, wrap_of
 from .theme import Theme
-from .width import TAB_CELLS, cell_width, cluster_width, clusters, is_unpainted, line_width, wrap_line
+from .width import TAB_CELLS, cell_width, cluster_width, clusters, is_unpainted, line_width, wrap_line, wrap_line_marked
 
 BULLET = "•"
 RULE = "─"
@@ -139,8 +139,9 @@ def wrap_prefixed(spans: Sequence[Span], first: Line, rest: Line, width: int) ->
     prefix_cells = max(line_width(first), line_width(rest))
     if prefix_cells >= width:
         first, rest, prefix_cells = (), (), 0
-    rows = wrap_line(tuple(spans), width - prefix_cells)
-    return [(*(first if index == 0 else rest), *row) for index, row in enumerate(rows)]
+    rows = wrap_line_marked(tuple(spans), width - prefix_cells)
+    return [(*((wrap_mark(kind),) if kind else ()), *(first if index == 0 else rest), *row)
+            for index, (row, kind) in enumerate(rows)]
 
 
 def render_line(source: str, state: MarkdownState, width: int, theme: Theme) -> tuple[list[Line], MarkdownState]:
@@ -219,6 +220,7 @@ class GrowingLine:
     clean: str = ""  # a line `clean_text` leaves as it is: for one that goes on from it, only what was added is checked
     rows: list[Line] = field(default_factory=list)  # the rows above the cut
     rest: Line = ()  # what every row of the line but its first hangs on
+    cut_wrap: str | None = None  # how the row at the cut goes on from the one above it (`style.wrap_mark`)
     after: MarkdownState = MarkdownState()  # the state the line hands the next
     drawn: tuple[MarkdownState, int, Theme | None] = (MarkdownState(), 0, None)  # the state, width and theme
 
@@ -266,6 +268,8 @@ def render_growing(
     stops: list[tuple[int, int]] = []
     spans = _inline_spans(text, theme.text, theme, stops if noted else None)
     rows = wrap_prefixed(spans, lead, memo.rest, width)
+    if memo.cut and memo.cut_wrap and rows:
+        rows[0] = (wrap_mark(memo.cut_wrap), *rows[0])  # the row at the cut goes on from the rows above it
     drawn = memo.rows + rows
     if noted:
         _move_cut(memo, source, start, spans, stops, rows, lead, width, theme)
@@ -294,7 +298,8 @@ def _move_cut(
     last = stops[-2][1]  # no row opening past this can take the cut: the rows below it are not read
     bare = max(line_width(lead), line_width(memo.rest)) >= width  # `wrap_prefixed` then drops the prefixes
     at, cut_row, cut_at = 0, 0, 0
-    for number, row in enumerate(rows):
+    for number, marked in enumerate(rows):
+        row = tuple(span for span in marked if span.style.wrap is None)  # a wrap's mark holds no text
         if number:
             while shown[at : at + 1] == " ":  # the spaces a break left out
                 at += 1
@@ -308,14 +313,16 @@ def _move_cut(
         at += len(words)
     if not cut_row:
         return
-    if wrap_prefixed(_inline_spans(source[start + cut_at :], theme.text, theme), memo.rest, memo.rest, width) != rows[
-        cut_row:
-    ]:
+    fresh = wrap_prefixed(_inline_spans(source[start + cut_at :], theme.text, theme), memo.rest, memo.rest, width)
+    kind = wrap_of(rows[cut_row])
+    if kind and fresh:
+        fresh[0] = (wrap_mark(kind), *fresh[0])
+    if fresh != rows[cut_row:]:
         return
     if not memo.cut and set(source[: start + cut_at]) <= _RULE_MARKS:
         return  # it could still turn out to be a rule
     memo.rows = memo.rows + rows[:cut_row]
-    memo.cut, memo.line = start + cut_at, source
+    memo.cut, memo.line, memo.cut_wrap = start + cut_at, source, kind
 
 
 def render_markdown(text: str, width: int, theme: Theme) -> list[Line]:
@@ -795,12 +802,12 @@ def hard_wrap(spans: Sequence[Span], width: int) -> list[Line]:
         piece = ""
         for cluster in clusters(span.text):
             cluster_cells = cluster_width(cluster)
-            if (row or piece) and used + cluster_cells > width:
+            if (used or piece) and used + cluster_cells > width:
                 if piece:
                     row.append(Span(piece, span.style))
                     piece = ""
                 rows.append(tuple(row))
-                row, used = [], 0
+                row, used = [wrap_mark(WRAP_VERBATIM)], 0
             piece += cluster
             used += cluster_cells
         if piece:
@@ -814,7 +821,8 @@ def band_rows(text: str, width: int, band: Style) -> list[Line]:
     rows: list[Line] = []
     for row in hard_wrap((Span(text, band),), width):
         filled = "".join(span.text for span in row)
-        rows.append((Span(filled + " " * max(0, width - line_width(row)), band),))
+        mark = tuple(span for span in row if span.style.wrap is not None)
+        rows.append((*mark, Span(filled + " " * max(0, width - line_width(row)), band)))
     return rows
 
 

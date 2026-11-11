@@ -27,7 +27,7 @@ from omh.tui.diff_view import (
     diff_rows,
     parse_inline_diff,
 )
-from omh.tui.style import Span
+from omh.tui.style import WRAP_SPACE, Span, wrap_mark
 from omh.tui.theme import DEFAULT_THEME as THEME
 from omh.tui.width import is_control, line_width
 
@@ -119,7 +119,7 @@ class RowTests(unittest.TestCase):
                 (Span("   2 ", THEME.muted), Span(f"+print('안녕 {EARTH}')" + " " * 18, THEME.diff_add)),  # 17 cells
                 (indent, Span("\\ No newline at end of file", THEME.muted)),
                 (indent, Span("… omitted 12 diff line(s) across 1", THEME.muted)),
-                (indent, Span("additional file(s)/section(s)", THEME.muted)),
+                (wrap_mark(WRAP_SPACE), indent, Span("additional file(s)/section(s)", THEME.muted)),  # joined on copy
             ],
         )
 

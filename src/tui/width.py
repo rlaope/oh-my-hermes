@@ -267,9 +267,12 @@ def _tokens(items: list[_Item]) -> list[list[_Item]]:
     return tokens
 
 
-def _wrap_paragraph(items: list[_Item], cells: int) -> list[list[_Item]]:
-    lines: list[list[_Item]] = []
+def _wrap_paragraph(items: list[_Item], cells: int) -> list[tuple[list[_Item], str | None]]:
+    """The paragraph's rows, each with how it goes on from the row above: None for the first, "space" after a break
+    that dropped spaces, "cut" inside a word too long for a row (`style.WRAP_SPACE`, `style.WRAP_CUT`)."""
+    lines: list[tuple[list[_Item], str | None]] = []
     line: list[_Item] = []
+    kind: str | None = None  # how `line` goes on from the row before it
     width = 0
     pending: list[_Item] = []  # spaces seen since the last word; dropped at a break
     for token in _tokens(items):
@@ -284,19 +287,19 @@ def _wrap_paragraph(items: list[_Item], cells: int) -> list[list[_Item]]:
             pending = []
             continue
         if line:
-            lines.append(line)
-            line, width = [], 0
+            lines.append((line, kind))
+            line, width, kind = [], 0, "space"
         pending = []
         for item in token:  # fits on a fresh line in one go, or is hard broken
             if line and width + item[1] > cells:
                 cut = _path_break(line, item)
-                lines.append(line[:cut])
-                line = line[cut:]
+                lines.append((line[:cut], kind))
+                line, kind = line[cut:], "cut"
                 width = _items_width(line)
             line.append(item)
             width += item[1]
     trailing, _ = _fit(pending, cells - width)
-    lines.append(line + trailing)
+    lines.append((line + trailing, kind))
     return lines
 
 
@@ -311,9 +314,9 @@ def _path_break(line: list[_Item], following: _Item) -> int:
     return len(line)
 
 
-def _wrap_items(items: list[_Item], cells: int) -> list[list[_Item]]:
+def _wrap_items(items: list[_Item], cells: int) -> list[tuple[list[_Item], str | None]]:
     cells = max(cells, 1)
-    wrapped: list[list[_Item]] = []
+    wrapped: list[tuple[list[_Item], str | None]] = []
     for paragraph in _paragraphs(items):
         wrapped.extend(_wrap_paragraph(paragraph, cells))
     return wrapped
@@ -321,7 +324,7 @@ def _wrap_items(items: list[_Item], cells: int) -> list[list[_Item]]:
 
 def wrap(text: str, cells: int) -> list[str]:
     """`text` as lines of at most `cells` each (see the module docstring for the rules)."""
-    return [_items_text(line) for line in _wrap_items(_text_items(text), cells)]
+    return [_items_text(line) for line, _kind in _wrap_items(_text_items(text), cells)]
 
 
 def line_width(line: Line) -> int:
@@ -350,4 +353,10 @@ def truncate_line(line: Line, cells: int, ellipsis: str = "…") -> Line:
 
 def wrap_line(line: Line, cells: int) -> list[Line]:
     """`wrap` for a styled line; every span keeps its style across the breaks."""
-    return [_items_line(row) for row in _wrap_items(_line_items(line), cells)]
+    return [_items_line(row) for row, _kind in _wrap_items(_line_items(line), cells)]
+
+
+def wrap_line_marked(line: Line, cells: int) -> list[tuple[Line, str | None]]:
+    """`wrap_line`, each row with how it goes on from the row above (None, "space" or "cut"; see `_wrap_paragraph`),
+    for a caller that marks its rows so a copy joins them again (`style.wrap_mark`)."""
+    return [(_items_line(row), kind) for row, kind in _wrap_items(_line_items(line), cells)]
