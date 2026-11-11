@@ -920,7 +920,6 @@ export const en = {
   "graph.editMsg": "Edit the plan of run {run}: ",
   "ss.termEnded": "{agent} ended",
   "ss.termEndedExit": "{agent} ended with exit {code}",
-  "ss.seeDocs": "see {agent} docs",
   "ss.codexBundled": " (the Codex bundled in the ChatGPT app is found too)",
   "ss.dshOld": "This DSH session ran deepseek-bot (omher 0.2.4). DSH is DeepSeek Harness now: Restart starts it in this folder.",
   "ss.dshApp": " (or the DeepSeek Harness app, which carries it)",

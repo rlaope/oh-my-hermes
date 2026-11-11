@@ -32,7 +32,7 @@ use serde_json::{json, Map, Value};
 
 use crate::dsh_chat::DshChat;
 use crate::session_files;
-use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, resume_args, signal_group, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
+use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
 /// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
@@ -132,6 +132,10 @@ pub trait Adapter: Send {
     fn name(&self) -> &str {
         "The agent"
     }
+    /// The program found is maybe not the agent at all (`Unrecognized`): its own reason wins over "old version".
+    fn unrecognized(&self) -> bool {
+        false
+    }
 }
 
 /// The adapter for an allow-listed chat agent, or `None` for agents that have no chat mode here. `resume` is a
@@ -144,6 +148,55 @@ pub fn adapter_for(id: &str, cwd: &str, resume: Option<&str>) -> Option<Box<dyn 
         // OmO speaks pi's RPC (senpi engine): the same adapter, under its own name
         "pi" | "omp" | "omo" => Some(Box::new(Pi::new(cwd, label))),
         _ => None,
+    }
+}
+
+/// An agent program found in none of its install layouts (`sessions::LAYOUTS`), so maybe another program with the
+/// same name: when it ends before printing one JSON line, its exit reason says so and names the install line,
+/// instead of that other program's own stderr. Everything else is the agent's adapter unchanged.
+struct Unrecognized {
+    inner: Box<dyn Adapter>,
+    /// `` `<path>` does not look like <agent> … ``
+    note: String,
+    spoke: bool,
+}
+
+impl Unrecognized {
+    fn wrap(inner: Box<dyn Adapter>, id: &str, path: &Path) -> Box<dyn Adapter> {
+        let (Some(a), Some(l)) = (agent(id), layout(id)) else { return inner };
+        let note = format!("{} does not look like {} (it is not where {} installs, and it ended without answering in its chat mode). Install {}: {}", path.display(), a.label, a.label, a.label, l.install);
+        Box::new(Unrecognized { inner, note, spoke: false })
+    }
+}
+
+impl Adapter for Unrecognized {
+    fn start(&mut self) -> Step {
+        self.inner.start()
+    }
+    fn on_line(&mut self, line: &str) -> Step {
+        self.spoke |= serde_json::from_str::<Value>(line.trim_start_matches('\u{feff}')).is_ok();
+        self.inner.on_line(line)
+    }
+    fn on_input(&mut self, input: Input) -> Result<Step, String> {
+        self.inner.on_input(input)
+    }
+    fn in_turn(&self) -> bool {
+        self.inner.in_turn()
+    }
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn unrecognized(&self) -> bool {
+        !self.spoke
+    }
+    fn explain(&self, err: &str) -> String {
+        let inner = self.inner.explain(err);
+        // a program that spoke the protocol, or said it is not signed in, is the agent after all
+        if self.spoke || inner.contains("not signed in") {
+            inner
+        } else {
+            self.note.clone()
+        }
     }
 }
 
@@ -1977,8 +2030,11 @@ impl ChatSessions {
             ("codex", Some(_)) => return Err("not a Codex thread id".into()),
             _ => None,
         };
-        let adapter = adapter_for(agent_id, &cwd.to_string_lossy(), thread).ok_or("no chat adapter")?;
+        let mut adapter = adapter_for(agent_id, &cwd.to_string_lossy(), thread).ok_or("no chat adapter")?;
         let (mut argv, path_env) = launch_for(agent_id)?;
+        if let Some(path) = unrecognized_program(agent_id) {
+            adapter = Unrecognized::wrap(adapter, agent_id, &path);
+        }
         argv.extend(args.iter().map(OsString::from));
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
@@ -2157,8 +2213,8 @@ impl ChatSessions {
                         // the start deadline ended it, and already said so
                         Some(why) => (a.in_turn(), why, true),
                         // it never spoke its protocol and refused omher's chat-mode arguments: an old version
-                        None if !answered.load(Ordering::SeqCst) && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
-                        None => (a.in_turn(), if raw.is_empty() { raw } else { a.explain(&raw) }, true),
+                        None if !answered.load(Ordering::SeqCst) && !a.unrecognized() && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
+                        None => (a.in_turn(), a.explain(&raw), true),
                     }
                 };
                 if let Ok(mut f) = sink.lock() {
@@ -4255,6 +4311,46 @@ mod tests {
         assert!(raw.starts_with("No default model selected."), "{raw}");
         assert_eq!(Pi::new("/w", "oh-my-pi").explain(&raw), "oh-my-pi is not signed in. Open Terminal and run /login, then Restart.");
         assert_eq!(Claude::new("/w").explain("boom"), "boom");
+    }
+
+    /// H1: a same-named other program (the QA report's shadow stub) ends at once with its own usage text; the
+    /// person reads that the path does not look like the agent, with the install line, not the stub's stderr.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_that_is_not_the_agent_is_named_with_the_install_line() {
+        let stub = "echo \"pi: impostor program (not the agent) args: $*\" >&2; echo 'usage: pi [-v] host...' >&2; exit 64";
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let path = Path::new("/Users/k/shadow/pi");
+        for (label, id) in [("pi", "pi"), ("oh-my-pi", "omp"), ("OmO", "omo")] {
+            let c = ChatSessions::default();
+            let (out, sink) = collect();
+            let mut adapter = Unrecognized::wrap(Box::new(Pi::new("/w", label)), id, path);
+            adapter.on_input(Input::send("hi")).unwrap();
+            c.spawn(vec!["/bin/sh".into(), "-c".into(), stub.into(), "pi".into(), "--mode".into(), "rpc".into()], &tmp, None, &[], adapter, sink).unwrap();
+            assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+            let got = out.lock().unwrap().clone();
+            let install = crate::sessions::layout(id).unwrap().install;
+            let want = format!("/Users/k/shadow/pi does not look like {label} (it is not where {label} installs, and it ended without answering in its chat mode). Install {label}: {install}");
+            assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(64), e) if *e == want)), "{got:?}");
+            assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "error") == want)), "{got:?}");
+            assert!(!got.iter().any(|o| format!("{o:?}").contains("impostor")), "{got:?}");
+        }
+        // Claude Code and Codex: the same, with their own install line; and with nothing on stderr at all
+        for (id, adapter) in [("claude", Box::new(Claude::new("/w")) as Box<dyn Adapter>), ("codex", Box::new(Codex::new("/w", None)))] {
+            let a = Unrecognized::wrap(adapter, id, path);
+            assert!(a.explain("").ends_with(crate::sessions::layout(id).unwrap().install), "{id}");
+        }
+        // the agent after all: it printed protocol, or it says it is not signed in
+        let mut a = Unrecognized::wrap(Box::new(Pi::new("/w", "oh-my-pi")), "omp", path);
+        assert_eq!(a.explain("No API key found"), "oh-my-pi is not signed in. Open Terminal and run /login, then Restart.");
+        a.on_line("\u{feff}{\"type\":\"response\",\"command\":\"get_state\",\"success\":true,\"data\":{}}");
+        assert_eq!(a.explain("boom"), "boom");
+        // a banner is not protocol
+        let mut b = Unrecognized::wrap(Box::new(Claude::new("/w")), "claude", path);
+        b.on_line("Welcome to some tool v1.2");
+        assert!(b.explain("boom").contains("does not look like Claude Code"));
+        // DSH and oh-my-hermes have no layout row: no wrapper
+        assert_eq!(Unrecognized::wrap(Box::new(Claude::new("/w")), "dsh", path).explain("boom"), "boom");
     }
 
     #[test]

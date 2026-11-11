@@ -918,7 +918,6 @@ export const ja: Record<Key, string> = {
   "graph.editMsg": "実行 {run} の計画を変更して: ",
   "ss.termEnded": "{agent} は終了しました",
   "ss.termEndedExit": "{agent} は終了しました（終了コード {code}）",
-  "ss.seeDocs": "{agent} のドキュメントを参照",
   "ss.codexBundled": "（ChatGPT アプリ内の Codex も検出します）",
   "ss.dshOld": "この DSH セッションは deepseek-bot で実行されました (omher 0.2.4)。DSH は DeepSeek Harness になりました: Restart でこのフォルダで起動します。",
   "ss.dshApp": " (または CLI を含む DeepSeek Harness アプリ)",

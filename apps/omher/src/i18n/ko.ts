@@ -918,7 +918,6 @@ export const ko: Record<Key, string> = {
   "graph.editMsg": "실행 {run}의 계획을 이렇게 바꿔 줘: ",
   "ss.termEnded": "{agent} 끝남",
   "ss.termEndedExit": "{agent} 끝남 (종료 코드 {code})",
-  "ss.seeDocs": "{agent} 문서 참고",
   "ss.codexBundled": " (ChatGPT 앱에 들어 있는 Codex도 찾아요)",
   "ss.dshOld": "이 DSH 세션은 deepseek-bot으로 실행됐어요 (omher 0.2.4). 이제 DSH는 DeepSeek Harness예요: Restart를 누르면 이 폴더에서 시작해요.",
   "ss.dshApp": " (또는 CLI가 들어 있는 DeepSeek Harness 앱)",
