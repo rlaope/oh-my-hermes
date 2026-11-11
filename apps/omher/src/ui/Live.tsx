@@ -3,6 +3,32 @@
 // that slides up like the activity line. All three go static under prefers-reduced-motion (ui.css).
 import { useState, type ReactNode } from "react";
 
+/** The ring's animation delay in seconds: the bot's own angle (`seed`, golden-ratio spread over one 1.2 s turn,
+ *  so a handful of bots land far apart) on the page's clock rather than from the moment the ring mounted. A ring
+ *  that moves to another row (the typing bubble handing over to the activity line) goes on at the same angle
+ *  instead of jumping. `now` is the page clock in ms. */
+export function ringDelay(seed: string, now: number): number {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const phase = seed ? Math.round((((h % 1000) * 0.618034) % 1) * 1200) : 0;
+  return -((now + phase) % 1200) / 1000;
+}
+
+/** The arc itself; its delay is fixed when it mounts, so a re-render never restarts or shifts it. */
+function Ring({ s, gap, testId, label, seed }: { s: number; gap: number; testId: string; label?: string; seed: string }) {
+  const [delay] = useState(() => ringDelay(seed, performance.now()));
+  return (
+    <span
+      className="ui-ring"
+      data-testid={testId}
+      role={label ? "status" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+      style={{ width: s, height: s, top: -gap, left: -gap, animationDelay: `${delay}s` }}
+    />
+  );
+}
+
 /** Wraps `children` (an avatar or a mark, `size` px square) and, while `on`, draws a spinner around it: a 2px,
  *  ~110 degree arc whose tail fades in from transparent to the brand gradient, with a round head (ui.css). It is
  *  one CSS conic gradient masked to a 2px band, so every ring has the same shape at any size. The ring is
@@ -26,24 +52,10 @@ export function LiveRing({
   seed?: string;
   children: ReactNode;
 }) {
-  const s = size + gap * 2;
-  let h = 0;
-  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  // golden-ratio spread of the hash over one turn (1.2s), so a handful of bots land far apart
-  const phase = seed ? -Math.round((((h % 1000) * 0.618034) % 1) * 1200) / 1000 : 0;
   return (
     <span className="ui-ring-w" style={{ width: size, height: size }}>
       {children}
-      {on && (
-        <span
-          className="ui-ring"
-          data-testid={testId}
-          role={label ? "status" : undefined}
-          aria-label={label}
-          aria-hidden={label ? undefined : true}
-          style={{ width: s, height: s, top: -gap, left: -gap, animationDelay: `${phase}s` }}
-        />
-      )}
+      {on && <Ring s={size + gap * 2} gap={gap} testId={testId} label={label} seed={seed} />}
     </span>
   );
 }
