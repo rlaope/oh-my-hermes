@@ -168,6 +168,23 @@ All notable changes will be documented here.
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.
 
+- **omher starts the agent you picked, not another program with its name, and
+  finds Grok and pi where their installers put them.** When Homebrew's `grok`
+  regex tool, or any other program called `claude`, `codex`, `omo`, `pi` or
+  `omp`, sits earlier on PATH, omher now starts the agent's own install (its
+  npm package, its installer's folder, its app or Homebrew cask) instead; a
+  real install in a place omher does not know is still found. If the program
+  it starts ends without answering in its chat mode, the session says
+  `<path> does not look like <agent>` and shows the install line, not the
+  other program's own error. The folders Grok's and pi's official installers
+  use (`~/.grok/bin`, `~/.pi/agent/bin`) are now searched, so an app opened
+  from the Dock finds them. The "Not installed" install lines follow each
+  product's docs: pi's npm package moved to `@earendil-works`, oh-my-pi's line
+  is its installer (its npm build needs Bun), and Grok's is its one-line
+  installer. Closing an oh-my-hermes session now ends its Hermes
+  conversation; it used to stay open, because the bridge called a gateway
+  method Hermes does not have.
+
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
   split a run into parallel lanes now looks only at the build nodes: it comes
   when at least 80% of two or more build nodes sit on one chain, in a run of
