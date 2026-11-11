@@ -41,6 +41,8 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("↑ / ↓", "Move between the composer's rows, walk the input history at its first and last row "
               "(earlier sessions' too, shared with hermes --tui), or move through an open completion menu "
               "(Ctrl+J / Ctrl+K and Ctrl+N / Ctrl+P move through the menu too)"),
+    ("Ctrl+N / Ctrl+P", "Move down / up in lists, menus, pickers and prompts; scroll one line in pagers, including /dag. "
+                         "Also work in CLI theme, model-chain and setup pickers"),
     ("Ctrl+R", "Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, "
                "Esc leaves the composer as it was"),
     ("Ctrl+X", "Opens the /sessions picker"),
@@ -50,7 +52,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                "a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N "
                "move the menu instead"),
     ("↑", "On an empty composer with prompts queued, takes them back into the composer to edit; a queued shell line comes back on its own"),
-    ("↓", "On an empty composer while the agent view under the info line shows subagents, gives its rows the keys "
+    ("↓ / Ctrl+N", "On an empty composer while the agent view under the info line shows subagents, gives its rows the keys "
           "as the agent list; in a DAG run, to its folding tree"),
     ("← / →", "Move by a character; with Ctrl or Alt, by a word (Alt+B and Alt+F too)"),
     ("Home / End, Ctrl+A / Ctrl+E", "Go to the start or the end of the line"),
@@ -68,9 +70,23 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Esc Esc", "Between turns, with text, clears it and keeps it in this session's history; on an empty composer, "
                 "lists your prompts to rewind to (/rewind does too)"),
     ("Esc (vim mode)", "With display.vim_mode on in Hermes' config, the composer starts in INSERT and Esc goes to "
-                       "NORMAL and does nothing else; in NORMAL, h l 0 ^ $ w b e j k gg G move, f F t T and a character "
+                       "NORMAL and does nothing else; in NORMAL, . repeats the last completed local change and [n]. "
+                       "overrides its count rather than multiplying it. Insert/change sessions complete on Escape and undo "
+                       "as one transaction; put repeats its captured payload even after another yank. External paste/image "
+                       "edits and oversized insertion sessions do not replace the saved change. Submit, clear, history/draft "
+                       "replacement, masked transitions and Vim toggles reset it; motion, yank and undo do not. Repeat "
+                       "is local to this composer, not a macro. In NORMAL, v enters character VISUAL; motions extend its inclusive atom "
+                       "selection, d/c/y delete, change or yank, and v or Esc cancels (Esc drops a pending command first). "
+                       "Visual j/k clamp to draft rows without history; counts before v or d/c/y do not scale the selection. "
+                       "Visual delete/change dot repeats the selected atom length forward, with [n]. scaling that length. "
+                       "In NORMAL, V enters VISUAL LINE over whole hard lines; v/V converts modes retaining endpoint columns, "
+                       "and V again cancels line selection. Linewise d/c/y use a linewise register without a terminal separator; "
+                       "put supplies it. Line delete/change dot repeats the selected hard-line count forward, with [n]. scaling that count. "
+                       "NORMAL-only gv restores the last completed selection with exact anchor/head, type and direction; its count is ignored (vl Esc h 9999gv restores the original two atoms). Escape, toggle-out and yank save it. Text or paste/image metadata generation changes, undo/redo, submit, clear, history/draft replacement, masking and Vim toggles invalidate it, even when text becomes identical again; failed/no-op edits do not. Resize and navigation preserve it; absent/stale gv is a consumed no-op and gv inside VISUAL is unsupported. Space is not a visual leader; Enter sends unchanged text and Ctrl+V invalidates active and saved selection before attaching the clipboard image, never block visual. "
+                       "In NORMAL, h l 0 ^ $ w W b B e E ge gE j k gg G move, f F t T and a character "
                        "find on the line and ; , repeat the find, i a I A o O insert, x X dd D C cc S s r, d c y "
-                       "with a motion, iw aw, a quote object (i or a with double quote, single quote or backtick; "
+                       "with a motion (operator j/k select logical hard lines, never wrapped rows or history; gg/G select "
+                       "through the first/last hard line, or an absolute line with a count), iw aw, a quote object (i or a with double quote, single quote or backtick; "
                        "inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and "
                        "adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner y keeps "
                        "the register and moves inside, d keeps register and caret, and c enters INSERT inside), or a bracket "
@@ -87,8 +103,10 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                        "cancel it and do what they always do. "
                        "A picker taking input also cancels pending leader and Vim commands; a session picker waiting "
                        "while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or "
-                       "Ctrl+C takes the picker. "
-                       "The info line says INSERT or NORMAL, or NORMAL · SPC while the leader is armed"),
+                       "Ctrl+C or Ctrl+N / Ctrl+P takes the picker; Ctrl+J / Ctrl+K still edit a typed draft. "
+                       "The info line says INSERT, NORMAL, VISUAL or VISUAL LINE, NORMAL · SPC while the leader is armed "
+                       "(steady block), or REPLACE while r waits for one character (steady underline, CSI 4 SP q). "
+                       "A non-character follower cancels r without editing or firing a mode shortcut; continuous R is unsupported"),
     ("Ctrl+V", "Attaches the clipboard image as an [Image #N] token at the caret"),
     ("Ctrl+O", "Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, "
                "while Hermes asks something, the whole question (it answers nothing); q leaves it"),

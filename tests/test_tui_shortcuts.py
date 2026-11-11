@@ -113,11 +113,15 @@ class TableTests(unittest.TestCase):
 
     def test_the_ctrl_letters_named_are_the_ones_that_do_something(self) -> None:
         named = ctrl_letters_named()
-        self.assertEqual(named, set("acdejklprstouvwxyz"))
+        self.assertEqual(named, set("acdejklnprstouvwxyz"))
         for letter in string.ascii_lowercase:
             changed = False
             for draft, undone in (("", False), ("one two", False), ("one two", True)):  # Ctrl+Y redoes the undone draft
                 app, client = make_app()
+                if letter == "n":  # Ctrl+N navigates only when a list owns input
+                    from omh.tui.session_picker import SessionPicker, SessionRow
+
+                    app.picker = SessionPicker([SessionRow("one", "One", "", 0, 0), SessionRow("two", "Two", "", 0, 0)], current="")
                 if letter == "p":  # Ctrl+P folds the plan: it does something only while a plan shows
                     from omh.tui.panels import HudSnapshot
                     from test_tui_panels import hud_payload
@@ -975,14 +979,23 @@ class PendingCharSearchShortcutTests(unittest.TestCase):
                 self.assertFalse(app.picker.waiting)
                 self.assertEqual(client.calls, [])
 
-    def test_other_pending_commands_keep_global_shortcuts(self) -> None:
-        for command in ("d", "2d", "g", "r", "di"):
+    def test_pending_g_owns_followers_other_commands_keep_global_shortcuts(self) -> None:
+        for command in ("d", "2d", "g", "2g", "2d3g", "r", "di"):
             for event in (Key(CHAR, "t", ctrl=True), Key(TAB, shift=True)):
                 with self.subTest(command=command, event=event):
                     app, client = self.pending_app(command)
+                    before = app.composer.text, app.composer.caret, app.composer._register
                     app._on_input(event)
-                    self.assertEqual([method for method, _params in client.calls], ["config.set"])
-                    self.assertTrue(app.composer.pending)
+                    if command.endswith(("g", "r")):
+                        # RS-1/WM-contract: g owns invalid followers, including
+                        # modified global keys, and cancels the entire grammar.
+                        self.assertEqual(client.calls, [])
+                        self.assertFalse(app.composer.pending)
+                        self.assertEqual((app.composer.text, app.composer.caret, app.composer._register), before)
+                        self.assertFalse(app.plan_mode)
+                    else:
+                        self.assertEqual([method for method, _params in client.calls], ["config.set"])
+                        self.assertTrue(app.composer.pending)
 
 
 class LeaderShortcutTests(unittest.TestCase):

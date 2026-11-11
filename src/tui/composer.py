@@ -114,7 +114,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import accumulate
 import re
 import unicodedata
@@ -162,10 +162,12 @@ REDO_CHAR = "y"  # with Ctrl
 # Vim mode: the editing mode's names, as the info line and Hermes' own status bar say them.
 VIM_INSERT = "INSERT"
 VIM_NORMAL = "NORMAL"
+VIM_REPLACE = "REPLACE"
+VIM_VISUAL = "VISUAL"
 VIM_REDO_CHAR = "r"  # with Ctrl, in NORMAL
 VIM_COUNT_CAP = 9999  # a count larger than this is this
 _VIM_OPERATORS = "dcy"
-_VIM_MOTIONS = "hl0^$wbe"
+_VIM_MOTIONS = ("h", "l", "0", "^", "$", "w", "W", "b", "B", "e", "E", "ge", "gE")
 _DIGITS = "0123456789"
 _BLANKS = (" ", TAB_CHAR)
 
@@ -372,6 +374,46 @@ def _word_end(units: Sequence[str], index: int) -> int:
     return index
 
 
+def _word_target(classes: Sequence[str], index: int, motion: str) -> int:
+    """Resolve one word step on atom classes, saturating at the buffer edges."""
+    size = len(classes)
+    if not size:
+        return 0
+    index = min(index, size)
+    if motion == "w":
+        if index < size:
+            kind = classes[index]
+            while index < size and classes[index] == kind:
+                index += 1
+        while index < size and classes[index] == "space":
+            index += 1
+        return index
+    if motion == "b":
+        index = max(index - 1, 0)
+        while index > 0 and classes[index] == "space":
+            index -= 1
+        while index > 0 and classes[index - 1] == classes[index]:
+            index -= 1
+        return index
+    if motion == "ge":
+        if index < size and classes[index] != "space":
+            kind = classes[index]
+            while index > 0 and classes[index - 1] == kind:
+                index -= 1
+        index = max(index - 1, 0)
+        while index > 0 and classes[index] == "space":
+            index -= 1
+        return index
+    # Preserve the after-last boundary while exhausting whitespace: NORMAL
+    # clamps it to the last atom unless it is a real trailing empty hard line.
+    index = min(index + 1, size)
+    while index < size and classes[index] == "space":
+        index += 1
+    while index + 1 < size and classes[index + 1] == classes[index]:
+        index += 1
+    return index
+
+
 def _next_word(units: Sequence[str], index: int) -> int:
     """Vim's `W`: the start of the next word, across lines; the end of the text after the last."""
     while index < len(units) and not units[index].isspace():
@@ -460,7 +502,83 @@ class _Register:
     linewise: bool
 
 
+@dataclass(frozen=True)
+class _RepeatChange:
+    command: str
+    effective_count: int
+    recipe: tuple[tuple[int, int, str], ...] = ()
+    terminal: int = 0
+    register: _Register | None = None
+    counted: bool = True
+
+
 _Snapshot = tuple[str, int, dict[str, str], dict[str, tuple[str, object]]]
+
+
+@dataclass
+class _InsertChange:
+    before: _Snapshot
+    command: str
+    count: int
+    origin: int
+    counted: bool = True
+    recipe: list[tuple[int, int, str]] = field(default_factory=list)
+    eligible: bool = True
+    recorded: bool = False
+    retained_bytes: int = 0
+
+
+class _RevisionMap(dict):
+    """Composer metadata with monotonic invalidation, including in-place/ABA edits.
+
+    Keep dict's public API; snapshots remain ordinary dictionaries. The callback
+    owns no text, image bytes or atom-boundary copy.
+    """
+
+    def __init__(self, values, changed):
+        super().__init__(values)
+        self.changed = changed
+
+    def __setitem__(self, key, value):
+        if key not in self or self[key] != value:
+            super().__setitem__(key, value)
+            self.changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self.changed()
+
+    def clear(self):
+        if self:
+            super().clear()
+            self.changed()
+
+    def pop(self, key, *default):
+        if key not in self:
+            return super().pop(key, *default)
+        value = super().pop(key)
+        self.changed()
+        return value
+
+    def popitem(self):
+        value = super().popitem()
+        self.changed()
+        return value
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self[key] = default
+        return self[key]
+
+    def update(self, *args, **kwargs):
+        values = dict(*args, **kwargs)
+        if any(key not in self or self[key] != value for key, value in values.items()):
+            super().update(values)
+            self.changed()
+
+    def __ior__(self, values):
+        self.update(values)
+        return self
 
 
 @dataclass
@@ -470,6 +588,11 @@ class Composer:
     history: list[str] = field(default_factory=list)
     history_index: int | None = None
     masked: bool = False
+    visual_anchor: int | None = None
+    visual_head: int | None = None
+    visual_line: bool = False
+    _generation: int = field(default=0, init=False, repr=False)
+    _saved_visual: tuple | None = field(default=None, init=False, repr=False)
     records_history: bool = True
     on_record: Callable[[str], None] | None = field(default=None, repr=False, compare=False)
     pastes: dict[str, str] = field(default_factory=dict, repr=False, compare=False)  # chip label -> its text
@@ -505,6 +628,65 @@ class Composer:
     _undo: list[_Snapshot] = field(default_factory=list, init=False, repr=False, compare=False)
     _redo: list[_Snapshot] = field(default_factory=list, init=False, repr=False, compare=False)
     _typing_at: int | None = field(default=None, init=False, repr=False, compare=False)  # where the typed run's caret is
+
+    _repeat_change: _RepeatChange | None = field(default=None, init=False, repr=False)
+    _insert_change: _InsertChange | None = field(default=None, init=False, repr=False)
+    _replaying: bool = field(default=False, init=False, repr=False)
+    _bell: bool = field(default=False, init=False, repr=False)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        # Masking is also changed by App without delivering a composer event.
+        if name == "masked" and "masked" in self.__dict__ and self.masked != value:
+            self._reset_repeat()
+            self._invalidate_reselection()
+            self._clear_visual()
+        if name in ("text", "pastes", "images") and name in self.__dict__ and self.__dict__[name] != value:
+            self._invalidate_reselection()
+        if name in ("pastes", "images"):
+            # A shallow repeat candidate must get callbacks bound to itself,
+            # never to the live composer; committed maps likewise rebind here.
+            value = _RevisionMap(value, self._metadata_changed)
+            if name == "images":
+                self._shaped = self._laid = None
+        object.__setattr__(self, name, value)
+
+    def take_bell(self) -> bool:
+        """Drain the transient notification; terminal policy belongs to App."""
+        bell, self._bell = self._bell, False
+        return bell
+
+    def _discard_insert_recipe(self, *, bell: bool = False) -> None:
+        session = self._insert_change
+        if session is not None:
+            session.eligible = False
+            session.recipe.clear()
+            session.retained_bytes = 0
+        self._bell |= bell
+
+    def _retain_repeat(self, change: _RepeatChange) -> None:
+        from .vim_repeat import _utf8
+        owned = sum(_utf8(payload) for _at, _deleted, payload in change.recipe)
+        # Only arguments, not semantic command spelling, are owned text.
+        if change.command.startswith("r"):
+            owned += _utf8(change.command[1:])
+        register = change.register
+        images = 0
+        if register is not None:
+            owned += _utf8(register.text)
+            for label, text in register.pastes.items():
+                owned += max(1, register.text.count(label)) * _utf8(text)
+            for token, (label, _image) in register.images.items():
+                occurrences = max(1, register.text.count(token))
+                images += occurrences
+                owned += occurrences * _utf8(label)
+        if len(change.recipe) > 9999 or owned > 1024 * 1024 or images > 256:
+            self._bell = True
+            return
+        self._repeat_change = change
+
+    def _reset_repeat(self) -> None:
+        self._repeat_change = None
+        self._insert_change = None
 
     def __post_init__(self) -> None:
         self._set(self.text, min(max(self.caret, 0), len(self.text)))
@@ -544,6 +726,14 @@ class Composer:
         self.caret = bounds[_cluster_index(bounds, min(len(_nfc(text[:caret])), len(full)))]
 
     def _replace(self, start: int, end: int, insert: str = "") -> None:
+        session = self._insert_change
+        record = None
+        if session is not None and session.eligible and not self._replaying:
+            _units, edges, _index = self._atoms()
+            if start in edges and end in edges:
+                record = (edges.index(start) - session.origin, edges.index(end) - edges.index(start), insert)
+            else:
+                session.eligible = False
         if self.pastes and start < end:  # a deletion that reaches a chip takes it whole
             for chip_start, chip_end in self._chip_spans():
                 if chip_start < end and chip_end > start:
@@ -555,6 +745,23 @@ class Composer:
         if self.images:
             self.images = {token: image for token, image in self.images.items() if token in self.text}
             self._unjoin_tokens()
+
+        if record is not None and session is not None:
+            from .vim_repeat import _utf8
+            session.retained_bytes += _utf8(record[2])
+            if session.retained_bytes > 1024 * 1024:
+                self._discard_insert_recipe(bell=True)
+                return
+            if session.recipe and record[1] == 0:
+                offset, deleted, payload = session.recipe[-1]
+                if deleted == 0 and record[0] == offset + len(clusters(payload)):
+                    session.recipe[-1] = (offset, 0, payload + record[2])
+                else:
+                    session.recipe.append(record)
+            else:
+                session.recipe.append(record)
+            if len(session.recipe) > 9999:
+                self._discard_insert_recipe(bell=True)
 
     def _unjoin_tokens(self) -> None:
         """Drop what joined a token's cluster (a combining mark typed after it), which would be neither drawn nor
@@ -609,11 +816,12 @@ class Composer:
 
     def _new_token(self) -> str:
         """A token character neither the text nor `images` holds."""
-        while True:
+        for _ in range(_TOKEN_LAST - _TOKEN_FIRST + 1):
             token = chr(_TOKEN_FIRST + self._token_count % (_TOKEN_LAST - _TOKEN_FIRST + 1))
             self._token_count += 1
             if token not in self.text and token not in self.images:
                 return token
+        raise ValueError("image token pool exhausted")
 
     def _tokens_for(self, text: str, images: Sequence[tuple[str, object]]) -> str:
         """`text` with the first `label` of each of `images` (label, image) made that image's token again."""
@@ -626,10 +834,14 @@ class Composer:
         return text
 
     def insert_image(self, label: str, image: object) -> bool:
+        self._clear_visual()
         """An image token drawn as `label` at the caret, a space on each side of it unless the text has one there (or
         it starts the text); one undo step. False, and nothing inserted, when the input is masked."""
         if self.masked:
             return False
+        self._drop_pending()
+        if self._insert_change is not None:
+            self._discard_insert_recipe()
         before = self._state()
         token = self._new_token()
         self.images[token] = (label, image)
@@ -677,6 +889,9 @@ class Composer:
         """Put `text` (cleaned as a paste is) in place of `self.text[start:end]`; the caret lands after it. One undo step.
 
         `images` (label, image) are tokens again where their labels stand in `text`."""
+        self._reset_repeat()
+        self._invalidate_reselection()
+        self._clear_visual()
         before = self._state()
         self._replace(start, end, self._tokens_for(_clean(text, self.masked), images))
         self._step(before, typed=False)
@@ -685,6 +900,9 @@ class Composer:
     def restore(self, shown: str, chips: Sequence[tuple[str, str]], images: Sequence[tuple[str, object]] = ()) -> None:
         """Put back, at the caret, a text a submit showed as `shown`: its `chips` (label, text) are chips again, and
         its `images` (label, image) tokens."""
+        self._reset_repeat()
+        self._invalidate_reselection()
+        self._clear_visual()
         before = self._state()
         self.pastes.update(chips)
         self._replace(self.caret, self.caret, self._tokens_for(_clean(shown, self.masked), images))
@@ -696,6 +914,17 @@ class Composer:
 
     def _step(self, before: _Snapshot, typed: bool) -> None:
         """Keep `before` as an undo step when the text changed since, unless it continues a typed run."""
+        if self._replaying:
+            return
+        session = self._insert_change
+        if session is not None:
+            if not session.recorded and self.text != session.before[0]:
+                if not self.masked:
+                    self._undo.append(session.before)
+                    del self._undo[:-UNDO_CAP]
+                self._redo.clear()
+                session.recorded = True
+            return
         if before[0] == self.text:
             if before[1] != self.caret:
                 self._typing_at = None  # a caret move ends the run
@@ -708,10 +937,16 @@ class Composer:
 
     def _take_step(self, source: list[_Snapshot], target: list[_Snapshot]) -> None:
         """Undo (from `_undo`) or redo (from `_redo`) one step; the state left goes on the other list."""
+        # Traversal ends capture even when there is no step to take. Do not
+        # finish it: undone insertion text must never become the next dot.
+        self._discard_insert_recipe()
+        self._insert_change = None
+        self._clear_visual()
         if not source:
             return
         target.append(self._state())
         text, caret, pastes, images = source.pop()
+        self._invalidate_reselection()
         self.pastes = dict(pastes)
         self.images = dict(images)
         self._set(text, caret)
@@ -725,6 +960,9 @@ class Composer:
         return shape.units, shape.bounds, _cluster_index(shape.bounds, self.caret)
 
     def _load(self, text: str) -> None:
+        self._invalidate_reselection()
+        self._clear_visual()
+        self._reset_repeat()
         self._set(text, len(text))
         self._scroll = 0
 
@@ -740,6 +978,17 @@ class Composer:
     # -- key handling ---------------------------------------------------------
 
     def handle(self, event: Key | Paste) -> ComposerAction:
+        if self.masked:
+            self._invalidate_reselection()
+            self._clear_visual()
+            self._reset_repeat()
+        if isinstance(event, Paste):
+            self._clear_visual()
+        if isinstance(event, Paste) and self._insert_change is not None:
+            self._discard_insert_recipe()
+        return self._handle_repeat_event(event)
+
+    def _handle_repeat_event(self, event: Key | Paste) -> ComposerAction:
         # Followers are consumed before even the shared undo/redo chords can dispatch.
         if self._leader and isinstance(event, Key):
             self._drop_pending()
@@ -751,6 +1000,27 @@ class Composer:
                 self._take_step(self._redo, self._undo) if redo else self._take_step(self._undo, self._redo)
                 self._clamp_normal()
                 return NOTHING
+        if (self.vim and self.normal and not self.visual and not self.masked and isinstance(event, Key)
+                and event.name == CHAR and event.char == "." and not event.ctrl and not event.alt
+                and not self._operator and not self._prefix):
+            # Dot owns its snapshot after admission; the generic edit wrapper
+            # must not copy maps or normalize the caret on a rejected replay.
+            self._normal_char(".")
+            return NOTHING
+        if (self.vim and self.normal and not self.visual and not self.masked
+                and isinstance(event, Key) and event.name == CHAR
+                and not (event.ctrl or event.alt) and not self._operator
+                and (self._prefix == "g" or (not self._prefix and
+                     (event.char == "g" or (event.char in _DIGITS and
+                      (event.char != "0" or self._count)))))):
+            # Counts and g initiation are grammar, not edits or motions. Defer
+            # atom normalization until an actual gg/ge/gE motion completes;
+            # otherwise a rejected gv could already have moved a stale caret.
+            follower = self._prefix == "g"
+            self._normal_command(event.char)
+            if follower and event.char in "geE":
+                self._clamp_normal()
+            return NOTHING
         before = self._state()
         modal = self._modal(event) if self.vim and not self.masked else None
         if modal is _TOOK_STEP:
@@ -776,6 +1046,9 @@ class Composer:
 
     def set_vim(self, on: bool) -> None:
         """Modal editing on or off; either way the composer is in INSERT with no command half typed."""
+        self._reset_repeat()
+        self._invalidate_reselection()
+        self._clear_visual()
         self.vim = on
         self._last_search = None
         self.normal = False
@@ -783,11 +1056,15 @@ class Composer:
 
     @property
     def vim_label(self) -> str:
-        """`VIM_INSERT` or `VIM_NORMAL` while vim mode is on, else ""."""
+        """The editing mode or pending single-replacement cue; empty outside Vim."""
         if not self.vim or self.masked:
             return ""
+        if self.visual:
+            return "VISUAL LINE" if self.visual_line else VIM_VISUAL
         if self.normal and self._leader:
             return f"{VIM_NORMAL} · SPC"
+        if self.normal and self._prefix == "r":
+            return VIM_REPLACE
         return VIM_NORMAL if self.normal else VIM_INSERT
 
     @property
@@ -799,6 +1076,138 @@ class Composer:
     def pending(self) -> bool:
         """Whether a NORMAL command or leader is half typed, which Esc drops."""
         return bool(self._count or self._operator or self._op_count or self._prefix or self._leader)
+
+    @property
+    def visual(self) -> bool:
+        return self.visual_anchor is not None
+
+    @property
+    def visual_span(self) -> tuple[int, int] | None:
+        if not self.visual:
+            return None
+        units, bounds, _index = self._atoms()
+        assert self.visual_anchor is not None and self.visual_head is not None
+        lo, hi = sorted((self.visual_anchor, self.visual_head))
+        if self.visual_line:
+            lo = _line_of(units, lo)[0]
+            hi = _line_of(units, hi)[1]
+            return bounds[lo], bounds[min(hi + 1, len(units))]
+        return bounds[lo], bounds[min(hi + 1, len(units))]
+
+    def _invalidate_reselection(self) -> None:
+        self._generation = self.__dict__.get("_generation", 0) + 1
+        self._saved_visual = None
+
+    def _metadata_changed(self) -> None:
+        self._invalidate_reselection()
+        self._shaped = self._laid = None
+
+    def _save_visual(self) -> None:
+        if self.visual:
+            self._saved_visual = (self._generation, self.visual_anchor, self.visual_head, self.visual_line)
+
+    def _restore_visual(self) -> None:
+        saved = self._saved_visual
+        if saved is None:
+            return
+        generation, anchor, head, line = saved
+        units, bounds, _ = self._atoms()
+        if (generation != self._generation or type(anchor) is not int or type(head) is not int
+                or type(line) is not bool
+                or not 0 <= anchor <= len(units) or not 0 <= head <= len(units)):
+            self._saved_visual = None
+            return
+        self.visual_anchor, self.visual_head, self.visual_line = anchor, head, line
+        self.caret = bounds[head]
+
+    def _exit_visual(self) -> None:
+        self._save_visual()
+        self._clear_visual()
+
+    def _clear_visual(self) -> None:
+        self.visual_anchor = self.visual_head = None
+        self.visual_line = False
+        self._drop_pending()
+
+    def _visual_char(self, char: str) -> ComposerAction:
+        if char.isascii() and char.isdigit() and (char != "0" or self._count) and not self._prefix:
+            self._count = str(min(int(self._count + char), VIM_COUNT_CAP))
+            return NOTHING
+        prefix, self._prefix = self._prefix, ""
+        if not prefix and char in "gfFtT":
+            self._prefix = char
+            return NOTHING
+        count = int(self._count) if self._count else None
+        self._drop_pending()
+        if not prefix and char in "vV":
+            line = char == "V"
+            if self.visual_line == line:
+                self._exit_visual()
+            else:
+                self.visual_line = line
+            return NOTHING
+        if not prefix and char == "u":
+            self._clear_visual()
+            self._take_step(self._undo, self._redo)
+            return _TOOK_STEP
+        if not prefix and char in _VIM_OPERATORS:
+            units, _bounds, _index = self._atoms()
+            assert self.visual_anchor is not None and self.visual_head is not None
+            lo, hi = sorted((self.visual_anchor, self.visual_head))
+            linewise = self.visual_line
+            line_count = 1
+            if linewise:
+                lo = _line_of(units, lo)[0]
+                hi = _line_of(units, hi)[1]
+                line_count = 1 + sum(unit == NEWLINE for unit in units[lo:hi])
+            else:
+                hi = min(hi + 1, len(units))
+            before = self._state()
+            self._exit_visual()
+            if linewise:
+                self._line_span(char, lo, hi)
+                if not units:
+                    self._yank(0, 0, linewise=True)
+                if char == "y":
+                    self.caret = self._atoms()[1][_first_blank_free(units, lo, hi)]
+            else:
+                self._operate_span(char, (lo, hi))
+            command = char + ("L" + str(line_count) if linewise else "V" + str(hi - lo))
+            if char == "c":
+                session = _InsertChange(before, command, 1, self._atoms()[2])
+                self._insert_change = session
+                if before[0] != self.text:
+                    if not self.masked:
+                        self._undo.append(before)
+                        del self._undo[:-UNDO_CAP]
+                    self._redo.clear()
+                    session.recorded = True
+            elif char == "d" and self.text != before[0]:
+                self._retain_repeat(_RepeatChange(command, 1))
+            return NOTHING
+        if prefix in ("f", "F", "t", "T"):
+            self._search(prefix, char, count or 1, "")
+        elif prefix == "g":
+            if char == "g":
+                self._goto_line(count or 1)
+            elif char in "eE":
+                self._move("g" + char, count)
+        elif not prefix and char in (";", ","):
+            if self._last_search is not None:
+                kind, target = self._last_search
+                if char == ",":
+                    kind = {"f": "F", "F": "f", "t": "T", "T": "t"}[kind]
+                self._search(kind, target, count or 1, "", repeat=True)
+        elif not prefix and char in (*_VIM_MOTIONS, "j", "k", "G"):
+            self._move(char, count)
+        units, bounds, index = self._atoms()
+        # A head can be an empty-line sentinel, but never the position after
+        # the final character of a nonempty hard line.
+        if index and (index == len(units) or units[index] == NEWLINE) and units[index - 1] != NEWLINE:
+            index -= 1
+        self.caret = bounds[index]
+        self.visual_head = index
+        return NOTHING
 
     def _drop_pending(self) -> None:
         self._leader = False
@@ -822,7 +1231,13 @@ class Composer:
                 self._enter_normal()
                 return self._normal_char(event.char)
             return None
-        if self._prefix in ("f", "F", "t", "T"):
+        if self.visual and event.name == ESCAPE:
+            self._drop_pending() if self.pending else self._exit_visual()
+            return NOTHING
+        if self.visual and event.name == ENTER:
+            self._clear_visual()
+            return None
+        if self._prefix in ("g", "f", "F", "t", "T", "r"):
             if event.name == CHAR and not (event.ctrl or event.alt):  # a reported Shift is in the char already
                 return self._normal_char(event.char)
             self._drop_pending()
@@ -833,7 +1248,7 @@ class Composer:
             self._drop_pending()
             # A legacy Alt chord is Esc and the key in one read: the Esc drops the object, then the key is a fresh one.
             return self._normal_char(event.char) if legacy_alt else NOTHING
-        if is_leader_key(event) and not (self._operator or self._prefix):
+        if not self.visual and is_leader_key(event) and not (self._operator or self._prefix):
             self._drop_pending()  # a count does not carry into a leader sequence
             self._leader = True
             return NOTHING
@@ -841,13 +1256,14 @@ class Composer:
             return self._normal_char(event.char)
         if event.name in (BACKSPACE, DELETE) and not (event.ctrl or event.alt or event.shift):
             return self._normal_char("h" if event.name == BACKSPACE else "x")
-        if self.pending:
-            self._drop_pending()  # a key that is no part of the command drops it, and does nothing else
+        if self.pending or self.visual:
+            self._drop_pending()  # unsupported visual keys cannot mutate text behind the selection
             return NOTHING
         return None
 
     def _enter_normal(self) -> None:
         """INSERT to NORMAL: the caret steps back onto the character before it, unless it starts a line."""
+        self._finish_insert()
         self.normal = True
         self._drop_pending()
         self._typing_at = None
@@ -864,7 +1280,7 @@ class Composer:
     def _clamp_normal(self) -> None:
         """In NORMAL the caret is on a character: never after a line's last one (an empty line keeps it), never
         inside a paste chip."""
-        if not self.normal:
+        if not self.normal or self.visual:
             return
         units, bounds, index = self._atoms()
         if (index == len(units) or units[index] == NEWLINE) and index > 0 and units[index - 1] != NEWLINE:
@@ -888,6 +1304,22 @@ class Composer:
             units, bounds = merged, edges
         return units, bounds, _cluster_index(bounds, self.caret)
 
+    def _word_classes(self, units: Sequence[str], big: bool = False) -> list[str]:
+        """Classify NORMAL atoms; opaque metadata tokens are singleton runs."""
+        result = []
+        for at, unit in enumerate(units):
+            if unit in self.pastes or any(_is_token(ch) for ch in unit):
+                kind = f"opaque:{at}"
+            elif unit.isspace():
+                kind = "space"
+            elif big:
+                kind = "word"
+            else:
+                base = next((ch for ch in unit if not unicodedata.category(ch).startswith("M")), "")
+                kind = "keyword" if base == "_" or (base and unicodedata.category(base)[0] in "LN") else "punctuation"
+            result.append(kind)
+        return result
+
     def _take_count(self) -> int | None:
         """The count typed for the command being completed (one before an operator times one after it); None
         without one."""
@@ -898,6 +1330,163 @@ class Composer:
         return min(count, VIM_COUNT_CAP)
 
     def _normal_char(self, char: str) -> ComposerAction:
+        if self.visual:
+            return self._visual_char(char)
+        if self._replaying:
+            return self._normal_command(char)
+        if char == "." and not (self._operator or self._prefix):
+            override = int(self._count) if self._count else None
+            self._drop_pending()
+            self._repeat(override)
+            return _TOOK_STEP
+        before = self._state()
+        count = min(int(self._count or "1") * int(self._op_count or "1"), VIM_COUNT_CAP)
+        counted = bool(self._count or self._op_count)
+        command = self._operator + self._prefix + char
+        if char in ";," and self._last_search is not None:
+            kind, target = self._last_search
+            if char == ",":
+                kind = {"f": "F", "F": "f", "t": "T", "T": "t"}[kind]
+            command = self._operator + kind + target
+        result = self._normal_command(char)
+        if self.pending:
+            return result
+        if not self.normal:
+            if command in ("i", "a", "I", "A", "o", "O", "s", "S", "C") or command.startswith("c"):
+                session = _InsertChange(before, command, count, self._atoms()[2], counted=counted)
+                self._insert_change = session
+                if before[0] != self.text:
+                    if not self.masked:
+                        self._undo.append(before)
+                        del self._undo[:-UNDO_CAP]
+                    self._redo.clear()
+                    session.recorded = True
+            return result
+        if before[0] != self.text and command != "u":
+            self._retain_repeat(_RepeatChange(command, count, register=self._register if command in ("p", "P") else None, counted=counted))
+        return result
+
+    def _execute_repeat(self, change: _RepeatChange, count: int) -> None:
+        command = change.command
+        if len(command) > 2 and command[:2] in ("dL", "cL"):
+            self._lines(command[0], min(int(command[2:]) * count, len(self._atoms()[0]) + 1))
+            return
+        if len(command) > 2 and command[:2] in ("dV", "cV"):
+            units, _bounds, index = self._atoms()
+            self._operate_span(command[0], (index, min(index + int(command[2:]) * count, len(units))))
+            return
+        if command in ("p", "P"):
+            current = self._register
+            self._register = change.register
+            try:
+                self._put(command == "p", count)
+            finally:
+                self._register = current
+        elif len(command) >= 2 and command[0] in "dcy":
+            op, tail = command[0], command[1:]
+            if len(tail) == 2 and tail[0] in "ia":
+                desc, target = tail
+                span = (self._text_object_span(desc, count) if target == "w" else
+                        self._quote_object_span(desc, count, target) if target in _QUOTE_CHARS else
+                        self._bracket_object_span(desc, count, target) if target in _BRACKET_PAIRS else None)
+                self._operate_span(op, span)
+            elif len(tail) == 2 and tail[0] in "fFtT":
+                self._search(tail[0], tail[1], count, op)
+            else:
+                self._operate(op, tail, count if change.counted or tail not in ("gg", "G") else None)
+        elif command.startswith("r") and len(command) > 1:
+            self._replace_chars(command[1:], count)
+        else:
+            self._command(command, count)
+
+    def _apply_recipe(self, change: _RepeatChange, origin: int) -> int:
+        for offset, deleted, payload in change.recipe:
+            _units, bounds, _index = self._atoms()
+            at = origin + offset
+            if at < 0 or at + deleted >= len(bounds):
+                raise ValueError("insertion recipe out of bounds")
+            self._replace(bounds[at], bounds[at + deleted], payload)
+        _units, bounds, _index = self._atoms()
+        endpoint = origin + change.terminal
+        if endpoint < 0 or endpoint >= len(bounds):
+            raise ValueError("insertion endpoint out of bounds")
+        self.caret = bounds[endpoint]
+        return endpoint
+
+    def _finish_insert(self) -> None:
+        session = self._insert_change
+        if session is None:
+            return
+        self._insert_change = None
+        terminal = self._atoms()[2] - session.origin
+        change = _RepeatChange(session.command, session.count, tuple(session.recipe), terminal, counted=session.counted)
+        if session.eligible and session.count > 1 and session.command in ("i", "a", "I", "A", "o", "O"):
+            # Apply additional copies to a detached candidate first.
+            self._repeat_transaction(change, session.count - 1, continuation=True)
+        if not session.recorded:
+            self._step(session.before, False)
+        elif self.text == session.before[0] and self._undo and self._undo[-1] == session.before:
+            self._undo.pop()
+        if self.text != session.before[0] and session.eligible:
+            self._retain_repeat(change)
+        elif self.text == session.before[0]:
+            self.caret = session.before[1]
+
+    def _repeat(self, override: int | None) -> None:
+        change = self._repeat_change
+        if change is not None:
+            if override is not None:
+                from dataclasses import replace
+                change = replace(change, counted=True)
+            self._repeat_transaction(change, override or change.effective_count)
+
+    def _repeat_transaction(self, change: _RepeatChange, count: int, *, continuation: bool = False) -> None:
+        # Admission is virtual: no expanded strings, snapshots, map copies or
+        # token reservations until every semantic endpoint and budget passes.
+        from .vim_repeat import preflight
+        try:
+            plan = preflight(self, change, count, continuation)
+        except ValueError:
+            self._bell = True
+            return
+        from copy import copy
+        candidate = copy(self)
+        candidate.pastes = dict(self.pastes)
+        candidate.images = dict(self.images)
+        candidate._chunks = dict(self._chunks)
+        candidate._undo = list(self._undo)
+        candidate._redo = list(self._redo)
+        candidate._insert_change = None
+        candidate._replaying = True
+        before = self._state()
+        insert, copies, count = plan.insertion, plan.copies, plan.count
+        try:
+            for n in range(copies):
+                if not continuation or change.command in ("o", "O"):
+                    if n == 0 or change.command in ("o", "O"):
+                        candidate._execute_repeat(change, 1 if change.command in ("i", "a", "I", "A", "o", "O") else count)
+                if insert:
+                    origin = candidate._atoms()[2]
+                    candidate._apply_recipe(change, origin)
+            if insert and not continuation:
+                candidate._enter_normal()
+            candidate._clamp_normal() if not continuation else None
+        except (ValueError, IndexError):
+            self._bell = True
+            return
+        # A change can delete and reinsert identical text. Its admitted
+        # mutations still expire the old selection, unlike a failed/no-op dot.
+        if candidate._generation != self._generation:
+            self._invalidate_reselection()
+        self.pastes, self.images = candidate.pastes, candidate.images
+        self._set(candidate.text, candidate.caret)
+        self._register = candidate._register
+        self._paste_count, self._token_count = candidate._paste_count, candidate._token_count
+        if not continuation:
+            self.normal = True
+            self._step(before, False)
+
+    def _normal_command(self, char: str) -> ComposerAction:
         """A character typed in NORMAL: part of a command, or the key that completes one."""
         prefix, self._prefix = self._prefix, ""
         if prefix in ("f", "F", "t", "T"):
@@ -919,8 +1508,18 @@ class Composer:
         if prefix == "g":
             count, operator = self._take_count(), self._operator
             self._drop_pending()
-            if char == "g" and not operator:
-                self._goto_line(count or 1)
+            if char == "g":
+                if operator:
+                    self._operate(operator, "gg", count)
+                else:
+                    self._goto_line(count or 1)
+            elif char == "v" and not operator:
+                self._restore_visual()
+            elif char in ("e", "E"):
+                if operator:
+                    self._operate(operator, "g" + char, count or 1)
+                else:
+                    self._move("g" + char, count)
             return NOTHING
         if char in _DIGITS and (char != "0" or (self._op_count if self._operator else self._count)):
             if self._operator:
@@ -952,7 +1551,7 @@ class Composer:
         count = self._take_count()
         operator, self._operator = self._operator, ""
         if operator:
-            self._operate(operator, char, count or 1)
+            self._operate(operator, char, count)
             return NOTHING
         return self._command(char, count)
 
@@ -961,7 +1560,10 @@ class Composer:
         times = count or 1
         units, bounds, index = self._atoms()
         start, end = _line_of(units, index)
-        if char in _VIM_MOTIONS or char in "jkG":
+        if char in "vV":
+            self.visual_anchor = self.visual_head = index
+            self.visual_line = char == "V"
+        elif char in _VIM_MOTIONS or char in "jkG":
             self._move(char, count)
         elif char == "i":
             self._enter_insert()
@@ -1019,9 +1621,9 @@ class Composer:
         elif char == "$":
             target = end
         else:
-            step = {"w": _next_word, "b": _word_start, "e": _end_of_word}[char]
+            classes = self._word_classes(units, char[-1].isupper())
             for _ in range(times):
-                target = max(step(units, target), 0)
+                target = _word_target(classes, target, char.lower())
         self.caret = bounds[min(target, len(units))]
 
     def _goto_line(self, number: int) -> None:
@@ -1047,29 +1649,30 @@ class Composer:
             return min(index, target), max(index, target)
         if motion == "$":
             return index, end
-        if motion == "b":
-            target = index
-            for _ in range(times):
-                target = _word_start(units, target)
-            return target, index
+        if motion not in ("w", "W", "b", "B", "e", "E", "ge", "gE"):
+            return None
         if not units:
-            return index, index  # `cw` on an empty composer still goes to INSERT
-        on_word = index < len(units) and not units[index].isspace()
-        if motion == "e" or (motion == "w" and operator == "c" and on_word):
-            # `cw` on a word is `ce`, Vim's own exception: it changes up to the word's end, not the blanks after it.
-            target = index if motion == "w" else _end_of_word(units, index)
-            if motion == "w":
-                while target + 1 < len(units) and not units[target + 1].isspace():
-                    target += 1
+            return index, index
+        classes = self._word_classes(units, motion[-1].isupper())
+        kind = motion.lower()
+        target = index
+        if kind == "w" and operator == "c" and index < len(units) and classes[index] != "space":
+            while target + 1 < len(units) and classes[target + 1] == classes[index]:
+                target += 1
             for _ in range(times - 1):
-                target = _end_of_word(units, target)
-            return index, target + 1
-        if motion == "w":
-            target = index
-            for _ in range(times):
-                target = _next_word(units, target)
-            return index, (min(target, end) if index < end else target)  # `dw` stops at the end of the line
-        return None
+                target = _word_target(classes, target, "e")
+            return index, min(target + 1, len(units))
+        for _ in range(times):
+            target = _word_target(classes, target, kind)
+        if kind == "b":
+            return target, index
+        if kind == "ge":
+            return target, min(index + 1, len(units))
+        if kind == "e":
+            return index, min(target + 1, len(units))
+        if times == 1 and index < end and classes[index] != "space" and target > end:
+            target = end  # dw/dW never consume the following hard line.
+        return index, target
 
     def _search_motion(self, kind: str, target: str, times: int, *, repeat: bool = False) -> tuple[int, int] | None:
         """Resolve a complete line-local search without committing partial counted progress."""
@@ -1278,12 +1881,36 @@ class Composer:
             return open_idx + 1, close_idx
         return open_idx, close_idx + 1
 
-    def _operate(self, operator: str, motion: str, times: int) -> None:
-        """`d`, `c` or `y` over `motion` (`times` of it), or over `times` whole lines when `motion` is the operator."""
+    def _operate(self, operator: str, motion: str, times: int | None) -> None:
+        """Resolve logical-line operators separately from rendered-row navigation."""
+        count = times or 1
+        units, _bounds, index = self._atoms()
         if motion == operator:
-            self._lines(operator, times)
+            self._lines(operator, count)
             return
-        self._operate_span(operator, self._motion_span(motion, times, operator))
+        if motion in ("j", "k", "gg", "G"):
+            starts = [0, *(at + 1 for at, unit in enumerate(units) if unit == NEWLINE)]
+            current = starts.index(_line_of(units, index)[0])
+            if motion in ("j", "k"):
+                target = current + (count if motion == "j" else -count)
+            else:
+                target = count - 1 if times is not None else (0 if motion == "gg" else len(starts) - 1)
+            target = min(max(target, 0), len(starts) - 1)
+            lo, hi = sorted((current, target))
+            self._line_span(operator, starts[lo], _line_of(units, starts[hi])[1])
+            return
+        span = self._motion_span(motion, count, operator)
+        # Vim's exclusive forward column-zero exception applies to w/W only;
+        # inclusive and backward motions must retain their own endpoints.
+        if span is not None and motion in ("w", "W"):
+            lo, hi = span
+            start, end = _line_of(units, index)
+            if hi > end and hi < len(units) and units[hi - 1] == NEWLINE:
+                if index <= _first_blank_free(units, start, end):
+                    self._line_span(operator, start, hi - 1)
+                    return
+                span = lo, hi - 1
+        self._operate_span(operator, span)
 
     def _operate_span(self, operator: str, span: tuple[int, int] | None) -> None:
         """Shared characterwise register, edit and change effects for motions and objects."""
@@ -1301,24 +1928,33 @@ class Composer:
                 self._enter_insert(change=True)
 
     def _lines(self, operator: str, times: int) -> None:
-        """`dd`, `cc` (`S`) or `yy`: `times` lines from the caret's."""
-        units, bounds, index = self._atoms()
+        """Doubled operators select hard lines beginning at the current line."""
+        units, _bounds, index = self._atoms()
         start, end = _line_of(units, index)
         for _ in range(times - 1):
             if end >= len(units):
                 break
             end = _line_of(units, end + 1)[1]
+        self._line_span(operator, start, end)
+
+    def _line_span(self, operator: str, start: int, end: int) -> None:
+        """Apply inclusive hard lines, retaining one replacement line for change."""
+        units, bounds, _index = self._atoms()
+        if not units:
+            if operator == "c":
+                self._enter_insert(change=True)
+            return  # No selected content: retain the register even for empty changes.
         self._yank(bounds[start], bounds[end], linewise=True)
         if operator == "y":
-            return
+            return  # Linewise yank preserves the original caret.
         if operator == "c":
             self._replace(bounds[start], bounds[end])
             self._enter_insert(change=True)
             return
         if end < len(units):
-            self._replace(bounds[start], bounds[end + 1])  # with the newline after them
+            self._replace(bounds[start], bounds[end + 1])
         else:
-            self._replace(bounds[start - 1] if start > 0 else bounds[start], bounds[end])  # the last: the one before
+            self._replace(bounds[start - 1] if start > 0 else bounds[start], bounds[end])
         units, bounds, index = self._atoms()
         start, end = _line_of(units, index)
         self.caret = bounds[_first_blank_free(units, start, end)]
@@ -1504,6 +2140,8 @@ class Composer:
         if 0 <= target < len(rows):
             self.caret = bounds[_position_at(rows[target], widths, col)]
             self._caret_off_chip(forward=True)
+        elif self.visual:
+            return
         elif step < 0:
             self._history_back()
         else:
@@ -1544,6 +2182,7 @@ class Composer:
         mark_style: Style = DEFAULT_STYLE,
         glow: Sequence[tuple[int, int]] = (),
         glow_style: Callable[[int, int], Style] | None = None,
+        selection_style: Style = Style(reverse=True),
     ) -> tuple[list[Line], tuple[int, int]]:
         """The visible rows at `width` cells, and the caret as (row, col) within them; paste chips and image tokens in
         `chip_style`, the `marks` (str index ranges of the text, such as a `/name` that resolves) in `mark_style`, and
@@ -1563,13 +2202,26 @@ class Composer:
         chips = self._chip_spans() if self.pastes and not self.masked else []
         if self.images:
             chips = sorted([*chips, *((at, at + 1) for at, ch in enumerate(self.text) if ch in self.images)])
+        selection = self.visual_span
+        final_line_selected = False
+        if self.visual_line and self.visual_anchor is not None and self.visual_head is not None:
+            atoms, _bounds, _index = self._atoms()
+            final_line_selected = _line_of(atoms, max(self.visual_anchor, self.visual_head))[1] == len(atoms)
         lines: list[Line] = []
         for number in range(scroll, min(len(rows), scroll + visible)):
             lead = Span(prompt, prompt_style) if number == 0 else indent
             start, end = rows[number].start, rows[number].end
-            if chips or marks or glow:
+            if chips or marks or glow or selection is not None:
                 body_spans = _chip_styled(shown, shape.bounds, start, end, chips, chip_style, marks, mark_style,
-                                          glow, glow_style)
+                                          glow, glow_style, selection, selection_style)
+                if selection is not None and rows[number].hard:
+                    at = shape.bounds[end]
+                    if end < len(shape.units) and shape.units[end] == NEWLINE and selection[0] <= at < selection[1]:
+                        body_spans.append(Span("␊", selection_style))
+                    elif selection == (at, at) or (self.visual_line and selection[0] <= at < selection[1]) or (
+                        final_line_selected and end == len(shape.units)
+                    ):
+                        body_spans.append(Span(" ", selection_style))
                 lines.append((lead, *body_spans))
                 continue
             body = "".join(shown[start:end])
@@ -1581,6 +2233,7 @@ def _chip_styled(
     shown: Sequence[str], bounds: Sequence[int], start: int, end: int, chips: Sequence[tuple[int, int]], style: Style,
     marks: Sequence[tuple[int, int]] = (), mark_style: Style = DEFAULT_STYLE,
     glow: Sequence[tuple[int, int]] = (), glow_style: Callable[[int, int], Style] | None = None,
+    selection: tuple[int, int] | None = None, selection_style: Style = DEFAULT_STYLE,
 ) -> list[Span]:
     """Clusters `start` to `end` as spans, the ones inside a chip (by str index) in `style`, inside a glow range in
     `glow_style` of their offset in it, inside a mark in `mark_style`."""
@@ -1593,6 +2246,9 @@ def _chip_styled(
             None)
         marked = not inside and any(mark_start <= bounds[index] < mark_end for mark_start, mark_end in marks)
         wanted = style if inside else lit if lit is not None else mark_style if marked else DEFAULT_STYLE
+        if selection is not None and selection[0] <= bounds[index] < selection[1]:
+            wanted = replace(wanted, bg=selection_style.bg, reverse=selection_style.reverse,
+                             fg=selection_style.fg or wanted.fg)
         if spans and spans[-1].style == wanted:
             spans[-1] = Span(spans[-1].text + shown[index], wanted)
         else:

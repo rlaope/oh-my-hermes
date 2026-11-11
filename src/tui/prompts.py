@@ -69,7 +69,7 @@ from typing import Any
 
 from . import command_risk
 from . import gateway_contract as contract
-from .keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Paste
+from .keys import CHAR, ENTER, ESCAPE, LEFT, RIGHT, Key, Paste, list_nav_step
 from .markdown import wrap_prefixed
 from .style import Line, Span, Style, fill, is_fill
 from .theme import CATCH_MARK, Theme
@@ -422,9 +422,9 @@ class PromptSlot:
         (`_denied`) but the tell row's.
         """
         choices = self.approval_choices()
-        if key.name in (UP, LEFT):
+        if list_nav_step(key) == -1 or key.name == LEFT:
             self.selected = max(self.selected - 1, 0)
-        elif key.name in (DOWN, RIGHT):
+        elif list_nav_step(key) == 1 or key.name == RIGHT:
             self.selected = min(self.selected + 1, len(choices) - 1)
         elif key.name == ENTER and choices[self.selected] == APPROVAL_TELL:
             return replace(self.decline(), tell=True)
@@ -461,9 +461,8 @@ class PromptSlot:
         last = numbered if submit is None else submit
         if isinstance(key, Paste):
             return None if self.typing or not self._other_row() else self._open_field(key)
-        if key.name in (UP, DOWN):
+        if (step := list_nav_step(key)) != 0:
             self.typing = False
-            step = -1 if key.name == UP else 1
             self.selected = min(max(self.selected + step, 0), last)
             return None
         if self.typing:

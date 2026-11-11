@@ -65,6 +65,8 @@ _PLAIN_KEYS = {
     "Q": KEY_QUIT,
     "\x03": KEY_QUIT,  # Ctrl-C: raw mode swallows the signal, so read it as cancel
     "\x04": KEY_QUIT,  # Ctrl-D
+    "\x0e": KEY_DOWN,  # Ctrl-N
+    "\x10": KEY_UP,  # Ctrl-P
     "j": KEY_DOWN,
     "J": KEY_DOWN,
     "k": KEY_UP,
