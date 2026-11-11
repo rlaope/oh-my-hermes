@@ -36,6 +36,15 @@ pub struct Dsh {
     interrupted: bool,
     /// the last `turn_end` reason: kind and error message
     reason: Option<(String, String)>,
+    /// the harness no longer has the session this message continued: the run is sent again without it
+    stale: bool,
+    /// this message was already sent again once (a fresh session is never retried)
+    retried: bool,
+}
+
+/// The harness's answer to `--session-id` naming a session it does not have (deleted, or another machine's).
+fn is_stale(err: &str) -> bool {
+    err.contains("does not exist") && err.contains("--session-id")
 }
 
 impl Dsh {
@@ -48,6 +57,8 @@ impl Dsh {
         self.turn = true;
         self.interrupted = false;
         self.reason = None;
+        self.stale = false;
+        self.retried = false;
         vec![ev("turn.start", json!({}))]
     }
 
@@ -57,7 +68,10 @@ impl Dsh {
     }
 
     fn end(&mut self, kind: &str, err: &str) -> Vec<Event> {
-        if !self.turn {
+        if !self.turn || self.stale {
+            return vec![];
+        }
+        if self.mark_stale(kind == "error", err) {
             return vec![];
         }
         self.turn = false;
@@ -122,13 +136,44 @@ impl Dsh {
         }
     }
 
+    /// A message that continued a session the harness no longer has: forget that id and keep the turn open, so
+    /// the message is sent again as a new session ([`Dsh::retry_fresh`]). Once per message, never on Stop.
+    fn mark_stale(&mut self, failed: bool, err: &str) -> bool {
+        if !failed || self.interrupted || self.retried || self.session.is_empty() || !is_stale(err) {
+            return false;
+        }
+        self.stale = true;
+        self.session.clear();
+        true
+    }
+
+    /// After a run ended on a stale session: the line that tells the person, and true, when the same message is
+    /// to be sent once more without `--session-id`.
+    pub fn retry_fresh(&mut self) -> Option<Vec<Event>> {
+        if !self.stale || !self.turn {
+            return None;
+        }
+        self.stale = false;
+        self.retried = true;
+        Some(vec![ev("session.error", json!({"message": "DeepSeek Harness no longer has the earlier conversation, so this message started a new one."}))])
+    }
+
     /// The run's process ended. A run that wrote no `final` ends here, with the reason from its stderr.
     pub fn finish(&mut self, code: Option<i32>, err: &str) -> Vec<Event> {
         if !self.turn {
             return vec![];
         }
+        if self.stale {
+            if !self.interrupted {
+                return vec![];
+            }
+            self.stale = false;
+        }
         if self.interrupted {
             return self.end("aborted", "");
+        }
+        if self.mark_stale(true, err) {
+            return vec![];
         }
         self.turn = false;
         vec![exit_turn_end(code, &friendly(err))]
@@ -258,6 +303,12 @@ impl DshChat {
     }
 
     fn send(&self, text: &str) -> Result<(), String> {
+        self.launch(text, true)
+    }
+
+    /// Start one run for `text`. `first` opens the turn; a message sent again (its session was stale) runs in
+    /// the turn it already opened.
+    fn launch(&self, text: &str, first: bool) -> Result<(), String> {
         let inner = &self.0;
         let mut slot = inner.run.lock().unwrap();
         if slot.is_some() {
@@ -281,7 +332,9 @@ impl DshChat {
         let exited = Arc::new(AtomicBool::new(false));
         *slot = Some(Run { child: child.clone(), pid, exited: exited.clone() });
         drop(slot);
-        deliver(&inner.sink, inner.state.lock().unwrap().begin());
+        if first {
+            deliver(&inner.sink, inner.state.lock().unwrap().begin());
+        }
 
         let tail = Arc::new(Mutex::new(String::new()));
         {
@@ -332,7 +385,7 @@ impl DshChat {
             });
         }
         {
-            let me = self.clone();
+            let (me, text) = (self.clone(), text.to_string());
             thread::spawn(move || {
                 let code = loop {
                     if let Ok(Some(st)) = child.lock().unwrap().try_wait() {
@@ -346,9 +399,21 @@ impl DshChat {
                     thread::sleep(Duration::from_millis(10));
                 }
                 let err = exit_reason(&tail.lock().unwrap());
-                let events = me.0.state.lock().unwrap().finish(code, &err);
+                let (events, again) = {
+                    let mut st = me.0.state.lock().unwrap();
+                    let events = st.finish(code, &err);
+                    (events, st.retry_fresh())
+                };
                 *me.0.run.lock().unwrap() = None;
                 deliver(&me.0.sink, events);
+                // the session it continued is gone: the same message once more, as a new session
+                if let Some(notice) = again {
+                    deliver(&me.0.sink, notice);
+                    if let Err(e) = me.launch(&text, false) {
+                        let end = me.0.state.lock().unwrap().finish(None, &e);
+                        deliver(&me.0.sink, end);
+                    }
+                }
             });
         }
         Ok(())
@@ -391,7 +456,13 @@ fn interrupt(r: &Run) {
 
 /// One run's command: `argv` in `cwd` on pipes, with the child PATH and `DSH_PERMISSION_MODE=workspace-write`
 /// (the harness's own default, pinned so an inherited setting cannot widen it). Nothing else is added.
+/// Inside a Linux AppImage the harness gets the host environment, not the image's library paths (#2778).
 fn command_for(argv: &[OsString], cwd: &Path, path_env: &OsString) -> Result<Command, String> {
+    command_with(argv, cwd, path_env, crate::appimage::host_env)
+}
+
+/// [`command_for`] with the last environment step given (`host`, run after the command's own variables).
+fn command_with(argv: &[OsString], cwd: &Path, path_env: &OsString, host: impl FnOnce(&mut Command)) -> Result<Command, String> {
     let (prog, rest) = argv.split_first().ok_or("empty argv")?;
     let mut cmd = Command::new(prog);
     cmd.args(rest).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -410,6 +481,7 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: &OsString) -> Result<Com
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
+    host(&mut cmd);
     Ok(cmd)
 }
 
@@ -695,6 +767,143 @@ mod tests {
         assert_eq!(lines[2], format!("--profile headless --patch {} --json --session-id {sid} -", patch.display()));
         assert_eq!(lines[3], "second message");
         assert_eq!(std::fs::read_to_string(patch).unwrap(), DSH_HEADLESS_PATCH);
+        let _ = std::fs::remove_dir_all(tmp);
+    }
+
+    #[test]
+    fn a_dsh_run_gets_the_host_environment_inside_an_appimage() {
+        use std::ffi::OsStr;
+        const APPDIR: &str = "/tmp/.mount_omherX";
+        let argv: Vec<OsString> = vec!["/opt/dsh/bin/dsh".into(), "--json".into()];
+        let path = OsString::from("/tmp/.mount_omherX/usr/bin:/usr/bin");
+        let cmd = command_with(&argv, Path::new("/w/proj"), &path, |c| {
+            // what the AppImage's AppRun exports, then the strip command_for applies
+            c.env("PYTHONHOME", "/tmp/.mount_omherX/usr/").env("LD_LIBRARY_PATH", "/tmp/.mount_omherX/usr/lib:/opt/host/lib");
+            crate::appimage::host_env_in(c, OsStr::new(APPDIR));
+        })
+        .unwrap();
+        let env: std::collections::HashMap<_, _> =
+            cmd.get_envs().map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|v| v.to_string_lossy().into_owned()))).collect();
+        assert_eq!(env["PYTHONHOME"], None);
+        assert_eq!(env["LD_LIBRARY_PATH"].as_deref(), Some("/opt/host/lib"));
+        assert_eq!(env["PATH"].as_deref(), Some("/usr/bin"));
+        assert_eq!(env["DSH_PERMISSION_MODE"].as_deref(), Some("workspace-write"), "the run's own variables stay");
+        assert!(env.values().flatten().all(|v| !v.contains(APPDIR)));
+    }
+
+    /// QA stream `dsh-stale.view.txt`: a message continuing a session the harness no longer has fails with
+    /// `session "session-…" does not exist; omit --session-id to start a new Session`.
+    const STALE: &str = r#"{"type":"error","message":"session \"session-0badbeef-0000-4000-8000-000000000003\" does not exist; omit --session-id to start a new Session"}"#;
+
+    #[test]
+    fn a_stale_session_is_dropped_and_the_message_sent_again_once() {
+        let mut d = Dsh::new("/w/proj", Some("session-0badbeef-0000-4000-8000-000000000003"));
+        let mut ev = d.begin();
+        ev.extend(d.on_line(STALE));
+        ev.extend(d.finish(Some(1), "dsh: session does not exist"));
+        // no turn.end: the turn stays open for the retry, and the id is forgotten
+        assert_eq!(names(&ev), ["turn.start"]);
+        assert!(d.session.is_empty());
+        let note = d.retry_fresh().unwrap();
+        assert_eq!(s(&note[0], "event"), "session.error");
+        assert!(s(&note[0], "message").contains("started a new one"), "{note:?}");
+        assert!(d.retry_fresh().is_none());
+        // the retry runs without --session-id and reports a new session; the turn ends once
+        let args = dsh_turn_args(Path::new("/h/p.yml"), Some(d.session.as_str()).filter(|s| !s.is_empty())).unwrap();
+        assert!(!args.iter().any(|a| a == "--session-id"));
+        let mut again = Vec::new();
+        for l in real("dsh-1-first.jsonl") {
+            again.extend(d.on_line(&l));
+        }
+        assert_eq!(of(&again, "session.info").len(), 1);
+        assert_eq!(of(&again, "turn.end").len(), 1);
+        assert_eq!(s(of(&again, "turn.end")[0], "outcome"), "done");
+        assert!(d.session.starts_with("session-") && d.session != "session-0badbeef-0000-4000-8000-000000000003");
+    }
+
+    #[test]
+    fn a_stale_session_is_retried_only_once_and_never_after_stop() {
+        // the fresh run fails the same way (it cannot, having no --session-id; but never loop): the error shows
+        let mut d = Dsh::new("/w/proj", Some("session-0badbeef-0000-4000-8000-000000000003"));
+        d.begin();
+        d.on_line(STALE);
+        d.finish(Some(1), "");
+        d.retry_fresh().unwrap();
+        d.session = "session-0badbeef-0000-4000-8000-000000000004".into();
+        let ev = d.on_line(STALE);
+        assert_eq!(s(&ev[0], "outcome"), "error");
+        assert!(d.retry_fresh().is_none());
+        // Stop wins over a stale session: the turn ends interrupted, nothing is sent again
+        let mut d = Dsh::new("/w/proj", Some("session-0badbeef-0000-4000-8000-000000000003"));
+        d.begin();
+        d.interrupt();
+        let ev = d.on_line(STALE);
+        assert_eq!(s(&ev[0], "outcome"), "interrupted");
+        assert!(d.retry_fresh().is_none());
+        // a new chat (no id yet) shows the error as it is
+        let mut d = Dsh::new("/w/proj", None);
+        d.begin();
+        assert_eq!(s(&d.on_line(STALE)[0], "outcome"), "error");
+    }
+
+    /// A stand-in harness that has lost the session: the message is sent again without --session-id, and the
+    /// chat ends one turn with the new session's answer.
+    #[cfg(unix)]
+    #[test]
+    fn a_stand_in_harness_without_the_session_gets_the_message_again() {
+        let tmp = std::env::temp_dir().canonicalize().unwrap().join(format!("omher-dsh-stale-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let fx = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("real");
+        std::fs::write(tmp.join("stale.jsonl"), format!("{STALE}\n")).unwrap();
+        let script = tmp.join("dsh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\necho \"$@\" >> '{log}'\ncat >> '{log}'\necho >> '{log}'\ncase \"$*\" in *--session-id*) cat '{st}'; exit 1;; *) cat '{a}';; esac\n",
+                log = tmp.join("log").display(),
+                st = tmp.join("stale.jsonl").display(),
+                a = fx.join("dsh-1-first.jsonl").display()
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let out = Arc::new(Mutex::new(Vec::<Event>::new()));
+        let o = out.clone();
+        let old = "session-0badbeef-0000-4000-8000-000000000003";
+        let chat = DshChat(Arc::new(Inner {
+            cwd: tmp.clone(),
+            patch: tmp.join(".omher").join("dsh").join("headless.patch.yml"),
+            launch: vec![script.clone().into()],
+            path_env: std::env::var_os("PATH").unwrap_or_default(),
+            state: Mutex::new(Dsh::new(&tmp.to_string_lossy(), Some(old))),
+            sink: Arc::new(Mutex::new(Box::new(move |x| {
+                if let ChatOut::Event(e) = x {
+                    o.lock().unwrap().push(e)
+                }
+            }))),
+            run: Mutex::new(None),
+        }));
+        chat.input(Input::Send { text: "Reply with exactly: ok".into(), images: vec![] }).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while (out.lock().unwrap().iter().all(|e| s(e, "event") != "turn.end") || chat.0.run.lock().unwrap().is_some()) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(20));
+        }
+        thread::sleep(Duration::from_millis(100));
+        let got = out.lock().unwrap().clone();
+        assert_eq!(names(&got).iter().filter(|n| *n == "turn.start").count(), 1, "{got:?}");
+        assert_eq!(of(&got, "turn.end").len(), 1, "{got:?}");
+        assert_eq!(s(of(&got, "turn.end")[0], "outcome"), "done");
+        assert!(s(of(&got, "session.error")[0], "message").contains("started a new one"));
+        assert_eq!(of(&got, "message").len(), 1);
+        let fresh = s(of(&got, "session.info").last().unwrap(), "agent_session");
+        assert_ne!(fresh, old);
+        let log = std::fs::read_to_string(tmp.join("log")).unwrap();
+        let lines: Vec<&str> = log.lines().collect();
+        assert!(lines[0].contains(&format!("--session-id {old}")));
+        assert_eq!(lines[1], "Reply with exactly: ok");
+        assert!(!lines[2].contains("--session-id"), "{}", lines[2]);
+        assert_eq!(lines[3], "Reply with exactly: ok");
         let _ = std::fs::remove_dir_all(tmp);
     }
 }
