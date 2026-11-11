@@ -2,8 +2,13 @@
 
 The control-plane writer owns activation. Current-message routing and explicit
 user instructions outrank this reminder; neither chat text nor history writes
-workflow state. Every call reprojects state because retained API history is not
-proof that a workflow marker survived a host summary boundary.
+workflow state. Every call reprojects state into the payload metadata, because
+retained API history is not proof that a workflow marker survived a host
+summary boundary. The rendered reminder rides the message only when it is not
+already the latest workflow line in the history Hermes replays: a session
+carries one copy rather than one per turn, a compaction that dropped it gets it
+again, a changed workflow gets its new text, and a workflow that ended gets
+`ACTIVE_WORKFLOW_ENDED_LINE` once.
 """
 from __future__ import annotations
 
@@ -21,6 +26,10 @@ from .active_workflow_context_state import (
     session_fingerprint,
 )
 from .runtime_reader import default_omh_home
+
+
+ACTIVE_WORKFLOW_HEAD = "[OMH Active Workflow]"
+ACTIVE_WORKFLOW_ENDED_LINE = f"{ACTIVE_WORKFLOW_HEAD} ended; the earlier workflow reminder no longer applies."
 
 
 class ActiveWorkflowContext(TypedDict):

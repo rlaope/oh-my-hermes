@@ -33,7 +33,13 @@ from ..degradation import (
     safe_error_type,
     runtime_binding_degradation,
 )
-from ..active_workflow_context import active_workflow_context, render_active_workflow_context
+from ..active_workflow_context import (
+    ACTIVE_WORKFLOW_ENDED_LINE,
+    ACTIVE_WORKFLOW_HEAD,
+    ActiveWorkflowContext,
+    active_workflow_context,
+    render_active_workflow_context,
+)
 from ..approval_bypass import record_approval_bypass
 from ..awareness_delivery import claim_route_guidance_delivery, record_awareness_delivery
 from ..context_budget_plan import context_budget_continuation, render_context_budget
@@ -359,8 +365,20 @@ def _primer_already_in_api_history(conversation_history: object, primer: str) ->
     subtracting the clean message prefix, so a user quoting
     ``[OMH Awareness]`` cannot suppress guidance.
     """
-    if not primer or not isinstance(conversation_history, (list, tuple)):
+    if not primer:
         return False
+    return any(primer in injected for injected in _replayed_injections(conversation_history))
+
+
+def _replayed_injections(conversation_history: object) -> list[str]:
+    """The host-injected suffix of every replayed ``api_content``, newest first.
+
+    The clean message prefix is subtracted, so text a person typed (quoting an
+    `[OMH ...]` line, say) is never read as something OMH already injected.
+    """
+    if not isinstance(conversation_history, (list, tuple)):
+        return []
+    injections: list[str] = []
     for message in reversed(conversation_history):
         if not isinstance(message, dict):
             continue
@@ -371,9 +389,44 @@ def _primer_already_in_api_history(conversation_history: object, primer: str) ->
         injected_content = api_content
         if isinstance(clean_content, str) and api_content.startswith(clean_content):
             injected_content = api_content[len(clean_content) :]
-        if primer in injected_content:
-            return True
-    return False
+        injections.append(injected_content)
+    return injections
+
+
+def _replayed_workflow_line(conversation_history: object) -> str:
+    """The latest `[OMH Active Workflow]` line Hermes is still replaying, or ``""``.
+
+    Hermes replays each turn's injection byte for byte, so the reminder sent
+    once stays in front of the model until a compaction drops it; this is how
+    the hook knows whether it is still there and what it said last.
+    """
+    for injected in _replayed_injections(conversation_history):
+        at = injected.rfind(ACTIVE_WORKFLOW_HEAD)
+        if at >= 0:
+            return injected[at:].split("\n", 1)[0]
+    return ""
+
+
+def _active_workflow_delta(
+    workflow_context: ActiveWorkflowContext | None, conversation_history: object
+) -> str:
+    """This turn's workflow line: only what replayed history does not already say.
+
+    The reminder rides the message when the latest replayed workflow line is
+    not this exact text (first turn, after a compaction dropped it, or after
+    the workflow changed). With no active workflow, a replayed reminder that
+    is still standing gets `ACTIVE_WORKFLOW_ENDED_LINE` once. Keyed on the
+    rendered text, as opencode keys an instruction source on its content hash
+    and emits only added, changed and removed sources
+    (packages/core/src/instructions/index.ts:143-160).
+    """
+    replayed = _replayed_workflow_line(conversation_history)
+    if workflow_context:
+        rendered = render_active_workflow_context(workflow_context)
+        return "" if replayed == rendered else rendered
+    if replayed and replayed != ACTIVE_WORKFLOW_ENDED_LINE:
+        return ACTIVE_WORKFLOW_ENDED_LINE
+    return ""
 
 
 def _without_replayed_boundary(
@@ -1046,7 +1099,9 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
         )
         if workflow_context:
             payload["omh_active_workflow"] = workflow_context
-            context_parts.append(render_active_workflow_context(workflow_context))
+        workflow_line = _active_workflow_delta(workflow_context, kwargs.get("conversation_history"))
+        if workflow_line:
+            context_parts.append(workflow_line)
         # `dag-ulw` as one option beside carrying a plan out, on `/plan`'s own
         # turn and, conditionally, on the turn right after a plan was made
         # (`plan_follow_on`). A child is never offered dag-ulw, nor a home
@@ -1214,6 +1269,11 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
                 omh_home=omh_home,
                 session_id=session_id,
             )
+        if "omh_active_workflow" in payload:
+            # The reminder is already in replayed history, but the metadata
+            # rides every call; Hermes skips a result with empty context.
+            payload["context"] = ""
+            return payload
         return None
 
     if status.get("active_executors"):

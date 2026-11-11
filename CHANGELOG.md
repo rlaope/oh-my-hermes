@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **An active workflow's reminder rides a session once, not on every turn.**
+  `[OMH Active Workflow]` was appended to every turn's message while a
+  workflow was active, and Hermes replays each turn's injection, so N turns
+  carried N copies. It is now sent only when the history Hermes replays does
+  not already end on that exact line: after a compaction dropped it, or when
+  the workflow changed. When the workflow ends, one line says the earlier
+  reminder no longer applies. The `omh_active_workflow` metadata still comes
+  with every call.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the

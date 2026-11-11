@@ -8,6 +8,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from _cli_harness import run_cli
+from omh.plugin_bundle.omh.active_workflow_context import (
+    ACTIVE_WORKFLOW_ENDED_LINE,
+    ACTIVE_WORKFLOW_HEAD,
+    render_active_workflow_context,
+)
 from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
 
 
@@ -81,8 +86,80 @@ class ActiveWorkflowContextTests(unittest.TestCase):
                 self.assertIn("[OMH Active Workflow]", payload["context"])
         first = self.hook()
         replay = self.hook(conversation_history=[{"role": "user", "content": "ok", "api_content": "ok\n" + first["context"]}])
+        # The metadata is reprojected every call; the reminder itself is already replayed.
         self.assertEqual(replay["omh_active_workflow"], first["omh_active_workflow"])
-        self.assertEqual(replay["context"], first["context"])
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, replay.get("context", ""))
+
+    @staticmethod
+    def replayed(*contexts: str) -> list[dict[str, str]]:
+        """History as Hermes replays it: each turn's injection in its `api_content` sidecar."""
+        rows: list[dict[str, str]] = []
+        for context in contexts:
+            rows.append({"role": "user", "content": "ok", "api_content": "ok\n\n" + context})
+            rows.append({"role": "assistant", "content": "done"})
+        return rows
+
+    def test_reminder_rides_once_while_history_replays_it(self) -> None:
+        # Given an active workflow.
+        self.fixture()
+        # When the first turn injects it and the second turn's history replays that turn.
+        first = self.hook(conversation_history=[])
+        reminder = render_active_workflow_context(first["omh_active_workflow"])
+        self.assertIn(reminder, first["context"])
+        second = self.hook(conversation_history=self.replayed(first["context"]))
+        # Then the second turn carries the metadata but not a second copy.
+        self.assertEqual(second["omh_active_workflow"], first["omh_active_workflow"])
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, second.get("context", ""))
+        # Nor does a later turn while the first copy is still in replayed history.
+        third = self.hook(conversation_history=[*self.replayed(first["context"]), *self.replayed("<omh-context>x</omh-context>")])
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, third.get("context", ""))
+
+    def test_reminder_returns_after_compaction_and_on_change(self) -> None:
+        self.fixture()
+        first = self.hook(conversation_history=[])
+        reminder = render_active_workflow_context(first["omh_active_workflow"])
+        # A compaction summary replaced the replayed turns: the reminder comes back.
+        compacted = self.hook(conversation_history=[{"role": "user", "content": "[CONTEXT COMPACTION] summary"}])
+        self.assertIn(reminder, compacted["context"])
+        # A person quoting the reminder in their own words does not count as replayed.
+        quoted = self.hook(conversation_history=[{"role": "user", "content": reminder, "api_content": reminder}])
+        self.assertIn(reminder, quoted["context"])
+        # The workflow changed: the new text is not in history, so it rides.
+        self.assertEqual(self.cli("clear", "--workflow", "memory-sync", "--session-ref", self.session)[0], 0)
+        self.start("plan")
+        changed = self.hook(conversation_history=self.replayed(first["context"]))
+        self.assertEqual(changed["omh_active_workflow"]["workflow"], "plan")
+        self.assertIn("[OMH Active Workflow] workflow=plan", changed["context"])
+        # An older copy of the new text earlier in history does not hide the change back.
+        self.assertIn(
+            "[OMH Active Workflow] workflow=plan",
+            self.hook(conversation_history=self.replayed(changed["context"], first["context"]))["context"],
+        )
+
+    def test_end_line_once_after_the_workflow_ends(self) -> None:
+        self.fixture()
+        first = self.hook(conversation_history=[])
+        self.assertEqual(self.cli("finish", "--workflow", "memory-sync", "--outcome", "finished",
+                                  "--session-ref", self.session)[0], 0)
+        # The replayed reminder still stands, and no workflow is active now: one end line.
+        ended = self.hook(conversation_history=self.replayed(first["context"]))
+        self.assertNotIn("omh_active_workflow", ended)
+        self.assertIn(ACTIVE_WORKFLOW_ENDED_LINE, ended["context"])
+        self.assertEqual(ended["context"].count(ACTIVE_WORKFLOW_HEAD), 1)
+        # The end line already follows the reminder in history: nothing more.
+        after = self.hook(conversation_history=self.replayed(first["context"], ended["context"]))
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, after.get("context", ""))
+        # A compaction that dropped both leaves nothing to retract.
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, self.hook(conversation_history=[]).get("context", ""))
+
+    def test_no_workflow_ever_injects_nothing(self) -> None:
+        # No state, no replayed reminder: neither the reminder nor an end line.
+        for history in ([], self.replayed("<omh-context>x</omh-context>"),
+                        [{"role": "user", "content": "[OMH Active Workflow] workflow=plan; lifecycle=active."}]):
+            with self.subTest(history=history):
+                payload = self.hook(conversation_history=history)
+                self.assertNotIn("omh_active_workflow", payload)
+                self.assertNotIn(ACTIVE_WORKFLOW_HEAD, payload.get("context", ""))
 
     def test_interjection_preserves_workflow(self) -> None:
         # Given an active workflow and unchanged on-disk checklist authority.
