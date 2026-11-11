@@ -832,11 +832,14 @@ run and approval decision stays Hermes'; the screen is OMH's.
   whole, in order, at the boundary. Briefings are the TUI's own rows, not
   part of the session Hermes stores: a resumed or rewound session is drawn
   again without them. The messenger's replies are unchanged.
-- With `OMH_TUI_MOUSE=1` the OMH TUI takes the mouse on the main screen once it can tell which row
+- The OMH TUI takes the mouse on the main screen once it can tell which row
   a report lands on (once the session's output has reached the bottom of the
   screen, or after Ctrl+L). A drag over the transcript or the rows under it
   selects the text (shown reversed) and copies it when you let go, without
-  the rail a block hangs on or a reply's margin, and the row above the
+  the rail a block hangs on or a reply's margin, and with the rows the OMH
+  TUI wrapped to fit the screen joined back into the line they were written
+  as (a space where the wrap dropped one, nothing inside a long word or
+  path, code exactly as it is), so a long command pastes as one line; the row above the
   composer says `✓ copied 694 chars to clipboard` for 2 s (the copy goes out
   as the pager's does, below); a double click copies a word and a triple
   click a row, and a key, the wheel, the next click or, once it is copied,
@@ -889,12 +892,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `terminal.integrated.macOptionClickForcesSelection` is on. That selection
   copies the rail, as it always has. Inside tmux the reports reach the OMH
   TUI with `set -g mouse` on or off, and with it on tmux hands the OMH TUI
-  the wheel and the drag instead of starting copy mode. Without
-  `OMH_TUI_MOUSE=1` (the default) the main screen's mouse is the terminal's:
+  the wheel and the drag instead of starting copy mode. With
+  `OMH_TUI_MOUSE=0` the main screen's mouse is the terminal's:
   the wheel scrolls its scrollback and a drag selects natively, rail
-  included, and click reports are on only while the agent list or the
+  and wrapped rows included, and click reports are on only while the agent list or the
   `/theme` picker is open, as the next item says.
-- By default the OMH TUI asks the terminal for click reports only while the agent list
+- With `OMH_TUI_MOUSE=0` the OMH TUI asks the terminal for click reports only while the agent list
   is open, so during a turn the wheel scrolls and a drag selects as in any
   shell, and the agent view is reached with Down; nothing in it, and
   nothing on the info line, is clickable while the list is closed. While the list is open a plain drag no longer selects text in
@@ -904,7 +907,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   the window is being resized. While click reports are on there, and for 0.5 s after they go off, an Esc pressed on
   its own acts after 0.3 s, the time a click report split by a slow
   connection has to arrive whole. Where the main screen takes the mouse
-  (with `OMH_TUI_MOUSE=1`) the Esc waits only where a report can still
+  (the default) the Esc waits only where a report can still
   come split: over SSH or WSL, while a mouse button is held, and for 0.5 s
   after the last report (a wheel turn, a click); otherwise it acts at the
   first silence, as with reports off. Another key typed within that time ends
@@ -941,8 +944,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   SSH. Elsewhere it
   goes out as OSC 52 with nothing to confirm it, and the footer says `⚠ copy
   sent (terminal may not support OSC 52)` (under tmux, that tmux passes it on
-  only with `set-clipboard on`). The terminal's own selection (everywhere by
-  default, or its bypass modifier with `OMH_TUI_MOUSE=1`) copies what the screen
+  only with `set-clipboard on`). The terminal's own selection (its bypass
+  modifier, or everywhere with `OMH_TUI_MOUSE=0`) copies what the screen
   shows, so it keeps each row's rail (`┃ ` in front of each row, and a
   reply's margin after it), and the terminal shows no copy notice of its
   own.
@@ -1277,8 +1280,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   Ctrl+K, Ctrl+C, Esc Esc) removes the image, and an undo puts both back.
   The prompt keeps the `[Image #N]` labels in its text so the model can name
   them, and the transcript lists under it each image Hermes accepted for it
-  (`⎿  [Image #1]`), with a small preview under each: real pixels on kitty and
-  Ghostty at truecolor, coloured half-blocks elsewhere (tmux, Terminal.app,
+  (`⎿  [Image #1]`), with a small preview under each: real pixels on kitty,
+  Ghostty and Otty at truecolor, coloured half-blocks elsewhere (tmux, Terminal.app,
   iTerm2, WezTerm, VS Code), even where Hermes' config names kitty, none under
   `NO_COLOR`; `display.inline_images: off` in Hermes' config turns it off. The
   prompt waits up to 2 seconds for its previews before it is printed, and

@@ -97,7 +97,7 @@ class InstallationDocTests(unittest.TestCase):
     def test_the_user_sees_a_preview_and_can_turn_it_off(self) -> None:
         installation = prose("docs/INSTALLATION.md")
         self.assertIn(
-            "with a small preview under each: real pixels on kitty and Ghostty at truecolor, coloured half-blocks "
+            "with a small preview under each: real pixels on kitty, Ghostty and Otty at truecolor, coloured half-blocks "
             "elsewhere (tmux, Terminal.app, iTerm2, WezTerm, VS Code), even where Hermes' config names kitty, none "
             "under `NO_COLOR`; `display.inline_images: off` in Hermes' config turns it off.",
             installation,
@@ -108,6 +108,7 @@ class InstallationDocTests(unittest.TestCase):
             installation,
         )
         self.assertEqual(inline_graphics({"GHOSTTY_RESOURCES_DIR": "/g"}), INLINE_KITTY)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty", "TERM": "xterm-256color"}), INLINE_KITTY)
         for environ in ({"TERM_PROGRAM": "WezTerm"}, {"TERM_PROGRAM": "vscode"}, {"TERM_PROGRAM": "Apple_Terminal"},
                         {"TERM_PROGRAM": "iTerm.app"}):
             self.assertEqual(inline_graphics(environ), INLINE_UNICODE, environ)

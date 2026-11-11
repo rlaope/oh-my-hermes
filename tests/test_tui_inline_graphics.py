@@ -56,6 +56,18 @@ class InlineGraphicsTests(unittest.TestCase):
     def test_ghostty_program_is_kitty(self) -> None:
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "Ghostty"}), INLINE_KITTY)
 
+    def test_otty_is_kitty(self) -> None:
+        # Otty's own environment: an xterm TERM and no kitty variable, only its program name.
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty", "TERM": "xterm-256color", "COLORTERM": "truecolor"}),
+                         INLINE_KITTY)
+
+    def test_otty_inside_tmux_is_unicode(self) -> None:
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty", "TMUX": "x"}), INLINE_UNICODE)
+
+    def test_a_program_named_like_otty_is_not_otty(self) -> None:
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "cotty"}), INLINE_UNICODE)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty-preview"}), INLINE_UNICODE)
+
     def test_comparison_is_case_insensitive(self) -> None:
         self.assertEqual(inline_graphics({"TERM": "XTERM-KITTY"}), INLINE_KITTY)
 
