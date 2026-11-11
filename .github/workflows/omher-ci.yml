@@ -34,10 +34,12 @@ jobs:
       - name: Install pnpm
         run: npm install --global pnpm@11
       - name: Install the Linux build libraries (WebKitGTK 4.1, tray, SVG, patchelf for the AppImage)
+        # Bounded: when the runner's Ubuntu mirror names do not resolve, apt waits 20 s per package and
+        # this step once ran for over two hours. The script falls back to another mirror instead.
+        timeout-minutes: 25
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
-            libssl-dev libgtk-3-dev file xvfb xdotool
+          bash apps/omher/scripts/linux-build-deps.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libgtk-3-dev file xvfb xdotool
       - name: Install dependencies
         working-directory: apps/omher
         run: pnpm install --frozen-lockfile
