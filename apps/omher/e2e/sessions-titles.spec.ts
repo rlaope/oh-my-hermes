@@ -37,7 +37,6 @@ async function open(page: Page, saved: Record<string, string> = {}) {
 async function start(page: Page, agent: string, folder: string, first = "/status") {
   await page.evaluate((f) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = f), folder);
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();

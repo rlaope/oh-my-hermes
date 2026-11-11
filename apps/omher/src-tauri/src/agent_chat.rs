@@ -95,7 +95,8 @@ pub fn adapter_for(id: &str, cwd: &str, resume: Option<&str>) -> Option<Box<dyn 
     match id {
         "claude" => Some(Box::new(Claude::new(cwd))),
         "codex" => Some(Box::new(Codex::new(cwd, resume))),
-        "pi" | "omp" => Some(Box::new(Pi::new(cwd, label))),
+        // OmO speaks pi's RPC (senpi engine): the same adapter, under its own name
+        "pi" | "omp" | "omo" => Some(Box::new(Pi::new(cwd, label))),
         _ => None,
     }
 }
@@ -1557,8 +1558,8 @@ impl ChatSessions {
         Arc::new(ChatSessions::default())
     }
 
-    /// Start allow-listed agent `agent_id` in its chat mode in `cwd`. `resume` (Claude Code only) continues
-    /// that conversation. `account_env` is `accounts::session_env` for that agent, as for a terminal session:
+    /// Start allow-listed agent `agent_id` in its chat mode in `cwd`. `resume` (Claude Code, Codex, OmO)
+    /// continues that conversation. `account_env` is `accounts::session_env` for that agent, as for a terminal session:
     /// the chosen account's home variable, or nothing. Anything not on the allow-list, or without a chat
     /// mode, is refused before a process exists.
     pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], sink: F) -> Result<u32, String>
@@ -2070,15 +2071,15 @@ mod tests {
 
     #[test]
     fn only_chat_agents_have_adapters() {
-        for id in ["claude", "codex", "pi", "omp"] {
+        for id in ["claude", "codex", "omo", "pi", "omp"] {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
-        for id in ["omh", "grok", "sh", ""] {
+        for id in ["omh", "grok", "dsh", "sh", ""] {
             assert!(adapter_for(id, "/w", None).is_none(), "{id}");
         }
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
-        for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
+        for bad in ["omh", "grok", "dsh", "/bin/sh", "claude -p"] {
             assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
         }
         assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
@@ -2291,6 +2292,41 @@ mod tests {
         assert_eq!(text, format!("{}abz", "x".repeat(2000)));
         // one event per line would be 2002
         assert!(deltas.len() < 200, "{} delta events", deltas.len());
+    }
+
+    /// The real OmO through `start_agent` (`omo --mode rpc`): "hi" gets an answer, then a second process started
+    /// with the session id it reported (`--session`) still knows the first turn. Needs omo signed in.
+    #[test]
+    #[ignore]
+    fn real_omo_chat_says_hi_and_resumes() {
+        let dir = std::env::temp_dir().join(format!("omher-real-omo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let turn = |resume: Option<&str>, text: &str| -> (String, Vec<String>) {
+            let c = ChatSessions::default();
+            let out = Arc::new(Mutex::new(Vec::new()));
+            let o = out.clone();
+            let id = c.start_agent("omo", &dir, resume, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            c.input(id, Input::Send { text: text.into() }).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(150);
+            while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
+                thread::sleep(Duration::from_millis(100));
+            }
+            let got = out.lock().unwrap().clone();
+            c.close(id);
+            thread::sleep(Duration::from_millis(500));
+            let session = got.iter().find_map(|x| match x { ChatOut::Event(e) if s(e, "event") == "session.info" && !s(e, "agent_session").is_empty() => Some(s(e, "agent_session")), _ => None }).unwrap_or_default();
+            let msgs: Vec<String> = got.iter().filter_map(|x| match x { ChatOut::Event(e) if s(e, "event") == "message" => Some(s(e, "text")), _ => None }).collect();
+            println!("omo session {session} (resume {resume:?}): {msgs:?}");
+            (session, msgs)
+        };
+        let (session, first) = turn(None, "hi. reply with just the word pineapple");
+        assert!(is_uuid(&session), "{session:?}");
+        assert!(first.iter().any(|m| m.to_lowercase().contains("pineapple")), "{first:?}");
+        let (again, second) = turn(Some(&session), "which fruit word did you just reply with? one word");
+        assert_eq!(again, session);
+        assert!(second.iter().any(|m| m.to_lowercase().contains("pineapple")), "{second:?}");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the
@@ -2805,6 +2841,28 @@ mod tests {
         assert_eq!(text_of(&st.events, "message"), ["4. (model stub-a)"]);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
         assert!(!p.in_turn());
+    }
+
+    #[test]
+    fn real_omo_plain_answer_through_the_pi_adapter() {
+        // omo 5.0.0-beta.65 (`omo --mode rpc`, signed in): pi's RPC plus its own events (settings_source_selected,
+        // agent_settled, agent_idle, setStatus/notify dialogs, stdout log lines); the session id is what --session takes
+        let mut p = Pi::new("/w/proj", "OmO");
+        p.start();
+        let st = run(&mut p, &real("omo-init.jsonl"));
+        let info = of(&st.events, "session.info");
+        assert_eq!(s(info[0], "agent_session"), "01a1c85a-703a-72fe-ae88-c1f9ffb5c249");
+        assert_eq!(s(info[0], "model"), "Claude Fable 5.1");
+        assert_eq!(of(&st.events, "session.models")[0]["options"].as_array().unwrap().len(), 3);
+        assert!(!p.in_turn());
+        p.on_input(Input::Send { text: "hi. reply with just the word ok".into() }).unwrap();
+        let st = replay(&mut p, &["omo-1-plain.jsonl"], &[]);
+        assert_eq!(text_of(&st.events, "message"), ["ok"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        assert!(of(&st.events, "approval.request").is_empty() && of(&st.events, "clarify.request").is_empty());
+        assert!(!p.in_turn());
+        // the error line names OmO, not pi
+        assert!(p.explain("No API key found").starts_with("OmO is not signed in"));
     }
 
     #[test]

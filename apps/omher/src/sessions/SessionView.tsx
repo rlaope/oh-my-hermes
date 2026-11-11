@@ -1,8 +1,9 @@
 // Main column for a SESSIONS entry: a header (agent mark, the session's name, the agent and folder, status, the
 // Terminal toggle and the model button) above either the chat (the bot chat's own Timeline and Composer, fed by
-// the agent's structured mode) or the agent's terminal. A New session (draft) is a chat that has not started: its
-// composer holds the agent picker and, under it, the folder chip; the first message starts the agent there (Start,
-// for an agent that opens in its terminal). After that both show read-only in the same places.
+// the agent's structured mode) or the agent's terminal. A New session (draft) is a chat that has not started, on the
+// agent picked in the SESSIONS + menu: its composer shows that agent read-only and, under it, the folder chip; the
+// first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
+// read-only too.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ITheme } from "@xterm/xterm";
 import { selectAsks, useStore } from "../state/store";
@@ -15,7 +16,7 @@ import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, TerminalIcon } from
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, folderChoices, folderName, missingNote, parentPath, terminalNote, tildePath, type AgentId, type SessionRec } from "./agents";
+import { agentDef, CONTINUES, folderChoices, folderName, missingNote, parentPath, terminalNote, tildePath, type AgentId, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
@@ -137,7 +138,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
             type="button"
             className="ss-restart"
             onClick={() => void getSessions().restart(rec.id)}
-            title={rec.agent === "claude" || rec.agent === "codex" ? `Start ${label} again, continuing this conversation` : `Start ${label} again in this folder`}
+            title={CONTINUES.includes(rec.agent) ? `Start ${label} again, continuing this conversation` : `Start ${label} again in this folder`}
             data-testid="session-restart"
           >
             Restart
@@ -172,7 +173,7 @@ const FolderIcon = ({ size = 13 }: { size?: number }) => (
   </svg>
 );
 
-/** A started session's agent in the composer row, where the draft's picker was: read-only. */
+/** The session's agent in the composer row, read-only (a draft's agent is changed from the SESSIONS + menu). */
 function AgentFixed({ agent }: { agent: AgentId }) {
   return (
     <span className="ss-pick ro" title={agentDef(agent).label} data-testid="session-agent-fixed">
@@ -259,72 +260,6 @@ function Context({ rec, account }: { rec: SessionRec; account?: string }) {
   );
 }
 
-/** The draft's agent picker in the composer row: every allow-listed agent with its mark; one that is not installed
- *  is disabled and says how to install it. */
-function AgentPick({ rec }: { rec: SessionRec }) {
-  const ss = useSessions();
-  const accounts = useAccounts();
-  const [open, setOpen] = useState(false);
-  const def = agentDef(rec.agent);
-  return (
-    <span className="ss-pick-w">
-      <button
-        type="button"
-        className="ss-pick"
-        aria-label={`${t("sessions.agent")}: ${def.label}`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={def.label}
-        onClick={() => setOpen((v) => !v)}
-        data-testid="session-agent-pick"
-      >
-        <AgentMark agent={rec.agent} size={14} />
-        <span className="ss-pick-n">{def.label}</span>
-        <ChevronDown />
-      </button>
-      <Popover open={open} onClose={() => setOpen(false)} side="top" align="right" width={248} label={t("sessions.agent")} className="ss-dpop">
-        <div data-testid="session-menu">
-          {ss.agents === null && <div className="ss-empty">Looking for agents…</div>}
-          {(ss.agents ?? []).map((a) => {
-            const d = agentDef(a.id);
-            const account = sessionAccountSuffix(accounts.groups, a.id);
-            const on = a.id === rec.agent;
-            return (
-              <button
-                key={a.id}
-                type="button"
-                className={`ss-item${on ? " on" : ""}`}
-                disabled={!a.path}
-                aria-pressed={on}
-                title={a.path ?? missingNote(a.id)}
-                onClick={() => {
-                  setOpen(false);
-                  getSessions().setDraft(rec.id, { agent: a.id });
-                }}
-                data-testid={`session-agent-${a.id}`}
-              >
-                <span className="ss-ic">
-                  <AgentMark agent={a.id} />
-                </span>
-                <span className="ss-n ss-n-as" title={account ? `${d.label} ${account}` : d.label}>
-                  <span className="ss-l">{d.label}</span>
-                  {account && (
-                    <span className="ss-as" data-testid={`session-account-${a.id}`}>
-                      {account}
-                    </span>
-                  )}
-                </span>
-                {a.path ? <code className="ss-cmd">{d.program}</code> : <span className="ss-missing">{t("sessions.notInstalled")}</span>}
-                <span className="ss-ck">{on && <CheckIcon />}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Popover>
-    </span>
-  );
-}
-
 /** A New session: the chat before its agent runs. */
 function DraftPane({ rec }: { rec: SessionRec }) {
   const ss = useSessions();
@@ -366,7 +301,7 @@ function DraftPane({ rec }: { rec: SessionRec }) {
         offlineText={!ready ? (!rec.cwd ? t("sessions.findingHome") : missingNote(rec.agent)) : t("sessions.pressStart", { agent: def.label })}
         onSend={(text) => start(text)}
         onStop={() => undefined}
-        tools={<AgentPick rec={rec} />}
+        tools={<AgentFixed agent={rec.agent} />}
         action={
           terminal ? (
             <button type="button" className="ss-go" disabled={!ready} onClick={() => start()} data-testid="session-go">

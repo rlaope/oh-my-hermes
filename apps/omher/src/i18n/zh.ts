@@ -105,7 +105,7 @@ export const zh: Record<Key, string> = {
   "onb.bots.body": "可以交付工作的同事。它们会规划、执行并汇报结果。",
   "onb.bots.action": "给机器人发消息",
   "onb.sessions.title": "会话",
-  "onb.sessions.body": "编程代理（Claude Code、Codex、pi、omp）在一个文件夹中与你一起工作。",
+  "onb.sessions.body": "编程代理（Claude Code、Codex、OmO、DSH、pi、omp）在一个文件夹中与你一起工作。",
   "onb.sessions.action": "新建会话",
   "onb.dismiss": "关闭",
   "onb.botsHint": "每个机器人是一个 Hermes 配置。用上方的 + 添加。",

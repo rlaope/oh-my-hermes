@@ -224,7 +224,7 @@ async fn account_login_cancel(shell: State<'_, Shell>, login: u32) -> Result<(),
     Ok(())
 }
 
-/// The allow-listed agent programs (claude, codex, omh, pi, omp, grok), how each opens and where each
+/// The allow-listed agent programs (claude, codex, omo, dsh, omh, pi, omp, grok), how each opens and where each
 /// was found, if anywhere.
 #[tauri::command]
 async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
@@ -233,7 +233,7 @@ async fn sessions_agents() -> Result<Vec<AgentInfo>, String> {
 
 /// Start allow-listed agent `agent` in folder `cwd` in a new pseudo-terminal (its own terminal UI). Only an
 /// agent id crosses from the UI: no program path, command line or argument; `resume` is a Claude Code
-/// session id that the shell checks is one (so the terminal view continues a chat); `account` is the account a
+/// session id or a DSH conversation id that the shell checks is a UUID (so the terminal continues it); `account` is the account a
 /// session restarted after an app restart ran with (checked by `accounts::session_env_for`). Terminal output goes
 /// to `on_data` as raw bytes, the exit code (null after a signal) once to `on_exit`.
 #[tauri::command]
