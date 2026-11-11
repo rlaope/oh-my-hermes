@@ -76,7 +76,7 @@ test("Claude with five logins: the card lists each with only its own record, nev
   const rows = card.getByTestId("usage-account");
   await expect(rows).toHaveCount(5);
   await expect(rows.locator(".uc-who")).toHaveText(["owner@example.com", "ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"]);
-  await expect(rows.first().locator(".uc-state")).toHaveText(/^Limited until \d\d:\d\d$/);
+  await expect(rows.first().locator(".uc-state")).toHaveText(/^Limited until (\w{3} )?\d\d:\d\d$/);
   await expect(rows.nth(1).locator(".uc-state")).toHaveText("No record");
   await expect(card.getByTestId("usage-accounts")).not.toContainText("%");
   // the meter itself is unchanged: one Claude mark, no ring (Claude Code gives no %)
