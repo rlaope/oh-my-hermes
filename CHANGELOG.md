@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI shows a background wait on its own runtime again.** With
+  `omh theme runtime own` (the default), the HUD read the bots' Hermes home
+  rather than the TUI profile the session runs on, so it never found the
+  session's background terminals: no `✳ Waiting… (… · terminal)` row stood
+  over the composer between turns and no background row sat on the info
+  line, though the process ran and Hermes would wake the session for it. The
+  HUD now reads the home `HERMES_HOME` names; the bot board alone keeps the
+  bots' home.
+
 - **omher reads fully in Chinese, Korean and Japanese, and typing in them is
   safe.** Every word omher itself shows (Settings and its pages, Accounts,
   Providers, the sidebar, the composer and model picker, approval and question
@@ -21,6 +30,7 @@ All notable changes will be documented here.
   the language (`zh-CN`, `ja`, `ko`), dates follow it too, and `--font` falls
   back to PingFang SC, Hiragino Sans GB, Microsoft YaHei and Noto Sans CJK
   (and their Japanese and Korean siblings).
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt
@@ -53,6 +63,36 @@ All notable changes will be documented here.
   The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
+
+- **omher's Automations and Plugins pages work, by hand or by asking the
+  bot, in English, Korean, Japanese or Chinese.** The two sidebar rows that
+  said Soon open pages. Automations lists every bot's cron jobs from each
+  profile's `cron/jobs.json` (read only), with a filter per bot, a status
+  mark per job (done, failed, never ran, paused), an on/off switch, and a
+  detail panel; pause, resume, delete and "+ New" go through that bot's own
+  gateway `cron.manage`, and Hermes' own refusal text shows when it rejects
+  a schedule. Run now and Edit are chat messages, because `cron.manage` has
+  neither: Run now sends `Run my automation "<name>" (id <id>) now.` to the
+  bot's chat and opens it, Edit fills the page's box with `Change automation
+  "<name>": `. A schedule reads in words in the picked language (`0 9 * * 1-5`
+  is "weekdays at 09:00", "평일 09:00"), with Hermes' own text in the tooltip;
+  a shape omher does not know stays as written, and a script job, which has
+  no prompt, names the script it runs. Plugins shows one bot's own plugins, the curated catalog from
+  its catalog cache file and Hermes' built-in ones; toggle, update and remove
+  go through the bot's `plugins.manage`, and an install is catalog-only:
+  Hermes inspects the entry at its pin, a sheet shows the source, what it
+  adds, the keys it needs and that it applies to that bot only, and Install
+  sends that same pin back. Refusals are read from Hermes' reason code
+  (`exists`, `source_moved`). Both pages open with a box that sends a request
+  to a picked bot's chat, and a job or plugin the bot made from chat shows up
+  there as a card (run once, open, undo; open, turn off). Settings › General
+  has a Language row (English, 한국어, 日本語, 中文) that switches at once and
+  is kept in `omher.lang`; the sidebar's labels and every new string are keys
+  in all four languages. `docs/OMHER-BOUNDARY.md` gains rules 24 and 25, and
+  rule 9 names them as its only exceptions.
+
+
+
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
