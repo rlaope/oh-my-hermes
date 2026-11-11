@@ -228,7 +228,8 @@ without 1002) and in a pager. Where it is on for the main screen, a drag, a
 double click or a triple click selects rows the live region printed, by their
 place in what it printed (`LiveRegion.doc_row`), shows them reversed and
 copies them; a row it cannot map for certain is never guessed at, and the
-wheel up opens the transcript view. With `OMH_TUI_MOUSE=0` the wheel and a drag
+wheel up turns reporting off until the next key, so the terminal scrolls its own
+scrollback. With `OMH_TUI_MOUSE=0` the wheel and a drag
 on the main screen are the terminal's. A copy joins rows the TUI wrapped to fit
 the width back into the line they were written as, by an empty mark each such
 row carries that paints nothing. A plain left click on an

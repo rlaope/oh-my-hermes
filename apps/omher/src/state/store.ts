@@ -218,6 +218,9 @@ export interface Chat {
   turnSeq: number;
   /** Set when chat.open failed (bot offline, gateway refused); the timeline shows it instead of loading forever. */
   openError?: string | null;
+  /** A status that came while no turn ran (Hermes says "Resuming interrupted turn…" just before the turn starts):
+   *  never shown on its own; a turn that starts within EARLY_STATUS_MS opens with it. */
+  early?: { text: string; at: number } | null;
 }
 
 /** The composer's "Reply there" chip: a thread elsewhere the next message points the bot at. */
@@ -447,6 +450,19 @@ function withItems(chat: Chat, items: ChatItem[]): Chat {
     .map((i) => ({ id: i.id, role: i.kind, text: i.text, ts: i.ts }));
   return { ...chat, items, messages };
 }
+
+/** The person answered a card: the running turn's "Waiting for approval / your answer" goes back to what the turn
+ *  was doing (its latest step), or to the plain working line, unless another card still waits. */
+function doneWaiting(c: Chat): Chat {
+  const t = c.turn;
+  if (!t || (t.status !== tr("live.waitApproval") && t.status !== tr("live.waitAnswer"))) return c;
+  if (c.items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(c.items, i))) return c;
+  const last = t.steps[t.steps.length - 1];
+  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail) : "" }));
+}
+
+/** How long a status that came before its turn still opens that turn (Hermes sends it right before). */
+const EARLY_STATUS_MS = 5_000;
 
 function newTurn(chat: Chat, bot: string, now: number, status = ""): [Chat, Turn] {
   const seq = chat.turnSeq + 1;
@@ -703,18 +719,23 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   }
   const bot = ev.bot;
   switch (ev.event) {
+    // A turn starts only on turn.start (or a chat found running on open). Every other live event belongs to the
+    // running turn and is dropped without one: an agent's own status after its turn ended (OmO's setStatus after
+    // agent_end) must not start a turn that nothing ends.
     case "turn.start":
-      return touchChat(state, bot, (c) => newTurn(endTurn(c, now, "done"), bot, now)[0]);
-    case "status":
-      return touchChat(state, bot, (c) => patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({ ...t, status: ev.text })));
-    case "thinking":
       return touchChat(state, bot, (c) => {
-        const base = c.turn ? c : newTurn(c, bot, now)[0];
-        return base.turn!.status ? base : patchTurn(base, (t) => ({ ...t, status: THINKING }));
+        const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
+        return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null };
       });
+    case "status":
+      return touchChat(state, bot, (c) =>
+        c.turn ? patchTurn(c, (t) => ({ ...t, status: ev.text })) : { ...c, early: { text: ev.text, at: now } },
+      );
+    case "thinking":
+      return touchChat(state, bot, (c) => (c.turn && !c.turn.status ? patchTurn(c, (t) => ({ ...t, status: THINKING })) : c));
     case "tool.start":
       return touchChat(state, bot, (c) =>
-        patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({
+        patchTurn(c, (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
           steps: [
@@ -737,14 +758,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     }
     case "skill":
       return touchChat(state, bot, (c) =>
-        patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) =>
-          t.skills.includes(ev.name) ? t : { ...t, skills: [...t.skills, ev.name] },
-        ),
+        patchTurn(c, (t) => (t.skills.includes(ev.name) ? t : { ...t, skills: [...t.skills, ev.name] })),
       );
     case "delta":
-      return touchChat(state, bot, (c) =>
-        patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({ ...t, streaming: t.streaming + ev.text })),
-      );
+      return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, streaming: t.streaming + ev.text })));
     case "message": {
       const next = touchChat(state, bot, (c) => {
         const cleared = patchTurn(c, (t) => ({ ...t, streaming: "" }));
@@ -812,7 +829,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           base = withItems(c, [...c.items, { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }]);
           base = patchTurn(base, (t) => ({ ...t, streaming: "" }));
         }
-        return endTurn(base, now, ev.outcome, ev.error);
+        return { ...endTurn(base, now, ev.outcome, ev.error), early: null };
       });
     case "bot.status":
       return {
@@ -920,21 +937,25 @@ export function reduce(state: AppState, a: Action): AppState {
       return reduceEvent(state, a.ev, a.now);
     case "approval.resolved":
       return touchChat(state, a.bot, (c) =>
-        withItems(
-          c,
-          c.items.map((i) =>
-            i.kind === "approval" && i.request_id === a.request_id ? { ...i, resolved: a.choice } : i,
+        doneWaiting(
+          withItems(
+            c,
+            c.items.map((i) =>
+              i.kind === "approval" && i.request_id === a.request_id ? { ...i, resolved: a.choice } : i,
+            ),
           ),
         ),
       );
     case "clarify.resolved":
       return touchChat(state, a.bot, (c) =>
-        withItems(
-          c,
-          c.items.map((i) =>
-            i.kind === "clarify" && i.request_id === a.request_id
-              ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
-              : i,
+        doneWaiting(
+          withItems(
+            c,
+            c.items.map((i) =>
+              i.kind === "clarify" && i.request_id === a.request_id
+                ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
+                : i,
+            ),
           ),
         ),
       );
