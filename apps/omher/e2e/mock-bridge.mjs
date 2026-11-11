@@ -11,7 +11,9 @@
 // mock.demo (Kami's live "Docs dark mode" plan on top of his list, its nodes' PRs in mixed states; `--demo` seeds it
 // at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
 // plugin from its chat: the bridge's poll would emit routines.update + routine.added, or plugin.added + plugins.update),
-// mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes).
+// mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
+// mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
+// drives it with mock.emit).
 import http from "node:http";
 import crypto from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
@@ -477,6 +479,8 @@ let automations, plugins, inspected, offlineWrites;
 let asked;
 /** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
 const subTimers = new Set();
+// Bots whose turns the test drives by hand (mock.manual).
+let manual;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -619,6 +623,7 @@ function reset() {
   offlineWrites = new Set();
   pending = new Map();
   asked = new Map();
+  manual = new Set();
   idSeq = 0;
   calls = [];
   submits = [];
@@ -1279,6 +1284,12 @@ const OPS = {
     else offlineWrites.add(p.bot);
     return {};
   },
+  "mock.manual": (p) => {
+    needStr(p, "bot");
+    if (p.on === false) manual.delete(p.bot);
+    else manual.add(p.bot);
+    return {};
+  },
   "mock.cliTitle": (p) => {
     cliTitles.set(`${p.agent}:${p.session}`, String(p.title ?? ""));
     return {};
@@ -1408,6 +1419,7 @@ function startTurn(bot, text, folder) {
   ev(bot, "bot.status", { status: bots[bot]?.status, running: true });
   if (folder) {
     ev(bot, "turn.start");
+    if (manual.has(bot.split("\u0000")[0])) return;
     if (text.startsWith("/approve")) return scriptApproval(bot);
     return schedule(bot, [
       ...tool(bot, "f-tool-1", "terminal", `ls ${folder.cwd}`, 80, 300),
@@ -1416,6 +1428,7 @@ function startTurn(bot, text, folder) {
     ]);
   }
   ev(bot, "turn.start");
+  if (manual.has(bot)) return;
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
