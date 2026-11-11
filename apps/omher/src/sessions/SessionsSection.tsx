@@ -53,14 +53,14 @@ export function SessionsHeader() {
   }, []);
   return (
     <div className="side-sh side-sh-row">
-      <span>Sessions</span>
+      <span>{t("nav.sessions")}</span>
       <span className="ss-add">
         <button
           ref={plus}
           type="button"
           className="ss-plus"
-          aria-label="New session"
-          title="New session"
+          aria-label={t("sessions.new")}
+          title={t("sessions.new")}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
@@ -102,11 +102,11 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     getSessions().draft(id);
   };
   return (
-    <Popover open onClose={close} align="left" width={MENU_W} label="New session" className="ss-pop">
+    <Popover open onClose={close} align="left" width={MENU_W} label={t("sessions.new")} className="ss-pop">
       <div
         ref={box}
         role="menu"
-        aria-label="New session"
+        aria-label={t("sessions.new")}
         data-testid="session-menu"
         onKeyDown={(e) => {
           const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
@@ -117,7 +117,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           items[(to + items.length) % items.length]?.focus();
         }}
       >
-        <div className="ss-h">New session</div>
+        <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">Looking for agents…</div>}
         {(agents ?? []).map((a) => {
           const def = agentDef(a.id);
@@ -187,7 +187,7 @@ function SessionStart() {
           data-testid="session-start"
         >
           <PlusIcon size={16} />
-          New session
+          {t("sessions.new")}
         </button>
         {open && <NewSessionMenu onClose={() => setOpen(false)} trigger={btn} />}
       </div>
@@ -219,7 +219,7 @@ export function SessionList() {
   // a draft's folder is not settled yet: it never makes another row show its parent
   const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home };
   return (
-    <nav className="bot-list ss-list" aria-label="Sessions" data-testid="session-list">
+    <nav className="bot-list ss-list" aria-label={t("nav.sessions")} data-testid="session-list">
       {ss.list.map((rec) =>
         confirm === rec.id ? (
           <div

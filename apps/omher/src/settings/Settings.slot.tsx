@@ -7,7 +7,7 @@ import type { SlotProps } from "../features";
 import type { Bot, ModelOptions } from "../lib/protocol";
 import { notifyEnabled, setNotifyEnabled, useStore } from "../state/store";
 import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
-import { t } from "../i18n";
+import { LANG_NAMES, LANGS, t, type Lang } from "../i18n";
 import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
@@ -381,6 +381,17 @@ function GeneralPage() {
     <div className="st-page">
       <div className="st-gh st-gh0">Appearance</div>
       <Appearance />
+      <div className="st-grp st-grp-lang">
+        <Row title={t("lang.title")} hint={t("lang.hint")}>
+          <Seg
+            label={t("lang.title")}
+            value={s.ui.lang}
+            onChange={(v) => s.setLanguage(v as Lang)}
+            options={LANGS.map((l) => ({ value: l, label: LANG_NAMES[l] }))}
+            testId="language"
+          />
+        </Row>
+      </div>
       <div className="st-gh">Notifications</div>
       <div className="st-grp">
         <Row title="Notify me" hint="When a bot answers, needs an approval or asks you something while omher is in the background">

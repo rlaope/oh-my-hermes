@@ -1,7 +1,8 @@
 // UI strings by key, in English, Korean, Japanese and Chinese. English is the source: every key lives in `en`, and
 // the other three carry the same keys with the same `{slots}` (i18n.test.ts). The app shows English unless
-// `omher.lang` in localStorage names another language; there is no picker yet. Strings written before this module
-// are still literals in their components: a new string gets a key here.
+// `omher.lang` in localStorage names another language; Settings › General › Language writes it and calls setLang
+// through the store, so the app re-renders in the new language without a restart. Strings written before this
+// module are still literals in some components: a new string gets a key here.
 import { en } from "./en";
 import { ja } from "./ja";
 import { ko } from "./ko";
@@ -12,6 +13,8 @@ export type Key = keyof typeof en;
 export const LANGS: readonly Lang[] = ["en", "ko", "ja", "zh"];
 export const DICT: Record<Lang, Record<Key, string>> = { en, ko, ja, zh };
 export const LANG_KEY = "omher.lang";
+/** Each language in its own words, for the picker. */
+export const LANG_NAMES: Record<Lang, string> = { en: "English", ko: "한국어", ja: "日本語", zh: "中文" };
 
 /** The stored language, or English when none (or an unknown one) is stored. */
 export function readLang(store: Pick<Storage, "getItem"> | undefined = typeof localStorage === "undefined" ? undefined : localStorage): Lang {
@@ -25,7 +28,7 @@ export function readLang(store: Pick<Storage, "getItem"> | undefined = typeof lo
 
 let current: Lang = readLang();
 export const lang = (): Lang => current;
-/** Switch the language for strings read from now on (tests; a picker would re-render after it). */
+/** Switch the language for strings read from now on. The store's `setLanguage` calls it and then re-renders. */
 export const setLang = (l: Lang) => {
   current = l;
 };

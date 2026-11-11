@@ -991,3 +991,13 @@
 .pv-keynote {
   margin-top: 8px;
 }
+
+/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped */
+.st-grp-lang {
+  margin-top: 10px;
+}
+.st-grp-lang .mseg button {
+  flex: none;
+  white-space: nowrap;
+  padding: 0 10px;
+}
