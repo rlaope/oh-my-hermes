@@ -74,7 +74,7 @@ OMH_OMHER_RELEASES_URL="https://api.github.com/repos/rlaope/oh-my-hermes/release
 OMH_OMHER_RELEASE_PAGES=5
 OMH_OMHER_SITE_URL="https://omher.app/"
 # The 512 px app icon for the Linux app menu entry (the same image the app bundles).
-OMH_OMHER_ICON_URL="${OMH_OMHER_ICON_URL:-https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/apps/omher/src-tauri/icons/icon.png}"
+OMH_OMHER_ICON_URL="https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/apps/omher/src-tauri/icons/icon.png"
 
 # Hermes runs a profile with HERMES_HOME=<root>/profiles/<name>, and its venv
 # lives under <root>. A home whose parent is `profiles` and whose root holds its
