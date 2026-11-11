@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 import time
 from typing import Any, ClassVar
 
-from .keys import CHAR, DOWN, END, ENTER, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, TAB, UP, Key, Paste
+from .keys import CHAR, END, ENTER, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, TAB, Key, Paste, list_nav_step
 from .pager import Pager
 from .panels import dag_page_lines
 from .style import TRUECOLOR, Line, Span
@@ -90,9 +90,9 @@ class DagPager(Pager):
                 self._follow = True
         elif char == "d":
             self.details = not self.details
-        elif event.name == DOWN or char == "j":
+        elif list_nav_step(event) == 1 or char == "j":
             self._scroll(1, rows)
-        elif event.name == UP or char == "k":
+        elif list_nav_step(event) == -1 or char == "k":
             self._scroll(-1, rows)
         elif event.name == PAGE_DOWN:
             self._scroll(self.body_rows(rows), rows)

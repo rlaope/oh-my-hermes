@@ -310,7 +310,9 @@ class AgentViewMixin:
         nearest row still shown and does nothing else.
         """
         name = event.name if isinstance(event, Key) else ""  # a paste is no key of the tree's
-        if self.tree_selected is None and name != DOWN:
+        if self.tree_selected is None and not (
+            name == DOWN or (isinstance(event, Key) and event.char == "n" and list_nav_step(event) == 1)
+        ):
             return False
         if isinstance(event, Key) and name == CHAR and event.alt and not event.protocol:
             self.tree_selected = None  # a legacy Alt chord is also Esc and a key: it leaves, as the list's does
@@ -524,7 +526,10 @@ class AgentViewMixin:
         self._settle_list()
         name = event.name if isinstance(event, Key) else ""  # a paste is no key of the list's
         if self.list_selected is None:
-            if name != DOWN or self.composer.text or self._menu_rows() or not self._list_available():
+            enter_list = name == DOWN or (
+                isinstance(event, Key) and event.char == "n" and list_nav_step(event) == 1
+            )
+            if not enter_list or self.composer.text or self._menu_rows() or not self._list_available():
                 return False
             self.list_selected = next(iter(self.roster.agents))
             return True

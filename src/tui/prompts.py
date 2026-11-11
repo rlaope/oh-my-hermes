@@ -31,8 +31,9 @@ Claude Code draws AskUserQuestion (`_framed_lines`): between two rules across
 the width, its asked sentence bold under the context Hermes wrote before it
 (dim, capped), a `label — description` choice as its label with the
 description dim under it, a last row that opens a text field for an answer of
-the person's own ("Type something."; while that field is open the composer is
-the field), and its keys on its own row under the bottom rule rather than on
+the person's own ("Type something."; while that field is open the composer
+takes its keys undrawn, and what it holds shows on that row with the caret
+there, `inline_field`), and its keys on its own row under the bottom rule rather than on
 the info line. The picker's own words (the keys, "Type something.", Hermes'
 "(Recommended)") are English whatever language the question is in, as in
 Claude Code. What a pick sends back is Hermes' own string. Every other slot row hangs
@@ -69,11 +70,11 @@ from typing import Any
 
 from . import command_risk
 from . import gateway_contract as contract
-from .keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Paste
+from .keys import CHAR, ENTER, ESCAPE, LEFT, RIGHT, Key, Paste, list_nav_step
 from .markdown import wrap_prefixed
 from .style import Line, Span, Style, fill, is_fill
 from .theme import CATCH_MARK, Theme
-from .width import cell_width, line_width, truncate, truncate_line, wrap_line
+from .width import cell_width, line_width, truncate, truncate_left, truncate_line, wrap_line
 
 # The order is the distance from safe: deny first (and selected), then the
 # narrowest allow, then the broadest. `always` is Hermes' permanent allow:
@@ -250,6 +251,11 @@ class PromptSlot:
     # them (`Composer.expanded`), which a multi-select question's Submit row sends with the ticked choices.
     draft: str = ""
     draft_sent: str = ""
+    # The field's words before the composer's caret, as `draft` shows them: where the caret stands on the field's row.
+    draft_before: str = ""
+    # Where the open text field's caret is drawn, (row, col) within the slot's last rows (`_framed_lines`); None when
+    # no field is open on a framed question's row, or its row was cut.
+    caret: tuple[int, int] | None = field(default=None, init=False, repr=False, compare=False)
     # An approval's command and its `command_risk.segments`, read once instead of on every frame.
     _segments: tuple[str, list[command_risk.Segment]] | None = field(
         default=None, init=False, repr=False, compare=False,
@@ -276,6 +282,12 @@ class PromptSlot:
         if self.method == "approval":
             return True
         return self.method == "clarify" and bool(self._current_choices()) and not self.typing
+
+    @property
+    def inline_field(self) -> bool:
+        """Whether the open text field is typed on its own row of the list (`Type something.`), as Claude Code's
+        AskUserQuestion does: a framed question with its field open. The composer takes the keys and is not drawn."""
+        return self.framed and self.typing
 
     @property
     def framed(self) -> bool:
@@ -422,9 +434,9 @@ class PromptSlot:
         (`_denied`) but the tell row's.
         """
         choices = self.approval_choices()
-        if key.name in (UP, LEFT):
+        if list_nav_step(key) == -1 or key.name == LEFT:
             self.selected = max(self.selected - 1, 0)
-        elif key.name in (DOWN, RIGHT):
+        elif list_nav_step(key) == 1 or key.name == RIGHT:
             self.selected = min(self.selected + 1, len(choices) - 1)
         elif key.name == ENTER and choices[self.selected] == APPROVAL_TELL:
             return replace(self.decline(), tell=True)
@@ -461,9 +473,8 @@ class PromptSlot:
         last = numbered if submit is None else submit
         if isinstance(key, Paste):
             return None if self.typing or not self._other_row() else self._open_field(key)
-        if key.name in (UP, DOWN):
+        if (step := list_nav_step(key)) != 0:
             self.typing = False
-            step = -1 if key.name == UP else 1
             self.selected = min(max(self.selected + step, 0), last)
             return None
         if self.typing:
@@ -594,6 +605,7 @@ class PromptSlot:
         """
         if max_rows <= 0:
             return []
+        self.caret = None  # until a framed question's open field draws it (`_framed_lines`)
         inner = max(width - len(SLOT_BAR), 1)
         queued: Line = (Span(WAITING.format(count=waiting, s="s" if waiting != 1 else ""), theme.muted),) if waiting else ()
         if self.framed:
@@ -940,8 +952,12 @@ class PromptSlot:
             asked_rows += wrap_line((Span(part, theme.user), *tail), inner)
         choices = self._current_choices()
         entries = [_choice_parts(choice) for choice in choices]
+        field_at = len(entries)  # the text field's row, when the question has one
+        typed = self.typing and not whole and self._other_row()
         if self._other_row():
-            # While the list has focus the field's row shows what was typed in it, which Submit sends.
+            # The field's row shows what was typed in it: with the field open, as it is typed, the caret on it (one
+            # row, scrolled to keep the caret in view: `_field_window`), and while the list has focus too, which
+            # Submit sends.
             entries.append((_one_line(self.draft) if self.draft.strip() and not self.typing else CLARIFY_OTHER, ""))
         leads = [f"{number}. " for number in range(1, len(entries) + 1)]
         if self._multi():
@@ -953,6 +969,11 @@ class PromptSlot:
             [(lead, label, description) for lead, (label, description) in zip(leads, entries)], inner, theme, theme.user,
             control=self._submit_row(),
         )
+        field_row: Line | None = None
+        caret_col = 0
+        if typed:
+            field_row, caret_col = self._field_row(leads[field_at], inner, theme)
+            choice_rows[field_at] = [field_row]
         listed = sum(len(choice) for choice in choice_rows)
         natural = len(lead_rows) + len(asked_rows) + listed
         # The key row first: the info line says none of them while the question is framed. The rules and the blank
@@ -961,8 +982,7 @@ class PromptSlot:
         room = max_rows
         footer = not whole and max_rows >= FRAMED_FOOTER_MIN_ROWS
         room -= footer
-        # With the field open the composer's rules stand under it.
-        ruled = not whole and not self.typing and room - 2 >= natural
+        ruled = not whole and room - 2 >= natural
         room -= 2 * ruled
         blank = room - 1 >= natural  # a row of the head below, so `room` keeps it
         # Rows run short: the context gives way before the asked sentence does, and Ctrl+O still shows it.
@@ -976,8 +996,12 @@ class PromptSlot:
         # (`style.gutter`), which a drag on the main screen never highlights or copies.
         bar = Span(SLOT_BAR, _framing(theme.muted))
         rule: Line = (Span(FRAME_RULE * width, _framing(theme.faint)),)
-        body = [_barred(row, bar, width) for row in self._fit(head, [], choice_rows, room, inner, theme)]
+        fitted = self._fit(head, [], choice_rows, room, inner, theme)
+        body = [_barred(row, bar, width) for row in fitted]
         rows = [rule, *body, rule] if ruled else body
+        # The caret stands on the field's row, where the person types (the composer takes the keys, undrawn).
+        at = next((index for index, row in enumerate(fitted) if row is field_row), None) if field_row else None
+        self.caret = None if at is None else (at + ruled, len(SLOT_BAR) + caret_col)
         if footer:
             kind = "field" if self.typing else "choice" if not self._multi() else "multi" if (
                 self.selected != self._submit_row()) else "send" if self.ticked or self.draft_sent.strip() else "skip"
@@ -987,6 +1011,28 @@ class PromptSlot:
             fits = [form for form in said if cell_width(indent + form) <= width]
             rows.append(truncate_line((Span(indent + (fits[0] if fits else said[-1]), _framing(theme.hint)),), width))
         return rows
+
+    def _field_row(self, lead: str, width: int, theme: Theme) -> tuple[Line, int]:
+        """The open text field's row on the list, in `Type something.`'s place: the `❯` mark and its number, then what
+        is typed (`draft`, one line), or the dim `Type something.` while it is empty; and the caret's column in it,
+        after the words before the composer's caret (`draft_before`). A field wider than the row shows its part
+        around the caret, cut with `…` at the end or ends that fall outside."""
+        mark = (Span(CHOICE_MARK, _framing(theme.user)), Span(lead, theme.menu_current))
+        start = cell_width(CHOICE_MARK) + cell_width(lead)
+        room = max(width - start - 1, 1)  # a cell after the words for the caret
+        words, before = _one_line_keep(self.draft), _one_line_keep(self.draft_before)
+        if not words:
+            return (*mark, Span(CLARIFY_OTHER, _framing(theme.hint))), start
+        if cell_width(words) <= room:
+            return (*mark, Span(words, theme.text)), start + cell_width(before)
+        # Scroll: the caret's words end the row, unless it stands near the start.
+        head = cell_width(before)
+        if head < room:
+            return (*mark, Span(truncate(words, room), theme.text)), start + head
+        shown = truncate_left(before, room)
+        # Words after the caret that the row cannot show: a dim `…` where they start, under the caret.
+        rest = (Span("…", theme.muted),) if len(before) < len(words) else ()
+        return (*mark, Span(shown, theme.text), *rest), start + cell_width(shown)
 
     def _value_lines(self, width: int, theme: Theme, queued: Line) -> list[Line]:
         label = {
@@ -1131,6 +1177,12 @@ def _joined(text: str) -> str:
 def _one_line(value: object) -> str:
     """`value` as one line of text: its whitespace, line breaks included, collapsed to single spaces."""
     return " ".join(str(value or "").split())
+
+
+def _one_line_keep(value: str) -> str:
+    """`value` as one line, each line break a space and nothing else changed: the open text field's words as typed,
+    so the caret's column (the words before it, the same way) stays where it is."""
+    return value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
 
 def _ticked_answer(choices: list[str]) -> str:

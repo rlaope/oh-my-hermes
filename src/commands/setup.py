@@ -4941,10 +4941,10 @@ def _keyboard_single_choice(
                 cursor = choices.index(pending)
             continue
         pending = ""
-        if key in {"\x1b[A", "k"}:
+        if key in {"\x1b[A", "k", "\x10"}:
             cursor = (cursor - 1) % len(options)
             continue
-        if key in {"\x1b[B", "j"}:
+        if key in {"\x1b[B", "j", "\x0e"}:
             cursor = (cursor + 1) % len(options)
             continue
         if key in {"\r", "\n", " "}:
@@ -5061,10 +5061,10 @@ def _keyboard_multi_choice(
         if pending in choices and key in {"\r", "\n"}:
             ticked ^= {pending}
         pending = ""
-        if key in {"\x1b[A", "k"}:
+        if key in {"\x1b[A", "k", "\x10"}:
             cursor = (cursor - 1) % len(options)
             continue
-        if key in {"\x1b[B", "j"}:
+        if key in {"\x1b[B", "j", "\x0e"}:
             cursor = (cursor + 1) % len(options)
             continue
         if key == " ":

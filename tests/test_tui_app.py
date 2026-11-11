@@ -2368,8 +2368,8 @@ class LocalCommandTests(AppTestCase):
         self.assertLess(history.index("┃ ❯ first prompt"), listed)
 
     def test_input_during_a_turn_queues_whatever_the_busy_mode(self) -> None:
-        # Hermes' `display.busy_input_mode` is Hermes' and its bots' business: here Enter during a turn always
-        # queues, so a `steer` or `interrupt` there never redirects or stops the turn from the OMH TUI.
+        # Hermes' `display.busy_input_mode` is Hermes' and its bots' business: a prompt sent before Hermes starts the
+        # turn queues, so a `steer` or `interrupt` there never redirects or stops the turn from the OMH TUI.
         for mode in ("queue", "steer", "interrupt"):
             with self.subTest(mode=mode):
                 run = self.prepare(
@@ -2703,7 +2703,7 @@ class KeyTests(AppTestCase):
         return run.terminal.running
 
     def test_esc_with_a_draft_interrupts_the_turn_and_keeps_the_draft(self) -> None:
-        # Enter queues during a turn, so Esc is the one-key stop, as in Claude Code: with a draft typed too.
+        # Enter never interrupts a turn, so Esc is the one-key stop, as in Claude Code: with a draft typed too.
         run = self.interrupted_run()
         terminal = run.terminal
         terminal.script(
@@ -2731,8 +2731,9 @@ class KeyTests(AppTestCase):
                 terminal.typed_during_query = answer  # what `Terminal.query_background` hands back
                 said = SEND_NOW_HINT.format(key=key)
                 terminal.script(
-                    self.submit(run, prompt),  # legacy bytes only: no key arrives as a report
-                    Step(b"then stop\r", when=self.running(run), label="running"),
+                    # One read: the second line lands before Hermes starts the turn, which Enter cannot steer yet, so
+                    # it queues (legacy bytes only: no key arrives as a report).
+                    Step(TYPED_AHEAD + prompt.encode() + b"\rthen stop\r", when=terminal.idle, label="the idle info line"),
                     Step(b"\x03", when=terminal.shows(said), capture="queued", label="queued"),
                     # The interrupt brings the queued prompt back into the composer: clear it, then leave.
                     Step(b"\x15\x04", when=lambda: "Interrupted." in terminal.history(), label="end"),

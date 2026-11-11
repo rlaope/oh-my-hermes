@@ -39,10 +39,11 @@ because over stdio the gateway otherwise waits out its whole deadline; events
 whose envelope `session_id` is not the live session are dropped, except
 `gateway.*` and withdrawals, which match by request id; the stored session id
 is tracked from every `session.info` and written (id only, mode 0600) to
-`HERMES_TUI_ACTIVE_SESSION_FILE`; input sent while a turn runs is queued in
-memory whatever Hermes' `display.busy_input_mode` says, a slash command too
-(only the ones `slash.RUNS_DURING_TURN` names run at once: `_run_slash`), and
-only Esc or `/stop` interrupts a turn.
+`HERMES_TUI_ACTIVE_SESSION_FILE`; typed text sent with Enter while a turn
+runs steers it (`_on_composer`, as Claude Code does), and what a steer cannot
+carry is queued in memory whatever Hermes' `display.busy_input_mode` says, a
+slash command too (only the ones `slash.RUNS_DURING_TURN` names run at once:
+`_run_slash`), and only Esc or `/stop` interrupts a turn.
 The queue is the TUI's own (the gateway has no call that withdraws a prompt):
 its prompts are listed above the composer's top rule, and Up on an empty
 composer takes them back into the composer (a `!` line on its own, never
@@ -149,7 +150,7 @@ from ..skin_pack import (
     write_wallpaper_choice,
 )
 from . import gateway_contract as contract
-from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer, ComposerAction
+from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, VIM_REPLACE, VIM_VISUAL, Composer, ComposerAction
 from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame, sticky_line
 from .git_status import GitWatcher
 from .inline_image import MODE_KITTY, PREVIEW_KEEP, PREVIEW_MAX_COLS, PREVIEW_MAX_ROWS, Preview, preview_from
@@ -259,6 +260,7 @@ from .screen import (
     CURSOR_HOME,
     CURSOR_SHAPE_BEAM,
     CURSOR_SHAPE_BLOCK,
+    CURSOR_SHAPE_UNDERLINE,
     ERASE_SCROLLBACK,
     FLUSHED_KEPT,
     HIDE_CURSOR,
@@ -2032,6 +2034,10 @@ def _slot_owns(slot: PromptSlot, event: Key | Paste, composer_text: str) -> bool
         return False
     if event.name in (ESCAPE, UP, DOWN):
         return True
+    if slot.method == "clarify" and event.name == CHAR and event.ctrl and event.char in ("n", "p") and not (
+        event.alt or event.shift or event.reported_shift
+    ):
+        return True
     return not composer_text and event.name == CHAR and event.ctrl and event.char == "c"
 
 
@@ -2076,7 +2082,9 @@ def picker_key(event: Key | Paste | Mouse) -> str:
     if event.name != CHAR:
         return _PICKER_KEYS.get(event.name, KEY_NONE)
     if event.ctrl:
-        return KEY_QUIT if event.char in ("c", "d") else KEY_NONE
+        if event.shift or event.reported_shift:
+            return KEY_NONE
+        return {"c": KEY_QUIT, "d": KEY_QUIT, "n": KEY_DOWN, "p": KEY_UP}.get(event.char, KEY_NONE)
     return plain_key(event.char)
 
 
@@ -4631,7 +4639,9 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self.slot is None and self._front_picker() is not None:
             self.composer._drop_pending()  # the picker owns input, including display keys that return below
-        if self._display_key(event):
+        if (not self.composer.visual or self.slot is not None or self._front_picker() is not None) and (
+            self._display_key(event)
+        ):
             return
         if isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c" and (
             self.composer.pending and self._exit_said()
@@ -4650,7 +4660,9 @@ class App(ModesMixin, AgentViewMixin):
             if isinstance(event, Key) and event.name == ESCAPE:
                 self._escape(event)  # drops the target as any pending command's Esc does, holding a waiting continue
                 return
-            if isinstance(event, Paste):
+            if isinstance(event, Paste) or (self.composer.visual and (
+                event.name == ENTER or (event.name == CHAR and event.ctrl and not event.alt and event.char == "v")
+            )):
                 self.composer._drop_pending()
             else:
                 self._on_composer(self._edit(self.composer, event), event)
@@ -4687,6 +4699,23 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 self._model_picker_key(event)
             return
+        if self.slot is None and self.composer.normal and not self.composer.visual and self.composer._prefix in ("g", "r"):
+            # The g/r grammar owns its follower after picker/slot/display policy,
+            # just like a literal find. Clipboard and Paste keep native intake;
+            # Enter and other invalid followers are consumed by Composer.
+            if isinstance(event, Paste) or (event.name == CHAR and event.ctrl and not event.alt and event.char == "v"):
+                self.composer._drop_pending()
+            else:
+                if not self._escape(event):
+                    self._on_composer(self._edit(self.composer, event), event)
+                return
+        if self.slot is None and self.composer.visual:
+            self.escape_armed = None
+            if self._attachment_input(event) or self._escape(event) or self._send_now_key(event):
+                return
+            self._on_composer(self._edit(self.composer, event), event,
+                              steer=isinstance(event, Key) and event.name == ENTER and event.ctrl)
+            return
         if self.slot is None and self.list_selected is None and self.tree_selected is None and self._leader_key(event):
             return
         if self.slot is None and self._agent_list_key(event):
@@ -4705,10 +4734,7 @@ class App(ModesMixin, AgentViewMixin):
         # The send-now key, as Claude Code's: while a turn runs, on an empty composer with a prompt queued that can be
         # sent, Ctrl+Enter (or Ctrl+J, where Ctrl+Enter may arrive as Enter) sends the oldest queued prompt into the
         # turn. Anywhere else Ctrl+J adds a line, and Ctrl+Enter with text typed steers that text.
-        if event in (SEND_NOW_KEY, STEER_FALLBACK_KEY) and not self.composer.text and self._steer_keys_live() and (
-            self._queue_head_steers()
-        ):
-            self._send_queued_now()
+        if self._send_now_key(event):
             return
         # The second Ctrl+C leaves even over text while the info line names it (`_exit_said`): the queue an interrupt
         # gives back lands in the composer between the presses, and clearing it there would leave the TUI open. Any
@@ -4723,16 +4749,30 @@ class App(ModesMixin, AgentViewMixin):
         action = self._edit(self.composer, event)
         self._on_composer(action, event, steer=isinstance(event, Key) and event.name == ENTER and event.ctrl)
 
+    def _send_now_key(self, event: Key | Paste) -> bool:
+        """Keep empty-draft queued send policy shared by ordinary and visual input."""
+        if event in (SEND_NOW_KEY, STEER_FALLBACK_KEY) and not self.composer.text and self._steer_keys_live() and (
+            self._queue_head_steers()
+        ):
+            self.composer._clear_visual()
+            self._send_queued_now()
+            return True
+        return False
+
     def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
         """`event` to `composer`, the person's own key: one that changes its text reopens the `/` menu at its top."""
-        before, editing = composer.text, composer.normal
+        before, editing, visual = composer.text, composer.normal, composer.visual
         action = composer.handle(event)
+        if composer.take_bell() and self.environ.get(BELL_ENV) != BELL_OFF:
+            self.terminal.write(BELL)
         if composer.text != before:
             self.menu_index = 0
             self.menu_closed = None
             self.escape_armed = None  # an edit takes back what a second Esc would have done
         elif composer.normal != editing:
             self.escape_armed = None  # so does a change of vim mode's editing mode (`i` between two Escs)
+        elif visual or composer.visual:
+            self.escape_armed = None  # selected motions and consumed followers are editing too
         return action
 
     def _front_picker(self) -> object | None:
@@ -4911,6 +4951,7 @@ class App(ModesMixin, AgentViewMixin):
         """The open question's text field (the composer while a slot is open) to `slot`: as shown, and as Enter in
         the field sends it, pastes whole (`Composer.expanded`)."""
         slot.draft, slot.draft_sent = self.composer.shown(), self.composer.expanded()
+        slot.draft_before = self.composer._labelled(self.composer.text[: self.composer.caret])
 
     def _next_question(self, question: int) -> None:
         """After a key or a submit the open slot took, from its question number `question`: if it moved on.
@@ -4962,6 +5003,16 @@ class App(ModesMixin, AgentViewMixin):
         """Act on what the composer made of `event`; `steer` says the key was Ctrl+Enter. A submit's image tokens go
         with it, to the prompt it sends."""
         if action.kind == SUBMIT:
+            # Enter steers a running turn with typed text, as Claude Code's does: the text shows as a sent prompt
+            # above the working row at once, never as a queued `⧗` row. What a steer cannot carry (a slash command,
+            # a `!` line, images) still queues for the turn's end (`_steer_or_submit`).
+            # Plan mode keeps Enter's queue: a plan request must not land in a turn that can edit. So does a queue
+            # already holding lines: what is sent goes behind them, in the order it was sent. And so does a prompt
+            # sent before Hermes has started the turn (`message.start`): there is no turn yet to steer.
+            steer = steer or (
+                self.transcript.running and self._steer_keys_live() and not self.plan_mode and not self.queued
+                and bool(action.text.strip())
+            )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
             if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer):
                 return  # it goes once the pastes it was typed with are answered, with their images
@@ -5068,6 +5119,8 @@ class App(ModesMixin, AgentViewMixin):
             )
             return True
         if event.name == CHAR and event.ctrl and not event.alt and event.char == "v":
+            self.composer._clear_visual()
+            self.composer._invalidate_reselection()
             self._paste("")
             return True
         return False
@@ -5093,7 +5146,7 @@ class App(ModesMixin, AgentViewMixin):
         """
         if not isinstance(event, Key) or event.name != ESCAPE:
             return False
-        if self.composer.vim and (not self.composer.normal or self.composer.pending):
+        if self.composer.vim and (not self.composer.normal or self.composer.pending or self.composer.visual):
             self.composer.handle(event)
             self.path_items = []
             self.escape_armed = None
@@ -5993,8 +6046,9 @@ class App(ModesMixin, AgentViewMixin):
     ) -> None:
         """Send `text`, or queue it behind the running turn; `typed` is what Up puts back in the composer.
 
-        While a turn runs it always queues, whatever Hermes' `display.busy_input_mode` says: Enter never interrupts
-        or steers a turn (Esc and `/stop` interrupt it, the send-now key and `/steer` steer it). `notice` goes under
+        While a turn runs it always queues, whatever Hermes' `display.busy_input_mode` says: it never interrupts
+        or steers a turn (Enter's typed text steers before it gets here, `_on_composer`; Esc and `/stop` interrupt,
+        the send-now key and `/steer` steer). `notice` goes under
         its row (`_submit_prompt`). One that starts a turn waits for Hermes' default model to be checked
         (`_start_turn`), and what is sent while that wait is on queues behind it (`_queue_waits`); a queue the
         person holds (`queue_held`) waits for this very prompt to go on. `images` go with it, queued too.
@@ -7521,14 +7575,16 @@ class App(ModesMixin, AgentViewMixin):
         self._settle_list()
 
     def _picker_arms(self, event: Key | Paste) -> bool:
-        """Whether `event` hands a waiting session picker the keys: Up, Down, Esc or Ctrl+C. Anything else stays the
+        """Whether `event` hands a waiting session picker the keys: Up, Down, Ctrl+N, Ctrl+P, Esc or Ctrl+C. Anything else stays the
         composer's, Enter included (it sends what was typed), and so does the next prompt typed after it: a prompt
         being typed never becomes the filter, as its filter row says."""
         picker = self.picker
         if picker is None:
             return False
         own = isinstance(event, Key) and (
-            event.name in (UP, DOWN, ESCAPE) or (event.name == CHAR and event.ctrl and event.char == "c")
+            event.name in (UP, DOWN, ESCAPE) or (event.name == CHAR and event.ctrl and (
+                event.char == "c" or (event.char in ("n", "p") and not (event.alt or event.shift or event.reported_shift))
+            ))
         )
         if own:
             picker.waiting = False
@@ -8958,10 +9014,18 @@ class App(ModesMixin, AgentViewMixin):
         return ground if ground is not None and self._shown_look() in SCENES else None
 
     def _sync_cursor_shape(self) -> None:
-        """Vim mode's cursor: a beam in INSERT, a block in NORMAL (DECSCUSR), written only when it changes. Without
-        vim mode, or where the composer does not have the keys, the terminal's own shape is back."""
-        label = self.composer.vim_label if self._composer_open() else ""
-        shape = CURSOR_SHAPE_BLOCK if label == VIM_NORMAL else CURSOR_SHAPE_BEAM if label == VIM_INSERT else None
+        """Keep modal and non-modal typing carets stable; hidden selection cursors use the terminal default."""
+        label = self.composer.vim_label if self._composer_open() or (self.picker is not None and self.picker.waiting) else ""
+        shape = None
+        if label in (VIM_NORMAL, f"{VIM_NORMAL} · SPC", VIM_VISUAL, "VISUAL LINE"):
+            shape = CURSOR_SHAPE_BLOCK
+        elif label == VIM_REPLACE:
+            shape = CURSOR_SHAPE_UNDERLINE
+        elif label == VIM_INSERT or (self._draft().vim and (
+            (self.slot is not None and not self.slot.picking) or self.search is not None
+            or self.picker is not None or self.rewind_picker is not None or self.model_picker is not None
+        )):
+            shape = CURSOR_SHAPE_BEAM
         self.terminal.set_cursor_shape(shape)  # the terminal writes only a change
 
     def _restore_cursor_shape(self) -> None:
@@ -9304,7 +9368,7 @@ class App(ModesMixin, AgentViewMixin):
         `composer_blank`).
         """
         if self.slot is not None:
-            return self.slot.picking
+            return self.slot.picking or self.slot.inline_field
         return (
             (self.picker is not None and not self.picker.waiting) or self.rewind_picker is not None
             or self.model_picker is not None
@@ -9412,10 +9476,11 @@ class App(ModesMixin, AgentViewMixin):
         """The open picker's caret, at the end of its filter row (its last render's), or the history search's, at
         the end of its query; None with neither open.
 
-        A question answered by picking has none: no key types anywhere there.
+        A question answered by picking has none: no key types anywhere there. A framed question whose text field is
+        open has it on the field's row, where what is typed shows (`PromptSlot.inline_field`).
         """
         if self.slot is not None:
-            return None
+            return self.slot.caret if self.slot.inline_field else None
         picker = self._front_picker()
         return picker.caret if picker is not None and picker is not self.launch_picker else None  # type: ignore[attr-defined]
 
