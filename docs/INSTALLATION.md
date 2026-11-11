@@ -1802,6 +1802,10 @@ prints the help of Hermes' skills command here instead of opening the skills
 hub. The command list is read again for each session
 the TUI opens, so a project's own skills are listed in its workspace, and
 completion also matches a part of a name: `/uml` finds `/omh-codebase-uml`.
+Names whose letters only appear in order come last, so `/rld` offers
+`/reload-skills` after every name that starts with or contains `rld`. The
+`/model`, `/sessions` and `/rewind` filters rank the same way: rows that
+contain what you type first, then rows holding its letters in order.
 
 The bot board (Ctrl+S or `/bots`) shows this machine's Hermes bots, full
 screen, and changes nothing. Every region on it is a rounded box, in the

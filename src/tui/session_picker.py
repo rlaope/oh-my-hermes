@@ -26,6 +26,7 @@ import math
 
 from .composer import PROMPT
 from .frame import RULE
+from .fuzzy import subsequence_tail
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
 from .prompts import CHOICE_MARK
 from .style import Line, Span
@@ -249,8 +250,7 @@ class SessionPicker:
     def visible(self) -> list[SessionRow]:
         """The rows the filter keeps: the current session first, then a day group after another (`day_group`), in
         list order inside each."""
-        needle = self.query.casefold()
-        kept = [row for row in self.rows if not needle or needle in f"{row.title}\n{row.preview}\n{row.id}".casefold()]
+        kept = subsequence_tail(self.rows, self.query, lambda row: (row.title, row.preview, row.id))
         return sorted(kept, key=self._rank) if self.now > 0 else kept
 
     def _rank(self, row: SessionRow) -> int:

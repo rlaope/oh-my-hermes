@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The slash menu and the pickers match letters typed in order.** `/rld` now
+  offers `/reload-skills`, and `snt` finds a `claude-sonnet-…` row in `/model`.
+  Names and rows that start with or contain what you typed keep their place and
+  order; the in-order matches follow, best fit first (word starts and runs of
+  neighbouring letters rank higher). `/sessions` and `/rewind` filter the same
+  way, and an empty filter is unchanged. After opencode's fuzzy dialog-select.
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
