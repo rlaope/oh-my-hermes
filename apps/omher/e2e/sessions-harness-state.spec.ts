@@ -75,6 +75,8 @@ for (const theme of ["dark", "light"] as const) {
     // no Stop left behind, and Restart is there
     await expect(page.getByTestId("stop")).toHaveCount(0);
     await expect(page.getByTestId("session-restart")).toBeVisible();
+    // its end says why: no "pick a model" hint that would point somewhere else
+    await expect(page.getByTestId("chat-no-model")).toHaveCount(0);
     await shot(page, "stuck", theme);
   });
 

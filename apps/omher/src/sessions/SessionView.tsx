@@ -147,18 +147,19 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   // files go to a chat agent; an oh-my-hermes session's chat is Hermes', which takes files in a bot's main chat only
   const takesFiles = (ss.agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode) === "chat";
   const label = agentDef(rec.agent).label;
-  // The bot chat's parts take a Bot: this session's chat stands in for one.
+  const ended = isEnded(rec);
+  // The bot chat's parts take a Bot: this session's chat stands in for one. An agent that ended before it named a
+  // model (an old version that never answered in chat mode) gets no "pick a model" hint: its end says why.
   const bot: Bot = {
     name: chatKey,
     display_name: label,
     is_default: false,
-    model: rec.model ?? "",
+    model: rec.model || (ended ? label : ""),
     provider: "",
     description: "",
     status: rec.status === "running" ? "online" : rec.status === "starting" ? "starting" : "offline",
     running: !!chat?.turn,
   };
-  const ended = isEnded(rec);
   const offlineText = rec.paused
     ? tr("ss.isPaused", { agent: label })
     : rec.status === "failed"
