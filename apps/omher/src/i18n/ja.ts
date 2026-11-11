@@ -848,7 +848,7 @@ export const ja: Record<Key, string> = {
   "ctl.hint.auto": "このフォルダ内で作業し、外に出るときは確認します",
   "ctl.modeFoot": "次のメッセージから適用",
   "ctl.lvl.minimal": "最小",
-  "ctl.lvl.xhigh": "かなり高",
+  "ctl.lvl.xhigh": "超高",
   "ctl.lvl.ultra": "ウルトラ",
   "ctl.context": "{used} / {max} · {pct}%",
   "ctl.contextTip": "{agent} が数えた使用中のコンテキスト",

@@ -850,7 +850,7 @@ export const en = {
   "ctl.hint.auto": "Works inside this folder; asks to go outside",
   "ctl.modeFoot": "Applies from the next message",
   "ctl.lvl.minimal": "Minimal",
-  "ctl.lvl.xhigh": "Extra high",
+  "ctl.lvl.xhigh": "X-High",
   "ctl.lvl.ultra": "Ultra",
   "ctl.context": "{used} / {max} · {pct}%",
   "ctl.contextTip": "Context in use, as {agent} counts it",

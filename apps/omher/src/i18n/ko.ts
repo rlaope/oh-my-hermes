@@ -848,7 +848,7 @@ export const ko: Record<Key, string> = {
   "ctl.hint.auto": "이 폴더 안에서 일하고, 밖으로 나갈 때 물어봅니다",
   "ctl.modeFoot": "다음 메시지부터 적용",
   "ctl.lvl.minimal": "최소",
-  "ctl.lvl.xhigh": "아주 높음",
+  "ctl.lvl.xhigh": "매우 높음",
   "ctl.lvl.ultra": "울트라",
   "ctl.context": "{used} / {max} · {pct}%",
   "ctl.contextTip": "{agent}가 센 사용 중인 컨텍스트",

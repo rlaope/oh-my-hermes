@@ -93,7 +93,17 @@
   color: var(--quiet);
 }
 
-/* the `/` menu of a session: what a command takes, and a quiet tag on a skill */
+/* the `/` menu of a session: names in one column so descriptions line up, what a command takes, a quiet tag on a
+   skill; at most a whole number of rows tall */
+[data-testid="command-picker"] {
+  width: min(560px, 100%);
+  max-height: 244px; /* 8 rows of 29.25px, the padding and the border: no row cut through */
+}
+[data-testid="command-picker"] .sk-row .sk-pill {
+  width: 30%;
+  max-width: none;
+  flex: none;
+}
 .sk-hint {
   flex: none;
   max-width: 30%;

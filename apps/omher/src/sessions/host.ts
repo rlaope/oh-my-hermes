@@ -321,7 +321,7 @@ export class MockHost implements SessionHost {
   }
 }
 
-const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
+const MOCK_MODELS: Record<string, { id: string; label: string; provider?: string }[]> = {
   claude: [
     { id: "opus", label: "Opus 5.5" },
     { id: "sonnet", label: "Sonnet 5.5" },
@@ -333,7 +333,16 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
   ],
   pi: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
   omp: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
-  omo: [{ id: "claude-fable-5-1", label: "Claude Fable 5.1" }],
+  // as real omo lists them on this Mac: many anthropic models, then two from another provider below the fold
+  omo: [
+    ...["Claude Fable 5.1", "Claude Opus 5", "Claude Opus 4.7", "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Claude Haiku 4.5", "Claude Opus 4.5", "Claude Sonnet 4.5", "Claude Opus 4.1", "Claude Sonnet 4", "Claude Opus 4", "Claude Haiku 4", "Claude 3.7 Sonnet"].map((label) => ({
+      id: `anthropic/${label.toLowerCase().replace(/ /g, "-").replace(/\./g, "-")}`,
+      label,
+      provider: "anthropic",
+    })),
+    { id: "opengateway/gpt-6", label: "GPT-6 (gateway)", provider: "opengateway" },
+    { id: "opengateway/gemini-4-carbon", label: "Gemini 4 Carbon (gateway)", provider: "opengateway" },
+  ],
 };
 
 /** What each mock agent reports about its controls, as the real CLIs do (see agent_chat.rs). */
