@@ -8,6 +8,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import mark from "../assets/omher-mark.png";
 import "./gate.css";
+import { t } from "../i18n";
 
 export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes" };
 export type InstallEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };
@@ -167,12 +168,9 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         <div className="gate-box gate-setup" data-testid="setup-screen">
           <img className="gate-mark" src={mark} alt="" width={44} height={44} />
           <div className="gate-head" data-testid="setup-head">
-            {install === "failed" ? "Install didn’t finish" : "Install Hermes to start"}
+            {install === "failed" ? t("gate.failedHead") : t("gate.head")}
           </div>
-          <p className="gate-text">
-            Your bots run on Hermes Agent, which isn’t on this computer yet. Install runs the command below: Hermes,
-            then oh-my-hermes.
-          </p>
+          <p className="gate-text">{t("gate.text")}</p>
           {command && (
             <div className="gate-cmdbox">
               <code className="gate-cmd" data-testid="setup-command">
@@ -197,12 +195,12 @@ export function BridgeGate({ children }: { children: ReactNode }) {
                 type="button"
                 className="gate-copy"
                 data-testid="setup-copy"
-                aria-label="Copy command"
+                aria-label={t("gate.copyCmd")}
                 onClick={() => {
                   void navigator.clipboard?.writeText(command).then(() => setCopied(true), () => {});
                 }}
               >
-                {copied ? "Copied" : "Copy"}
+                {copied ? t("gate.copied") : t("gate.copy")}
               </button>
             </div>
           )}
@@ -220,8 +218,8 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               {installError
                 ? installError
                 : exitCode === null
-                  ? "The installer could not run."
-                  : `The installer stopped (exit ${exitCode}). The output above says why. Fix it and press Install again.`}
+                  ? t("gate.couldNotRun")
+                  : t("gate.stopped", { code: exitCode })}
             </p>
           )}
           <div className="gate-actions">
@@ -235,7 +233,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               onClick={runInstall}
             >
               {running && <span className="gate-spin" aria-hidden="true" />}
-              {running ? "Installing…" : install === "failed" ? "Install again" : "Install"}
+              {running ? t("gate.installing") : install === "failed" ? t("gate.again") : t("gate.install")}
             </button>
             <button
               type="button"
@@ -244,12 +242,12 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               disabled={running || retrying}
               onClick={retry}
             >
-              Check again
+              {t("gate.check")}
             </button>
           </div>
           {install !== "failed" && (
             <p className="gate-note" data-testid="setup-note">
-              Takes a few minutes. You’ll pick a model in the app after.
+              {t("gate.note")}
             </p>
           )}
         </div>
@@ -261,14 +259,14 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   return (
     <div className="gate" data-testid="bridge-gate" data-state={status?.state ?? "starting"}>
       <div className="gate-box">
-        <div className="gate-title">{failed ? "omher can’t reach Hermes" : "Starting omher…"}</div>
+        <div className="gate-title">{failed ? t("gate.unreachable") : t("gate.starting")}</div>
         {failed && (
           <>
             <p className="gate-error" data-testid="bridge-error">
-              {status?.error || "The local bridge did not start."}
+              {status?.error || t("gate.noBridge")}
             </p>
             <button type="button" className="gate-retry" data-testid="bridge-retry" disabled={retrying} onClick={retry}>
-              Retry
+              {t("gate.retry")}
             </button>
           </>
         )}

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Automation, Bot } from "../lib/protocol";
 import { useStore } from "../state/store";
 import { t } from "../i18n";
+import { holdImeEnter } from "../lib/ime";
 import { Avatar, PlusIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { AskBox, BotChip, errorLine, PageHead, Toggle, atWords, dateWords, nextWords, toSec } from "./kit";
@@ -380,6 +381,7 @@ function NewForm({ bots, initial, onDone }: { bots: Bot[]; initial?: string; onD
   return (
     <form
       className="au-form"
+      onKeyDown={holdImeEnter}
       data-testid="auto-form"
       onSubmit={(e) => {
         e.preventDefault();

@@ -18,6 +18,7 @@ import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
 import { agentDef, CONTINUES, folderChoices, folderName, missingNote, parentPath, terminalNote, tildePath, type AgentId, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
+import { t as tr, type Key } from "../i18n";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { useAccounts } from "../settings/accounts/useAccounts";
@@ -75,7 +76,7 @@ const LIGHT: ITheme = {
 
 export const termTheme = (mode: "dark" | "light") => (mode === "light" ? LIGHT : DARK);
 
-const STATUS: Record<string, string> = { starting: "Starting…", running: "Running", exited: "Ended", failed: "Could not start" };
+const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
 function TerminalPane({ rec }: { rec: SessionRec }) {
   const s = useStore();
@@ -114,12 +115,12 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   };
   const ended = rec.status === "exited" || rec.status === "failed";
   const offlineText = rec.paused
-    ? `${label} is paused`
+    ? tr("ss.isPaused", { agent: label })
     : rec.status === "failed"
-      ? `${label} could not start`
+      ? tr("ss.agentCouldNotStart", { agent: label })
       : rec.status === "starting"
-        ? `Starting ${label}…`
-        : `${label} has ended`;
+        ? tr("ss.startingAgent", { agent: label })
+        : tr("ss.hasEnded", { agent: label });
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   // one element per chat: the bubbles are memoized on it
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
@@ -131,17 +132,17 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
       ) : ended && (
         <div className="ss-ended" role="status" data-testid="session-ended">
           <span className="ss-ended-t" title={why || undefined}>
-            {rec.status === "failed" ? "Could not start" : "Ended"}
+            {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
             {why ? ` · ${why}` : ""}
           </span>
           <button
             type="button"
             className="ss-restart"
             onClick={() => void getSessions().restart(rec.id)}
-            title={CONTINUES.includes(rec.agent) ? `Start ${label} again, continuing this conversation` : `Start ${label} again in this folder`}
+            title={CONTINUES.includes(rec.agent) ? tr("ss.restartContinue", { agent: label }) : tr("ss.restartFolder", { agent: label })}
             data-testid="session-restart"
           >
-            Restart
+            {tr("ss.restart")}
           </button>
         </div>
       )}
@@ -341,7 +342,7 @@ function TerminalIdle({ rec }: { rec: SessionRec }) {
   const label = agentDef(rec.agent).label;
   return (
     <div className="pane ss-chat ss-idle" data-testid="session-idle">
-      <div className="chat-empty">{rec.paused ? null : `${label} ended`}</div>
+      <div className="chat-empty">{rec.paused ? null : tr("ss.agentEnded", { agent: label })}</div>
       {rec.paused && <Paused rec={rec} />}
     </div>
   );
@@ -362,22 +363,22 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title="Model"
+        title={tr("ss.model")}
         data-testid="model-pill"
       >
-        <span className="mp-mk" title={live ? "Running" : "Not running"}>
+        <span className="mp-mk" title={live ? tr("ss.running") : tr("ss.notRunning")}>
           <ModelIcon model={rec.model || label} provider={vendor} size={14} />
           <span className={`mp-d${live ? " live" : ""}`} aria-hidden="true" />
         </span>
-        <span data-testid="model-label">{rec.model || "Model"}</span>
+        <span data-testid="model-label">{rec.model || tr("ss.model")}</span>
         <ChevronDown />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} label="Model" width={256} className="mp-pop">
+      <Popover open={open} onClose={() => setOpen(false)} label={tr("ss.model")} width={256} className="mp-pop">
         <div data-testid="model-pop" aria-busy={busy}>
-          <div className="mp-h">Model</div>
+          <div className="mp-h">{tr("ss.model")}</div>
           <div className="mp-list">
             {!options || options.length === 0 ? (
-              <div className="mp-empty">{live ? "Loading models…" : `${label} is not running`}</div>
+              <div className="mp-empty">{live ? tr("ss.loadingModels") : tr("ss.agentNotRunning", { agent: label })}</div>
             ) : (
               options.map((o) => {
                 const on = o.label === rec.model || o.id === rec.model;
@@ -412,7 +413,7 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
               {note}
             </div>
           )}
-          <div className="mp-f">Applies to this session</div>
+          <div className="mp-f">{tr("ss.applies")}</div>
         </div>
       </Popover>
     </div>
@@ -426,7 +427,7 @@ export function SessionView() {
   if (!rec) {
     return (
       <div className="chat-empty" data-testid="session-gone">
-        This session was closed
+        {tr("ss.closed")}
       </div>
     );
   }
@@ -458,16 +459,18 @@ export function SessionView() {
   const status = rec.paused
     ? t("resume.pausedShort")
     : rec.view === "terminal" && canToggle
-      ? "Terminal view"
+      ? tr("ss.terminalView")
       : rec.status === "exited" && rec.exitCode
-        ? `Ended · exit ${rec.exitCode}`
+        ? tr("ss.endedExit", { code: rec.exitCode })
         : rec.status === "running" && showChat
           ? needs
-            ? "Needs you"
+            ? tr("ss.needsYou")
             : turn
-              ? "Working"
-              : "Ready"
-          : STATUS[rec.status];
+              ? tr("ss.working")
+              : tr("ss.ready")
+          : STATUS[rec.status]
+            ? tr(STATUS[rec.status])
+            : rec.status;
   return (
     <>
       <header className="head" data-testid="header">
@@ -495,8 +498,8 @@ export function SessionView() {
               type="button"
               className={`ss-toggle${rec.view === "terminal" ? " on" : ""}`}
               aria-pressed={rec.view === "terminal"}
-              aria-label={rec.view === "terminal" ? "Back to the chat" : "Open in Terminal"}
-              title={rec.view === "terminal" ? "Back to the chat" : "Open in Terminal"}
+              aria-label={rec.view === "terminal" ? tr("ss.backToChat") : tr("ss.openTerminal")}
+              title={rec.view === "terminal" ? tr("ss.backToChat") : tr("ss.openTerminal")}
               aria-description={rec.view === "terminal" ? undefined : terminalNote(rec.agent)}
               onClick={() => void getSessions().setView(rec.id, rec.view === "terminal" ? "chat" : "terminal")}
               data-testid="session-terminal-toggle"
@@ -515,7 +518,7 @@ export function SessionView() {
         // a Hermes folder chat between its first message and the bridge's chat id: not a reason to start a terminal
         <div className="pane ss-chat" data-testid="session-chat">
           <div className="thread" data-testid="timeline">
-            <div className="day">{rec.status === "failed" ? `${def.label} could not start${rec.error ? ` · ${rec.error}` : ""}` : `Starting ${def.label}…`}</div>
+            <div className="day">{rec.status === "failed" ? (rec.error ? tr("ss.couldNotStartWhy", { agent: def.label, error: rec.error }) : tr("ss.agentCouldNotStart", { agent: def.label })) : tr("ss.startingAgent", { agent: def.label })}</div>
           </div>
         </div>
       ) : (

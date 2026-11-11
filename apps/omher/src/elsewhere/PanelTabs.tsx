@@ -4,26 +4,28 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import type { Bot, Routine, TerminalRun, Worktree, WorktreeDiff } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { shortTime } from "../app/time";
-import { t } from "../i18n";
+import { t, tx, type Key } from "../i18n";
 import { SourceIcon, Spinner } from "../ui";
 import { cadence, nextRun, sourceName } from "./format";
 import "./panel.css";
 
 export type PanelTab = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
 
-export const TABS: { id: PanelTab; label: string }[] = [
-  { id: "details", label: "Details" },
-  { id: "terminal", label: "Terminal" },
-  { id: "schedule", label: "Schedule" },
-  { id: "worktrees", label: "Worktrees" },
-  { id: "diff", label: "Diff" },
-  {
-    id: "runs",
-    get label() {
-      return t("plans.tab");
-    },
+const TAB_KEY: Record<PanelTab, Key> = {
+  details: "pn.details",
+  terminal: "pn.terminal",
+  schedule: "pn.schedule",
+  worktrees: "pn.worktrees",
+  diff: "pn.diff",
+  runs: "plans.tab",
+};
+/** The tabs in order; each label is read in the current language. */
+export const TABS: { id: PanelTab; readonly label: string }[] = (Object.keys(TAB_KEY) as PanelTab[]).map((id) => ({
+  id,
+  get label() {
+    return t(TAB_KEY[id]);
   },
-];
+}));
 
 const I = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 export const TAB_ICON: Record<PanelTab, ReactElement> = {
@@ -106,14 +108,14 @@ function Loading({ error, empty }: { error: string | null; empty?: string }) {
   if (empty) return <div className="pn-empty">{empty}</div>;
   return (
     <div className="pn-empty">
-      <Spinner size={12} label="Loading" />
+      <Spinner size={12} label={t("pn.loading")} />
     </div>
   );
 }
 
 function Refresh({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" className="pn-ref" onClick={onClick} title="Refresh" aria-label="Refresh">
+    <button type="button" className="pn-ref" onClick={onClick} title={t("pn.refresh")} aria-label={t("pn.refresh")}>
       <svg viewBox="0 0 24 24" {...I} width="12" height="12">
         <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
       </svg>
@@ -149,10 +151,11 @@ export function TerminalTab({ bot }: { bot: Bot }) {
   return (
     <div className="pn-body" data-testid="panel-terminal">
       <div className="pn-sec">
-        What {bot.display_name} ran<span>read-only</span>
+        {t("pn.ran", { bot: bot.display_name })}
+        <span>{t("pn.ro")}</span>
         <Refresh onClick={reload} />
       </div>
-      {runs.length === 0 && <Loading error={null} empty={`${bot.display_name} has not run a command yet.`} />}
+      {runs.length === 0 && <Loading error={null} empty={t("pn.noRuns", { bot: bot.display_name })} />}
       {runs.map((r) => {
         const all = open === r.id;
         const long = r.output.split("\n").length > 6 || r.output.length > 360;
@@ -170,12 +173,12 @@ export function TerminalTab({ bot }: { bot: Bot }) {
             {r.output && <pre className="pn-out">{shown}</pre>}
             {(long || tallCmd) && (
               <button type="button" className="pn-more" onClick={() => setOpen(all ? null : r.id)}>
-                {all ? "Show less" : "Show all"}
+                {all ? t("pn.less") : t("pn.showAll")}
               </button>
             )}
             <div className="pn-meta">
               {r.source && r.source !== "tui" && r.source !== "local" && (
-                <span className="pn-src" title={`Run from ${sourceName(r.source)}`}>
+                <span className="pn-src" title={t("pn.runFrom", { app: sourceName(r.source) })}>
                   <SourceIcon source={r.source} size={10} />
                   {sourceName(r.source)}
                 </span>
@@ -185,7 +188,7 @@ export function TerminalTab({ bot }: { bot: Bot }) {
                   {shortPath(r.cwd)}
                 </span>
               )}
-              {r.exit_code !== null && r.exit_code !== 0 && <span className="pn-exit">exit {r.exit_code}</span>}
+              {r.exit_code !== null && r.exit_code !== 0 && <span className="pn-exit">{t("pn.exit", { code: r.exit_code })}</span>}
               <span className="pn-ts">{shortTime(r.ts)}</span>
             </div>
           </div>
@@ -207,13 +210,14 @@ export function ScheduleTab({ bot }: { bot: Bot }) {
   return (
     <div className="pn-body" data-testid="panel-schedule">
       <div className="pn-sec">
-        {bot.display_name}'s routines<span>{routines.length}</span>
+        {t("pn.botRoutines", { bot: bot.display_name })}
+        <span>{routines.length}</span>
       </div>
       {routines.length === 0 && (
         <div className="pn-empty">
-          No routines yet.
+          {t("pn.noRoutines")}
           <br />
-          Ask {bot.display_name} in the chat, e.g. “every morning at 9, check new PRs”.
+          {t("pn.askRoutine", { bot: bot.display_name })}
         </div>
       )}
       {sorted.map((r) => (
@@ -222,10 +226,10 @@ export function ScheduleTab({ bot }: { bot: Bot }) {
           <span className="pn-r">{nextRun(r)}</span>
           <span className="pn-s">
             {cadence(r.schedule)}
-            {r.last_run_at ? ` · last ran ${shortTime(toSec(r.last_run_at))}` : ""}
+            {r.last_run_at ? t("pn.lastRan", { when: shortTime(toSec(r.last_run_at)) }) : ""}
           </span>
           <span className={`pn-st ${r.last_status && r.last_status !== "ok" ? "bad" : r.last_status ? "ok" : ""}`}>
-            {r.enabled ? r.last_status || "not run yet" : "paused"}
+            {r.enabled ? r.last_status || t("pn.notRun") : t("pn.paused")}
           </span>
         </div>
       ))}
@@ -249,7 +253,8 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
   return (
     <div className="pn-body" data-testid="panel-worktrees">
       <div className="pn-sec">
-        Where {bot.display_name} worked<span>{list.length}</span>
+        {t("pn.worked", { bot: bot.display_name })}
+        <span>{list.length}</span>
         <Refresh
           onClick={() => {
             fresh.current = true;
@@ -257,16 +262,16 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
           }}
         />
       </div>
-      {list.length === 0 && <div className="pn-empty">No git worktrees in {bot.display_name}'s recent commands.</div>}
+      {list.length === 0 && <div className="pn-empty">{t("pn.noTrees", { bot: bot.display_name })}</div>}
       {list.map((w) => (
         <button key={w.path} type="button" className="pn-row link" onClick={() => onOpenDiff(w.path)} data-testid="panel-tree" title={w.path}>
-          <b className="mono">{w.branch || (w.head ? `detached @ ${w.head.slice(0, 7)}` : "detached")}</b>
+          <b className="mono">{w.branch || (w.head ? t("pn.detachedAt", { sha: w.head.slice(0, 7) }) : t("pn.detached"))}</b>
           <span className="pn-r">{shortTime(w.last)}</span>
           <span className="pn-s">
             {w.repo} · <span className="mono">{leaf(w.path)}</span>
           </span>
           <span className={`pn-st ${w.dirty ? "warn" : w.dirty === 0 ? "ok" : ""}`}>
-            {w.dirty === null ? "?" : w.dirty === 0 ? "clean" : `${w.dirty} changed`}
+            {w.dirty === null ? "?" : w.dirty === 0 ? t("pn.clean") : t("pn.changed", { n: w.dirty })}
           </span>
         </button>
       ))}
@@ -283,15 +288,15 @@ export function DiffTab({ bot, path, onPick }: { bot: Bot; path: string | null; 
   const lines = useMemo(() => (diff.data?.patch ?? "").split("\n"), [diff.data]);
   const fresh = useMemo(() => (diff.data?.files ?? []).filter((f) => f.untracked), [diff.data]);
   if (!trees.data) return <Loading error={trees.error} />;
-  if (!target) return <div className="pn-empty">No git worktrees in {bot.display_name}'s recent commands.</div>;
+  if (!target) return <div className="pn-empty">{t("pn.noTrees", { bot: bot.display_name })}</div>;
   const d = diff.data;
   return (
     <div className="pn-body" data-testid="panel-diff">
       <div className="pn-pick">
-        <select value={target} onChange={(e) => onPick(e.target.value)} aria-label="Worktree" data-testid="panel-diff-pick">
+        <select value={target} onChange={(e) => onPick(e.target.value)} aria-label={t("pn.worktree")} data-testid="panel-diff-pick">
           {trees.data.worktrees.map((w) => (
             <option key={w.path} value={w.path}>
-              {w.branch || `detached @ ${w.head.slice(0, 7)}`} · {w.repo}
+              {w.branch || t("pn.detachedAt", { sha: w.head.slice(0, 7) })} · {w.repo}
             </option>
           ))}
         </select>
@@ -302,17 +307,18 @@ export function DiffTab({ bot, path, onPick }: { bot: Bot; path: string | null; 
       ) : (
         <>
           <div className="pn-sec">
-            {d.scope === "uncommitted" ? "Uncommitted changes" : "Last commit"}
+            {d.scope === "uncommitted" ? t("pn.uncommitted") : t("pn.lastCommit")}
             <span>
-              {d.files.length} file{d.files.length === 1 ? "" : "s"} · +{d.files.reduce((a, f) => a + f.add, 0)} −
+              {d.files.length === 1 ? t("pn.file1") : t("pn.files", { n: d.files.length })} · +{d.files.reduce((a, f) => a + f.add, 0)} −
               {d.files.reduce((a, f) => a + f.del, 0)}
             </span>
           </div>
-          {d.files.length === 0 && <div className="pn-empty">Nothing changed.</div>}
+          {d.files.length === 0 && <div className="pn-empty">{t("pn.nothing")}</div>}
           {fresh.length > 0 && (
             <div className="pn-new" data-testid="panel-diff-untracked">
               <div className="df-f">
-                New files, not tracked yet<span>{fresh.length}</span>
+                {t("pn.untracked")}
+                <span>{fresh.length}</span>
               </div>
               {fresh.map((f) => (
                 <div key={f.path} className="df-l a mono" title={f.path}>
@@ -347,8 +353,8 @@ export function DiffTab({ bot, path, onPick }: { bot: Bot; path: string | null; 
               );
             })}
           </div>
-          {d.truncated && <div className="pn-empty">Long diff: the rest is cut. Open the worktree to see all of it.</div>}
-          <div className="pn-foot">Read-only. {bot.display_name} makes the changes; you see them here.</div>
+          {d.truncated && <div className="pn-empty">{t("pn.truncated")}</div>}
+          <div className="pn-foot">{t("pn.foot", { bot: bot.display_name })}</div>
         </>
       )}
     </div>

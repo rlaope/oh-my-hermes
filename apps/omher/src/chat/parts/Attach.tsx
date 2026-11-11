@@ -8,6 +8,7 @@ import { PlusIcon } from "../../ui";
 import { attachKind, badgeFor, limitReason, previewKind } from "./attachFiles";
 import { fileSize } from "./mediaLines";
 import { FileRow, gridOf, ImageTile } from "./Media";
+import { t } from "../../i18n";
 
 export interface Chip extends OutFile {
   id: string;
@@ -21,7 +22,7 @@ function readBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ""));
-    r.onerror = () => reject(r.error ?? new Error("could not read the file"));
+    r.onerror = () => reject(r.error ?? new Error(t("att.readFailed")));
     r.readAsDataURL(file);
   });
 }
@@ -116,9 +117,9 @@ export function AttachButton({
         files.push(new File([blob], `pasted.${type.split("/")[1]?.split("+")[0] || "bin"}`, { type }));
       }
       if (files.length) onFiles(files);
-      else onError("Nothing to attach on the clipboard");
+      else onError(t("att.clipEmpty"));
     } catch {
-      onError("Couldn't read the clipboard");
+      onError(t("att.clipFailed"));
     }
   };
 
@@ -132,8 +133,8 @@ export function AttachButton({
       <button
         type="button"
         className="att-plus"
-        aria-label="Attach"
-        title="Attach"
+        aria-label={t("att.attach")}
+        title={t("att.attach")}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
@@ -147,15 +148,15 @@ export function AttachButton({
       {open && (
         <div className="att-menu" role="menu" data-testid="attach-menu">
           <button type="button" role="menuitem" onClick={() => pick(media.current)} data-testid="attach-media">
-            <span>Photos &amp; videos</span>
+            <span>{t("att.media")}</span>
             <kbd>{mod()}⇧A</kbd>
           </button>
           <button type="button" role="menuitem" onClick={() => pick(any.current)} data-testid="attach-files">
-            <span>Files</span>
+            <span>{t("att.files")}</span>
             <kbd>{mod()}O</kbd>
           </button>
           <button type="button" role="menuitem" onClick={() => void paste()} data-testid="attach-paste">
-            <span>Paste from clipboard</span>
+            <span>{t("att.paste")}</span>
             <kbd>{mod()}V</kbd>
           </button>
         </div>
@@ -182,7 +183,7 @@ export function Chips({ chips, onRemove }: { chips: Chip[]; onRemove: (id: strin
           <span className="att-size" data-testid="attach-chip-note">
             {c.reason ?? fileSize(c.size)}
           </span>
-          <button type="button" className="att-x" aria-label={`Remove ${c.name}`} onClick={() => onRemove(c.id)} data-testid="attach-remove">
+          <button type="button" className="att-x" aria-label={t("att.removeOf", { name: c.name })} onClick={() => onRemove(c.id)} data-testid="attach-remove">
             ×
           </button>
         </div>
@@ -253,7 +254,7 @@ export function useDropZone(anchor: React.RefObject<HTMLElement | null>, enabled
   return over && zone
     ? createPortal(
         <div className="att-drop" data-testid="attach-drop">
-          <span>Drop to attach</span>
+          <span>{t("att.drop")}</span>
         </div>,
         zone,
       )

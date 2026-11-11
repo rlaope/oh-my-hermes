@@ -11,29 +11,31 @@ import type { ApprovalChoice, ClarifyAnswers, ClarifyQuestion } from "../../lib/
 import { askOpen, getStore, useStore, type ApprovalItem, type AskExpiry, type ClarifyItem } from "../../state/store";
 import { answerOf, EMPTY, type Pick } from "./answers";
 import { riskOf } from "./risk";
+import { t, type Key } from "../../i18n";
+import { holdImeEnter } from "../../lib/ime";
 
 export const slot = "cards";
 
-const ALLOW_LABEL: Record<ApprovalChoice, string> = {
-  once: "Allowed once",
-  session: "Allowed for session",
-  always: "Always allowed",
-  deny: "Denied",
+const ALLOW_LABEL: Record<ApprovalChoice, Key> = {
+  once: "card.allowedOnce",
+  session: "card.allowedSession",
+  always: "card.allowedAlways",
+  deny: "card.denied",
 };
 
-const EXPIRED_LABEL: Record<AskExpiry, string> = {
-  timeout: "Timed out",
-  resolved: "Answered elsewhere",
-  cancelled: "Not answered",
+const EXPIRED_LABEL: Record<AskExpiry, Key> = {
+  timeout: "card.timedOut",
+  resolved: "card.answeredElsewhere",
+  cancelled: "card.notAnswered",
 };
 
 /** Buttons in display order; only those the request offers are shown. All carry the same weight: the card
  *  never nudges toward allowing (a `rm -rf` must not have a bright "Allow" next to a faint "Deny"). Deny comes
  *  first so the left-most, first-tabbed answer is the safe one. `key` is its number while the card has focus. */
-const BUTTONS: { choice: ApprovalChoice; label: string; key: string }[] = [
-  { choice: "deny", label: "Deny", key: "1" },
-  { choice: "once", label: "Allow once", key: "2" },
-  { choice: "session", label: "Allow for session", key: "3" },
+const BUTTONS: { choice: ApprovalChoice; label: Key; key: string }[] = [
+  { choice: "deny", label: "card.deny", key: "1" },
+  { choice: "once", label: "card.allowOnce", key: "2" },
+  { choice: "session", label: "card.allowSession", key: "3" },
 ];
 
 /** Cards already scrolled to for a given focus request, so a re-mount does not steal focus again. */
@@ -59,7 +61,7 @@ async function respond(bot: string, id: string, run: () => Promise<void>): Promi
   const st = getStore().getState();
   const it = st.chats[bot]?.items.find((i) => i.id === id);
   const done = it?.kind === "approval" ? !!it.resolved : it?.kind === "clarify" ? it.answer !== undefined : true;
-  return done ? null : st.lastError || "the bridge did not take it";
+  return done ? null : st.lastError || t("card.notTaken");
 }
 
 function Line({ icon, text, detail, testid }: { icon: string; text: string; detail?: string; testid: string }) {
@@ -89,10 +91,10 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
 
   if (item.resolved) {
     const denied = item.resolved === "deny";
-    return <Line icon={denied ? "✕" : "✓"} text={ALLOW_LABEL[item.resolved]} detail={item.command || item.title} testid="card-line" />;
+    return <Line icon={denied ? "✕" : "✓"} text={t(ALLOW_LABEL[item.resolved])} detail={item.command || item.title} testid="card-line" />;
   }
-  if (item.expired && !busy) return <Line icon="–" text={EXPIRED_LABEL[item.expired]} detail={item.command || item.title} testid="card-line" />;
-  if (!open && !busy) return <Line icon="–" text="Not answered" detail={item.command || item.title} testid="card-line" />;
+  if (item.expired && !busy) return <Line icon="–" text={t(EXPIRED_LABEL[item.expired])} detail={item.command || item.title} testid="card-line" />;
+  if (!open && !busy) return <Line icon="–" text={t("card.notAnswered")} detail={item.command || item.title} testid="card-line" />;
 
   const pick = async (choice: ApprovalChoice) => {
     if (busy) return;
@@ -123,7 +125,7 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       aria-keyshortcuts={shown.map((b) => b.key).join(" ")}
       onKeyDown={onKey}
     >
-      <div className="card-title">{item.title || "Approval needed"}</div>
+      <div className="card-title">{item.title || t("card.approvalNeeded")}</div>
       {risks.length > 0 && (
         <div className="card-risk" data-testid="card-risk" role="note">
           <span className="card-risk-ic" aria-hidden="true">!</span>
@@ -133,19 +135,19 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       {item.command && <pre className="card-cmd">{item.command}</pre>}
       {item.cwd && (
         <div className="card-cwd" title={item.cwd} data-testid="card-cwd">
-          in {item.cwd}
+          {t("card.inCwd", { cwd: item.cwd })}
         </div>
       )}
       <div className="card-acts">
         {shown.map((b) => (
           <button key={b.choice} type="button" className="card-btn soft" disabled={!!busy} onClick={() => void pick(b.choice)}>
-            {b.label}
+            {t(b.label)}
           </button>
         ))}
         <span className="card-keys" aria-hidden="true">
           {shown.map((b) => b.key).join(" · ")}
         </span>
-        {err && <span className="card-err">Not sent · {err}</span>}
+        {err && <span className="card-err">{t("card.notSent", { error: err })}</span>}
       </div>
     </div>
   );
@@ -182,8 +184,8 @@ function QuestionInput({
         className="card-in iv-in"
         value={pick.other}
         disabled={disabled}
-        placeholder="Your answer (optional)"
-        aria-label={`Answer ${index + 1}`}
+        placeholder={t("card.answerOpt")}
+        aria-label={t("card.answerN", { n: index + 1 })}
         onChange={(e) => onChange({ chosen: [], other: e.target.value })}
       />
     );
@@ -217,7 +219,7 @@ function QuestionInput({
         onClick={() => setOtherOpen(true)}
       >
         {multi && <span className="iv-box" aria-hidden="true">{pick.other.trim() ? "✓" : ""}</span>}
-        Other…
+        {t("card.other")}
       </button>
       {showOther && (
         <input
@@ -225,8 +227,8 @@ function QuestionInput({
           value={pick.other}
           disabled={disabled}
           autoFocus={otherOpen && !pick.other}
-          placeholder={multi ? "Something else (added to your picks)" : "Something else"}
-          aria-label={`Other answer ${index + 1}`}
+          placeholder={multi ? t("card.otherMulti") : t("card.otherOne")}
+          aria-label={t("card.otherN", { n: index + 1 })}
           onChange={(e) => onChange({ chosen: multi ? pick.chosen : [], other: e.target.value })}
           onBlur={() => {
             if (!pick.other.trim()) setOtherOpen(false);
@@ -270,22 +272,23 @@ function Interview({ bot, item, cardRef }: { bot: string; item: ClarifyItem; car
       ref={cardRef}
       tabIndex={-1}
       className="card iv"
+      onKeyDown={holdImeEnter}
       data-testid="card-interview"
       role="group"
-      aria-label={`${qs.length} questions`}
+      aria-label={t("card.questions", { n: qs.length })}
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
-      <div className="card-title">{qs.length} questions</div>
+      <div className="card-title">{t("card.questions", { n: qs.length })}</div>
       <ol className="iv-list">
         {qs.map((q, i) => (
           <li key={q.qid} className="iv-q" data-testid="iv-question">
             <div className="iv-text">
               <span className="iv-n">{i + 1}</span>
               {q.question}
-              {q.choices?.length ? <span className="iv-hint"> · {q.multi_select ? "pick any" : "pick one"}</span> : null}
+              {q.choices?.length ? <span className="iv-hint"> · {q.multi_select ? t("card.pickAny") : t("card.pickOne")}</span> : null}
             </div>
             <QuestionInput
               q={q}
@@ -299,12 +302,13 @@ function Interview({ bot, item, cardRef }: { bot: string; item: ClarifyItem; car
       </ol>
       <div className="card-acts">
         <button type="submit" className="card-btn primary" disabled={busy}>
-          Submit
+          {t("card.submit")}
         </button>
         <span className="iv-count" data-testid="iv-count">
-          {given} of {qs.length} answered{given < qs.length ? ` · ${qs.length - given} will be skipped` : ""}
+          {t("card.answered", { given, n: qs.length })}
+          {given < qs.length ? t("card.skipped", { n: qs.length - given }) : ""}
         </span>
-        {err && <span className="card-err">Not sent · {err}</span>}
+        {err && <span className="card-err">{t("card.notSent", { error: err })}</span>}
       </div>
     </form>
   );
@@ -322,10 +326,10 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
   const interview = (item.questions?.length ?? 0) > 1;
   useFocusRequest(bot, item.id, interview ? formRef : ref, open);
 
-  const detail = interview ? `${item.questions!.length} questions` : item.question;
-  if (item.answer !== undefined) return <Line icon="✓" text={`Answered: ${item.answer}`} detail={detail} testid="card-line" />;
-  if (item.expired && !busy) return <Line icon="–" text={EXPIRED_LABEL[item.expired]} detail={detail} testid="card-line" />;
-  if (!open && !busy) return <Line icon="–" text="Not answered" detail={detail} testid="card-line" />;
+  const detail = interview ? t("card.questions", { n: item.questions!.length }) : item.question;
+  if (item.answer !== undefined) return <Line icon="✓" text={t("card.answeredWith", { answer: item.answer })} detail={detail} testid="card-line" />;
+  if (item.expired && !busy) return <Line icon="–" text={t(EXPIRED_LABEL[item.expired])} detail={detail} testid="card-line" />;
+  if (!open && !busy) return <Line icon="–" text={t("card.notAnswered")} detail={detail} testid="card-line" />;
   if (interview) return <Interview bot={bot} item={item} cardRef={formRef} />;
 
   const answer = async (a: string) => {
@@ -340,7 +344,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
   const multi = !!item.multi && choices.length > 0;
 
   return (
-    <div ref={ref} tabIndex={-1} className="card" data-testid="card-clarify" role="group" aria-label="Question">
+    <div ref={ref} tabIndex={-1} className="card" data-testid="card-clarify" role="group" aria-label={t("card.question")}>
       <div className="card-title">{item.question}</div>
       <div className="card-acts">
         {multi ? (
@@ -368,7 +372,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
               disabled={busy || !chosen.length}
               onClick={() => void answer(JSON.stringify(chosen))}
             >
-              Answer
+              {t("card.answer")}
             </button>
           </>
         ) : choices.length > 0 ? (
@@ -380,6 +384,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
         ) : (
           <form
             className="card-ask"
+            onKeyDown={holdImeEnter}
             onSubmit={(e) => {
               e.preventDefault();
               void answer(text);
@@ -389,16 +394,16 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
               className="card-in"
               value={text}
               disabled={busy}
-              placeholder="Your answer"
-              aria-label="Your answer"
+              placeholder={t("card.yourAnswer")}
+              aria-label={t("card.yourAnswer")}
               onChange={(e) => setText(e.target.value)}
             />
             <button type="submit" className="card-btn soft" disabled={busy || !text.trim()}>
-              Answer
+              {t("card.answer")}
             </button>
           </form>
         )}
-        {err && <span className="card-err">Not sent · {err}</span>}
+        {err && <span className="card-err">{t("card.notSent", { error: err })}</span>}
       </div>
     </div>
   );

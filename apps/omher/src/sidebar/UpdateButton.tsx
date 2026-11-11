@@ -4,6 +4,7 @@
 // A failed check stays quiet (the next one runs in 6 hours); a failed install says why in one line.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Spinner } from "../ui";
+import { t } from "../i18n";
 import { percent, shortError, updateHost, type PendingUpdate } from "./updater";
 import { runningLine, UpdateConfirm } from "./UpdateConfirm";
 import { getSessions } from "../sessions/sessions";
@@ -72,7 +73,7 @@ export function UpdateButton() {
 
   if (st.kind === "none") return null;
   if (st.kind === "installing" || st.kind === "restarting") {
-    const label = st.kind === "restarting" ? "Restarting…" : st.pct === null ? "Updating…" : `Updating ${st.pct}%`;
+    const label = st.kind === "restarting" ? t("upd.restarting") : st.pct === null ? t("upd.updating") : t("upd.updatingPct", { n: st.pct });
     return (
       <span className="upd upd-busy" data-testid="update-progress" aria-live="polite">
         <Spinner size={10} label={label} />
@@ -95,10 +96,10 @@ export function UpdateButton() {
         data-testid="update-btn"
         aria-haspopup="dialog"
         aria-expanded={asking}
-        title={st.kind === "failed" ? st.error : `Install omher ${update.version} and restart`}
+        title={st.kind === "failed" ? st.error : t("upd.tip", { version: update.version })}
         onClick={() => setAsking(true)}
       >
-        {st.kind === "failed" ? "Retry update" : `Update to ${st.update.version}`}
+        {st.kind === "failed" ? t("upd.retry") : t("upd.to", { version: st.update.version })}
       </button>
       {st.kind === "failed" && (
         <span className="upd-err" role="alert" data-testid="update-error">

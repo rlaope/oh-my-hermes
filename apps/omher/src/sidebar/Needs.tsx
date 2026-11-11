@@ -21,10 +21,10 @@ export function AskLine({ text }: { text: string }) {
 /** "now", "40s", "3m", "2h". */
 export function age(ts: number, nowMs: number): string {
   const s = Math.max(0, Math.floor(nowMs / 1000 - ts));
-  if (s < 10) return "now";
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  return `${Math.floor(s / 3600)}h`;
+  if (s < 10) return t("time.nowShort");
+  if (s < 60) return t("unit.s", { n: s });
+  if (s < 3600) return t("unit.m", { n: Math.floor(s / 60) });
+  return t("unit.h", { n: Math.floor(s / 3600) });
 }
 
 /** The collapsed strip's line: the count, then who asked last and the first words of that ask, so the person
@@ -33,7 +33,7 @@ export function age(ts: number, nowMs: number): string {
 export function stripText(n: number, who: string, ask: string, max = 32): { count: string; rest: string } {
   const flat = ask.replace(/`/g, "").replace(/\s+/g, " ").trim();
   const words = flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
-  return { count: n === 1 ? "1 needs you" : `${n} need you`, rest: ` · ${who}: ${words}` };
+  return { count: n === 1 ? t("needs.one") : t("needs.many", { n }), rest: ` · ${who}: ${words}` };
 }
 
 /** Asks the list shows before its "+N more" row: three two-line entries fit without cutting one. */
@@ -105,7 +105,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
         <div
           className="needs-list"
           role="list"
-          aria-label="Waiting for your answer"
+          aria-label={t("needs.list")}
           data-testid="needs-list"
         >
           {shown.map((a) => (
@@ -125,7 +125,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
                 <span className="needs-r1">
                   <span className="needs-b">{name(a.bot)}</span>
                   <span className="needs-tag" data-testid="needs-tag">
-                    {a.item.kind === "approval" ? "Approve" : "Question"}
+                    {a.item.kind === "approval" ? t("needs.approve") : t("needs.question")}
                   </span>
                   <span className="needs-age">{age(a.ts, now)}</span>
                 </span>
@@ -162,14 +162,14 @@ export function HiddenList({ onClose }: { onClose: () => void }) {
     if (!hidden.length) onClose();
   }, [hidden.length, onClose]);
   return (
-    <div className="hidden-list" ref={ref} role="dialog" aria-label="Hidden bots" data-testid="hidden-list">
-      <div className="hidden-h">Hidden bots</div>
+    <div className="hidden-list" ref={ref} role="dialog" aria-label={t("needs.hidden")} data-testid="hidden-list">
+      <div className="hidden-h">{t("needs.hidden")}</div>
       {hidden.map((b) => (
         <div key={b.name} className="hidden-row">
           <Avatar bot={b.name} size={20} />
           <span className="hidden-n">{b.display_name}</span>
-          <button type="button" className="hidden-show" onClick={() => s.hideBot(b.name, false)} aria-label={`Show ${b.display_name}`}>
-            Show
+          <button type="button" className="hidden-show" onClick={() => s.hideBot(b.name, false)} aria-label={t("needs.showOf", { name: b.display_name })}>
+            {t("needs.show")}
           </button>
         </div>
       ))}

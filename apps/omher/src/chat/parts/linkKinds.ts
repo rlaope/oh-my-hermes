@@ -3,6 +3,11 @@
 // (a pull request, a thread, a video, ...), and a short label for the chip that stands in for the bare URL.
 // A host must BE the service's domain or one of its subdomains: `github.com.evil.io` is a plain web link.
 // Anything not recognised is `service: "web"` with its domain as the label, so a lookalike shows where it goes.
+// Service names stay as written; the kind words around them follow the current language.
+import { t as tr, type Key } from "../../i18n";
+
+/** "Slack channel" in the current language. */
+const k = (svc: string, kind: Key) => tr("lk.svcKind", { svc, kind: tr(kind) });
 
 export type LinkService =
   | "github"
@@ -92,7 +97,7 @@ function github(u: URL, p: string[]): LinkInfo {
     const [user, id] = p;
     if (user) meta.user = user;
     if (id) meta.id = id;
-    return { service: "github", kind: "gist", label: user && id ? `gist · ${user}` : "GitHub gist", meta };
+    return { service: "github", kind: "gist", label: user && id ? `gist · ${user}` : "GitHub Gist", meta };
   }
   if (!p.length || GH_RESERVED.has(p[0].toLowerCase())) return { service: "github", kind: "page", label: "GitHub", meta };
   const [owner, repo, kind, ...rest] = p;
@@ -118,7 +123,7 @@ function github(u: URL, p: string[]): LinkInfo {
       const n = num(rest[0]);
       if (!n) break;
       meta.number = n;
-      return { service: "github", kind: "discussion", label: `${full} discussion #${n}`, meta };
+      return { service: "github", kind: "discussion", label: `${full} ${tr("lk.k.discussion")} #${n}`, meta };
     }
     case "commit": {
       if (!rest[0] || !/^[0-9a-f]{7,40}$/i.test(rest[0])) break;
@@ -130,13 +135,13 @@ function github(u: URL, p: string[]): LinkInfo {
         meta.tag = rest.slice(1).join("/");
         return { service: "github", kind: "release", label: `${full} ${meta.tag}`, meta };
       }
-      return { service: "github", kind: "releases", label: `${full} releases`, meta };
+      return { service: "github", kind: "releases", label: `${full} ${tr("lk.k.releases")}`, meta };
     }
     case "actions": {
       const n = rest[0] === "runs" ? num(rest[1]) : null;
       if (n) {
         meta.run = n;
-        return { service: "github", kind: "run", label: "CI run", meta };
+        return { service: "github", kind: "run", label: tr("lk.ciRun"), meta };
       }
       return { service: "github", kind: "actions", label: `${full} actions`, meta };
     }
@@ -155,7 +160,7 @@ function github(u: URL, p: string[]): LinkInfo {
       const range = rest.join("/");
       if (!range) break;
       meta.range = range;
-      return { service: "github", kind: "compare", label: `compare ${range}`, meta };
+      return { service: "github", kind: "compare", label: tr("lk.compare", { range }), meta };
     }
   }
   return { service: "github", kind: "repo", label: full, meta };
@@ -171,7 +176,7 @@ function slack(u: URL, p: string[]): LinkInfo {
     const ch = u.searchParams.get("channel");
     if (ch) {
       meta.channel = ch;
-      return { service: "slack", kind: "channel", label: "Slack channel", meta };
+      return { service: "slack", kind: "channel", label: k("Slack", "lk.k.channel"), meta };
     }
   }
   // app.slack.com/client/T…/C…[/thread/C…-ts]
@@ -180,9 +185,9 @@ function slack(u: URL, p: string[]): LinkInfo {
     const th = p[3] === "thread" && p[4] ? /-(\d+\.\d+)$/.exec(p[4]) : null;
     if (th) {
       meta.thread = th[1];
-      return { service: "slack", kind: "thread", label: "Slack · thread", meta };
+      return { service: "slack", kind: "thread", label: `Slack · ${tr("lk.k.thread")}`, meta };
     }
-    return { service: "slack", kind: "channel", label: "Slack channel", meta };
+    return { service: "slack", kind: "channel", label: k("Slack", "lk.k.channel"), meta };
   }
   // <team>.slack.com/archives/C…[/p1794195216893139][?thread_ts=…]
   if (p[0] === "archives" && p[1]) {
@@ -192,10 +197,10 @@ function slack(u: URL, p: string[]): LinkInfo {
     const thread = u.searchParams.get("thread_ts");
     if (thread) {
       meta.thread = thread;
-      return { service: "slack", kind: "thread", label: "Slack · thread", meta };
+      return { service: "slack", kind: "thread", label: `Slack · ${tr("lk.k.thread")}`, meta };
     }
-    if (ts) return { service: "slack", kind: "message", label: "Slack message", meta };
-    return { service: "slack", kind: "channel", label: "Slack channel", meta };
+    if (ts) return { service: "slack", kind: "message", label: k("Slack", "lk.k.message"), meta };
+    return { service: "slack", kind: "channel", label: k("Slack", "lk.k.channel"), meta };
   }
   if (team) return { service: "slack", kind: "workspace", label: `Slack · ${team}`, meta };
   return { service: "slack", kind: "page", label: "Slack", meta };
@@ -205,11 +210,11 @@ function discord(u: URL, p: string[]): LinkInfo {
   const meta: Record<string, string> = {};
   if (u.hostname === "discord.gg" || u.hostname.endsWith(".discord.gg")) {
     if (p[0]) meta.invite = p[0];
-    return { service: "discord", kind: "invite", label: p[0] ? `Discord invite · ${p[0]}` : "Discord", meta };
+    return { service: "discord", kind: "invite", label: p[0] ? `${k("Discord", "lk.k.invite")} · ${p[0]}` : "Discord", meta };
   }
   if ((p[0] === "invite" || p[0] === "invites") && p[1]) {
     meta.invite = p[1];
-    return { service: "discord", kind: "invite", label: `Discord invite · ${p[1]}`, meta };
+    return { service: "discord", kind: "invite", label: `${k("Discord", "lk.k.invite")} · ${p[1]}`, meta };
   }
   if (p[0] === "channels" && p[1]) {
     meta.guild = p[1];
@@ -217,11 +222,11 @@ function discord(u: URL, p: string[]): LinkInfo {
       meta.channel = p[2];
       if (p[3]) {
         meta.message = p[3];
-        return { service: "discord", kind: "message", label: "Discord message", meta };
+        return { service: "discord", kind: "message", label: k("Discord", "lk.k.message"), meta };
       }
-      return { service: "discord", kind: "channel", label: "Discord channel", meta };
+      return { service: "discord", kind: "channel", label: k("Discord", "lk.k.channel"), meta };
     }
-    return { service: "discord", kind: "server", label: p[1] === "@me" ? "Discord DMs" : "Discord server", meta };
+    return { service: "discord", kind: "server", label: p[1] === "@me" ? k("Discord", "lk.k.dms") : k("Discord", "lk.k.server"), meta };
   }
   return { service: "discord", kind: "page", label: "Discord", meta };
 }
@@ -254,23 +259,23 @@ function google(u: URL, p0: string[]): LinkInfo | null {
     const p = dropAccount(p0);
     if (p[0] === "file" && p[1] === "d" && p[2]) {
       meta.id = p[2];
-      return { service: "googledrive", kind: "file", label: "Drive file", meta };
+      return { service: "googledrive", kind: "file", label: k("Drive", "lk.k.file"), meta };
     }
     const fi = p.indexOf("folders");
     if (fi >= 0 && p[fi + 1]) {
       meta.id = p[fi + 1];
-      return { service: "googledrive", kind: "folder", label: "Drive folder", meta };
+      return { service: "googledrive", kind: "folder", label: k("Drive", "lk.k.folder"), meta };
     }
     const id = u.searchParams.get("id");
     if (id) meta.id = id;
-    return { service: "googledrive", kind: id ? "file" : "page", label: id ? "Drive file" : "Google Drive", meta };
+    return { service: "googledrive", kind: id ? "file" : "page", label: id ? k("Drive", "lk.k.file") : "Google Drive", meta };
   }
   if (host === "calendar.google.com") {
     const eid = u.searchParams.get("eid");
     const p = dropAccount(p0.slice(p0[0] === "calendar" ? 1 : 0));
     if (eid || p.includes("eventedit") || p[0] === "event") {
       if (eid) meta.eid = eid;
-      return { service: "googlecalendar", kind: "event", label: "Calendar event", meta };
+      return { service: "googlecalendar", kind: "event", label: tr("lk.calEvent"), meta };
     }
     return { service: "googlecalendar", kind: "page", label: "Google Calendar", meta };
   }
@@ -282,7 +287,7 @@ function google(u: URL, p0: string[]): LinkInfo | null {
   if (host === "mail.google.com") {
     const id = /\/([A-Za-z0-9]{16,})$/.exec(u.hash)?.[1];
     if (id) meta.thread = id;
-    return { service: "gmail", kind: id ? "thread" : "page", label: id ? "Gmail thread" : "Gmail", meta };
+    return { service: "gmail", kind: id ? "thread" : "page", label: id ? k("Gmail", "lk.k.thread") : "Gmail", meta };
   }
   if (host === "maps.app.goo.gl" || (host === "goo.gl" && p0[0] === "maps")) {
     return { service: "googlemaps", kind: "place", label: "Google Maps", meta };
@@ -311,13 +316,13 @@ function x(_u: URL, p: string[]): LinkInfo {
   const meta: Record<string, string> = {};
   if (p[0] === "i" && p[1] === "web" && p[2] === "status" && p[3]) {
     meta.post = p[3];
-    return { service: "x", kind: "post", label: "X post", meta };
+    return { service: "x", kind: "post", label: k("X", "lk.k.post"), meta };
   }
   if (!p[0] || X_RESERVED.has(p[0].toLowerCase()) || !/^\w{1,15}$/.test(p[0])) return { service: "x", kind: "page", label: "X", meta };
   meta.user = p[0];
   if (p[1] === "status" && p[2] && /^\d+$/.test(p[2])) {
     meta.post = p[2];
-    return { service: "x", kind: "post", label: `@${p[0]} · post`, meta };
+    return { service: "x", kind: "post", label: `@${p[0]} · ${tr("lk.k.post")}`, meta };
   }
   return { service: "x", kind: "profile", label: `@${p[0]}`, meta };
 }
@@ -335,10 +340,10 @@ function linkedin(u: URL, p: string[]): LinkInfo {
   }
   if (p[0] === "jobs" && p[1] === "view" && p[2]) {
     meta.job = p[2].replace(/^.*-(\d+)$/, "$1");
-    return { service: "linkedin", kind: "job", label: "LinkedIn job", meta };
+    return { service: "linkedin", kind: "job", label: k("LinkedIn", "lk.k.job"), meta };
   }
   if (p[0] === "posts" || (p[0] === "feed" && p[1] === "update") || p[0] === "pulse") {
-    return { service: "linkedin", kind: "post", label: "LinkedIn post", meta };
+    return { service: "linkedin", kind: "post", label: k("LinkedIn", "lk.k.post"), meta };
   }
   return { service: "linkedin", kind: "page", label: "LinkedIn", meta };
 }
@@ -354,16 +359,16 @@ function youtube(u: URL, p: string[]): LinkInfo {
   else if ((p[0] === "embed" || p[0] === "live" || p[0] === "v") && p[1]) video = p[1];
   if (video && /^[\w-]{6,20}$/.test(video)) {
     meta.video = video;
-    return { service: "youtube", kind: "video", label: `YouTube · video${at}`, meta };
+    return { service: "youtube", kind: "video", label: `YouTube · ${tr("lk.k.video")}${at}`, meta };
   }
   if (p[0] === "shorts" && p[1]) {
     meta.video = p[1];
-    return { service: "youtube", kind: "short", label: "YouTube · short", meta };
+    return { service: "youtube", kind: "short", label: `YouTube · ${tr("lk.k.short")}`, meta };
   }
   const list = u.searchParams.get("list");
   if (p[0] === "playlist" && list) {
     meta.list = list;
-    return { service: "youtube", kind: "playlist", label: "YouTube · playlist", meta };
+    return { service: "youtube", kind: "playlist", label: `YouTube · ${tr("lk.k.playlist")}`, meta };
   }
   if (p[0]?.startsWith("@")) {
     meta.handle = p[0];
@@ -375,7 +380,7 @@ function youtube(u: URL, p: string[]): LinkInfo {
   }
   if (p[0] === "channel" && p[1]) {
     meta.channel = p[1];
-    return { service: "youtube", kind: "channel", label: "YouTube channel", meta };
+    return { service: "youtube", kind: "channel", label: k("YouTube", "lk.k.channel"), meta };
   }
   return { service: "youtube", kind: "page", label: "YouTube", meta };
 }
@@ -402,7 +407,7 @@ function linear(_u: URL, p: string[]): LinkInfo {
     meta.issue = p[2].toUpperCase();
     return { service: "linear", kind: "issue", label: meta.issue, meta };
   }
-  if (p[1] === "project" && p[2]) return { service: "linear", kind: "project", label: "Linear project", meta };
+  if (p[1] === "project" && p[2]) return { service: "linear", kind: "project", label: k("Linear", "lk.k.project"), meta };
   return { service: "linear", kind: "page", label: "Linear", meta };
 }
 
@@ -411,7 +416,7 @@ function figma(_u: URL, p: string[]): LinkInfo {
   if (["file", "design", "proto", "board", "slides"].includes(p[0]) && p[1]) {
     meta.key = p[1];
     const name = p[2] ? titleOf(p[2]) : "";
-    return { service: "figma", kind: p[0], label: name ? `Figma · ${name}` : "Figma file", meta };
+    return { service: "figma", kind: p[0], label: name ? `Figma · ${name}` : k("Figma", "lk.k.file"), meta };
   }
   return { service: "figma", kind: "page", label: "Figma", meta };
 }

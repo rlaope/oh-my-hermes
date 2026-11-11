@@ -1,5 +1,6 @@
 // Small display helpers shared by the Runs panel and the full view.
 import type { RunNode } from "../lib/runs";
+import type { Key } from "../i18n";
 
 /** A model's name as people say it: "claude-opus-5-5" -> "Opus 5.5", "gpt-6.1-sol" -> "GPT-6.1 Sol", "gpt-6-astra"
  *  -> "GPT-6 Astra", "gemini-3-pro" -> "Gemini 3 Pro", "z-ai/glm-5.3-ultrafast" -> "GLM-5.3", "kimi-k3" -> "Kimi K3",
@@ -34,14 +35,14 @@ export function modelName(model: string): string {
   return raw;
 }
 
-export const STATE_WORD: Record<RunNode["state"], string> = {
-  done: "done",
-  running: "running",
-  failed: "failed",
-  blocked: "blocked",
-  parked: "parked",
-  waiting: "waiting",
-  cancelled: "cancelled",
+export const STATE_WORD: Record<RunNode["state"], Key> = {
+  done: "st.done",
+  running: "st.running",
+  failed: "st.failed",
+  blocked: "st.blocked",
+  parked: "st.parked",
+  waiting: "st.waiting",
+  cancelled: "st.cancelled",
 };
 
 /** The dag run's short name ("omher-v02") from its id ("dag:<session>/omher-v02"). */

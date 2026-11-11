@@ -7,7 +7,7 @@ import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
-import { LANG_KEY, readLang, setLang, type Lang } from "../i18n";
+import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
   Away,
   LinkPlaces,
@@ -272,29 +272,34 @@ export interface AppState {
 
 // ---- activity text --------------------------------------------------------------------------
 
-const VERBS: Record<string, string> = {
-  terminal: "Running",
-  read_file: "Reading",
-  search_files: "Searching",
-  web_search: "Searching the web",
-  web_extract: "Reading",
-  write_file: "Editing",
-  patch: "Editing",
-  delegate_task: "Asking",
-  skill_view: "Using skill",
-  skill_use: "Using skill",
+const VERBS: Record<string, Key> = {
+  terminal: "live.running",
+  read_file: "live.reading",
+  search_files: "live.searching",
+  web_search: "live.searchingWeb",
+  web_extract: "live.reading",
+  write_file: "live.editing",
+  patch: "live.editing",
+  delegate_task: "live.asking",
+  skill_view: "live.usingSkill",
+  skill_use: "live.usingSkill",
 };
 
-/** "<Verb> <detail>" for a tool call; unknown tools keep their own name as the verb. */
+/** "<Verb> <detail>" for a tool call, the verb in the current language; unknown tools keep their own name. */
 export function activityText(name: string, detail: string): string {
-  const verb = VERBS[name] ?? name;
+  const verb = VERBS[name] ? tr(VERBS[name]) : name;
   const d = (detail ?? "").trim();
   return d ? `${verb} ${d}` : verb;
 }
 
 /** The live text split for display: when it is the latest tool's text, `code` holds its command or path. */
+/** The status of a turn found running on open, before any event: shown as "Working…" in the current language. */
+export const WORKING = "Working…";
+/** The status a turn gets from `thinking`, before any tool or status text. */
+export const THINKING = "Thinking…";
+
 export function liveLabel(t: Turn): { verb: string; code?: string } {
-  const status = t.status || "Working…";
+  const status = t.status || WORKING;
   const last = t.steps[t.steps.length - 1];
   if (last && last.detail && status === activityText(last.name, last.detail)) {
     return { verb: activityText(last.name, ""), code: last.detail };
@@ -305,7 +310,7 @@ export function liveLabel(t: Turn): { verb: string; code?: string } {
 /** Whether a running turn has something for its activity line to say: a tool or skill ran, or the bot sent a
  *  status of its own. Before that (only thinking) the chat shows the typing bubble instead of the line. */
 export function turnHasActivity(t: Turn): boolean {
-  return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== "Thinking…" && t.status !== "Working…");
+  return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== THINKING && t.status !== WORKING);
 }
 
 // ---- state helpers --------------------------------------------------------------------------
@@ -504,7 +509,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     sessionId: res.session_id,
   };
   if (res.running && !next.turn) {
-    next = newTurn(next, bot, now, "Working…")[0];
+    next = newTurn(next, bot, now, WORKING)[0];
   } else if (!res.running && next.turn) {
     next = endTurn(next, now, "done");
   }
@@ -611,7 +616,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "thinking":
       return touchChat(state, bot, (c) => {
         const base = c.turn ? c : newTurn(c, bot, now)[0];
-        return base.turn!.status ? base : patchTurn(base, (t) => ({ ...t, status: "Thinking…" }));
+        return base.turn!.status ? base : patchTurn(base, (t) => ({ ...t, status: THINKING }));
       });
     case "tool.start":
       return touchChat(state, bot, (c) =>
@@ -658,7 +663,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return touchChat(state, bot, (c) => {
         // chat.open replays asks that are still waiting; the card is already there.
         if (c.items.some((i) => i.kind === "approval" && i.request_id === ev.request_id)) return c;
-        const base = patchTurn(c, (t) => ({ ...t, status: "Waiting for approval" }));
+        const base = patchTurn(c, (t) => ({ ...t, status: tr("live.waitApproval") }));
         const item: ApprovalItem = {
           kind: "approval",
           id: `approval-${ev.request_id}`,
@@ -674,7 +679,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "clarify.request":
       return touchChat(state, bot, (c) => {
         if (c.items.some((i) => i.kind === "clarify" && i.request_id === ev.request_id)) return c;
-        const base = patchTurn(c, (t) => ({ ...t, status: "Waiting for your answer" }));
+        const base = patchTurn(c, (t) => ({ ...t, status: tr("live.waitAnswer") }));
         const qs = (ev.questions ?? []).filter((q) => q && typeof q.question === "string" && q.question.trim());
         const item: ClarifyItem = {
           kind: "clarify",
@@ -773,7 +778,7 @@ export function reduce(state: AppState, a: Action): AppState {
       const chats: AppState["chats"] = {};
       // agent:<id> chats run in the desktop shell, not through Hermes: a bridge outage does not touch them
       for (const [b, c] of Object.entries(state.chats))
-        chats[b] = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", "Connection to Hermes lost") : c;
+        chats[b] = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", tr("live.lost")) : c;
       return { ...state, conn: a.status, chats };
     }
     case "chat.failed":
@@ -1007,9 +1012,9 @@ export function askFrom(state: AppState, key: string): string {
 
 /** One plain line for an ask: "Allow `rm -rf build/`?" or the (first) question. */
 export function askText(it: ApprovalItem | ClarifyItem): string {
-  if (it.kind === "approval") return it.command ? `Allow \`${it.command}\`?` : it.title || "Allow this command?";
+  if (it.kind === "approval") return it.command ? tr("ask.allowCmd", { cmd: `\`${it.command}\`` }) : it.title || tr("ask.allowThis");
   const n = it.questions?.length ?? 0;
-  return n > 1 ? `${n} questions: ${it.questions![0].question}` : it.question;
+  return n > 1 ? tr("ask.questions", { n, first: it.questions![0].question }) : it.question;
 }
 
 let sideCache: { bots: Bot[]; pinned: string[]; hidden: string[]; out: Bot[] } | null = null;
@@ -1372,7 +1377,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         try {
           results.push(await bridge.request("chat.attach", { bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
         } catch (e) {
-          throw new Error(`Couldn't attach ${f.name} · ${errText(e)}`);
+          throw new Error(tr("att.failed", { name: f.name, error: errText(e) }));
         }
       }
       const sent = toWire(promptText(text, results), skillNames.get(bot) ?? []);
@@ -1400,7 +1405,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       try {
         const route = chatRoute(b);
         if (route) await route.approve(requestId, choice);
-        else if (isSessionChat(b)) throw new Error("this session has ended");
+        else if (isSessionChat(b)) throw new Error(tr("ask.sessionEnded"));
         else await bridge.request("approval.respond", { bot: b, request_id: requestId, choice });
         dispatch({ type: "approval.resolved", bot: b, request_id: requestId, choice });
       } catch (e) {
@@ -1416,7 +1421,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
           route
             ? route.clarify(requestId, x)
             : isSessionChat(b)
-              ? Promise.reject(new Error("this session has ended"))
+              ? Promise.reject(new Error(tr("ask.sessionEnded")))
               : bridge.request("clarify.respond", typeof x === "string" ? { bot: b, request_id: requestId, answer: x } : { bot: b, request_id: requestId, answers: x });
         await say(answer);
         if (typeof answer === "string") {

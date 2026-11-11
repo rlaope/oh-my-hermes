@@ -3,29 +3,30 @@
 // "Worked for 2m 41s · 6 steps" and a click opens one detail row per step.
 import { useEffect, useState } from "react";
 import type { SlotProps } from "../../features";
-import { activityText, getStore, liveLabel, type Step, type Turn } from "../../state/store";
+import { activityText, getStore, liveLabel, THINKING, WORKING, type Step, type Turn } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
-import { t } from "../../i18n";
+import { t, t as tr, tx, type Key } from "../../i18n";
 import "./activity.css";
 
 export const slot = "activity";
 
 /** Plain verbs for the detail rows. Unknown tools read as their own name, with underscores spaced. */
-const VERBS: Record<string, string> = {
-  terminal: "Ran",
-  read_file: "Read",
-  search_files: "Searched",
-  web_search: "Searched the web",
-  web_extract: "Read",
-  write_file: "Edited",
-  patch: "Edited",
-  delegate_task: "Asked a helper",
-  skill_view: "Used skill",
-  skill_use: "Used skill",
-  browser_navigate: "Opened",
+const VERBS: Record<string, Key> = {
+  terminal: "act.ran",
+  read_file: "act.read",
+  search_files: "act.searched",
+  web_search: "act.searchedWeb",
+  web_extract: "act.read",
+  write_file: "act.edited",
+  patch: "act.edited",
+  delegate_task: "act.asked",
+  skill_view: "act.usedSkill",
+  skill_use: "act.usedSkill",
+  browser_navigate: "act.opened",
 };
-const stepVerb = (name: string) => VERBS[name] ?? name.replace(/_/g, " ");
+const stepVerb = (name: string) => (VERBS[name] ? tr(VERBS[name]) : name.replace(/_/g, " "));
+const DAG_STATUS: Record<string, Key> = { failed: "act.dag.failed", working: "act.dag.working", stopped: "act.dag.stopped", returned: "act.dag.returned" };
 /** Code-like details (commands, paths, URLs) render in mono; prose (a helper's goal) stays text. */
 const isCode = (name: string) => !["delegate_task", "web_search"].includes(name);
 
@@ -38,6 +39,9 @@ interface Label {
   verb: string;
   code?: string;
 }
+
+/** A placeholder status word the store keeps in English, said in the current language. */
+const shownLabel = (l: Label): Label => (l.verb === WORKING ? { ...l, verb: tr("act.working") } : l.verb === THINKING ? { ...l, verb: tr("row.thinking") } : l);
 
 const labelText = (l: Label) => (l.code ? `${l.verb} ${l.code}` : l.verb);
 
@@ -88,10 +92,10 @@ function DagRows({ step, live }: { step: Step; live: boolean }) {
       {step.dag!.map((d) => (
         <div key={`${d.run}/${d.node}`} className={`act-step act-dag${step.ok === false ? " fail" : ""}`} data-testid="activity-dag">
           <span className="v prose">
-            Assigned <code>{d.node}</code> to a helper
+            {tx("act.assigned", { node: <code>{d.node}</code> })}
           </span>
           <span className={`act-dag-st ${status}`} data-testid="activity-dag-status">
-            {status}
+            {tr(DAG_STATUS[status])}
           </span>
           <button
             type="button"
@@ -130,7 +134,7 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
             {step.detail}
           </span>
         ))}
-      <span className="s">{running && live ? "…" : `${failed ? "failed · " : ""}${stepTime(ms)}`}</span>
+      <span className="s">{running && live ? "…" : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}</span>
     </div>
   );
 }
@@ -152,10 +156,10 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
   const canOpen = n > 0;
 
   let summary = "";
-  if (state === "done") summary = `Worked for ${total} · ${n} step${n === 1 ? "" : "s"}`;
-  else if (state === "interrupted") summary = `Stopped after ${total}`;
-  else if (state === "ended") summary = `Ended after ${total}`;
-  else if (state === "error") summary = `Failed after ${total}${t.error ? ` · ${t.error}` : ""}`;
+  if (state === "done") summary = n === 1 ? tr("act.worked1", { t: total }) : tr("act.worked", { t: total, n });
+  else if (state === "interrupted") summary = tr("act.stopped", { t: total });
+  else if (state === "ended") summary = tr("act.ended", { t: total });
+  else if (state === "error") summary = `${tr("act.failedAfter", { t: total })}${t.error ? ` · ${t.error}` : ""}`;
 
   return (
     <div className={`act${open ? " open" : ""}`} data-testid="activity" data-state={state}>
@@ -168,7 +172,7 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
         onClick={() => setOpen((o) => !o)}
       >
         {state === "live" ? (
-          <Spinner size={11} label="Working" />
+          <Spinner size={11} label={tr("ui.working")} />
         ) : (
           <span className={`act-ic ${state}`} aria-hidden>
             {state === "done" ? "✓" : state === "error" ? "!" : "■"}
@@ -181,7 +185,7 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
             </span>
           ))}
         {live ? (
-          <Ticker label={liveLabel(t)} />
+          <Ticker label={shownLabel(liveLabel(t))} />
         ) : (
           <span className="act-sum" data-testid="activity-text">
             {summary}

@@ -85,7 +85,7 @@ export function useShortcuts(): void {
         const n = nextAsk(selectAsks(s), s.ui.focusAsk);
         if (n) void a.jumpToAsk(n.bot, n.item.id);
       } else if (hit.kind === "search") {
-        const el = document.querySelector<HTMLInputElement>('input[aria-label="Search bots"]');
+        const el = document.querySelector<HTMLInputElement>('[data-testid="bot-search"]');
         el?.focus();
         el?.select();
       } else if (hit.kind === "details") {

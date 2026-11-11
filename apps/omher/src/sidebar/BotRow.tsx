@@ -6,14 +6,16 @@ import { AskLine } from "./Needs";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { fileName, splitMedia } from "../chat/parts/mediaLines";
+import { t } from "../i18n";
+import { WORKING } from "../state/store";
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
-const liveText = (status: string | undefined) => (status && status !== "Working…" ? status : "Thinking…");
+const liveText = (status: string | undefined) => (status && status !== WORKING ? status : t("row.thinking"));
 
 /** One-line preview: the live step while running, else the last assistant text. */
 export function preview(bot: Bot, chat: Chat | undefined): { text: string; live: boolean; ts: number | null } {
-  if (bot.status === "offline") return { text: "Not connected", live: false, ts: null };
+  if (bot.status === "offline") return { text: t("row.offline"), live: false, ts: null };
   if (chat?.turn) return { text: liveText(chat.turn.status), live: true, ts: chat.turn.startedAt / 1000 };
   const items = chat?.items ?? [];
   for (let i = items.length - 1; i >= 0; i -= 1) {
@@ -83,10 +85,10 @@ function Menu({ menu, onClose, name, at }: { menu: RowMenu; onClose: () => void;
     fn();
   };
   const items: [string, () => void][] = [
-    [menu.pinned ? "Unpin" : "Pin to top", menu.onPin],
-    ["Edit bot", menu.onEdit],
-    ["Hide from sidebar", menu.onHide],
-    ...(menu.onShowHidden ? ([["Show hidden…", menu.onShowHidden]] as [string, () => void][]) : []),
+    [menu.pinned ? t("row.unpin") : t("row.pin"), menu.onPin],
+    [t("row.edit"), menu.onEdit],
+    [t("row.hide"), menu.onHide],
+    ...(menu.onShowHidden ? ([[t("row.showHidden"), menu.onShowHidden]] as [string, () => void][]) : []),
   ];
   return (
     <div
@@ -94,7 +96,7 @@ function Menu({ menu, onClose, name, at }: { menu: RowMenu; onClose: () => void;
       className="row-menu"
       style={{ left: at.x, top: at.y }}
       role="menu"
-      aria-label={`${name} actions`}
+      aria-label={t("row.actions", { name })}
       data-testid="row-menu"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -171,18 +173,18 @@ export function BotRow({
         data-testid={`bot-${bot.name}`}
       >
         {/* answering: a thin rotating ring around the face; an open ask stops it (the amber dot takes over) */}
-        <LiveRing on={running && !needs} size={34} gap={3.5} label="Answering" seed={bot.name}>
+        <LiveRing on={running && !needs} size={34} gap={3.5} label={t("row.answering")} seed={bot.name}>
           <Avatar bot={bot.name} size={34} />
         </LiveRing>
         <span className="bot-m">
           <span className="bot-r1">
             <span className="bot-n">
               {bot.display_name}
-              {pinned && <span className="bot-pin" data-testid="pinned" aria-label="Pinned" title="Pinned" />}
+              {pinned && <span className="bot-pin" data-testid="pinned" aria-label={t("row.pinned")} title={t("row.pinned")} />}
             </span>
             {needs > 0 ? (
               <span className="bot-t wait" data-testid="bot-time">
-                waiting
+                {t("row.waiting")}
               </span>
             ) : busySince !== null ? (
               <span className="bot-t busy" data-testid="bot-time">
@@ -203,7 +205,7 @@ export function BotRow({
             {live && <TypingDots size={3} testId="bot-typing" />}
             {needs > 0 ? (
               // a plain amber dot, no number: a count here would read as unread (the strip carries the count)
-              <span className="needs-dot" data-testid="needs" role="status" aria-label="Needs your answer" title="Needs your answer" />
+              <span className="needs-dot" data-testid="needs" role="status" aria-label={t("row.needsAnswer")} title={t("row.needsAnswer")} />
             ) : (
               unread > 0 && (
                 <span className="badge" data-testid="unread">
@@ -218,7 +220,7 @@ export function BotRow({
         <button
           type="button"
           className="bot-more"
-          aria-label={`More for ${bot.display_name}`}
+          aria-label={t("row.more", { name: bot.display_name })}
           aria-haspopup="menu"
           aria-expanded={open}
           data-testid={`bot-more-${bot.name}`}
