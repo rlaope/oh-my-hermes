@@ -67,7 +67,7 @@ fn emit(st: &mut Step, e: Event) {
 
 /// What omher knows about one ACP agent. The program and its fixed argument live in the allow-list
 /// (`sessions::AGENTS`, `sessions::chat_args`); this row holds what the protocol cannot say.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct AcpAgent {
     pub id: &'static str,
     pub label: &'static str,
@@ -76,23 +76,129 @@ pub struct AcpAgent {
     pub login: &'static str,
     /// The agent's own tool that loads a skill (its `tool_call` title), whose `rawInput.name` names the skill.
     pub skill_tool: Option<&'static str>,
-    /// Environment the program starts with, fixed per agent (see [`OPENCODE_ASK`]).
-    pub env: &'static [(&'static str, &'static str)],
+    /// How the agent is made to ask before edits and shell commands without loosening a rule of the person's own
+    /// (see [`RuleProbe`]); `None` adds nothing.
+    pub rules: Option<RuleProbe>,
 }
 
-/// OpenCode's `build` agent runs every tool without asking unless its config says otherwise. This makes it ask
-/// before every edit and every shell command, for this process only. OpenCode merges `OPENCODE_PERMISSION` over
-/// the person's own config at startup (`Config.loadInstanceState`, 1.19.5) and writes nothing; the rules are
-/// pattern maps so a pattern rule of the person's own (`"rm *": "deny"`, `"git *": "allow"`) still applies.
-pub const OPENCODE_ASK: &str = r#"{"edit":{"*":"ask"},"bash":{"*":"ask"}}"#;
+/// An agent whose own default runs tools without asking. Before the chat starts, the shell runs the agent's fixed
+/// rule listing (`args`) in the session folder with the environment the chat gets, sets `var` to what `build` makes
+/// of it, lists again with `var` set and starts the chat only when `kept` says the agent took the rules as meant.
+/// Anything else (the listing fails, times out or does not parse, the rules did not hold, or `var` is already set
+/// in omher's own environment) refuses the chat with [`NO_RULES`].
+#[derive(Debug)]
+pub struct RuleProbe {
+    pub args: &'static [&'static str],
+    pub var: &'static str,
+    pub build: fn(&str) -> Option<String>,
+    pub kept: fn(&str, &str) -> bool,
+}
+
+/// Why an agent with a [`RuleProbe`] did not start (the UI shows it translated, `ss.noRules`).
+pub const NO_RULES: &str = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
 
 pub const ACP_AGENTS: [AcpAgent; 1] = [AcpAgent {
     id: "opencode",
     label: "OpenCode",
     login: "opencode auth login",
     skill_tool: Some("skill"),
-    env: &[("OPENCODE_PERMISSION", OPENCODE_ASK)],
+    rules: Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept }),
 }];
+
+/// OpenCode's `permission` / `pattern` match (`Wildcard.match`, 1.19.5): `*` any run, `?` one character, `\\` read
+/// as `/`, and a pattern ending in `" *"` also matches without that tail.
+fn wildcard(text: &str, pattern: &str) -> bool {
+    fn m(t: &[char], p: &[char]) -> bool {
+        match p.split_first() {
+            None => t.is_empty(),
+            Some(('*', rest)) => (0..=t.len()).any(|i| m(&t[i..], rest)),
+            Some(('?', rest)) => !t.is_empty() && m(&t[1..], rest),
+            Some((c, rest)) => t.first() == Some(c) && m(&t[1..], rest),
+        }
+    }
+    let t: Vec<char> = text.replace('\\', "/").chars().collect();
+    let p: Vec<char> = pattern.replace('\\', "/").chars().collect();
+    m(&t, &p) || (p.ends_with(&[' ', '*']) && m(&t, &p[..p.len() - 2]))
+}
+
+/// The tools omher's approval card stands for, and the key their ask rules go under. OpenCode files a write or a
+/// patch under `edit`. The key is not the tool's own name, so OpenCode's config merge cannot fold these rules into
+/// the person's own `bash` / `edit` entry (which would keep the person's key order and let their `"*": "allow"`
+/// come after an ask); `"bash *"` matches the tool `bash` and nothing else.
+const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];
+
+/// Each agent's rules for `bash` and `edit` as OpenCode resolved them, from what `opencode agent list` printed
+/// (each agent's name and mode on its own line, then its ruleset as JSON, where the last matching rule decides):
+/// per tool, each pattern once at its last place with its action, in order. `None` when the listing has no `build`
+/// agent or holds a line or rule this does not know.
+fn resolved(listing: &str) -> Option<Vec<(String, Vec<Vec<(String, String)>>)>> {
+    let mut agents: Vec<(String, String)> = Vec::new();
+    for line in listing.lines() {
+        let head = !line.starts_with([' ', '\t', '[', ']', '{', '}']) && line.ends_with(')') && line.contains(" (");
+        if head {
+            agents.push((line[..line.rfind(" (")?].to_string(), String::new()));
+        } else {
+            let last = agents.last_mut()?;
+            last.1.push_str(line);
+            last.1.push('\n');
+        }
+    }
+    if !agents.iter().any(|(n, _)| n == "build") {
+        return None;
+    }
+    let mut out = Vec::new();
+    for (name, body) in agents {
+        let rules: Vec<Value> = serde_json::from_str(&body).ok()?;
+        let mut per = Vec::new();
+        for (tool, _) in ASKED {
+            let mut seen: Vec<(String, String)> = Vec::new();
+            for r in rules.iter().rev() {
+                let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
+                if !matches!(action, "allow" | "ask" | "deny") {
+                    return None;
+                }
+                if wildcard(tool, perm) && !seen.iter().any(|(p, _)| p == pattern) {
+                    seen.push((pattern.to_string(), action.to_string()));
+                }
+            }
+            seen.reverse();
+            per.push(seen);
+        }
+        out.push((name, per));
+    }
+    Some(out)
+}
+
+/// The ask rules for an OpenCode chat, from what `opencode agent list` printed without them: for every agent and
+/// each of `bash` and `edit`, the person's own resolved rules repeated after theirs, in the same order, with allow
+/// turned into ask. What they allow asks, what asks still asks, what they deny stays denied, for blanket and
+/// pattern rules alike.
+pub fn opencode_ask(listing: &str) -> Option<String> {
+    let q = |v: &str| Value::String(v.into()).to_string();
+    let agents = resolved(listing)?
+        .iter()
+        .map(|(name, per)| {
+            let tools = ASKED
+                .iter()
+                .zip(per)
+                .map(|((_, key), rules)| {
+                    let pairs: Vec<String> = rules.iter().map(|(p, a)| format!("{}:{}", q(p), q(if a == "deny" { "deny" } else { "ask" }))).collect();
+                    format!("{}:{{{}}}", q(key), pairs.join(","))
+                })
+                .collect::<Vec<_>>();
+            format!("{}:{{\"permission\":{{{}}}}}", q(name), tools.join(","))
+        })
+        .collect::<Vec<_>>();
+    Some(format!("{{\"agent\":{{{}}}}}", agents.join(",")))
+}
+
+/// Whether OpenCode, listed again with `rules` set (`listing`), took them as meant: no agent lets `bash` or `edit`
+/// run unasked anywhere, and its rules are exactly the ones `rules` was built from. A later config layer that
+/// put an allow back after them fails this, and the chat does not start.
+pub fn opencode_kept(rules: &str, listing: &str) -> bool {
+    resolved(listing).is_some_and(|agents| agents.iter().all(|(_, per)| per.iter().flatten().all(|(_, a)| a != "allow")))
+        && opencode_ask(listing).as_deref() == Some(rules)
+}
 
 pub fn acp_agent(id: &str) -> Option<&'static AcpAgent> {
     ACP_AGENTS.iter().find(|a| a.id == id)
@@ -868,16 +974,135 @@ mod tests {
 
     #[test]
     fn real_opencode_0_without_the_ask_rules_a_command_runs_unasked() {
-        // the same request with OpenCode's own defaults (no OPENCODE_PERMISSION): no card, the command ran. This is
-        // why the row starts OpenCode with OPENCODE_ASK.
+        // the same request with OpenCode's own defaults (no ask rules): no card, the command ran. This is why the row
+        // starts OpenCode with ask rules (`RuleProbe`).
         let mut a = Acp::new(opencode(), "/w/proj", None);
         let st = replay(&mut a, "opencode-0-default-runs-unasked.jsonl", Some("run echo raw"), &[]);
         one_clean_turn(&st.events);
         assert!(of(&st.events, "approval.request").is_empty());
         assert_eq!(of(&st.events, "tool.end")[0]["ok"], true);
-        assert_eq!(opencode().env, &[("OPENCODE_PERMISSION", OPENCODE_ASK)]);
-        let rules: Value = serde_json::from_str(OPENCODE_ASK).unwrap();
-        assert_eq!(rules, json!({"edit": {"*": "ask"}, "bash": {"*": "ask"}}));
+        let probe = opencode().rules.as_ref().unwrap();
+        assert_eq!((probe.args, probe.var), (&["agent", "list"][..], "OPENCODE_CONFIG_CONTENT"));
+    }
+
+    /// `opencode agent list` from OpenCode 1.19.5 (scratch HOME, `opencode-rules.json`) for one person's config:
+    /// as it is, with omher's rules in `OPENCODE_CONFIG_CONTENT`, and with the earlier fixed `OPENCODE_PERMISSION`.
+    fn rules_case(case: &str) -> (String, String, String) {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("acp").join("opencode-rules.json");
+        let all: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let c = &all[case];
+        (s(c, "agent_list"), s(c, "agent_list_in_omher"), s(c, "agent_list_with_old_rule"))
+    }
+
+    /// What OpenCode decides for `tool` on `input` under agent `agent` of `listing` (its `Permission.evaluate`: the
+    /// last rule whose permission and pattern match, else ask).
+    fn decides(listing: &str, agent: &str, tool: &str, input: &str) -> String {
+        let mut cur = None;
+        let mut body = String::new();
+        for line in listing.lines() {
+            if !line.starts_with([' ', '[', ']']) && line.ends_with(')') {
+                if cur.as_deref() == Some(agent) {
+                    break;
+                }
+                cur = Some(line[..line.rfind(" (").unwrap()].to_string());
+                body.clear();
+            } else if cur.as_deref() == Some(agent) {
+                body.push_str(line);
+            }
+        }
+        let rules: Vec<Value> = serde_json::from_str(&body).unwrap();
+        rules.iter().rev().find(|r| wildcard(tool, &s(r, "permission")) && wildcard(input, &s(r, "pattern"))).map(|r| s(r, "action")).unwrap_or_else(|| "ask".into())
+    }
+
+    /// For each recorded config: (tool, input, the person's own decision, the decision inside omher).
+    fn check_rules(case: &str, want: &[(&str, &str, &str, &str)]) {
+        let (base, in_omher, old) = rules_case(case);
+        let rules = opencode_ask(&base).unwrap();
+        // the very rules the recording started OpenCode with
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("acp").join("opencode-rules.json");
+        let all: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        assert_eq!(rules, s(&all[case], "env_sent"), "{case}");
+        // OpenCode, started with these rules, resolved exactly them, and nothing in bash or edit is allowed unasked
+        assert!(opencode_kept(&rules, &in_omher), "{case}");
+        assert!(!opencode_kept(&rules, &base), "{case}: without the rules OpenCode runs tools unasked");
+        for agent in ["build", "general", "plan", "explore"] {
+            for (tool, input, own, inside) in want {
+                if agent == "build" {
+                    assert_eq!(decides(&base, agent, tool, input), *own, "{case} build {tool} {input}: the person's own rule");
+                }
+                let got = decides(&in_omher, agent, tool, input);
+                let never_looser = match decides(&base, agent, tool, input).as_str() {
+                    "deny" => got == "deny",
+                    _ => got == "ask" || got == "deny",
+                };
+                assert!(never_looser, "{case} {agent} {tool} {input}: {got}");
+                if agent == "build" {
+                    assert_eq!(got, *inside, "{case} build {tool} {input}");
+                }
+            }
+        }
+        // the earlier fixed rule turned this person's deny into ask
+        if want.iter().any(|w| w.2 == "deny") {
+            assert!(want.iter().any(|(t, i, own, _)| *own == "deny" && decides(&old, "build", t, i) == "ask"), "{case}");
+        }
+    }
+
+    #[test]
+    fn real_opencode_rules_a_blanket_string_deny_stays_deny() {
+        // `"permission": {"bash": "deny"}`
+        check_rules("string-deny", &[("bash", "echo hi", "deny", "deny"), ("bash", "rm -rf x", "deny", "deny"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_opencode_rules_a_blanket_map_deny_stays_deny() {
+        // `"permission": {"bash": {"*": "deny"}}`
+        check_rules("map-deny", &[("bash", "echo hi", "deny", "deny"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_opencode_rules_a_star_deny_stays_deny_for_both() {
+        // `"permission": {"*": "deny"}`
+        check_rules("star-deny", &[("bash", "echo hi", "deny", "deny"), ("edit", "a.md", "deny", "deny")]);
+    }
+
+    #[test]
+    fn real_opencode_rules_a_pattern_deny_stays_deny_and_the_rest_asks() {
+        // `"permission": {"bash": {"rm *": "deny"}}`
+        check_rules("pattern-deny", &[("bash", "rm -rf x", "deny", "deny"), ("bash", "echo hi", "allow", "ask"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_opencode_rules_an_allow_becomes_ask() {
+        // `"permission": {"bash": "allow", "edit": "allow"}`
+        check_rules("allow", &[("bash", "echo hi", "allow", "ask"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_opencode_rules_with_nothing_set_everything_asks() {
+        check_rules("none", &[("bash", "echo hi", "allow", "ask"), ("bash", "rm -rf x", "allow", "ask"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn opencode_rules_refuse_what_they_cannot_read() {
+        assert_eq!(opencode_ask(""), None);
+        assert_eq!(opencode_ask("Error: Config file is not valid JSON"), None);
+        let (base, _, _) = rules_case("none");
+        // no build agent, a truncated ruleset, an action this does not know
+        assert_eq!(opencode_ask(&base.replace("build (primary)", "builder (primary)")), None);
+        assert_eq!(opencode_ask(&base[..base.len() / 2]), None);
+        assert_eq!(opencode_ask(&base.replacen("\"action\": \"allow\"", "\"action\": \"maybe\"", 1)), None);
+        // rules OpenCode did not keep (a later layer put an allow back) refuse the start
+        let rules = opencode_ask(&base).unwrap();
+        assert!(!opencode_kept(&rules, &base));
+        assert!(!opencode_kept(&rules, ""));
+    }
+
+    #[test]
+    fn wildcard_matches_as_opencode_does() {
+        assert!(wildcard("bash", "*") && wildcard("bash", "bash") && wildcard("bash", "bash *") && wildcard("bash", "ba?h"));
+        assert!(wildcard("rm -rf x", "rm *") && wildcard("rm", "rm *") && !wildcard("rmdir x", "rm *"));
+        assert!(!wildcard("bash", "edit *") && !wildcard("bashful", "bash *"));
+        assert!(wildcard("a\\b.md", "a/*.md"));
     }
 
     #[test]
@@ -995,7 +1220,7 @@ mod tests {
     }
 
     /// The real OpenCode started exactly as omher starts it (`ChatSessions::start_agent("opencode", …)`: the
-    /// allow-listed program found on PATH, `acp`, the row's `OPENCODE_PERMISSION`), with no prompt, so no model is
+    /// allow-listed program found on PATH, `acp`, the ask rules built from its own `agent list`), with no prompt, so no model is
     /// called: the conversation opens with its models and commands, a model switch applies, the child carries the
     /// ask rule, and a second process continues `OMHER_REAL_OPENCODE_SESSION` (a conversation with a turn). Run
     /// with a scratch HOME and the scratch install first on PATH:
@@ -1038,10 +1263,11 @@ mod tests {
         // the child process carries the row's ask rule (ps shows a process's environment to its own user)
         let ps = std::process::Command::new("ps").args(["-E", "-ww", "-o", "command=", "-ax"]).output().unwrap();
         let ps = String::from_utf8_lossy(&ps.stdout);
-        let line = ps.lines().find(|l| l.contains(" acp ") && l.contains("OPENCODE_PERMISSION=")).unwrap_or("");
-        let env_rule = line.split_whitespace().find(|w| w.starts_with("OPENCODE_PERMISSION=")).unwrap_or("");
-        println!("child env: {env_rule}");
-        assert_eq!(env_rule, format!("OPENCODE_PERMISSION={OPENCODE_ASK}"));
+        let line = ps.lines().find(|l| l.contains(" acp ") && l.contains("OPENCODE_CONFIG_CONTENT=")).unwrap_or("");
+        let at = line.find("OPENCODE_CONFIG_CONTENT=").unwrap();
+        println!("child env: {}…", &line[at..(at + 120).min(line.len())]);
+        assert!(line[at..].starts_with(r#"OPENCODE_CONFIG_CONTENT={"agent":{"build":{"permission":{"bash *":{"#));
+        assert!(!line.contains("OPENCODE_PERMISSION="));
         c.input(id, Input::Model { model: "opencode/beam-free".into() }).unwrap();
         wait(&out, &|ev: &[Value]| ev.iter().any(|e| s(e, "model") == "OpenCode/Beam Free"));
         assert!(out.lock().unwrap().iter().any(|e| s(e, "model") == "OpenCode/Beam Free"));
@@ -1055,6 +1281,78 @@ mod tests {
         println!("second process: session {again}; errors {:?}", ev.iter().filter(|e| s(e, "event") == "session.error").collect::<Vec<_>>());
         assert_eq!(again, earlier);
         assert!(!ev.iter().any(|e| s(e, "event") == "session.error"));
+        c.close(id);
+        std::thread::sleep(Duration::from_millis(800));
+    }
+
+    /// One real OpenCode turn through `ChatSessions::start_agent` for a person whose own OpenCode config says
+    /// `"permission": {"bash": "deny"}` (put it in the scratch HOME's `~/.config/opencode/opencode.json` first): asked
+    /// to run a command, OpenCode is refused by that rule inside omher (1.19.5 does not even offer the model its
+    /// `bash` tool). A command never becomes an approval card, so the person cannot approve it by mistake, and it
+    /// never runs. Edits still ask (each card is
+    /// answered Deny here). With `"bash": "allow"` instead and `OMHER_REAL_OPENCODE_OWN_BASH=allow`, the same turn
+    /// shows the command's card first. One model turn on a free model, no login:
+    /// `OMHER_REAL_OPENCODE_DIR=<scratch folder> cargo test real_opencode_a_bash_deny_still_refuses -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_opencode_a_bash_deny_still_refuses() {
+        use crate::agent_chat::{ChatOut, ChatSessions};
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
+        let dir = std::env::var("OMHER_REAL_OPENCODE_DIR").map(std::path::PathBuf::from).unwrap();
+        let c = Arc::new(ChatSessions::default());
+        let out: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let o = out.clone();
+        let id = c
+            .start_agent("opencode", &dir, None, &[], move |x| match x {
+                ChatOut::Event(e) => o.lock().unwrap().push(e),
+                ChatOut::Exit(code, err) => o.lock().unwrap().push(json!({"event": "exit", "code": code, "error": err})),
+            })
+            .unwrap();
+        let wait = |cond: &dyn Fn(&[Value]) -> bool, secs: u64| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(secs);
+            while std::time::Instant::now() < deadline && !cond(&out.lock().unwrap()) {
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        };
+        wait(&|ev: &[Value]| ev.iter().any(|e| s(e, "event") == "session.commands"), 60);
+        c.input(id, Input::send("Run this shell command with your bash tool and nothing else: echo denied > d.txt   If it is refused, do not try any other way; just reply refused.")).unwrap();
+        let mut answered = 0;
+        let deadline = std::time::Instant::now() + Duration::from_secs(240);
+        while std::time::Instant::now() < deadline {
+            let ev = out.lock().unwrap().clone();
+            if ev.iter().any(|e| matches!(s(e, "event").as_str(), "turn.end" | "exit")) {
+                break;
+            }
+            let cards = of(&ev, "approval.request");
+            for card in &cards[answered..] {
+                c.input(id, Input::Approve { request_id: s(card, "request_id"), choice: "deny".into() }).unwrap();
+            }
+            answered = cards.len();
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        let ev = out.lock().unwrap().clone();
+        for e in &ev {
+            if !matches!(s(e, "event").as_str(), "delta" | "thinking" | "session.models" | "session.commands") {
+                println!("{e}");
+            }
+        }
+        assert!(ev.iter().any(|e| s(e, "event") == "turn.end"), "the turn ended");
+        let starts = of(&ev, "tool.start");
+        let terminal: Vec<String> = starts.iter().filter(|e| s(e, "name") == "terminal").map(|e| s(e, "tool_id")).collect();
+        let command_cards = of(&ev, "approval.request").iter().filter(|e| s(e, "title") == "Run this command?").count();
+        println!("command steps tried: {}, command cards: {command_cards}", terminal.len());
+        if std::env::var("OMHER_REAL_OPENCODE_OWN_BASH").as_deref() == Ok("allow") {
+            // the contrast: the person's own `"bash": "allow"` asks inside omher (answered Deny here)
+            assert!(command_cards >= 1, "an allowed command asks first");
+        } else {
+            // OpenCode 1.19.5 takes a tool whose last rule is a blanket deny away from the model, so it may never try
+            assert_eq!(command_cards, 0, "a denied command never becomes a card");
+        }
+        for e in of(&ev, "tool.end").iter().filter(|e| terminal.contains(&s(e, "tool_id"))) {
+            assert_eq!(e["ok"], false, "the command step was refused: {e}");
+        }
+        assert!(!dir.join("d.txt").exists(), "the command never ran");
         c.close(id);
         std::thread::sleep(Duration::from_millis(800));
     }

@@ -123,9 +123,11 @@ All notable changes will be documented here.
   conversation after a restart (`session/resume`, checked against a real
   OpenCode 1.19.5 run), and Stop ends a turn even while it waits for you.
   OpenCode would otherwise run every edit and shell command without asking:
-  omher starts it with `OPENCODE_PERMISSION` so it asks for both, and its
-  approval card offers Deny and Allow once only, because OpenCode's "Always
-  allow" saves a permanent project rule. omher gives the agent no file or
+  omher reads OpenCode's own resolved rules first and starts it with ask
+  rules built from them, so what you allow asks, what you deny stays denied,
+  and if OpenCode does not keep them omher does not start it. Its approval
+  card offers Deny and Allow once only, because OpenCode's "Always allow"
+  saves a permanent project rule. omher gives the agent no file or
   terminal access of its own (BOUNDARY rule 11).
 
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
