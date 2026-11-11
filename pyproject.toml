@@ -158,8 +158,8 @@ lint = [
 
 # Initial static-analysis baseline (issue #638). Scoped to Pyflakes (F) —
 # correctness signal (unused imports/vars, undefined names, shadowing) —
-# rather than the full pycodestyle/style surface, because this ~135k LOC
-# repo has no enforced line-length or import-order convention today and a
+# rather than the full pycodestyle/style surface, because this large repo has
+# no enforced line-length or import-order convention today and a
 # style-driven ruleset would demand a repo-wide reformat out of scope for a
 # baseline gate. Broaden the ruleset in follow-up work, not this issue.
 #
