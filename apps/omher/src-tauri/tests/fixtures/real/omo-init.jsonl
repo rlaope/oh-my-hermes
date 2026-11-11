@@ -1,0 +1,20 @@
+{"type":"settings_source_selected","path":"/home/u/.omo/agent/settings.json","format":"json","reason":"json-only","scope":"global"}
+{"type":"extension_ui_request","id":"208cc302-e367-49a7-b976-e3f94ff9df32","method":"setStatus","statusKey":"anthropic-web-search"}
+{"type":"extension_ui_request","id":"569061bf-ab93-42a0-8b63-938fd2b47e18","method":"setStatus","statusKey":"openai-web-search"}
+{"type":"extension_ui_request","id":"81eadb13-412f-4bd3-825e-b97296485e53","method":"setStatus","statusKey":"anthropic-web-search"}
+{"type":"extension_ui_request","id":"3e0392a2-4219-4d8d-8628-171092effe1b","method":"setStatus","statusKey":"openai-web-search"}
+{"type":"extension_ui_request","id":"14c600f4-c734-4f95-b642-0b45636ce53b","method":"setStatus","statusKey":"pi-websearch"}
+{"type":"model_changed","model":{"id":"claude-fable-5-1","name":"Claude Fable 5.1","provider":"anthropic","reasoning":true},"thinkingLevel":"medium","source":"set","thinkingSelection":{"level":"medium","source":"explicit"}}
+{"type":"thinking_level_changed","level":"high","thinkingSelection":{"level":"high","source":"explicit"}}
+{"type":"extension_ui_request","id":"a7f7c27b-85d9-462a-b40c-7e3347265037","method":"notify","message":"Switched to recommended model 'claude-fable-5-1'.","notifyType":"info"}
+{"type":"extension_ui_request","id":"3eac80e1-695c-4c3b-9a37-1e8cf405ff74","method":"setStatus","statusKey":"monitors"}
+{"type":"extension_ui_request","id":"843a9e3c-78bc-4b9f-b49a-a7ee0ff49f0f","method":"setStatus","statusKey":"pi-websearch"}
+{"type":"extension_ui_request","id":"32c36490-73ee-42b3-92d6-35c8782a1fba","method":"setStatus","statusKey":"pi-webfetch"}
+{"type":"extension_ui_request","id":"c53f27cd-63a9-4e72-abea-e40e6b20b950","method":"setStatus","statusKey":"goal"}
+{"type":"extension_ui_request","id":"73a49b64-aebd-472e-a224-06e215cfc654","method":"notify","message":"omo-senpi: configuration diagnostics: Ignored unknown keys in /home/u/.omo/omo.jsonc: exclude_models","notifyType":"warning"}
+{"type":"extension_ui_request","id":"8054b951-5baa-44a0-bde6-28ac9d1c4a26","method":"setStatus","statusKey":"  omo-native","statusText":"(😺 OmO Native)"}
+{"type":"extension_ui_request","id":"db6a5c24-53f0-4f54-9177-62d146620efc","method":"setStatus","statusKey":"memory"}
+{"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"claude-fable-5-1","name":"Claude Fable 5.1","provider":"anthropic","reasoning":true},"thinkingLevel":"high","isStreaming":false,"sessionFile":"/home/u/.omo/agent/sessions/--w-proj--/2026-11-11T02-05-32-602Z_01a1c85a-703a-72fe-ae88-c1f9ffb5c249.jsonl","sessionId":"01a1c85a-703a-72fe-ae88-c1f9ffb5c249","cwd":"/w/proj","messageCount":0}}
+{"id":"omher-2","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"claude-fable-5","name":"Claude Fable 5","provider":"anthropic","reasoning":true},{"id":"claude-fable-5-1","name":"Claude Fable 5.1","provider":"anthropic","reasoning":true},{"id":"claude-haiku-4-5","name":"Claude Haiku 4.5 (latest)","provider":"anthropic","reasoning":true}]}}
+{"type":"message_start","message":{"role":"custom","customType":"senpi-task.usage","content":"<omo-senpi-task>(cut)</omo-senpi-task>","display":false,"details":{},"timestamp":1794362733405}}
+{"type":"message_end","message":{"role":"custom","customType":"senpi-task.usage","content":"<omo-senpi-task>(cut)</omo-senpi-task>","display":false,"details":{},"timestamp":1794362733405}}

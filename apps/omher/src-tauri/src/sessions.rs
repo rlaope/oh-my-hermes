@@ -1,10 +1,10 @@
-//! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omh`, `pi`,
-//! `omp`, `grok`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
+//! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omo`, `dsh`, `omh`,
+//! `pi`, `omp`, `grok`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
 //! the app quits.
 //!
 //! The UI only ever names an agent id. The program, its path and its arguments are decided here: an id that
 //! is not in [`AGENTS`] is refused, and there is no way to pass a command line or extra arguments from the
-//! UI beyond a Claude Code session id ([`resume_args`]). Agent discovery looks on `PATH` plus the usual install folders, because an app started from the Dock
+//! UI beyond a conversation id to continue ([`resume_args`]). Agent discovery looks on `PATH` plus the usual install folders, because an app started from the Dock
 //! or the Start menu gets a much shorter `PATH` than a terminal does.
 
 use std::collections::HashMap;
@@ -48,9 +48,16 @@ pub enum Mode {
 }
 
 /// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
-pub const AGENTS: [Agent; 6] = [
+pub const AGENTS: [Agent; 8] = [
     Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
     Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },
+    // OmO (`omo-ai`, oh-my-openagent on the senpi engine) speaks pi's RPC: `omo --mode rpc`, checked against omo
+    // 5.0.0-beta.65 (get_state, prompt, agent_end; `--session <id>` continues a conversation).
+    Agent { id: "omo", program: "omo", label: "OmO", mode: Mode::Chat },
+    // DSH (deepseek-bot's `dsh`) is a terminal client of a running gateway and refuses to run without a TTY;
+    // its headless mode is the DeepSeek Harness's one-shot runner, not this conversation, so it opens in its
+    // terminal. `--resume <id>` names (or continues) the conversation.
+    Agent { id: "dsh", program: "dsh", label: "DSH", mode: Mode::Terminal },
     Agent { id: "omh", program: "omh", label: "oh-my-hermes", mode: Mode::Hermes },
     Agent { id: "pi", program: "pi", label: "pi", mode: Mode::Chat },
     Agent { id: "omp", program: "omp", label: "oh-my-pi", mode: Mode::Chat },
@@ -74,29 +81,33 @@ pub const CLAUDE_CHAT_ARGS: [&str; 9] = [
 ];
 
 /// The fixed arguments that start agent `id` in its structured mode, or `None` when it has none here. These
-/// are the only arguments omher ever adds besides a Claude Code session id ([`resume_args`]).
+/// are the only arguments omher ever adds besides a conversation id ([`resume_args`]).
 pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
     match agent(id)?.mode {
         Mode::Chat => Some(match id {
             "claude" => &CLAUDE_CHAT_ARGS[..],
             "codex" => &["app-server"][..],
-            "pi" | "omp" => &["--mode", "rpc"][..],
+            "pi" | "omp" | "omo" => &["--mode", "rpc"][..],
             _ => return None,
         }),
         _ => None,
     }
 }
 
-/// `--resume <id>` for Claude Code, so its terminal view and its chat continue one conversation. Only a
-/// UUID that Claude Code itself reported is accepted; every other agent and any other text is refused.
+/// The argument that continues a conversation: `--resume <id>` for Claude Code (so its terminal view and its
+/// chat continue one conversation) and for DSH (the conversation id omher gave it when it started), `--session
+/// <id>` for OmO (the session id it reported). The id must be a UUID; every other agent and any other text is
+/// refused.
 pub fn resume_args(id: &str, session: &str) -> Result<Vec<OsString>, String> {
-    if id != "claude" {
-        return Err(format!("{id} sessions cannot be resumed"));
-    }
+    let flag = match id {
+        "claude" | "dsh" => "--resume",
+        "omo" => "--session",
+        _ => return Err(format!("{id} sessions cannot be resumed")),
+    };
     if !is_uuid(session) {
-        return Err("not a Claude Code session id".into());
+        return Err("not a conversation id".into());
     }
-    Ok(vec!["--resume".into(), session.into()])
+    Ok(vec![flag.into(), session.into()])
 }
 
 /// `8-4-4-4-12` hex digits, nothing else.
@@ -425,7 +436,7 @@ impl Sessions {
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
-    /// or nothing. `resume` (Claude Code only) continues that conversation in the agent's own terminal UI.
+    /// or nothing. `resume` (Claude Code, DSH) continues that conversation in the agent's own terminal UI.
     pub fn start_agent<F>(
         &self,
         agent_id: &str,
@@ -623,9 +634,9 @@ mod tests {
     }
 
     #[test]
-    fn allow_list_is_exactly_the_five_agents() {
+    fn allow_list_is_exactly_the_eight_agents() {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
-        assert_eq!(ids, ["claude", "codex", "omh", "pi", "omp", "grok"]);
+        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"]);
         for a in &AGENTS {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
         }
@@ -636,7 +647,16 @@ mod tests {
         let modes: Vec<(&str, Mode)> = AGENTS.iter().map(|a| (a.id, a.mode)).collect();
         assert_eq!(
             modes,
-            [("claude", Mode::Chat), ("codex", Mode::Chat), ("omh", Mode::Hermes), ("pi", Mode::Chat), ("omp", Mode::Chat), ("grok", Mode::Terminal)]
+            [
+                ("claude", Mode::Chat),
+                ("codex", Mode::Chat),
+                ("omo", Mode::Chat),
+                ("dsh", Mode::Terminal),
+                ("omh", Mode::Hermes),
+                ("pi", Mode::Chat),
+                ("omp", Mode::Chat),
+                ("grok", Mode::Terminal)
+            ]
         );
         assert_eq!(
             chat_args("claude").unwrap(),
@@ -645,7 +665,8 @@ mod tests {
         assert_eq!(chat_args("codex").unwrap(), ["app-server"]);
         assert_eq!(chat_args("pi").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
-        for none in ["omh", "grok", "sh", "", "claude -p"] {
+        assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
+        for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
             assert!(chat_args(none).is_none(), "{none}");
         }
         // no allow-listed argument can run a shell, skip permissions or load extra config
@@ -662,6 +683,17 @@ mod tests {
             assert!(resume_args("claude", bad).is_err(), "{bad:?}");
         }
         assert!(resume_args("codex", id).is_err());
+        // OmO continues with --session, DSH with --resume, each only with a UUID
+        assert_eq!(resume_args("omo", id).unwrap(), [OsString::from("--session"), OsString::from(id)]);
+        assert_eq!(resume_args("dsh", id).unwrap(), [OsString::from("--resume"), OsString::from(id)]);
+        for agent in ["omo", "dsh"] {
+            for bad in ["", "default", "--yolo", "eee5079a-c52e-4526-b633-f3d8cb7d6394 --x", "../x"] {
+                assert!(resume_args(agent, bad).is_err(), "{agent} {bad:?}");
+            }
+        }
+        for agent in ["pi", "omp", "grok", "omh"] {
+            assert!(resume_args(agent, id).is_err(), "{agent}");
+        }
         let s = Sessions::default();
         assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--yolo"), &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
