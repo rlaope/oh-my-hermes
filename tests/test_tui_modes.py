@@ -124,8 +124,8 @@ class RecordingClient:
 def make_app(*, busy: bool = False, rows: int = 24, cols: int = 80, **options: object) -> tuple[App, RecordingClient]:
     client = RecordingClient()
     # The living wallpaper paints the blank cells and the update notice asks npm; their own tests turn them on (the
-    # update notice's with its fetch injected). The main screen's mouse (a drag selects, the wheel opens the
-    # transcript view) is left to the terminal as `OMH_TUI_MOUSE=0` leaves it, which is the behaviour these tests pin
+    # update notice's with its fetch injected). The main screen's mouse (a drag selects, the wheel up hands it to the
+    # terminal) is left to the terminal as `OMH_TUI_MOUSE=0` leaves it, which is the behaviour these tests pin
     # byte for byte; `tests/test_tui_main_mouse.py` turns it on.
     environ = {"OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0", "OMH_TUI_MOUSE": "0",
                **options.pop("environ", {})}  # type: ignore[dict-item]

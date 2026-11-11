@@ -1,0 +1,3399 @@
+[
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Fable 5.2"
+      },
+      {
+        "event": "delta",
+        "text": "2+2 is 4."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgtcdP1Sx8Bh7mvQU6F3R-0",
+        "text": "2+2 is 4."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-1-plain.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Fable 5.2"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "mkdir -p d1",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_018Vf4SBrSRkxAcnm14Wk6xX"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d1",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "bbbc866f-ba86-44bf-8cc3-5e96a07b66ad",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_018Vf4SBrSRkxAcnm14Wk6xX"
+      },
+      {
+        "detail": "mkdir -p d2",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01KEoLDizWi3KX4EjChZfdCM"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d2",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "bde27dc3-270b-455b-93df-5d19479e1dad",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01KEoLDizWi3KX4EjChZfdCM"
+      },
+      {
+        "detail": "mkdir -p d3",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01B9E4gY7ynGvFJWweh1yJzf"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d3",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "32e2cbab-b3cd-4e96-801a-a0c9759c7ad5",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01B9E4gY7ynGvFJWweh1yJzf"
+      },
+      {
+        "detail": "mkdir -p d4",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_017sccq98YdbYaENzbhbguqv"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_017sccq98YdbYaENzbhbguqv"
+      },
+      {
+        "event": "delta",
+        "text": "done — `"
+      },
+      {
+        "event": "delta",
+        "text": "d"
+      },
+      {
+        "event": "delta",
+        "text": "2`, `d3`,"
+      },
+      {
+        "event": "delta",
+        "text": " `d4` were created; `"
+      },
+      {
+        "event": "delta",
+        "text": "mkdir -p d1"
+      },
+      {
+        "event": "delta",
+        "text": "` was denied and"
+      },
+      {
+        "event": "delta",
+        "text": " not retried, so `d1"
+      },
+      {
+        "event": "delta",
+        "text": "` does not exist."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgtcepeqB54NWProwvQMo-0",
+        "text": "done — `d2`, `d3`, `d4` were created; `mkdir -p d1` was denied and not retried, so `d1` does not exist."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-2-approvals.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "acceptEdits",
+        "event": "session.info",
+        "model": "Fable 5.2"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "notes.txt +1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01JKPV7PJrag9r2r2PxE4qLN"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01JKPV7PJrag9r2r2PxE4qLN"
+      },
+      {
+        "detail": "/w/proj/README.md",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01A3zoNsf5jeShKnt78UQKRg"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01A3zoNsf5jeShKnt78UQKRg"
+      },
+      {
+        "detail": "README.md +1 -1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01WRJNN6eZcnh6rZnPZtz9fA"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01WRJNN6eZcnh6rZnPZtz9fA"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011Cgtcfhp64CbwgP8GUZ7Mh-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-3-edit.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "acceptEdits",
+        "event": "session.info",
+        "model": "Fable 5.2"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "sleep 25; echo finished",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_014dHZEUUDr7kJAoSJeDV9R9"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_014dHZEUUDr7kJAoSJeDV9R9"
+      },
+      {
+        "detail": "sleep 25; echo finished",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01S3Zisz6bNmbbNzvbQNR9sQ"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01S3Zisz6bNmbbNzvbQNR9sQ"
+      },
+      {
+        "event": "delta",
+        "text": "The fo"
+      },
+      {
+        "event": "delta",
+        "text": "reground run"
+      },
+      {
+        "event": "delta",
+        "text": " was blocked (the"
+      },
+      {
+        "event": "delta",
+        "text": " harness refuses a"
+      },
+      {
+        "event": "delta",
+        "text": " foreground `sleep`"
+      },
+      {
+        "event": "delta",
+        "text": "), so the command is now running in"
+      },
+      {
+        "event": "delta",
+        "text": " the background (ID `bk"
+      },
+      {
+        "event": "delta",
+        "text": "t0wjjli`)."
+      },
+      {
+        "event": "delta",
+        "text": " It has not"
+      },
+      {
+        "event": "delta",
+        "text": " finished yet, so there is"
+      },
+      {
+        "event": "delta",
+        "text": " no output to report —"
+      },
+      {
+        "event": "delta",
+        "text": " I'll give"
+      },
+      {
+        "event": "delta",
+        "text": " you the output once the"
+      },
+      {
+        "event": "delta",
+        "text": " completion notification arrives."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgtcgS2bL2RsaStj5uqvm-0",
+        "text": "The foreground run was blocked (the harness refuses a foreground `sleep`), so the command is now running in the background (ID `bkt0wjjli`). It has not finished yet, so there is no output to report — I'll give you the output once the completion notification arrives."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-4-background.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "acceptEdits",
+        "event": "session.info",
+        "model": "Fable 5.2"
+      },
+      {
+        "choices": [
+          "hello",
+          "hi"
+        ],
+        "event": "clarify.request",
+        "question": "Which greeting should go in greet.txt?",
+        "request_id": "6914fd1b-59bd-4aea-9faa-ec411db07466"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01TuwozBufcN64KyjBsPxx7Y"
+      },
+      {
+        "event": "delta",
+        "text": "hello"
+      },
+      {
+        "event": "message",
+        "id": "msg_011Cgtch1h9LCGW6CCaVWVqJ-0",
+        "text": "hello"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-5-question.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "acceptEdits",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "detail": "definitely-not-a-command-xyz --flag; echo \"exit=$?\"",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01Qx26NFejnG3STuY9X7Gdm9"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "definitely-not-a-command-xyz --flag; echo \"exit=$?\"",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "79ccb023-3d46-4b1b-ab39-a2d702a91b80",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01Qx26NFejnG3STuY9X7Gdm9"
+      },
+      {
+        "event": "delta",
+        "text": "exit code 127 (command"
+      },
+      {
+        "event": "delta",
+        "text": " not found)."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgtchQ1abJXCe8uZJFZmg-0",
+        "text": "exit code 127 (command not found)."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-6-error.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "bc03da85-b58e-4e10-81a0-6a7ee39a6d01",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Opus 5.5"
+      },
+      {
+        "error": "Claude Code is not signed in. Sign in from Settings › Accounts (or open Terminal and run /login), then Restart.",
+        "event": "turn.end",
+        "outcome": "error"
+      }
+    ],
+    "name": "claude-signed-out.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "`"
+      },
+      {
+        "event": "delta",
+        "text": "notes.txt`, which"
+      },
+      {
+        "event": "delta",
+        "text": " I created"
+      },
+      {
+        "event": "delta",
+        "text": " with the"
+      },
+      {
+        "event": "delta",
+        "text": " Write tool in the work-"
+      },
+      {
+        "event": "delta",
+        "text": "claude directory."
+      },
+      {
+        "event": "delta",
+        "text": " I also made"
+      },
+      {
+        "event": "delta",
+        "text": " the direct"
+      },
+      {
+        "event": "delta",
+        "text": "ories `d2`, `d"
+      },
+      {
+        "event": "delta",
+        "text": "3`, and `d4`"
+      },
+      {
+        "event": "delta",
+        "text": ", but those"
+      },
+      {
+        "event": "delta",
+        "text": " are not files."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgtdcdXepAVW4BqvtKf6t-0",
+        "text": "`notes.txt`, which I created with the Write tool in the work-claude directory. I also made the directories `d2`, `d3`, and `d4`, but those are not files."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "python3 -c \"import time; time.sleep(30); print('finished')\"",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01TUSFsTgYsLmoVcDovAoqsx"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "python3 -c \"import time; time.sleep(30); print('finished')\"",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "127b0367-255c-4f44-a902-f84ea6e3cd71",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_01TUSFsTgYsLmoVcDovAoqsx"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "interrupted"
+      }
+    ],
+    "name": "claude-4-stop.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      }
+    ],
+    "name": "claude-7-model.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "`"
+      },
+      {
+        "event": "delta",
+        "text": "notes.txt`, which"
+      },
+      {
+        "event": "delta",
+        "text": " I created"
+      },
+      {
+        "event": "delta",
+        "text": " with the"
+      },
+      {
+        "event": "delta",
+        "text": " Write tool in the work-"
+      },
+      {
+        "event": "delta",
+        "text": "claude directory."
+      },
+      {
+        "event": "delta",
+        "text": " I also made"
+      },
+      {
+        "event": "delta",
+        "text": " the direct"
+      },
+      {
+        "event": "delta",
+        "text": "ories `d2`, `d"
+      },
+      {
+        "event": "delta",
+        "text": "3`, and `d4`"
+      },
+      {
+        "event": "delta",
+        "text": ", but those"
+      },
+      {
+        "event": "delta",
+        "text": " are not files."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgtdcdXepAVW4BqvtKf6t-0",
+        "text": "`notes.txt`, which I created with the Write tool in the work-claude directory. I also made the directories `d2`, `d3`, and `d4`, but those are not files."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-8-resume.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "detail": "python3 -c \"import time; time.sleep(30); print('finished again')\"",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_016BwKwoPjmXksxMHiprfpAS"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "python3 -c \"import time; time.sleep(30); print('finished again')\"",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "4e2aeeee-a163-4b48-96ed-6f5f65c753f0",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_016BwKwoPjmXksxMHiprfpAS"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "ended"
+      }
+    ],
+    "name": "claude-10-close.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e0c8f4087d09ff35d592503294d",
+        "text": "2 + 2 = 4."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-1-plain.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " four"
+      },
+      {
+        "event": "delta",
+        "text": " commands"
+      },
+      {
+        "event": "delta",
+        "text": " in"
+      },
+      {
+        "event": "delta",
+        "text": " order"
+      },
+      {
+        "event": "delta",
+        "text": ","
+      },
+      {
+        "event": "delta",
+        "text": " with"
+      },
+      {
+        "event": "delta",
+        "text": " one"
+      },
+      {
+        "event": "delta",
+        "text": " tool"
+      },
+      {
+        "event": "delta",
+        "text": " call"
+      },
+      {
+        "event": "delta",
+        "text": " for"
+      },
+      {
+        "event": "delta",
+        "text": " each"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e11219c87d0a405bf0b604b5fa8",
+        "text": "I’ll run the four commands in order, with one tool call for each."
+      },
+      {
+        "detail": "mkdir -p d1",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-4bf965f5-22d8-4627-83f9-e029205a6dc7"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d1",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-0",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "exec-4bf965f5-22d8-4627-83f9-e029205a6dc7"
+      },
+      {
+        "detail": "mkdir -p d2",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-68709aa1-19e4-4d21-9923-9777ded7f1c0"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d2",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-1",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-68709aa1-19e4-4d21-9923-9777ded7f1c0"
+      },
+      {
+        "detail": "mkdir -p d3",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-a3214463-cfb7-49fe-a20d-48025d660191"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d3",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-2",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-a3214463-cfb7-49fe-a20d-48025d660191"
+      },
+      {
+        "detail": "mkdir -p d4",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-871c7319-cf8f-4339-ae6a-e9fe7aa88220"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "mkdir -p d4",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-3",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-871c7319-cf8f-4339-ae6a-e9fe7aa88220"
+      },
+      {
+        "event": "delta",
+        "text": "done"
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e19b8bc87d09cd0140ee1ee63ae",
+        "text": "done"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-2-approvals.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " create"
+      },
+      {
+        "event": "delta",
+        "text": " notes"
+      },
+      {
+        "event": "delta",
+        "text": ".txt"
+      },
+      {
+        "event": "delta",
+        "text": " with"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " requested"
+      },
+      {
+        "event": "delta",
+        "text": " line"
+      },
+      {
+        "event": "delta",
+        "text": " using"
+      },
+      {
+        "event": "delta",
+        "text": " apply"
+      },
+      {
+        "event": "delta",
+        "text": "_patch"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e1dd58c87d0b20bba17cefa9650",
+        "text": "I’ll create notes.txt with the requested line using apply_patch."
+      },
+      {
+        "detail": "notes.txt +1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "exec-52a9e30f-3b40-4d04-bec1-810dd532c4bc"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-4",
+        "title": "Allow Codex to change notes.txt?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-52a9e30f-3b40-4d04-bec1-810dd532c4bc"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e20b5c887d097324b1f172fdd6c",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-3-edit.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "choices": [
+          "hello",
+          "hi"
+        ],
+        "event": "clarify.request",
+        "question": "Which greeting should I put in greet.txt?",
+        "request_id": "call_ca2f656324d2452f86b6779d00a43c56"
+      },
+      {
+        "detail": "60s",
+        "event": "tool.start",
+        "name": "Waiting",
+        "tool_id": "call_7a9e6021a44749b88b5c6cd67f9c3b45"
+      },
+      {
+        "event": "tool.end",
+        "ms": 60000,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_7a9e6021a44749b88b5c6cd67f9c3b45"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " wait"
+      },
+      {
+        "event": "delta",
+        "text": " for"
+      },
+      {
+        "event": "delta",
+        "text": " your"
+      },
+      {
+        "event": "delta",
+        "text": " answer"
+      },
+      {
+        "event": "delta",
+        "text": " before"
+      },
+      {
+        "event": "delta",
+        "text": " writing"
+      },
+      {
+        "event": "delta",
+        "text": " greet"
+      },
+      {
+        "event": "delta",
+        "text": ".txt"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e69f21c87d0835d4f2263037b9a",
+        "text": "I’ll wait for your answer before writing greet.txt."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-5-question.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " and"
+      },
+      {
+        "event": "delta",
+        "text": " check"
+      },
+      {
+        "event": "delta",
+        "text": " its"
+      },
+      {
+        "event": "delta",
+        "text": " exit"
+      },
+      {
+        "event": "delta",
+        "text": " code"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e722f0487d08684e96b3df780a1",
+        "text": "I’ll run the command and check its exit code."
+      },
+      {
+        "detail": "definitely-not-a-command-xyz --flag",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-057fbf1e-ff57-41e8-ae76-f1da73b6b568"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "definitely-not-a-command-xyz --flag",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-6",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "exec-057fbf1e-ff57-41e8-ae76-f1da73b6b568"
+      },
+      {
+        "event": "delta",
+        "text": "Exit"
+      },
+      {
+        "event": "delta",
+        "text": " code"
+      },
+      {
+        "event": "delta",
+        "text": ":"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "127"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e74077487d09bdcd51da3c7c797",
+        "text": "Exit code: 127."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-6-error.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 2/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 3/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 4/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 5/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 1/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 2/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 3/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 4/5"
+      },
+      {
+        "event": "status",
+        "text": "Reconnecting... 5/5"
+      },
+      {
+        "error": "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.",
+        "event": "turn.end",
+        "outcome": "error"
+      }
+    ],
+    "name": "codex-signed-out.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " and"
+      },
+      {
+        "event": "delta",
+        "text": " report"
+      },
+      {
+        "event": "delta",
+        "text": " its"
+      },
+      {
+        "event": "delta",
+        "text": " output"
+      },
+      {
+        "event": "delta",
+        "text": " when"
+      },
+      {
+        "event": "delta",
+        "text": " it"
+      },
+      {
+        "event": "delta",
+        "text": " finishes"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e237e6487d0ac3c157813026f8e",
+        "text": "I’ll run the command and report its output when it finishes."
+      },
+      {
+        "detail": "sleep 30; echo finished",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-dd31207a-d8f2-4c1a-9a88-043766e5c9f5"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "sleep 30; echo finished",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "codex-5",
+        "title": "Run this command?"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "interrupted"
+      }
+    ],
+    "name": "codex-4-stop.jsonl"
+  },
+  {
+    "agent": "codex",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6.1-sol"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6.1-Sol"
+      },
+      {
+        "event": "session.info",
+        "model": "GPT-6-Astra"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "sw"
+      },
+      {
+        "event": "delta",
+        "text": "itched"
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e6f793487d0bd636e6d7a8d9a6c",
+        "text": "switched"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-7-model.jsonl"
+  },
+  {
+    "agent": "codex-resume",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
+        "approval": "untrusted",
+        "event": "session.info",
+        "model": "gpt-6-astra"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.models",
+        "options": []
+      },
+      {
+        "event": "session.info",
+        "model": "gpt-6-astra"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": " created"
+      },
+      {
+        "event": "delta",
+        "text": " `"
+      },
+      {
+        "event": "delta",
+        "text": "notes"
+      },
+      {
+        "event": "delta",
+        "text": ".txt"
+      },
+      {
+        "event": "delta",
+        "text": "`"
+      },
+      {
+        "event": "delta",
+        "text": " containing"
+      },
+      {
+        "event": "delta",
+        "text": " `"
+      },
+      {
+        "event": "delta",
+        "text": "hello"
+      },
+      {
+        "event": "delta",
+        "text": " from"
+      },
+      {
+        "event": "delta",
+        "text": " qa"
+      },
+      {
+        "event": "delta",
+        "text": "`."
+      },
+      {
+        "event": "message",
+        "id": "msg_0761ca4f7d6831e2016af2a04dad7c87d08963ebb08a494214",
+        "text": "I created `notes.txt` containing `hello from qa`."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-8-resume.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omo-1-plain.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "4. "
+      },
+      {
+        "event": "delta",
+        "text": "(model "
+      },
+      {
+        "event": "delta",
+        "text": "stub-a)"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "4. (model stub-a)"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omp-1-plain.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "ls -la",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_0"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "ls -la",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "15c83d5cc8f4cc2c",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "call_bash_0"
+      },
+      {
+        "detail": "echo hi",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_1"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "echo hi",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "15c83d5ccab4cc2d",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_bash_1"
+      },
+      {
+        "detail": "pwd",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_2"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "pwd",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "15c83d5cdb74cc2e",
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_bash_2"
+      },
+      {
+        "event": "delta",
+        "text": "done"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "done"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omp-2-approvals.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "notes.txt +1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "call_write_0"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "15c83d5cf3b4cc30",
+        "title": "Allow write to change notes.txt?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_write_0"
+      },
+      {
+        "detail": "README.md",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "call_edit_1"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "15c83d5cf834cc31",
+        "title": "Allow edit to change files?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "call_edit_1"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omp-3-edit.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "Which "
+      },
+      {
+        "event": "delta",
+        "text": "greeting "
+      },
+      {
+        "event": "delta",
+        "text": "should "
+      },
+      {
+        "event": "delta",
+        "text": "go "
+      },
+      {
+        "event": "delta",
+        "text": "in "
+      },
+      {
+        "event": "delta",
+        "text": "greet.txt: "
+      },
+      {
+        "event": "delta",
+        "text": "hello "
+      },
+      {
+        "event": "delta",
+        "text": "or "
+      },
+      {
+        "event": "delta",
+        "text": "hi?"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "Which greeting should go in greet.txt: hello or hi?"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omp-5-question.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "definitely-not-a-command-xyz --flag",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "delta",
+        "text": "exit "
+      },
+      {
+        "event": "delta",
+        "text": "code "
+      },
+      {
+        "event": "delta",
+        "text": "127 "
+      },
+      {
+        "event": "delta",
+        "text": "(command "
+      },
+      {
+        "event": "delta",
+        "text": "not "
+      },
+      {
+        "event": "delta",
+        "text": "found)"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "exit code 127 (command not found)"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omp-6-error.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "sleep 30; echo finished",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "interrupted"
+      }
+    ],
+    "name": "omp-4-running.jsonl"
+  },
+  {
+    "agent": "omp",
+    "events": [
+      {
+        "agent_session": "01a1c3c0-1dd1-7281-9299-5eded6b35082",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "Stub B"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "4. "
+      },
+      {
+        "event": "delta",
+        "text": "(model "
+      },
+      {
+        "event": "delta",
+        "text": "stub-b)"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "4. (model stub-b)"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omp-7-model.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "4. "
+      },
+      {
+        "event": "delta",
+        "text": "(model "
+      },
+      {
+        "event": "delta",
+        "text": "stub-a)"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "4. (model stub-a)"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "pi-1-plain.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "ls -la",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_bash_0"
+      },
+      {
+        "detail": "echo hi",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_1"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_bash_1"
+      },
+      {
+        "detail": "pwd",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_2"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_bash_2"
+      },
+      {
+        "event": "delta",
+        "text": "done"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "done"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "pi-2-tools.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "notes.txt +1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "call_write_0"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_write_0"
+      },
+      {
+        "detail": "README.md +1 -1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "call_edit_1"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "call_edit_1"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "pi-3-edit.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "Which "
+      },
+      {
+        "event": "delta",
+        "text": "greeting "
+      },
+      {
+        "event": "delta",
+        "text": "should "
+      },
+      {
+        "event": "delta",
+        "text": "go "
+      },
+      {
+        "event": "delta",
+        "text": "in "
+      },
+      {
+        "event": "delta",
+        "text": "greet.txt: "
+      },
+      {
+        "event": "delta",
+        "text": "hello "
+      },
+      {
+        "event": "delta",
+        "text": "or "
+      },
+      {
+        "event": "delta",
+        "text": "hi?"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "Which greeting should go in greet.txt: hello or hi?"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "pi-5-question.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "definitely-not-a-command-xyz --flag",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "delta",
+        "text": "exit "
+      },
+      {
+        "event": "delta",
+        "text": "code "
+      },
+      {
+        "event": "delta",
+        "text": "127 "
+      },
+      {
+        "event": "delta",
+        "text": "(command "
+      },
+      {
+        "event": "delta",
+        "text": "not "
+      },
+      {
+        "event": "delta",
+        "text": "found)"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "exit code 127 (command not found)"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "pi-6-error.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "detail": "sleep 30; echo finished",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "call_bash_0"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "interrupted"
+      }
+    ],
+    "name": "pi-4-running.jsonl"
+  },
+  {
+    "agent": "pi",
+    "events": [
+      {
+        "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "event": "session.info",
+        "model": "Stub A"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "stub",
+            "id": "stub/stub-a",
+            "label": "Stub A"
+          },
+          {
+            "detail": "stub",
+            "id": "stub/stub-b",
+            "label": "Stub B"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "Stub B"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "4. "
+      },
+      {
+        "event": "delta",
+        "text": "(model "
+      },
+      {
+        "event": "delta",
+        "text": "stub-b)"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "4. (model stub-b)"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "pi-7-model.jsonl"
+  },
+  {
+    "agent": "pi-noauth",
+    "events": [
+      {
+        "agent_session": "01a1c3b9-9fa8-7324-a15c-615875b6d647",
+        "event": "session.info",
+        "model": ""
+      },
+      {
+        "event": "session.models",
+        "options": []
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "error": "pi is not signed in. Open Terminal and run /login, then Restart.",
+        "event": "turn.end",
+        "outcome": "error"
+      }
+    ],
+    "name": "pi-signed-out.jsonl"
+  }
+]

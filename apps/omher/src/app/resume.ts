@@ -4,7 +4,7 @@
 // folder, account, view, the agent's own conversation id, whether it was running, and the last messages of its
 // chat, which omher draws itself). These functions are pure; resumeBoot.ts reads, writes and applies them.
 import type { PanelTabId } from "../state/store";
-import { isAgentId, type AgentId } from "../sessions/agents";
+import { CONTINUES, isAgentId, type AgentId } from "../sessions/agents";
 
 export const RESUME_KEY = "omher.resume";
 export const RESUME_VERSION = 1;
@@ -198,6 +198,7 @@ export function buildResume(i: ResumeInput, now: number): ResumeSnap {
   };
 }
 
-/** Claude Code and Codex chats continue their own conversation by themselves; anything else waits for Resume. */
+/** Chats whose agent continues a conversation (Claude Code, Codex, OmO: `CONTINUES`) continue it by themselves
+ *  after a restart; anything else waits for Resume. The caller checks the agent runs as a chat on this machine. */
 export const continuesItself = (s: Pick<SavedSession, "agent" | "view" | "agentSession">): boolean =>
-  (s.agent === "claude" || s.agent === "codex") && !!s.agentSession;
+  CONTINUES.includes(s.agent) && !!s.agentSession;

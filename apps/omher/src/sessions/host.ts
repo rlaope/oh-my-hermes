@@ -412,6 +412,26 @@ class MockChat {
         this.at(60, () => this.end("error", `${agentDef(this.agent).label} is not signed in. Sign in from Settings › Accounts, then Restart.`));
         return;
       }
+      if (text === "/die") {
+        // the program dies mid-turn with nothing more on its stdout (a crash before the shell saw the turn)
+        this.at(60, () => this.emit({ event: "delta", text: "partial" }));
+        this.at(120, () => {
+          this.stop();
+          this.turn = false;
+          this.emit({ event: "exit", code: null, error: "" });
+        });
+        return;
+      }
+      if (text.endsWith("/late")) {
+        // OmO (omo-1-plain.jsonl): the answer, the turn's end, then a status of its own (`setStatus`) after it
+        this.say("ok", 60);
+        this.at(400, () => {
+          this.end("done"); // clears the pending timers: the late events are scheduled after it
+          this.at(50, () => this.emit({ event: "status", text: "mem:khope-sionic-ai-d09472c9 9d ago (+1)" }));
+          this.at(100, () => this.emit({ event: "thinking" }));
+        });
+        return;
+      }
       if (text.startsWith("/slow")) {
         for (let k = 0; k < 40; k++) this.at(100 + k * 250, () => this.emit({ event: "delta", text: `line ${k + 1}\n` }));
         return;
