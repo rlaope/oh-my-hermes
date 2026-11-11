@@ -442,6 +442,20 @@ All notable changes will be documented here.
   Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
   Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
 
+- **A SESSIONS chat in omher takes files, as the bot chat does.** Paste, the
+  `+` menu and a drop on the chat now attach files in a Claude Code, Codex,
+  OmO, pi or oh-my-pi chat, in a draft too (its first send starts the agent
+  with them), with the bot chat's chips, limits (20 files, 100 MB) and error
+  texts; a file that cannot be saved sends nothing and keeps the chips. Each
+  file is saved under `~/.omher/session-files/<session>/`, never in the
+  project or a Hermes profile, and removed when the session closes. A
+  picture reaches the agent as its own image input (Claude Code's base64
+  image content, Codex's `localImage`, the rpc `prompt`'s `images`); any
+  other file is named in the message by its saved path. The sent bubble
+  keeps its files after omher restarts, and a file dropped on a session's
+  terminal is saved and its quoted path typed at the prompt. An
+  oh-my-hermes session takes no files (BOUNDARY rule 26).
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

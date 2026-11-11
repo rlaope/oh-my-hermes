@@ -2392,6 +2392,64 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// The real attach check: a picture with a word in it and a small text file, saved and resolved exactly as a
+    /// SESSIONS chat does (`session_files::save`, `Input::resolve`, the adapter's own image input; the text file
+    /// named by its saved path), sent to the real agent in a temp folder. Approvals are answered `once`. Needs the
+    /// agent installed and signed in: `OMHER_REAL_AGENT=codex cargo test real_agent_reads_attached_files --
+    /// --ignored --nocapture` (claude, codex or omo; default claude).
+    #[test]
+    #[ignore]
+    fn real_agent_reads_attached_files() {
+        let agent = std::env::var("OMHER_REAL_AGENT").unwrap_or_else(|_| "claude".into());
+        let base = std::env::temp_dir().join(format!("omher-real-attach-{agent}-{}", std::process::id()));
+        let (home, dir) = (base.join("home"), base.join("proj"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        let (home, dir) = (home.canonicalize().unwrap(), dir.canonicalize().unwrap());
+        let png = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/real/word.png")).unwrap();
+        let pic = session_files::save(&home, "s1", "word.png", &png).unwrap();
+        let txt = session_files::save(&home, "s1", "notes.txt", b"alpha line\nthe second line is cobalt-42\ngamma line\n").unwrap();
+        // what the UI sends (attach.ts wireText): the typed text, then the non-picture file by its saved path
+        let text = format!(
+            "1) What word is written in the attached picture? 2) What is the second line of the attached text file? Answer as: picture=<word>; line2=<line>\n\nAttached file (a copy omher saved; open it with your tools):\n- {}",
+            txt.display()
+        );
+        let mut input = Input::Send { text, images: vec![Picture::from(pic.to_string_lossy().into_owned())] };
+        input.resolve(&home).unwrap();
+        let c = Arc::new(ChatSessions::default());
+        let out = Arc::new(Mutex::new(Vec::<ChatOut>::new()));
+        let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
+        let me2 = me.clone();
+        let id = c
+            .start_agent(&agent, &dir, None, &[], move |x| {
+                if let ChatOut::Event(e) = &x {
+                    if s(e, "event") == "approval.request" {
+                        println!("approval {} {}", s(e, "title"), s(e, "command"));
+                        let (c3, rid, id) = (c2.clone(), s(e, "request_id"), *me2.lock().unwrap());
+                        thread::spawn(move || {
+                            let _ = c3.input(id, Input::Approve { request_id: rid, choice: "once".into() });
+                        });
+                    }
+                }
+                o.lock().unwrap().push(x);
+            })
+            .unwrap();
+        *me.lock().unwrap() = id;
+        c.input(id, input).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(240);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
+            thread::sleep(Duration::from_millis(100));
+        }
+        let got = out.lock().unwrap().clone();
+        let msgs: Vec<String> = got.iter().filter_map(|x| match x { ChatOut::Event(e) if s(e, "event") == "message" => Some(s(e, "text")), _ => None }).collect();
+        println!("{agent} answered: {msgs:?}");
+        c.close(id);
+        thread::sleep(Duration::from_millis(500));
+        let all = msgs.join(" ").to_lowercase();
+        let _ = std::fs::remove_dir_all(&base);
+        assert!(all.contains("marigold") && all.contains("cobalt-42"), "{got:?}");
+    }
+
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the
     /// same allow-list, adapter and pipes a session uses. Needs claude installed and signed in, and spends a
     /// tiny turn: `cargo test real_claude_chat_replies_ok -- --ignored --nocapture`.
