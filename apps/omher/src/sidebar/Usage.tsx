@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import type { UsageProvider } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { AgentIcon } from "../ui";
-import { PROVIDER_NAME, meterDot, meterLabel, planText, ringLevel, stateText, topPercent, windowRow } from "./usageFormat";
+import { PROVIDER_NAME, accountRow, meterDot, meterLabel, planText, ringLevel, stateText, topPercent, windowRow } from "./usageFormat";
 
 const REFRESH_MS = 60_000;
 const R = 11.5;
@@ -63,6 +63,20 @@ function Card({ p, now, caret }: { p: UsageProvider; now: number; caret: number 
             </div>
           );
         })
+      )}
+      {p.accounts && p.accounts.length > 1 && (
+        <div className="uc-accts" data-testid="usage-accounts">
+          <div className="uc-ah">{p.accounts.length} logins</div>
+          {p.accounts.map((a, i) => {
+            const [who, what] = accountRow(a, now);
+            return (
+              <div className="uc-a" key={i} data-testid="usage-account" data-source={a.source} data-state={a.state}>
+                <span className="uc-who" title={who}>{who}</span>
+                <span className={`uc-state st-${a.state}`}>{what}</span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

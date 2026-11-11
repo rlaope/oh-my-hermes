@@ -67,6 +67,25 @@ test("one mark per provider above the user row; rings only where the source gave
   expect(ops).toContain("usage.read");
 });
 
+
+test("Claude with five logins: the card lists each with only its own record, never a % it did not give", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("usage-claude").hover();
+  const card = page.getByTestId("usage-card");
+  await expect(card.getByTestId("usage-accounts")).toContainText("5 logins");
+  const rows = card.getByTestId("usage-account");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.locator(".uc-who")).toHaveText(["owner@example.com", "ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"]);
+  await expect(rows.first().locator(".uc-state")).toHaveText(/^Limited until \d\d:\d\d$/);
+  await expect(rows.nth(1).locator(".uc-state")).toHaveText("No record");
+  await expect(card.getByTestId("usage-accounts")).not.toContainText("%");
+  // the meter itself is unchanged: one Claude mark, no ring (Claude Code gives no %)
+  await expect(page.getByTestId("usage-claude")).toHaveCount(1);
+  await expect(page.getByTestId("usage-claude").locator(".usage-ring")).toHaveCount(0);
+  // Codex has one login: no list
+  await page.getByTestId("usage-codex").hover();
+  await expect(page.getByTestId("usage-card").getByTestId("usage-accounts")).toHaveCount(0);
+});
 test("hover shows the card: plan, then each window with % and reset", async ({ page }) => {
   await open(page);
   await page.getByTestId("usage-codex").hover();
