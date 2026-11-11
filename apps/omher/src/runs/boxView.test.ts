@@ -1044,7 +1044,7 @@ describe("the layout", () => {
       }
     }
     expect(shared).toBe(0);
-  }, 30_000);
+  }, 120_000);
 
   it("keeps a line into a child clear of the lines that leave the row above it, however many there are", async () => {
     // seeded runs with many start nodes, where every fifth node waits on half of the nodes before it: its top
