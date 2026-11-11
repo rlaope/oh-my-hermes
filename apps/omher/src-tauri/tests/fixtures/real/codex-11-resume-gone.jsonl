@@ -1,0 +1,7 @@
+{"id":1,"result":{"userAgent":"omher/0.167.0-alpha.3.2 (Mac OS 26.6.2; arm64) unknown (omher; 0.2.4)","codexHome":"/home/u/.codex","platformFamily":"unix","platformOs":"macos"}}
+{"method":"configWarning","params":{"summary":"Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  user (/home/u/.codex/config.toml): `mcp_servers.playwright.type` is ignored.","details":null},"emittedAtMs":1794412025489}
+{"method":"remoteControl/status/changed","params":{"status":"disabled","serverName":"mac.local","installationId":"00000000-0000-4000-8000-000000000000","environmentId":null},"emittedAtMs":1794412025489}
+{"id":3,"result":{"data":[{"id":"gpt-6.1-sol","model":"gpt-6.1-sol","displayName":"GPT-6.1-Sol","description":"Latest workhorse model for coding and everyday work.","hidden":false},{"id":"gpt-6.1-terra","model":"gpt-6.1-terra","displayName":"GPT-6.1 Terra","description":"GPT-6.1 Terra Codex model.","hidden":false}]}}
+{"error":{"code":-32600,"message":"no rollout found for thread id 0badbeef-0000-4000-8000-000000000000"},"id":2}
+{"method":"account/updated","params":{"authMode":"chatgpt","planType":"self_serve_business_prolite"},"emittedAtMs":1794412026286}
+{"id":4,"result":{"thread":{"id":"01a1cb4b-0d4e-7751-aae4-9d65216fa4e6","name":null,"cwd":"/w/proj"},"model":"gpt-6.1-sol","approvalPolicy":"never","sandbox":{"type":"dangerFullAccess"}}}

@@ -888,6 +888,10 @@ export const zh: Record<Key, string> = {
   "ss.session": "会话",
   "ss.hermesClosed": "Hermes 关闭了这个聊天",
   "ss.modelNotChanged": "模型未更改：{error}",
+  "ss.noChatMode": "{agent} 没有以聊天模式响应，可能是旧版本：{install}",
+  "ss.newConversation": "没有找到之前的对话，已在这里开始新对话。",
+  "ss.modelNext": "下一轮：{model}",
+  "ss.modelNextTip": "当前这一轮继续使用 {model}，所选模型从下一轮开始生效",
 
   // resolved cards, errors, run prefills, link chip words (i18n 0.2.5)
   "card.allowedOnce": "已允许一次",

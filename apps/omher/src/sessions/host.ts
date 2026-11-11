@@ -176,6 +176,10 @@ type MockGlobals = {
   __omherMockAgents?: AgentId[];
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
+  /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
+  __omherMockNoChat?: AgentId[];
+  /** e2e: the Codex thread a chat resumes is gone (deleted or archived): the shell starts a new one */
+  __omherMockGoneThreads?: boolean;
 };
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
@@ -260,7 +264,10 @@ export class MockHost implements SessionHost {
   async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string) {
     const id = ++this.next;
     this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
-    const c = new MockChat(agent, onEvent, resume, cwd);
+    const c = new MockChat(agent, onEvent, resume, cwd, {
+      noChat: !!this.g.__omherMockNoChat?.includes(agent),
+      gone: agent === "codex" && !!resume && !!this.g.__omherMockGoneThreads,
+    });
     this.chats.set(id, c);
     c.boot();
     return id;
@@ -320,18 +327,29 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
 
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
  *  Esc; `/exit` ends the program; `/title <name>` names the conversation as the agent; anything else gets a
- *  short answer after one tool step. */
+ *  short answer after one tool step. `noChat`: an old version that never speaks its chat protocol, ended by the
+ *  shell's start deadline (shortened here). `gone`: a Codex resume onto a thread that no longer exists. */
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
   private seq = 0;
   private waiting: string | null = null;
   private model: string;
+  /** a model picked while a turn ran (Claude Code): the next turn's init confirms it */
+  private next = "";
   private session: string;
-  constructor(private agent: AgentId, private emit: (ev: ChatEvent) => void, resume?: string, private cwd = "") {
+  private dead = false;
+  constructor(
+    private agent: AgentId,
+    private emit: (ev: ChatEvent) => void,
+    resume?: string,
+    private cwd = "",
+    private how: { noChat?: boolean; gone?: boolean } = {},
+  ) {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
+    if (how.gone) this.session = `codex-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     // DeepSeek Harness names its session `session-<uuid>` and reports no model in its headless stream
     if (agent === "dsh") {
       if (!resume) this.session = "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8";
@@ -342,7 +360,22 @@ class MockChat {
     this.timers.push(setTimeout(fn, ms));
   }
   boot() {
+    if (this.how.noChat) {
+      // the shell's start deadline (agent_chat.rs START_DEADLINE): no protocol line came, so it ends the session
+      const why = `${agentDef(this.agent).label} did not answer in chat mode; it may be an old version: update it, then Restart.`;
+      this.timers.push(
+        setTimeout(() => {
+          this.dead = true;
+          this.emit({ event: "session.error", kind: "no_chat_mode", message: why });
+          if (this.turn) this.emit({ event: "turn.end", outcome: "error", error: why });
+          this.turn = false;
+          this.emit({ event: "exit", code: null, error: why });
+        }, 600),
+      );
+      return;
+    }
     this.at(20, () => {
+      if (this.how.gone) this.emit({ event: "session.note", kind: "new_conversation", text: "The earlier Codex conversation was not found; a new one started." });
       this.emit({ event: "session.info", agent_session: this.session, ...(this.model ? { model: this.model } : {}) });
       this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
     });
@@ -365,11 +398,19 @@ class MockChat {
     this.at(at + 240, () => this.emit({ event: "message", id: `m${++this.seq}`, text }));
   }
   input(i: ChatInput) {
+    if (this.dead) throw new Error("the session has ended");
     if (i.kind === "send") {
       if (!this.turn) {
         this.turn = true;
         this.emit({ event: "turn.start" });
+        if (this.next) {
+          // the turn's init: it runs on the model picked during the last one
+          this.model = this.next;
+          this.next = "";
+          this.emit({ event: "session.info", model: this.model, model_next: "" });
+        }
       }
+      if (this.how.noChat) return; // the old program reads it and says nothing
       const text = i.text.trim();
       if (text === "/exit") {
         this.at(30, () => {
@@ -463,6 +504,12 @@ class MockChat {
     } else if (i.kind === "model") {
       const m = (MOCK_MODELS[this.agent] ?? []).find((x) => x.id === i.model);
       if (!m) throw new Error(`unknown model ${i.model}`);
+      if (this.agent === "claude" && this.turn) {
+        // Claude Code keeps the running turn on its model: the pick is for the next turn
+        this.next = m.label === this.model ? "" : m.label;
+        this.timers.push(setTimeout(() => this.emit({ event: "session.info", model_next: this.next }), 20));
+        return;
+      }
       this.model = m.label;
       this.at(20, () => this.emit({ event: "session.info", model: this.model }));
     } else if (i.kind === "clarify") {
