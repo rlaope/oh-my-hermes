@@ -10,6 +10,7 @@ import { Sidebar } from "../sidebar/Sidebar";
 import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
 import { SettingsView } from "./SettingsView";
+import { AutomationsPage } from "../pages/Automations";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 
@@ -49,10 +50,12 @@ export function App() {
 
   return (
     <MentionContext.Provider value={mentions}>
-    <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window">
+    <div className={`window${panelOpen ? " panel-open" : ""}`} data-testid="window" lang={s.ui.lang}>
       <Sidebar />
       <main className="main">
-        {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "session" ? (
+        {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "automations" ? (
+          <AutomationsPage />
+                ) : s.ui.view === "session" ? (
           <Suspense fallback={null}>
             <SessionView />
           </Suspense>
