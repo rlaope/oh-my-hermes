@@ -354,7 +354,6 @@ test("a running terminal session's dot: 6px, solid, inside its tile, readable on
     );
     await open(page);
     await page.getByTestId("session-new").click();
-    await page.getByTestId("session-agent-pick").click();
     await page.getByTestId("session-agent-grok").click();
     await page.getByTestId("session-folder").click();
     await page.getByTestId("session-choose").click();

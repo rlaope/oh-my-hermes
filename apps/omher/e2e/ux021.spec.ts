@@ -34,7 +34,6 @@ async function open(page: Page, installed = ["claude", "codex", "omh"]) {
 async function start(page: Page, agent: string, folder: string) {
   await page.evaluate((f) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = f), folder);
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
@@ -130,16 +129,17 @@ test("U13: an agent that exits with code 0 reads Ended in grey, never Failed", a
 test("U14: a missing agent's Not installed tooltip carries its install line, as text only", async ({ page }) => {
   await open(page, ["claude"]);
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   const lines: Record<string, string> = {
     codex: "npm i -g @openai/codex",
+    omo: "npm i -g omo-ai",
+    dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
     pi: "npm i -g @mariozechner/pi-coding-agent",
     omp: "npm i -g @oh-my-pi/pi-coding-agent",
     grok: "see grok docs",
   };
   for (const [agent, line] of Object.entries(lines)) {
     const row = page.getByTestId(`session-agent-${agent}`);
-    await expect(row).toBeDisabled();
+    await expect(row).toHaveAttribute("aria-disabled", "true");
     await expect(row).toContainText("Not installed");
     await expect(row).toHaveAttribute("title", new RegExp(`${agent} was not found on this computer · .*${line.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`));
   }

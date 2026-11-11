@@ -1,19 +1,19 @@
-// SESSIONS in the sidebar: the `+` that opens a New session chat (agent and folder are picked in that chat, see
-// DraftPane in SessionView), and one row per session started in this run of the app. A draft row reads "New
+// SESSIONS in the sidebar: the `+` menu of agents (picking one opens its New session chat at once; the folder is
+// picked in that chat, see DraftPane in SessionView), and one row per session started in this run of the app. A draft row reads "New
 // session" over its folder until its first message. A chat row shows the bot row's live states: the
 // answer ring around the agent mark and the turn's elapsed time while a turn runs, and the amber dot with
 // "waiting" while one of its approvals or questions is open (the same asks the Needs-you strip lists). A
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
-import { CloseIcon, LiveRing, PlusIcon, TypingDots } from "../ui";
+import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { AgentMark } from "./AgentMark";
-import { agentDef, folderName, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
+import { agentDef, folderName, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
@@ -35,31 +35,136 @@ export function sessionAccountSuffix(groups: AccountGroup[] | null, agent: Agent
   return `as ${name}`;
 }
 
-/** Open a New session chat (the SESSIONS +, its empty-state row, the first-run card): an open draft is reused. */
-export function openNewSession(): void {
-  getSessions().draft();
+const openers = new Set<() => void>();
+/** Open the SESSIONS + menu from elsewhere (the first-run card's "New session"). */
+export function openNewSessionMenu(): void {
+  for (const f of [...openers]) f();
 }
 
 export function SessionsHeader() {
+  const [open, setOpen] = useState(false);
+  const plus = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const f = () => setOpen(true);
+    openers.add(f);
+    return () => {
+      openers.delete(f);
+    };
+  }, []);
   return (
     <div className="side-sh side-sh-row">
       <span>Sessions</span>
       <span className="ss-add">
-        <button type="button" className="ss-plus" aria-label="New session" title="New session" onClick={openNewSession} data-testid="session-new">
+        <button
+          ref={plus}
+          type="button"
+          className="ss-plus"
+          aria-label="New session"
+          title="New session"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          data-testid="session-new"
+        >
           <PlusIcon size={14} />
         </button>
+        {open && <NewSessionMenu onClose={() => setOpen(false)} trigger={plus} />}
       </span>
     </div>
   );
 }
 
-/** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
-const CODING: AgentId[] = ["claude", "codex", "pi", "omp", "grok"];
+/** The menu spans the section, 8px inside both sidebar edges. */
+const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
 
-/** The empty section: one "New session" row built like the sidebar's nav rows, opening a New session chat. What
- *  it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */
+/** The SESSIONS + menu: every agent with its mark and name, the installed ones first (the last one used on top),
+ *  the missing ones dimmed with their install line in the tooltip. Picking one opens its New session chat at once
+ *  (the folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
+function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: RefObject<HTMLButtonElement | null> }) {
+  const ss = useSessions();
+  const accounts = useAccounts();
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ss.agents === null) void getSessions().loadAgents();
+  }, [ss.agents]);
+  const agents = ss.agents ? menuOrder(ss.agents, ss.recent) : null;
+  // the first row takes the focus once the list is there (installed first, so it is the one Enter should pick)
+  const ready = agents !== null;
+  useEffect(() => {
+    if (ready) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+  }, [ready]);
+  const close = (why: "escape" | "outside" | "pick") => {
+    onClose();
+    if (why === "escape") trigger.current?.focus();
+  };
+  const pick = (id: AgentId) => {
+    close("pick");
+    getSessions().draft(id);
+  };
+  return (
+    <Popover open onClose={close} align="left" width={MENU_W} label="New session" className="ss-pop">
+      <div
+        ref={box}
+        role="menu"
+        aria-label="New session"
+        data-testid="session-menu"
+        onKeyDown={(e) => {
+          const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+          const i = items.indexOf(document.activeElement as HTMLButtonElement);
+          const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
+          if (to === null || !items.length) return;
+          e.preventDefault();
+          items[(to + items.length) % items.length]?.focus();
+        }}
+      >
+        <div className="ss-h">New session</div>
+        {agents === null && <div className="ss-empty">Looking for agents…</div>}
+        {(agents ?? []).map((a) => {
+          const def = agentDef(a.id);
+          const account = sessionAccountSuffix(accounts.groups, a.id);
+          const missing = !a.path;
+          return (
+            <button
+              key={a.id}
+              type="button"
+              role="menuitem"
+              className={`ss-item${missing ? " off" : ""}`}
+              aria-disabled={missing || undefined}
+              title={a.path ?? missingNote(a.id)}
+              onClick={() => {
+                if (!missing) pick(a.id);
+              }}
+              data-testid={`session-agent-${a.id}`}
+            >
+              <span className="ss-ic">
+                <AgentMark agent={a.id} />
+              </span>
+              <span className="ss-n ss-n-as" title={account ? `${def.label} ${account}` : def.label}>
+                <span className="ss-l">{def.label}</span>
+                {account && (
+                  <span className="ss-as" data-testid={`session-account-${a.id}`}>
+                    {account}
+                  </span>
+                )}
+              </span>
+              {missing && <span className="ss-missing">{t("sessions.notInstalled")}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </Popover>
+  );
+}
+
+/** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
+const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok"];
+
+/** The empty section: one "New session" row built like the sidebar's nav rows, opening the same + menu under it.
+ *  What it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */
 function SessionStart() {
   const ss = useSessions();
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
@@ -70,10 +175,22 @@ function SessionStart() {
   const tip = names ? `${t("onb.sessionsHint")} ${names}` : t("onb.sessionsHint");
   return (
     <div className="ss-none" data-testid="session-none">
-      <button type="button" className="ss-start" title={tip} onClick={openNewSession} data-testid="session-start">
-        <PlusIcon size={16} />
-        New session
-      </button>
+      <div className="ss-start-w">
+        <button
+          ref={btn}
+          type="button"
+          className="ss-start"
+          title={tip}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          data-testid="session-start"
+        >
+          <PlusIcon size={16} />
+          New session
+        </button>
+        {open && <NewSessionMenu onClose={() => setOpen(false)} trigger={btn} />}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,24 @@
+{"id":"omher-3","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"hi. reply with just the word ok"}],"timestamp":1794362733366}}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"hi. reply with just the word ok"}],"timestamp":1794362733366}}
+{"type":"message_start","message":{"role":"assistant","content":[],"api":"anthropic-messages","provider":"anthropic","model":"claude-fable-5-1","providerThinkingLevel":"high","stopReason":"pending","timestamp":1794362733501}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"ok"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"ok"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok","index":0}],"api":"anthropic-messages","provider":"anthropic","model":"claude-fable-5-1","providerThinkingLevel":"high","stopReason":"stop","timestamp":1794362733501,"responseId":"msg_011CgvKd1fKpPd2EgVVShwAq","rawStopReason":"end_turn"}}
+{"type":"turn_end"}
+{"type":"extension_ui_request","id":"b23ba245-bc1f-4d65-b855-c6433d4face4","method":"setStatus","statusKey":"goal"}
+{"type":"extension_ui_request","id":"b0332815-af35-4512-8bc9-4b8f8dc487b6","method":"notify","message":"TPS 716.3 tok/s. Cache hit 0.0%, 0.0s","notifyType":"info"}
+{"type":"agent_end","willRetry":false}
+{"type":"extension_ui_request","id":"11ffa6de-10df-42f5-a279-8a0eba5bd4e5","method":"setStatus","statusKey":"  omo-native","statusText":"(😺 OmO Native)"}
+{"type":"agent_settled"}
+{"type":"agent_idle"}
+{"type":"extension_ui_request","id":"be9d2b87-a714-4d3c-be43-fb74e83049e4","method":"setStatus","statusKey":"anthropic-web-search"}
+{"type":"extension_ui_request","id":"724b5114-f74f-4561-86b4-bcbd1135e303","method":"setStatus","statusKey":"openai-web-search"}
+{"type":"extension_ui_request","id":"732e6006-e3df-41d1-b86a-586e7b4f435a","method":"setStatus","statusKey":"monitors"}
+{"type":"extension_ui_request","id":"e30b86a1-14a6-4ebc-8d3d-8d6ec162b3e0","method":"setStatus","statusKey":"pi-websearch"}
+{"type":"extension_ui_request","id":"f6a85a40-c1e8-42e2-b8b1-07284541d933","method":"setStatus","statusKey":"pi-webfetch"}
+{"type":"extension_ui_request","id":"4f1a806c-a1aa-4e24-82d7-629eb643ee74","method":"setStatus","statusKey":"loop"}
+{"type":"extension_ui_request","id":"086457c5-e40a-4e6c-93e9-43ac5e44aa0c","method":"setStatus","statusKey":"memory"}

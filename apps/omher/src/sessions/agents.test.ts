@@ -19,16 +19,18 @@ import {
 import { MockHost } from "./host";
 
 describe("session agents", () => {
-  it("is the fixed list of six, in menu order, matching the Rust allow-list", () => {
-    expect(AGENTS.map((a) => a.id)).toEqual(["claude", "codex", "omh", "pi", "omp", "grok"]);
-    expect(AGENTS.map((a) => a.label)).toEqual(["Claude Code", "Codex", "oh-my-hermes", "pi", "oh-my-pi", "Grok"]);
+  it("is the fixed list of eight, in menu order, matching the Rust allow-list", () => {
+    expect(AGENTS.map((a) => a.id)).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"]);
+    expect(AGENTS.map((a) => a.label)).toEqual(["Claude Code", "Codex", "OmO", "DSH", "oh-my-hermes", "pi", "oh-my-pi", "Grok"]);
     for (const a of AGENTS) expect(a.program).toBe(a.id);
   });
 
-  it("opens claude, codex, pi and omp as chats, omh as a Hermes chat, grok as a terminal (same as the Rust list)", () => {
+  it("opens claude, codex, omo, pi and omp as chats, omh as a Hermes chat, dsh and grok as terminals (same as the Rust list)", () => {
     expect(AGENTS.map((a) => [a.id, a.mode])).toEqual([
       ["claude", "chat"],
       ["codex", "chat"],
+      ["omo", "chat"],
+      ["dsh", "terminal"],
       ["omh", "hermes"],
       ["pi", "chat"],
       ["omp", "chat"],
@@ -41,7 +43,7 @@ describe("session agents", () => {
   });
 
   it("accepts only those ids", () => {
-    for (const id of ["claude", "codex", "omh", "pi", "omp", "grok"]) expect(isAgentId(id)).toBe(true);
+    for (const id of ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"]) expect(isAgentId(id)).toBe(true);
     for (const bad of ["", "sh", "/bin/sh", "claude --yolo", "Claude", " claude", null, 1, {}]) expect(isAgentId(bad)).toBe(false);
   });
 
@@ -206,10 +208,10 @@ describe("mock session host", () => {
     expect(ops.filter((o) => o === "start")).toHaveLength(0); // a chat never starts a terminal
   });
 
-  it("reports claude, codex and omh installed and pi, omp, grok missing", async () => {
+  it("reports claude, codex and omh installed and omo, dsh, pi, omp, grok missing", async () => {
     const list = await new MockHost({}).agents();
     expect(list.filter((a) => a.path).map((a) => a.id)).toEqual(["claude", "codex", "omh"]);
-    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["pi", "omp", "grok"]);
-    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "hermes", "chat", "chat", "terminal"]);
+    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["omo", "dsh", "pi", "omp", "grok"]);
+    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "terminal", "hermes", "chat", "chat", "terminal"]);
   });
 });

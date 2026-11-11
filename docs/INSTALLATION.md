@@ -307,7 +307,9 @@ The `omher@beta` argument adds three things to the plain install, and only with 
 The app is the newest `omher-v*` release: the `.dmg` for your Mac's architecture is checked against the release's
 `SHA256SUMS.txt`, mounted, and `omher.app` is copied to `/Applications` (or `~/Applications`, or `OMH_APP_DIR`)
 under a temporary name, then swapped for an older copy only once the copy is whole; on Windows the per-user
-installer is checked the same way and runs silently. Linux gets Hermes and OMH only, with a note.
+installer is checked the same way and runs silently. On Linux x86_64 the AppImage is checked the same way,
+put at `~/.local/bin/omher` (or `OMH_APP_DIR`) and given an app menu entry ([omher on Linux](omher-linux.md));
+other Linux machines get Hermes and OMH only, with a note.
 `OMH_WITH_HERMES=0` skips installing Hermes and `OMH_WITH_DESKTOP=0` skips the app. Run from a Hermes profile
 shell (`HERMES_HOME=<root>/profiles/<name>`), the installer looks for Hermes under `<root>`, as omher does.
 

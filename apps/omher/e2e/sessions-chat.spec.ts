@@ -41,9 +41,8 @@ async function open(page: Page, folder = "/Users/you/code/omher") {
 /** A New session chat on `agent` in the dialog's folder; nothing runs until its first message. */
 async function draft(page: Page, agent: string) {
   await page.getByTestId("session-new").click();
-  await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
+  await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
 }
@@ -126,6 +125,7 @@ test("the empty section's New session row opens a New session chat, then gives w
   await open(page);
   await expect(page.getByTestId("session-start")).toHaveAttribute("title", /Claude Code/);
   await page.getByTestId("session-start").click();
+  await page.getByTestId("session-agent-claude").click();
   await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
   await expect(page.getByTestId("session-none")).toHaveCount(0);
   await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);

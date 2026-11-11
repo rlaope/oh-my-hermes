@@ -68,7 +68,6 @@ async function setup(page: Page, folders: string[] = []) {
  *  (`first`), Grok by Start. */
 async function start(page: Page, agent: string, first = "/status") {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
@@ -316,7 +315,6 @@ test("a terminal session that was running comes back paused and starts only on R
 test("a New session chat that never started comes back as a draft after a restart, and nothing starts", async ({ page }) => {
   await setup(page, ["/Users/you/code/web-app"]);
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId("session-agent-codex").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
@@ -327,7 +325,7 @@ test("a New session chat that never started comes back as a draft after a restar
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
   await page.reload();
   await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
-  await expect(page.getByTestId("session-agent-pick")).toHaveText("Codex");
+  await expect(page.getByTestId("session-agent-fixed")).toHaveText("Codex");
   await expect(page.getByTestId("session-folder")).toHaveText("web-app");
   await expect(page.getByTestId("composer")).toHaveValue("half a thought");
   await expect(page.locator("[data-testid=session-list] .ss-row .bot-n")).toHaveText(["New session"]);

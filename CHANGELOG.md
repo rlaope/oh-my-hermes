@@ -330,6 +330,21 @@ All notable changes will be documented here.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
 
+- **omher: SESSIONS `+` opens a menu of agents, now with OmO and DSH.**
+  Pressing `+` (or the empty section's New session row, or the first-run
+  card) opens a small menu under the button: Claude Code, Codex, OmO, DSH,
+  oh-my-hermes, pi, oh-my-pi and Grok, each with its mark. Installed agents
+  come first, the one used last on top; a missing one is dimmed and its
+  tooltip has the install line. Arrow keys, Home/End, Enter and Esc work.
+  Picking one opens that agent's New session chat at once, in the last
+  folder used (the chip under the composer); the composer names the agent
+  and no longer has a second picker. OmO (`npm i -g omo-ai`) runs as a chat
+  through its RPC mode (`omo --mode rpc`) and Restart continues its
+  conversation (`--session`). DSH, deepseek-bot's terminal (`~/.local/bin/dsh`),
+  opens in its terminal with a conversation id of its own (`--resume`), so
+  Resume after a restart continues it. Launch on first send, drafts across a
+  restart and session titles work as in 0.2.3.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

@@ -1,6 +1,6 @@
 // Settings › Providers: one compact row per provider (mark, name, slug, "in use", model count). A row opens
 // inline to its models grouped by vendor, one vendor per line; only the provider in use starts open, with
-// its current model first. Keys are Hermes': "Add key" opens the system terminal running
+// its current model first. A long list scrolls inside a ~320px box under its filter. Keys are Hermes': "Add key" opens the system terminal running
 // `hermes auth add <provider> --type api-key` (BOUNDARY rule 23); omher never sees the key.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ModelOptions, ModelProvider } from "../../lib/protocol";
@@ -233,37 +233,39 @@ function ProviderModels({ id, p, current }: { id: string; p: ModelProvider; curr
       )}
       {p.models.length === 0 && <div className="pv-none">No models</div>}
       {q.trim() && shown.length === 0 && <div className="pv-none">No model matches “{q.trim()}”</div>}
-      {shown.map((g) => (
-        <div className="pv-g" key={g.vendor || "-"} data-testid="provider-group">
-          {g.vendor ? (
-            <span className="pv-v" title={g.vendor}>
-              <span className="pv-vi">
-                <ProviderMark names={[g.vendor]} size={11} />
+      <div className="pv-scroll" data-testid={`provider-scroll-${p.slug}`}>
+        {shown.map((g) => (
+          <div className="pv-g" key={g.vendor || "-"} data-testid="provider-group">
+            {g.vendor ? (
+              <span className="pv-v" title={g.vendor}>
+                <span className="pv-vi">
+                  <ProviderMark names={[g.vendor]} size={11} />
+                </span>
+                <span>{g.vendor}</span>
               </span>
-              <span>{g.vendor}</span>
+            ) : null}
+            <span className="pv-ms">
+              {g.models.map((e) => (
+                <span
+                  key={e.id}
+                  className={`pv-m${e.id === current ? " on" : ""}`}
+                  title={e.id === current ? `${e.id} · in use` : e.id}
+                  data-testid="provider-model"
+                  data-id={e.id}
+                >
+                  {e.id === current && (
+                    <svg className="pv-on" width="9" height="9" viewBox="0 0 12 12" aria-label="in use" role="img">
+                      <path d="M2.5 6.5l2.3 2.3L9.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                  <span className="pv-mn">{e.name}</span>
+                  {e.tag && <small className="pv-sfx">{e.tag}</small>}
+                </span>
+              ))}
             </span>
-          ) : null}
-          <span className="pv-ms">
-            {g.models.map((e) => (
-              <span
-                key={e.id}
-                className={`pv-m${e.id === current ? " on" : ""}`}
-                title={e.id === current ? `${e.id} · in use` : e.id}
-                data-testid="provider-model"
-                data-id={e.id}
-              >
-                {e.id === current && (
-                  <svg className="pv-on" width="9" height="9" viewBox="0 0 12 12" aria-label="in use" role="img">
-                    <path d="M2.5 6.5l2.3 2.3L9.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-                <span className="pv-mn">{e.name}</span>
-                {e.tag && <small className="pv-sfx">{e.tag}</small>}
-              </span>
-            ))}
-          </span>
-        </div>
-      ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

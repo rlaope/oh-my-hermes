@@ -1,6 +1,6 @@
 # omher
 
-omher is a desktop app for your Hermes bots, on macOS and Windows. Each Hermes profile is one bot. Each bot has one main
+omher is a desktop app for your Hermes bots, on macOS, Windows and Linux. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
 read-only. Under the bots, SESSIONS starts a terminal agent (Claude Code, Codex, oh-my-hermes, pi, oh-my-pi) in a
 folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
@@ -11,7 +11,7 @@ Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 ## Install
 
 **One command (beta).** It installs Hermes Agent and oh-my-hermes if they are missing, then omher
-(macOS and Windows; Linux gets Hermes and OMH only). Download buttons are on [omher.app](https://omher.app/).
+(macOS, Windows and Linux x86_64). Download buttons are on [omher.app](https://omher.app/).
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
@@ -23,8 +23,8 @@ irm https://omher.app/omher.ps1 | iex
 # same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
 ```
 
-The installer copies omher into `/Applications` (or `~/Applications`) on macOS and runs the Windows installer
-silently for your user. `OMH_WITH_HERMES=0` skips installing Hermes; `OMH_WITH_DESKTOP=0` skips the app.
+The installer copies omher into `/Applications` (or `~/Applications`) on macOS, runs the Windows installer
+silently for your user, and on Linux puts the AppImage at `~/.local/bin/omher` with an app menu entry. `OMH_WITH_HERMES=0` skips installing Hermes; `OMH_WITH_DESKTOP=0` skips the app.
 Without `omher@beta` the one-liner installs only the `omh` command, as before.
 
 ![The omher desktop app in dark mode: a bot list on the left, and a chat with the bot Kami that reports a nightly digest from Discord, picks up a Slack thread about 502 errors, runs four steps and answers with the fix](../../assets/omher-in-use-dark.webp)
@@ -56,8 +56,14 @@ xattr -dr com.apple.quarantine /Applications/omher.app
 the `.msi`. The installer is not code-signed, so SmartScreen may say "Windows protected your PC": choose
 **More info**, then **Run anyway**. The installer fetches Microsoft's WebView2 runtime if it is missing.
 
+**Linux (x86_64).** Download `omher-<version>-linux-x64.AppImage`, make it executable and run it:
+`chmod +x omher-*.AppImage && ./omher-*.AppImage`. It needs WebKitGTK 4.1 and FUSE 2 (`libfuse2`; Ubuntu 24.04
+calls it `libfuse2t64`), which most desktops already have. A `.deb` is on the same release. The in-app update
+button replaces the AppImage in place; a `.deb` install is updated by installing the next `.deb` by hand.
+Details and troubleshooting: [`docs/omher-linux.md`](../../docs/omher-linux.md).
+
 Check a download against `SHA256SUMS.txt` on the same release:
-`shasum -a 256 <file>` (macOS) or `certutil -hashfile <file> SHA256` (Windows).
+`shasum -a 256 <file>` (macOS), `sha256sum <file>` (Linux) or `certutil -hashfile <file> SHA256` (Windows).
 
 ### Where omher looks for Hermes
 
@@ -80,12 +86,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
-- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a New session chat at once.
-  Its composer row picks the agent among the programs found on `PATH` and in the usual install folders
-  (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`), and the folder chip under it picks the folder
+- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a menu of the agents found on
+  `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`): the
+  installed ones first, the last one used on top, the missing ones dimmed with their install line. Picking one
+  opens its New session chat at once; its composer names the agent, and the folder chip under it picks the folder
   (the last one used, else home; recent folders, Choose folder… or home). Nothing runs until the first message, which
   becomes the agent's first prompt; a terminal agent starts on Start. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
-  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`); the shell
+  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
   and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
@@ -104,8 +111,9 @@ Rules the code keeps:
   text. 20 files, 100 MB each; if one attach fails, nothing is sent.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
-- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omh`, `pi`, `omp` or `grok`,
-  with no arguments, in the folder you picked; stopped when the session is closed or the app quits.
+- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
+  `omp` or `grok`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
+  picked; stopped when the session is closed or the app quits.
 
 ## Develop
 
@@ -143,6 +151,9 @@ Agent and CLI marks in `src/assets/agents/` are the projects' own marks, unedite
   The model marks in `src/ui/modelMarks.ts` come from the same set.
 - pi: `logo-auto.svg` from [pi.dev](https://pi.dev) ([pi-mono](https://github.com/badlogic/pi-mono), MIT).
 - omp: the official mark from [omp.sh](https://omp.sh).
+- OmO: `omo-icon-light.svg` from [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (its viewBox
+  trimmed to the tile).
+- DSH: deepseek-bot's `docs/assets/logo-pixel.svg` from [deepseek-bot](https://github.com/rlaope/deepseek-bot) (MIT).
 - OMH: the oh-my-hermes kami mark from this repository.
 
 Each mark belongs to its owner and is used only to name that tool in the app.

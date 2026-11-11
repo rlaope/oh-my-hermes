@@ -73,6 +73,8 @@ OMH_HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 OMH_OMHER_RELEASES_URL="https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10"
 OMH_OMHER_RELEASE_PAGES=5
 OMH_OMHER_SITE_URL="https://omher.app/"
+# The 512 px app icon for the Linux app menu entry (the same image the app bundles).
+OMH_OMHER_ICON_URL="https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/apps/omher/src-tauri/icons/icon.png"
 
 # Hermes runs a profile with HERMES_HOME=<root>/profiles/<name>, and its venv
 # lives under <root>. A home whose parent is `profiles` and whose root holds its
@@ -722,12 +724,126 @@ omher_app_failed() {
   exit 1
 }
 
+# Linux x86_64: the release's AppImage, checked against SHA256SUMS.txt, becomes
+# ~/.local/bin/omher (swapped in only once the download is whole), plus a
+# .desktop entry and icon so it shows in the app menu. Other Linux machines
+# (arm64) get Hermes and OMH only, with a note.
+install_omher_appimage() {
+  case "$(uname -a 2>/dev/null)" in
+    *x86_64*|*amd64*) ;;
+    *)
+      say_step "[omher]" "Install the omher desktop app"
+      say_note "omher has no Linux build for this processor yet (x86_64 only), so Hermes and OMH are set up without it."
+      return 0
+      ;;
+  esac
+  say_step "[omher]" "Install the omher desktop app (Linux x64 AppImage)"
+  OMH_OMHER_TMP="$(omh_temp_dir)"
+  OMH_OMHER_LOOKUP=0
+  OMH_OMHER_IMG_URL="$(omher_release_asset_url "linux-x64\\.AppImage")" || OMH_OMHER_LOOKUP=$?
+  case "$OMH_OMHER_LOOKUP" in
+    0) ;;
+    1)
+      rm -rf "$OMH_OMHER_TMP"
+      say_note "No omher release for Linux was found on GitHub yet."
+      say_note "Hermes and OMH are installed. Get the app from $OMH_OMHER_SITE_URL when it is out."
+      return 0
+      ;;
+    2)
+      rm -rf "$OMH_OMHER_TMP"
+      omher_app_failed "GitHub's API rate limit was reached (60 requests an hour per network without a token). Wait an hour, or set GITHUB_TOKEN, and run this again."
+      ;;
+    *)
+      rm -rf "$OMH_OMHER_TMP"
+      omher_app_failed "GitHub's API did not answer, so the omher release could not be looked up."
+      ;;
+  esac
+  say_note "omher AppImage: $OMH_OMHER_IMG_URL"
+  if ! curl -fsSL -o "$OMH_OMHER_TMP/omher.AppImage" "$OMH_OMHER_IMG_URL"; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not download $OMH_OMHER_IMG_URL"
+  fi
+  OMH_OMHER_SUMS_URL="${OMH_OMHER_IMG_URL%/*}/SHA256SUMS.txt"
+  if ! curl -fsSL -o "$OMH_OMHER_TMP/SHA256SUMS.txt" "$OMH_OMHER_SUMS_URL"; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not download $OMH_OMHER_SUMS_URL to check the AppImage."
+  fi
+  OMH_OMHER_IMG_NAME="${OMH_OMHER_IMG_URL##*/}"
+  OMH_OMHER_WANT="$(tr -d '\r' <"$OMH_OMHER_TMP/SHA256SUMS.txt" |
+    awk -v name="$OMH_OMHER_IMG_NAME" '$2 == name || $2 == "*" name { print $1; exit }')"
+  OMH_OMHER_GOT="$(omh_sha256 "$OMH_OMHER_TMP/omher.AppImage")" || OMH_OMHER_GOT=""
+  if [ -z "$OMH_OMHER_WANT" ] || [ -z "$OMH_OMHER_GOT" ] || [ "$OMH_OMHER_WANT" != "$OMH_OMHER_GOT" ]; then
+    rm -rf "$OMH_OMHER_TMP"
+    [ -n "$OMH_OMHER_WANT" ] || OMH_OMHER_WANT="no entry for $OMH_OMHER_IMG_NAME"
+    [ -n "$OMH_OMHER_GOT" ] || OMH_OMHER_GOT="no checksum tool"
+    omher_app_failed "The downloaded AppImage does not match SHA256SUMS.txt (expected $OMH_OMHER_WANT, got $OMH_OMHER_GOT)."
+  fi
+  say_ok "SHA-256 matches SHA256SUMS.txt ($OMH_OMHER_IMG_NAME)"
+  if [ -n "$OMH_APP_DIR" ]; then
+    OMH_OMHER_DEST="$OMH_APP_DIR"
+  else
+    OMH_OMHER_DEST="$OMH_HOME_DIR/.local/bin"
+  fi
+  if ! mkdir -p "$OMH_OMHER_DEST"; then
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not create $OMH_OMHER_DEST."
+  fi
+  # Copied next to the target under a hidden name, made executable, then
+  # renamed over it: a failed copy leaves an existing omher as it was, and a
+  # running omher keeps its old file until it quits.
+  OMH_OMHER_NEW="$OMH_OMHER_DEST/.omher.new.$$"
+  rm -f "$OMH_OMHER_NEW"
+  if ! cp "$OMH_OMHER_TMP/omher.AppImage" "$OMH_OMHER_NEW" || ! chmod 755 "$OMH_OMHER_NEW"; then
+    rm -f "$OMH_OMHER_NEW"
+    rm -rf "$OMH_OMHER_TMP"
+    omher_app_failed "Could not copy the AppImage into $OMH_OMHER_DEST."
+  fi
+  rm -rf "$OMH_OMHER_TMP"
+  if [ -e "$OMH_OMHER_DEST/omher" ]; then
+    say_note "Replacing the omher that was already in $OMH_OMHER_DEST."
+  fi
+  if ! mv -f "$OMH_OMHER_NEW" "$OMH_OMHER_DEST/omher"; then
+    rm -f "$OMH_OMHER_NEW"
+    omher_app_failed "Could not move the new AppImage into $OMH_OMHER_DEST/omher."
+  fi
+  OMH_OMHER_APP_PATH="$OMH_OMHER_DEST/omher"
+  say_ok "$OMH_OMHER_APP_PATH"
+  # The app menu entry. The icon is the site's (the app's own icon, 512 px);
+  # a failed icon download only leaves the entry with a generic icon.
+  OMH_OMHER_DATA="${XDG_DATA_HOME:-$OMH_HOME_DIR/.local/share}"
+  OMH_OMHER_ICON_DIR="$OMH_OMHER_DATA/icons/hicolor/512x512/apps"
+  OMH_OMHER_DESKTOP_DIR="$OMH_OMHER_DATA/applications"
+  if mkdir -p "$OMH_OMHER_DESKTOP_DIR" "$OMH_OMHER_ICON_DIR"; then
+    curl -fsSL -o "$OMH_OMHER_ICON_DIR/omher.png" "$OMH_OMHER_ICON_URL" 2>/dev/null || rm -f "$OMH_OMHER_ICON_DIR/omher.png"
+    {
+      printf '[Desktop Entry]\n'
+      printf 'Type=Application\n'
+      printf 'Name=omher\n'
+      printf 'Comment=Your Hermes bots in one window\n'
+      printf 'Exec="%s" %%U\n' "$OMH_OMHER_APP_PATH"
+      printf 'Icon=omher\n'
+      printf 'Terminal=false\n'
+      printf 'Categories=Office;Utility;\n'
+      printf 'StartupWMClass=omher\n'
+    } >"$OMH_OMHER_DESKTOP_DIR/omher.desktop" && say_ok "$OMH_OMHER_DESKTOP_DIR/omher.desktop"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$OMH_OMHER_DESKTOP_DIR" >/dev/null 2>&1 || true
+    fi
+  else
+    say_note "Could not create $OMH_OMHER_DESKTOP_DIR; omher works, it just has no app menu entry."
+  fi
+}
+
 install_omher_app() {
   case "$(uname -s 2>/dev/null || printf 'unknown')" in
     Darwin) ;;
+    Linux)
+      install_omher_appimage
+      return $?
+      ;;
     *)
       say_step "[omher]" "Install the omher desktop app"
-      say_note "omher has no build for $(uname -s 2>/dev/null || printf 'this system') yet (macOS and Windows only), so Hermes and OMH are set up without it."
+      say_note "omher has no build for $(uname -s 2>/dev/null || printf 'this system') yet (macOS, Windows and Linux x86_64 only), so Hermes and OMH are set up without it."
       return 0
       ;;
   esac
@@ -1075,6 +1191,9 @@ if [ "$OMH_OMHER_BETA" = "1" ]; then
     fi
   fi
   if [ -n "$OMH_OMHER_APP_PATH" ]; then
-    say "omher is in $OMH_OMHER_APP_PATH. Open it from there or from Launchpad."
+    case "$OMH_OMHER_APP_PATH" in
+      *.app) say "omher is in $OMH_OMHER_APP_PATH. Open it from there or from Launchpad." ;;
+      *) say "omher is in $OMH_OMHER_APP_PATH. Open it from your app menu, or run 'omher' when $(dirname "$OMH_OMHER_APP_PATH") is on your PATH." ;;
+    esac
   fi
 fi

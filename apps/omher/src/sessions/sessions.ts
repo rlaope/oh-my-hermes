@@ -1,13 +1,14 @@
 // SESSIONS: the agent sessions omher started in this run of the app. Each one is an allow-listed agent
-// (claude, codex, omh, pi, omp, grok) in a folder the person picked. Most open as a chat: Claude Code,
-// Codex, pi and oh-my-pi run in their structured mode in the desktop shell (src-tauri/src/agent_chat.rs),
+// (claude, codex, omo, dsh, omh, pi, omp, grok) in a folder the person picked. Most open as a chat: Claude Code,
+// Codex, OmO, pi and oh-my-pi run in their structured mode in the desktop shell (src-tauri/src/agent_chat.rs),
 // oh-my-hermes opens a Hermes chat in that folder through the bridge (`folder.open`). Their events land in
 // the app store under the session's own chat key, so the bot chat's timeline, activity line, cards and
-// composer draw them. Grok has no verifiable chat mode, so it stays a terminal (xterm on a pseudo-terminal),
-// and every chat can switch to its agent's terminal view.
+// composer draw them. Grok and DSH have no chat mode here, so they stay a terminal (xterm on a pseudo-terminal);
+// DSH gets a conversation id when it starts (`--resume <id>`), so its Resume continues that conversation.
+// Every chat can switch to its agent's terminal view.
 //
-// SESSIONS + opens a New session chat at once (a draft): the agent is picked in its composer and the folder in the
-// chip under it (the last folder used, else home). Nothing starts until the first message, which becomes the
+// SESSIONS + opens a small menu of the agents; picking one opens a New session chat on it at once (a draft), its
+// folder in the chip under the composer (the last folder used, else home). Nothing starts until the first message, which becomes the
 // agent's first prompt (a terminal agent starts on Start and is sent nothing); then agent and folder are fixed.
 // Closing a draft starts nothing.
 //
@@ -18,7 +19,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, draftAgent, draftFolder, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { agentDef, CONTINUES, draftAgent, draftFolder, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
@@ -400,19 +401,22 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   // ---- sessions -----------------------------------------------------------------------------
 
   /**
-   * Open a New session chat: a draft on the last agent used (else the first installed) in the last folder used
-   * (else home). An open draft is reused rather than stacking a second one. Nothing starts here.
+   * Open a New session chat: a draft on `agent` (the one picked in the SESSIONS + menu; none = the last agent
+   * used, else the first installed) in the last folder used (else home). An open draft is reused rather than
+   * stacking a second one, and takes the agent picked. Nothing starts here.
    */
-  const draft = (): string => {
+  const draft = (agent?: AgentId): string => {
     const open = state.list.find((r) => r.status === "draft");
     if (open) {
+      if (agent) setDraft(open.id, { agent });
       store().actions.openSession(open.id);
       return open.id;
     }
     const id = `s${++seq}`;
+    if (agent) picked.set(id, { agent: true });
     const r: SessionRec = {
       id,
-      agent: draftAgent(state.recent, state.agents),
+      agent: agent ?? draftAgent(state.recent, state.agents),
       cwd: draftFolder(state.recent, state.home),
       startedAt: Date.now(),
       status: "draft",
@@ -473,6 +477,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       view: mode === "terminal" ? "terminal" : "chat",
       ...(account ? { account } : {}),
       ...(startedAs ? { startedAs } : {}),
+      // DSH names its conversation by the id it is started with (`--resume <id>`): one id per session, so Resume
+      // after a restart continues it
+      ...(r.agent === "dsh" ? { agentSession: crypto.randomUUID() } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     });
@@ -513,8 +520,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!r) return;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = modeOf(state.agents, r.agent) !== "terminal";
-    // Claude Code's terminal continues the chat's conversation
-    const resume = ofChat && r.agent === "claude" && r.agentSession ? r.agentSession : undefined;
+    // Claude Code's terminal continues the chat's conversation; DSH (a terminal agent) its own
+    const resume = r.agentSession && ((ofChat && r.agent === "claude") || (!ofChat && r.agent === "dsh")) ? r.agentSession : undefined;
     try {
       const hostId = await host.start(
         r.agent,
@@ -657,13 +664,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   };
 
   /**
-   * Start an ended chat session's agent again in the same chat. Claude Code and Codex continue their
-   * conversation (Claude Code `--resume`, Codex `thread/resume`); pi and oh-my-pi start a new one.
+   * Start an ended chat session's agent again in the same chat. Claude Code, Codex and OmO continue their
+   * conversation (Claude Code `--resume`, Codex `thread/resume`, OmO `--session`); pi and oh-my-pi start a new one.
    */
   const restart = async (id: string) => {
     const r = rec(id);
     if (!r || procs.has(id) || modeOf(state.agents, r.agent) !== "chat" || (r.status !== "exited" && r.status !== "failed")) return;
-    const resume = (r.agent === "claude" || r.agent === "codex") && r.agentSession ? r.agentSession : undefined;
+    const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
     note(id, null);
     await startAgentChat(id, resume);
