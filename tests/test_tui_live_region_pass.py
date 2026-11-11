@@ -14,14 +14,11 @@ from test_tui_panels import hud_payload
 
 from omh.skin_pack import SKIN_THEMES
 from omh.tui import transcript as transcript_module
-from omh.tui.frame import sticky_line
 from omh.tui.gateway import Event
 from omh.tui.keys import CHAR, Key
-from omh.tui.layout import allocate
 from omh.tui.panels import HudSnapshot, panel_lines
-from omh.tui.style import is_fill
 from omh.tui.theme import (
-    DEFAULT_LAUNCH, DEFAULT_THEME as THEME, TEXT_CONTRAST, build_theme, contrast_ratio, with_prompt_band, without_colour,
+    DEFAULT_LAUNCH, DEFAULT_THEME as THEME, build_theme, with_prompt_band, without_colour,
 )
 from omh.tui.transcript import AssistantBlock, SteerBlock, block_rows
 from omh.tui.width import line_width
@@ -37,18 +34,6 @@ def plan_rows(width: int = 80, max_rows: int = 40, **options) -> list[str]:
 
 
 class MidTurnMessageTests(unittest.TestCase):
-    def test_the_sticky_prompt_runs_on_the_band_with_a_blank_row_over_it(self) -> None:
-        line = sticky_line("dag ulw 공존패치 ㄱㄱ", 60, BANDED)
-        self.assertTrue(is_fill(line[-1]) and line[-1].style.bg == BANDED.prompt_band.bg)
-        self.assertEqual({span.style.bg for span in line}, {BANDED.prompt_band.bg})
-        for span in line[:-1]:
-            if span.text.strip():
-                self.assertGreaterEqual(contrast_ratio(span.style.fg, BANDED.prompt_band.bg), TEXT_CONTRAST, span)
-        budget = allocate(40, 80, sticky=True, tail_rows=3, slot_rows=0, composer_rows=1, sticky_gap=True)
-        self.assertEqual((budget.sticky_gap, budget.sticky), (1, 1))
-        tight = allocate(10, 80, sticky=True, tail_rows=6, slot_rows=0, composer_rows=1, sticky_gap=True)
-        self.assertEqual(tight.sticky_gap, 0, "the gap gives way before a live row")
-
     def test_a_steer_runs_on_the_band(self) -> None:
         (row,) = block_rows(SteerBlock("look at the docs too"), 60, BANDED)
         self.assertEqual({span.style.bg for span in row}, {BANDED.prompt_band.bg})

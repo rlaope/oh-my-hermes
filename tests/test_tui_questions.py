@@ -970,14 +970,14 @@ class TinyTerminalQuestionTests(unittest.TestCase):
 
     def test_the_label_row_is_the_text_questions_alone(self) -> None:
         # A tiny terminal still gives a panel, a menu or a picked list nothing beyond what it gave before.
-        self.assertEqual(allocate(5, 80, sticky=False, tail_rows=0, slot_rows=4, composer_rows=1, min_height=0).slot, 0)
+        self.assertEqual(allocate(5, 80, tail_rows=0, slot_rows=4, composer_rows=1, min_height=0).slot, 0)
         self.assertEqual(
-            allocate(5, 80, sticky=False, tail_rows=0, slot_rows=4, composer_rows=1, min_height=0, text_question=True).slot, 1
+            allocate(5, 80, tail_rows=0, slot_rows=4, composer_rows=1, min_height=0, text_question=True).slot, 1
         )
         self.assertEqual(
-            allocate(3, 80, sticky=False, tail_rows=0, slot_rows=4, composer_rows=1, min_height=0, text_question=True).slot, 0
+            allocate(3, 80, tail_rows=0, slot_rows=4, composer_rows=1, min_height=0, text_question=True).slot, 0
         )
-        roomy = dict(sticky=False, tail_rows=0, slot_rows=9, composer_rows=1, min_height=0)
+        roomy = dict(tail_rows=0, slot_rows=9, composer_rows=1, min_height=0)
         self.assertEqual(allocate(24, 80, **roomy, text_question=True), allocate(24, 80, **roomy))
 
 

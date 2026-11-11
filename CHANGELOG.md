@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
+  long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
+  working row once it had scrolled off; the owner found it noise. The prompt
+  stays in the transcript and scrolls off with it (scroll up to read it), and
+  the two rows the echo and the blank row over it took go to the turn's own
+  output.
+
 - **omher's Automations and Plugins pages work, by hand or by asking the
   bot, in English, Korean, Japanese or Chinese.** The two sidebar rows that
   said Soon open pages. Automations lists every bot's cron jobs from each

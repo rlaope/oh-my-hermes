@@ -150,7 +150,7 @@ from ..skin_pack import (
 )
 from . import gateway_contract as contract
 from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer, ComposerAction
-from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame, sticky_line
+from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, branch_forms, build_frame
 from .git_status import GitWatcher
 from .inline_image import MODE_KITTY, PREVIEW_KEEP, PREVIEW_MAX_COLS, PREVIEW_MAX_ROWS, Preview, preview_from
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
@@ -2268,7 +2268,7 @@ class App(ModesMixin, AgentViewMixin):
         # What `commands.catalog` last said, bound to the live session: completion and `/help` read it.
         self.catalog: list[tuple[str, str]] = []
         # Every name a typed `/name` resolves to (`slash.known_names`): drawn bold in its colour in the composer,
-        # your prompt's row and the `↳ you:` reminder. The TUI's own commands until the catalog arrives.
+        # and your prompt's row. The TUI's own commands until the catalog arrives.
         self.known_slash = known_names()
         self.catalog_categories: list[tuple[str, list[str]]] = []
         self.skill_count = 0
@@ -2324,8 +2324,6 @@ class App(ModesMixin, AgentViewMixin):
         self.lifecycle_seen = 0  # the live session's `message.start` and `message.complete` events, counted
         self.inbound_at = 0.0  # when the gateway last sent anything (`GATEWAY_SILENCE_SECONDS`)
         self.authority_epoch: object = None  # the shared gateway's epoch the last create or resume answered
-        self.sticky = ""
-        self.flushed_since_prompt = 0  # rows printed above the region from the last prompt's first row on
         self.turn_pending = False  # a prompt went out and its turn has not started (or ended) yet
         # The undeclared event types the submitted turn has brought before any of TURN_PROGRESS_EVENTS; None
         # before the first prompt, once the watch ends, and after the notice (`_watch_turn`).
@@ -6079,8 +6077,6 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_aside(NoticeBlock(notice))
         if not queued:
             self.queue_held = False  # the person started a turn: the queue goes on behind it
-        self.sticky = shown or text
-        self.flushed_since_prompt = 0
         self._clear_roster()  # the agents shown were the last turn's
         self.bg_done = None  # a turn starts: the finished row's offer was for an idle session
         self.turn_pending = True
@@ -7432,7 +7428,7 @@ class App(ModesMixin, AgentViewMixin):
 
         The old session's open requests are declined, yolo the TUI set there
         is turned off, and its runtime closed; everything that belonged to it
-        (transcript, queue, sticky prompt, attachments, HUD snapshot,
+        (transcript, queue, attachments, HUD snapshot,
         subagents) is dropped before the new one is adopted.
         The caller says so in the new transcript, after its own notice.
         """
@@ -7463,8 +7459,6 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(
                 QUEUE_BACK_SWITCH_NOTICE.format(count=len(back), s="" if len(back) == 1 else "s"), NOTICE_WARN
             )
-        self.sticky = ""
-        self.flushed_since_prompt = 0  # rows printed above the region from the last prompt's first row on
         # Hermes held nothing of a draft's or the queue's images; what it staged for a prompt went with that session.
         self._reset_staging(UNSENT_BACK_SWITCH)
         self.hud = None
@@ -8142,7 +8136,7 @@ class App(ModesMixin, AgentViewMixin):
         limit = budget.total - budget.agents - budget.info  # the info line's row
         working = min(self._working_rows(), budget.tail)
         if working:
-            limit = min(limit, budget.sticky_gap + budget.sticky + budget.tail + budget.pad - working)
+            limit = min(limit, budget.tail + budget.pad - working)
         return first + limit - 1
 
     def _transcript_view(self) -> bool:
@@ -9102,7 +9096,6 @@ class App(ModesMixin, AgentViewMixin):
             self.terminal.write(self.pager.frame(*self.size, self.theme, self._erase_ground()))
             return
         stable = self.transcript.take_stable_lines(cols, self.theme, live_rows=self.size[1])
-        prompt_row = self.transcript.prompt_row
         head: list[Line] = []
         if self.banner_facts is not None:
             background = self._surface()
@@ -9119,13 +9112,6 @@ class App(ModesMixin, AgentViewMixin):
             self.card_state = CARD_KEPT
         if head:
             stable = head + stable
-            prompt_row = None if prompt_row is None else prompt_row + len(head)
-        # Counted from the prompt's own first row: not the blank row or the held rows above it, and after a full
-        # redraw only the rows retaken from the prompt on.
-        if prompt_row is not None:
-            self.flushed_since_prompt = len(stable) - prompt_row
-        else:
-            self.flushed_since_prompt += len(stable)
         if not self._menu_rows():
             self.menu_below = None
         # On the screen's last row the region keeps its height (what the flush below covers aside), so what shrinks
@@ -9134,13 +9120,10 @@ class App(ModesMixin, AgentViewMixin):
         pinned = self.region.last_row(rows) == rows - 1
         min_height = max(self.region.height - len(stable), 0) if pinned else 0
         # The frame a turn ends with, on the bottom rows: the turn's last frame. Its working rows, their spacer and
-        # the done line balance out, but the sticky prompt (and the blank row over it) and the blank row over the plan
-        # have nothing in this frame to take their rows. The sticky came in once the prompt had scrolled off, scrolling
-        # as many transcript rows into scrollback, and nothing brings those back, so kept they would stand as blank
-        # rows between the done line and the composer. The region gives them up and the composer rises by them.
+        # the done line balance out, but the blank row over the plan has nothing in this frame to take its row, so
+        # kept it would stand as a blank row between the done line and the composer. The region gives it up and
+        # the composer rises by it (below, once the frame is built).
         ended = self.frame_budget if pinned and self.frame_busy and not self._busy() else None
-        if ended is not None:
-            min_height = max(min_height - ended.sticky - ended.sticky_gap, 0)
         top = self.region.top_row(rows)
         if not pinned and self.launch_layout and top is not None:
             # Until the first prompt the launch fills the screen: the rows under the banner pad the region down to the
@@ -9220,22 +9203,14 @@ class App(ModesMixin, AgentViewMixin):
             if card:
                 build = partial(build, tail=[*build.keywords["tail"], *card, *([()] * (room - len(card)))])
                 frame = build()
-        sticky_row = None
-        # The rows above the region once the flush below and this frame are drawn: transcript rows.
-        if self._sticky_needed(self.region.rows_above(rows, len(stable), frame.height)):
-            sticky = self._drawn(
-                "the sticky prompt", lambda: [sticky_line(self.sticky, cols, self.theme, self.known_slash)], cols
-            )
-            frame = build(sticky=sticky[0])
-            sticky_row = sticky[0]
         # Flushed before the frame, the lines cover the region's top rows, where the lines leaving
         # the tail were drawn (a settled tool group is those same rows, moved above the region), and
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
         # The wallpaper paints the blank tails of the rows above the region too, the transcript's included, so it stays
         # in view over a full session (owner's choice of 2026-10-29; `screen` names what that costs a selection).
         lower = max(self.region.height - len(stable) - frame.height, 0) if padded is not None else 0
-        if lower and not self.region.can_lower(rows, lower):  # the frame grew again (a sticky prompt): pad as before
-            frame = padded() if sticky_row is None else padded(sticky=sticky_row)
+        if lower and not self.region.can_lower(rows, lower):  # the frame grew again: pad as before
+            frame = padded()
             lower = 0
         self._keep_selection_true(stable, frame.lines)
         self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, ambient=self._ambient(),
@@ -9479,18 +9454,6 @@ class App(ModesMixin, AgentViewMixin):
         on: from the first frame on a terminal that answers the query.
         """
         return self.decoder.protocol_reported
-
-    def _sticky_needed(self, above: int) -> bool:
-        """Whether the sent prompt needs echoing above the composer: only once it has scrolled off.
-
-        `above` is how many screen rows lie above the live region. Everything
-        there is transcript, so while the rows printed from the prompt's first
-        row on still fit there, the prompt itself is on screen and an echo
-        would only repeat it.
-        """
-        if not (self._busy() and self.sticky.strip()):
-            return False
-        return self.flushed_since_prompt > above
 
     def _tail(self, cols: int) -> list[Line]:
         self.tail_spacer = False  # until the rows below say otherwise: a tail that raises (`_drawn`) has no spacer

@@ -26,7 +26,7 @@ import unittest
 
 from _tui_lines import rule_edges, composer_row, lines_text
 from omh.tui.composer import Composer
-from omh.tui.frame import BROWSING_HINT, build_frame, rule_line, sticky_line
+from omh.tui.frame import BROWSING_HINT, build_frame, rule_line
 from omh.tui.frame import MODE_ACCEPT, MODE_ACCEPT_PLAN, MODE_PLAN, MODE_SHELL
 from omh.tui.layout import (
     AGENT_VIEW_ROWS,
@@ -62,19 +62,18 @@ def plain(*texts: str) -> list[Line]:
 class AllocateGridTests(unittest.TestCase):
     def test_budget_rules_hold_over_the_grid(self) -> None:
         checked = 0
-        for rows, cols, tail_rows, slot_rows, composer_rows, sticky in itertools.product(
-            ROWS, COLS, TAIL_ROWS, SLOT_ROWS, COMPOSER_ROWS, (False, True)
+        for rows, cols, tail_rows, slot_rows, composer_rows in itertools.product(
+            ROWS, COLS, TAIL_ROWS, SLOT_ROWS, COMPOSER_ROWS
         ):
             budget = allocate(
                 rows,
                 cols,
-                sticky=sticky,
                 tail_rows=tail_rows,
                 slot_rows=slot_rows,
                 composer_rows=composer_rows,
             )
-            where = (rows, cols, tail_rows, slot_rows, composer_rows, sticky, budget)
-            self.check_budget(budget, rows, cols, tail_rows, slot_rows, composer_rows, sticky, where)
+            where = (rows, cols, tail_rows, slot_rows, composer_rows, budget)
+            self.check_budget(budget, rows, cols, tail_rows, slot_rows, composer_rows, where)
             checked += 1
         self.assertGreater(checked, 25_000)
 
@@ -86,13 +85,11 @@ class AllocateGridTests(unittest.TestCase):
         tail_rows: int,
         slot_rows: int,
         composer_rows: int,
-        sticky: bool,
         where: tuple[object, ...],
     ) -> None:
         room = max(rows - 1, 0)
         content = budget.total
         parts = (
-            budget.sticky,
             budget.tail,
             budget.slot,
             budget.rule,
@@ -115,13 +112,12 @@ class AllocateGridTests(unittest.TestCase):
         self.assertLessEqual(budget.slot, rows // 3, where)
         self.assertLessEqual(budget.slot, slot_rows, where)
         self.assertLessEqual(budget.tail, tail_rows, where)
-        self.assertLessEqual(budget.sticky, int(sticky), where)
         self.assertLessEqual(budget.rule, 1, where)
         # tiny terminals: composer and info line only
         if rows < MIN_ROWS or cols < MIN_COLS:
             self.assertEqual(
-                (budget.sticky, budget.tail, budget.slot, budget.rule, budget.bottom_rule),
-                (0, 0, 0, 0, 0),
+                (budget.tail, budget.slot, budget.rule, budget.bottom_rule),
+                (0, 0, 0, 0),
                 where,
             )
         else:
@@ -132,10 +128,6 @@ class AllocateGridTests(unittest.TestCase):
             if content < room:
                 self.assertEqual(budget.tail, tail_rows, where)
                 self.assertEqual(budget.slot, min(slot_rows, rows // 3), where)
-                self.assertEqual(budget.sticky, int(sticky), where)
-            # the sticky row is never taken while the slot is short of its cap
-            if budget.sticky:
-                self.assertEqual(budget.slot, min(slot_rows, rows // 3), where)
 
 
 class AgentViewBudgetTests(unittest.TestCase):
@@ -145,9 +137,9 @@ class AgentViewBudgetTests(unittest.TestCase):
         for rows, cols, tail_rows, slot_rows, composer_rows, agents_rows in itertools.product(
             range(1, 60), COLS, (0, 5, 200), (0, 9, 60), (1, 12), (0, 3, 7, 30)
         ):
-            plain_budget = allocate(rows, cols, sticky=False, tail_rows=tail_rows, slot_rows=slot_rows,
+            plain_budget = allocate(rows, cols, tail_rows=tail_rows, slot_rows=slot_rows,
                                     composer_rows=composer_rows)
-            with_view = allocate(rows, cols, sticky=False, tail_rows=tail_rows, slot_rows=slot_rows,
+            with_view = allocate(rows, cols, tail_rows=tail_rows, slot_rows=slot_rows,
                                  composer_rows=composer_rows, agents_rows=agents_rows)
             where = (rows, cols, tail_rows, slot_rows, composer_rows, agents_rows, with_view)
             self.assertLessEqual(with_view.total, max(rows - 1, 0), where)
@@ -163,20 +155,20 @@ class AgentViewBudgetTests(unittest.TestCase):
 
     def test_the_view_leaves_the_tail_its_floor_and_takes_the_rest(self) -> None:
         # 12 rows, a full slot: seven rows after the composer frame and the info line, four of them the slot's.
-        free = allocate(12, 80, sticky=False, tail_rows=5, slot_rows=9, composer_rows=1, agents_rows=4)
-        floored = allocate(12, 80, sticky=False, tail_rows=5, slot_rows=9, composer_rows=1, agents_rows=4, tail_floor=1)
+        free = allocate(12, 80, tail_rows=5, slot_rows=9, composer_rows=1, agents_rows=4)
+        floored = allocate(12, 80, tail_rows=5, slot_rows=9, composer_rows=1, agents_rows=4, tail_floor=1)
         self.assertEqual((free.slot, free.agents, free.tail), (4, 3, 0))
         self.assertEqual((floored.slot, floored.agents, floored.tail), (4, 2, 1))
         # A floor past the tail's own rows asks for nothing more, and room enough leaves the view whole.
-        self.assertEqual(allocate(12, 80, sticky=False, tail_rows=0, slot_rows=9, composer_rows=1, agents_rows=4,
+        self.assertEqual(allocate(12, 80, tail_rows=0, slot_rows=9, composer_rows=1, agents_rows=4,
                                   tail_floor=2).agents, 3)
-        self.assertEqual(allocate(40, 80, sticky=False, tail_rows=5, slot_rows=9, composer_rows=1, agents_rows=7,
+        self.assertEqual(allocate(40, 80, tail_rows=5, slot_rows=9, composer_rows=1, agents_rows=7,
                                   tail_floor=2).agents, 7)
 
     def test_the_view_is_the_regions_last_rows_under_the_info_line(self) -> None:
-        parts = Budget(sticky=0, tail=1, slot=1, rule=1, composer=1, bottom_rule=1, info=1, agents=2)
+        parts = Budget(tail=1, slot=1, rule=1, composer=1, bottom_rule=1, info=1, agents=2)
         region = compose(
-            parts, sticky=None, tail=plain("t1"), slot=plain("[Plan]"), rule=plain("──")[0], composer=plain("> a"),
+            parts, tail=plain("t1"), slot=plain("[Plan]"), rule=plain("──")[0], composer=plain("> a"),
             bottom_rule=plain("__")[0], info=plain("info")[0], agents=plain("● main", "⠋ agent", "cut"),
         )
         self.assertEqual(lines_text(region), ["t1", "[Plan]", "──", "> a", "__", "info", "● main", "⠋ agent"])
@@ -207,40 +199,40 @@ class AgentViewBudgetTests(unittest.TestCase):
 
 def budget(**rows: int) -> Budget:
     """A `Budget` with every part not named at 0."""
-    parts = ("sticky", "tail", "slot", "rule", "composer", "bottom_rule", "info")
+    parts = ("tail", "slot", "rule", "composer", "bottom_rule", "info")
     return Budget(**{part: rows.get(part, 0) for part in parts})
 
 
 class AllocateExampleTests(unittest.TestCase):
     def test_an_everyday_terminal(self) -> None:
-        got = allocate(24, 80, sticky=True, tail_rows=3, slot_rows=4, composer_rows=1)
-        self.assertEqual(got, budget(sticky=1, tail=3, slot=4, rule=1, composer=1, bottom_rule=1, info=1))
-        self.assertEqual(got.total, 12)
-        self.assertEqual(got.composer_top, 9)
+        got = allocate(24, 80, tail_rows=3, slot_rows=4, composer_rows=1)
+        self.assertEqual(got, budget(tail=3, slot=4, rule=1, composer=1, bottom_rule=1, info=1))
+        self.assertEqual(got.total, 11)
+        self.assertEqual(got.composer_top, 8)
         # the composer's first row: its own rows plus the bottom rule and the info line from the end
         self.assertEqual(got.total - got.composer_top, got.composer + 2)
 
     def test_the_tail_takes_the_rest_and_the_slot_is_capped(self) -> None:
-        got = allocate(24, 80, sticky=True, tail_rows=100, slot_rows=100, composer_rows=100)
-        self.assertEqual(got, budget(sticky=1, tail=5, slot=8, rule=1, composer=6, bottom_rule=1, info=1))
+        got = allocate(24, 80, tail_rows=100, slot_rows=100, composer_rows=100)
+        self.assertEqual(got, budget(tail=6, slot=8, rule=1, composer=6, bottom_rule=1, info=1))
         self.assertEqual(got.total, 23)
 
     def test_an_idle_region_is_its_composer_box_and_info_line_alone(self) -> None:
-        got = allocate(24, 80, sticky=False, tail_rows=0, slot_rows=0, composer_rows=1)
+        got = allocate(24, 80, tail_rows=0, slot_rows=0, composer_rows=1)
         self.assertEqual(got, budget(rule=1, composer=1, bottom_rule=1, info=1))
         self.assertEqual(got.total, 4)
 
     def test_a_tiny_terminal_draws_composer_and_info_line_only(self) -> None:
         for rows, cols in ((5, 80), (24, MIN_COLS - 1)):
             with self.subTest(rows=rows, cols=cols):
-                got = allocate(rows, cols, sticky=True, tail_rows=9, slot_rows=9, composer_rows=1)
+                got = allocate(rows, cols, tail_rows=9, slot_rows=9, composer_rows=1)
                 self.assertEqual(got, budget(composer=1, info=1))
 
     def test_a_short_terminal_drops_the_bottom_rule_and_keeps_the_info_line(self) -> None:
         shapes = {
             rows: (got.bottom_rule, got.info)
             for rows in range(MIN_ROWS, 13)
-            for got in [allocate(rows, 80, sticky=False, tail_rows=0, slot_rows=0, composer_rows=1)]
+            for got in [allocate(rows, 80, tail_rows=0, slot_rows=0, composer_rows=1)]
         }
         self.assertEqual(
             shapes, {6: (0, 1), 7: (1, 1), 8: (1, 1), 9: (1, 1), 10: (1, 1), 11: (1, 1), 12: (1, 1)}
@@ -251,13 +243,13 @@ class AllocateExampleTests(unittest.TestCase):
         # still gets every row it may take: it never costs the slot a row.
         for rows in range(MIN_ROWS, 86):
             with self.subTest(rows=rows):
-                got = allocate(rows, 80, sticky=False, tail_rows=0, slot_rows=999, composer_rows=999)
+                got = allocate(rows, 80, tail_rows=0, slot_rows=999, composer_rows=999)
                 self.assertEqual(got.slot, slot_cap(rows, 80))
 
     def test_the_smallest_terminals(self) -> None:
-        two = allocate(2, 80, sticky=True, tail_rows=9, slot_rows=9, composer_rows=3)
+        two = allocate(2, 80, tail_rows=9, slot_rows=9, composer_rows=3)
         self.assertEqual(two, budget(composer=1))
-        one = allocate(1, 80, sticky=True, tail_rows=9, slot_rows=9, composer_rows=3)
+        one = allocate(1, 80, tail_rows=9, slot_rows=9, composer_rows=3)
         self.assertEqual(one.total, 0)
 
     def test_the_caps(self) -> None:
@@ -270,7 +262,7 @@ class GapTests(unittest.TestCase):
     """The blank rows around the plan (the owner's spacing of 2026-10-27): only from rows nothing else wants."""
 
     def test_a_tall_terminal_gives_both_gaps_and_the_frame_draws_them_around_the_slot(self) -> None:
-        budget = allocate(40, 80, sticky=False, tail_rows=10, slot_rows=4, composer_rows=1, gaps=(True, True),
+        budget = allocate(40, 80, tail_rows=10, slot_rows=4, composer_rows=1, gaps=(True, True),
                           tail_floor=2, gap_reserve=2)
         self.assertEqual((budget.gaps, budget.slot, budget.tail), ((1, 1), 4, 10))
         slot = [(Span("[Plan]"),), (Span("[ ] a"),), (Span("[ ] b"),), (Span("[ ] c"),)]
@@ -284,9 +276,9 @@ class GapTests(unittest.TestCase):
     def test_the_gaps_give_way_before_the_slot_the_agent_view_or_the_working_rows(self) -> None:
         for rows in range(MIN_ROWS, 30):
             with self.subTest(rows=rows):
-                spaced = allocate(rows, 80, sticky=False, tail_rows=3, slot_rows=5, composer_rows=1,
+                spaced = allocate(rows, 80, tail_rows=3, slot_rows=5, composer_rows=1,
                                   agents_rows=7, tail_floor=2, gaps=(True, True), gap_reserve=2)
-                plain = allocate(rows, 80, sticky=False, tail_rows=3, slot_rows=5, composer_rows=1,
+                plain = allocate(rows, 80, tail_rows=3, slot_rows=5, composer_rows=1,
                                  agents_rows=7, tail_floor=2, gap_reserve=2)
                 self.assertEqual((spaced.slot, spaced.agents, spaced.floor), (plain.slot, plain.agents, plain.floor))
                 self.assertEqual(spaced.composer_top - sum(spaced.gaps) - spaced.tail,
@@ -364,11 +356,13 @@ class GapsNeverCostALiveRowTests(unittest.TestCase):
 
     def test_running_calls_keep_two_blank_rows_where_they_fit_and_the_newest_where_the_tail_is_too_tall(self) -> None:
         """2026-11-09: two blank rows between two calls, as scrollback has them; a live tail too tall gives up the
-        second row of its oldest gaps, only as many as it must, so no call row is lost (the tests above)."""
+        second row of its oldest gaps, only as many as it must, so no call row is lost (the tests above). Since the
+        `↳ you:` echo and the blank row over it went (2026-11-11), a long turn has those two rows back: one more gap
+        keeps both rows, or one more call shows."""
         cases = {(42, 150, True, 3, True): [2, 2], (24, 80, False, 4, False): [2, 2, 2],
-                 (24, 80, False, 3, True): [1, 2], (24, 80, False, 6, False): [1, 1, 2, 2, 2],
-                 (24, 80, False, 7, False): [1, 1, 1, 1, 1, 2], (15, 60, False, 3, True): [1],
-                 (24, 80, False, 8, False): [1] * 7, (30, 80, True, 8, True): [1] * 4}
+                 (24, 80, False, 3, True): [2, 2], (24, 80, False, 6, False): [1, 2, 2, 2, 2],
+                 (24, 80, False, 7, False): [1, 1, 1, 1, 2, 2], (15, 60, False, 3, True): [1],
+                 (24, 80, False, 8, False): [1] * 7, (30, 80, True, 8, True): [1] * 5}
         for (rows, cols, agents, count, plan), gaps in cases.items():
             with self.subTest(rows=rows, cols=cols, agents=agents, calls=count, plan=plan):
                 screen = self.scene(rows, cols, agents, count, plan)
@@ -483,22 +477,22 @@ class HiddenComposerBudgetTests(unittest.TestCase):
 
     def test_the_slot_takes_the_composer_frames_rows_and_the_rows_under_it_stay(self) -> None:
         checked = 0
-        for rows, cols, tail_rows, slot_rows, composer_rows, sticky in itertools.product(
-            ROWS, COLS, TAIL_ROWS, SLOT_ROWS, COMPOSER_ROWS, (False, True)
+        for rows, cols, tail_rows, slot_rows, composer_rows in itertools.product(
+            ROWS, COLS, TAIL_ROWS, SLOT_ROWS, COMPOSER_ROWS
         ):
-            parts = dict(sticky=sticky, tail_rows=tail_rows, slot_rows=slot_rows)
+            parts = dict(tail_rows=tail_rows, slot_rows=slot_rows)
             shown = allocate(rows, cols, composer_rows=composer_rows, **parts)  # type: ignore[arg-type]
             got = allocate(rows, cols, composer_rows=composer_rows, composer_hidden=True, **parts)  # type: ignore[arg-type]
-            where = (rows, cols, tail_rows, slot_rows, composer_rows, sticky, got)
+            where = (rows, cols, tail_rows, slot_rows, composer_rows, got)
             self.assertEqual((got.rule, got.composer, got.bottom_rule), (0, 0, 0), where)
             self.assertEqual(got.info, shown.info, where)
             self.assertLessEqual(got.total, max(rows - 1, 0), where)
-            self.assertTrue(all(part >= 0 for part in (got.sticky, got.tail, got.slot)), where)
+            self.assertTrue(all(part >= 0 for part in (got.tail, got.slot)), where)
             self.assertEqual(got.slot, min(slot_rows, choice_cap(rows, cols)), where)
             if slot_rows and shown.composer:
                 self.assertGreaterEqual(got.slot, 1, where)  # the highlighted row, at least
             if rows < MIN_ROWS or cols < MIN_COLS:
-                self.assertEqual((got.sticky, got.tail), (0, 0), where)
+                self.assertEqual(got.tail, 0, where)
             checked += 1
         self.assertGreater(checked, 25_000)
 
@@ -508,14 +502,14 @@ class HiddenComposerBudgetTests(unittest.TestCase):
         self.assertEqual(choice_cap(24, MIN_COLS - 1), 1)  # too narrow for a slot: the composer's own row
         for rows in sizes:
             with self.subTest(rows=rows):
-                frame = allocate(rows, 80, sticky=False, tail_rows=0, slot_rows=0, composer_rows=1)
+                frame = allocate(rows, 80, tail_rows=0, slot_rows=0, composer_rows=1)
                 self.assertEqual(choice_cap(rows, 80), slot_cap(rows, 80) + frame.rule + frame.composer + frame.bottom_rule)
 
     def test_an_everyday_terminal(self) -> None:
-        got = allocate(24, 80, sticky=True, tail_rows=3, slot_rows=5, composer_rows=2, composer_hidden=True)
-        self.assertEqual(got, budget(sticky=1, tail=3, slot=5, info=1))
-        got = allocate(24, 80, sticky=True, tail_rows=100, slot_rows=100, composer_rows=1, composer_hidden=True)
-        self.assertEqual(got, budget(sticky=1, tail=10, slot=11, info=1))
+        got = allocate(24, 80, tail_rows=3, slot_rows=5, composer_rows=2, composer_hidden=True)
+        self.assertEqual(got, budget(tail=3, slot=5, info=1))
+        got = allocate(24, 80, tail_rows=100, slot_rows=100, composer_rows=1, composer_hidden=True)
+        self.assertEqual(got, budget(tail=11, slot=11, info=1))
 
 
 class SlotCaretTests(unittest.TestCase):
@@ -542,10 +536,9 @@ class ComposeTests(unittest.TestCase):
         self.info = (Span("info"),)
 
     def test_rows_stack_in_order_and_the_tail_keeps_its_last_rows(self) -> None:
-        parts = budget(sticky=1, tail=2, slot=2, rule=1, composer=2, bottom_rule=1, info=1)
+        parts = budget(tail=2, slot=2, rule=1, composer=2, bottom_rule=1, info=1)
         region = compose(
             parts,
-            sticky=(Span("↳ you: hi"),),
             tail=plain("t1", "t2", "t3", "t4"),
             slot=plain("s1", "s2", "s3"),
             rule=self.rule,
@@ -555,15 +548,14 @@ class ComposeTests(unittest.TestCase):
         )
         self.assertEqual(
             lines_text(region),
-            ["↳ you: hi", "t3", "t4", "s1", "s2", "──", "> a", "  b", "__", "info"],
+            ["t3", "t4", "s1", "s2", "──", "> a", "  b", "__", "info"],
         )
         self.assertEqual(len(region), parts.total)
 
     def test_short_parts_are_filled_with_blank_rows_to_the_exact_count(self) -> None:
-        parts = budget(sticky=1, tail=3, slot=2, rule=1, composer=2, bottom_rule=1, info=1)
+        parts = budget(tail=3, slot=2, rule=1, composer=2, bottom_rule=1, info=1)
         region = compose(
             parts,
-            sticky=None,
             tail=plain("t1"),
             slot=plain("s1"),
             rule=self.rule,
@@ -571,16 +563,15 @@ class ComposeTests(unittest.TestCase):
             bottom_rule=self.bottom,
             info=self.info,
         )
-        self.assertEqual(lines_text(region), ["", "", "", "t1", "", "s1", "──", "> a", "", "__", "info"])
+        self.assertEqual(lines_text(region), ["", "", "t1", "", "s1", "──", "> a", "", "__", "info"])
         self.assertEqual(region[0], BLANK)
 
     def test_pad_rows_go_under_the_live_block_and_above_the_working_rows(self) -> None:
         # Pad rows at the region's top left a band between the transcript and the live block it continues (the
         # owner's report, 2026-10-25); the working row and its tip stay on the composer.
-        parts = Budget(sticky=1, tail=4, slot=0, rule=1, composer=1, bottom_rule=1, info=1, pad=3, floor=2)
+        parts = Budget(tail=4, slot=0, rule=1, composer=1, bottom_rule=1, info=1, pad=3, floor=2)
         region = compose(
             parts,
-            sticky=(Span("↳ you: hi"),),
             tail=plain("call", "output", "working", "tip"),
             slot=[],
             rule=self.rule,
@@ -590,18 +581,17 @@ class ComposeTests(unittest.TestCase):
         )
         self.assertEqual(
             lines_text(region),
-            ["↳ you: hi", "call", "output", "", "", "", "working", "tip", "──", "> a", "__", "info"],
+            ["call", "output", "", "", "", "working", "tip", "──", "> a", "__", "info"],
         )
         self.assertEqual(len(region), parts.total)
-        got = allocate(24, 80, sticky=False, tail_rows=4, slot_rows=0, composer_rows=1, min_height=12, tail_floor=2)
+        got = allocate(24, 80, tail_rows=4, slot_rows=0, composer_rows=1, min_height=12, tail_floor=2)
         self.assertEqual((got.pad, got.floor), (12 - 8, 2))
-        self.assertEqual(allocate(24, 80, sticky=False, tail_rows=1, slot_rows=0, composer_rows=1, tail_floor=2).floor,
+        self.assertEqual(allocate(24, 80, tail_rows=1, slot_rows=0, composer_rows=1, tail_floor=2).floor,
                          1)  # never more rows than the tail shows
 
     def test_nothing_budgeted_draws_nothing(self) -> None:
         region = compose(
             budget(composer=1, info=1),
-            sticky=(Span("sticky"),),
             tail=plain("t1"),
             slot=plain("s1"),
             rule=self.rule,
@@ -612,8 +602,8 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(lines_text(region), ["> a", "info"])
 
     def test_caret_row_counts_everything_above_the_composer(self) -> None:
-        parts = budget(sticky=1, tail=2, slot=2, rule=1, composer=3, bottom_rule=1, info=1)
-        self.assertEqual([caret_row(parts, row) for row in (-1, 0, 1, 2, 7)], [6, 6, 7, 8, 8])
+        parts = budget(tail=2, slot=2, rule=1, composer=3, bottom_rule=1, info=1)
+        self.assertEqual([caret_row(parts, row) for row in (-1, 0, 1, 2, 7)], [5, 5, 6, 7, 7])
 
 
 class FrameTests(unittest.TestCase):
@@ -720,28 +710,6 @@ class FrameTests(unittest.TestCase):
             placeholder="Ask Hermes anything",
         )
         self.assertEqual(lines_text([typed.lines[typed.budget.composer_top]]), [composer_row("❯ x", 40)])
-
-    def test_the_sticky_line_shows_the_first_line_of_the_prompt(self) -> None:
-        line = sticky_line("  fix the 한글 bug\nand more", 40, DEFAULT_THEME)
-        self.assertEqual(lines_text([line]), ["↳ you: fix the 한글 bug"])
-        self.assertEqual(lines_text([sticky_line("abcdefghij", 12, DEFAULT_THEME)]), ["↳ you: abcd…"])
-
-    def test_the_sticky_line_has_no_band_and_reads_apart_from_a_transcript_row_by_its_colours(self) -> None:
-        # Round 3, review B NIT 9: right under the turn's last row (`▸ thought for …`), it read as one more of them.
-        # Round 4: no band behind the person's own text, as the prompt's echo has none; `↳ you:` in the accent,
-        # which no transcript row starts with, and the prompt in the muted text colour.
-        from omh.tui.style import is_fill
-        from omh.tui.theme import theme_named
-
-        for theme in (DEFAULT_THEME, theme_named("sky", "#FFFFFF"), theme_named("sky", "#1E1E1E")):
-            with self.subTest(theme=theme.name):
-                line = sticky_line("fix the bug", 40, theme)
-                self.assertEqual({span.style.bg for span in line}, {None})
-                self.assertFalse(any(is_fill(span) for span in line))
-                self.assertEqual([(span.text, span.style) for span in line],
-                                 [("↳ you: ", theme.running), ("fix the bug", theme.muted)])
-                (cut,) = [sticky_line("abcdefghij", 12, theme)]
-                self.assertEqual((cut[-1].text, cut[-1].style), ("…", theme.dim))  # a dim mark where it is cut
 
 
 if __name__ == "__main__":

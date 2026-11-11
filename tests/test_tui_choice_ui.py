@@ -474,14 +474,12 @@ class PickerTests(unittest.TestCase):
                 screen = drawn(app)
                 self.assertEqual(app.terminal.screen.cursor[0], next(i for i, line in enumerate(screen) if line.startswith("❯ a draft")))  # type: ignore[attr-defined]
 
-    def test_the_caret_stays_on_the_filter_row_with_the_echo_and_the_working_row_above(self) -> None:
-        # The slot's top is below the sticky echo and the working row: the caret counts them.
+    def test_the_caret_stays_on_the_filter_row_with_the_working_row_above(self) -> None:
+        # The slot's top is below the working row: the caret counts it.
         app, _client = make_app(busy=True)
-        app.sticky, app.flushed_since_prompt = "run the tools", 999  # the prompt has scrolled off: its echo shows
         app._open_session_picker(SESSIONS)
         type_text(app, "re")
         screen = drawn(app)
-        self.assertTrue(any(line.startswith("↳ you: run the tools") for line in screen), screen)
         self.assertTrue(any("Working…" in line for line in screen), screen)
         row = info_row(screen) - 1
         self.assertEqual(screen[row], "❯ re")

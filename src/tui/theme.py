@@ -81,7 +81,7 @@ every other row in the terminal's foreground (`menu`) and its details on
 approval's choices are the exception: the highlighted one is bold in its tone
 on a band of that tone (`pick_error`, `pick_ok`, `pick_warn`, `pick_muted`),
 since allowing and denying must not look alike at a glance. The
-info line under the composer and the sticky prompt over a running turn have
+info line under the composer has
 no bar: their words and marks are measured against the terminal's background
 like any transcript row.
 """
