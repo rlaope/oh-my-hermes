@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Scrolling up in the OMH TUI scrolls.** Since the main screen took the
+  mouse so a drag copies clean, the wheel up opened the full-screen
+  transcript view instead of scrolling, a pager that could hold as little as
+  one notice. The wheel up now hands the mouse to the terminal, which scrolls
+  its own scrollback as in any shell; the next key or paste takes it back, so
+  a drag copies without the rail again. Ctrl+O still opens the transcript
+  view.
+
 - **The omher Linux AppImage reaches its bots again.** The AppImage's AppRun
   exports `PYTHONHOME` and `PYTHONPATH` pointing into the image, and omher
   passed them to the host Hermes Python, so the bridge died with
@@ -12,6 +20,7 @@ All notable changes will be documented here.
   the agent CLIs, sign-ins, the installer) now gets the host environment, and
   the PR CI starts the built AppImage under Xvfb and fails unless the app, its
   window and its bridge are all up. (#2778)
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
@@ -480,6 +489,20 @@ All notable changes will be documented here.
   keeps its files after omher restarts, and a file dropped on a session's
   terminal is saved and its quoted path typed at the prompt. An
   oh-my-hermes session takes no files (BOUNDARY rule 26).
+
+- **An omher session that has answered is idle, and an ended terminal session
+  can start again.** OmO, pi and oh-my-pi send statuses of their own after a
+  turn ends; omher used to start a new turn from them, so the chat stayed on
+  Working with Stop until the next message. A turn now starts only on its own
+  start, an agent's status shows only while its turn runs, a turn with no
+  steps reads `Worked for 13s`, an agent that dies or is stopped mid-turn ends
+  its turn, Stop before Codex names a turn still stops it, and an OmO chat
+  that was running continues by itself after omher restarts. A stopped OmO
+  turn reads Stopped, Terminal and back during a Claude Code turn leaves the
+  chat idle, the live line drops `Waiting for approval` once you answer, and
+  a CLI's config warning is no longer shown as the reason it ended. DSH and Grok
+  sessions that exit get the same Ended line and Restart as a chat, whose
+  tooltip says whether the conversation continues.
 
 ## 4.0.7 - 2026-11-09
 

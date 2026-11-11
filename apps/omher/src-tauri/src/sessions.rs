@@ -792,7 +792,7 @@ mod tests {
             assert!(resume_args("claude", bad).is_err(), "{bad:?}");
         }
         assert!(resume_args("codex", id).is_err());
-        // OmO continues with --session, DSH with --resume, each only with a UUID
+        // OmO continues with --session, only with a UUID
         assert_eq!(resume_args("omo", id).unwrap(), [OsString::from("--session"), OsString::from(id)]);
         // DSH continues DeepSeek Harness's own `session-<uuid>` with --session-id; a bare UUID (a 0.2.4 deepseek-bot
         // conversation id) is refused

@@ -76,7 +76,7 @@ RULES = (
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
-    "a Claude Code or Codex chat that was running starts again by itself in the same folder, continuing its own conversation,",
+    "a Claude Code, Codex, OmO or DSH chat that was running starts again by itself in the same folder, continuing its own conversation,",
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
     "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",

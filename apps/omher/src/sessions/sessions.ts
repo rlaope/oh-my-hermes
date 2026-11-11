@@ -242,6 +242,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     notify?.(full);
   };
 
+  /** The chat's program is gone (it exited, or omher stopped it): a turn the chat still shows ends with it. The
+   *  shell sends the turn's end before the exit when its adapter knew of the turn; this covers the rest (omher
+   *  stopped it, so its last events are dropped). */
+  const endLiveTurn = (id: string, outcome: "interrupted" | "ended") => {
+    const key = keys.get(id);
+    if (!key || !store().getState().chats[key]?.turn) return;
+    store().dispatch({ type: "event", ev: { event: "turn.end", bot: key, outcome } as BridgeEvent, now: Date.now() });
+  };
+
   const onAgentEvent = (id: string, proc: ChatProc) => (ev: ChatEvent) => {
     if (procs.get(id) !== proc && ev.event !== "exit") return; // an old process of this session (Terminal toggle)
     switch (ev.event) {
@@ -268,6 +277,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       case "exit": {
         if (procs.get(id) === proc) procs.delete(id);
         if (proc.stopping) return;
+        endLiveTurn(id, "ended");
         const code = typeof ev.code === "number" ? ev.code : null;
         const error = typeof ev.error === "string" ? ev.error.trim() : "";
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
@@ -643,6 +653,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return true;
   };
 
+  /** How many times session `id`'s terminal was started again (Restart): the view keys its terminal on it. */
+  const termRuns = new Map<string, number>();
+
   const startTerm = async (id: string, t: Term) => {
     const r = rec(id);
     if (!r) return;
@@ -786,6 +799,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!p) return;
     p.stopping = true;
     procs.delete(id);
+    endLiveTurn(id, "interrupted");
     if (p.kind === "agent" && p.hostId !== undefined) await host.chatClose(p.hostId).catch(() => undefined);
     if (p.kind === "folder" && p.bot && p.fid) await store().actions.folderClose(p.bot, p.fid).catch(() => undefined);
   };
@@ -816,12 +830,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   };
 
   /**
-   * Start an ended chat session's agent again in the same chat. Claude Code, Codex and OmO continue their
-   * conversation (Claude Code `--resume`, Codex `thread/resume`, OmO `--session`); pi and oh-my-pi start a new one.
+   * Start an ended session's agent again: a chat agent in the same chat, a terminal agent in a fresh terminal, in
+   * the same folder and account. Agents in `CONTINUES` continue their conversation (Claude Code `--resume`, Codex
+   * `thread/resume`, OmO `--session`, DSH `--session-id`); the others (pi, oh-my-pi, Grok's terminal) start a new one.
    */
   const restart = async (id: string) => {
     const r = rec(id);
-    if (!r || procs.has(id) || modeOf(state.agents, r.agent) !== "chat" || (r.status !== "exited" && r.status !== "failed")) return;
+    if (!r || (r.status !== "exited" && r.status !== "failed")) return;
+    if (modeOf(state.agents, r.agent) === "terminal") {
+      // a fresh terminal: the view mounts it and starts the program (continuing the conversation, as startTerm says)
+      const t = terms.get(id);
+      if (t && !t.closed) return;
+      disposeTerm(id);
+      termRuns.set(id, (termRuns.get(id) ?? 0) + 1);
+      patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined });
+      return;
+    }
+    if (procs.has(id) || modeOf(state.agents, r.agent) !== "chat") return;
     const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
     note(id, null);
@@ -855,8 +880,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /**
    * Put back the sessions saved before omher restarted (once per page load; a second call does nothing, so no
-   * program starts twice). Each keeps its id, folder, account and chat. A Claude Code or Codex chat that was
-   * running continues its conversation; any other running one comes back paused; ended ones stay ended.
+   * program starts twice). Each keeps its id, folder, account and chat. A chat that was running and continues a
+   * conversation (Claude Code, Codex, OmO) continues it; any other running one comes back paused; ended ones stay
+   * ended (with Restart).
    */
   const restore = (saved: SavedSession[]) => {
     if (restored || state.list.length > 0) return;
@@ -1019,6 +1045,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
     hasTerm: (id: string) => terms.has(id),
+    /** Changes each time Restart starts session `id`'s terminal program again. */
+    termRun: (id: string) => termRuns.get(id) ?? 0,
     /** The session whose chat has app-store key `key`. */
     byKey: (key: string) => {
       for (const [id, k] of keys) if (k === key) return rec(id) ?? null;

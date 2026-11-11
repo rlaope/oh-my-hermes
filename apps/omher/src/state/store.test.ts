@@ -107,6 +107,69 @@ describe("reducer: a full turn", () => {
     expect(s.chats.kami.turn!.streaming).toBe("abcd");
   });
 
+  it("a status, thinking, step or text outside a turn starts none; a status just before turn.start opens it", () => {
+    // Hermes says a goal or loop verdict after the turn's message.complete (prompt_turn._goal_followup_after_turn):
+    // it must not start a turn nothing ends
+    let s = run(initialState(), realTurn("kami"));
+    s = run(s, [
+      { event: "status", bot: "kami", text: "Goal reached" },
+      { event: "thinking", bot: "kami" },
+      { event: "tool.start", bot: "kami", tool_id: "x", name: "terminal", detail: "ls" },
+      { event: "tool.end", bot: "kami", tool_id: "x", name: "terminal", ok: true, ms: 1 },
+      { event: "skill", bot: "kami", name: "plan" },
+      { event: "delta", bot: "kami", text: "late" },
+    ], T0 + 10_000);
+    expect(s.chats.kami.turn).toBeNull();
+    expect(s.chats.kami.items.filter((i) => i.kind === "activity")).toHaveLength(1);
+    // auto-continue: "Resuming interrupted turn…" comes right before message.start, so the turn opens with it
+    s = run(s, [{ event: "status", bot: "kami", text: "Resuming interrupted turn…" }, { event: "turn.start", bot: "kami" }], T0 + 60_000);
+    expect(s.chats.kami.turn!.status).toBe("Resuming interrupted turn…");
+    s = run(s, [{ event: "turn.end", bot: "kami", outcome: "done" }], T0 + 61_000);
+    // a status from long before does not
+    s = run(s, [{ event: "status", bot: "kami", text: "old" }], T0 + 70_000);
+    s = run(s, [{ event: "turn.start", bot: "kami" }], T0 + 90_000);
+    expect(s.chats.kami.turn!.status).toBe("");
+  });
+
+  it("a session chat's turn.end after Stop stays ended when the agent's status comes later", () => {
+    const key = "agent:s9";
+    let s = run(initialState(), [{ event: "turn.start", bot: key }, { event: "status", bot: key, text: "Working on it" }]);
+    s = run(s, [{ event: "turn.end", bot: key, outcome: "interrupted" }, { event: "status", bot: key, text: "(😺 OmO Native)" }], T0 + 5_000);
+    expect(s.chats[key].turn).toBeNull();
+    expect(s.chats[key].lastTurn!.outcome).toBe("interrupted");
+  });
+
+  it("an answered card puts the live line back to the turn's work, not \"Waiting for approval\"", () => {
+    // audit O7 (claude-A): approve, then the command runs and the answer streams under the old waiting line
+    let s = run(initialState(), [
+      { event: "turn.start", bot: "kami" },
+      { event: "tool.start", bot: "kami", tool_id: "b1", name: "terminal", detail: "echo one > one.txt" },
+      { event: "approval.request", bot: "kami", request_id: "r1", title: "Run this command?", command: "echo one > one.txt", choices: ["once", "deny"] },
+    ]);
+    expect(s.chats.kami.turn!.status).toBe("Waiting for approval");
+    s = reduce(s, { type: "approval.resolved", bot: "kami", request_id: "r1", choice: "once" });
+    expect(s.chats.kami.turn!.status).toBe(activityText("terminal", "echo one > one.txt"));
+    s = run(s, [{ event: "tool.end", bot: "kami", tool_id: "b1", name: "terminal", ok: true, ms: 5 }]);
+    // a question with no step running goes back to the plain working line
+    s = run(s, [{ event: "clarify.request", bot: "kami", request_id: "q1", question: "Red or blue?", choices: ["Red", "Blue"] }]);
+    expect(s.chats.kami.turn!.status).toBe("Waiting for your answer");
+    s = reduce(s, { type: "clarify.resolved", bot: "kami", request_id: "q1", answer: "Blue" });
+    expect(s.chats.kami.turn!.status).toBe("");
+    // two cards: answering one keeps waiting for the other
+    s = run(s, [
+      { event: "approval.request", bot: "kami", request_id: "r2", title: "Run?", command: "a", choices: ["once", "deny"] },
+      { event: "approval.request", bot: "kami", request_id: "r3", title: "Run?", command: "b", choices: ["once", "deny"] },
+    ]);
+    s = reduce(s, { type: "approval.resolved", bot: "kami", request_id: "r2", choice: "once" });
+    expect(s.chats.kami.turn!.status).toBe("Waiting for approval");
+    s = reduce(s, { type: "approval.resolved", bot: "kami", request_id: "r3", choice: "deny" });
+    expect(s.chats.kami.turn!.status).toBe("");
+    // the agent's own status is never rewritten
+    s = run(s, [{ event: "status", bot: "kami", text: "Compacting" }]);
+    s = reduce(s, { type: "approval.resolved", bot: "kami", request_id: "r3", choice: "deny" });
+    expect(s.chats.kami.turn!.status).toBe("Compacting");
+  });
+
   it("collects skill chips once", () => {
     const s = run(initialState(), [
       { event: "turn.start", bot: "kami" },
