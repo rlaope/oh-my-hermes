@@ -41,11 +41,11 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("model pill: one control, popover lists providers and models with the current one checked", async ({ page }) => {
+test("model pill: the model control plus the panel button, popover lists providers and models with the current one checked", async ({ page }) => {
   await open(page);
   const right = page.getByTestId("head-right");
-  await expect(right.locator(":scope > *")).toHaveCount(1);
-  expect(await right.locator("button, a, [role=button], input, select").count()).toBe(1);
+  await expect(right.locator(":scope > *")).toHaveCount(2);
+  expect(await right.locator("button, a, [role=button], input, select").count()).toBe(2);
   const pill = page.getByTestId("model-pill");
   // the model's company mark sits before the name (Opus -> Claude)
   await expect(pill.locator('svg.model-ic[data-mark="claude"]')).toBeVisible();
