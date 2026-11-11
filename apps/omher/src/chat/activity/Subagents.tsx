@@ -101,8 +101,11 @@ export function FanoutCard({ fan, live }: { fan: Fanout; live: boolean }) {
     return () => clearInterval(h);
   }, [running]);
   const now = Date.now();
-  const ends = subs.map((s) => s.startedAt + rowMs(s, now));
-  const span = elapsed((running ? now : Math.max(fan.startedAt, ...ends)) - fan.startedAt);
+  // the fan-out's elapsed time: from its first subagent's start (one that ended with its own time began that long
+  // before it ended, which can be before omher heard of it) to now, or to its last end; never less than its longest row
+  const begun = Math.min(fan.startedAt, ...subs.map((s) => (s.seconds !== undefined && s.endedAt !== undefined ? s.endedAt - s.seconds * 1000 : s.startedAt)));
+  const ends = subs.map((s) => s.endedAt ?? s.startedAt + rowMs(s, now));
+  const span = elapsed(Math.max((running ? now : Math.max(begun, ...ends)) - begun, ...subs.map((s) => rowMs(s, now))));
   const failed = subs.filter((s) => s.state === "failed").length;
   const run = subs.find((s) => s.dag)?.dag?.run ?? null;
   const open = () => getStore().actions.openRun(run ?? (fan.delegation ? `delegate:${fan.delegation}` : null));

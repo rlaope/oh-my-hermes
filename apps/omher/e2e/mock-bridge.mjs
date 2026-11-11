@@ -440,17 +440,28 @@ function cliSeed() {
 // The mock SESSIONS Claude chat's own run (the MockHost's Claude session id, in the e2e folder): the agent's record
 // of the two subagents of "/subagents", as CliRuns reads it from the session's transcript. Its title is the agent's
 // ("Claude Code session"): the session panel shows the session row's name instead.
-function sessionRun() {
-  const t = now() - 30;
+// The session's own record as the bridge reads it from the transcript of the run the chat shows ("/subagents"),
+// the message sent `ago` seconds back: each subagent starts at its call and the first ends when its hand-back
+// reached the chat, after the time the chat's row says (3.7s, by Claude Code's own count, as the transcript's
+// stamps do); the second starts when its call reached the chat and takes 9.4s. With `hold` it is still out, as in
+// "/subagents hold". The same moments as host.ts's MockChat "/subagents" (0.6s and 0.17s after the send).
+function sessionRun({ ago = 30, hold = false } = {}) {
+  const sent = now() - ago;
   const node = (id, label, summary, started, ended) => ({
-    id, label, deps: [], layer: 0, state: "done", model: "claude-fable-5-2", executor: "claude", lane: "general-purpose",
-    summary, started, ended, attempts: [{ n: 1, outcome: "completed", started, ended }],
+    id, label, deps: [], layer: 0, state: ended === undefined ? "running" : "done", model: "claude-fable-5-2", executor: "claude",
+    lane: "general-purpose", started, attempts: [{ n: 1, outcome: ended === undefined ? "open" : "completed", started, ...(ended === undefined ? {} : { ended }) }],
+    ...(ended === undefined ? {} : { summary, ended }),
   });
+  const back = sent + 0.6;
+  const second = sent + 0.17;
+  const nodes = [node("sa-1", "Read a.txt first line", "alpha line", back - 3.7, back), node("sa-2", "Count lines of b.txt", "3", second, hold ? undefined : second + 9.4)];
+  const t = back - 3.7;
+  const end = second + 9.4;
   return {
     id: "claude:11111111-2222-4333-8444-555555555555", kind: "claude-task", agent: "claude",
     owner: { type: "session", id: "11111111-2222-4333-8444-555555555555" }, title: "Claude Code session",
-    cwd: "/Users/you/code/omher", state: "done", started: t, updated: t + 10, ended: t + 10,
-    nodes: [node("sa-1", "Read a.txt first line", "alpha line", t, t + 4), node("sa-2", "Count lines of b.txt", "3", t + 1, t + 10)],
+    cwd: "/Users/you/code/omher", state: hold ? "running" : "done", started: t, updated: hold ? now() : end,
+    ...(hold ? {} : { ended: end }), nodes,
   };
 }
 
@@ -1319,8 +1330,8 @@ const OPS = {
     return { count: p.events.length };
   },
   // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
-  "mock.sessionRun": () => {
-    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), sessionRun()];
+  "mock.sessionRun": (p) => {
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), sessionRun({ ago: typeof p.ago === "number" ? p.ago : undefined, hold: p.hold === true })];
     return { ok: true };
   },
   "mock.reset": () => {

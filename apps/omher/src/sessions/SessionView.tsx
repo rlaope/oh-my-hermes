@@ -430,7 +430,9 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
           <ModelIcon model={rec.model || label} provider={vendor} size={14} />
           <span className={`mp-d${live ? " live" : ""}`} aria-hidden="true" />
         </span>
-        <span data-testid="model-label">{rec.model || tr("ss.model")}</span>
+        <span className="mp-l" title={rec.model || undefined} data-testid="model-label">
+          {rec.model || tr("ss.model")}
+        </span>
         <ChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} label={tr("ss.model")} width={256} className="mp-pop">
