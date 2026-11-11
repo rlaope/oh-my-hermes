@@ -402,6 +402,17 @@ All notable changes will be documented here.
   Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
   Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
 
+- **An omher session that has answered is idle, and an ended terminal session
+  can start again.** OmO, pi and oh-my-pi send statuses of their own after a
+  turn ends; omher used to start a new turn from them, so the chat stayed on
+  Working with Stop until the next message. A turn now starts only on its own
+  start, an agent's status shows only while its turn runs, a turn with no
+  steps reads `Worked for 13s`, an agent that dies or is stopped mid-turn ends
+  its turn, Stop before Codex names a turn still stops it, and an OmO chat
+  that was running continues by itself after omher restarts. DSH and Grok
+  sessions that exit get the same Ended line and Restart as a chat, whose
+  tooltip says whether the conversation continues.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

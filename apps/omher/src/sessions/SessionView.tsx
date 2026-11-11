@@ -113,7 +113,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
     status: rec.status === "running" ? "online" : rec.status === "starting" ? "starting" : "offline",
     running: !!chat?.turn,
   };
-  const ended = rec.status === "exited" || rec.status === "failed";
+  const ended = isEnded(rec);
   const offlineText = rec.paused
     ? tr("ss.isPaused", { agent: label })
     : rec.status === "failed"
@@ -121,31 +121,12 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
       : rec.status === "starting"
         ? tr("ss.startingAgent", { agent: label })
         : tr("ss.hasEnded", { agent: label });
-  const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   // one element per chat: the bubbles are memoized on it
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
       <Timeline bot={bot} face={face} />
-      {rec.paused ? (
-        <Paused rec={rec} />
-      ) : ended && (
-        <div className="ss-ended" role="status" data-testid="session-ended">
-          <span className="ss-ended-t" title={why || undefined}>
-            {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
-            {why ? ` · ${why}` : ""}
-          </span>
-          <button
-            type="button"
-            className="ss-restart"
-            onClick={() => void getSessions().restart(rec.id)}
-            title={CONTINUES.includes(rec.agent) ? tr("ss.restartContinue", { agent: label }) : tr("ss.restartFolder", { agent: label })}
-            data-testid="session-restart"
-          >
-            {tr("ss.restart")}
-          </button>
-        </div>
-      )}
+      {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
       <Composer
         key={chatKey}
         bot={bot}
@@ -317,10 +298,34 @@ function DraftPane({ rec }: { rec: SessionRec }) {
   );
 }
 
+const isEnded = (rec: SessionRec) => rec.status === "exited" || rec.status === "failed";
+
+/** Restart's (and Resume's) tooltip: whether the agent continues this conversation or starts a new one. */
+function againTip(rec: SessionRec): string {
+  const agent = agentDef(rec.agent).label;
+  return CONTINUES.includes(rec.agent) && rec.agentSession ? tr("ss.restartContinue", { agent }) : tr("ss.restartFolder", { agent });
+}
+
+/** An ended session (chat or terminal): one quiet line, and Restart, which starts its agent again in the same folder
+ *  and account. */
+function Ended({ rec }: { rec: SessionRec }) {
+  const why = rec.error ? rec.error.trim().split("\n").pop() : "";
+  return (
+    <div className="ss-ended" role="status" data-testid="session-ended">
+      <span className="ss-ended-t" title={why || undefined}>
+        {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
+        {why ? ` · ${why}` : ""}
+      </span>
+      <button type="button" className="ss-restart" onClick={() => void getSessions().restart(rec.id)} title={againTip(rec)} data-testid="session-restart">
+        {tr("ss.restart")}
+      </button>
+    </div>
+  );
+}
+
 /** A session that was running when omher restarted and does not continue by itself: one line and Resume, which
  *  starts it again in the same folder (and account). */
 function Paused({ rec }: { rec: SessionRec }) {
-  const label = agentDef(rec.agent).label;
   return (
     <div className="ss-ended" role="status" data-testid="session-paused">
       <span className="ss-ended-t">{t("resume.paused")}</span>
@@ -328,7 +333,7 @@ function Paused({ rec }: { rec: SessionRec }) {
         type="button"
         className="ss-restart"
         onClick={() => void getSessions().resume(rec.id)}
-        title={t("resume.resumeTip", { agent: label })}
+        title={againTip(rec)}
         data-testid="session-resume"
       >
         {t("resume.resume")}
@@ -337,13 +342,14 @@ function Paused({ rec }: { rec: SessionRec }) {
   );
 }
 
-/** A restored terminal session that is not running: no terminal is started until the person asks. */
+/** A restored terminal session that is not running: no terminal is started until the person asks (Resume, or
+ *  Restart once it has ended). */
 function TerminalIdle({ rec }: { rec: SessionRec }) {
   const label = agentDef(rec.agent).label;
   return (
     <div className="pane ss-chat ss-idle" data-testid="session-idle">
       <div className="chat-empty">{rec.paused ? null : tr("ss.agentEnded", { agent: label })}</div>
-      {rec.paused && <Paused rec={rec} />}
+      {rec.paused ? <Paused rec={rec} /> : <Ended rec={rec} />}
     </div>
   );
 }
@@ -522,7 +528,11 @@ export function SessionView() {
           </div>
         </div>
       ) : (
-        <TerminalPane key={`${rec.id}-term`} rec={rec} />
+        <>
+          {/* a new key after Restart: a fresh terminal for the program started again */}
+          <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} />
+          {!canToggle && isEnded(rec) && <Ended rec={rec} />}
+        </>
       )}
     </>
   );

@@ -104,9 +104,11 @@ describe("resume snapshot", () => {
     expect(gone.sessions).toHaveLength(3);
   });
 
-  it("Claude Code and Codex continue by themselves; the others wait for Resume", () => {
+  it("Claude Code, Codex and OmO continue by themselves; the others wait for Resume", () => {
     expect(continuesItself({ agent: "claude", view: "chat", agentSession: "u" })).toBe(true);
     expect(continuesItself({ agent: "codex", view: "chat", agentSession: "t" })).toBe(true);
+    // OmO continues with --session (a real omo answered from its earlier turn after a restart)
+    expect(continuesItself({ agent: "omo", view: "chat", agentSession: "01a1ca42-38d5-7b6b-b3e9-d76953dcecd0" })).toBe(true);
     expect(continuesItself({ agent: "claude", view: "chat" })).toBe(false);
     for (const agent of ["pi", "omp", "grok", "omh"] as const) expect(continuesItself({ agent, view: "chat", agentSession: "x" })).toBe(false);
   });
@@ -256,7 +258,7 @@ describe("update confirm: the running line", () => {
     );
     expect(sp(runningLine([rec("s1", "pi", "/w/p", "running")], mode))).toBe("1 session running: p (pi). It comes back with a Resume button.");
     expect(sp(runningLine([rec("s1", "claude", "/w/a", "running", "u"), rec("s2", "grok", "/w/g", "starting")], mode))).toBe(
-      "2 sessions running: a (Claude Code), g (Grok). Claude Code and Codex resume after the restart; the others come back with a Resume button.",
+      "2 sessions running: a (Claude Code), g (Grok). Claude Code, Codex and OmO resume after the restart; the others come back with a Resume button.",
     );
   });
 });

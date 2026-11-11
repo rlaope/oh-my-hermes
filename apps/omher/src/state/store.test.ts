@@ -107,6 +107,38 @@ describe("reducer: a full turn", () => {
     expect(s.chats.kami.turn!.streaming).toBe("abcd");
   });
 
+  it("a status, thinking, step or text outside a turn starts none; a status just before turn.start opens it", () => {
+    // Hermes says a goal or loop verdict after the turn's message.complete (prompt_turn._goal_followup_after_turn):
+    // it must not start a turn nothing ends
+    let s = run(initialState(), realTurn("kami"));
+    s = run(s, [
+      { event: "status", bot: "kami", text: "Goal reached" },
+      { event: "thinking", bot: "kami" },
+      { event: "tool.start", bot: "kami", tool_id: "x", name: "terminal", detail: "ls" },
+      { event: "tool.end", bot: "kami", tool_id: "x", name: "terminal", ok: true, ms: 1 },
+      { event: "skill", bot: "kami", name: "plan" },
+      { event: "delta", bot: "kami", text: "late" },
+    ], T0 + 10_000);
+    expect(s.chats.kami.turn).toBeNull();
+    expect(s.chats.kami.items.filter((i) => i.kind === "activity")).toHaveLength(1);
+    // auto-continue: "Resuming interrupted turn…" comes right before message.start, so the turn opens with it
+    s = run(s, [{ event: "status", bot: "kami", text: "Resuming interrupted turn…" }, { event: "turn.start", bot: "kami" }], T0 + 60_000);
+    expect(s.chats.kami.turn!.status).toBe("Resuming interrupted turn…");
+    s = run(s, [{ event: "turn.end", bot: "kami", outcome: "done" }], T0 + 61_000);
+    // a status from long before does not
+    s = run(s, [{ event: "status", bot: "kami", text: "old" }], T0 + 70_000);
+    s = run(s, [{ event: "turn.start", bot: "kami" }], T0 + 90_000);
+    expect(s.chats.kami.turn!.status).toBe("");
+  });
+
+  it("a session chat's turn.end after Stop stays ended when the agent's status comes later", () => {
+    const key = "agent:s9";
+    let s = run(initialState(), [{ event: "turn.start", bot: key }, { event: "status", bot: key, text: "Working on it" }]);
+    s = run(s, [{ event: "turn.end", bot: key, outcome: "interrupted" }, { event: "status", bot: key, text: "(😺 OmO Native)" }], T0 + 5_000);
+    expect(s.chats[key].turn).toBeNull();
+    expect(s.chats[key].lastTurn!.outcome).toBe("interrupted");
+  });
+
   it("collects skill chips once", () => {
     const s = run(initialState(), [
       { event: "turn.start", bot: "kami" },
