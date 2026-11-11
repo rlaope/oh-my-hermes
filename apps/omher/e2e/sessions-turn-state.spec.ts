@@ -1,7 +1,8 @@
 // A finished turn stays finished. OmO (and pi / oh-my-pi) send a status of their own after the turn's end
 // (`setStatus` after `agent_end`, tests/fixtures/real/omo-1-plain.jsonl): the chat stays idle (Send, no spinner,
 // header Ready, no ring on the row). Stop ends a turn for good. A terminal session that exits (Ctrl+C, `exit`)
-// gets the Ended line with Restart, which starts the program again.
+// gets the Ended line with Restart, which starts the program again (Grok: a new conversation); an ended DSH chat's
+// Restart continues DeepSeek Harness's own session.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -103,7 +104,7 @@ test("Stop ends the turn for good: a status after it does not bring the spinner 
 
 test("a terminal session that exits shows Ended with Restart, which starts the program again", async ({ page }) => {
   await open(page);
-  await draft(page, "dsh");
+  await draft(page, "grok");
   await page.getByTestId("session-go").click();
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect.poll(async () => (await calls(page)).filter((c) => c.op === "start").length).toBe(1);
@@ -117,23 +118,46 @@ test("a terminal session that exits shows Ended with Restart, which starts the p
   await expect(ended).toBeVisible();
   await expect(page.getByTestId("session-status")).toHaveText("Ended");
   const restart = page.getByTestId("session-restart");
-  // DSH continues its conversation with the id it was started with
-  await expect(restart).toHaveAttribute("title", "Start DSH again, continuing this conversation");
+  // Grok's terminal does not continue a conversation: Restart starts a new one in the same folder
+  await expect(restart).toHaveAttribute("title", "Start Grok again in this folder, as a new conversation");
   await restart.click();
   await expect(page.getByTestId("session-ended")).toHaveCount(0);
   await expect.poll(async () => (await calls(page)).filter((c) => c.op === "start").length).toBe(2);
   const again = (await calls(page)).filter((c) => c.op === "start")[1];
-  expect(again).toMatchObject({ agent: "dsh", cwd: first.cwd, resume: first.resume });
+  expect(again).toMatchObject({ agent: "grok", cwd: first.cwd });
+  expect(first.resume).toBeUndefined();
+  expect(again.resume).toBeUndefined();
   await expect(page.getByTestId("session-status")).toHaveText("Running");
   await expect(page.getByTestId("terminal")).toBeVisible();
-  // Grok starts a new conversation
-  await draft(page, "grok");
-  await page.getByTestId("session-go").click();
-  await expect(page.getByTestId("terminal")).toBeVisible();
+  // it ends again by `exit` and still offers a new conversation
   await page.locator(".term-host").click();
   await page.keyboard.type("exit");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-restart")).toHaveAttribute("title", "Start Grok again in this folder, as a new conversation");
+});
+
+test("an ended DSH chat restarts as a chat that continues DeepSeek Harness's own session", async ({ page }) => {
+  await open(page);
+  await draft(page, "dsh");
+  await send(page, "Remember PLUM-42.");
+  await expect(page.getByTestId("bubble-bot").last()).toHaveText("(mock DSH) You said: Remember PLUM-42.");
+  await send(page, "/exit");
+  await expect(page.getByTestId("session-status")).toHaveText("Ended");
+  const restart = page.getByTestId("session-restart");
+  await expect(restart).toHaveAttribute("title", "Start DSH again, continuing this conversation");
+  await restart.click();
+  await expect(page.getByTestId("session-ended")).toHaveCount(0);
+  await expect.poll(async () => (await calls(page)).filter((c) => c.op === "chat.start").length).toBe(2);
+  const starts = (await calls(page)).filter((c) => c.op === "chat.start");
+  expect(starts[0]).toMatchObject({ agent: "dsh" });
+  expect(starts[0].resume).toBeUndefined();
+  // the harness's own `session-<uuid>`, not a terminal `--resume` id
+  expect(starts[1]).toMatchObject({ agent: "dsh", cwd: starts[0].cwd, resume: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
+  await expect(page.getByTestId("session-status")).toHaveText("Ready");
+  // a chat, never a terminal
+  const all = await calls(page);
+  expect(all.filter((c) => c.op === "start")).toHaveLength(0);
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
 });
 
 test("an agent that dies mid-turn leaves the chat ended, not working", async ({ page }) => {

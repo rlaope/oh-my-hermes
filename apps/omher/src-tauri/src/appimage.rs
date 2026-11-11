@@ -106,7 +106,7 @@ pub(crate) fn host_env<C: HostCommand>(cmd: &mut C) {
     }
 }
 
-fn host_env_in<C: HostCommand>(cmd: &mut C, appdir: &OsStr) {
+pub(crate) fn host_env_in<C: HostCommand>(cmd: &mut C, appdir: &OsStr) {
     for (k, v) in host_env_edits(cmd.child_env(), appdir) {
         cmd.set_env(&k, v.as_deref());
     }
