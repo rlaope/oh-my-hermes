@@ -1050,3 +1050,35 @@
   font-family: var(--mono);
   font-size: 11px;
 }
+
+/* a run its record still calls running, quiet for a day: no live dot, the row and its time muted */
+.rn-dot.stale {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--quiet);
+}
+.rn-row.stale .rn-title,
+.rn-row.stale .rn-n {
+  color: var(--quiet);
+}
+.ph-dot.stale {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--quiet);
+}
+.ph-w.stale {
+  color: var(--quiet);
+}
+/* the empty Plans tab: three plain lines, no illustration or card */
+.rn-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 2px 4px 14px;
+}
+.rn-empty code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.rn-empty > :first-child {
+  color: var(--body);
+}

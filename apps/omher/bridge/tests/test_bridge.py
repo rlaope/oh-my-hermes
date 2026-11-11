@@ -2317,6 +2317,51 @@ class Runs(unittest.TestCase):
             self.assertEqual(got["handoffs"], {})
             self.assertFalse(any("outside the dag dir" in t for t in got["handoffs"].values()))
 
+    def test_a_running_run_quiet_for_a_day_with_no_helper_reporting_is_stale_not_live(self):
+        from datetime import datetime, timezone
+        v02 = "dag:20261108_213859_c9a97486/omher-v02"
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261108_213859_c9a97486"])
+            rec = next(dag.glob("*/omher-v02.json"))
+            updated = json.loads(rec.read_text(encoding="utf-8"))["updated_at"]
+            os.utime(rec, (updated, updated))  # the file changed when the record says it did
+            reader = ob.DagRuns(ob.Delegations(tz=timezone.utc))
+            one = lambda now: next(r for r in reader.list("kami", prof, now=now) if r["id"] == v02)
+            # ten minutes after its last change it is live
+            self.assertEqual((one(updated + 600)["state"], one(updated + 600).get("stale")), ("running", None))
+            # a day and a bit with no change: still "running" as the record says, but stale, and listed after
+            # every live run (a run settled since sorts by its own time as before)
+            quiet = one(updated + ob.QUIET_RUN + 60)
+            self.assertEqual((quiet["state"], quiet["stale"]), ("running", True))
+            self.assertEqual(quiet["counts"]["running"], 3)
+            # runs.get marks it the same way runs.list does
+            self.assertEqual(reader.get("kami", prof, v02)["run"].get("stale"), one(time.time()).get("stale"))
+            # the file itself changed since (a newer write than its updated_at): live again
+            os.utime(rec, (updated + ob.QUIET_RUN, updated + ob.QUIET_RUN))
+            self.assertNotIn("stale", one(updated + ob.QUIET_RUN + 60))
+            os.utime(rec, (updated, updated))
+            # a helper of one of its nodes still writing its log: live, however old the record
+            folder = prof / "cache" / "delegation" / "live" / "deleg_00aa11cc"
+            folder.mkdir(parents=True)
+            now = updated + 3 * ob.QUIET_RUN
+            started = datetime.fromtimestamp(now - 7200, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            (folder / "manifest.json").write_text(json.dumps({"started": started, "tasks": [
+                {"index": 0, "goal": "[dag:omher-v02/t2-attach] attach", "status": "running"}]}), encoding="utf-8")
+            (folder / "task-0.log").write_text(f"goal: attach\nstarted: {started}\n", encoding="utf-8")
+            for f in folder.iterdir():
+                os.utime(f, (now - 120, now - 120))
+            self.assertNotIn("stale", one(now))
+            # the same helper silent for over an hour (stalled): stale
+            for f in folder.iterdir():
+                os.utime(f, (now - ob.STALE_AFTER - 60, now - ob.STALE_AFTER - 60))
+            self.assertTrue(one(now)["stale"])
+
+    def test_only_running_dag_runs_can_be_stale(self):
+        run = {"id": "dag:s/x", "state": "done", "updated": 0.0, "nodes": []}
+        self.assertNotIn("stale", ob.mark_stale(dict(run), None, [], 10 * ob.QUIET_RUN))
+        self.assertTrue(ob.mark_stale(dict(run, state="running"), None, [], 10 * ob.QUIET_RUN)["stale"])
+        self.assertNotIn("stale", ob.mark_stale(dict(run, state="running"), None, [], ob.QUIET_RUN - 1))
+
     def test_no_dag_dir_or_no_state_db_means_no_runs(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(ob.DagRuns().list("kami", Path(d)), [])
@@ -2347,8 +2392,8 @@ class Runs(unittest.TestCase):
             prof, dag = _runs_profile(Path(d), sorted(sids), dag_src=real)
             runs = ob.DagRuns().list("kami", prof)
             self.assertGreaterEqual(len(runs), 1)
-            states = [r["state"] for r in runs]
-            self.assertEqual(states, sorted(states, key=lambda s: s != "running"))  # running first
+            live = [r["state"] == "running" and not r.get("stale") for r in runs]
+            self.assertEqual(live, sorted(live, reverse=True))  # live runs first (a stale one sorts by its time)
             got = ob.DagRuns().get("kami", prof, runs[0]["id"])
             self.assertEqual(len(got["run"]["nodes"]), runs[0]["counts"]["nodes"])
 
