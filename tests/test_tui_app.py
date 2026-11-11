@@ -1705,25 +1705,6 @@ class ShellLineTests(unittest.TestCase):
         _say(stream, "gateway said: \x1b[31mboom\x1b[0m \x1b]8;;http://x\x07link\x1b]8;;\x07")
         self.assertEqual(stream.getvalue(), "gateway said: boom link\n")
 
-class StickyPromptTests(unittest.TestCase):
-    """The sent prompt is echoed above the composer only once it has scrolled off the screen."""
-
-    def app(self, flushed: int, busy: bool = True) -> App:
-        app = App(ScriptedTerminal(rows=20, cols=60), None, {}, poller=FakePoller())  # type: ignore[arg-type]
-        app.sticky = "what changed in the build?"
-        app.turn_pending = busy
-        app.flushed_since_prompt = flushed
-        return app
-
-    def test_no_echo_while_the_prompt_is_still_on_screen(self) -> None:
-        self.assertFalse(self.app(flushed=12)._sticky_needed(12))  # 12 transcript rows above the region
-
-    def test_the_echo_appears_once_the_prompt_has_scrolled_off(self) -> None:
-        self.assertTrue(self.app(flushed=13)._sticky_needed(12))
-
-    def test_no_echo_when_no_turn_is_running(self) -> None:
-        self.assertFalse(self.app(flushed=99, busy=False)._sticky_needed(12))
-
 class ModelChainPickerTests(unittest.TestCase):
     def test_tui_keys_map_to_picker_tokens_and_ctrl_c_ctrl_d_esc_cancel(self) -> None:
         cases = {

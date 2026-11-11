@@ -3,8 +3,8 @@
 Everything finished goes to the terminal's own scrollback as plain lines
 (`flush_above`), so the terminal's own scrolling, selecting and copying work on
 it wherever the app leaves the mouse to the terminal (and with its bypass
-modifier where the app takes it: `marks`). Right below the last of them sits one live region: sticky
-prompt, streaming tail, panels, composer, info line. The region starts
+modifier where the app takes it: `marks`). Right below the last of them sits one live region:
+streaming tail, panels, composer, info line. The region starts
 where the output ends and is as tall as its frame, so it follows the content:
 it grows downward until its last row is the screen's last row, and from then
 on growing scrolls the screen up as printed output would. From then on the

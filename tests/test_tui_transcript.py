@@ -253,30 +253,6 @@ class SpacingTests(LoopTestCase):
         self.assertEqual(len(self.transcript.blocks), 2)
 
 
-class PromptRowTests(LoopTestCase):
-    """`prompt_row`: where the last take's lines hold the newest prompt's first row; None when they hold no prompt."""
-
-    def take(self) -> list[str]:
-        return lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
-
-    def test_only_a_prompt_sets_it_after_the_blank_row_above_it(self) -> None:
-        self.transcript.add_notice("a notice")
-        self.assertTrue(self.take())
-        self.assertIsNone(self.transcript.prompt_row)
-        self.transcript.add_user("first")
-        taken = self.take()
-        self.assertEqual(self.transcript.prompt_row, 1)  # the blank row above the prompt is not the prompt's
-        self.assertEqual(taken[1], "┃ ❯ first")
-        for event in (ev("message.start"), ev("tool.start", tool_id="t1", name="terminal", context="ls"),
-                      ev("tool.complete", tool_id="t1", name="terminal", result={"exit_code": 0}, duration_s=0.5)):
-            self.transcript.apply(event)
-        self.transcript.apply(ev("message.delta", text="done\n"))  # the tool group settles: a take with no prompt
-        self.assertTrue(self.take())
-        self.assertIsNone(self.transcript.prompt_row)
-        self.assertEqual(self.take(), [])
-        self.assertIsNone(self.transcript.prompt_row)  # an empty take holds no prompt either
-
-
 class RetakeTests(LoopTestCase):
     def test_retake_offers_the_whole_transcript_again_at_a_new_width(self) -> None:
         self.user("first question that is long enough to wrap at a narrow width")
