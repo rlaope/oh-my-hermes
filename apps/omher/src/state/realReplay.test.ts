@@ -29,8 +29,8 @@ describe("real agent streams through the reducer", () => {
   const all = replays as Replay[];
 
   it("covers every agent", () => {
-    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "omo", "omp", "pi", "pi-noauth"]));
-    expect(all.length).toBeGreaterThanOrEqual(36);
+    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-helpers", "codex-helper-stop", "omo", "omp", "pi", "pi-noauth"]));
+    expect(all.length).toBeGreaterThanOrEqual(38);
   });
 
   for (const r of all) {

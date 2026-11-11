@@ -21,6 +21,20 @@ All notable changes will be documented here.
   HUD now reads the home `HERMES_HOME` names; the bot board alone keeps the
   bots' home.
 
+- **A Codex session in omher stays on your turn while Codex's subagents work.**
+  Codex streams its subagents' threads on the same connection, and omher
+  took their events as its own: when the first subagent finished, the chat
+  showed Ready and Send while Codex was still working; Stop sent the
+  subagent's turn id, which Codex refused, so nothing stopped and nothing
+  said so; and each subagent's answer ("done", "alpha line") showed and
+  notified as Codex's own. omher now keeps the session's own thread apart: a
+  subagent's turn never ends yours, Stop names your turn, a refused Stop
+  shows on the turn's line, and each subagent comes out as one `subagent`
+  record (name, model, current step, state, answer, time) that the chat's
+  subagent rows can show; an approval asked inside a subagent names it.
+  Tested on recorded Codex 0.167 streams with two subagents in parallel and
+  Stop while one runs.
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt
