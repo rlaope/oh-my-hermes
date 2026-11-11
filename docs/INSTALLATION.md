@@ -847,8 +847,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   of the last row above them, so dragging to the bottom of the screen
   copies the transcript. During a turn that puts your draft out of a drag's
   reach too, and an approval or a value prompt, which sit under the row
-  counting how long Hermes has waited; the wheel up opens the question's own
-  view (Ctrl+O's), where a drag copies it. A question with choices, framed
+  counting how long Hermes has waited; Ctrl+O opens the question's own
+  view, where a drag copies it. A question with choices, framed
   between two rules, has no such row and can be dragged over during a turn
   as well; its rules, its bar, the `❯` on the highlighted choice and its
   key row are never copied, only the question and the choices. A drag over the transcript's rows stays on them
@@ -859,10 +859,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
   copies text other than what it showed. Its highlight never goes into the
   scrollback. Ctrl+C within 2 s of a drag that copied only drops the
   selection, since Windows Terminal and VS Code copy with it; the next
-  Ctrl+C acts as always. The wheel up opens the
-  transcript view Ctrl+O opens, one notch up from its end, where the screen
-  was; it scrolls there, and q goes back. The wheel down does nothing on the
-  main screen. A row the OMH TUI did not print in this screen (the shell's
+  Ctrl+C acts as always. The wheel up scrolls the terminal's own
+  scrollback, as in any shell, and opens no view: its first notch hands the
+  mouse to the terminal, and the next key or paste takes it back, so a drag
+  copies clean again. The wheel down does nothing on the main screen while
+  the OMH TUI holds the mouse. Ctrl+O still opens the transcript view. A row the OMH TUI did not print in this screen (the shell's
   output above the session, the rows from before a Ctrl+Z) selects nothing:
   dragging from there opens the transcript view instead (the open question,
   while one is asked), and with nothing to show it opens nothing. While the
@@ -870,7 +871,7 @@ run and approval decision stays Hermes'; the screen is OMH's.
   dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
   rows reflowed into the scrollback with a selection on them can keep it
   reversed there. The agent list still takes a click on its rows, and the
-  wheel over the list does nothing, as below. If you scroll the terminal's
+  wheel over the list does nothing. If you scroll the terminal's
   own scrollback (its scrollbar, Shift+PageUp) and then drag, the row a
   report names is the terminal's to say: some terminals jump back to the
   bottom first or report nothing over scrollback rows, and one that reports
