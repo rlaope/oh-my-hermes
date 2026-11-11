@@ -106,7 +106,7 @@ export const en = {
   "onb.bots.body": "Coworkers you hand work to. They plan it, run it and report back.",
   "onb.bots.action": "Message a bot",
   "onb.sessions.title": "Sessions",
-  "onb.sessions.body": "A coding agent (Claude Code, Codex, pi, omp) working with you in one folder.",
+  "onb.sessions.body": "A coding agent (Claude Code, Codex, OmO, DSH, pi, omp) working with you in one folder.",
   "onb.sessions.action": "New session",
   "onb.dismiss": "Dismiss",
   "onb.botsHint": "Each bot is a Hermes profile. Add one with + above.",

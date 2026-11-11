@@ -45,7 +45,7 @@ test("first run: the cards sit over an empty chat only, their quiet buttons work
   await expect(onb).toBeVisible();
   await expect(page.getByTestId("onb-bots")).toContainText("Bots");
   await expect(page.getByTestId("onb-bots")).toContainText("Coworkers you hand work to. They plan it, run it and report back.");
-  await expect(page.getByTestId("onb-sessions")).toContainText("A coding agent (Claude Code, Codex, pi, omp) working with you in one folder.");
+  await expect(page.getByTestId("onb-sessions")).toContainText("A coding agent (Claude Code, Codex, OmO, DSH, pi, omp) working with you in one folder.");
   await expect(onb).not.toContainText("Hermes");
   // one flat container, no gradient, small radius; both cards inside it; one × in its top-right corner
   const look = await onb.evaluate((el) => {
@@ -87,10 +87,13 @@ test("first run: the cards sit over an empty chat only, their quiet buttons work
   await page.getByTestId("onb-message").click();
   await expect(page.getByTestId("composer")).toBeFocused();
 
-  // "New session" opens the same New session chat as the sidebar's own New session row; closing it starts nothing
+  // "New session" opens the same + menu as the sidebar's +; picking opens the New session chat; closing it starts nothing
   await page.getByTestId("onb-session").click();
+  await expect(page.getByTestId("session-new")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("session-menu")).toBeVisible();
+  await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
-  await expect(page.getByTestId("session-agent-pick")).toBeVisible();
+  await expect(page.getByTestId("session-agent-fixed")).toBeVisible();
   const draft = page.locator("[data-testid=session-list] .ss-row").first();
   await draft.hover();
   await draft.getByTestId("session-close").click();
