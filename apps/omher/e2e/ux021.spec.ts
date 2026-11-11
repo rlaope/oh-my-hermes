@@ -134,8 +134,8 @@ test("U14: a missing agent's Not installed tooltip carries its install line, as 
     omo: "npm i -g omo-ai",
     dsh: "npm i -g @deepseek-ai/dsh",
     pi: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
-    omp: "npm i -g @oh-my-pi/pi-coding-agent",
-    grok: "see grok docs",
+    omp: "curl -fsSL https://omp.sh/install | sh",
+    grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
     opencode: "npm install -g opencode-ai",
   };
   for (const [agent, line] of Object.entries(lines)) {
