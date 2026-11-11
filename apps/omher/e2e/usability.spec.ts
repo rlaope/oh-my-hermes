@@ -1,5 +1,5 @@
 // Usability: notifications while omher is in the background, keyboard shortcuts, the risk line on an
-// approval card, and "Soon" tags on features that are not in this version.
+// approval card, and the sidebar's Automations and Plugins rows opening their pages.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -160,12 +160,15 @@ test("a risky command gets a warning line; the buttons stay the same", async ({ 
   expect(order.slice(0, 3)).toEqual(["Deny", "Allow once", "Allow for session"]);
 });
 
-test("features not in this version say Soon", async ({ page }) => {
+test("Automations and Plugins are pages now, not Soon", async ({ page }) => {
   await open(page);
-  for (const id of ["nav-automations", "nav-plugins"]) {
+  for (const [id, page_] of [["nav-automations", "automations"], ["nav-plugins", "plugins"]] as const) {
     const b = page.getByTestId(id);
-    await expect(b).toBeDisabled();
-    await expect(b).toContainText("Soon");
+    await expect(b).toBeEnabled();
+    await expect(b).not.toContainText("Soon");
+    await b.click();
+    await expect(page.getByTestId(page_)).toBeVisible();
+    await expect(b).toHaveAttribute("aria-current", "page");
   }
 });
 

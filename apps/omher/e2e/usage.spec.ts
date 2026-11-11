@@ -98,13 +98,13 @@ test("hover shows the card: plan, then each window with % and reset", async ({ p
     }, id);
     expect(Math.abs(caret - mark), id).toBeLessThanOrEqual(1.5);
   }
-  // the card starts on the first mark's edge and covers the nav rows' "Soon" tags whole (never cuts one in half)
-  const [cardBox, first, soon] = await Promise.all([
+  // the card starts on the first mark's edge and covers the nav rows' counts whole (never cuts one in half)
+  const [cardBox, first, count] = await Promise.all([
     page.getByTestId("usage-card").boundingBox(), page.getByTestId("usage-codex").boundingBox(),
-    page.locator("[data-testid=nav-plugins] .nav-soon").boundingBox(),
+    page.locator("[data-testid=nav-automations] .nav-count").boundingBox(),
   ]);
   expect(Math.abs(cardBox!.x - first!.x)).toBeLessThanOrEqual(0.5);
-  expect(cardBox!.x + cardBox!.width).toBeGreaterThanOrEqual(soon!.x + soon!.width);
+  expect(cardBox!.x + cardBox!.width).toBeGreaterThanOrEqual(count!.x + count!.width);
   // moving away closes a hover card; a click pins it until outside click / Escape
   await page.getByTestId("bot-friren").hover();
   await expect(card).toHaveCount(0);
