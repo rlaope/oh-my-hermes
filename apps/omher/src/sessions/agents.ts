@@ -5,7 +5,7 @@ import { pickTitle, type TitleSource } from "./titles";
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
-export type AgentId = "claude" | "codex" | "omh" | "pi" | "omp" | "grok";
+export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok";
 
 export type AgentMode = "chat" | "hermes" | "terminal";
 
@@ -20,6 +20,8 @@ export interface AgentDef {
 export const AGENTS: readonly AgentDef[] = [
   { id: "claude", program: "claude", label: "Claude Code", mode: "chat" },
   { id: "codex", program: "codex", label: "Codex", mode: "chat" },
+  { id: "omo", program: "omo", label: "OmO", mode: "chat" },
+  { id: "dsh", program: "dsh", label: "DSH", mode: "terminal" },
   { id: "omh", program: "omh", label: "oh-my-hermes", mode: "hermes" },
   { id: "pi", program: "pi", label: "pi", mode: "chat" },
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
@@ -40,6 +42,8 @@ export function terminalNote(agent: AgentId): string {
 export const INSTALL: Record<AgentId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex (the Codex bundled in the ChatGPT app is found too)",
+  omo: "npm i -g omo-ai",
+  dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
   pi: "npm i -g @mariozechner/pi-coding-agent",
   omp: "npm i -g @oh-my-pi/pi-coding-agent",
@@ -53,6 +57,10 @@ export function missingNote(agent: AgentId): string {
 }
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
+
+/** Chat agents whose Restart (and Resume) continues the conversation: Claude Code `--resume`, Codex
+ *  `thread/resume`, OmO `--session`. pi and oh-my-pi start a new one. */
+export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
 
@@ -253,6 +261,15 @@ export function lastAgent(list: Recent[]): AgentId | null {
   let best: Recent | null = null;
   for (const r of list) if (!best || r.at > best.at) best = r;
   return best ? best.agent : null;
+}
+
+/** The SESSIONS + menu's order: the installed agents first, the last one used on top of them, then the rest in
+ *  list order; the agents that are not installed after those, in list order. */
+export function menuOrder(agents: AgentInfo[], list: Recent[]): AgentInfo[] {
+  const last = lastAgent(list);
+  const rank = (a: AgentInfo) => (a.path ? (a.id === last ? 0 : 1) : 2);
+  const at = (a: AgentInfo) => AGENTS.findIndex((d) => d.id === a.id);
+  return agents.filter((a) => isAgentId(a.id)).sort((a, b) => rank(a) - rank(b) || at(a) - at(b));
 }
 
 /** The agent a New session chat starts on: the last one used if it is installed, else the first installed (menu

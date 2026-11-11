@@ -27,7 +27,8 @@ export interface SessionHost {
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
   /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
-   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is one. `account`
+   *  `resume` is a Claude Code session id (the terminal view of a chat) or a DSH conversation id; the shell checks
+   *  it is a UUID. `account`
    *  names the Settings › Accounts login it runs as (the one it ran with, after a restart); none = the one picked
    *  for new sessions. */
   start(
@@ -43,7 +44,7 @@ export interface SessionHost {
   write(id: number, data: string): Promise<void>;
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
-  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code session id or a Codex thread id to continue;
+  /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code or OmO session id or a Codex thread id to continue;
    *  `account`: as for `start`). */
   chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string): Promise<number>;
   chatInput(id: number, input: ChatInput): Promise<void>;
@@ -128,6 +129,8 @@ export interface MockCall {
 const BANNER: Record<AgentId, string> = {
   claude: "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m \x1b[2m(mock)\x1b[0m",
   codex: "\x1b[1m>_ Codex\x1b[0m \x1b[2m(mock)\x1b[0m",
+  omo: "\x1b[1mOmO\x1b[0m \x1b[2m(mock)\x1b[0m",
+  dsh: "\x1b[38;2;77;107;254m▙\x1b[0m \x1b[1mdeepseek-bot\x1b[0m \x1b[2m(mock)\x1b[0m",
   omh: "\x1b[38;2;211;60;141m◆\x1b[0m \x1b[1moh-my-hermes\x1b[0m \x1b[2m(mock)\x1b[0m",
   pi: "\x1b[1mπ pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
@@ -249,6 +252,7 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
   ],
   pi: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
   omp: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
+  omo: [{ id: "claude-fable-5-1", label: "Claude Fable 5.1" }],
 };
 
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
