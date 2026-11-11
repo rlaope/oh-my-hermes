@@ -994,6 +994,71 @@ mod tests {
         assert_eq!(written(&st)[0]["result"], json!({"outcome": {"outcome": "cancelled"}}));
     }
 
+    /// The real OpenCode started exactly as omher starts it (`ChatSessions::start_agent("opencode", …)`: the
+    /// allow-listed program found on PATH, `acp`, the row's `OPENCODE_PERMISSION`), with no prompt, so no model is
+    /// called: the conversation opens with its models and commands, a model switch applies, the child carries the
+    /// ask rule, and a second process continues `OMHER_REAL_OPENCODE_SESSION` (a conversation with a turn). Run
+    /// with a scratch HOME and the scratch install first on PATH:
+    /// `cargo test real_opencode_through_start_agent -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_opencode_through_start_agent() {
+        use crate::agent_chat::{ChatOut, ChatSessions};
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
+        let dir = std::env::var("OMHER_REAL_OPENCODE_DIR").map(std::path::PathBuf::from).unwrap();
+        type Out = Arc<Mutex<Vec<Value>>>;
+        let wait = |out: &Out, cond: &dyn Fn(&[Value]) -> bool| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(60);
+            while std::time::Instant::now() < deadline && !cond(&out.lock().unwrap()) {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        };
+        let open = |resume: Option<&str>| {
+            let c = ChatSessions::default();
+            let out: Out = Arc::new(Mutex::new(Vec::new()));
+            let o = out.clone();
+            let id = c
+                .start_agent("opencode", &dir, resume, &[], move |x| {
+                    if let ChatOut::Event(e) = x {
+                        o.lock().unwrap().push(e)
+                    }
+                })
+                .unwrap();
+            wait(&out, &|ev: &[Value]| ev.iter().any(|e| s(e, "event") == "session.commands"));
+            (c, id, out)
+        };
+        let (c, id, out) = open(None);
+        let ev = out.lock().unwrap().clone();
+        let sid = ev.iter().map(|e| s(e, "agent_session")).find(|x| !x.is_empty()).unwrap();
+        let models = ev.iter().find(|e| s(e, "event") == "session.models").unwrap()["options"].as_array().unwrap().len();
+        let cmds: Vec<String> = ev.iter().find(|e| s(e, "event") == "session.commands").unwrap()["commands"].as_array().unwrap().iter().map(|c| s(c, "name")).collect();
+        println!("new: session {sid}, {models} models, commands {cmds:?}, model {:?}", ev.iter().map(|e| s(e, "model")).filter(|m| !m.is_empty()).collect::<Vec<_>>());
+        assert!(sid.starts_with("ses_") && is_acp_session_id(&sid));
+        // the child process carries the row's ask rule (ps shows a process's environment to its own user)
+        let ps = std::process::Command::new("ps").args(["-E", "-ww", "-o", "command=", "-ax"]).output().unwrap();
+        let ps = String::from_utf8_lossy(&ps.stdout);
+        let line = ps.lines().find(|l| l.contains(" acp ") && l.contains("OPENCODE_PERMISSION=")).unwrap_or("");
+        let env_rule = line.split_whitespace().find(|w| w.starts_with("OPENCODE_PERMISSION=")).unwrap_or("");
+        println!("child env: {env_rule}");
+        assert_eq!(env_rule, format!("OPENCODE_PERMISSION={OPENCODE_ASK}"));
+        c.input(id, Input::Model { model: "opencode/beam-free".into() }).unwrap();
+        wait(&out, &|ev: &[Value]| ev.iter().any(|e| s(e, "model") == "OpenCode/Beam Free"));
+        assert!(out.lock().unwrap().iter().any(|e| s(e, "model") == "OpenCode/Beam Free"));
+        println!("model switch: OpenCode/Beam Free");
+        c.close(id);
+        std::thread::sleep(Duration::from_millis(800));
+        let earlier = std::env::var("OMHER_REAL_OPENCODE_SESSION").unwrap();
+        let (c, id, out) = open(Some(&earlier));
+        let ev = out.lock().unwrap().clone();
+        let again = ev.iter().map(|e| s(e, "agent_session")).find(|x| !x.is_empty()).unwrap_or_default();
+        println!("second process: session {again}; errors {:?}", ev.iter().filter(|e| s(e, "event") == "session.error").collect::<Vec<_>>());
+        assert_eq!(again, earlier);
+        assert!(!ev.iter().any(|e| s(e, "event") == "session.error"));
+        c.close(id);
+        std::thread::sleep(Duration::from_millis(800));
+    }
+
     #[test]
     fn json_objects_strips_a_bom_and_splits_joined_objects() {
         assert_eq!(json_objects("\u{feff}{\"a\":1}"), [json!({"a": 1})]);
