@@ -477,6 +477,8 @@ let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs
 let automations, plugins, inspected, offlineWrites;
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
+/** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
+const subTimers = new Set();
 // Bots whose turns the test drives by hand (mock.manual).
 let manual;
 
@@ -596,6 +598,8 @@ function reset() {
   acctLimited = {};
   acctLabels = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
+  for (const h of subTimers) clearTimeout(h);
+  subTimers.clear();
   bots = Object.fromEntries(BOT_SEED.map((b) => [b.name, { ...b }]));
   history = Object.fromEntries(
     Object.entries(HISTORY_SEED).map(([bot, rows]) => [
@@ -1454,18 +1458,43 @@ function scriptNormal(bot, text) {
   ]);
 }
 
-// A delegate_task that hands out two parts of the codex-coexist dag run (one returns, one keeps working).
+// A delegate_task that hands out two parts of the codex-coexist dag run, with Hermes' subagent events in the order a
+// real turn sent them (bridge/tests/fixtures/real-subagent-turn.json): spawn, start, thinking, a tool, then complete.
+// Like the real background fan-out, the children outlive the turn: the turn ends at 600 ms, the first child returns
+// at 1.6 s, the second at 2.6 s (`/delegate fail` makes it fail). The UI events are the bridge's `subagent` shape.
 function scriptDelegate(bot) {
   const dag = [
     { run: "codex-coexist-live", node: "t3-doctor" },
     { run: "codex-coexist-live", node: "t5-verify" },
   ];
+  const fail = /\bfail\b/.test(turns[bot]?.text ?? "");
+  const deleg = `deleg_${Math.random().toString(16).slice(2, 10)}`;
+  const kids = [
+    { id: "sa-0-7c1f2a90", goal: "Doctor check for the Codex pack", model: "gpt-6.1-sol", dag: dag[0], cmd: "omh doctor --codex", out: "The Codex pack is current (12 skills)." },
+    { id: "sa-1-3e9b44d1", goal: "Independent verify vs base + live probes", model: "claude-opus-5-5", dag: dag[1], cmd: "pnpm test --run", out: fail ? "Two probes timed out." : "All 6 probes pass on the branch." },
+  ];
+  const sub = (k, i, state, extra = {}) =>
+    ev(bot, "subagent", { id: k.id, index: i, count: kids.length, goal: k.goal, model: k.model, dag: k.dag, state, ...(state === "queued" ? {} : { delegation: deleg }), ...extra });
   schedule(bot, [
     [80, () => ev(bot, "tool.start", { tool_id: "d1", name: "delegate_task", detail: "Doctor check for the Codex pack (+1 more)", dag })],
-    [400, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 320 })],
-    [500, () => say(bot, "Both helpers are on it.")],
+    [120, () => kids.forEach((k, i) => sub(k, i, "queued"))],
+    [160, () => kids.forEach((k, i) => sub(k, i, "running"))],
+    [220, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 140 })],
+    [300, () => kids.forEach((k, i) => sub(k, i, "thinking"))],
+    [420, () => kids.forEach((k, i) => sub(k, i, "running", { tool: "terminal", step: k.cmd }))],
+    [500, () => say(bot, "Both subagents are on it.")],
     [600, () => endTurn(bot, "done")],
   ]);
+  // after the turn: the children report back on their own
+  const later = (ms, fn) => {
+    const h = setTimeout(() => {
+      subTimers.delete(h);
+      fn();
+    }, ms);
+    subTimers.add(h);
+  };
+  later(1600, () => sub(kids[0], 0, "done", { summary: kids[0].out, seconds: 1.4 }));
+  later(2600, () => sub(kids[1], 1, fail ? "failed" : "done", { summary: kids[1].out, seconds: 2.4 }));
 }
 
 function scriptApproval(bot) {

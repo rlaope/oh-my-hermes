@@ -69,6 +69,8 @@ RULES = (
     "never settles, retries or cancels a run; the Plans tab (these runs, listed as plans) is read-only.",
     "For the Plans graph omher also reads, never writes, Hermes' delegate_task folders",
     "and uses only the records written by the bot's own sessions.",
+    "The bridge passes on the `subagent.*` events Hermes sends on the bot's own chat",
+    "it never passes a subagent's thinking text, and omher never assigns, steers or stops a subagent.",
     "the CLI agents' own session files on this machine",
     "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
     "For a SESSIONS row omher reads the same files for one more thing, the title of the conversation that row runs",
@@ -147,6 +149,16 @@ def _rust_strings(source: str) -> list[str]:
 
 def _flat(text: str) -> str:
     return re.sub(r"\s+", " ", text)
+
+
+class SubagentEvents(unittest.TestCase):
+    def test_the_bridge_calls_no_subagent_or_delegation_control_method(self) -> None:
+        # Hermes' gateway can steer, pause, interrupt and kill a delegation; omher only shows what Hermes sends
+        src = (ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
+        calls = set(re.findall(r"_call\(\s*conn,\s*\"([a-z._]+)\"", src))
+        self.assertTrue(calls, "no gateway call found: the pattern no longer matches the bridge")
+        self.assertEqual({c for c in calls if c.startswith(("subagent.", "delegation."))}, set())
+        self.assertNotRegex(src, r"\"(subagent|delegation)\.(steer|interrupt|kill|pause|resume|cancel)\"")
 
 
 class DocPins(unittest.TestCase):

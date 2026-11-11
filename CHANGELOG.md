@@ -521,6 +521,17 @@ All notable changes will be documented here.
   A dag run nothing changed for a day, with no helper still writing, reads
   "no update for 9d" instead of pulsing as live.
 
+- **omher shows each subagent in the chat while it works.** The bridge now
+  passes on the `subagent.*` events Hermes sends on the bot's own chat (clipped;
+  never a subagent's thinking text), and a turn that starts a `delegate_task`
+  shows one card per fan-out: "2 subagents running · 1 of 2 · 41s", then
+  "Ran 2 subagents · 3m", with one row per subagent (the model's vendor mark,
+  its goal in a few words, its state, its current step or its result line, its
+  time) that keeps updating after the bot's own turn ends. The card's run name
+  opens that run in Plans. The activity details say "subagent" instead of
+  "helper" in all four languages. omher still never assigns, steers or stops a
+  subagent.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
