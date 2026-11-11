@@ -913,9 +913,22 @@ impl Codex {
             _ => raw,
         }
     }
-    /// A thread other than the session's own: one of Codex's sub-agents.
+    /// A sub-agent's thread: one Codex named as a sub-agent (`subAgentActivity`), or one whose turn belongs to
+    /// another turn (`rootTurnId`). Any other thread id is the session's own.
     fn is_helper(&self, thread: &str) -> bool {
-        !thread.is_empty() && self.thread.as_deref().is_some_and(|t| t != thread)
+        self.helpers.contains_key(thread)
+    }
+    /// A turn of another thread that belongs to a running turn (a sub-agent of a sub-agent, or one Codex did not
+    /// announce): registered as a helper.
+    fn adopt(&mut self, thread: &str, method: &str, p: &Value) {
+        if thread.is_empty() || self.is_helper(thread) || self.thread.as_deref() == Some(thread) || !method.starts_with("turn/") {
+            return;
+        }
+        let t = &p["turn"];
+        let root = s(t, "rootTurnId");
+        if !root.is_empty() && root != s(t, "id") {
+            self.helper(thread, "", "");
+        }
     }
     /// The helper of `thread`, registered on first sight (`subAgentActivity` names it; a thread first seen
     /// elsewhere, such as a helper of a resumed turn, starts unnamed).
@@ -953,7 +966,7 @@ impl Codex {
     /// `subAgentActivity` (on the session's thread, or a helper's for a nested one): a helper started or ended.
     fn helper_activity(&mut self, st: &mut Step, item: &Value, done: bool) {
         let thread = s(item, "agentThreadId");
-        if thread.is_empty() || !self.is_helper(&thread) {
+        if thread.is_empty() || self.thread.as_deref() == Some(thread.as_str()) {
             return;
         }
         let model = s(item, "model");
@@ -1198,6 +1211,7 @@ impl Adapter for Codex {
             }
             return st;
         }
+        self.adopt(&thread, &method, &p);
         if self.is_helper(&thread) && method != "serverRequest/resolved" {
             self.on_helper_line(&mut st, &thread, &method, &p);
             return st;
@@ -3641,8 +3655,10 @@ mod tests {
         let said = text_of(&st.events, "message");
         assert!(!said.iter().any(|t| t == "done" || t == "alpha line"), "{said:?}");
         assert!(said.iter().any(|t| t.starts_with("Agent 1 wrote one.txt")), "{said:?}");
-        // no streamed helper text either, and none of the helpers' commands is a step of Codex's turn
-        assert!(text_of(&st.events, "delta").iter().all(|t| !t.contains("alpha")));
+        // no streamed helper text either (only the session's own thread's deltas), and none of the helpers'
+        // commands is a step of Codex's turn
+        let own = real("codex-9-helpers.jsonl").iter().filter(|l| l.contains("item/agentMessage/delta") && l.contains("\"threadId\":\"01a1ca24-1047")).count();
+        assert_eq!(text_of(&st.events, "delta").len(), own);
         let steps: Vec<String> = st.events.iter().filter(|e| s(e, "event") == "tool.start").map(|e| s(e, "detail")).collect();
         assert!(!steps.iter().any(|d| d.contains("echo one") || d.contains("head -n 1")), "{steps:?}");
     }
