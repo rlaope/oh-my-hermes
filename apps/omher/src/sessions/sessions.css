@@ -694,3 +694,9 @@
 .ss-plans-rows {
   padding: 4px 2px;
 }
+/* the model pill's "Next turn: X" after a pick made while a turn ran */
+.mp-next {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

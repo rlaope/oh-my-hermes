@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, CONTINUES, draftAgent, draftFolder, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { agentDef, CONTINUES, draftAgent, draftFolder, INSTALL, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
@@ -95,6 +95,8 @@ interface ChatProc {
   bot?: string;
   /** set when omher itself stopped it (close, Terminal toggle), so its exit is not an end of the session */
   stopping?: boolean;
+  /** the program never spoke its chat protocol (an old version, a hung start): the reason its turn and exit carry */
+  noChat?: string;
 }
 
 const readRecent = () => {
@@ -259,6 +261,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         const fresh = typeof ev.agent_session === "string" && !!ev.agent_session && ev.agent_session !== rec(id)?.agentSession;
         if (typeof ev.agent_session === "string" && ev.agent_session) p.agentSession = ev.agent_session;
         if (typeof ev.model === "string" && ev.model) p.model = ev.model;
+        // a model picked mid-turn waits for the next turn ("" = it has taken effect, or was taken back)
+        if (typeof ev.model_next === "string") p.modelNext = ev.model_next || undefined;
         // the agent named the conversation (Claude Code's session title, a Codex thread name)
         if (typeof ev.title === "string" && ev.title.trim()) p.agentTitle = ev.title.trim();
         if (typeof ev.background === "number") p.background = ev.background;
@@ -273,18 +277,33 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         set({ models: { ...state.models, [id]: Array.isArray(ev.options) ? (ev.options as ModelOption[]) : [] } });
         return;
       case "session.error":
+        if (ev.kind === "no_chat_mode") {
+          // the shell ends this session: say why in the person's words, with the line that updates the agent
+          const agent = rec(id)?.agent ?? "claude";
+          proc.noChat = tr("ss.noChatMode", { agent: agentDef(agent).label, install: INSTALL[agent] });
+          return;
+        }
         note(id, String(ev.message ?? ""));
+        return;
+      case "session.note":
+        // something the agent's side did on its own that the person should know (Codex: a new conversation in place
+        // of one that is gone)
+        if (ev.kind === "new_conversation") {
+          const key = keys.get(id);
+          if (key) store().dispatch({ type: "system.note", bot: key, text: tr("ss.newConversation"), now: Date.now() });
+        }
         return;
       case "exit": {
         if (procs.get(id) === proc) procs.delete(id);
         if (proc.stopping) return;
         endLiveTurn(id, "ended");
         const code = typeof ev.code === "number" ? ev.code : null;
-        const error = typeof ev.error === "string" ? ev.error.trim() : "";
+        const error = proc.noChat ?? (typeof ev.error === "string" ? ev.error.trim() : "");
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
         return;
       }
       default:
+        if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
         // the agent may have titled the conversation during the turn
         if (ev.event === "turn.end") void readAgentTitle(id);

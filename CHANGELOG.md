@@ -37,19 +37,29 @@ All notable changes will be documented here.
   Claude Code 2.1.322 (two subagents in parallel, then one whose command needs
   approval) and OmO 5.1.56.
 
-- **A Codex session in omher stays on your turn while Codex's sub-agents work.**
-  Codex streams its sub-agents' threads on the same connection, and omher
-  took their events as its own: when the first sub-agent finished, the chat
+- **A Codex session in omher stays on your turn while Codex's subagents work.**
+  Codex streams its subagents' threads on the same connection, and omher
+  took their events as its own: when the first subagent finished, the chat
   showed Ready and Send while Codex was still working; Stop sent the
-  sub-agent's turn id, which Codex refused, so nothing stopped and nothing
-  said so; and each sub-agent's answer ("done", "alpha line") showed and
+  subagent's turn id, which Codex refused, so nothing stopped and nothing
+  said so; and each subagent's answer ("done", "alpha line") showed and
   notified as Codex's own. omher now keeps the session's own thread apart: a
-  sub-agent's turn never ends yours, Stop names your turn, a refused Stop
-  shows on the turn's line, and each sub-agent comes out as one `subagent`
+  subagent's turn never ends yours, Stop names your turn, a refused Stop
+  shows on the turn's line, and each subagent comes out as one `subagent`
   record (name, model, current step, state, answer, time) that the chat's
-  sub-agent rows can show; an approval asked inside a sub-agent names it.
-  Tested on recorded Codex 0.167 streams with two sub-agents in parallel and
+  subagent rows can show; an approval asked inside a subagent names it.
+  Tested on recorded Codex 0.167 streams with two subagents in parallel and
   Stop while one runs.
+
+- **An omher session chat never hangs on Working.** An agent that does not answer in
+  chat mode within 20 seconds (an old OmO or pi that ignores `--mode rpc`, a hung start),
+  or that refuses the chat-mode flag, ends with "<agent> did not answer in chat mode; it
+  may be an old version: <install line>" and Restart. A Codex chat reopened onto a
+  thread that was deleted starts a new conversation in the same folder, says so, and
+  answers the message you sent. A Claude Code model picked mid-turn shows as "Next turn:
+  <model>" instead of flipping the header. A line with a byte-order mark, or two
+  protocol messages on one line, no longer gets dropped. On Windows, closing a chat also
+  ends the `node.exe` behind the agent's `.cmd` shim.
 
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the

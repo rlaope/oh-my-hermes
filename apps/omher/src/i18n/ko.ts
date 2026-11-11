@@ -893,6 +893,10 @@ export const ko: Record<Key, string> = {
   "ss.session": "세션",
   "ss.hermesClosed": "Hermes가 이 채팅을 닫았어요",
   "ss.modelNotChanged": "모델을 바꾸지 못했어요: {error}",
+  "ss.noChatMode": "{agent}가 채팅 모드로 답하지 않았어요. 오래된 버전일 수 있어요: {install}",
+  "ss.newConversation": "이전 대화를 찾지 못해 여기서 새 대화를 시작했어요.",
+  "ss.modelNext": "다음 턴: {model}",
+  "ss.modelNextTip": "지금 턴은 {model}로 계속하고, 고른 모델은 다음 턴부터 써요",
 
   // resolved cards, errors, run prefills, link chip words (i18n 0.2.5)
   "card.allowedOnce": "한 번 허용함",
