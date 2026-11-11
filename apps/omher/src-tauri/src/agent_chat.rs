@@ -954,7 +954,9 @@ impl Codex {
     fn helper_event(&self, thread: &str, state: &str, extra: Value) -> Event {
         let h = &self.helpers[thread];
         let count = if self.fanout.0 == h.delegation { self.fanout.1 } else { h.index + 1 };
-        let mut f = json!({"id": thread, "delegation": h.delegation, "index": h.index, "count": count, "goal": h.name, "state": state});
+        // the agent-neutral subagent shape every session adapter emits: Codex names a sub-agent (its agentPath) but
+        // streams no task text, so `goal` stays empty
+        let mut f = json!({"id": thread, "agent": "codex", "name": h.name, "goal": "", "delegation": h.delegation, "index": h.index, "count": count, "state": state});
         if !h.model.is_empty() {
             f["model"] = Value::String(h.model.clone());
         }
@@ -1204,7 +1206,7 @@ impl Adapter for Codex {
             // asked inside a helper: the card says which one
             if self.is_helper(&thread) && st.events.len() > n {
                 let h = self.helper(&thread, "", "");
-                let who = json!({"id": thread, "goal": h.name});
+                let who = json!({"id": thread, "name": h.name});
                 for e in &mut st.events[n..] {
                     e["subagent"] = who.clone();
                 }
@@ -3674,12 +3676,12 @@ mod tests {
         let two = of("13c7f1bb6917");
         // started, its step, done with its own answer and time
         assert_eq!(one.iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["running", "running", "done"]);
-        assert_eq!(s(&one[0], "goal"), "write one");
+        assert_eq!((s(&one[0], "agent"), s(&one[0], "name"), s(&one[0], "goal")), ("codex".into(), "write one".into(), String::new()));
         assert_eq!(s(&one[0], "model"), "gpt-6.1-sol");
         assert_eq!(s(&one[1], "step"), "echo one > one.txt");
         assert_eq!(s(&one[2], "summary"), "done");
         assert_eq!(one[2]["seconds"], json!(4.8));
-        assert_eq!(s(&two[0], "goal"), "read first line");
+        assert_eq!(s(&two[0], "name"), "read first line");
         assert_eq!(s(two.last().unwrap(), "summary"), "alpha line");
         // one fan-out of two: the same delegation (the person's turn), index 0 and 1
         let deleg = s(&one[0], "delegation");
@@ -3727,7 +3729,7 @@ mod tests {
         run(&mut x, &lines[..=spawned]);
         let st = x.on_line(r#"{"id":91,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-539f-7e51-ad88-e39bedaf4545","turnId":"01a1ca24-53f9-72c0-a436-7edf958315cf","itemId":"exec-1","command":"/bin/zsh -lc 'rm one.txt'","cwd":"/w/proj"}}"#);
         assert_eq!(s(&st.events[0], "event"), "approval.request");
-        assert_eq!(st.events[0]["subagent"], json!({"id": "01a1ca24-539f-7e51-ad88-e39bedaf4545", "goal": "write one"}));
+        assert_eq!(st.events[0]["subagent"], json!({"id": "01a1ca24-539f-7e51-ad88-e39bedaf4545", "name": "write one"}));
         // the answer goes back to the same request
         let st = x.on_input(Input::Approve { request_id: "codex-91".into(), choice: "deny".into() }).unwrap();
         assert_eq!(written(&st)[0], json!({"id": 91, "result": {"decision": "decline"}}));
