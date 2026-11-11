@@ -289,7 +289,7 @@ impl DshChat {
     pub fn input(&self, input: Input) -> Result<(), String> {
         match input {
             // headless takes text only: attached pictures are named by their saved copy, as other files are
-            Input::Send { text, images } => self.send(&with_pictures(&text, &images)),
+            Input::Send { text, images, .. } => self.send(&with_pictures(&text, &images)),
             Input::Interrupt => {
                 let run = self.0.run.lock().unwrap();
                 let r = run.as_ref().ok_or("nothing is running")?;
@@ -299,6 +299,7 @@ impl DshChat {
             }
             Input::Approve { .. } | Input::Clarify { .. } => Err("DeepSeek Harness asks nothing in this chat".into()),
             Input::Model { .. } => Err("DeepSeek Harness uses the model set in its own app".into()),
+            Input::Mode { .. } | Input::Effort { .. } => Err("DeepSeek Harness runs with its own settings in this chat".into()),
         }
     }
 
@@ -531,9 +532,9 @@ mod tests {
                 thread::sleep(Duration::from_millis(100));
             }
         };
-        chat.input(Input::Send { text: "Pick one fruit and one whole number between 10 and 99. Reply with only those two, like: mango 37".into(), images: vec![] }).unwrap();
+        chat.input(Input::Send { text: "Pick one fruit and one whole number between 10 and 99. Reply with only those two, like: mango 37".into(), images: vec![], id: String::new() }).unwrap();
         idle();
-        chat.input(Input::Send { text: "Multiply the number you just picked by 3. Reply with only the fruit and the result.".into(), images: vec![] }).unwrap();
+        chat.input(Input::Send { text: "Multiply the number you just picked by 3. Reply with only the fruit and the result.".into(), images: vec![], id: String::new() }).unwrap();
         idle();
         let got = out.lock().unwrap().clone();
         let msgs: Vec<String> = got.iter().filter(|e| s(e, "event") == "message").map(|e| s(e, "text")).collect();
@@ -750,13 +751,13 @@ mod tests {
             }
             ends() == n
         };
-        chat.input(Input::Send { text: "first message".into(), images: vec![] }).unwrap();
+        chat.input(Input::Send { text: "first message".into(), images: vec![], id: String::new() }).unwrap();
         assert!(wait(1));
         let deadline = Instant::now() + Duration::from_secs(5);
         while chat.0.run.lock().unwrap().is_some() && Instant::now() < deadline {
             thread::sleep(Duration::from_millis(20));
         }
-        chat.input(Input::Send { text: "second message".into(), images: vec![] }).unwrap();
+        chat.input(Input::Send { text: "second message".into(), images: vec![], id: String::new() }).unwrap();
         assert!(wait(2));
         let log = std::fs::read_to_string(tmp.join("log")).unwrap();
         let lines: Vec<&str> = log.lines().collect();
@@ -884,7 +885,7 @@ mod tests {
             }))),
             run: Mutex::new(None),
         }));
-        chat.input(Input::Send { text: "Reply with exactly: ok".into(), images: vec![] }).unwrap();
+        chat.input(Input::Send { text: "Reply with exactly: ok".into(), images: vec![], id: String::new() }).unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
         while (out.lock().unwrap().iter().all(|e| s(e, "event") != "turn.end") || chat.0.run.lock().unwrap().is_some()) && Instant::now() < deadline {
             thread::sleep(Duration::from_millis(20));

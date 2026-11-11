@@ -114,8 +114,8 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
   // a subagent that ended (or a new one) re-reads the record at once
   const moved = subs.map((x) => `${x.id}:${x.state}`).join(",");
   const got = useSessionRun(rec, working, moved);
-  // the same second as the chat's card, which ticks every second
-  const nowMs = useNow(working > 0, 1000);
+  // the same clock as the chat's card, which re-reads it every quarter second
+  const nowMs = useNow(working > 0, 250);
   const nowS = nowMs / 1000;
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   // the record's own title is the agent's ("Claude Code session" when it wrote none): the session row's name reads

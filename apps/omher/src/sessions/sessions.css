@@ -359,13 +359,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* the path gives way first, then the name, down to a few letters; the controls on the right stay whole */
-  min-width: min(3em, 100%);
-  flex: 0 1 auto;
+  /* the path gives way first, then the name (to its ellipsis); the controls on the right stay whole */
+  min-width: 0;
+  flex: 0 10000 auto;
   max-width: 46%;
 }
 .ss-head-path {
-  flex: 0 1000 auto;
+  flex: 0 1000000000 auto;
   font-size: 11.5px;
   color: var(--quiet);
   white-space: nowrap;
@@ -429,9 +429,10 @@
 
 /* chat sessions */
 /* the controls give way last: only once the path and the name are down to their least does the model's label
-   ellipsize (as in the bot header); the toggle and the panel button never shrink */
+   ellipsize (as in the bot header); the toggle and the panel button never shrink. (A shrink factor under 1 would
+   leave part of the overflow unabsorbed: flex multiplies the free space by the sum of factors below 1.) */
 .ss-head-right {
-  flex: 0 0.001 auto;
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: 6px;

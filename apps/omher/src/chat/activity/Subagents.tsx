@@ -97,7 +97,8 @@ export function FanoutCard({ fan, live }: { fan: Fanout; live: boolean }) {
   const [, tick] = useState(0);
   useEffect(() => {
     if (!running) return;
-    const h = setInterval(() => tick((n) => n + 1), 1000);
+    // a quarter second: a row read here and the same subagent read in Plans never stand a whole second apart
+    const h = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(h);
   }, [running]);
   const now = Date.now();

@@ -4170,7 +4170,7 @@ mod tests {
         x.start();
         x.on_input(Input::send("hi")).unwrap();
         run(&mut x, &real("codex-11-resume-gone.jsonl")[..5]);
-        let st = x.on_line(r#"{"id":4,"error":{"code":-32600,"message":"not signed in"}}"#);
+        let st = x.on_line(r#"{"id":5,"error":{"code":-32600,"message":"not signed in"}}"#);
         assert_eq!(ends(&st.events), [("error".into(), "Codex could not start a conversation: not signed in".into())]);
         assert!(!x.in_turn());
     }
@@ -4181,14 +4181,19 @@ mod tests {
     #[test]
     fn real_claude_11_a_model_picked_mid_turn_is_for_the_next_turn() {
         let mut c = claude_up();
-        let lines = real("claude-11-model-mid-turn.jsonl");
         let haiku = written(&c.on_input(Input::Model { model: "haiku".into() }).unwrap())[0].clone();
-        assert_eq!(s(&haiku, "request_id"), "omher-model-2");
+        assert!(s(&haiku, "request_id").starts_with("omher-model-"));
+        // the recording answers the ids omher sent then (2, 3); this run's are its own (init also asks the context use)
+        let mut lines = real("claude-11-model-mid-turn.jsonl");
+        let ids = |l: &mut Vec<String>, from: &str, to: &str| l.iter_mut().for_each(|x| *x = x.replace(&format!("\"{from}\""), &format!("\"{to}\"")));
+        ids(&mut lines, "omher-model-3", "@sonnet@");
+        ids(&mut lines, "omher-model-2", &s(&haiku, "request_id"));
         let st = run(&mut c, &lines[..1]);
         assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).collect::<Vec<_>>(), ["Haiku 5.5"]);
         c.on_input(Input::send("Reply with exactly: ok")).unwrap();
         let sonnet = written(&c.on_input(Input::Model { model: "sonnet".into() }).unwrap())[0].clone();
-        assert_eq!(s(&sonnet, "request_id"), "omher-model-3");
+        assert_ne!(s(&sonnet, "request_id"), s(&haiku, "request_id"));
+        ids(&mut lines, "@sonnet@", &s(&sonnet, "request_id"));
         // everything until the turn's end, then the next turn
         let first_end = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();
         let st = run(&mut c, &lines[1..=first_end]);
@@ -5213,7 +5218,7 @@ mod tests {
     #[test]
     fn a_codex_helper_finishing_does_not_end_the_persons_turn() {
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let lines = real("codex-9-helpers.jsonl");
         // the first helper's own turn/completed: the person's turn is still running
         let child_end = lines.iter().position(|l| l.contains("\"turn/completed\"") && l.contains("01a1ca24-539f")).unwrap();
@@ -5229,7 +5234,7 @@ mod tests {
     #[test]
     fn a_codex_helpers_text_is_never_codexs_own_answer() {
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let st = run(&mut x, &real("codex-9-helpers.jsonl"));
         let said = text_of(&st.events, "message");
         assert!(!said.iter().any(|t| t == "done" || t == "alpha line"), "{said:?}");
@@ -5245,7 +5250,7 @@ mod tests {
     #[test]
     fn codex_helpers_come_out_as_subagent_lines() {
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let st = run(&mut x, &real("codex-9-helpers.jsonl"));
         let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
         let of = |id: &str| subs.iter().filter(|e| s(e, "id").ends_with(id)).map(|e| (*e).clone()).collect::<Vec<_>>();
@@ -5275,7 +5280,7 @@ mod tests {
         let mut x = Codex::new("/w/proj", None);
         x.start();
         run(&mut x, &real("codex-10-helper-stop-init.jsonl"));
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         run(&mut x, &real("codex-10-helper-stop.jsonl"));
         let st = x.on_input(Input::Interrupt).unwrap();
         let w = written(&st);
@@ -5300,7 +5305,7 @@ mod tests {
         // shape from codex-rs app-server-protocol (v2 CommandExecutionRequestApprovalParams); this Mac's Codex runs
         // with approval_policy = never, so no helper approval was recorded
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let lines = real("codex-9-helpers.jsonl");
         let spawned = lines.iter().position(|l| l.contains("\"subAgentActivity\"") && l.contains("write_one")).unwrap();
         run(&mut x, &lines[..=spawned]);
