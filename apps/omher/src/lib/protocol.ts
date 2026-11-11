@@ -487,6 +487,8 @@ interface EventBase {
   session?: string;
 }
 
+export type SubagentState = "queued" | "running" | "thinking" | "done" | "failed" | "cancelled";
+
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
   | (EventBase & { event: "status"; text: string })
@@ -500,6 +502,25 @@ export type BridgeEvent =
       dag?: { run: string; node: string }[];
     })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
+  /** One of Hermes' `subagent.*` events of the bot's own turn (a delegate_task child), clipped by the bridge. */
+  | (EventBase & {
+      event: "subagent";
+      id: string;
+      /** The fan-out it belongs to (absent on the first, queued event). */
+      delegation?: string;
+      index: number;
+      count: number;
+      goal: string;
+      dag?: { run: string; node: string };
+      model?: string;
+      state: SubagentState;
+      /** The tool it is running and that tool's line, or its batched progress. */
+      tool?: string;
+      step?: string;
+      /** Its result line (done) or error (failed). */
+      summary?: string;
+      seconds?: number;
+    })
   | (EventBase & { event: "skill"; name: string })
   | (EventBase & { event: "delta"; text: string })
   | (EventBase & { event: "message"; id: string; text: string })
