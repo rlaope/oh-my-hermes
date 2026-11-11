@@ -1798,8 +1798,10 @@ impl ChatSessions {
                 done.store(true, Ordering::SeqCst);
             });
         }
+        // set once stderr reached its end: the exit reason is read from all of it
+        let err_done = Arc::new(AtomicBool::new(false));
         {
-            let tail = tail.clone();
+            let (tail, err_done) = (tail.clone(), err_done.clone());
             thread::spawn(move || {
                 let mut r = stderr;
                 let mut buf = [0u8; 4096];
@@ -1815,10 +1817,12 @@ impl ChatSessions {
                         t.drain(..cut);
                     }
                 }
+                err_done.store(true, Ordering::SeqCst);
             });
         }
         {
             let (child, exited, sink, adapter, done) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), reader_done.clone());
+            let err_done = err_done.clone();
             thread::spawn(move || {
                 let code = loop {
                     if let Ok(Some(st)) = child.lock().unwrap().try_wait() {
@@ -1827,9 +1831,9 @@ impl ChatSessions {
                     thread::sleep(Duration::from_millis(40));
                 };
                 exited.store(true, Ordering::SeqCst);
-                // let the reader hand over what the program printed last
+                // let the readers hand over what the program printed last (stdout's events, stderr's reason)
                 let deadline = Instant::now() + Duration::from_millis(800);
-                while !done.load(Ordering::SeqCst) && Instant::now() < deadline {
+                while !(done.load(Ordering::SeqCst) && err_done.load(Ordering::SeqCst)) && Instant::now() < deadline {
                     thread::sleep(Duration::from_millis(10));
                 }
                 let (mid_turn, err) = {
