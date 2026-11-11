@@ -35,6 +35,16 @@ All notable changes will be documented here.
   Tested on recorded Codex 0.167 streams with two subagents in parallel and
   Stop while one runs.
 
+- **An omher session chat never hangs on Working.** An agent that does not answer in
+  chat mode within 20 seconds (an old OmO or pi that ignores `--mode rpc`, a hung start),
+  or that refuses the chat-mode flag, ends with "<agent> did not answer in chat mode; it
+  may be an old version: <install line>" and Restart. A Codex chat reopened onto a
+  thread that was deleted starts a new conversation in the same folder, says so, and
+  answers the message you sent. A Claude Code model picked mid-turn shows as "Next turn:
+  <model>" instead of flipping the header. A line with a byte-order mark, or two
+  protocol messages on one line, no longer gets dropped. On Windows, closing a chat also
+  ends the `node.exe` behind the agent's `.cmd` shim.
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt

@@ -32,7 +32,7 @@ use serde_json::{json, Map, Value};
 
 use crate::dsh_chat::DshChat;
 use crate::session_files;
-use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
+use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
 /// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
@@ -220,6 +220,10 @@ pub trait Adapter: Send {
     fn explain(&self, err: &str) -> String {
         err.to_string()
     }
+    /// The agent's name in a sentence ("Claude Code did not answer …").
+    fn name(&self) -> &str {
+        "The agent"
+    }
 }
 
 /// The adapter for an allow-listed chat agent, or `None` for agents that have no chat mode here. `resume` is a
@@ -397,6 +401,47 @@ pub(crate) fn exit_reason(tail: &str) -> String {
     };
     let lines: Vec<String> = tail.lines().map(|l| strip_ansi(l).trim().to_string()).filter(|l| !l.is_empty() && !warning(l)).collect();
     lines.iter().find(|l| !is_log(l)).or(lines.last()).map(|l| clip(l, 200)).unwrap_or_default()
+}
+
+/// The protocol messages on one line of an agent's stdout, in order: a leading byte-order mark is dropped, and a line
+/// holding two JSON objects back to back (`{…}{…}`, a missed newline) yields both. A line that does not start with a
+/// JSON object (a banner, a terminal frame) yields nothing; after a bad value the rest of the line is dropped.
+pub(crate) fn protocol_lines(line: &str) -> Vec<&str> {
+    let line = line.trim_start_matches('\u{feff}');
+    let mut out = Vec::new();
+    let mut values = serde_json::Deserializer::from_str(line).into_iter::<serde::de::IgnoredAny>();
+    let mut from = 0;
+    while let Some(Ok(_)) = values.next() {
+        let to = values.byte_offset();
+        let one = line[from..to].trim();
+        if !one.starts_with('{') {
+            break;
+        }
+        out.push(one);
+        from = to;
+    }
+    out
+}
+
+/// How long a chat's program has to print its first protocol message. Measured on this Mac (load about 4.5) from
+/// start to the first JSON line: Claude Code 0.25 s, Codex 0.11-0.29 s, OmO 0.71-1.48 s. 20 s leaves a slow first
+/// start (a cold disk, an antivirus scan of node on Windows) more than ten times the slowest of those.
+pub(crate) const START_DEADLINE: Duration = Duration::from_secs(20);
+
+/// The reason a session ends with when its program never spoke its chat protocol: an old version that does not know
+/// the structured mode, or a start that hangs. The UI shows its own words for it (with the install line); this text
+/// is what reaches the session when it has none.
+pub(crate) fn no_chat_mode(agent: &str) -> String {
+    format!("{agent} did not answer in chat mode; it may be an old version: update it, then Restart.")
+}
+
+/// Whether `reason` (an exit's stderr) says the program refused omher's chat-mode arguments (`--mode rpc`,
+/// `app-server`, `--input-format` …): a version that does not have the mode.
+pub(crate) fn refused_chat_mode(reason: &str) -> bool {
+    let low = reason.to_ascii_lowercase();
+    ["unknown option", "unknown argument", "unexpected argument", "unrecognized option", "unrecognized argument", "invalid option", "unknown command", "unrecognized subcommand"]
+        .iter()
+        .any(|p| low.contains(p))
 }
 
 /// `text` without terminal colour and cursor codes (`ESC [ … letter`).
@@ -583,6 +628,10 @@ pub struct Claude {
     auto_turn: bool,
     pending: HashMap<String, ClaudeAsk>,
     model: String,
+    /// a model the person picked while a turn ran: Claude Code uses it from the next turn on, whose init confirms it
+    model_next: String,
+    /// the turn that ran during that pick has ended: the next init settles the header, whatever it names
+    next_due: bool,
     /// model ids (`haiku`, `claude-haiku-5-5`) -> the name Claude Code shows for them
     labels: HashMap<String, String>,
     /// the last assistant message carried an error kind (`authentication_failed`, …)
@@ -624,6 +673,7 @@ impl Claude {
             } else {
                 self.waiting.all_taken(step);
             }
+            self.next_due = !self.model_next.is_empty();
             let mut f = json!({"outcome": outcome});
             if let Some(e) = error.filter(|e| !e.is_empty()) {
                 f["error"] = Value::String(e);
@@ -636,6 +686,10 @@ impl Claude {
 const CLAUDE_SIGNED_OUT: &str = "Claude Code is not signed in. Sign in from Settings › Accounts (or open Terminal and run /login), then Restart.";
 
 impl Adapter for Claude {
+    fn name(&self) -> &str {
+        "Claude Code"
+    }
+
     fn start(&mut self) -> Step {
         let mut st = Step::default();
         self.control(&mut st, "init", json!({"subtype": "initialize", "hooks": null}));
@@ -654,6 +708,12 @@ impl Adapter for Claude {
             "system" if s(&v, "subtype") == "init" => {
                 self.model = s(&v, "model");
                 let mut f = json!({"agent_session": s(&v, "session_id"), "model": self.label(&self.model)});
+                // the turn after a pick made mid-turn: its init names the model it runs on, which the header now shows
+                if !self.model_next.is_empty() && (self.next_due || self.label(&self.model_next) == self.label(&self.model)) {
+                    self.model_next.clear();
+                    f["model_next"] = Value::String(String::new());
+                }
+                self.next_due = false;
                 let mode = s(&v, "permissionMode");
                 if !mode.is_empty() {
                     f["approval"] = Value::String(mode.clone());
@@ -761,10 +821,23 @@ impl Adapter for Claude {
                 } else if id.starts_with("omher-model-") {
                     if s(r, "subtype") == "success" {
                         let m = s(body, "model");
-                        if !m.is_empty() {
-                            self.model = m;
+                        if self.turn {
+                            // the running turn keeps the model it started on: the header says the pick is for the next
+                            // turn, and that turn's init confirms it
+                            if !m.is_empty() && self.label(&m) != self.label(&self.model) {
+                                self.model_next = m;
+                                st.emit(ev("session.info", json!({"model_next": self.label(&self.model_next)})));
+                            } else {
+                                self.model_next.clear();
+                                st.emit(ev("session.info", json!({"model_next": ""})));
+                            }
+                        } else {
+                            if !m.is_empty() {
+                                self.model = m;
+                            }
+                            self.model_next.clear();
+                            st.emit(ev("session.info", json!({"model": self.label(&self.model), "model_next": ""})));
                         }
-                        st.emit(ev("session.info", json!({"model": self.label(&self.model)})));
                     } else {
                         st.emit(ev("session.error", json!({"message": format!("Model not changed: {}", s(r, "error"))})));
                     }
@@ -1345,6 +1418,10 @@ impl Codex {
 }
 
 impl Adapter for Codex {
+    fn name(&self) -> &str {
+        "Codex"
+    }
+
     fn start(&mut self) -> Step {
         let mut st = Step::default();
         self.call(&mut st, "initialize", json!({"clientInfo": {"name": "omher", "title": "omher", "version": env!("CARGO_PKG_VERSION")}, "capabilities": {"experimentalApi": false}}));
@@ -1366,11 +1443,27 @@ impl Adapter for Codex {
             let what = self.calls.remove(&n).unwrap_or("");
             if let Some(err) = v.get("error") {
                 let msg = s(err, "message");
-                if what == "turn/start" {
+                if what == "thread/resume" {
+                    // The thread to continue is gone (deleted or archived: "no rollout found"): start a new one in the
+                    // same folder, say so, and send what was queued to it once Codex names it.
+                    self.resume = None;
+                    st.emit(ev("session.note", json!({"kind": "new_conversation", "text": clip(&format!("The earlier Codex conversation was not found ({msg}); a new one started."), 240)})));
+                    let cwd = self.cwd.clone();
+                    self.call(&mut st, "thread/start", json!({"cwd": cwd}));
+                } else if what == "turn/start" {
                     self.end(&mut st, "error", Some(clip(&msg, 200)));
                 } else if what == "turn/interrupt" && self.turn {
                     // a refused Stop says so where the person looks: the running turn's line
                     st.emit(ev("status", json!({"text": clip(&format!("Codex did not stop: {msg}"), 160)})));
+                } else if what == "thread/start" {
+                    // no thread to send to: a message waiting for one ends its turn with the reason
+                    self.queued.clear();
+                    let m = clip(&format!("Codex could not start a conversation: {msg}"), 200);
+                    if self.turn {
+                        self.end(&mut st, "error", Some(m));
+                    } else {
+                        st.emit(ev("session.error", json!({"message": m})));
+                    }
                 } else {
                     st.emit(ev("session.error", json!({"message": format!("{what}: {msg}")})));
                 }
@@ -1893,6 +1986,14 @@ impl Adapter for Pi {
         self.friendly(err)
     }
 
+    fn name(&self) -> &str {
+        if self.label.is_empty() {
+            "pi"
+        } else {
+            &self.label
+        }
+    }
+
     fn start(&mut self) -> Step {
         let mut st = Step::default();
         self.cmd(&mut st, "get_state", json!({}));
@@ -2166,6 +2267,8 @@ struct ChatLive {
     sink: ChatSink,
     child: Arc<Mutex<Child>>,
     pid: u32,
+    /// the program and everything it started (`cmd.exe` and its `node.exe` on Windows)
+    tree: Arc<Option<ProcessTree>>,
     exited: Arc<AtomicBool>,
 }
 
@@ -2176,6 +2279,8 @@ pub struct ChatSessions {
     /// DSH chats: no process between messages, a run per message ([`DshChat`])
     dsh: Mutex<HashMap<u32, DshChat>>,
     next: AtomicU32,
+    /// tests: a shorter [`START_DEADLINE`]
+    start_deadline: Option<Duration>,
 }
 
 /// Queue `lines` for the chat's writer thread. Never blocks (a pipe takes only so much before a write
@@ -2318,6 +2423,7 @@ impl ChatSessions {
         }
         let mut cmd = command_for(&argv, cwd, path_env, account_env)?;
         let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", Path::new(&argv[0]).display()))?;
+        let tree = Arc::new(ProcessTree::adopt(&child));
         let mut stdout = child.stdout.take().ok_or("no stdout")?;
         let stderr = child.stderr.take().ok_or("no stderr")?;
         let mut pipe = child.stdin.take().ok_or("no stdin")?;
@@ -2338,6 +2444,10 @@ impl ChatSessions {
         let exited = Arc::new(AtomicBool::new(false));
         let child = Arc::new(Mutex::new(child));
         let tail = Arc::new(Mutex::new(String::new()));
+        // the program printed a protocol message (it speaks its chat mode); until then a start deadline runs
+        let answered = Arc::new(AtomicBool::new(false));
+        // why omher ended the session itself (the start deadline): the exit reports this instead of stderr
+        let verdict: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
         write_lines(&stdin, &first.write)?;
         deliver(&sink, first.events);
@@ -2360,7 +2470,7 @@ impl ChatSessions {
                     }
                 }
             });
-            let (adapter, stdin, sink, done) = (adapter.clone(), stdin.clone(), sink.clone(), reader_done.clone());
+            let (adapter, stdin, sink, done, answered) = (adapter.clone(), stdin.clone(), sink.clone(), reader_done.clone(), answered.clone());
             thread::spawn(move || {
                 let mut pending: Vec<u8> = Vec::new();
                 let run = |lines: &mut dyn Iterator<Item = &[u8]>| {
@@ -2369,13 +2479,13 @@ impl ChatSessions {
                         let mut a = adapter.lock().unwrap();
                         for raw in lines {
                             let line = String::from_utf8_lossy(raw);
-                            let line = line.trim_end_matches(['\n', '\r']);
-                            if line.trim().is_empty() {
-                                continue;
+                            // a BOM, or two messages on one line, still reach the adapter one message at a time
+                            for msg in protocol_lines(line.trim_end_matches(['\n', '\r'])) {
+                                answered.store(true, Ordering::SeqCst);
+                                let step = a.on_line(msg);
+                                out.write.extend(step.write);
+                                out.events.extend(step.events);
                             }
-                            let step = a.on_line(line);
-                            out.write.extend(step.write);
-                            out.events.extend(step.events);
                         }
                     }
                     let _ = write_lines(&stdin, &out.write);
@@ -2417,7 +2527,33 @@ impl ChatSessions {
             });
         }
         {
-            let (child, exited, sink, adapter, done) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), reader_done.clone());
+            // the start deadline: a program that has printed no protocol message by then is not in its chat mode (an
+            // old version showing its terminal UI, a hung start), so the session ends with that reason, all of it
+            let (child, exited, sink, adapter, answered, verdict, tree) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), answered.clone(), verdict.clone(), tree.clone());
+            let deadline = Instant::now() + self.start_deadline.unwrap_or(START_DEADLINE);
+            thread::spawn(move || {
+                while Instant::now() < deadline {
+                    if answered.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                if answered.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst) {
+                    return;
+                }
+                let why = no_chat_mode(adapter.lock().unwrap().name());
+                *verdict.lock().unwrap() = Some(why.clone());
+                deliver(&sink, vec![ev("session.error", json!({"kind": "no_chat_mode", "message": why}))]);
+                match tree.as_ref() {
+                    Some(t) => t.kill(),
+                    None => {
+                        let _ = child.lock().unwrap().kill();
+                    }
+                }
+            });
+        }
+        {
+            let (child, exited, sink, adapter, done, answered, verdict) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), reader_done.clone(), answered.clone(), verdict.clone());
             let err_done = err_done.clone();
             thread::spawn(move || {
                 let code = loop {
@@ -2432,12 +2568,21 @@ impl ChatSessions {
                 while !(done.load(Ordering::SeqCst) && err_done.load(Ordering::SeqCst)) && Instant::now() < deadline {
                     thread::sleep(Duration::from_millis(10));
                 }
-                let (mid_turn, err) = {
+                let (mid_turn, err, said) = {
                     let a = adapter.lock().unwrap();
                     let raw = exit_reason(&tail.lock().unwrap());
-                    (a.in_turn(), a.explain(&raw))
+                    match verdict.lock().unwrap().take() {
+                        // the start deadline ended it, and already said so
+                        Some(why) => (a.in_turn(), why, true),
+                        // it never spoke its protocol and refused omher's chat-mode arguments: an old version
+                        None if !answered.load(Ordering::SeqCst) && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
+                        None => (a.in_turn(), a.explain(&raw), true),
+                    }
                 };
                 if let Ok(mut f) = sink.lock() {
+                    if !said {
+                        f(ChatOut::Event(ev("session.error", json!({"kind": "no_chat_mode", "message": err}))));
+                    }
                     if mid_turn {
                         f(ChatOut::Event(exit_turn_end(code, &err)));
                     }
@@ -2446,7 +2591,7 @@ impl ChatSessions {
             });
         }
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
-        self.live.lock().unwrap().insert(id, ChatLive { stdin, adapter, sink, child, pid, exited });
+        self.live.lock().unwrap().insert(id, ChatLive { stdin, adapter, sink, child, pid, tree, exited });
         Ok(id)
     }
 
@@ -2504,9 +2649,15 @@ fn stop(s: ChatLive, grace: Duration) {
     }
     if !s.exited.load(Ordering::SeqCst) {
         signal_group(Some(s.pid), false);
+        // Windows has no hang-up: the whole tree goes now (cmd.exe and the node.exe behind an npm shim)
         #[cfg(not(unix))]
         {
-            let _ = s.child.lock().unwrap().kill();
+            match s.tree.as_ref() {
+                Some(t) => t.kill(),
+                None => {
+                    let _ = s.child.lock().unwrap().kill();
+                }
+            }
         }
     }
     let deadline = Instant::now() + grace;
@@ -2516,6 +2667,11 @@ fn stop(s: ChatLive, grace: Duration) {
     if !s.exited.load(Ordering::SeqCst) {
         signal_group(Some(s.pid), true);
         let _ = s.child.lock().unwrap().kill();
+    }
+    // whatever the program started and left behind (a helper that ignores hang-up, the node.exe behind cmd.exe) goes
+    // with it, also when the program itself already ended
+    if let Some(t) = s.tree.as_ref() {
+        t.kill();
     }
 }
 
@@ -3636,6 +3792,260 @@ mod tests {
         assert!(text_of(&st.events, "message")[0].contains("notes.txt"));
     }
 
+    /// H5, recorded from the real Codex 0.167 (`thread/resume` onto a deleted thread): omher starts a new thread in the
+    /// same folder, says so, and the message the person sent while it waited goes to the new thread.
+    #[test]
+    fn codex_resume_onto_a_gone_thread_starts_a_new_one_and_sends_what_waited() {
+        let gone = "0badbeef-0000-4000-8000-000000000000";
+        let mut x = Codex::new("/w/proj", Some(gone));
+        x.start();
+        let lines = real("codex-11-resume-gone.jsonl");
+        // the person's message is sent before Codex has answered anything (omher reopened the chat by itself)
+        let sent = x.on_input(Input::send("Reply with exactly: ok")).unwrap();
+        assert_eq!(names(&sent.events), ["turn.start"]);
+        assert!(sent.write.is_empty(), "no thread yet: the message waits");
+        let st = run(&mut x, &lines[..5]);
+        let w = written(&st);
+        assert_eq!(w.iter().filter(|c| c["method"] == "thread/resume").count(), 1);
+        // the resume error is said in the chat and answered with a new thread in the same folder, not a popover note
+        let note = of(&st.events, "session.note");
+        assert_eq!(note.len(), 1, "{:?}", st.events);
+        assert_eq!(s(note[0], "kind"), "new_conversation");
+        assert!(of(&st.events, "session.error").is_empty(), "{:?}", st.events);
+        let start = w.iter().find(|c| c["method"] == "thread/start").expect("a new thread");
+        assert_eq!(start["params"]["cwd"], "/w/proj");
+        assert!(x.in_turn(), "the message is still on its way");
+        let st = run(&mut x, &lines[5..]);
+        let new = "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6";
+        assert_eq!(s(of(&st.events, "session.info")[0], "agent_session"), new);
+        let w = written(&st);
+        let turn = w.iter().find(|c| c["method"] == "turn/start").expect("the waiting message is sent");
+        assert_eq!(turn["params"]["threadId"], new);
+        assert_eq!(turn["params"]["input"][0]["text"], "Reply with exactly: ok");
+        // Stop works on it like on any turn
+        x.on_line(r#"{"method":"turn/started","params":{"threadId":"01a1cb4b-0d4e-7751-aae4-9d65216fa4e6","turn":{"id":"t1"}}}"#);
+        assert_eq!(written(&x.on_input(Input::Interrupt).unwrap())[0]["method"], "turn/interrupt");
+    }
+
+    /// H5: when the new thread cannot start either, the waiting message ends its turn with the reason (no Working).
+    #[test]
+    fn codex_resume_and_new_thread_both_refused_end_the_waiting_turn() {
+        let mut x = Codex::new("/w/proj", Some("0badbeef-0000-4000-8000-000000000000"));
+        x.start();
+        x.on_input(Input::send("hi")).unwrap();
+        run(&mut x, &real("codex-11-resume-gone.jsonl")[..5]);
+        let st = x.on_line(r#"{"id":5,"error":{"code":-32600,"message":"not signed in"}}"#);
+        assert_eq!(ends(&st.events), [("error".into(), "Codex could not start a conversation: not signed in".into())]);
+        assert!(!x.in_turn());
+    }
+
+    /// H7, recorded from the real Claude Code 2.1.322: Haiku picked between turns, Sonnet picked right after the next
+    /// message went out. That turn still runs on Haiku (its init and its answer say so); the header keeps Haiku and
+    /// says "next turn: Sonnet", never Sonnet, Haiku, Sonnet; the next turn's init confirms Sonnet.
+    #[test]
+    fn real_claude_11_a_model_picked_mid_turn_is_for_the_next_turn() {
+        let mut c = claude_up();
+        let lines = real("claude-11-model-mid-turn.jsonl");
+        let haiku = written(&c.on_input(Input::Model { model: "haiku".into() }).unwrap())[0].clone();
+        assert_eq!(s(&haiku, "request_id"), "omher-model-3");
+        let st = run(&mut c, &lines[..1]);
+        assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).collect::<Vec<_>>(), ["Haiku 5.5"]);
+        c.on_input(Input::send("Reply with exactly: ok")).unwrap();
+        let sonnet = written(&c.on_input(Input::Model { model: "sonnet".into() }).unwrap())[0].clone();
+        assert_eq!(s(&sonnet, "request_id"), "omher-model-4");
+        // everything until the turn's end, then the next turn
+        let first_end = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();
+        let st = run(&mut c, &lines[1..=first_end]);
+        let models: Vec<String> = of(&st.events, "session.info").iter().filter_map(|e| e.get("model").and_then(Value::as_str).map(String::from)).collect();
+        assert!(models.iter().all(|m| m == "Haiku 5.5"), "the header flips: {models:?}");
+        let next: Vec<String> = of(&st.events, "session.info").iter().filter_map(|e| e.get("model_next").and_then(Value::as_str).map(String::from)).collect();
+        assert_eq!(next, ["Sonnet 5.5"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        c.on_input(Input::send("Reply with exactly: ok")).unwrap();
+        let st = run(&mut c, &lines[first_end + 1..]);
+        let info = of(&st.events, "session.info")[0];
+        assert_eq!(s(info, "model"), "Sonnet 5.5");
+        assert_eq!(info["model_next"], "", "the next turn's init confirms the pick");
+        // a pick between turns still applies at once
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-9","response":{"model":"claude-haiku-5-5"}}}"#.to_string()]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "model"), "Haiku 5.5");
+    }
+
+    /// H11: a byte-order mark before a line, and two messages on one line, reach the adapter as protocol messages,
+    /// one at a time, in order. A banner or a terminal frame is still nothing.
+    #[test]
+    fn protocol_lines_drop_a_bom_and_split_two_messages_on_one_line() {
+        assert_eq!(protocol_lines("\u{feff}{\"a\":1}"), [r#"{"a":1}"#]);
+        assert_eq!(protocol_lines(r#"{"type":"agent_end"}{"type":"agent_start"}"#), [r#"{"type":"agent_end"}"#, r#"{"type":"agent_start"}"#]);
+        assert_eq!(protocol_lines(r#"{"a":1}  {"b":"}{"}"#), [r#"{"a":1}"#, r#"{"b":"}{"}"#]);
+        assert!(protocol_lines("Welcome to OmO 3.0 (press q)").is_empty());
+        assert!(protocol_lines("\u{1b}[?1049h\u{1b}[2J omo 3.0 interactive").is_empty());
+        // a value cut short (a truncated line) yields what came before it
+        assert_eq!(protocol_lines(r#"{"a":1}{"b":"#), [r#"{"a":1}"#]);
+        assert!(protocol_lines("").is_empty());
+    }
+
+    /// H11 on pipes, every adapter: the QA's `pipe-bom` stub (a BOM before pi's get_state answer, agent_end and the
+    /// next agent_start on one line) and the same drift in Claude Code's and Codex's first lines.
+    #[cfg(unix)]
+    #[test]
+    fn a_bom_or_two_messages_on_one_line_do_not_hang_any_chat() {
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        // the stub answers once it has read what omher wrote at start and the person's message (`reads` lines)
+        let run_stub = |adapter: Box<dyn Adapter>, reads: usize, out: &str| {
+            let c = ChatSessions::default();
+            let (got, sink) = collect();
+            let script = format!("{}printf '{out}'; sleep 0.3", "read l; ".repeat(reads));
+            let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], adapter, sink).unwrap();
+            c.input(id, Input::send("hi")).unwrap();
+            assert!(wait_for(|| got.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+            let events: Vec<Event> = got.lock().unwrap().iter().filter_map(|o| match o { ChatOut::Event(e) => Some(e.clone()), _ => None }).collect();
+            events
+        };
+        // pi (the QA stub's bytes): the session id arrives, and the turn ends done at agent_end, not at the exit
+        let ev = run_stub(Box::new(Pi::new("/w", "pi")), 3, r#"\357\273\277{"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"m","name":"M"},"sessionId":"s-bom"}}\r\n{"type":"agent_start"}\r\n{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"crlf ok"}],"stopReason":"stop"}}\r\n{"type":"agent_end"}{"type":"agent_start"}\n"#);
+        assert_eq!(s(of(&ev, "session.info")[0], "agent_session"), "s-bom");
+        assert_eq!(ends(&ev)[0], ("done".into(), "".into()), "{ev:?}");
+        // Claude Code: its init behind a BOM, and the turn's result glued to the line before it
+        let ev = run_stub(Box::new(Claude::new("/w")), 2, r#"\357\273\277{"type":"system","subtype":"init","session_id":"c-bom","model":"m"}\n{"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","content":[{"type":"text","text":"ok"}]}}{"type":"result","subtype":"success","is_error":false,"result":"ok"}\n"#);
+        assert_eq!(s(of(&ev, "session.info")[0], "agent_session"), "c-bom");
+        assert_eq!(ends(&ev)[0], ("done".into(), "".into()), "{ev:?}");
+        // Codex: the initialize answer behind a BOM still opens the thread (the message waiting for it goes out)
+        let c = ChatSessions::default();
+        let (got, sink) = collect();
+        let mark = tmp.join(format!("omher-chat-bom-{}", std::process::id()));
+        let script = format!("read l; printf '\\357\\273\\277{{\"id\":1,\"result\":{{}}}}\\n'; while read l; do printf '%s\\n' \"$l\" >> '{}'; done", mark.display());
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Codex::new("/w", None)), sink).unwrap();
+        assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| t.contains("thread/start")), 10), "Codex's handshake stalled on a BOM");
+        c.close(id);
+        assert!(wait_for(|| got.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let _ = std::fs::remove_file(mark);
+    }
+
+    /// H4: the QA's `old-omo` stub (an old OmO that ignores `--mode rpc`, draws its terminal UI and waits). The start
+    /// deadline ends the session with the plain reason, the message sent meanwhile ends with it, nothing stays
+    /// Working, and the program (and what it started) is stopped.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_that_never_answers_in_chat_mode_ends_with_the_reason() {
+        let mut c = ChatSessions::default();
+        c.start_deadline = Some(Duration::from_millis(600));
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let script = "trap '' HUP; printf '\\033[?1049h\\033[2J omo 3.0 interactive  (press q)\\n'; sleep 30 & cat >/dev/null; wait";
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::new("/w", "OmO")), sink).unwrap();
+        c.input(id, Input::send("hi")).unwrap();
+        let started = Instant::now();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10), "still Working");
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+        let got = out.lock().unwrap().clone();
+        let why = "OmO did not answer in chat mode; it may be an old version: update it, then Restart.";
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "session.error" && s(e, "kind") == "no_chat_mode" && s(e, "message") == why)), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "outcome") == "error" && s(e, "error") == why)), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(_, e) if e == why)), "{got:?}");
+    }
+
+    /// H4: a slow but healthy start is not cut: an agent whose first protocol line comes after a while (within the
+    /// deadline) keeps its session and answers.
+    #[cfg(unix)]
+    #[test]
+    fn a_slow_start_within_the_deadline_still_works() {
+        let mut c = ChatSessions::default();
+        c.start_deadline = Some(Duration::from_millis(1500));
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let script = r#"sleep 0.8; printf '{"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"name":"M"},"sessionId":"slow"}}\n'; sleep 1.5; printf '{"type":"agent_start"}\n{"type":"agent_end"}\n'; sleep 0.2"#;
+        let mut a: Box<dyn Adapter> = Box::new(Pi::new("/w", "pi"));
+        a.on_input(Input::send("hi")).unwrap();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], a, sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let got = out.lock().unwrap().clone();
+        assert!(!got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "kind") == "no_chat_mode")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "outcome") == "done")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(0), e) if e.is_empty())), "{got:?}");
+    }
+
+    /// H4: the QA's `old-pi` stub (exits at once with `error: unknown option '--mode'`): the same plain reason, not
+    /// the raw flag error.
+    #[cfg(unix)]
+    #[test]
+    fn an_old_version_that_refuses_the_chat_mode_flag_says_so_plainly() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let script = "echo \"error: unknown option '--mode'\" >&2; echo 'Usage: pi [options] [message]' >&2; exit 1";
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::new("/w", "pi")), sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let got = out.lock().unwrap().clone();
+        let why = "pi did not answer in chat mode; it may be an old version: update it, then Restart.";
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "kind") == "no_chat_mode")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(1), e) if e == why)), "{got:?}");
+        // a program that did speak its protocol keeps its own reason (a login, a crash)
+        assert!(refused_chat_mode("error: unknown option '--mode'") && refused_chat_mode("error: unexpected argument 'app-server' found"));
+        assert!(!refused_chat_mode("Error: not logged in"));
+    }
+
+    /// H12: closing a chat stops what its program started too (Unix: the process group; Windows: the Job Object
+    /// that holds `cmd.exe` and the `node.exe` behind an npm shim). Here a child that ignores hang-up and outlives
+    /// its parent stands in for node behind cmd.exe.
+    #[cfg(unix)]
+    #[test]
+    fn closing_a_chat_stops_the_processes_its_program_started() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let mark = tmp.join(format!("omher-chat-tree-{}", std::process::id()));
+        let (out, sink) = collect();
+        // the grandchild writes its pid, ignores HUP and TERM, and lives on alone once the shell above it is gone
+        let script = format!("sh -c 'trap \"\" HUP TERM; echo $$ > \"{}\"; while :; do sleep 1; done' & printf '{{\"type\":\"agent_start\"}}\\n'; wait", mark.display());
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::new("/w", "pi")), sink).unwrap();
+        assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| !t.trim().is_empty()), 10));
+        let pid: i32 = std::fs::read_to_string(&mark).unwrap().trim().parse().unwrap();
+        c.close(id);
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        assert!(wait_for(|| unsafe { libc::kill(pid, 0) } != 0, 10), "pid {pid} kept running after close");
+        let _ = std::fs::remove_file(mark);
+    }
+
+    /// H12 on Windows (runs on the Windows CI job only): a chat started through `cmd.exe /c` — as an npm `.cmd` shim
+    /// is — whose child outlives cmd.exe; closing the chat ends that child too.
+    #[cfg(windows)]
+    #[test]
+    fn closing_a_chat_stops_the_node_behind_a_cmd_shim() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir();
+        let mark = tmp.join(format!("omher-chat-tree-{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&mark);
+        let (out, sink) = {
+            let out = Arc::new(Mutex::new(Vec::new()));
+            let o = out.clone();
+            (out, move |x| o.lock().unwrap().push(x))
+        };
+        // cmd.exe starts a PowerShell that writes its own pid and sleeps; cmd.exe itself waits on it, as on node
+        let ps = format!("$PID | Out-File -Encoding ascii '{}'; Start-Sleep -Seconds 120", mark.display());
+        let argv: Vec<OsString> = vec!["cmd.exe".into(), "/c".into(), "powershell".into(), "-NoProfile".into(), "-Command".into(), ps.into()];
+        let id = c.spawn(argv, &tmp, None, &[], Box::new(Pi::new("/w", "pi")), sink).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while Instant::now() < deadline && !std::fs::read_to_string(&mark).is_ok_and(|t| !t.trim().is_empty()) {
+            thread::sleep(Duration::from_millis(100));
+        }
+        let pid: u32 = std::fs::read_to_string(&mark).unwrap().trim().parse().unwrap();
+        c.close(id);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))) {
+            thread::sleep(Duration::from_millis(50));
+        }
+        let alive = || {
+            let o = Command::new("tasklist").args(["/FI", &format!("PID eq {pid}"), "/NH"]).output().unwrap();
+            String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline && alive() {
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(!alive(), "the process behind cmd.exe (pid {pid}) kept running after close");
+        let _ = std::fs::remove_file(mark);
+    }
+
     #[test]
     fn titles_the_agents_give_the_conversation_reach_the_session() {
         // Claude Code says a rename (in Claude Code, or from its own titler) as system/session_title_changed
@@ -4138,6 +4548,8 @@ mod tests {
         File(&'static str),
         Head(&'static str),
         Tail(&'static str),
+        /// lines `from..to` of a file, as recorded
+        Lines(&'static str, usize, usize),
         Send,
         Stop,
         Model(&'static str),
@@ -4156,6 +4568,8 @@ mod tests {
         // the recording finishes a turn, then the person asks for a slow command and presses Stop
         out.push(("claude-4-stop.jsonl", "claude", vec![Send, Head("claude-4-stop.jsonl"), Send, Tail("claude-4-stop.jsonl"), Stop, File("claude-4-stopped.jsonl")]));
         out.push(("claude-7-model.jsonl", "claude", vec![Model("haiku"), File("claude-7-model.jsonl")]));
+        // a model picked between turns, then one picked right after the next message went out (QA H7)
+        out.push(("claude-11-model-mid-turn.jsonl", "claude", vec![Model("haiku"), Lines("claude-11-model-mid-turn.jsonl", 0, 1), Send, Model("sonnet"), Lines("claude-11-model-mid-turn.jsonl", 1, 6), Send, Tail("claude-11-model-mid-turn.jsonl")]));
         // a resumed conversation: an old background task's empty result, then the person's answer
         out.push(("claude-8-resume.jsonl", "claude", vec![Send, File("claude-8-resume.jsonl"), Head("claude-4-stop.jsonl")]));
         // omher closed the chat mid-command: the exit watcher ends the turn
@@ -4166,6 +4580,8 @@ mod tests {
         out.push(("codex-4-stop.jsonl", "codex", vec![Send, File("codex-4-stop.jsonl"), Stop, File("codex-4-stopped.jsonl")]));
         out.push(("codex-7-model.jsonl", "codex", vec![Model("gpt-6-astra"), Send, File("codex-7-model.jsonl")]));
         out.push(("codex-8-resume.jsonl", "codex-resume", vec![File("codex-8-resume-init.jsonl"), File("codex-8-resume.jsonl"), Send, File("codex-8-resume-turn.jsonl")]));
+        // reopened onto a thread that is gone, with a message waiting: a new thread takes it (QA H5)
+        out.push(("codex-11-resume-gone.jsonl", "codex-resume-gone", vec![Send, File("codex-11-resume-gone.jsonl"), File("codex-1-plain.jsonl")]));
         // two sub-agents in parallel (their threads stream on the same connection), then Stop while one runs
         out.push(("codex-9-helpers.jsonl", "codex-helpers", vec![Send, File("codex-9-helpers.jsonl")]));
         out.push(("codex-10-helper-stop.jsonl", "codex-helper-stop", vec![Send, File("codex-10-helper-stop.jsonl"), Stop, File("codex-10-helper-stopped.jsonl")]));
@@ -4195,6 +4611,7 @@ mod tests {
             "claude" => (Box::new(Claude::new("/w/proj")), vec!["claude-init.jsonl"]),
             "codex" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-init.jsonl"]),
             "codex-resume" => (Box::new(Codex::new("/w/proj", Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"))), vec![]),
+            "codex-resume-gone" => (Box::new(Codex::new("/w/proj", Some("0badbeef-0000-4000-8000-000000000000"))), vec![]),
             "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
             "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
             "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
@@ -4257,6 +4674,10 @@ mod tests {
                 Do::Tail(f) => {
                     used.insert((*f).into());
                     split(f).1
+                }
+                Do::Lines(f, from, to) => {
+                    used.insert((*f).into());
+                    real(f)[*from..*to].to_vec()
                 }
             };
             for l in lines {

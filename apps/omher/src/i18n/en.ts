@@ -917,6 +917,10 @@ export const en = {
   "ss.session": "Session",
   "ss.hermesClosed": "Hermes closed this chat",
   "ss.modelNotChanged": "Model not changed: {error}",
+  "ss.noChatMode": "{agent} did not answer in chat mode; it may be an old version: {install}",
+  "ss.newConversation": "The earlier conversation was not found, so a new one started here.",
+  "ss.modelNext": "Next turn: {model}",
+  "ss.modelNextTip": "The running turn keeps {model}; your pick applies from the next turn",
 
   // resolved cards, errors, run prefills, link chip words (i18n 0.2.5)
   "card.allowedOnce": "Allowed once",

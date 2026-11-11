@@ -742,3 +742,10 @@
 .ss-go:not(:disabled):hover {
   filter: brightness(1.08);
 }
+
+/* the model pill's "Next turn: X" after a pick made while a turn ran */
+.mp-next {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

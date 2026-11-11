@@ -940,10 +940,108 @@
       },
       {
         "event": "session.info",
-        "model": "Haiku 5.5"
+        "model": "Haiku 5.5",
+        "model_next": ""
       }
     ],
     "name": "claude-7-model.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "Haiku 5.5",
+        "model_next": ""
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "model_next": "Sonnet 5.5"
+      },
+      {
+        "agent_session": "8807e0e5-dd2a-4324-98d1-1949e74bd4b2",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Haiku 5.5"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgwSYtfMJpV2oL7SAAKfj-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "8807e0e5-dd2a-4324-98d1-1949e74bd4b2",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Sonnet 5.5",
+        "model_next": ""
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgwSZ2pk1BfgZZ2zde1te-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-11-model-mid-turn.jsonl"
   },
   {
     "agent": "claude",
@@ -2392,6 +2490,84 @@
     "name": "codex-8-resume.jsonl"
   },
   {
+    "agent": "codex-resume-gone",
+    "events": [
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          }
+        ]
+      },
+      {
+        "event": "session.note",
+        "kind": "new_conversation",
+        "text": "The earlier Codex conversation was not found (no rollout found for thread id 0badbeef-0000-4000-8000-000000000000); a new one started."
+      },
+      {
+        "agent_session": "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6",
+        "approval": "never",
+        "event": "session.info",
+        "mode": "",
+        "model": "GPT-6.1-Sol",
+        "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e0c8f4087d09ff35d592503294d",
+        "text": "2 + 2 = 4."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-11-resume-gone.jsonl"
+  },
+  {
     "agent": "codex-helpers",
     "events": [
       {
@@ -2442,9 +2618,22 @@
       {
         "agent_session": "01a1ca24-1047-7ee0-aac2-faf093d44dbe",
         "approval": "never",
+        "effort": "xhigh",
         "event": "session.info",
+        "mode": "",
         "model": "GPT-6.1-Sol",
         "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ]
       },
       {
         "event": "turn.start"
@@ -2519,6 +2708,11 @@
         "state": "running"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30769
+      },
+      {
         "agent": "codex",
         "count": 1,
         "delegation": "codex-01a1ca24-43f9-7ca2-9131-22dfa42687b7",
@@ -2545,6 +2739,11 @@
         "state": "running"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30860
+      },
+      {
         "agent": "codex",
         "count": 2,
         "delegation": "codex-01a1ca24-43f9-7ca2-9131-22dfa42687b7",
@@ -2557,6 +2756,11 @@
         "seconds": 4.8,
         "state": "done",
         "summary": "done"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30903
       },
       {
         "agent": "codex",
@@ -2585,6 +2789,11 @@
         "seconds": 4.6,
         "state": "done",
         "summary": "alpha line"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30984
       },
       {
         "event": "delta",
@@ -2672,6 +2881,11 @@
         "text": "Agent 1 wrote one.txt; Agent 2 reported a.txt’s first line: alpha line."
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 31071
+      },
+      {
         "event": "delta",
         "text": "Do"
       },
@@ -2703,6 +2917,11 @@
         "event": "message",
         "id": "msg_06e385cc77ea6e32016af442b3911487d09881ba72864c61b6",
         "text": "Do you prefer red or blue?"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 31238
       },
       {
         "event": "turn.end",
@@ -2762,9 +2981,22 @@
       {
         "agent_session": "01a1ca32-da48-7f42-adc1-3469420bbfa8",
         "approval": "never",
+        "effort": "xhigh",
         "event": "session.info",
+        "mode": "",
         "model": "GPT-6.1-Sol",
         "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ]
       },
       {
         "event": "turn.start"
@@ -2875,6 +3107,11 @@
         "state": "running"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30499
+      },
+      {
         "agent": "codex",
         "count": 1,
         "delegation": "codex-01a1ca32-e30e-7312-bc08-818ebbf0e1b3",
@@ -2905,6 +3142,11 @@
         "seconds": 50.4,
         "state": "done",
         "summary": "Command completed successfully (exit code 0). Output: ```text child-late ```"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30543
       },
       {
         "event": "delta",
@@ -2986,6 +3228,11 @@
         "event": "message",
         "id": "msg_0e2bac6f8644161c016af44698702887d0866f343307f708b2",
         "text": "The sub-agent completed successfully (exit code 0):\n\n```text\nchild-late\n```"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30648
       },
       {
         "event": "turn.end",

@@ -150,19 +150,20 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   // files go to a chat agent; an oh-my-hermes session's chat is Hermes', which takes files in a bot's main chat only
   const takesFiles = (ss.agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode) === "chat";
   const label = agentDef(rec.agent).label;
-  // The bot chat's parts take a Bot: this session's chat stands in for one.
+  const ended = isEnded(rec);
+  // The bot chat's parts take a Bot: this session's chat stands in for one. An agent that ended before it named a
+  // model (an old version that never answered in chat mode) gets no "pick a model" hint: its end says why.
   const bot: Bot = {
     name: chatKey,
     display_name: label,
     is_default: false,
     // DeepSeek Harness keeps its model in its own app and its headless stream names none: nothing to pick here
-    model: rec.model || (rec.agent === "dsh" ? "dsh" : ""),
+    model: rec.model || (rec.agent === "dsh" ? "dsh" : ended ? label : ""),
     provider: "",
     description: "",
     status: rec.status === "running" ? "online" : rec.status === "starting" ? "starting" : "offline",
     running: !!chat?.turn,
   };
-  const ended = isEnded(rec);
   const offlineText = rec.paused
     ? tr("ss.isPaused", { agent: label })
     : rec.status === "failed"
@@ -543,7 +544,8 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
     listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
   }, [active, open]);
   const choose = async (o: ModelOption) => {
-    if (o.label === rec.model || o.id === rec.model || busy || !live) return;
+    const on = rec.modelNext ? o.label === rec.modelNext || o.id === rec.modelNext : o.label === rec.model || o.id === rec.model;
+    if (on || busy || !live) return;
     setBusy(true);
     await getSessions().setModel(rec.id, o);
     setBusy(false);
@@ -582,6 +584,12 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
             </span>
           </>
         )}
+        {/* a pick made while a turn ran: the agent takes it from the next turn, whose start confirms it */}
+        {rec.modelNext && (
+          <span className="mp-next" title={tr("ss.modelNextTip", { model: rec.model ?? "" })} data-testid="model-next">
+            {tr("ss.modelNext", { model: rec.modelNext })}
+          </span>
+        )}
         <ChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} label={tr("ss.model")} width={300} className="mp-pop">
@@ -617,7 +625,7 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
                 <div key={g.provider || "-"} role="group" aria-label={g.provider || label} data-testid="model-group">
                   {groups.length > 1 && g.provider && <div className="mp-g">{g.provider}</div>}
                   {g.rows.map((o) => {
-                    const on = o.label === rec.model || o.id === rec.model;
+                    const on = rec.modelNext ? o.label === rec.modelNext || o.id === rec.modelNext : o.label === rec.model || o.id === rec.model;
                     const i = flat.indexOf(o);
                     return (
                       <button
@@ -657,6 +665,11 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
                 testId="reasoning-seg"
               />
             </>
+          )}
+          {rec.modelNext && !note && (
+            <div className="mp-note" role="status" data-testid="model-next-note">
+              {tr("ss.modelNextTip", { model: rec.model ?? "" })}
+            </div>
           )}
           {note && (
             <div className="mp-note" role="status" title={note} data-testid="model-note">
