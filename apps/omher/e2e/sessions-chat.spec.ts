@@ -97,7 +97,7 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   await expect(page.getByTestId("activity-step")).toHaveText(/Read\s*README\.md/);
   await expect(row.getByTestId("live-ring")).toHaveCount(0);
   const send = (await calls(page)).find((c) => c.op === "chat.input")!;
-  expect(send.input).toEqual({ kind: "send", text: "explain the sessions feature" });
+  expect(send.input).toEqual({ kind: "send", text: "explain the sessions feature", id: "local-s1" });
   // a session chat never goes to the bot's main chat
   expect((await bridgeCalls()).filter((c) => c.op === "chat.send")).toHaveLength(0);
 });
