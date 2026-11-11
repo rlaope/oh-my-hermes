@@ -1,5 +1,6 @@
 mod accounts;
 mod agent_chat;
+mod appimage;
 mod bridge;
 mod hermes_auth;
 mod sessions;
@@ -50,11 +51,24 @@ async fn open_external(url: String) -> Result<(), String> {
     }
     // A Discord web link opens the Discord app when it is installed, the browser otherwise.
     if let Some(app_url) = discord_app_url(&url) {
-        if discord_app_installed() && tauri_plugin_opener::open_url(&app_url, None::<&str>).is_ok() {
+        if discord_app_installed() && system_open_url(&app_url).is_ok() {
             return Ok(());
         }
     }
-    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| e.to_string())
+    system_open_url(&url)
+}
+
+/// The system opener for an address. On Linux it goes through `appimage::open`, which hands a link to
+/// `xdg-open` without the AppImage's bundled-library environment (a plain install is unaffected).
+fn system_open_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        appimage::open(url)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
+    }
 }
 
 /// `https://discord.com/channels/G/C` -> `discord://discord.com/channels/G/C` (the form the Discord app
@@ -65,7 +79,7 @@ pub(crate) fn discord_app_url(url: &str) -> Option<String> {
 }
 
 /// Whether the Discord desktop app is there to take `discord://`. macOS and Linux report a missing handler as
-/// an open error (so the browser fallback runs); Windows would show an "find an app" dialog instead, so there
+/// an open error (`xdg-open` exits non-zero, so the browser fallback runs); Windows would show an "find an app" dialog instead, so there
 /// we look for the app first.
 fn discord_app_installed() -> bool {
     #[cfg(windows)]
@@ -331,7 +345,14 @@ async fn open_media(shell: State<'_, Shell>, path: String, reveal: Option<bool>)
     if reveal.unwrap_or(false) {
         tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
     } else {
-        tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+        #[cfg(target_os = "linux")]
+        {
+            appimage::open(&path.to_string_lossy())
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+        }
     }
 }
 
