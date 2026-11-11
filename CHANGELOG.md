@@ -141,6 +141,10 @@ All notable changes will be documented here.
     and limits; files are saved under `~/.omher/session-files/<session>/` and
     removed when the session closes, and a picture reaches the agent as an
     image. An oh-my-hermes session takes no files (BOUNDARY rule 26). (#2781)
+  - **The bot's face stays put.** After you send, the bot's ringed face no
+    longer blinks away when the first status line replaces the typing dots;
+    one face stays in place from send to the end of the reply, and a SESSIONS
+    chat's agent mark does the same. (#2780)
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the
