@@ -3,9 +3,9 @@
 // Codex, OmO, pi and oh-my-pi run in their structured mode in the desktop shell (src-tauri/src/agent_chat.rs),
 // oh-my-hermes opens a Hermes chat in that folder through the bridge (`folder.open`). Their events land in
 // the app store under the session's own chat key, so the bot chat's timeline, activity line, cards and
-// composer draw them. Grok and DSH have no chat mode here, so they stay a terminal (xterm on a pseudo-terminal);
-// DSH gets a conversation id when it starts (`--resume <id>`), so its Resume continues that conversation.
-// Every chat can switch to its agent's terminal view.
+// composer draw them. DSH (DeepSeek Harness) is a chat too, one headless run per message continuing the harness's
+// own session (`--session-id`); it has no terminal view. Grok has no chat mode here, so it stays a terminal (xterm on
+// a pseudo-terminal). Every other chat can switch to its agent's terminal view.
 //
 // SESSIONS + opens a small menu of the agents; picking one opens a New session chat on it at once (a draft), its
 // folder in the chip under the composer (the last folder used, else home). Nothing starts until the first message, which becomes the
@@ -478,9 +478,6 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       view: mode === "terminal" ? "terminal" : "chat",
       ...(account ? { account } : {}),
       ...(startedAs ? { startedAs } : {}),
-      // DSH names its conversation by the id it is started with (`--resume <id>`): one id per session, so Resume
-      // after a restart continues it
-      ...(r.agent === "dsh" ? { agentSession: crypto.randomUUID() } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     });
@@ -521,8 +518,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!r) return;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = modeOf(state.agents, r.agent) !== "terminal";
-    // Claude Code's terminal continues the chat's conversation; DSH (a terminal agent) its own
-    const resume = r.agentSession && ((ofChat && r.agent === "claude") || (!ofChat && r.agent === "dsh")) ? r.agentSession : undefined;
+    // Claude Code's terminal continues the chat's conversation
+    const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     try {
       const hostId = await host.start(
         r.agent,
@@ -722,6 +719,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         continue;
       }
       const mode = modeOf(state.agents, s.agent);
+      if (s.agent === "dsh" && s.view === "terminal") {
+        // omher 0.2.4's DSH ran deepseek-bot's terminal (its id is a deepseek-bot conversation): it comes back ended
+        // with a plain line and never starts deepseek-bot; Restart starts DeepSeek Harness in the folder
+        list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "exited", exitCode: null, error: tr("ss.dshOld"), ...(s.title ? { title: s.title } : {}) });
+        fromBefore.add(s.id);
+        seq = Math.max(seq, Number(s.id.slice(1)) || 0);
+        keys.set(s.id, `agent:${s.id}`);
+        openChat(s.id);
+        continue;
+      }
       const auto = s.running && mode === "chat" && continuesItself(s);
       const r: SessionRec = {
         id: s.id,

@@ -450,7 +450,8 @@ export function SessionView() {
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   const chatKey = getSessions().chatKey(rec.id);
   const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
-  const canToggle = mode !== "terminal";
+  // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app)
+  const canToggle = mode !== "terminal" && rec.agent !== "dsh";
   const showChat = rec.view === "chat" && !!chatKey;
   const c = chatKey ? s.chats[chatKey] : undefined;
   const turn = !!c?.turn;
@@ -514,7 +515,7 @@ export function SessionView() {
         <ChatPane rec={rec} chatKey={chatKey!} />
       ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
         <TerminalIdle rec={rec} />
-      ) : rec.view === "chat" && canToggle ? (
+      ) : rec.view === "chat" && mode !== "terminal" ? (
         // a Hermes folder chat between its first message and the bridge's chat id: not a reason to start a terminal
         <div className="pane ss-chat" data-testid="session-chat">
           <div className="thread" data-testid="timeline">

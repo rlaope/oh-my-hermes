@@ -10,6 +10,8 @@
 //!   `item/commandExecution/requestApproval`, `turn/interrupt`).
 //! - pi and oh-my-pi: `--mode rpc`, JSONL commands, responses and events (`prompt`, `abort`,
 //!   `extension_ui_request` dialogs).
+//! - DSH (DeepSeek Harness): one `dsh --profile headless --json` run per message, continued by `--session-id`
+//!   ([`crate::dsh_chat`]).
 //!
 //! The UI sends only an agent id, a folder and chat input; the program and its arguments come from the
 //! allow-list. Closing the session (or quitting the app) stops the program.
@@ -28,6 +30,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
+use crate::dsh_chat::DshChat;
 use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, resume_args, signal_group, Mode, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts.
@@ -46,7 +49,7 @@ pub enum Input {
 /// `approval.request`, `turn.end`, …) plus `session.info` (agent session id, model) and `session.models`.
 pub type Event = Value;
 
-fn ev(name: &str, fields: Value) -> Event {
+pub(crate) fn ev(name: &str, fields: Value) -> Event {
     let mut m = Map::new();
     m.insert("event".into(), Value::String(name.into()));
     if let Value::Object(f) = fields {
@@ -105,11 +108,11 @@ pub fn adapter_for(id: &str, cwd: &str, resume: Option<&str>) -> Option<Box<dyn 
 // Shared helpers
 // ---------------------------------------------------------------------------------------------
 
-fn s(v: &Value, k: &str) -> String {
+pub(crate) fn s(v: &Value, k: &str) -> String {
     v.get(k).and_then(Value::as_str).unwrap_or("").to_string()
 }
 
-fn clip(t: &str, n: usize) -> String {
+pub(crate) fn clip(t: &str, n: usize) -> String {
     let one = t.split_whitespace().collect::<Vec<_>>().join(" ");
     if one.chars().count() <= n {
         one
@@ -251,7 +254,7 @@ fn tool_detail(input: &Value) -> String {
 }
 
 /// The bot chat's tool names for the verbs on the progress line ("Running", "Reading", "Editing" …).
-fn tool_kind(name: &str) -> &str {
+pub(crate) fn tool_kind(name: &str) -> &str {
     match name.to_ascii_lowercase().as_str() {
         "bash" | "shell" | "exec" | "exec_command" | "local_shell" | "powershell" | "eval" => "terminal",
         "read" | "notebookread" | "view" => "read_file",
@@ -291,7 +294,7 @@ fn file_call_detail(input: &Value, cwd: &str) -> String {
 }
 
 /// The progress-line detail of a tool call: the diff summary for file tools, else the command / path / query.
-fn call_detail(name: &str, input: &Value, cwd: &str) -> String {
+pub(crate) fn call_detail(name: &str, input: &Value, cwd: &str) -> String {
     if tool_kind(name) == "patch" {
         file_call_detail(input, cwd)
     } else {
@@ -1474,6 +1477,8 @@ struct ChatLive {
 #[derive(Default)]
 pub struct ChatSessions {
     live: Mutex<HashMap<u32, ChatLive>>,
+    /// DSH chats: no process between messages, a run per message ([`DshChat`])
+    dsh: Mutex<HashMap<u32, DshChat>>,
     next: AtomicU32,
 }
 
@@ -1569,6 +1574,13 @@ impl ChatSessions {
         let a = agent(agent_id).ok_or_else(|| format!("unknown agent \"{agent_id}\""))?;
         if a.mode != Mode::Chat {
             return Err(format!("{} has no chat mode", a.label));
+        }
+        if agent_id == "dsh" {
+            // DeepSeek Harness: `resume` is the `session-<uuid>` it reported (resume_args checks it)
+            let chat = DshChat::start(cwd, resume, sink)?;
+            let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
+            self.dsh.lock().unwrap().insert(id, chat);
+            return Ok(id);
         }
         let args = chat_args(agent_id).ok_or("no chat mode")?;
         // Codex continues a thread over its own protocol (`thread/resume`), not by an argument; the id must
@@ -1736,6 +1748,10 @@ impl ChatSessions {
 
     /// One thing the person did in chat `id`.
     pub fn input(&self, id: u32, input: Input) -> Result<(), String> {
+        let dsh = self.dsh.lock().unwrap().get(&id).cloned();
+        if let Some(chat) = dsh {
+            return chat.input(input);
+        }
         let (adapter, stdin, sink) = {
             let g = self.live.lock().unwrap();
             let s = g.get(&id).ok_or("no such session")?;
@@ -1749,6 +1765,9 @@ impl ChatSessions {
 
     /// Stop the program (stdin closed, then hang-up, then a hard kill after a grace period) and forget it.
     pub fn close(&self, id: u32) {
+        if let Some(chat) = self.dsh.lock().unwrap().remove(&id) {
+            thread::spawn(move || chat.stop(Duration::from_millis(1500)));
+        }
         let live = self.live.lock().unwrap().remove(&id);
         if let Some(s) = live {
             thread::spawn(move || stop(s, Duration::from_millis(1500)));
@@ -1757,7 +1776,9 @@ impl ChatSessions {
 
     pub fn close_all(&self) {
         let all: Vec<ChatLive> = self.live.lock().unwrap().drain().map(|(_, s)| s).collect();
-        let handles: Vec<_> = all.into_iter().map(|s| thread::spawn(move || stop(s, Duration::from_millis(400)))).collect();
+        let dsh: Vec<DshChat> = self.dsh.lock().unwrap().drain().map(|(_, c)| c).collect();
+        let mut handles: Vec<_> = all.into_iter().map(|s| thread::spawn(move || stop(s, Duration::from_millis(400)))).collect();
+        handles.extend(dsh.into_iter().map(|c| thread::spawn(move || c.stop(Duration::from_millis(400)))));
         for h in handles {
             let _ = h.join();
         }
@@ -1765,7 +1786,7 @@ impl ChatSessions {
 
     #[cfg(test)]
     pub fn count(&self) -> usize {
-        self.live.lock().unwrap().len()
+        self.live.lock().unwrap().len() + self.dsh.lock().unwrap().len()
     }
 }
 
@@ -2074,12 +2095,14 @@ mod tests {
         for id in ["claude", "codex", "omo", "pi", "omp"] {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
+        // DSH has no adapter: its chat is a run per message (dsh_chat)
         for id in ["omh", "grok", "dsh", "sh", ""] {
             assert!(adapter_for(id, "/w", None).is_none(), "{id}");
         }
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
-        for bad in ["omh", "grok", "dsh", "/bin/sh", "claude -p"] {
+        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], |_| {}).is_err());
+        for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
             assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
         }
         assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
