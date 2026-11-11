@@ -62,8 +62,11 @@ export HOME="$home" WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_REND
 unset HERMES_HOME OMHER_HERMES_PYTHON
 echo "display: $DISPLAY, HOME=$HOME"
 
+# The AppImage runtime sets APPIMAGE and APPDIR before it starts AppRun (also for --appimage-extract-and-run);
+# starting the unpacked AppRun skips the runtime, so set them as it would. omher keys its host-environment
+# handling for the programs it starts (the bridge's Python first) on both being set.
 # setsid: the app leads its own process group, so cleanup kills it with its WebKit and bridge children.
-(cd "$root" && exec setsid ./AppRun >"$work/app.out" 2>"$work/app.err") &
+(cd "$root" && APPIMAGE="$img" APPDIR="$root" exec setsid ./AppRun >"$work/app.out" 2>"$work/app.err") &
 app_pid=$!
 start=$(date +%s)
 
