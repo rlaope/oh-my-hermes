@@ -29,9 +29,9 @@ from test_tui_subagents import FIRST
 from test_tui_rewind import Clock
 from omh.tui import app as app_module
 from omh.tui.app import DOUBLE_ESCAPE_SECONDS, App, PathItem, vim_mode
-from omh.tui.composer import CANCEL, NONE, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer
+from omh.tui.composer import CANCEL, NONE, SUBMIT, VIM_INSERT, VIM_NORMAL, VIM_REPLACE, Composer
 from omh.tui.gateway import ServerRequest
-from omh.tui.screen import CURSOR_SHAPE_BEAM, CURSOR_SHAPE_BLOCK, CURSOR_SHAPE_DEFAULT
+from omh.tui.screen import CURSOR_SHAPE_BEAM, CURSOR_SHAPE_BLOCK, CURSOR_SHAPE_DEFAULT, CURSOR_SHAPE_UNDERLINE
 from omh.tui.keys import BACKSPACE, CHAR, DELETE, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, KeyDecoder, Paste
 from omh.tui.modes import chip_column, editing_label, info_line, mode_label
 from omh.tui.frame import MODE_ACCEPT, MODE_NORMAL
@@ -136,7 +136,7 @@ class InsertAndEscTests(unittest.TestCase):
 
 class NormalNeverTypesTests(unittest.TestCase):
     def test_no_character_that_is_no_command_changes_the_text_or_moves_the_caret(self) -> None:
-        commands = set("hl0^$wbejkgGiaIAoOxXdDcCsSryupP")
+        commands = set("hl0^$wWbBeEjkgGiaIAoOxXdDcCsSryupPvV")
         others = [char for char in string.printable if char not in commands and not char.isspace()]
         others += [" ", "한", "é", FAMILY]
         for char in others:
@@ -200,17 +200,36 @@ class MotionTests(unittest.TestCase):
         keys(composer, "w")
         self.assertEqual(composer.caret, 4)
         keys(composer, "2w")
+        self.assertEqual(composer.caret, 8)  # keyword -> hyphen -> digit
+        keys(composer, "2w")
         self.assertEqual(composer.caret, 16)  # across the line's end
         keys(composer, "b")
         self.assertEqual(composer.caret, 10)
-        keys(composer, "3b")
+        keys(composer, "5b")
         self.assertEqual(composer.caret, 0)
         keys(composer, "e")
         self.assertEqual(composer.caret, 2)
         keys(composer, "e")
+        self.assertEqual(composer.caret, 6)
+        keys(composer, "2e")
         self.assertEqual(composer.caret, 8)
         keys(composer, "9w")
         self.assertEqual(composer.caret, len(text) - 1)  # the end of the text, on its last character
+        composer = normal(text, 0)
+        keys(composer, "W")
+        self.assertEqual(composer.caret, 4)
+        keys(composer, "2W")
+        self.assertEqual(composer.caret, 16)
+        keys(composer, "B")
+        self.assertEqual(composer.caret, 10)
+        keys(composer, "3B")
+        self.assertEqual(composer.caret, 0)
+        keys(composer, "E")
+        self.assertEqual(composer.caret, 2)
+        keys(composer, "E")
+        self.assertEqual(composer.caret, 8)
+        keys(composer, "9W")
+        self.assertEqual(composer.caret, len(text) - 1)
 
     def test_j_and_k_move_between_lines_and_walk_history_at_the_edges(self) -> None:
         composer = Composer(vim=True, history=["older"])
@@ -384,11 +403,78 @@ class EditTests(unittest.TestCase):
                 self.assertEqual((composer.text, composer.vim_label), (expected, VIM_INSERT))
 
     def test_an_operator_with_no_motion_it_knows_does_nothing(self) -> None:
-        for command in ("dj", "dz", "dc", "yG", "dgg"):
+        for command in ("dz", "dc", "yz", "dgz"):
             with self.subTest(command=command):
                 composer = normal("one\ntwo", 1)
                 keys(composer, command)
                 self.assertEqual((*state(composer), composer.pending), ("one\ntwo", 1, VIM_NORMAL, False))
+
+
+class SingleReplaceTests(unittest.TestCase):
+    def test_counted_replace_cue_completes_and_undo_redo_dot_still_work(self) -> None:
+        composer = normal("abcdef", 1)
+        keys(composer, "2r")
+        self.assertEqual(state(composer), ("abcdef", 1, VIM_REPLACE))
+        self.assertTrue(composer.normal)
+        self.assertTrue(composer.pending)
+        composer.handle(Key(CHAR, "X", shift=True))
+        self.assertEqual(state(composer), ("aXXdef", 2, VIM_NORMAL))
+        keys(composer, "u")
+        self.assertEqual(composer.text, "abcdef")
+        composer.handle(Key(CHAR, "r", ctrl=True))
+        self.assertEqual(composer.text, "aXXdef")
+        keys(composer, "l.")
+        self.assertEqual(state(composer), ("aXXXXf", 4, VIM_NORMAL))
+
+    def test_noncharacter_and_modified_followers_cancel_without_editing(self) -> None:
+        for event in (Key(BACKSPACE), Key(DELETE), Key(ENTER), ESC, Key(LEFT), Key(UP),
+                      Key(TAB), Key(TAB, shift=True), Key(CHAR, "t", ctrl=True),
+                      Key(CHAR, "x", alt=True), Key(CHAR, "x", alt=True, protocol=True)):
+            with self.subTest(event=event):
+                composer = normal("abcd", 1)
+                keys(composer, "2r")
+                self.assertEqual(composer.handle(event).kind, NONE)
+                self.assertEqual(state(composer), ("abcd", 1, VIM_NORMAL))
+                self.assertFalse(composer.pending)
+                keys(composer, "x")  # cancelled counts cannot leak to the next command
+                self.assertEqual(composer.text, "acd")
+
+    def test_literal_space_is_replacement_not_leader_and_failure_clears_cue(self) -> None:
+        composer = normal("abc", 1)
+        keys(composer, "r ")
+        self.assertEqual(state(composer), ("a c", 1, VIM_NORMAL))
+        self.assertFalse(composer.leader)
+        keys(composer, "9rX")
+        self.assertEqual(state(composer), ("a c", 1, VIM_NORMAL))
+        self.assertFalse(composer.pending)
+        composer = normal("")
+        keys(composer, "rX")
+        self.assertEqual(state(composer), ("", 0, VIM_NORMAL))
+
+    def test_uppercase_R_remains_unsupported(self) -> None:
+        composer = normal("abc", 1)
+        keys(composer, "R")
+        self.assertEqual(state(composer), ("abc", 1, VIM_NORMAL))
+        self.assertFalse(composer.pending)
+
+    def test_underline_constant_is_steady_deCSCUSR_four(self) -> None:
+        self.assertEqual(CURSOR_SHAPE_UNDERLINE, "\x1b[4 q")
+
+    def test_app_replace_owns_global_chords_and_reports_cue(self) -> None:
+        for event in (Key(CHAR, "t", ctrl=True), Key(TAB, shift=True), Key(ENTER),
+                      Key(BACKSPACE), Key(DELETE)):
+            with self.subTest(event=event):
+                app, client, _clock = vim_app()
+                type_text(app, "abc")
+                app._on_input(ESC)
+                type_text(app, "0r")
+                self.assertIn(VIM_REPLACE, info(app))
+                before_mode = app.mode
+                app._on_input(event)
+                self.assertEqual(state(app.composer), ("abc", 0, VIM_NORMAL))
+                self.assertFalse(app.composer.pending)
+                self.assertEqual(app.mode, before_mode)
+                self.assertEqual(client.calls, [])
 
 
 class YankPutTests(unittest.TestCase):
@@ -1017,6 +1103,33 @@ class CursorShapeTests(unittest.TestCase):
         self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BLOCK])
         app._on_input(Key(CHAR, "i"))
         self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
+
+    def test_leader_keeps_block_and_replace_uses_underline(self) -> None:
+        app, _client, _clock = vim_app()
+        type_text(app, "abc")
+        app._on_input(ESC)
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BLOCK])
+        app._on_input(Key(CHAR, " "))
+        self.assertEqual(self.shapes(app), [])
+        app._on_input(ESC)
+        app._on_input(Key(CHAR, "r"))
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_UNDERLINE])
+        self.assertIn("REPLACE", info(app))
+        app._on_input(Key(CHAR, "z"))
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BLOCK])
+
+    def test_search_and_text_question_use_beam_with_vim_on(self) -> None:
+        for method in ("search", "secret"):
+            with self.subTest(method=method):
+                app, _client, _clock = vim_app()
+                app._on_input(ESC)
+                self.shapes(app)
+                if method == "search":
+                    app._on_input(Key(CHAR, " "))
+                    app._on_input(Key(CHAR, "r"))
+                else:
+                    app._on_server_request(ServerRequest("srq-1", "secret", {"prompt": "token"}))
+                self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
 
     def test_without_vim_mode_the_terminal_keeps_its_own_shape(self) -> None:
         app, _client = make_app()

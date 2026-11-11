@@ -44,8 +44,9 @@ from functools import lru_cache
 from typing import ClassVar, NamedTuple
 import unicodedata
 
+from .keys import list_nav_step
 from .keys import (
-    BUTTON_LEFT, CHAR, DOWN, END, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, UP, WHEEL_DOWN, WHEEL_UP, Key, Mouse, Paste,
+    BUTTON_LEFT, CHAR, END, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, WHEEL_DOWN, WHEEL_UP, Key, Mouse, Paste,
 )
 from .screen import HIDE_CURSOR, SYNC_BEGIN, SYNC_END, paint_line, without_controls
 from .style import CSI, WRAP_SPACE, WRAP_VERBATIM, Line, Span, wrap_of
@@ -108,9 +109,9 @@ class Pager:
         char = event.char if event.name == CHAR and not event.ctrl and not event.alt else ""
         if event.name == ESCAPE or char == "q":
             return False
-        if event.name == DOWN or char == "j":
+        if list_nav_step(event) == 1 or char == "j":
             self._scroll(1, rows)
-        elif event.name == UP or char == "k":
+        elif list_nav_step(event) == -1 or char == "k":
             self._scroll(-1, rows)
         elif event.name == PAGE_DOWN or char == " ":
             self._scroll(page, rows)

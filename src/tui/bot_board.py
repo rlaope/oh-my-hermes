@@ -115,7 +115,7 @@ from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 from ..plugin_bundle.omh.sqlite_readonly import connect_readonly
 from .history import history_path
 from .launch_card import _pad
-from .keys import CHAR, DOWN, END, ENTER, ESCAPE, HOME, LEFT, PAGE_DOWN, PAGE_UP, RIGHT, UP, Key, Paste
+from .keys import CHAR, END, ENTER, ESCAPE, HOME, LEFT, PAGE_DOWN, PAGE_UP, RIGHT, Key, Paste, list_nav_step
 from .markdown import clean_text
 from .pager import Pager
 from .prompts import CHOICE_MARK
@@ -1845,9 +1845,9 @@ class BotBoard(Pager):
             self._open()
         elif self.view.session:
             return super().handle_key(event, rows)
-        elif event.name == DOWN or char == "j":
+        elif list_nav_step(event) == 1 or char == "j":
             self._move(1)
-        elif event.name == UP or char == "k":
+        elif list_nav_step(event) == -1 or char == "k":
             self._move(-1)
         elif event.name == PAGE_DOWN:
             self._move(self.body_rows(rows))
