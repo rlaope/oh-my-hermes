@@ -3449,7 +3449,8 @@ mod tests {
             out.push(json!({"name": name, "agent": kind, "events": events}));
         }
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("real");
-        let all: std::collections::BTreeSet<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".jsonl")).collect();
+        // DSH has no adapter (a run per message): dsh_chat.rs's own tests replay its dsh-*.jsonl streams
+        let all: std::collections::BTreeSet<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".jsonl") && !n.starts_with("dsh-")).collect();
         assert_eq!(all.difference(&used).collect::<Vec<_>>(), Vec::<&String>::new(), "a recorded stream no sequence replays");
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("src").join("state").join("__fixtures__").join("real-agent-replay.json");
         let text = serde_json::to_string_pretty(&Value::Array(out)).unwrap() + "\n";
