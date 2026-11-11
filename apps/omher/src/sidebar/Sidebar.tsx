@@ -29,6 +29,7 @@ export function Sidebar() {
   const asks = selectAsks(s);
   const hiddenCount = s.ui.hidden.filter((n) => s.bots.some((b) => b.name === n)).length;
   const inSettings = s.ui.view === "settings";
+  const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
 
   return (
@@ -39,7 +40,7 @@ export function Sidebar() {
           <b>omher</b>
         </div>
         <div className="side-add">
-          <IconButton label="Add a bot" onClick={() => AddBot && setAdding((v) => !v)} aria-expanded={adding} disabled={!AddBot}>
+          <IconButton label={t("nav.addBot")} onClick={() => AddBot && setAdding((v) => !v)} aria-expanded={adding} disabled={!AddBot}>
             <PlusIcon />
           </IconButton>
           {AddBot && adding && <AddBot onClose={() => setAdding(false)} />}
@@ -49,8 +50,8 @@ export function Sidebar() {
         <SearchIcon />
         <input
           type="search"
-          placeholder="Search"
-          aria-label="Search bots"
+          placeholder={t("nav.search")}
+          aria-label={t("nav.searchBots")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && setQ("")}
@@ -58,8 +59,8 @@ export function Sidebar() {
       </label>
       <NeedsStrip asks={asks} />
       <section className="side-sec" data-testid="side-bots">
-        <div className="side-sh">Bots</div>
-        <nav className="bot-list" aria-label="Bots">
+        <div className="side-sh">{t("nav.bots")}</div>
+        <nav className="bot-list" aria-label={t("nav.bots")}>
           {bots.map((b) => {
             const pinned = s.ui.pinned.includes(b.name);
             return (
@@ -97,13 +98,26 @@ export function Sidebar() {
         <SessionList />
       </section>
       <div className="side-foot">
-        <button type="button" className="nav" disabled title="Coming in a later version" data-testid="nav-automations">
+        <button
+          type="button"
+          className={`nav${s.ui.view === "automations" ? " on" : ""}`}
+          aria-current={s.ui.view === "automations" ? "page" : undefined}
+          onClick={() => s.openAutomations()}
+          data-testid="nav-automations"
+        >
           <CalendarIcon />
-          Automations<span className="nav-soon">Soon</span>
+          {t("nav.automations")}
+          {automations > 0 && <span className="nav-count">{automations}</span>}
         </button>
-        <button type="button" className="nav" disabled title="Coming in a later version" data-testid="nav-plugins">
+        <button
+          type="button"
+          className={`nav${s.ui.view === "plugins" ? " on" : ""}`}
+          aria-current={s.ui.view === "plugins" ? "page" : undefined}
+          onClick={() => s.openPlugins()}
+          data-testid="nav-plugins"
+        >
           <GridIcon />
-          Plugins<span className="nav-soon">Soon</span>
+          {t("nav.plugins")}
         </button>
         <button
           type="button"
@@ -112,16 +126,16 @@ export function Sidebar() {
           data-testid="nav-settings"
         >
           <GearIcon />
-          Settings
+          {t("nav.settings")}
         </button>
         <Usage />
         <AccountsWatcher />
         <div className={`me${inSettings && s.ui.settingsPage === "accounts" ? " on" : ""}`} data-testid="me">
-          <button type="button" className="me-btn" onClick={() => s.openSettings("accounts")} title="Accounts">
+          <button type="button" className="me-btn" onClick={() => s.openSettings("accounts")} title={t("nav.accounts")}>
             <span className="me-i" aria-hidden="true">
               Y
             </span>
-            <span>You</span>
+            <span>{t("nav.you")}</span>
           </button>
           <UpdateButton />
         </div>

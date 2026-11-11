@@ -6,6 +6,7 @@ import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
 import { TypingRow, awaitingFirstToken } from "./Typing";
 import { ActivityFallback, CardFallback, ElsewhereFallback, RoutineFallback } from "./fallbacks";
+import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 
 /** A time label goes in when the day changes, or after a quiet gap within the same day. */
 const GAP = 30 * 60;
@@ -74,6 +75,10 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
         const C = slots.routineLine ?? RoutineFallback;
         return <C bot={bot.name} item={it} />;
       }
+      case "routineAdded":
+        return <RoutineAddedCard bot={bot.name} item={it} />;
+      case "pluginAdded":
+        return <PluginAddedCard bot={bot.name} item={it} />;
       case "system":
         return (
           <div className="line sys" data-testid="system-line">

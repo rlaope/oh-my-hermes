@@ -59,6 +59,13 @@ OFFLINE_COOLDOWN = 10.0
 ATTACH_B64_MAX = (100 * 1024 * 1024 + 2) // 3 * 4
 UI_FRAME_MAX = ATTACH_B64_MAX + 64 * 1024
 ATTACH_TIMEOUT = 180.0
+# The only actions omher sends to Hermes' own `cron.manage` and `plugins.manage` (BOUNDARY rules 24 and 25).
+CRON_ACTIONS = frozenset({"add", "pause", "resume", "remove"})
+PLUGIN_ACTIONS = frozenset({"list", "toggle", "inspect", "install", "update", "remove"})
+JOB_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+PLUGIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")  # an installed plugin's name or key (`image_gen/fal`)
+# A curated catalog entry's name: no `/` or `:`, so neither a Git URL nor `owner/repo` can pass as one.
+CATALOG_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
     (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
@@ -1033,23 +1040,163 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
     return out
 
 
-def read_routines(profile_dir: Path) -> list[dict]:
+def _read_jobs(profile_dir: Path) -> list[dict]:
+    """The job dicts in `<profile>/cron/jobs.json` (Hermes' own cron store), opened read-only; [] when absent."""
     try:
         data = json.loads((profile_dir / "cron" / "jobs.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
     jobs = data.get("jobs") if isinstance(data, dict) else data
+    return [j for j in (jobs if isinstance(jobs, list) else []) if isinstance(j, dict) and j.get("id")]
+
+
+def _routine_row(j: dict) -> dict:
+    sched = j.get("schedule_display")
+    if not sched and isinstance(j.get("schedule"), dict):
+        sched = j["schedule"].get("display") or j["schedule"].get("expr")
+    return {"id": str(j["id"]), "name": str(j.get("name") or j["id"]), "schedule": str(sched or ""),
+            "next_run_at": j.get("next_run_at"), "last_run_at": j.get("last_run_at"),
+            "last_status": j.get("last_status"), "enabled": bool(j.get("enabled", True))}
+
+
+def read_routines(profile_dir: Path) -> list[dict]:
+    return [_routine_row(j) for j in _read_jobs(profile_dir)]
+
+
+AUTOMATION_PROMPT_MAX = 2000  # chars of a job's prompt the Automations page shows
+
+
+def _origin_place(origin) -> dict | None:
+    """Where an `origin` delivery lands, for display only: `{platform, place}` (a Discord guild name dropped)."""
+    if not isinstance(origin, dict):
+        return None
+    platform = str(origin.get("platform") or "").strip().lower()
+    if not platform:
+        return None
+    name = " ".join(str(origin.get("chat_name") or "").split())
+    if platform == "discord":
+        parts = [x.strip() for x in name.split(" / ") if x.strip()]
+        name = parts[1] if len(parts) >= 2 else (parts[0] if parts else "")
+    elif platform == "slack" and name and not name.startswith("#"):
+        name = f"#{name}"
+    return {"platform": platform, "place": name[:80]}
+
+
+def read_automations(profile_dir: Path) -> list[dict]:
+    """A bot's cron jobs for the Automations page: `read_routines`' fields plus what the detail panel shows
+    (prompt or script name, delivery, created, last error, repeat). Read-only; `cron.manage` on the bot's gateway is the
+    only way omher changes a job."""
     out = []
-    for j in jobs if isinstance(jobs, list) else []:
-        if not isinstance(j, dict) or not j.get("id"):
-            continue
-        sched = j.get("schedule_display")
-        if not sched and isinstance(j.get("schedule"), dict):
-            sched = j["schedule"].get("display") or j["schedule"].get("expr")
-        out.append({"id": str(j["id"]), "name": str(j.get("name") or j["id"]), "schedule": str(sched or ""),
-                    "next_run_at": j.get("next_run_at"), "last_run_at": j.get("last_run_at"),
-                    "last_status": j.get("last_status"), "enabled": bool(j.get("enabled", True))})
+    for j in _read_jobs(profile_dir):
+        base = _routine_row(j)
+        rep = j.get("repeat") if isinstance(j.get("repeat"), dict) else {}
+        times, done = rep.get("times"), rep.get("completed")
+        out.append({**base,
+                    "paused": not base["enabled"] or str(j.get("state") or "") == "paused" or bool(j.get("paused_at")),
+                    "prompt": str(j.get("prompt") or "")[:AUTOMATION_PROMPT_MAX],
+                    "script": _clip(Path(str(j["script"])).name, 120) if j.get("script") else None,
+                    "deliver": str(j.get("deliver") or "local"),
+                    "origin": _origin_place(j.get("origin")),
+                    "created_at": j.get("created_at"),
+                    "last_error": _clip(str(j.get("last_error") or j.get("last_delivery_error") or ""), 300) or None,
+                    "repeat": {"times": times if isinstance(times, int) else None,
+                               "completed": done if isinstance(done, int) else 0}})
     return out
+
+
+# ---------------------------------------------------------------- plugins (catalog cache + folder names)
+
+PLUGIN_CATEGORIES = ("automation", "tools", "memory", "voice", "web", "desktop", "models", "platform", "general")
+CATALOG_PAGE = 60  # catalog entries sent per plugins.catalog answer
+_CATALOG_CACHE: dict[str, tuple[int, list[dict], str]] = {}
+
+
+def catalog_path(profile_dir: Path, root: Path) -> Path | None:
+    """The plugin catalog cache Hermes keeps for this profile, else the one at the Hermes root."""
+    for p in (profile_dir / "cache" / "plugin-catalog.json", root / "cache" / "plugin-catalog.json"):
+        if p.is_file():
+            return p
+    return None
+
+
+def _strs(value, n: int = 40) -> list[str]:
+    return [str(x) for x in value[:n] if isinstance(x, (str, int))] if isinstance(value, list) else []
+
+
+def read_catalog(path: Path) -> tuple[list[dict], str]:
+    """The catalog's entries (those it lists as removed left out), compacted for the UI, and `generated_at`.
+    Cached by mtime: the file is a few MB."""
+    try:
+        mtime = path.stat().st_mtime_ns
+    except OSError:
+        return [], ""
+    hit = _CATALOG_CACHE.get(str(path))
+    if hit and hit[0] == mtime:
+        return hit[1], hit[2]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], ""
+    data = data if isinstance(data, dict) else {}
+    removed = {str(r.get("name")) for r in data.get("removed") or [] if isinstance(r, dict)}
+    out = []
+    for e in data.get("entries") or []:
+        if not isinstance(e, dict) or not isinstance(e.get("name"), str) or e["name"] in removed:
+            continue
+        caps = e.get("capabilities") if isinstance(e.get("capabilities"), dict) else {}
+        out.append({"name": e["name"], "title": str(e.get("title") or ""),
+                    "description": _clip(str(e.get("description") or ""), 400),
+                    "tier": str(e.get("tier") or "community"), "category": str(e.get("category") or "general"),
+                    "version": str(e.get("version") or ""), "repo": str(e.get("repo") or ""),
+                    "maintainer": str(e.get("maintainer") or ""), "platforms": _strs(e.get("platforms"), 8),
+                    "tools": _strs(caps.get("provides_tools")), "hooks": _strs(caps.get("provides_hooks")),
+                    "requires_env": _strs(caps.get("requires_env"), 12)})
+    gen = str(data.get("generated_at") or "")
+    _CATALOG_CACHE[str(path)] = (mtime, out, gen)
+    return out, gen
+
+
+_TIER_RANK = {"official": 0, "verified": 1, "community": 2}
+
+
+def search_catalog(entries: list[dict], query: str = "", category: str = "", limit: int = CATALOG_PAGE) -> dict:
+    """Entries matching `query` (name, title, description) in `category`, official tier first, then by name."""
+    q = query.strip().lower()
+    hits = [e for e in entries if (not category or e["category"] == category)
+            and (not q or q in e["name"].lower() or q in e["title"].lower() or q in e["description"].lower())]
+    hits.sort(key=lambda e: (_TIER_RANK.get(e["tier"], 3), e["name"].lower()))
+    counts = {c: 0 for c in PLUGIN_CATEGORIES}
+    for e in entries:
+        if e["category"] in counts:
+            counts[e["category"]] += 1
+    return {"total": len(entries), "matched": len(hits), "entries": hits[:max(1, min(limit, 200))], "categories": counts}
+
+
+def plugin_folders(profile_dir: Path) -> set[str]:
+    """Names of the folders under `<profile>/plugins/` (the bot's own installs). Names only; nothing is opened."""
+    try:
+        return {p.name for p in (profile_dir / "plugins").iterdir() if p.is_dir() and not p.name.startswith(".")}
+    except OSError:
+        return set()
+
+
+def plugin_row(row: dict, catalog: dict[str, dict]) -> dict:
+    """One `plugins.manage list` row for the UI, joined with its catalog entry for tier, hooks and category."""
+    name = str(row.get("name") or "")
+    cat = catalog.get(str(row.get("catalog_name") or "")) or catalog.get(name) or {}
+    schema = row.get("settings_schema") if isinstance(row.get("settings_schema"), list) else []
+    needs = [str(f.get("env") or f.get("key")) for f in schema
+             if isinstance(f, dict) and f.get("type") == "secret" and not f.get("has_value")]
+    source = str(row.get("source") or "user")
+    tools = row.get("tools") if isinstance(row.get("tools"), list) else []
+    return {"name": name, "key": str(row.get("key") or name), "title": str(cat.get("title") or ""),
+            "version": str(row.get("version") or ""),
+            "description": _clip(str(row.get("description") or cat.get("description") or ""), 400),
+            "source": source, "enabled": str(row.get("status") or "") == "enabled",
+            "tier": str(row.get("catalog_tier") or cat.get("tier") or ("bundled" if source == "bundled" else "user")),
+            "category": str(cat.get("category") or ""), "catalog_name": str(row.get("catalog_name") or "") or None,
+            "tools": len(tools) or len(cat.get("tools") or []), "hooks": len(cat.get("hooks") or []),
+            "update_available": bool(row.get("update_available")), "needs_env": needs[:8]}
 
 
 def _to_ts(value) -> float:
@@ -3184,6 +3331,11 @@ class Bridge:
         self._env_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
         self._routine_state: dict[str, dict] = {}
+        self._routine_changes: list[tuple[str, str, dict]] = []  # routines.update / routine.added, queued by a poll
+        self._plugin_state: dict[str, set[str]] = {}  # plugin folder names per bot at the last look
+        # What omher itself just added: never announced back to the chat as something the bot did.
+        self._own_jobs: set[tuple[str, str]] = set()
+        self._own_plugins: set[tuple[str, str]] = set()
         self.ops = {
             "hello": self.op_hello, "bots.list": self.op_bots_list, "chat.open": self.op_chat_open,
             "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt,
@@ -3203,6 +3355,13 @@ class Bridge:
             "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
             "accounts.remove": self.op_accounts_remove, "accounts.set_active": self.op_accounts_set_active,
             "accounts.label": self.op_accounts_label, "accounts.discard": self.op_accounts_discard,
+            "automations.list": self.op_automations_list, "automations.add": self.op_automations_add,
+            "automations.pause": self.op_automations_pause, "automations.resume": self.op_automations_resume,
+            "automations.remove": self.op_automations_remove,
+            "plugins.list": self.op_plugins_list, "plugins.catalog": self.op_plugins_catalog,
+            "plugins.inspect": self.op_plugins_inspect, "plugins.install": self.op_plugins_install,
+            "plugins.toggle": self.op_plugins_toggle, "plugins.update": self.op_plugins_update,
+            "plugins.remove": self.op_plugins_remove,
         }
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self.runs = DagRuns()
@@ -3438,6 +3597,8 @@ class Bridge:
         payload = params.get("payload") if isinstance(params.get("payload"), dict) else {}
         if typ == "sessions.changed":
             return await self._elsewhere_changed(conn)
+        if typ == "cron.changed":  # Hermes saw the bot's jobs.json move: re-read it now, not at the next poll
+            return await self.poll_routines_once()
         if sid and sid in conn.main_ids:
             return await self._main_event(conn, typ, params, payload)
         for f in list(conn.folders.values()):
@@ -4088,31 +4249,226 @@ class Bridge:
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}
 
+    # ------------------------------------------------------------ automations (cron) and plugins
+    # Reads come from files (`cron/jobs.json`, the catalog cache, plugin folder names). Every change goes
+    # through the bot's own gateway: `cron.manage` and `plugins.manage`, with the actions below only.
+
+    async def _cron(self, conn: Conn, action: str, **params) -> dict:
+        if action not in CRON_ACTIONS:
+            raise BridgeError("bad_request", f"cron action {action} is not used by omher")
+        res = await self._call(conn, "cron.manage", action=action, **params)
+        res = res if isinstance(res, dict) else {}
+        if res.get("success") is False or (res.get("error") and not res.get("success")):
+            raise BridgeError("cron_refused", _clip(str(res.get("error") or "Hermes refused the change"), 600))
+        return res
+
+    async def _plugins(self, conn: Conn, action: str, **params) -> dict:
+        if action not in PLUGIN_ACTIONS:
+            raise BridgeError("bad_request", f"plugins action {action} is not used by omher")
+        res = await self._call(conn, "plugins.manage", action=action, **params)
+        return res if isinstance(res, dict) else {}
+
+    def _job_of(self, bot: dict, job_id) -> dict:
+        if not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id):
+            raise BridgeError("bad_request", "need the automation's id")
+        for j in read_automations(bot["path"]):
+            if j["id"] == job_id:
+                return j
+        raise BridgeError("not_found", f"{bot['name']} has no automation {job_id}")
+
+    async def op_automations_list(self, p) -> dict:
+        out = []
+        for b in discover_bots(self.home):
+            out += [{**j, "bot": b["name"]} for j in read_automations(b["path"])]
+        return {"automations": out}
+
+    async def op_automations_add(self, p) -> dict:
+        name, schedule, prompt, deliver = (p.get(k) for k in ("name", "schedule", "prompt", "deliver"))
+        for k, v, n in (("name", name, 120), ("schedule", schedule, 200), ("prompt", prompt, 8000)):
+            if not isinstance(v, str) or not v.strip() or len(v) > n:
+                raise BridgeError("bad_request", f"{k} must be text (up to {n} characters)")
+        bot = self._bot(p.get("bot"))
+        if deliver is not None and deliver != f"bot-chat:{bot['name']}":
+            raise BridgeError("bad_request", "deliver is the bot's own chat or left out")
+        conn = await self._conn(bot["name"])
+        res = await self._cron(conn, "add", name=name.strip(), schedule=schedule.strip(), prompt=prompt.strip(),
+                               **({"deliver": deliver} if deliver else {}))
+        jid = str(res.get("job_id") or (res.get("job") or {}).get("id") or "")
+        if jid:
+            self._own_jobs.add((bot["name"], jid))
+        await self.poll_routines_once()
+        return {"job": jid, "name": str(res.get("name") or name.strip())}
+
+    async def _job_action(self, p, action: str) -> dict:
+        bot = self._bot(p.get("bot"))
+        job = self._job_of(bot, p.get("job"))
+        conn = await self._conn(bot["name"])
+        await self._cron(conn, action, name=job["id"])  # cron.manage carries the job id in `name`
+        await self.poll_routines_once()
+        return {"job": job["id"]}
+
+    async def op_automations_pause(self, p) -> dict:
+        return await self._job_action(p, "pause")
+
+    async def op_automations_resume(self, p) -> dict:
+        return await self._job_action(p, "resume")
+
+    async def op_automations_remove(self, p) -> dict:
+        return await self._job_action(p, "remove")
+
+    def _catalog(self, bot: dict) -> tuple[list[dict], str]:
+        path = catalog_path(bot["path"], hermes_root_of(self.home))
+        return read_catalog(path) if path else ([], "")
+
+    async def op_plugins_catalog(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        query, category = p.get("query") or "", p.get("category") or ""
+        if not isinstance(query, str) or len(query) > 100 or (category and category not in PLUGIN_CATEGORIES):
+            raise BridgeError("bad_request", "query is text, category one of the catalog's")
+        limit = p.get("limit") if isinstance(p.get("limit"), int) else CATALOG_PAGE
+        entries, generated = await asyncio.to_thread(self._catalog, bot)
+        return {**search_catalog(entries, query, category, limit), "generated_at": generated or None}
+
+    async def op_plugins_list(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        conn = await self._conn(bot["name"])
+        res = await self._plugins(conn, "list")
+        entries, _ = await asyncio.to_thread(self._catalog, bot)
+        by_name = {e["name"]: e for e in entries}
+        rows = [plugin_row(r, by_name) for r in res.get("plugins") or [] if isinstance(r, dict) and r.get("name")]
+        return {"plugins": rows}
+
+    def _plugin_name(self, p, key: str = "name") -> str:
+        v = p.get(key)
+        if not isinstance(v, str) or not PLUGIN_NAME.fullmatch(v):
+            raise BridgeError("bad_request", f"need a plugin {key}")
+        return v
+
+    async def _catalog_entry(self, bot: dict, p) -> dict:
+        """The catalog entry `catalog_name` names. Only a name the curated catalog cache lists passes: a Git
+        URL, `owner/repo` or any other source is refused here, before Hermes is asked (BOUNDARY rule 25)."""
+        name = p.get("catalog_name")
+        if not isinstance(name, str) or not CATALOG_NAME.fullmatch(name):
+            raise BridgeError("bad_request", "plugins install from the catalog by name only")
+        entries, _ = await asyncio.to_thread(self._catalog, bot)
+        entry = next((e for e in entries if e["name"] == name), None)
+        if entry is None:
+            raise BridgeError("not_found", f"{name} is not in the plugin catalog")
+        return entry
+
+    async def op_plugins_inspect(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        entry = await self._catalog_entry(bot, p)
+        name = entry["name"]
+        conn = await self._conn(bot["name"])
+        res = await self._plugins(conn, "inspect", catalog_name=name)
+        if not res.get("ok"):
+            raise BridgeError("inspect_failed", _clip(str(res.get("error") or "Hermes could not read it"), 400))
+        return {"entry": entry, "sha": str(res.get("sha") or ""), "agent": bool(res.get("agent")),
+                "desktop": bool(res.get("desktop")), "warnings": _strs(res.get("warnings"), 6)}
+
+    async def op_plugins_install(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        name = (await self._catalog_entry(bot, p))["name"]
+        sha = p.get("inspected_sha")
+        if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{7,64}", sha):
+            raise BridgeError("bad_request", "install needs the sha its inspect returned")
+        conn = await self._conn(bot["name"])
+        res = await self._plugins(conn, "install", catalog_name=name, enable=True, inspected_sha=sha)
+        installed = str(res.get("plugin_name") or res.get("name") or name)
+        self._own_plugins.add((bot["name"], installed))
+        return {"name": installed, "enabled": bool(res.get("enabled", True)),
+                "restart_required": bool(res.get("restart_required")), "warnings": _strs(res.get("warnings"), 6),
+                "missing_env": _strs(res.get("missing_env"), 12)}
+
+    async def op_plugins_toggle(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        key = self._plugin_name(p, "key")
+        if not isinstance(p.get("enable"), bool):
+            raise BridgeError("bad_request", "enable is true or false")
+        conn = await self._conn(bot["name"])
+        res = await self._plugins(conn, "toggle", key=key, enable=p["enable"])
+        return {"name": str(res.get("name") or key), "restart_required": bool(res.get("restart_required"))}
+
+    async def op_plugins_update(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        name = self._plugin_name(p)
+        conn = await self._conn(bot["name"])
+        res = await self._plugins(conn, "update", name=name)
+        if res.get("consent_required") or res.get("scan_blocked"):
+            raise BridgeError("needs_review", f"This update needs a closer look. Ask {bot['display_name']} in chat to update {name}.")
+        return {"name": str(res.get("name") or name), "unchanged": bool(res.get("unchanged")),
+                "restart_required": bool(res.get("restart_required"))}
+
+    async def op_plugins_remove(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        name = self._plugin_name(p)
+        conn = await self._conn(bot["name"])
+        await self._plugins(conn, "remove", name=name)
+        return {"name": name}
+
     def poll_routines(self) -> list[tuple[str, dict]]:
-        """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run."""
+        """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run. A changed
+        file also queues `routines.update`, and a job id first seen after the baseline queues `routine.added`
+        (unless omher added it itself)."""
         ran = []
         for b in discover_bots(self.home):
             path = b["path"] / "cron" / "jobs.json"
             try:
                 mtime = path.stat().st_mtime_ns
             except OSError:
-                continue
+                mtime = None
             st = self._routine_state.get(b["name"])
             if st is not None and st["mtime"] == mtime:
                 continue
-            jobs = read_routines(b["path"])
+            jobs = read_automations(b["path"]) if mtime is not None else []
             last = {j["id"]: j["last_run_at"] for j in jobs}
             if st is not None:
                 ran += [(b["name"], j) for j in jobs if j["last_run_at"] and st["last"].get(j["id"]) != j["last_run_at"]]
+                self._routine_changes.append(("routines.update", b["name"], {}))
+                for j in jobs:
+                    if j["id"] not in st["last"] and (b["name"], j["id"]) not in self._own_jobs:
+                        self._routine_changes.append(("routine.added", b["name"], j))
             self._routine_state[b["name"]] = {"mtime": mtime, "last": last}
         return ran
+
+    def poll_plugins(self) -> list[tuple[str, str]]:
+        """(bot, folder name) for each plugin folder that appeared under a profile since the last look."""
+        added = []
+        for b in discover_bots(self.home):
+            names = plugin_folders(b["path"])
+            seen = self._plugin_state.get(b["name"])
+            if seen is not None:
+                added += [(b["name"], n) for n in sorted(names - seen) if (b["name"], n) not in self._own_plugins]
+            self._plugin_state[b["name"]] = names
+        return added
 
     async def poll_routines_once(self) -> int:
         ran = self.poll_routines()
         for bot, j in ran:
             await self.emit("routine.ran", bot, routine_id=j["id"], name=j["name"],
                             status=str(j["last_status"] or "ok"), ts=_to_ts(j["last_run_at"]))
+        changes, self._routine_changes = self._routine_changes, []
+        for event, bot, j in changes:
+            if event == "routine.added":
+                await self.emit(event, bot, routine_id=j["id"], name=j["name"], schedule=j["schedule"],
+                                next_run_at=j["next_run_at"], deliver=j["deliver"], origin=j["origin"],
+                                ts=_to_ts(j.get("created_at")))
+            else:
+                await self.emit(event, bot)
         return len(ran)
+
+    async def poll_plugins_once(self) -> int:
+        added = self.poll_plugins()
+        for bot, name in added:
+            entry = {}
+            with contextlib.suppress(Exception):
+                entries, _ = self._catalog(self._bot(bot))
+                entry = next((e for e in entries if e["name"] == name), {})
+            await self.emit("plugin.added", bot, name=name, title=str(entry.get("title") or ""),
+                            tools=len(entry.get("tools") or []), hooks=len(entry.get("hooks") or []), ts=time.time())
+            await self.emit("plugins.update", bot)
+        return len(added)
 
     async def poll_elsewhere_once(self) -> None:
         for conn in list(self.conns.values()):
@@ -4128,11 +4484,14 @@ class Bridge:
 
     async def _watch(self) -> None:
         self.poll_routines()  # baseline: nothing that already ran is announced
+        self.poll_plugins()
         last_else = self.clock()
         while True:
             await asyncio.sleep(self.poll_s)
             with contextlib.suppress(Exception):
                 await self.poll_routines_once()
+            with contextlib.suppress(Exception):
+                await self.poll_plugins_once()
             if self.clock() - last_else >= self.elsewhere_poll_s:
                 last_else = self.clock()
                 with contextlib.suppress(Exception):

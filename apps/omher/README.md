@@ -114,6 +114,11 @@ Rules the code keeps:
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
   `omp` or `grok`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.
+- **Automations and plugins change only through the bot.** The Automations page reads each profile's
+  `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
+  Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
+  a plugin only with the bot's `plugins.manage`; installs are catalog-only, inspected first and confirmed.
+- **Four languages.** English, Korean, Japanese and Chinese (`src/i18n/`), picked in Settings › General › Language.
 
 ## Develop
 

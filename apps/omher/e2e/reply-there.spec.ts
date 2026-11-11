@@ -33,6 +33,8 @@ const submits = async (): Promise<{ bot: string; session_id: string; text: strin
 /** Every op the app may call: reads, plus chat.send to the main chat. Nothing here writes to a messenger. */
 const ALLOWED = new Set([
   "hello",
+  // every bot's automations, read from files (no gateway)
+  "automations.list",
   "bots.list",
   "bots.avatar",
   "bots.info",
