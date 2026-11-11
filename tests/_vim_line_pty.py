@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import codecs
+import importlib.util
 import os
 from pathlib import Path
 import select
@@ -24,6 +25,8 @@ CASES = (("Vd", "FIRST\nTAIL", 6), ("Vdu", TEXT, 6),
 
 def assert_line_visual_pty(testcase):
     """Execute every line operator at 20×8 and 100×30; missing PTY is a failure."""
+    if importlib.util.find_spec("termios") is None:
+        testcase.skipTest("the OMH TUI needs termios")
     import pty
     import termios
 

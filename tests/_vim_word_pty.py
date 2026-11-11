@@ -7,6 +7,7 @@ composer, layout and rendering are the production implementations.
 from __future__ import annotations
 
 import codecs
+import importlib.util
 import os
 from pathlib import Path
 import select
@@ -28,6 +29,8 @@ CASES = (("w", 0, 5), ("W", 0, 11), ("b", 20, 17),
 
 def assert_word_motions_pty(testcase):
     """Assert all eight motions at 20 and 100 columns in disposable profiles."""
+    if importlib.util.find_spec("termios") is None:
+        testcase.skipTest("the OMH TUI needs termios")
     import pty
     import termios
 
@@ -81,7 +84,7 @@ def assert_word_motions_pty(testcase):
                                 screen.feed(decoder.decode(chunk))
                             except AssertionError as error:
                                 log = root / "tui_gateway" / "client_frames.jsonl"
-                                raise AssertionError(f"{error}\nRPC: {log.read_text() if log.exists() else ''}\nRAW: {raw.decode('utf-8', 'replace')[-5000:]}") from error
+                                raise AssertionError(f"{error}\nRPC: {log.read_text(encoding='utf-8', errors='replace') if log.exists() else ''}\nRAW: {raw.decode('utf-8', 'replace')[-5000:]}") from error
 
                 def send(data):
                     os.write(master, data)

@@ -8,6 +8,7 @@ are captured before/after and included in any assertion diagnostic.
 from __future__ import annotations
 
 import codecs
+import importlib.util
 import os
 from pathlib import Path
 import select
@@ -42,6 +43,8 @@ CASES = (
 
 def assert_operator_pty(testcase):
     """Execute every line operator at 20×8 and 100×30; missing PTY is a failure."""
+    if importlib.util.find_spec("termios") is None:
+        testcase.skipTest("the OMH TUI needs termios")
     import pty
     import termios
 

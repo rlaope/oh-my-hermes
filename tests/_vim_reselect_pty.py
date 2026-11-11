@@ -7,6 +7,7 @@ OMH_VIM_RESELECT_EVIDENCE to retain every journey, including failures.
 from __future__ import annotations
 
 import codecs
+import importlib.util
 from dataclasses import dataclass
 import json
 import os
@@ -99,6 +100,8 @@ JOURNEYS = (
 
 def assert_reselect_pty(testcase):
     """No PTY skips: every case starts at each size and resizes while restored."""
+    if importlib.util.find_spec("termios") is None:
+        testcase.skipTest("the OMH TUI needs termios")
     import pty
     import termios
 

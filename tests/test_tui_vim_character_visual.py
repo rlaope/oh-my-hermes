@@ -606,7 +606,7 @@ class TestCV(unittest.TestCase):
         """CV-4/CV-7: help and installation expose the supported visual slice."""
         from omh.tui.shortcuts import SHORTCUTS
         description = dict(SHORTCUTS)["Esc (vim mode)"]
-        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         for wording in ("character VISUAL", "d/c/y", "Visual j/k", "VISUAL"):
             self.assertIn(wording, description)
             self.assertIn(wording, doc)

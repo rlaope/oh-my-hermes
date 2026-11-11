@@ -277,7 +277,7 @@ class TestLV(unittest.TestCase):
 
     def test_docs(self):
         from omh.tui.shortcuts import SHORTCUTS
-        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         for text in ("VISUAL LINE", "hard-line count", "v/V", "linewise"):
             self.assertIn(text, dict(SHORTCUTS)["Esc (vim mode)"])
             self.assertIn(text, doc)

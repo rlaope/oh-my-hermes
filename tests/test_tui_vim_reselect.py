@@ -473,7 +473,7 @@ class TestRS(unittest.TestCase):
 
     def test_docs(self):
         from omh.tui.shortcuts import SHORTCUTS
-        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         for phrase in ("gv", "generation", "NORMAL-only", "anchor/head", "9999gv", "paste/image metadata",
                        "undo/redo", "history/draft replacement", "masking", "failed/no-op", "never block visual",
                        "Enter sends unchanged text", "clipboard image"):
