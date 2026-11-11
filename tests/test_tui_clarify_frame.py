@@ -13,8 +13,9 @@ from __future__ import annotations
 import unittest
 
 from _tui_lines import line_text, lines_text
-from test_tui_modes import SID, drawn, make_app
+from test_tui_modes import SID, RecordingClient, drawn, make_app
 from omh.tui import prompts
+from omh.tui.app import App
 from omh.tui.gateway import Event, ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, Key
 from omh.tui.style import NO_COLOR
@@ -339,6 +340,84 @@ class FramedWaitLayoutTests(unittest.TestCase):
         app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
         drawn(app)
         self.assertEqual(app._working_rows(), 1)
+
+
+class InlineFieldTests(unittest.TestCase):
+    """Owner, 2026-11-11: the digit on `Type something.` opens the field on that very row, as Claude Code's
+    AskUserQuestion does: what is typed shows there, the caret stands there, and no composer is drawn under it."""
+
+    def open(self, cols: int = 60) -> "tuple[App, RecordingClient]":
+        from test_tui_modes import make_app
+
+        now = [1000.0]
+        app, client = make_app(busy=True, rows=30, cols=cols, clock=lambda: now[0])
+        params = {"questions": [{"qid": "q0", "question": "어떻게 할까요?",
+                                 "choices": ["A — first", "B — second", "C — third"], "multi_select": False}]}
+        app._on_event(Event("tool.start", SID, {"tool_id": "c1", "name": "clarify", "args": params, "context": "x"}))
+        app._on_server_request(ServerRequest("srq-1", "clarify", params))
+        now[0] += 5  # past the arming delay
+        return app, client
+
+    def field_rows(self, app: "App") -> list[str]:
+        return [line.rstrip() for line in drawn(app) if "4. " in line]
+
+    def test_the_digit_opens_the_field_on_its_row_and_typing_shows_there(self) -> None:
+        from test_tui_modes import type_text
+
+        app, client = self.open()
+        app._on_input(Key(CHAR, "4"))
+        self.assertTrue(app.slot.typing)
+        self.assertEqual(self.field_rows(app), ["▌ ❯ 4. Type something."])  # the dim placeholder, highlighted
+        type_text(app, "한글로 답변")
+        screen = drawn(app)
+        self.assertIn("▌ ❯ 4. 한글로 답변", [line.rstrip() for line in screen])
+        self.assertFalse([line for line in screen if line.startswith("❯")])  # no composer row under the question
+        row, col = app._slot_caret()
+        self.assertEqual(col, cell_width("▌ ❯ 4. 한글로 답변"))  # right after the words, on the field's row
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.answers[-1], ("srq-1", {"result": {"answers": {"q0": "한글로 답변"}}}))
+
+    def test_the_caret_follows_the_composer_and_a_long_answer_scrolls_on_one_row(self) -> None:
+        from omh.tui.keys import LEFT
+        from test_tui_modes import type_text
+
+        app, _client = self.open(cols=40)
+        app._on_input(Key(CHAR, "4"))
+        type_text(app, "abc")
+        app._on_input(Key(LEFT))
+        drawn(app)
+        self.assertEqual(app._slot_caret()[1], cell_width("▌ ❯ 4. ab"))
+        app._on_input(Key(CHAR, "e"))  # composer: "abec", caret after the e
+        type_text(app, " and a much longer answer than the row")
+        (row,) = self.field_rows(app)
+        self.assertLessEqual(cell_width(row), 40)
+        self.assertTrue(row.startswith("▌ ❯ 4. …"))  # the start scrolled off, the caret's words kept
+        self.assertTrue(row.endswith("…"))  # the `c` after the caret, cut
+        self.assertLess(app._slot_caret()[1], 40)
+
+    def test_up_goes_back_to_the_list_with_the_composer_hidden_and_the_words_kept(self) -> None:
+        from omh.tui.keys import UP
+        from test_tui_modes import type_text
+
+        app, _client = self.open()
+        app._on_input(Key(CHAR, "4"))
+        type_text(app, "kept")
+        app._on_input(Key(UP))
+        self.assertFalse(app.slot.typing)
+        self.assertEqual(self.field_rows(app), ["▌   4. kept"])
+        self.assertIsNone(app._slot_caret())  # picking again: no caret anywhere
+
+    def test_a_question_without_choices_still_types_in_the_composer(self) -> None:
+        from test_tui_modes import make_app, type_text
+
+        now = [1000.0]
+        app, _client = make_app(busy=True, rows=30, cols=60, clock=lambda: now[0])
+        params = {"questions": [{"qid": "q0", "question": "Your name?", "choices": [], "multi_select": False}]}
+        app._on_server_request(ServerRequest("srq-2", "clarify", params))
+        now[0] += 5  # past the arming delay
+        type_text(app, "ann")
+        self.assertFalse(app._composer_hidden())
+        self.assertIn("❯ ann", [line.rstrip() for line in drawn(app)])
 
 
 if __name__ == "__main__":

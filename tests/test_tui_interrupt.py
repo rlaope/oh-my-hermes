@@ -39,7 +39,7 @@ def submitted(client) -> list[str]:
 
 
 class EscWithADraftTests(unittest.TestCase):
-    """Enter queues during a turn, so Esc is the one-key stop, as in Claude Code: with a draft too, which stays."""
+    """Enter never interrupts a turn, so Esc is the one-key stop, as in Claude Code: with a draft too, which stays."""
 
     def test_esc_with_a_draft_during_a_turn_interrupts_and_keeps_the_draft(self) -> None:
         app, client = running(QueuedLine("queued"))
