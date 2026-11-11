@@ -142,8 +142,7 @@ All notable changes will be documented here.
   omher starts it with `OPENCODE_PERMISSION` so it asks for both, and its
   approval card offers Deny and Allow once only, because OpenCode's "Always
   allow" saves a permanent project rule. omher gives the agent no file or
-  terminal access of its own (BOUNDARY rule 11). The pi install hint now
-  names `@earendil-works/pi-coding-agent`, the package pi's README names.
+  terminal access of its own (BOUNDARY rule 11).
 
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus

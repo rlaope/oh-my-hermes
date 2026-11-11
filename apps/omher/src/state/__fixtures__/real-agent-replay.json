@@ -3927,6 +3927,11 @@
         "used": 30543
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30543
+      },
+      {
         "event": "delta",
         "text": "The"
       },

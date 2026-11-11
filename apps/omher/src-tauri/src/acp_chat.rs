@@ -639,9 +639,8 @@ impl Adapter for Acp {
                 out(&mut st, json!({"jsonrpc": "2.0", "id": a.rpc_id, "result": {"outcome": {"outcome": "selected", "optionId": option}}}));
             }
             Input::Clarify { .. } => return Err("no such question".into()),
-            // omher offers no permission mode or effort for an ACP agent (it asks before every edit and command)
-            Input::Mode { mode } => return Err(format!("{} has no permission mode here ({mode})", self.agent.label)),
-            Input::Effort { effort } => return Err(format!("{} has no reasoning effort here ({effort})", self.agent.label)),
+            // the agent picks its own permission mode and effort; omher offers no switch for them here
+            Input::Mode { .. } | Input::Effort { .. } => return Err(format!("{} has no mode or effort switch here", self.agent.label)),
             Input::Model { model } => {
                 let Some(sid) = self.session.clone() else { return Err(format!("{} has not started yet", self.agent.label)) };
                 let mut p = Map::new();
@@ -1082,6 +1081,8 @@ mod tests {
         assert!(st.write.is_empty());
         assert_eq!(names(&st.events), ["turn.end"]);
         assert!(a.on_input(Input::Interrupt).is_err());
+        assert!(a.on_input(Input::Mode { mode: "plan".into() }).is_err());
+        assert!(a.on_input(Input::Effort { effort: "high".into() }).is_err());
         assert!(a.on_input(Input::Send { text: "x".into(), images: vec![crate::agent_chat::Picture::from("/p.png".to_string())], id: String::new() }).is_err());
     }
 

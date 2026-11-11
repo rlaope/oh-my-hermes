@@ -121,9 +121,9 @@ describe("session agents", () => {
     expect(missingNote("pi")).toBe("pi was not found on this computer · install: npm i -g --ignore-scripts @earendil-works/pi-coding-agent");
     expect(missingNote("omp")).toBe("omp was not found on this computer · install: curl -fsSL https://omp.sh/install | sh");
     expect(missingNote("grok")).toBe("grok was not found on this computer · install: curl -fsSL https://x.ai/cli/install.sh | bash");
+    for (const a of AGENTS) expect(missingNote(a.id)).not.toMatch(/mariozechner|see .* docs|npm i -g @oh-my-pi/);
     // OpenCode's own docs (opencode.ai/v1/docs): the npm package is opencode-ai, its program `opencode`
     expect(missingNote("opencode")).toBe("opencode was not found on this computer · install: npm install -g opencode-ai");
-    for (const a of AGENTS) expect(missingNote(a.id)).not.toMatch(/mariozechner|see .* docs|npm i -g @oh-my-pi/);
     expect(Object.keys(INSTALL).sort()).toEqual(AGENTS.map((a) => a.id).sort());
   });
 

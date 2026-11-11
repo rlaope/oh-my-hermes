@@ -299,7 +299,7 @@ impl DshChat {
             }
             Input::Approve { .. } | Input::Clarify { .. } => Err("DeepSeek Harness asks nothing in this chat".into()),
             Input::Model { .. } => Err("DeepSeek Harness uses the model set in its own app".into()),
-            Input::Mode { .. } | Input::Effort { .. } => Err("DeepSeek Harness runs with its own settings in this chat".into()),
+            Input::Mode { .. } | Input::Effort { .. } => Err("DeepSeek Harness uses the mode and effort set in its own app".into()),
         }
     }
 
@@ -700,6 +700,8 @@ mod tests {
         assert!(chat.input(Input::Approve { request_id: "a".into(), choice: "once".into() }).is_err());
         assert!(chat.input(Input::Clarify { request_id: "a".into(), answer: Value::Null }).is_err());
         assert!(chat.input(Input::Model { model: "x".into() }).is_err());
+        assert!(chat.input(Input::Mode { mode: "plan".into() }).is_err());
+        assert!(chat.input(Input::Effort { effort: "high".into() }).is_err());
         assert!(!chat.0.run.lock().unwrap().is_some());
         // a resume that is not a harness session id is refused before anything else
         assert!(DshChat::start(&tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), |_| {}).is_err());

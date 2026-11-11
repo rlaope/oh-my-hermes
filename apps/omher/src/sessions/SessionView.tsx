@@ -546,8 +546,8 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
     listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
   }, [active, open]);
   const choose = async (o: ModelOption) => {
-    const now = rec.modelNext ?? rec.model;
-    if (o.label === now || o.id === now || busy || !live) return;
+    const on = rec.modelNext ? o.label === rec.modelNext || o.id === rec.modelNext : o.label === rec.model || o.id === rec.model;
+    if (on || busy || !live) return;
     setBusy(true);
     await getSessions().setModel(rec.id, o);
     setBusy(false);
@@ -580,12 +580,6 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
         <span className="mp-l" title={rec.model || undefined} data-testid="model-label">
           {rec.model || tr("ss.model")}
         </span>
-        {/* a pick made while a turn ran: the agent takes it from the next turn, whose start confirms it */}
-        {rec.modelNext && (
-          <span className="mp-next" title={tr("ss.modelNextTip", { model: rec.model ?? "" })} data-testid="model-next">
-            {tr("ss.modelNext", { model: rec.modelNext })}
-          </span>
-        )}
         {effort && efforts.length > 0 && (
           <>
             <span className="sep" />
@@ -593,6 +587,12 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
               {levelLabel(effort, efforts)}
             </span>
           </>
+        )}
+        {/* a pick made while a turn ran: the agent takes it from the next turn, whose start confirms it */}
+        {rec.modelNext && (
+          <span className="mp-next" title={tr("ss.modelNextTip", { model: rec.model ?? "" })} data-testid="model-next">
+            {tr("ss.modelNext", { model: rec.modelNext })}
+          </span>
         )}
         <ChevronDown />
       </button>

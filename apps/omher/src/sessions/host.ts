@@ -188,12 +188,12 @@ type MockGlobals = {
   __omherMockAgents?: AgentId[];
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
+  /** e2e: the branch of each folder (none = not a repository) */
+  __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
   __omherMockNoChat?: AgentId[];
   /** e2e: the Codex thread a chat resumes is gone (deleted or archived): the shell starts a new one */
   __omherMockGoneThreads?: boolean;
-  /** e2e: the branch of each folder (none = not a repository) */
-  __omherBranches?: Record<string, string>;
 };
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
@@ -393,10 +393,9 @@ const MOCK_MODES: Partial<Record<AgentId, string[]>> = { claude: ["default", "pl
 
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
  *  Esc; `/exit` ends the program; `/title <name>` names the conversation as the agent; anything else gets a
- *  short answer after one tool step. `noChat`: an old version that never speaks its chat protocol, ended by the
- *  shell's start deadline (shortened here). `gone`: a Codex resume onto a thread that no longer exists.
- *  A message sent while a turn runs is queued and answered after it, as Claude Code and OmO do; Stop
- *  drops it. */
+ *  short answer after one tool step. A message sent while a turn runs is queued and answered after it, as Claude
+ *  Code and OmO do; Stop drops it. `noChat`: an old version that never speaks its chat protocol, ended by the
+ *  shell's start deadline (shortened here). `gone`: a Codex resume onto a thread that no longer exists. */
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
@@ -423,13 +422,13 @@ class MockChat {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
+    if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
     if (how.gone) this.session = `codex-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     // DeepSeek Harness names its session `session-<uuid>` and reports no model in its headless stream
     if (agent === "dsh") {
       if (!resume) this.session = "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8";
       this.model = "";
     }
-    if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
   }
   private at(ms: number, fn: () => void) {
     this.timers.push(setTimeout(fn, ms));

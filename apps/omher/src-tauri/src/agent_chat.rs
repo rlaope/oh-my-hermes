@@ -30,8 +30,8 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::dsh_chat::DshChat;
 use crate::acp_chat::{acp_agent, is_acp_session_id, Acp};
+use crate::dsh_chat::DshChat;
 use crate::session_files;
 use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
@@ -752,6 +752,8 @@ pub struct Claude {
     labels: HashMap<String, String>,
     /// the last assistant message carried an error kind (`authentication_failed`, …)
     error_kind: String,
+    /// messages sent and not yet echoed back taken (`--replay-user-messages`)
+    waiting: Waiting,
     /// its subagents (Agent/Task calls) by tool_use id
     subs: Subagents,
     /// Claude Code's agent / task id -> the tool_use id of its Agent call (asks and task events name the agent id)
@@ -761,8 +763,6 @@ pub struct Claude {
     /// subagents that run in the background: their task notification ends them (a foreground one ends with its
     /// tool result, which carries its own words and model)
     bg_subs: std::collections::HashSet<String>,
-    /// messages sent and not yet echoed back taken (`--replay-user-messages`)
-    waiting: Waiting,
 }
 
 impl Claude {
@@ -1381,9 +1381,6 @@ pub struct Codex {
     unauthorized: bool,
     /// Stop was pressed before Codex named the turn: interrupt it as soon as it does
     stop_asked: bool,
-    /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
-    /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
-    helpers: Subagents,
     /// the person's mode (approval policy, sandbox) and effort, sent with every turn from the next one on
     mode: Option<(&'static str, &'static str)>,
     effort: Option<String>,
@@ -1392,6 +1389,9 @@ pub struct Codex {
     /// skill name -> its SKILL.md path (skills/list), for `$name` in a message
     skills: HashMap<String, String>,
     waiting: Waiting,
+    /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
+    /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
+    helpers: Subagents,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -1414,12 +1414,12 @@ impl Codex {
             changes: HashMap::new(),
             unauthorized: false,
             stop_asked: false,
-            helpers: Subagents::new("codex"),
             mode: None,
             effort: None,
             efforts: HashMap::new(),
             skills: HashMap::new(),
             waiting: Waiting::default(),
+            helpers: Subagents::new("codex"),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -1852,10 +1852,7 @@ impl Adapter for Codex {
             }
             "item/reasoning/textDelta" | "item/reasoning/summaryTextDelta" => st.emit(ev("thinking", json!({}))),
             "item/started" => {
-                let iid = s(&item, "id");
                 match s(&item, "type").as_str() {
-                    // a sub-agent's own activity: its row, never a step of the person's turn
-                    "subAgentActivity" => self.helper_activity(&mut st, &item, false),
                     // Codex recorded a message the person sent (our id as its clientId)
                     "userMessage" => {
                         let cid = s(&item, "clientId");
@@ -1863,22 +1860,12 @@ impl Adapter for Codex {
                             self.waiting.take_id(&mut st, &cid);
                         }
                     }
-                    "commandExecution" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "terminal", "detail": clip(&Codex::command_of(&item), 160)}))),
-                    "fileChange" => {
-                        let detail = self.file_changes(&item);
-                        let paths: Vec<String> = item.get("changes").and_then(Value::as_array).into_iter().flatten().map(|c| rel(&s(c, "path"), &self.cwd)).filter(|p| !p.is_empty()).collect();
-                        self.changes.insert(iid.clone(), clip(&paths.join(", "), 120));
-                        st.emit(ev("tool.start", json!({"tool_id": iid, "name": "patch", "detail": detail})));
+                    "subAgentActivity" => self.helper_activity(&mut st, &item, false),
+                    _ => {
+                        if let Some((name, detail)) = self.item_step(&item) {
+                            st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
+                        }
                     }
-                    "mcpToolCall" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": s(&item, "tool"), "detail": format!("{}.{}", s(&item, "server"), s(&item, "tool"))}))),
-                    "dynamicToolCall" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": tool_kind(&s(&item, "tool")), "detail": tool_detail(&item["arguments"])}))),
-                    "webSearch" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "web_search", "detail": s(&item, "query")}))),
-                    "imageView" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "read_file", "detail": rel(&s(&item, "path"), &self.cwd)}))),
-                    "sleep" => {
-                        let secs = item.get("durationMs").and_then(Value::as_u64).unwrap_or(0) / 1000;
-                        st.emit(ev("tool.start", json!({"tool_id": iid, "name": "Waiting", "detail": if secs > 0 { format!("{secs}s") } else { String::new() }})));
-                    }
-                    _ => {}
                 }
             }
             "item/completed" => {
@@ -2087,6 +2074,10 @@ pub struct Pi {
     last_stop: String,
     last_error: String,
     pending: HashMap<String, PiAsk>,
+    /// thinking levels it offers (`get_available_thinking_levels`)
+    levels: Vec<String>,
+    reads: u64,
+    waiting: Waiting,
     /// OmO's subagents (`task` tool), by task id once OmO names them (`st_…`), else `<call id>:<n>`
     subs: Subagents,
     /// OmO's task id -> our subagent id; a `task` call id -> its subagents in order
@@ -2094,10 +2085,6 @@ pub struct Pi {
     calls_subs: HashMap<String, Vec<String>>,
     /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
     background: usize,
-    /// thinking levels it offers (`get_available_thinking_levels`)
-    levels: Vec<String>,
-    reads: u64,
-    waiting: Waiting,
 }
 
 /// oh-my-pi's tool approval as a select (`Allow tool: bash\nCommand: ls -la` with Approve / Approve bash for this
@@ -2390,14 +2377,14 @@ impl Adapter for Pi {
                     _ => {}
                 }
             }
-            "message_start" if s(&v["message"], "role") == "custom" => {
-                let m = v["message"].clone();
-                self.task_done(&mut st, &m);
-            }
             // the agent took the person's message (a follow-up leaves its queue here)
             "message_end" if s(&v["message"], "role") == "user" => self.waiting.take(&mut st),
             "thinking_level_changed" => st.emit(ev("session.info", json!({"effort": s(&v, "level")}))),
             "commands_changed" => st.emit(pi_commands(&v)),
+            "message_start" if s(&v["message"], "role") == "custom" => {
+                let m = v["message"].clone();
+                self.task_done(&mut st, &m);
+            }
             "message_end" => {
                 let m = &v["message"];
                 if s(m, "role") == "assistant" {
@@ -4181,19 +4168,14 @@ mod tests {
     #[test]
     fn real_claude_11_a_model_picked_mid_turn_is_for_the_next_turn() {
         let mut c = claude_up();
+        let lines = real("claude-11-model-mid-turn.jsonl");
         let haiku = written(&c.on_input(Input::Model { model: "haiku".into() }).unwrap())[0].clone();
-        assert!(s(&haiku, "request_id").starts_with("omher-model-"));
-        // the recording answers the ids omher sent then (2, 3); this run's are its own (init also asks the context use)
-        let mut lines = real("claude-11-model-mid-turn.jsonl");
-        let ids = |l: &mut Vec<String>, from: &str, to: &str| l.iter_mut().for_each(|x| *x = x.replace(&format!("\"{from}\""), &format!("\"{to}\"")));
-        ids(&mut lines, "omher-model-3", "@sonnet@");
-        ids(&mut lines, "omher-model-2", &s(&haiku, "request_id"));
+        assert_eq!(s(&haiku, "request_id"), "omher-model-3");
         let st = run(&mut c, &lines[..1]);
         assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).collect::<Vec<_>>(), ["Haiku 5.5"]);
         c.on_input(Input::send("Reply with exactly: ok")).unwrap();
         let sonnet = written(&c.on_input(Input::Model { model: "sonnet".into() }).unwrap())[0].clone();
-        assert_ne!(s(&sonnet, "request_id"), s(&haiku, "request_id"));
-        ids(&mut lines, "@sonnet@", &s(&sonnet, "request_id"));
+        assert_eq!(s(&sonnet, "request_id"), "omher-model-4");
         // everything until the turn's end, then the next turn
         let first_end = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();
         let st = run(&mut c, &lines[1..=first_end]);
@@ -4921,12 +4903,12 @@ mod tests {
         out.push(("codex-4-stop.jsonl", "codex", vec![Send, File("codex-4-stop.jsonl"), Stop, File("codex-4-stopped.jsonl")]));
         out.push(("codex-7-model.jsonl", "codex", vec![Model("gpt-6-astra"), Send, File("codex-7-model.jsonl")]));
         out.push(("codex-8-resume.jsonl", "codex-resume", vec![File("codex-8-resume-init.jsonl"), File("codex-8-resume.jsonl"), Send, File("codex-8-resume-turn.jsonl")]));
+        // reopened onto a thread that is gone, with a message waiting: a new thread takes it (QA H5)
+        out.push(("codex-11-resume-gone.jsonl", "codex-resume-gone", vec![Send, File("codex-11-resume-gone.jsonl"), File("codex-1-plain.jsonl")]));
         // two subagents in parallel (Claude Code 2.1.322, real run), then a subagent whose command needs approval
         out.push(("claude-9-subagents.jsonl", "claude", vec![Send, File("claude-9-subagents.jsonl"), Send, File("claude-9-subagent-ask.jsonl")]));
         // OmO 5.1.56: two background subagents (`task`), then the next turn during which their completions arrive
         out.push(("omo-9-subagents.jsonl", "omo", vec![Send, File("omo-9-subagents.jsonl"), Send, File("omo-9-subagents-after.jsonl")]));
-        // reopened onto a thread that is gone, with a message waiting: a new thread takes it (QA H5)
-        out.push(("codex-11-resume-gone.jsonl", "codex-resume-gone", vec![Send, File("codex-11-resume-gone.jsonl"), File("codex-1-plain.jsonl")]));
         // two sub-agents in parallel (their threads stream on the same connection), then Stop while one runs
         out.push(("codex-9-helpers.jsonl", "codex-helpers", vec![Send, File("codex-9-helpers.jsonl")]));
         out.push(("codex-10-helper-stop.jsonl", "codex-helper-stop", vec![Send, File("codex-10-helper-stop.jsonl"), Stop, File("codex-10-helper-stopped.jsonl")]));
