@@ -375,7 +375,23 @@ test("the run's header is plain text in the app's font: the title leads, a statu
   const expand = head.getByTestId("graph-expand");
   await expect(expand).toHaveAttribute("title", /^Full view (⌘⇧G|Ctrl\+Shift\+G)$/);
   await expect(expand).toHaveText("");
-  const [eb, tb, pb] = await Promise.all([expand.boundingBox(), head.getByTestId("run-plan-title").boundingBox(), page.getByTestId("panel-runs").boundingBox()]);
+  // read the three boxes in one frame once the panel has stopped sliding in (three boundingBox() calls are three
+  // round trips, so on a slow runner they came from different frames of the slide: 2.7 px apart on Windows CI)
+  const boxes = () =>
+    page.evaluate(() =>
+      ["graph-expand", "run-plan-title", "panel-runs"].map((id) => {
+        const b = document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        return { x: b.x, y: b.y, width: b.width, height: b.height };
+      }),
+    );
+  await expect
+    .poll(async () => {
+      const a = (await boxes())[2].x;
+      await page.waitForTimeout(80);
+      return Math.abs(a - (await boxes())[2].x) < 0.5;
+    })
+    .toBe(true);
+  const [eb, tb, pb] = await boxes();
   expect([eb!.width, eb!.height]).toEqual([24, 24]);
   expect(Math.abs(eb!.y + eb!.height / 2 - (tb!.y + tb!.height / 2))).toBeLessThanOrEqual(1);
   expect(eb!.x + eb!.width).toBeLessThanOrEqual(pb!.x + pb!.width);
