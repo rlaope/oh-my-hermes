@@ -61,7 +61,7 @@ export const ja: Record<Key, string> = {
   "plans.all": "全{n}件の計画",
   "plans.none": "計画はまだありません。",
   "plans.noneHint": "このボットが作業をサブエージェントに分けて任せると、各パートと進み具合がここにリアルタイムで表示されます。",
-  "plans.noneHow": "始めるには、作業を並列に分けるよう頼むか、作業内容と一緒に dag ulw を送ってください。",
+  "plans.noneHow": "始めるには、作業を並列に分けるよう頼むか、作業内容と一緒に {cmd} を送ってください。",
   "plans.stale": "{t}更新なし",
   "plans.cli": "CLI エージェント",
   "plans.cliAll": "CLI エージェント（{n}）",

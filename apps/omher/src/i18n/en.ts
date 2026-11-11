@@ -62,7 +62,7 @@ export const en = {
   "plans.all": "All {n} plans",
   "plans.none": "No plans yet.",
   "plans.noneHint": "When this bot hands work to subagents, each part and how far it got shows here, live.",
-  "plans.noneHow": "To start one, ask it to split a task into parallel parts, or send dag ulw with the task.",
+  "plans.noneHow": "To start one, ask it to split a task into parallel parts, or send {cmd} with the task.",
   "plans.stale": "no update for {t}",
   "plans.cli": "CLI agents",
   "plans.cliAll": "CLI agents ({n})",

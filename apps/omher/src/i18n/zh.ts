@@ -61,7 +61,7 @@ export const zh: Record<Key, string> = {
   "plans.all": "全部 {n} 个计划",
   "plans.none": "还没有计划。",
   "plans.noneHint": "这个机器人把工作分给子代理后，每个部分和进度都会实时显示在这里。",
-  "plans.noneHow": "要开始，请让它把任务拆成并行部分，或连同任务发送 dag ulw。",
+  "plans.noneHow": "要开始，请让它把任务拆成并行部分，或连同任务发送 {cmd}。",
   "plans.stale": "{t}无更新",
   "plans.cli": "CLI 代理",
   "plans.cliAll": "CLI 代理（{n}）",

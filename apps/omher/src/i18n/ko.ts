@@ -61,7 +61,7 @@ export const ko: Record<Key, string> = {
   "plans.all": "계획 {n}개 전체",
   "plans.none": "아직 계획이 없습니다.",
   "plans.noneHint": "이 봇이 일을 서브에이전트에게 나눠 맡기면, 각 부분과 진행 상황이 여기에 실시간으로 표시됩니다.",
-  "plans.noneHow": "시작하려면 작업을 병렬로 나눠 달라고 하거나, 작업과 함께 dag ulw를 보내세요.",
+  "plans.noneHow": "시작하려면 작업을 병렬로 나눠 달라고 하거나, 작업과 함께 {cmd}를 보내세요.",
   "plans.stale": "{t} 동안 변경 없음",
   "plans.cli": "CLI 에이전트",
   "plans.cliAll": "CLI 에이전트 ({n})",

@@ -10,7 +10,7 @@ import { getStore, useStore } from "../state/store";
 import { CloseIcon, ExpandIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
-import { t } from "../i18n";
+import { t, tx } from "../i18n";
 import { frontiers } from "./boxView";
 import { RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
@@ -216,7 +216,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
         <div className="pn-empty rn-empty" data-testid="plans-empty">
           <div>{t("plans.none")}</div>
           <div>{t("plans.noneHint")}</div>
-          <div>{t("plans.noneHow")}</div>
+          <div>{tx("plans.noneHow", { cmd: <code>dag ulw</code> })}</div>
         </div>
       )}
       {lists && runs.length > 0 && (
