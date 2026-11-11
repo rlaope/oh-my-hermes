@@ -158,6 +158,13 @@ All notable changes will be documented here.
     turn ended), an agent that dies mid-turn ends its turn, and a running OmO
     chat continues after omher restarts. DSH and Grok sessions that exit get
     the Ended line and Restart a chat has. (#2782)
+  - **Subagents are visible.** The bot chat's header has a panel button right
+    of the model control: it opens the right panel, on Plans when the bot has
+    live work, and carries a live dot while subagents work. A turn that starts
+    a `delegate_task` opens Plans on that run once by itself (windows 1100px
+    and wider), Plans re-reads itself while a run is live and says what it is
+    for when empty, and a dag run nothing changed for a day reads "no update
+    for 9d" instead of pulsing as live. (#2784)
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the
