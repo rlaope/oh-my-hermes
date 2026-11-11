@@ -168,6 +168,7 @@ const BANNER: Record<AgentId, string> = {
   pi: "\x1b[1mπ pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   grok: "\x1b[1m𝕏 Grok\x1b[0m \x1b[2m(mock)\x1b[0m",
+  opencode: "\x1b[1mopencode\x1b[0m \x1b[2m(mock)\x1b[0m",
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
@@ -317,6 +318,10 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
   pi: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
   omp: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
   omo: [{ id: "claude-fable-5-1", label: "Claude Fable 5.1" }],
+  opencode: [
+    { id: "opencode/big-pickle", label: "OpenCode/Big Pickle" },
+    { id: "opencode/beam-free", label: "OpenCode/Beam Free" },
+  ],
 };
 
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
@@ -333,6 +338,7 @@ class MockChat {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
+    if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
   }
   private at(ms: number, fn: () => void) {
     this.timers.push(setTimeout(fn, ms));
@@ -341,6 +347,9 @@ class MockChat {
     this.at(20, () => {
       this.emit({ event: "session.info", agent_session: this.session, model: this.model });
       this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
+      // the agent's own commands and skills (ACP `available_commands_update`), as acp_chat.rs sends them
+      if (this.agent === "opencode")
+        this.emit({ event: "session.commands", commands: ["init", "review"].map((name) => ({ name, description: "", hint: "", kind: "command", prefix: "/" })) });
     });
   }
   stop() {
@@ -380,7 +389,9 @@ class MockChat {
         this.at(60, () => this.emit({ event: "tool.start", tool_id: "t-rm", name: "terminal", detail: "rm -rf ./build" }));
         this.at(140, () => {
           this.waiting = rid;
-          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices: ["deny", "once", "session"] });
+          // an ACP agent (OpenCode) offers Deny and Allow once only: its "always" is a saved project rule
+          const choices = this.agent === "opencode" ? ["deny", "once"] : ["deny", "once", "session"];
+          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices });
         });
         return;
       }

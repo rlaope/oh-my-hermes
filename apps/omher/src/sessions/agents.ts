@@ -6,7 +6,7 @@ import { t } from "../i18n";
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
-export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok";
+export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode";
 
 export type AgentMode = "chat" | "hermes" | "terminal";
 
@@ -27,6 +27,7 @@ export const AGENTS: readonly AgentDef[] = [
   { id: "pi", program: "pi", label: "pi", mode: "chat" },
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
   { id: "grok", program: "grok", label: "Grok", mode: "terminal" },
+  { id: "opencode", program: "opencode", label: "OpenCode", mode: "chat" },
 ];
 
 /** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
@@ -46,9 +47,10 @@ export const INSTALL: Record<AgentId, string> = {
   omo: "npm i -g omo-ai",
   dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
-  pi: "npm i -g @mariozechner/pi-coding-agent",
+  pi: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
   omp: "npm i -g @oh-my-pi/pi-coding-agent",
   grok: "see grok docs",
+  opencode: "npm install -g opencode-ai",
 };
 
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. */
@@ -61,8 +63,9 @@ export function missingNote(agent: AgentId): string {
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
 
 /** Agents whose Restart (and Resume) continues the conversation: Claude Code `--resume`, Codex `thread/resume`,
- *  OmO `--session`, DSH `--resume <id>` (its terminal). pi, oh-my-pi and Grok start a new one. */
-export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh"];
+ *  OmO `--session`, DSH `--resume <id>` (its terminal), OpenCode `session/resume`. pi, oh-my-pi and Grok start a
+ *  new one. */
+export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
 

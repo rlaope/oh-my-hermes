@@ -241,9 +241,9 @@ test("the + menu: installed agents first (the last one used on top), missing one
   // the first row has the focus, so Enter picks the agent on top
   await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
   expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
+    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode"].map((a) => `session-agent-${a}`),
   );
-  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok"]);
+  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode"]);
   // each with its official mark, never a letter
   for (const a of ["dsh", "omo", "omp", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`).locator(`img[data-mark="${a}"]`)).toHaveCount(1);
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
@@ -254,7 +254,7 @@ test("the + menu: installed agents first (the last one used on top), missing one
     await expect(row).toHaveClass(/\boff\b/);
     await expect(row).toContainText("Not installed");
   }
-  await expect(menu.getByTestId("session-agent-pi")).toHaveAttribute("title", "pi was not found on this computer · install: npm i -g @mariozechner/pi-coding-agent");
+  await expect(menu.getByTestId("session-agent-pi")).toHaveAttribute("title", "pi was not found on this computer · install: npm i -g --ignore-scripts @earendil-works/pi-coding-agent");
   const dim = await menu.getByTestId("session-agent-pi").evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e.querySelector(".ss-ic")!).opacity]);
   const lit = await menu.getByTestId("session-agent-claude").evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e.querySelector(".ss-ic")!).opacity]);
   expect(dim[0]).not.toBe(lit[0]);
@@ -278,7 +278,7 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
-  await expect(menu.getByTestId("session-agent-grok")).toBeFocused();
+  await expect(menu.getByTestId("session-agent-opencode")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(plus).toBeFocused();
