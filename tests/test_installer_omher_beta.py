@@ -94,6 +94,8 @@ case "$url" in
     ;;
   */SHA256SUMS.txt) src="$FAKE_NET/SHA256SUMS.txt" ;;
   *.dmg) src="$FAKE_NET/omher.dmg" ;;
+  *.AppImage) src="$FAKE_NET/omher.AppImage" ;;
+  */icon.png) src="$FAKE_NET/icon.png" ;;
   *) [ -n "$fmt" ] && printf '404'; exit 22 ;;
 esac
 [ -f "$src" ] || { [ -n "$fmt" ] && printf '404'; exit 22; }
@@ -160,13 +162,16 @@ def _release(tag: str, names: list[str]) -> dict[str, object]:
 
 DMG = b"not really a dmg"
 DMG_SHA256 = hashlib.sha256(DMG).hexdigest()
+APPIMAGE = b"\x7fELF not really an AppImage"
+APPIMAGE_SHA256 = hashlib.sha256(APPIMAGE).hexdigest()
 
 # Newest first, as the API lists them: an OMH package release ahead of the app's.
 RELEASES = [
     _release("v4.0.7", ["oh_my_hermes-4.0.7-py3-none-any.whl"]),
     _release("omher-v0.1.0", [
         "omher-0.1.0-macos-arm64.dmg", "omher-0.1.0-macos-x64.dmg",
-        "omher-0.1.0-windows-x64-setup.exe", "omher-0.1.0-windows-x64.msi", "SHA256SUMS.txt",
+        "omher-0.1.0-windows-x64-setup.exe", "omher-0.1.0-windows-x64.msi", "omher-0.1.0-linux-x64.AppImage",
+        "SHA256SUMS.txt",
     ]),
 ]
 
@@ -202,13 +207,16 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self._write(self.net / "python-stub", STUB_PYTHON)
         self._write(self.net / "hermes-install.sh", FAKE_HERMES_INSTALLER)
         (self.net / "omher.dmg").write_bytes(DMG)
+        (self.net / "omher.AppImage").write_bytes(APPIMAGE)
+        (self.net / "icon.png").write_bytes(b"png")
         self._sums(DMG_SHA256)
         (self.net / "releases.json").write_text(json.dumps(RELEASES), encoding="utf-8")
 
     def _sums(self, digest: str) -> None:
         (self.net / "SHA256SUMS.txt").write_text(
             "".join(f"{digest}  {name}\n" for name in ("omher-0.1.0-macos-arm64.dmg", "omher-0.1.0-macos-x64.dmg"))
-            + f"{'0' * 64}  omher-0.1.0-windows-x64-setup.exe\n",
+            + f"{'0' * 64}  omher-0.1.0-windows-x64-setup.exe\n"
+            + f"{APPIMAGE_SHA256}  omher-0.1.0-linux-x64.AppImage\n",
             encoding="utf-8",
         )
 
@@ -408,13 +416,49 @@ class OmherBetaInstallerTests(unittest.TestCase):
         self.assertIn("pick a model from the model menu", result.stdout)
         self.assertNotIn("hermes setup", result.stdout)
 
-    def test_linux_skips_the_app_with_a_note(self) -> None:
+    def _linux(self, **environment: str) -> subprocess.CompletedProcess[str]:
         self._system_python()
         self._existing_hermes()
-        result = self._run("omher@beta", FAKE_UNAME_S="Linux")
+        env = {"FAKE_UNAME_S": "Linux", "FAKE_UNAME_M": "x86_64", "XDG_DATA_HOME": str(self.root / "share")}
+        env.update(environment)
+        return self._run("omher@beta", **env)
+
+    def test_linux_installs_the_appimage_with_a_menu_entry(self) -> None:
+        result = self._linux()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("omher has no build for Linux yet", result.stdout)
+        app = self.apps / "omher"
+        self.assertEqual(app.read_bytes(), APPIMAGE)
+        self.assertTrue(app.stat().st_mode & 0o111, oct(app.stat().st_mode))
+        self.assertTrue(any(u.endswith("/omher-v0.1.0/omher-0.1.0-linux-x64.AppImage") for u in self._calls("curl")))
+        desktop = (self.root / "share" / "applications" / "omher.desktop").read_text(encoding="utf-8")
+        self.assertIn(f'Exec="{app}" %U\n', desktop)
+        self.assertIn("Icon=omher\n", desktop)
+        self.assertTrue((self.root / "share" / "icons" / "hicolor" / "512x512" / "apps" / "omher.png").is_file())
         self.assertEqual(self._calls("hdiutil"), [])
+        self.assertTrue(self._setup_ran())
+        self.assertIn("Open it from your app menu", result.stdout)
+        self.assertEqual(sorted(p.name for p in self.apps.iterdir()), ["omher"])
+
+    def test_linux_without_app_dir_uses_local_bin(self) -> None:
+        result = self._linux(OMH_APP_DIR="")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.home / ".local" / "bin" / "omher").read_bytes(), APPIMAGE)
+
+    def test_linux_refuses_an_appimage_that_does_not_match_sha256sums(self) -> None:
+        self.apps.mkdir()
+        (self.apps / "omher").write_bytes(b"old")
+        (self.net / "omher.AppImage").write_bytes(b"tampered")
+        result = self._linux()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("does not match SHA256SUMS.txt", result.stdout)
+        self.assertEqual((self.apps / "omher").read_bytes(), b"old")
+        self.assertEqual(sorted(p.name for p in self.apps.iterdir()), ["omher"])
+
+    def test_linux_on_arm_skips_the_app_with_a_note(self) -> None:
+        result = self._linux(FAKE_UNAME_M="aarch64")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("x86_64 only", result.stdout)
+        self.assertFalse(self.apps.exists())
         self.assertTrue(self._setup_ran())
 
     def test_a_doctor_complaint_after_a_fresh_hermes_does_not_cost_the_app(self) -> None:
