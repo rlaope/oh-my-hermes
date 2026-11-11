@@ -790,8 +790,20 @@
   transform: rotate(90deg);
 }
 .pv-body {
-  padding: 2px 12px 10px 34px;
+  padding: 2px 12px 10px;
   min-width: 0;
+}
+/* a long catalog scrolls in its own quiet box; the filter above it stays put */
+.pv-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.pv-scroll::-webkit-scrollbar {
+  width: 6px;
 }
 .pv-q {
   display: block;
@@ -816,8 +828,8 @@
 }
 .pv-g {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 8px;
   padding: 5px 0;
   font-size: 12px;
   line-height: 18px;
