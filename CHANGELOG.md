@@ -79,6 +79,25 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
+  shows every Claude login you have.
+  - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the
+    AppImage updates itself through the Update button like the other builds.
+    The `omher@beta` installer puts it in `~/.local/bin/omher` with a menu
+    entry, and omher.app has a Linux download button. (#2765)
+  - **SESSIONS `+` menu, OmO and DSH.** `+` opens a menu of agents with their
+    marks: installed ones first, the one used last on top, a missing one
+    dimmed with its install line. Picking one opens its New session chat at
+    once. OmO (`npm i -g omo-ai`) runs as a chat and Restart continues it;
+    DSH (deepseek-bot's `dsh`) opens in its terminal and Resume continues it.
+    (#2766)
+  - **Every Claude login.** Settings › Accounts and the Claude usage card list
+    each Claude login a local CLIProxyAPI holds, read-only and by name alone;
+    omher never opens those files. (#2764)
+  - **Providers.** Settings › Providers shows one compact row per provider
+    that opens to its models grouped by vendor, a long list scrolls inside a
+    capped box, and Add key opens your terminal with `hermes auth add`.
+    (#2763, #2767)
 - **omher 0.2.3.** New sessions open a chat at once, sessions have names, and
   an update asks first and brings you back where you were.
   - **New session.** SESSIONS `+` opens a chat right away, like the Codex app:
@@ -314,21 +333,6 @@ All notable changes will be documented here.
   it starts, so the bridge no longer stops on `No module named 'websockets'`.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
-
-- **omher: SESSIONS `+` opens a menu of agents, now with OmO and DSH.**
-  Pressing `+` (or the empty section's New session row, or the first-run
-  card) opens a small menu under the button: Claude Code, Codex, OmO, DSH,
-  oh-my-hermes, pi, oh-my-pi and Grok, each with its mark. Installed agents
-  come first, the one used last on top; a missing one is dimmed and its
-  tooltip has the install line. Arrow keys, Home/End, Enter and Esc work.
-  Picking one opens that agent's New session chat at once, in the last
-  folder used (the chip under the composer); the composer names the agent
-  and no longer has a second picker. OmO (`npm i -g omo-ai`) runs as a chat
-  through its RPC mode (`omo --mode rpc`) and Restart continues its
-  conversation (`--session`). DSH, deepseek-bot's terminal (`~/.local/bin/dsh`),
-  opens in its terminal with a conversation id of its own (`--resume`), so
-  Resume after a restart continues it. Launch on first send, drafts across a
-  restart and session titles work as in 0.2.3.
 
 ## 4.0.7 - 2026-11-09
 
