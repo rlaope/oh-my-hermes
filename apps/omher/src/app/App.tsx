@@ -11,6 +11,7 @@ import { Chat } from "../chat/Chat";
 import { DetailsFallback } from "./DetailsFallback";
 import { SettingsView } from "./SettingsView";
 import { AutomationsPage } from "../pages/Automations";
+import { PluginsPage } from "../pages/Plugins";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 
@@ -55,7 +56,9 @@ export function App() {
       <main className="main">
         {s.ui.view === "settings" ? <SettingsView /> : s.ui.view === "automations" ? (
           <AutomationsPage />
-                ) : s.ui.view === "session" ? (
+        ) : s.ui.view === "plugins" ? (
+          <PluginsPage />
+        ) : s.ui.view === "session" ? (
           <Suspense fallback={null}>
             <SessionView />
           </Suspense>
