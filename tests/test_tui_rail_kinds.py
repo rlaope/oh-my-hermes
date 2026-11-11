@@ -7,7 +7,7 @@ details) is one row, and any other call ends the run; a shell call that feeds a
 script through a heredoc names the script and counts its lines. An agent row
 reads a short title, and the model leads its figures. A `/name` that resolves
 to a command or a skill is bold in the skill hue in the composer, in the echoed
-prompt and on the sticky `↳ you:` row; a path, an unknown `/foo` and a slash
+prompt; a path, an unknown `/foo` and a slash
 inside a word stay plain.
 """
 
@@ -26,7 +26,7 @@ from omh.skin_pack import SKIN_THEMES
 from omh.tui.app import STATE_WAITING, WAITING_GLYPH, App
 from omh.tui.composer import Composer
 from omh.tui.diff_view import diff_rows, parse_inline_diff
-from omh.tui.frame import build_frame, sticky_line
+from omh.tui.frame import build_frame
 from omh.tui.gateway import Event, Response
 from omh.tui.history import SEARCH_LABEL, HistorySearch
 from omh.tui.keys import CHAR, Key
@@ -386,18 +386,6 @@ class SlashTokenTests(unittest.TestCase):
         self.assertTrue({"dag-ulw", "model", "help"} <= names)
         self.assertNotIn("update", names)  # Hermes' own TUI runs it, not this one
 
-    def test_a_cut_through_a_token_leaves_no_half_of_it_coloured(self) -> None:
-        # #2223 review 14: the sticky row cuts its words before it colours them; `/dag-ulw` cut to `/dag` is not
-        # the `/dag` command either.
-        known = frozenset({"dag-ulw", "dag"})
-        for width in range(9, 16):
-            sticky = sticky_line("/dag-ulw go on", width, THEME, known)
-            with self.subTest(width=width, row=line_text(sticky)):
-                self.assertTrue(line_text(sticky).endswith("…"))
-                self.assertFalse([span for span in sticky if span.style == THEME.slash])
-        whole = sticky_line("/dag-ulw go on and on", 18, THEME, known)
-        self.assertEqual([span.text for span in whole if span.style == THEME.slash], ["/dag-ulw"])
-
     def test_a_resumed_prompt_keeps_the_highlight(self) -> None:
         # #2223 review 9: a resumed session's prompt rows read `known` as a live prompt's do.
         app, _client = make_app(rows=40, cols=100)
@@ -463,16 +451,6 @@ class SlashTokenTests(unittest.TestCase):
         self.assertEqual(THEME.slash, THEME.kinds[KIND_FAMILIES.index("skill")])  # a skill reads as its loads do
         plain = build_frame(cols=60, rows=24, composer=Composer(text="/model go"), info=(Span("info"),))
         self.assertFalse([span for line in plain.lines for span in line if span.style == THEME.slash])
-
-    def test_the_echoed_prompt_and_the_sticky_row_draw_it_too(self) -> None:
-        (echo,) = block_rows(UserBlock("/dag-ulw go a/dag-ulw", known=KNOWN), 60, THEME)
-        self.assertEqual(line_text(echo), "┃ ❯ /dag-ulw go a/dag-ulw")
-        self.assertEqual([span.text for span in echo if span.style == THEME.slash], ["/dag-ulw"])
-        sticky = sticky_line("/dag-ulw go /foo", 60, THEME, KNOWN)
-        self.assertEqual(line_text(sticky), "↳ you: /dag-ulw go /foo")
-        self.assertEqual([span.text for span in sticky if span.style == THEME.slash], ["/dag-ulw"])
-        self.assertFalse([span for span in sticky_line("/dag-ulw go", 60, THEME) if span.style == THEME.slash])
-
 
 class TinyWidthTests(unittest.TestCase):
     def test_no_railed_row_is_wider_than_a_tiny_terminal(self) -> None:

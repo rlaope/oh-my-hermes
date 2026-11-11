@@ -322,7 +322,7 @@ class InfoLineContrastTests(unittest.TestCase):
 class StatusBarTintTests(unittest.TestCase):
     """The audit's G8: on a light terminal the status bar was the palette's dark bar, a band across a light screen.
 
-    The bar now backs only the pager's footer; the info line and the sticky prompt have none.
+    The bar now backs only the pager's footer; the info line has none.
     """
 
     def test_a_light_terminal_gets_a_light_bar_of_the_palettes_own_and_a_dark_or_unknown_one_keeps_it(self) -> None:

@@ -457,11 +457,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   steer and a turn's done line are one each); older ones are
   left to the terminal's scrollback until a full redraw clears it, and from
   then on that row says how many `/history` still shows.
-- That region holds, from the top: the prompt you just sent (while the
-  turn runs, once the prompt itself has scrolled off, as `↳ you: …`, the
-  `↳ you:` in the running blue and your words dim, on your sent prompt's band
-  with a blank row above it, and a dim `…` where they are cut; a steer you
-  sent runs on the same band), the tail of the reply that is still streaming, one slot for the
+- That region holds, from the top: the tail of the reply that is still
+  streaming (a prompt you sent, a steer included, stays in the transcript
+  above it and scrolls off with it; scroll up to read it), one slot for the
   OMH plan (or a question Hermes asked, or the slash-command
   menu when it does not open under the composer), the prompts queued behind
   the running turn (`⧗`, up to three named and the rest counted; while the
@@ -482,8 +480,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   two rows; from 7 rows it has both, and under 6 rows (or 20
   columns) the composer is a bare `❯ …` row with no rule. A `/name` you type
   that names one of Hermes' commands or skills is drawn bold in the skill
-  colour, in the composer, in your prompt once it is sent and on the
-  `↳ you:` row; a resumed session's prompts are drawn again once Hermes
+  colour, in the composer and in your prompt once it is sent; a resumed
+  session's prompts are drawn again once Hermes
   names the session's commands and skills, when that moves one of the
   prompts a redraw prints. A
   path such as `src/a.py`, a `/name` nothing answers to and
@@ -638,9 +636,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   rows it stays there: what grows above it scrolls the transcript up, and a
   list or question closing there does not pull it up, its rows staying blank
   above the composer until more is printed into them. A turn's end is the one
-  exception: the `↳ you:` reminder, the blank row over it and the blank row
-  over the plan go with the turn, so the composer rises by those rows (at most
-  three, left blank under the footer) and the done line stays one blank row
+  exception: the blank row over the plan goes with the turn, so the composer
+  rises by that row (left blank under the footer) and the done line stays one blank row
   above it or the plan; the next turn's output takes it back down. The agent view under
   it takes at most a quarter of the screen, seven rows on a terminal of 28
   rows or more (so a one-row composer's input row is row 16 of 24 or 31 of
@@ -2046,7 +2043,7 @@ against it: your prompts and the replies are in the terminal's own text colour,
 every other colour a word is drawn in reaches 4.5:1 contrast on that background
 and every rule or mark 3:1 (on the pager's footer, against its bar: the
 theme's own bar colour on a dark background, a light tint of it on a light
-one; the info line under the composer and the sticky prompt have no bar),
+one; the info line under the composer has no bar),
 and
 on a light background the diff bands are light tints, their words at 4.5:1 on
 each. The menus (the completion menu, the pickers, choice prompts, the agent

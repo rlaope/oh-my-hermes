@@ -1,7 +1,7 @@
 """One repaint: from what the app holds to the rows `LiveRegion.render` draws.
 
 The app loop calls `build_frame` once per repaint with the terminal size, the
-parts it holds (sticky prompt, streaming tail, slot, composer, info line)
+parts it holds (streaming tail, slot, composer, info line)
 and the input mode, then hands the result to
 `LiveRegion.render(frame.lines, frame.cursor, cols, flush=lines)`.
 
@@ -25,7 +25,7 @@ The composer follows the content until the screen is full, then stays on the
 bottom rows. With `min_height` 0 a frame is exactly as tall as what it holds
 (`layout.allocate`), and `LiveRegion` draws it right under the output, so the
 composer sits under the last row printed, the panel, prompt slot, completion
-menu, tail and sticky prompt above it, and the rows under it (the bottom
+menu and tail above it, and the rows under it (the bottom
 rule, by the terminal size alone, `layout.under_composer`, the info line and
 the agent view) under it. When something above the composer grows,
 the composer moves down with it until the region's last row is the screen's
@@ -58,17 +58,15 @@ from .aura import AURA_RULE, aura_ranges, aura_rule, aura_style
 from .composer import PROMPT, Composer
 from .git_status import GitState
 from .layout import BLANK, Budget, allocate, caret_row, compose, composer_cap
-from .style import TRUECOLOR, Line, Span, Style, fill
-from .slash import slash_spans, slash_token_ranges
-from .theme import DEFAULT_THEME, KIND_FAMILIES, Theme, aura_moves, on_band
-from .width import cell_width, line_width, truncate, truncate_line
+from .style import TRUECOLOR, Line, Span, Style
+from .slash import slash_token_ranges
+from .theme import DEFAULT_THEME, KIND_FAMILIES, Theme, aura_moves
+from .width import cell_width, truncate, truncate_line
 
 RULE = "─"  # the composer's rules, above and under it, full width
 INFO_INSET = 2  # cells before the info line's text, under the rule
 BRANCH_LABEL = "branch:"
 BRANCH_CUTS = (24, 12)  # the cells a long branch name is cut to on a narrow info line, its `…` included
-STICKY_PREFIX = "↳ you: "
-STICKY_CUT = "…"  # where the reminder's prompt is cut
 BROWSING_HINT = "↑↓ browsing · esc to type"  # in the composer's place while the agent list or the dag tree has the keys
 
 MODE_NORMAL = "normal"
@@ -96,7 +94,6 @@ def build_frame(
     rows: int,
     composer: Composer | None,
     info: Line,
-    sticky: Line | None = None,
     tail: Sequence[Line] = (),
     slot: Sequence[Line] = (),
     theme: Theme = DEFAULT_THEME,
@@ -169,7 +166,6 @@ def build_frame(
         return allocate(
             rows,
             cols,
-            sticky=sticky is not None,
             tail_rows=len(tail),
             slot_rows=len(slot),
             composer_rows=len(composer_lines),
@@ -180,7 +176,6 @@ def build_frame(
             agents_rows=len(agents),
             tail_floor=tail_floor,
             gaps=(gaps[0] and bool(tail) and bool(tail[-1]), gaps[1]),  # a tail that ends blank is its own gap
-            sticky_gap=sticky is not None,
             gap_reserve=gap_reserve,
         )
 
@@ -213,7 +208,6 @@ def build_frame(
     rule = tuple(Span(span.text, replace(span.style, gutter=True)) for span in rule)
     lines = compose(
         budget,
-        sticky=sticky,
         tail=tail,
         slot=slot,
         rule=rule,
@@ -279,36 +273,3 @@ def _browsing_rows(count: int, cols: int, theme: Theme) -> list[Line]:
 def rule_line(width: int, theme: Theme = DEFAULT_THEME) -> Line:
     """One of the composer's rules: `RULE` across `width`, in the rule colour, a gutter (never copied)."""
     return (Span(RULE * max(width, 0), replace(theme.rule, gutter=True)),)
-
-
-def sticky_line(prompt_text: str, width: int, theme: Theme = DEFAULT_THEME, known: frozenset[str] = frozenset()) -> Line:
-    """`↳ you: <first line of the prompt>` cut to `width`, shown while a turn runs.
-
-    It runs on your sent prompt's band (`theme.prompt_band`, to the right
-    edge), as the prompt's echo in the transcript does, with a blank row
-    above it (`layout.allocate`'s sticky gap) so it never reads as the
-    reply's last line: `↳ you:` in the running blue (a turn runs), which no
-    transcript row starts with, the prompt in the muted text colour (a
-    `/name` in it that resolves, `known`, bold in its colour, as on the
-    prompt's own row), and a dim `…` where it is cut, each measured against
-    the band.
-    """
-    if width <= 0:
-        return ()
-    band = theme.prompt_band
-    if band.bg is not None:
-        line = sticky_line(prompt_text, width, on_band(theme, band), known)
-        return (*(Span(span.text, replace(span.style, bg=band.bg, depth=band.depth)) for span in line), fill(band))
-    first = prompt_text.strip().split("\n", 1)[0]
-    lead = Span(STICKY_PREFIX, theme.running)  # a turn runs
-    line = (lead, *slash_spans(first, known, theme.muted, theme.slash))
-    if line_width(line) <= width:
-        return line
-    room = width - cell_width(STICKY_PREFIX) - cell_width(STICKY_CUT)
-    if room <= 0:
-        return (*truncate_line(line, width - len(STICKY_CUT), ellipsis=""), Span(STICKY_CUT, theme.dim))
-    # The words are cut before they are coloured: a token the cut goes through is no token (`/dag-ulw` cut to `/dag`).
-    cut = truncate(first, room, ellipsis="")
-    whole = [(start, end) for start, end in slash_token_ranges(first, known) if end <= len(cut)]
-    spans = slash_spans(cut, known, theme.muted, theme.slash, whole if first.startswith(cut) else [])
-    return (lead, *spans, Span(STICKY_CUT, theme.dim))

@@ -327,8 +327,8 @@ class BottomLineTests(unittest.TestCase):
 
     def test_no_row_of_its_own_at_any_height(self) -> None:
         for rows in (24, 29, 30, 40):
-            busy = allocate(rows, 80, sticky=False, tail_rows=3, slot_rows=12, composer_rows=1, agents_rows=9)
-            idle = allocate(rows, 80, sticky=False, tail_rows=0, slot_rows=0, composer_rows=1)
+            busy = allocate(rows, 80, tail_rows=3, slot_rows=12, composer_rows=1, agents_rows=9)
+            idle = allocate(rows, 80, tail_rows=0, slot_rows=0, composer_rows=1)
             with self.subTest(rows=rows):
                 self.assertEqual(idle.total, idle.composer + idle.rule + idle.bottom_rule + idle.info)
                 self.assertLessEqual(busy.total, rows - 1)

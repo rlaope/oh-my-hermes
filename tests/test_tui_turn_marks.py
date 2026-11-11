@@ -700,14 +700,13 @@ class SettledTailTests(unittest.TestCase):
                 done = max(index for index, line in enumerate(screen[:plan]) if line.startswith("  ✻ "))
                 # The spacer row every block opens with, then the panel. On the bottom rows the region keeps its
                 # height as the turn ends, but not the rows only the running turn had and nothing takes at its end:
-                # the blank row over the plan (2026-10-27 spacing) and, under a tall group, the sticky prompt row
-                # and the blank row over it. Those stood here as blank rows until the next prompt (the owner's report
-                # of 2026-10-28); the region gives them up and the composer rises by them.
+                # the blank row over the plan (2026-10-27 spacing). It stood here as a blank row until the next prompt
+                # (the owner's report of 2026-10-28); the region gives it up and the composer rises by it.
                 self.assertEqual(plan - done - 1, 1, "\n".join(screen[done - 1 : plan + 1]))
                 self.assertEqual(set(screen[done + 1 : plan]), {""}, "\n".join(screen[done - 1 : plan + 1]))
 
-    def test_the_prompt_and_its_sticky_echo_are_never_on_screen_together(self) -> None:
-        # A reply streams line by line under the prompt: the prompt shows until it scrolls off, the echo after.
+    def test_a_prompt_that_scrolls_off_is_never_echoed_above_the_composer(self) -> None:
+        # The owner removed the `↳ you: …` echo (2026-11-11): a prompt that scrolls off is read by scrolling up.
         for rows, cols, earlier in ((24, 80, 0), (24, 80, 60), (40, 100, 0), (40, 100, 60)):
             with self.subTest(rows=rows, cols=cols, earlier=earlier):
                 app, now = self.app_with_plan(rows, cols, earlier)
@@ -715,30 +714,21 @@ class SettledTailTests(unittest.TestCase):
                 app._render()
                 app._on_event(ev("message.start"))
                 app._render()
-                echoed = 0
+                scrolled = False
                 for index in range(rows * 2):
                     now[0] += 0.05
                     app._on_event(ev("message.delta", text=f"line {index}\n"))
                     app._render()
-                    screen = app.terminal.screen.lines()
-                    prompt = any(line.startswith("┃ ❯ run the tools") for line in screen)
-                    echo = any(line.startswith("↳ you: run the tools") for line in screen)
-                    self.assertFalse(prompt and echo, f"line {index}: the prompt and its echo are both on screen")
-                    self.assertTrue(prompt or echo, f"line {index}: the prompt scrolled off and nothing echoes it")
-                    echoed += echo
-                self.assertGreater(echoed, 0, "the prompt never scrolled off")
+                    scrolled = self.assert_no_echo(app, f"line {index}") or scrolled
+                self.assertTrue(scrolled, "the prompt never scrolled off")
 
-    def assert_prompt_xor_echo(self, app: object, where: str) -> bool:
-        """Exactly one of the prompt and its sticky echo is on screen; True when it is the echo."""
+    def assert_no_echo(self, app: object, where: str) -> bool:
+        """No `↳ you:` row is on screen; True when the prompt has scrolled off."""
         screen = app.terminal.screen.lines()  # type: ignore[attr-defined]
-        prompt = any(line.startswith("┃ ❯ run the tools") for line in screen)
-        echo = any(line.startswith("↳ you: run the tools") for line in screen)
-        self.assertFalse(prompt and echo, f"{where}: the prompt and its echo are both on screen\n" + "\n".join(screen))
-        self.assertTrue(prompt or echo, f"{where}: the prompt scrolled off and nothing echoes it")
-        return echo
+        self.assertFalse([line for line in screen if "↳ you:" in line], f"{where}: an echo row\n" + "\n".join(screen))
+        return not any(line.startswith("┃ ❯ run the tools") for line in screen)
 
-    def test_a_tall_tool_batch_never_shows_the_prompt_and_its_echo_together(self) -> None:
-        # The blank row above the prompt is not the prompt's: counted, the echo came one row early, over the prompt.
+    def test_a_tall_tool_batch_never_echoes_the_prompt(self) -> None:
         shapes = ((24, 80, 60, 8), (24, 80, 60, 14), (24, 80, 0, 14), (40, 100, 60, 14), (24, 80, 0, 2), (40, 100, 0, 2),
                   (40, 100, 0, 8))
         for rows, cols, earlier, tools in shapes:
@@ -752,14 +742,14 @@ class SettledTailTests(unittest.TestCase):
                     now[0] += 0.1
                     app._on_event(ev("tool.start", tool_id=f"t{index}", name="read_file", context=f"f{index}.py"))
                     app._render()
-                    self.assert_prompt_xor_echo(app, f"tool {index} started")
+                    self.assert_no_echo(app, f"tool {index} started")
                 for index in range(tools):
                     app._on_event(ev("tool.complete", tool_id=f"t{index}", name="read_file", result={"content": "x"}))
                     app._render()
-                    self.assert_prompt_xor_echo(app, f"tool {index} completed")
+                    self.assert_no_echo(app, f"tool {index} completed")
 
-    def test_the_frame_and_its_flush_are_one_write_so_no_state_between_them_shows(self) -> None:
-        # Written apart, the frame (echo drawn) showed for a moment over the prompt the flush had not yet moved.
+    def test_the_frame_and_its_flush_are_one_write(self) -> None:
+        # Written apart, a frame showed for a moment over rows the flush had not yet moved.
         from omh.tui.screen import SYNC_BEGIN
 
         for rows, cols, earlier, tools in ((24, 80, 0, 14), (24, 80, 60, 8), (40, 100, 0, 14)):
@@ -774,7 +764,7 @@ class SettledTailTests(unittest.TestCase):
                 def checked(text: str) -> None:  # every write reaches the screen as one feed
                     feed(text)
                     synced[-1] += text.count(SYNC_BEGIN)
-                    self.assert_prompt_xor_echo(app, "after one write")
+                    self.assert_no_echo(app, "after one write")
 
                 screen.feed = checked  # type: ignore[method-assign]
                 events = [ev("message.start")]
@@ -789,9 +779,8 @@ class SettledTailTests(unittest.TestCase):
                 self.assertLessEqual(max(synced), 1, "a render wrote more than one synchronized update")
                 self.assertIn(1, synced)
 
-    def test_a_resize_redraw_mid_turn_never_shows_the_prompt_and_its_echo_together(self) -> None:
-        # The redraw takes the session again from its top: only the rows from the prompt on are the prompt's,
-        # and the banner it prints again ahead of them is not.
+    def test_a_resize_redraw_mid_turn_never_echoes_the_prompt(self) -> None:
+        # The redraw takes the session again from its top, the banner it prints again included.
         cases = ((40, 100, 0, False), (40, 100, 60, False), (24, 80, 0, False), (24, 80, 60, False), (24, 80, 0, True))
         for rows, cols, earlier, banner in cases:
             with self.subTest(rows=rows, cols=cols, earlier=earlier, banner=banner):
@@ -810,14 +799,14 @@ class SettledTailTests(unittest.TestCase):
                 app._on_resize()
                 now[0] += 1.0
                 app._render_when_due()
-                self.assert_prompt_xor_echo(app, "after the resize redraw")
-                echoed = False
+                self.assert_no_echo(app, "after the resize redraw")
+                scrolled = False
                 for index in range(2, rows * 2):
                     now[0] += 0.05
                     app._on_event(ev("message.delta", text=f"line {index}\n"))
                     app._render()
-                    echoed = self.assert_prompt_xor_echo(app, f"line {index} after the redraw") or echoed
-                self.assertTrue(echoed, "the prompt never scrolled off after the redraw")
+                    scrolled = self.assert_no_echo(app, f"line {index} after the redraw") or scrolled
+                self.assertTrue(scrolled, "the prompt never scrolled off after the redraw")
 
 
 class ApprovalOutcomeTests(unittest.TestCase):
