@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI sends its desktop notification only while the terminal window is not in front.** A turn that ran 10 s
+  or more, a question and a finished background process each rang the bell and, in iTerm2, WezTerm, Ghostty, foot
+  and rxvt, raised a notification (OSC 9 or 777) even with the window focused, where the person already sees it.
+  Once the terminal has reported focus and has it, only the bell rings; with focus gone, or from a terminal that
+  never reports it, both go as before. `OMH_TUI_BELL=0` still keeps everything quiet.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the

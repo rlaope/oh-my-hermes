@@ -1045,7 +1045,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   timeout, 300 s by default), and a turn that ran 10 s or more ends with the
   terminal's own notification: OSC 9 in iTerm2, WezTerm and Ghostty, OSC 777
   in foot and rxvt, the bell elsewhere (tmux among them, which flags the
-  window); `OMH_TUI_BELL=0` keeps all of it quiet.
+  window); `OMH_TUI_BELL=0` keeps all of it quiet. The notification waits
+  for a window that is not in front: once the terminal has reported focus
+  (it answers the TUI's focus reporting) and has it, only the bell rings;
+  a terminal that never reports focus gets both, as before.
 - Each launch look has a living wallpaper: the TUI sets the terminal's
   background to the look's own colour (OSC 11) while it runs and keeps a
   scene moving in the screen's blank cells, drawn as pixel art in the

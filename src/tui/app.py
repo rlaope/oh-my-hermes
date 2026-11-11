@@ -4258,13 +4258,20 @@ class App(ModesMixin, AgentViewMixin):
         if self.environ.get(BELL_ENV) == BELL_OFF:
             return
         signal = attention_sequence(self.environ, truncate(slot.attention(), QUESTION_ALERT_CHARS))
-        self.terminal.write(BELL if signal == BELL else BELL + signal)
+        self.terminal.write(BELL if signal == BELL or self._window_focused() else BELL + signal)
 
     def _alert_turn_end(self, seconds: float) -> None:
         """A turn of `TURN_ALERT_SECONDS` or more ends with the terminal's attention signal, unless OMH_TUI_BELL=0."""
         if seconds < TURN_ALERT_SECONDS or self.environ.get(BELL_ENV) == BELL_OFF:
             return
-        self.terminal.write(attention_sequence(self.environ, TURN_ALERT_TEXT.format(elapsed=elapsed_text(seconds))))
+        signal = attention_sequence(self.environ, TURN_ALERT_TEXT.format(elapsed=elapsed_text(seconds)))
+        self.terminal.write(BELL if self._window_focused() else signal)
+
+    def _window_focused(self) -> bool:
+        """Whether the terminal said it has focus (a focus report arrived and none since took it away): then a desktop
+        notification (OSC 9 or 777) would only repeat what the person sees, and the bell alone is rung. Never reported
+        is unknown, not focused: the full signal, as before."""
+        return self.decoder.focus_seen and self.decoder.unfocused_at is None
 
     def _write_title(self) -> None:
         """The terminal title, `<session title> · <state>`, written only when it changed (the first one pushes the old)."""
@@ -8810,7 +8817,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.environ.get(BELL_ENV) == BELL_OFF:
             return
         signal = attention_sequence(self.environ, truncate(f"{tool_call(process)} finished", QUESTION_ALERT_CHARS))
-        self.terminal.write(BELL if signal == BELL else BELL + signal)
+        self.terminal.write(BELL if signal == BELL or self._window_focused() else BELL + signal)
 
     def _report_background(self) -> None:
         """Enter on an empty composer while the row says a process finished: the one prompt that tells the session, and
