@@ -1542,6 +1542,8 @@ DELEG_LIMIT = 40        # newest delegation folders read per bot
 LOG_HEAD = 2048         # bytes read from the top of a task log (goal, started)
 LOG_TAIL = 6144         # bytes read from its end (the `final` lines)
 STALE_AFTER = 3600.0    # a "running" task whose log has not moved for this long has stopped reporting
+QUIET_RUN = 86400.0     # a "running" dag run whose record has not changed for this long, with no helper log moving
+                        # (STALE_AFTER), is no longer live: `stale` (nothing settled it; omher never does either)
 ROUTE_FRESH = 900.0     # OMH's own window: a route record older than this no longer describes a dispatch
 _FINAL = re.compile(r"^\d\d:\d\d:\d\d final\s+\|\s*(.*)$")
 _TASK_STATE = {"running": "running", "completed": "done", "failed": "failed", "error": "failed",
@@ -1874,6 +1876,24 @@ def attach_delegations(run: dict, delegs: list[dict]) -> dict:
     return run
 
 
+def mark_stale(run: dict, path: Path | None, delegs: list[dict], now: float) -> dict:
+    """`stale: true` on a running dag run that is not live any more: its record (the `updated_at` it carries, and
+    the file's own mtime) did not change for QUIET_RUN, and none of its helpers is still reporting (a task log
+    that has not moved for STALE_AFTER already reads as stalled). The state stays as the record says."""
+    if run["state"] != "running":
+        return run
+    changed = run["updated"]
+    try:
+        changed = max(changed, path.stat().st_mtime) if path is not None else changed
+    except OSError:
+        pass
+    name = run["id"].rsplit("/", 1)[-1]
+    reporting = any(t.get("dag", {}).get("run") == name and t["status"] == "running" for d in delegs for t in d["tasks"])
+    if now - changed > QUIET_RUN and not reporting:
+        run["stale"] = True
+    return run
+
+
 class DagRuns:
     """Reads `<omh home>/runtime/dag/*/*.json` for one bot: a run belongs to the bot when its `session_id` is a
     session in the bot's own state.db. A record caught mid-write keeps its last good parse (cache keyed by
@@ -1917,15 +1937,16 @@ class DagRuns:
         except sqlite3.Error:
             return set()
 
-    def _owned(self, bot: str, profile_dir: Path):
+    def _owned(self, bot: str, profile_dir: Path, now: float | None = None):
         """(json path or None, record or None, AgentRun) for each of the bot's runs: its dag runs with their
         helpers' models and routes filled in, then its delegate_task fan-outs that belong to no dag run."""
+        now = time.time() if now is None else now
         mine = self._sessions(profile_dir)
         home = omh_home_for(profile_dir)
         records = load_route_records(home)
-        delegs = attach_routes(self.delegations.list(profile_dir), records, mine)
+        delegs = attach_routes(self.delegations.list(profile_dir, now=now), records, mine)
         table = route_table(records, mine)
-        out = [(path, rec, attach_planned(attach_delegations(run, delegs), table))
+        out = [(path, rec, mark_stale(attach_planned(attach_delegations(run, delegs), table), path, delegs, now))
                for path, rec, run in self._dag(bot, profile_dir, mine)]
         for d in delegs:
             if d["tasks"] and not any(t.get("dag") for t in d["tasks"]):
@@ -1969,9 +1990,9 @@ class DagRuns:
         ids = [str(n["id"]) for n in rec.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
         return {i for i in ids if self._handoff_file(root, path, i) is not None}
 
-    def list(self, bot: str, profile_dir: Path) -> list[dict]:
-        runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir)]
-        runs.sort(key=lambda r: (r["state"] != "running", -r["updated"]))
+    def list(self, bot: str, profile_dir: Path, now: float | None = None) -> list[dict]:
+        runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir, now)]
+        runs.sort(key=lambda r: (r["state"] != "running" or bool(r.get("stale")), -r["updated"]))
         return runs
 
     def get(self, bot: str, profile_dir: Path, run_id: str) -> dict:
