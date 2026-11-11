@@ -763,6 +763,7 @@ class FallbackTargetTests(unittest.TestCase):
             "PATH": "/chosen/bin",
         }
         paths = SimpleNamespace(hermes_home=Path("/resolved/hermes"))
+        chosen_hermes_home = Path("/chosen/hermes")
         args = build_parser().parse_args([])
         for scrub in (False, True):
             for node in (False, True):
@@ -772,14 +773,15 @@ class FallbackTargetTests(unittest.TestCase):
                     run.return_value.returncode = 3
                     status = _run_hermes_fallback(
                         self.HERMES, args, paths, "frontend unavailable",
-                        hermes_home=Path("/chosen/hermes"), scrub=scrub,
+                        hermes_home=chosen_hermes_home, scrub=scrub,
                     )
                     env = run.call_args.kwargs["env"]
                     for name in INHERITED_TUI_ENV:
                         self.assertNotIn(name, env.keys(), name)
                         self.assertEqual(os.environ[name], inherited[name])
                     self.assertEqual(env["OMH_HOME"], inherited["OMH_HOME"])
-                    self.assertEqual(env["HERMES_HOME"], "/chosen/hermes")
+                    # The fallback passes str(Path), which is native: backslashes on Windows.
+                    self.assertEqual(env["HERMES_HOME"], str(chosen_hermes_home))
                     self.assertEqual(env["PATH"], inherited["PATH"])
                     self.assertEqual("TELEGRAM_BOT_TOKEN" in env, not scrub)
                     self.assertEqual(run.call_args.args[0], [self.HERMES, *(["--tui"] if node else [])])
