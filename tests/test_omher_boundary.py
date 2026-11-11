@@ -58,7 +58,7 @@ RULES = (
     "DSH is DeepSeek Harness only:",
     "never another `dsh` on PATH.",
     "A DSH chat runs one `dsh --profile headless --patch <home>/.omher/dsh/headless.patch.yml --json -` per message on pipes,",
-    "and continues with `--session-id session-<uuid>`, an id the harness reported; it has no terminal view.",
+    "and continues with `--session-id session-<uuid>`, an id the harness reported (when the harness no longer has that session, the same message is sent once more without it, as a new session, and the chat says so); it has no terminal view.",
     "omher never reads a key and never changes `~/.dsh`.",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
@@ -693,11 +693,14 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIn('if agent_id == "dsh" {\n            return Err(', self.prod.split("pub fn start_agent", 1)[1])
         dsh = (SHELL / "dsh_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
         self.assertEqual(dsh.count("Command::new("), 1)
-        send = dsh.split("fn send(&self", 1)[1].split("\n    }\n", 1)[0]
+        send = dsh.split("fn launch(&self", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn("let mut argv = inner.launch.clone();", send)
         self.assertIn("argv.extend(dsh_turn_args(&inner.patch,", send)
         self.assertIn('let (launch, path_env) = launch_for("dsh")?;', dsh)
-        build = dsh.split("fn command_for(", 1)[1].split("\n}\n", 1)[0]
+        # inside a Linux AppImage the run gets the host environment, as every other spawn does (#2778)
+        self.assertIn("command_with(argv, cwd, path_env, crate::appimage::host_env)", dsh.split("fn command_for(", 1)[1].split("\n}\n", 1)[0])
+        build = dsh.split("fn command_with(", 1)[1].split("\n}\n", 1)[0]
+        self.assertTrue(build.rstrip().endswith("host(&mut cmd);\n    Ok(cmd)"))
         self.assertEqual(re.findall(r'cmd\.env\("([A-Z_]+)"', build), ["PATH", "DSH_PERMISSION_MODE", "LANG"])
         self.assertIn('cmd.env("DSH_PERMISSION_MODE", "workspace-write");', build)
         self.assertNotIn(".arg(", build)
