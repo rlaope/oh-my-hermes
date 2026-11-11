@@ -518,6 +518,30 @@ All notable changes will be documented here.
   sessions that exit get the same Ended line and Restart as a chat, whose
   tooltip says whether the conversation continues.
 
+- **omher's subagents are visible without knowing a shortcut.** The bot chat's
+  header has one panel button right of the model control: it opens the right
+  panel (on Plans when the bot has live work or the panel was never used, else
+  on the last tab) and closes it, and while subagents work it carries the live
+  dot and says how many in its tooltip. A turn that starts a `delegate_task`
+  opens Plans on that run by itself once (windows 1100px and wider; a close
+  sticks for that turn). Plans re-reads on its own every 3 s while a run is
+  live and right after each fan-out step, stops while the window is hidden,
+  says plainly what it is for when empty, no longer opens a bot with no plans
+  on a CLI agent's run, and the turn summary counts the rows its details show.
+  A dag run nothing changed for a day, with no helper still writing, reads
+  "no update for 9d" instead of pulsing as live.
+
+- **omher shows each subagent in the chat while it works.** The bridge now
+  passes on the `subagent.*` events Hermes sends on the bot's own chat (clipped;
+  never a subagent's thinking text), and a turn that starts a `delegate_task`
+  shows one card per fan-out: "2 subagents running · 1 of 2 · 41s", then
+  "Ran 2 subagents · 3m", with one row per subagent (the model's vendor mark,
+  its goal in a few words, its state, its current step or its result line, its
+  time) that keeps updating after the bot's own turn ends. The card's run name
+  opens that run in Plans. The activity details say "subagent" instead of
+  "helper" in all four languages. omher still never assigns, steers or stops a
+  subagent.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

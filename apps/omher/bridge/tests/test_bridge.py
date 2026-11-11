@@ -444,6 +444,83 @@ class EventMapping(BridgeCase):
             running = [(e["status"], e["running"]) for e in s.events if e["event"] == "bot.status"]
             self.assertEqual(running[-2:], [("online", True), ("online", False)])
 
+    async def test_a_real_fan_out_becomes_subagent_events_clipped_with_no_thinking_text(self):
+        """kami's Bot Chat, one real turn asking two subagents for `date +%F` and `uname -s` (gateway frames as
+        recorded; the two `subagent.complete` frames came after the parent's turn ended and are rebuilt from the
+        children's own task logs, `rebuilt_from_task_log`)."""
+        frames = json.loads((HERE / "fixtures" / "real-subagent-turn.json").read_text(encoding="utf-8"))
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            for f in frames:
+                c.push(f["type"], f["payload"], execution_generation=1)
+            await s.until(lambda ev: sum(e["event"] == "subagent" and e.get("state") == "done" for e in ev) == 2)
+            ev = [e for e in s.events if e["event"] != "bot.status"]
+            sub = [e for e in ev if e["event"] == "subagent"]
+            # every subagent.* frame but none dropped: 2 spawn, 2 start, 3 thinking, 1 tool, 2 complete
+            self.assertEqual([e["state"] for e in sub], ["queued", "queued", "running", "running", "thinking", "thinking",
+                                                        "running", "thinking", "done", "done"])
+            self.assertEqual({e["id"] for e in sub}, {"sa-0-ab7aca17", "sa-1-0a3ce8a1"})
+            self.assertEqual({(e["index"], e["count"]) for e in sub}, {(0, 2), (1, 2)})
+            self.assertTrue(all(e["bot"] == "kami" and "session" not in e for e in sub))
+            first = sub[0]
+            self.assertEqual(set(first), {"event", "bot", "id", "index", "count", "goal", "model", "state"})
+            self.assertEqual(first["model"], "claude-fable-5-2")
+            started = [e for e in sub if e["state"] == "running" and "step" not in e]
+            self.assertEqual({e["delegation"] for e in started}, {"deleg_40dc82e8"})
+            # the goal, clipped: no frame's text runs past the caps
+            self.assertTrue(all(len(e["goal"]) <= ob.SUBAGENT_GOAL for e in sub))
+            self.assertTrue(first["goal"].startswith("Run the shell command `date +%F` in the terminal"))
+            tool = next(e for e in sub if e.get("tool"))
+            self.assertEqual((tool["id"], tool["tool"], tool["step"]), ("sa-1-0a3ce8a1", "terminal", "uname -s"))
+            # thinking: the state only, never a text field
+            self.assertTrue(all(set(e) & {"text", "step", "summary"} == set() for e in sub if e["state"] == "thinking"))
+            done = {e["id"]: e for e in sub if e["state"] == "done"}
+            self.assertEqual((done["sa-0-ab7aca17"]["summary"], done["sa-0-ab7aca17"]["seconds"]), ("2026-11-11", 8.8))
+            self.assertEqual((done["sa-1-0a3ce8a1"]["summary"], done["sa-1-0a3ce8a1"]["seconds"]), ("Darwin", 6.1))
+            # the parent's turn: one start, one end; the late subagent frames open no second turn
+            kinds = [e["event"] for e in ev]
+            self.assertEqual((kinds.count("turn.start"), kinds.count("turn.end")), (1, 1))
+            self.assertLess(kinds.index("turn.end"), max(i for i, k in enumerate(kinds) if k == "subagent"))
+            ts = next(e for e in ev if e["event"] == "tool.start")
+            self.assertEqual(ts["name"], "delegate_task")
+            self.assertLess(kinds.index("tool.start"), kinds.index("subagent"))
+
+    def test_subagent_fields_clip_every_text_and_take_the_dag_mark_off_the_goal(self):
+        long = "x" * 900
+        f = ob.subagent_fields("subagent.start", {"subagent_id": "sa-0", "task_index": 0, "task_count": 3,
+                                                  "goal": "[dag:docs-dark/contrast] Check the contrast " + long,
+                                                  "delegation_id": "deleg_1", "model": "m" * 300})
+        self.assertEqual(f["dag"], {"run": "docs-dark", "node": "contrast"})
+        self.assertTrue(f["goal"].startswith("Check the contrast"))
+        self.assertEqual((len(f["goal"]), len(f["model"])), (ob.SUBAGENT_GOAL, 80))
+        t = ob.subagent_fields("subagent.tool", {"subagent_id": "sa-0", "tool_name": "terminal", "text": long})
+        self.assertEqual(len(t["step"]), ob.SUBAGENT_STEP)
+        c = ob.subagent_fields("subagent.complete", {"subagent_id": "sa-0", "status": "failed", "summary": long,
+                                                     "duration_seconds": 12.345, "output_tail": [long]})
+        self.assertEqual((c["state"], len(c["summary"]), c["seconds"]), ("failed", ob.SUBAGENT_SUMMARY, 12.3))
+        self.assertNotIn("output_tail", c)
+        th = ob.subagent_fields("subagent.thinking", {"subagent_id": "sa-0", "text": "my secret chain of thought"})
+        self.assertNotIn("my secret", json.dumps(th))
+        pr = ob.subagent_fields("subagent.progress", {"subagent_id": "sa-0", "text": "🔀 [1] read_file, terminal"})
+        self.assertEqual(pr["step"], "[1] read_file, terminal")
+        self.assertIsNone(ob.subagent_fields("subagent.text", {"subagent_id": "sa-0", "text": "tok"}))
+        self.assertIsNone(ob.subagent_fields("subagent.start", {"goal": "no id"}))
+        self.assertEqual(ob.subagent_fields("subagent.complete", {"subagent_id": "s", "status": "interrupted"})["state"],
+                         "cancelled")
+
+    async def test_subagent_events_of_another_session_are_not_forwarded(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("subagent.start", {"subagent_id": "sa-x", "goal": "elsewhere"}, sid="someone-else")
+            c.push("subagent.start", {"subagent_id": "sa-y", "goal": "mine"})
+            await s.until(lambda ev: any(e["event"] == "subagent" for e in ev))
+            await asyncio.sleep(0.05)
+            self.assertEqual([e["id"] for e in s.events if e["event"] == "subagent"], ["sa-y"])
+
     async def test_skill_view_also_emits_skill(self):
         async with Env() as env:
             s = await self.open(env)
@@ -2317,6 +2394,51 @@ class Runs(unittest.TestCase):
             self.assertEqual(got["handoffs"], {})
             self.assertFalse(any("outside the dag dir" in t for t in got["handoffs"].values()))
 
+    def test_a_running_run_quiet_for_a_day_with_no_helper_reporting_is_stale_not_live(self):
+        from datetime import datetime, timezone
+        v02 = "dag:20261108_213859_c9a97486/omher-v02"
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261108_213859_c9a97486"])
+            rec = next(dag.glob("*/omher-v02.json"))
+            updated = json.loads(rec.read_text(encoding="utf-8"))["updated_at"]
+            os.utime(rec, (updated, updated))  # the file changed when the record says it did
+            reader = ob.DagRuns(ob.Delegations(tz=timezone.utc))
+            one = lambda now: next(r for r in reader.list("kami", prof, now=now) if r["id"] == v02)
+            # ten minutes after its last change it is live
+            self.assertEqual((one(updated + 600)["state"], one(updated + 600).get("stale")), ("running", None))
+            # a day and a bit with no change: still "running" as the record says, but stale, and listed after
+            # every live run (a run settled since sorts by its own time as before)
+            quiet = one(updated + ob.QUIET_RUN + 60)
+            self.assertEqual((quiet["state"], quiet["stale"]), ("running", True))
+            self.assertEqual(quiet["counts"]["running"], 3)
+            # runs.get marks it the same way runs.list does
+            self.assertEqual(reader.get("kami", prof, v02)["run"].get("stale"), one(time.time()).get("stale"))
+            # the file itself changed since (a newer write than its updated_at): live again
+            os.utime(rec, (updated + ob.QUIET_RUN, updated + ob.QUIET_RUN))
+            self.assertNotIn("stale", one(updated + ob.QUIET_RUN + 60))
+            os.utime(rec, (updated, updated))
+            # a helper of one of its nodes still writing its log: live, however old the record
+            folder = prof / "cache" / "delegation" / "live" / "deleg_00aa11cc"
+            folder.mkdir(parents=True)
+            now = updated + 3 * ob.QUIET_RUN
+            started = datetime.fromtimestamp(now - 7200, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            (folder / "manifest.json").write_text(json.dumps({"started": started, "tasks": [
+                {"index": 0, "goal": "[dag:omher-v02/t2-attach] attach", "status": "running"}]}), encoding="utf-8")
+            (folder / "task-0.log").write_text(f"goal: attach\nstarted: {started}\n", encoding="utf-8")
+            for f in folder.iterdir():
+                os.utime(f, (now - 120, now - 120))
+            self.assertNotIn("stale", one(now))
+            # the same helper silent for over an hour (stalled): stale
+            for f in folder.iterdir():
+                os.utime(f, (now - ob.STALE_AFTER - 60, now - ob.STALE_AFTER - 60))
+            self.assertTrue(one(now)["stale"])
+
+    def test_only_running_dag_runs_can_be_stale(self):
+        run = {"id": "dag:s/x", "state": "done", "updated": 0.0, "nodes": []}
+        self.assertNotIn("stale", ob.mark_stale(dict(run), None, [], 10 * ob.QUIET_RUN))
+        self.assertTrue(ob.mark_stale(dict(run, state="running"), None, [], 10 * ob.QUIET_RUN)["stale"])
+        self.assertNotIn("stale", ob.mark_stale(dict(run, state="running"), None, [], ob.QUIET_RUN - 1))
+
     def test_no_dag_dir_or_no_state_db_means_no_runs(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(ob.DagRuns().list("kami", Path(d)), [])
@@ -2347,8 +2469,8 @@ class Runs(unittest.TestCase):
             prof, dag = _runs_profile(Path(d), sorted(sids), dag_src=real)
             runs = ob.DagRuns().list("kami", prof)
             self.assertGreaterEqual(len(runs), 1)
-            states = [r["state"] for r in runs]
-            self.assertEqual(states, sorted(states, key=lambda s: s != "running"))  # running first
+            live = [r["state"] == "running" and not r.get("stale") for r in runs]
+            self.assertEqual(live, sorted(live, reverse=True))  # live runs first (a stale one sorts by its time)
             got = ob.DagRuns().get("kami", prof, runs[0]["id"])
             self.assertEqual(len(got["run"]["nodes"]), runs[0]["counts"]["nodes"])
 
