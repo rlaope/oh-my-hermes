@@ -3,6 +3,7 @@ mod acp_chat;
 mod agent_chat;
 mod appimage;
 mod bridge;
+mod dsh_chat;
 mod hermes_auth;
 mod session_files;
 mod sessions;
