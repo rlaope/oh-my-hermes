@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::acp_chat::{acp_agent, is_acp_session_id, Acp};
+use crate::acp_chat::{acp_agent, is_acp_session_id, Acp, RuleProbe, NO_RULES};
 use crate::dsh_chat::DshChat;
 use crate::session_files;
 use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
@@ -2372,6 +2372,52 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, accoun
     Ok(cmd)
 }
 
+/// How long an agent's rule listing ([`RuleProbe`]) may take before the chat is refused.
+const RULES_DEADLINE: Duration = Duration::from_secs(30);
+
+/// `probe`'s variable and value for a chat of the program `argv` in `cwd`: the program's fixed rule listing runs on
+/// pipes with no input, with the same `PATH` and account variable the chat gets; `probe.build` turns its output into
+/// the value, and a second listing with the value set must satisfy `probe.kept`. Any doubt (the variable already set
+/// in omher's own environment, a failed or slow listing, output it cannot read, rules that did not hold) is
+/// [`NO_RULES`], and the chat does not start.
+fn agent_rules(probe: &RuleProbe, argv: &[OsString], cwd: &Path, path_env: &OsString, account_env: &[(String, String)]) -> Result<(String, String), String> {
+    if !cwd.is_absolute() || !cwd.is_dir() {
+        return Err(format!("not a folder: {}", cwd.display()));
+    }
+    if std::env::var_os(probe.var).is_some() {
+        return Err(NO_RULES.into());
+    }
+    let mut argv = argv.to_vec();
+    argv.extend(probe.args.iter().map(OsString::from));
+    let list = |env: &[(String, String)]| -> Option<String> {
+        let mut cmd = command_for(&argv, cwd, Some(path_env.clone()), env).ok()?;
+        cmd.stdin(Stdio::null());
+        let child = cmd.spawn().ok()?;
+        let tree = ProcessTree::adopt(&child);
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = tx.send(child.wait_with_output());
+        });
+        match rx.recv_timeout(RULES_DEADLINE) {
+            Ok(Ok(o)) if o.status.success() => Some(String::from_utf8_lossy(&o.stdout).into_owned()),
+            Err(_) => {
+                if let Some(t) = tree {
+                    t.kill();
+                }
+                None
+            }
+            _ => None,
+        }
+    };
+    let value = list(account_env).and_then(|l| (probe.build)(&l)).ok_or(NO_RULES)?;
+    let mut env = account_env.to_vec();
+    env.push((probe.var.to_string(), value.clone()));
+    match list(&env) {
+        Some(again) if (probe.kept)(&value, &again) => Ok((probe.var.to_string(), value)),
+        _ => Err(NO_RULES.into()),
+    }
+}
+
 impl ChatSessions {
     pub fn new() -> Arc<ChatSessions> {
         Arc::new(ChatSessions::default())
@@ -2410,6 +2456,7 @@ impl ChatSessions {
         };
         let mut adapter = adapter_for(agent_id, &cwd.to_string_lossy(), thread).ok_or("no chat adapter")?;
         let (mut argv, path_env) = launch_for(agent_id)?;
+        let program = argv.clone();
         if let Some(path) = unrecognized_program(agent_id) {
             adapter = Unrecognized::wrap(adapter, agent_id, &path);
         }
@@ -2417,9 +2464,12 @@ impl ChatSessions {
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
         }
-        // the agent's own fixed environment from its table row (OpenCode: ask before edits and commands)
+        // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own resolved rules,
+        // so nothing the person allows runs unasked and nothing they deny becomes askable; or it does not start
         let mut env = account_env.to_vec();
-        env.extend(acp.map(|a| a.env).unwrap_or(&[]).iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        if let Some(probe) = acp.and_then(|a| a.rules.as_ref()) {
+            env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);
+        }
         self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)
     }
 
@@ -2701,6 +2751,37 @@ fn stop(s: ChatLive, grace: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A stand-in rule listing: `/bin/sh -c <script>` prints its first listing, or with the variable set its second.
+    #[cfg(unix)]
+    fn rules_with(script: &str) -> Result<(String, String), String> {
+        fn build(l: &str) -> Option<String> {
+            l.strip_prefix("rules:").map(|r| r.trim().to_string())
+        }
+        fn kept(rules: &str, again: &str) -> bool {
+            again.trim() == format!("kept {rules}")
+        }
+        let probe = RuleProbe { args: &[], var: "OMHER_TEST_RULES_VAR", build, kept };
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let argv: Vec<OsString> = vec!["/bin/sh".into(), "-c".into(), script.into()];
+        agent_rules(&probe, &argv, &tmp, &std::env::var_os("PATH").unwrap(), &[])
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn an_agent_starts_only_with_rules_it_listed_and_kept() {
+        let ok = r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then echo "kept $OMHER_TEST_RULES_VAR"; else echo "rules: R1"; fi"#;
+        assert_eq!(rules_with(ok), Ok(("OMHER_TEST_RULES_VAR".to_string(), "R1".to_string())));
+        // each doubt refuses the start with the one plain sentence
+        for bad in [
+            "exit 1",                                                                                // the listing failed
+            "echo 'Error: Config file is not valid JSON'",                                           // nothing it can read
+            r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then echo "kept other"; else echo "rules: R1"; fi"#, // not kept
+            r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then exit 1; else echo "rules: R1"; fi"#,           // second listing failed
+        ] {
+            assert_eq!(rules_with(bad), Err(NO_RULES.to_string()), "{bad}");
+        }
+    }
 
     impl Input {
         /// A message with text only.

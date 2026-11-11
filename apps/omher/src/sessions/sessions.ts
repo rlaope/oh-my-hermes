@@ -149,6 +149,9 @@ const titleKey = (r: SessionRec) => (r.agentSession ? `${r.agent}:${r.agentSessi
 /** Agents whose own session files carry a conversation title the bridge can read (`cli.title`). */
 const TITLED: readonly AgentId[] = ["claude", "codex"];
 
+/** The shell's own words when it will not start OpenCode (`NO_RULES` in acp_chat.rs, kept equal by a test). */
+export const NO_RULES = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
+
 const errText = (e: unknown) =>
   typeof e === "string"
     ? e
@@ -395,7 +398,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       void readBranch(id);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);
-      patchRec(id, { status: "failed", error: errText(e) });
+      // the shell's refusal to start an agent whose ask rules it could not prove (acp_chat.rs NO_RULES), translated
+      const why = errText(e);
+      patchRec(id, { status: "failed", error: why === NO_RULES ? tr("ss.noRules") : why });
     }
   };
 

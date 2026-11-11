@@ -887,6 +887,7 @@ export const ja: Record<Key, string> = {
   "ss.backToChat": "チャットに戻る",
   "ss.openTerminal": "ターミナルで開く",
   "ss.couldNotStartWhy": "{agent} を起動できませんでした · {error}",
+  "ss.noRules": "OpenCode に設定したご自身の権限ルールがそのまま守られるか omher が確認できなかったため、OpenCode を起動しませんでした。",
   "ss.lookingAgents": "エージェントを探しています…",
   "ss.stopIn": "{folder} の {agent} を停止しますか？",
   "ss.stopQ": "{agent} を停止しますか？",

@@ -265,12 +265,16 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await menu.getByTestId("session-agent-pi").click({ force: true });
   await expect(menu).toBeVisible();
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
-  // anchored to the +: it opens right under it, inside the sidebar
+  // anchored to the +: it opens right under it, or right over its row when there is more room there (nine agents
+  // in an 820px window), inside the sidebar (sessions-menu-fit.spec.ts measures the fit)
+  await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
   const pb = (await plus.boundingBox())!;
   const pop = (await menu.locator("..").boundingBox())!;
   const side = (await page.getByTestId("sidebar").boundingBox())!;
-  expect(pop.y).toBeGreaterThanOrEqual(pb.y + pb.height - 1);
-  expect(pop.y - (pb.y + pb.height)).toBeLessThan(12);
+  const under = pop.y - (pb.y + pb.height);
+  // over the row: the + sits 2px proud of its 24px row, so the menu ends up to 2px below the +'s top
+  const over = pb.y - (pop.y + pop.height);
+  expect([under, over].some((d) => d >= -3 && d < 12), `under ${under}, over ${over}`).toBe(true);
   expect(pop.x).toBeGreaterThanOrEqual(side.x);
   expect(pop.x + pop.width).toBeLessThanOrEqual(side.x + side.width);
   // keys: Home goes to the top, arrows move (and wrap), Esc closes and gives the focus back to +

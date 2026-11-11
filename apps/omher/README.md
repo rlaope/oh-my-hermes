@@ -107,7 +107,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become
   approval cards with Deny and Allow once (OpenCode's "Always allow" saves a project rule, so omher does not
-  offer it). OpenCode starts with `OPENCODE_PERMISSION` set so it asks before every edit and shell command.
+  offer it). Before OpenCode starts, omher reads its resolved rules (`opencode agent list`) and starts it with
+  ask rules built from them: what you allow asks first, what you deny stays denied. If omher cannot confirm OpenCode
+  kept them, it does not start OpenCode.
 
 Rules the code keeps:
 

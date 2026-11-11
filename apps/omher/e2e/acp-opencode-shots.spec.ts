@@ -1,4 +1,5 @@
-// Shots for the ACP adapter work: the New session menu, an OpenCode chat and its approval card, dark and light.
+// Shots for the ACP adapter work: the New session menu (every agent listed, 820px window), an OpenCode chat and its
+// approval card, dark and light.
 // Run with OMHER_SHOTS=<dir> OMHER_SHOT_TAG=before|after (skipped otherwise). The "before" run is on the base
 // commit, where OpenCode is not in the menu: the chat and approval shots then show Claude Code for comparison.
 import { expect, test, type Page } from "@playwright/test";
@@ -39,12 +40,21 @@ async function open(page: Page, theme: string) {
 }
 
 for (const theme of ["dark", "light"]) {
-  test(`shots: menu, chat and approval (${theme})`, async ({ page }) => {
+  test(`shots: the + menu with every agent listed (${theme})`, async ({ page }) => {
+    await open(page, theme);
+    await page.getByTestId("session-new").click();
+    await expect(page.getByTestId("session-agent-grok")).toBeAttached();
+    // the last row's tooltip would cover the menu: rest the pointer on the chat
+    await page.mouse.move(900, 300);
+    mkdirSync(SHOTS, { recursive: true });
+    await page.screenshot({ path: join(SHOTS, `acp-opencode-menu-${TAG}-${theme}.png`), animations: "disabled" });
+  });
+
+  test(`shots: chat and approval (${theme})`, async ({ page }) => {
     await open(page, theme);
     await page.getByTestId("session-new").click();
     await expect(page.getByTestId("session-agent-claude")).toBeVisible();
     mkdirSync(SHOTS, { recursive: true });
-    await page.screenshot({ path: join(SHOTS, `acp-opencode-menu-${TAG}-${theme}.png`), animations: "disabled" });
     const oc = page.getByTestId("session-agent-opencode");
     const agent = (await oc.count()) ? "opencode" : "claude";
     await page.getByTestId(`session-agent-${agent}`).click();

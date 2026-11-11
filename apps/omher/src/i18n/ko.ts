@@ -887,6 +887,7 @@ export const ko: Record<Key, string> = {
   "ss.backToChat": "채팅으로 돌아가기",
   "ss.openTerminal": "터미널에서 열기",
   "ss.couldNotStartWhy": "{agent}를 시작하지 못했어요 · {error}",
+  "ss.noRules": "omher가 OpenCode에 직접 설정한 권한 규칙이 그대로 지켜지는지 확인하지 못해 OpenCode를 시작하지 않았어요.",
   "ss.lookingAgents": "에이전트를 찾는 중…",
   "ss.stopIn": "{folder}의 {agent}를 멈출까요?",
   "ss.stopQ": "{agent}를 멈출까요?",

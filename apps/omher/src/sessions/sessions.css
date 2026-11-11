@@ -45,8 +45,21 @@
 }
 /* the header's + menu opens on the row's own bottom edge, 2px above the "New session" button under it, so the
    button's top edge and corners never show above the menu as a second edge */
-.side-sh-row .ss-pop {
+.side-sh-row .ss-pop.ui-pop-bottom {
   top: 100%;
+}
+/* opened above its row when there is more room there: it ends 2px over the + (which stands 2px above its row) */
+.side-sh-row .ss-pop.ui-pop-top {
+  bottom: calc(100% + 4px);
+}
+/* the list scrolls inside the menu when the window is too short for every agent (fitMenu sets its max height) */
+.ss-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* the first frame, before the menu knows where it fits, is not shown */
+.ss-pop-measuring {
+  visibility: hidden;
 }
 .ss-pop {
   left: calc(-1 * var(--side-x) + 8px);
