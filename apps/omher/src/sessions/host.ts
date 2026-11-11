@@ -29,8 +29,7 @@ export interface SessionHost {
   /** Native folder picker; null when the person cancels. */
   pickFolder(defaultPath: string): Promise<string | null>;
   /** Start `agent` in `cwd` in a terminal. Only the agent id goes to the shell: never a command line.
-   *  `resume` is a Claude Code session id (the terminal view of a chat) or a DSH conversation id; the shell checks
-   *  it is a UUID. `account`
+   *  `resume` is a Claude Code session id (the terminal view of a chat); the shell checks it is a UUID. `account`
    *  names the Settings › Accounts login it runs as (the one it ran with, after a restart); none = the one picked
    *  for new sessions. */
   start(
@@ -163,7 +162,7 @@ const BANNER: Record<AgentId, string> = {
   claude: "\x1b[38;2;217;119;87m✻\x1b[0m \x1b[1mClaude Code\x1b[0m \x1b[2m(mock)\x1b[0m",
   codex: "\x1b[1m>_ Codex\x1b[0m \x1b[2m(mock)\x1b[0m",
   omo: "\x1b[1mOmO\x1b[0m \x1b[2m(mock)\x1b[0m",
-  dsh: "\x1b[38;2;77;107;254m▙\x1b[0m \x1b[1mdeepseek-bot\x1b[0m \x1b[2m(mock)\x1b[0m",
+  dsh: "\x1b[1mDeepSeek Harness\x1b[0m \x1b[2m(mock)\x1b[0m",
   omh: "\x1b[38;2;211;60;141m◆\x1b[0m \x1b[1moh-my-hermes\x1b[0m \x1b[2m(mock)\x1b[0m",
   pi: "\x1b[1mπ pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
@@ -351,6 +350,11 @@ class MockChat {
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
     if (how.gone) this.session = `codex-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
+    // DeepSeek Harness names its session `session-<uuid>` and reports no model in its headless stream
+    if (agent === "dsh") {
+      if (!resume) this.session = "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8";
+      this.model = "";
+    }
   }
   private at(ms: number, fn: () => void) {
     this.timers.push(setTimeout(fn, ms));
@@ -372,7 +376,7 @@ class MockChat {
     }
     this.at(20, () => {
       if (this.how.gone) this.emit({ event: "session.note", kind: "new_conversation", text: "The earlier Codex conversation was not found; a new one started." });
-      this.emit({ event: "session.info", agent_session: this.session, model: this.model });
+      this.emit({ event: "session.info", agent_session: this.session, ...(this.model ? { model: this.model } : {}) });
       this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
     });
   }
