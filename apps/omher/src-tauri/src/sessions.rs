@@ -853,6 +853,119 @@ pub(crate) fn signal_group(pid: Option<u32>, hard: bool) {
 #[cfg(not(unix))]
 pub(crate) fn signal_group(_pid: Option<u32>, _hard: bool) {}
 
+/// Every process a chat's program started, so closing the chat (or the start deadline) stops all of them, not only
+/// the program itself. Unix: the program leads its own process group (`process_group(0)` in the chat's command), so
+/// the group is killed. Windows has no process groups, and an npm agent runs as `cmd.exe /c <shim>.cmd`, which starts
+/// `node.exe`: killing `cmd.exe` leaves node running. There the program goes into a Job Object that kills every
+/// process in it when [`ProcessTree::kill`] ends it or the last handle closes (also when omher itself ends);
+/// processes it starts later join the job on their own.
+pub(crate) struct ProcessTree {
+    #[cfg(unix)]
+    pid: u32,
+    #[cfg(windows)]
+    job: job::Handle,
+}
+
+#[cfg(windows)]
+unsafe impl Send for ProcessTree {}
+#[cfg(windows)]
+unsafe impl Sync for ProcessTree {}
+
+impl ProcessTree {
+    /// The tree of `child`, or `None` when the system refuses one (the caller then kills `child` alone).
+    #[cfg(unix)]
+    pub(crate) fn adopt(child: &std::process::Child) -> Option<ProcessTree> {
+        Some(ProcessTree { pid: child.id() }).filter(|t| t.pid > 1)
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn adopt(child: &std::process::Child) -> Option<ProcessTree> {
+        use std::os::windows::io::AsRawHandle;
+        unsafe {
+            let h = job::CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
+            if h.is_null() {
+                return None;
+            }
+            let tree = ProcessTree { job: h };
+            let mut info: job::ExtendedLimits = std::mem::zeroed();
+            info.basic.limit_flags = job::KILL_ON_JOB_CLOSE;
+            let size = std::mem::size_of::<job::ExtendedLimits>() as u32;
+            if job::SetInformationJobObject(h, job::EXTENDED_LIMIT_INFORMATION, &mut info as *mut _ as *mut _, size) == 0 {
+                return None;
+            }
+            if job::AssignProcessToJobObject(h, child.as_raw_handle() as job::Handle) == 0 {
+                return None;
+            }
+            Some(tree)
+        }
+    }
+
+    /// End every process in the tree now. Unix: SIGKILL to the group only, so it is safe after the program itself has
+    /// ended and been reaped (the group id stays taken while any member lives; an empty group is ESRCH).
+    pub(crate) fn kill(&self) {
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(-(self.pid as i32), libc::SIGKILL);
+        }
+        #[cfg(windows)]
+        unsafe {
+            job::TerminateJobObject(self.job, 1);
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ProcessTree {
+    fn drop(&mut self) {
+        // kill-on-close: whatever is still in the job ends here
+        unsafe {
+            job::CloseHandle(self.job);
+        }
+    }
+}
+
+/// The kernel32 calls and structures [`ProcessTree`] uses (winnt.h layout, 64-bit).
+#[cfg(windows)]
+mod job {
+    use std::ffi::c_void;
+
+    pub type Handle = *mut c_void;
+    pub const EXTENDED_LIMIT_INFORMATION: i32 = 9; // JobObjectExtendedLimitInformation
+    pub const KILL_ON_JOB_CLOSE: u32 = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+
+    #[repr(C)]
+    pub struct BasicLimits {
+        pub per_process_user_time_limit: i64,
+        pub per_job_user_time_limit: i64,
+        pub limit_flags: u32,
+        pub minimum_working_set_size: usize,
+        pub maximum_working_set_size: usize,
+        pub active_process_limit: u32,
+        pub affinity: usize,
+        pub priority_class: u32,
+        pub scheduling_class: u32,
+    }
+
+    #[repr(C)]
+    pub struct ExtendedLimits {
+        pub basic: BasicLimits,
+        pub io: [u64; 6],
+        pub process_memory_limit: usize,
+        pub job_memory_limit: usize,
+        pub peak_process_memory_used: usize,
+        pub peak_job_memory_used: usize,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        pub fn CreateJobObjectW(attributes: *mut c_void, name: *const u16) -> Handle;
+        pub fn SetInformationJobObject(job: Handle, class: i32, info: *mut c_void, length: u32) -> i32;
+        pub fn AssignProcessToJobObject(job: Handle, process: Handle) -> i32;
+        pub fn TerminateJobObject(job: Handle, exit_code: u32) -> i32;
+        pub fn CloseHandle(handle: Handle) -> i32;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------------------------

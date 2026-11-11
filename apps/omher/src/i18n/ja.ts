@@ -888,6 +888,10 @@ export const ja: Record<Key, string> = {
   "ss.session": "セッション",
   "ss.hermesClosed": "Hermes がこのチャットを閉じました",
   "ss.modelNotChanged": "モデルを変更できませんでした: {error}",
+  "ss.noChatMode": "{agent} がチャットモードで応答しませんでした。古いバージョンかもしれません: {install}",
+  "ss.newConversation": "以前の会話が見つからなかったため、ここで新しい会話を始めました。",
+  "ss.modelNext": "次のターン: {model}",
+  "ss.modelNextTip": "実行中のターンは {model} のまま進み、選んだモデルは次のターンから使われます",
 
   // resolved cards, errors, run prefills, link chip words (i18n 0.2.5)
   "card.allowedOnce": "今回のみ許可しました",
