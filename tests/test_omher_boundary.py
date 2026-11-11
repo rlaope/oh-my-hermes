@@ -113,6 +113,13 @@ RULES = (
     "`install` carries the pin `inspect` returned.",
     "never installs from a Git URL or `owner/repo`, and never edits config itself.",
     "A refused install is read from Hermes' reason code (`exists`, `source_moved`), never from its message.",
+    "Files the person attaches in a SESSIONS chat (paste, the + menu, a drop on the chat) or drops on a session's terminal"
+    " are saved by the desktop app under omher's own folder, one folder per session:",
+    "`~/.omher/session-files/<session id>/<n>-<name>`, never in the project folder and never in a Hermes profile;",
+    "The shell reads back only plain files in that folder (no links, no other path), and the page never names a file outside it.",
+    "A session's folder is removed when the session is closed, and the folders of sessions that are no longer in the list"
+    " are removed when omher starts.",
+    "An oh-my-hermes session takes no files: rule 3 keeps files to a bot's main chat.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -149,7 +156,7 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twenty_five_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_twenty_six_numbered_rules(self) -> None:
         # 22: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
@@ -158,9 +165,10 @@ class DocPins(unittest.TestCase):
         # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
         # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
-        # boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
+        # boundary on purpose; 26: rule 26 (SESSIONS attachments saved under ~/.omher/session-files) did too.
+        # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 25, len(rules))
+        self.assertTrue(6 <= len(rules) <= 26, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -717,6 +725,9 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         # what the person does in a chat is one of five inputs, never a command line
         inputs = re.search(r"pub enum Input \{(.*?)\n\}", self.chat, re.S).group(1)
         self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model"])
+        # Send carries text and the paths of saved pictures only (rule 26): never bytes or a type from the page
+        self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture> },", inputs)
+        self.assertIn('#[serde(from = "String")]\npub struct Picture', self.chat)
 
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
@@ -902,3 +913,73 @@ class AutomationsAndPlugins(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SessionFilesStayInOmhersFolder(unittest.TestCase):
+    """Rule 26: SESSIONS attachments are saved only under `~/.omher/session-files/<session>/`, read back only from
+    there, typed at a terminal only as a saved path, removed with their session; Hermes sessions take none."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.files = (SHELL / "session_files.rs").read_text(encoding="utf-8")
+        cls.prod = cls.files.split("#[cfg(test)]", 1)[0]
+        cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        cls.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        cls.ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        cls.view = (UI_SRC / "sessions" / "SessionView.tsx").read_text(encoding="utf-8")
+
+    def test_the_one_folder_is_under_omhers_own_home(self) -> None:
+        root = self.prod.split("pub fn root", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('home.join(".omher").join("session-files")', root)
+        # one plain folder name per session id (`s` and digits), never a path from the page
+        valid = self.prod.split("pub fn valid_session", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("b[0] == b's' && b[1..].iter().all(u8::is_ascii_digit)", valid)
+        # a saved name is its last path part, never hidden, and a copy never overwrites (create_new)
+        self.assertIn("rsplit(['/', '\\\\'])", self.prod)
+        self.assertIn(".create_new(true)", self.prod)
+        # the only writes: create_dir_all + the new file; the only deletes: the session's own folder
+        for banned in ("fs::write(", "fs::rename(", "fs::copy(", "set_permissions"):
+            self.assertNotIn(banned, self.prod, banned)
+        self.assertEqual(self.prod.count("fs::remove_dir_all("), 1)
+        self.assertEqual(self.prod.count("fs::remove_file("), 1)  # a link standing where a session folder should be
+        # no process, no network
+        for banned in ("Command::new", "TcpStream", "reqwest", "spawn_command"):
+            self.assertNotIn(banned, self.files, banned)
+
+    def test_reads_back_only_plain_files_in_that_folder(self) -> None:
+        check = self.prod.split("pub fn check", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("p.is_symlink()", "canonicalize()", "strip_prefix(&root)", "parts.len() != 2", "valid_session("):
+            self.assertIn(needle, check)
+        # every read of a page-named path goes through check(): the picture input and the bubble after a restart
+        resolve = self.chat.split("pub fn resolve", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("session_files::check(home, &p.path)?", resolve)
+        self.assertEqual(resolve.count("std::fs::read("), 1)
+        read = self.lib.split("async fn session_file_read", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("session_files::check(&home, &path)?", read)
+        chat_input = self.lib.split("async fn chat_input", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("input.resolve(&user_home()?)?;", chat_input)
+
+    def test_the_commands_take_a_session_id_a_name_and_bytes_only(self) -> None:
+        save = self.lib.split("async fn session_file_save", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("session_files::save(&home, &session, &name, &data)", save)
+        self.assertNotRegex(save.split(")", 1)[0], r"\b(path|cwd|dir)\b")
+        for cmd, params in (("session_files_remove", "session: String"), ("session_files_prune", "keep: Vec<String>"), ("session_file_read", "path: String")):
+            sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
+            self.assertIsNotNone(sig, cmd)
+            self.assertEqual(sig.group(1).strip(), params, cmd)
+
+    def test_close_removes_a_sessions_files_and_a_start_prunes_the_rest(self) -> None:
+        close = self.ui.split("const close = (id: string) => {", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn("host.removeFiles(id)", close)
+        restore = self.ui.split("const restore = (saved: SavedSession[]) => {", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn("host.pruneFiles(ids)", restore)
+        self.assertIn("host.pruneFiles([])", restore)
+
+    def test_a_terminal_gets_only_a_saved_quoted_path_and_hermes_sessions_take_no_files(self) -> None:
+        drop = self.ui.split("const dropOnTerminal = async", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn("shellQuote(await host.saveFile(id, f.name, await f.read()), windows)", drop)
+        self.assertEqual(self.ui.count("host.write("), 2)  # xterm's own typing, and the dropped path
+        # files go to chat agents only: an oh-my-hermes session's composer has no onSendFiles
+        self.assertIn('onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}', self.view)
+        self.assertIn("=== \"chat\";", self.view.split("const takesFiles", 1)[1].split("\n", 1)[0])
+        self.assertIn('onSendFiles={mode === "chat" ? startWithFiles : undefined}', self.view)

@@ -6,9 +6,10 @@ import { AGENTS, agentDef, type AgentId, type AgentInfo } from "./agents";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 
-/** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. */
+/** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
+ *  (`saveFile`) of attached pictures, for the agent's own image input. */
 export type ChatInput =
-  | { kind: "send"; text: string }
+  | { kind: "send"; text: string; images?: string[] }
   | { kind: "interrupt" }
   | { kind: "approve"; request_id: string; choice: ApprovalChoice }
   | { kind: "clarify"; request_id: string; answer: string | ClarifyAnswers }
@@ -49,6 +50,15 @@ export interface SessionHost {
   chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string): Promise<number>;
   chatInput(id: number, input: ChatInput): Promise<void>;
   chatClose(id: number): Promise<void>;
+  /** Save a file the person attached in session `session` under omher's own folder
+   *  (`~/.omher/session-files/<session>/`); the saved copy's absolute path. */
+  saveFile(session: string, name: string, data: Uint8Array): Promise<string>;
+  /** The bytes of a file `saveFile` saved (a sent bubble's picture after a restart). */
+  readFile(path: string): Promise<Uint8Array>;
+  /** Remove session `session`'s saved files. */
+  removeFiles(session: string): Promise<void>;
+  /** Remove the saved files of every session not in `keep`. */
+  pruneFiles(keep: string[]): Promise<void>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -97,6 +107,23 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("chat_close", { id });
   }
+  async saveFile(session: string, name: string, data: Uint8Array) {
+    const { invoke } = await this.core();
+    // the bytes go raw (no JSON array of numbers); the name rides in a header
+    return invoke<string>("session_file_save", data, { headers: { "x-session": session, "x-name": encodeURIComponent(name) } });
+  }
+  async readFile(path: string) {
+    const { invoke } = await this.core();
+    return new Uint8Array(await invoke<ArrayBuffer>("session_file_read", { path }));
+  }
+  async removeFiles(session: string) {
+    const { invoke } = await this.core();
+    await invoke("session_files_remove", { session });
+  }
+  async pruneFiles(keep: string[]) {
+    const { invoke } = await this.core();
+    await invoke("session_files_prune", { keep });
+  }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -114,7 +141,7 @@ export class TauriHost implements SessionHost {
 // ---- mock (browser, e2e) --------------------------------------------------------------------
 
 export interface MockCall {
-  op: "reset" | "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close";
+  op: "reset" | "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close" | "file.save" | "file.remove" | "file.prune";
   id?: number;
   agent?: string;
   cwd?: string;
@@ -124,6 +151,11 @@ export interface MockCall {
   resume?: string;
   account?: string;
   input?: ChatInput;
+  session?: string;
+  name?: string;
+  size?: number;
+  path?: string;
+  keep?: string[];
 }
 
 const BANNER: Record<AgentId, string> = {
@@ -138,7 +170,13 @@ const BANNER: Record<AgentId, string> = {
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
-type MockGlobals = { __omherPickFolder?: string | null; __omherSessionCalls?: MockCall[]; __omherMockAgents?: AgentId[] };
+type MockGlobals = {
+  __omherPickFolder?: string | null;
+  __omherSessionCalls?: MockCall[];
+  __omherMockAgents?: AgentId[];
+  /** e2e: the next file saves fail with this message */
+  __omherFileSaveError?: string;
+};
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
 export class MockHost implements SessionHost {
@@ -237,6 +275,31 @@ export class MockHost implements SessionHost {
     this.log({ op: "chat.close", id });
     this.chats.get(id)?.stop();
     this.chats.delete(id);
+  }
+
+  // ---- files: kept in memory under the same paths the shell would use ------------------------
+  private files = new Map<string, Uint8Array>();
+  async saveFile(session: string, name: string, data: Uint8Array) {
+    if (this.g.__omherFileSaveError) throw new Error(this.g.__omherFileSaveError);
+    const dir = `/Users/you/.omher/session-files/${session}/`;
+    let n = 1;
+    while (this.files.has(`${dir}${n}-${name}`)) n += 1;
+    const path = `${dir}${n}-${name}`;
+    this.files.set(path, data);
+    this.log({ op: "file.save", session, name, size: data.length, path });
+    return path;
+  }
+  async readFile(path: string) {
+    const d = this.files.get(path);
+    if (!d) throw new Error("not a file omher saved");
+    return d;
+  }
+  async removeFiles(session: string) {
+    this.log({ op: "file.remove", session });
+    for (const k of [...this.files.keys()]) if (k.includes(`/session-files/${session}/`)) this.files.delete(k);
+  }
+  async pruneFiles(keep: string[]) {
+    this.log({ op: "file.prune", keep });
   }
 }
 
@@ -359,7 +422,8 @@ class MockChat {
       }
       this.at(60, () => this.emit({ event: "tool.start", tool_id: `t${this.seq}`, name: "read_file", detail: "README.md" }));
       this.at(300, () => this.emit({ event: "tool.end", tool_id: `t${this.seq}`, name: "", ok: true, ms: 240 }));
-      this.say(`(mock ${agentDef(this.agent).label}) You said: ${text}`, 360);
+      const pics = i.images?.length ? ` (${i.images.length} picture${i.images.length > 1 ? "s" : ""})` : "";
+      this.say(`(mock ${agentDef(this.agent).label}) You said: ${text}${pics}`, 360);
       this.at(800, () => this.end("done"));
     } else if (i.kind === "interrupt") {
       if (!this.turn) throw new Error("nothing is running");

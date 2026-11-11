@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
-use crate::agent_chat::{call_detail, clip, ev, exit_reason, exit_turn_end, s, tool_kind, ChatOut, Event, Input};
+use crate::agent_chat::{call_detail, clip, ev, exit_reason, exit_turn_end, s, tool_kind, ChatOut, Event, Input, Picture};
 use crate::sessions::{dsh_patch_path, dsh_turn_args, launch_for, resume_args, DSH_HEADLESS_PATCH};
 
 /// The harness's `--json` run events for one DSH chat, across its messages. Pure: lines in, events out.
@@ -135,6 +135,16 @@ impl Dsh {
     }
 }
 
+/// The message with each attached picture named by its saved path (the UI's wording for attached files).
+fn with_pictures(text: &str, images: &[Picture]) -> String {
+    if images.is_empty() {
+        return text.to_string();
+    }
+    let head = if images.len() == 1 { "Attached file (a copy omher saved; open it with your tools):" } else { "Attached files (copies omher saved; open them with your tools):" };
+    let list: Vec<String> = images.iter().map(|p| format!("- {}", p.path)).collect();
+    [text.trim().to_string(), format!("{head}\n{}", list.join("\n"))].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n")
+}
+
 /// A calm line for a harness error: a missing key says where to add one, anything else its first line.
 pub fn friendly(err: &str) -> String {
     let e = err.trim().trim_start_matches("dsh: ");
@@ -233,7 +243,8 @@ impl DshChat {
 
     pub fn input(&self, input: Input) -> Result<(), String> {
         match input {
-            Input::Send { text, .. } => self.send(&text),
+            // headless takes text only: attached pictures are named by their saved copy, as other files are
+            Input::Send { text, images } => self.send(&with_pictures(&text, &images)),
             Input::Interrupt => {
                 let run = self.0.run.lock().unwrap();
                 let r = run.as_ref().ok_or("nothing is running")?;
@@ -448,9 +459,9 @@ mod tests {
                 thread::sleep(Duration::from_millis(100));
             }
         };
-        chat.input(Input::Send { text: "Pick one fruit and one whole number between 10 and 99. Reply with only those two, like: mango 37".into() }).unwrap();
+        chat.input(Input::Send { text: "Pick one fruit and one whole number between 10 and 99. Reply with only those two, like: mango 37".into(), images: vec![] }).unwrap();
         idle();
-        chat.input(Input::Send { text: "Multiply the number you just picked by 3. Reply with only the fruit and the result.".into() }).unwrap();
+        chat.input(Input::Send { text: "Multiply the number you just picked by 3. Reply with only the fruit and the result.".into(), images: vec![] }).unwrap();
         idle();
         let got = out.lock().unwrap().clone();
         let msgs: Vec<String> = got.iter().filter(|e| s(e, "event") == "message").map(|e| s(e, "text")).collect();
@@ -564,6 +575,14 @@ mod tests {
     }
 
     #[test]
+    fn pictures_are_named_in_the_message() {
+        assert_eq!(with_pictures("look", &[]), "look");
+        let p = Picture::from("/h/.omher/sessions/s1/shot.png".to_string());
+        assert_eq!(with_pictures("look", &[p.clone()]), "look\n\nAttached file (a copy omher saved; open it with your tools):\n- /h/.omher/sessions/s1/shot.png");
+        assert!(with_pictures("", &[p.clone(), p]).starts_with("Attached files (copies omher saved; open them with your tools):\n- "));
+    }
+
+    #[test]
     fn the_overlay_is_fixed_text_and_never_written_through_a_link() {
         let dir = std::env::temp_dir().join(format!("omher-dsh-patch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -659,13 +678,13 @@ mod tests {
             }
             ends() == n
         };
-        chat.input(Input::Send { text: "first message".into() }).unwrap();
+        chat.input(Input::Send { text: "first message".into(), images: vec![] }).unwrap();
         assert!(wait(1));
         let deadline = Instant::now() + Duration::from_secs(5);
         while chat.0.run.lock().unwrap().is_some() && Instant::now() < deadline {
             thread::sleep(Duration::from_millis(20));
         }
-        chat.input(Input::Send { text: "second message".into() }).unwrap();
+        chat.input(Input::Send { text: "second message".into(), images: vec![] }).unwrap();
         assert!(wait(2));
         let log = std::fs::read_to_string(tmp.join("log")).unwrap();
         let lines: Vec<&str> = log.lines().collect();

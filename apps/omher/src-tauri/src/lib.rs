@@ -4,6 +4,7 @@ mod appimage;
 mod bridge;
 mod dsh_chat;
 mod hermes_auth;
+mod session_files;
 mod sessions;
 mod setup;
 
@@ -320,7 +321,51 @@ async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume:
 #[tauri::command]
 async fn chat_input(shell: State<'_, Shell>, id: u32, input: agent_chat::Input) -> Result<(), String> {
     let chats = shell.chats.clone();
-    tauri::async_runtime::spawn_blocking(move || chats.input(id, input)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut input = input;
+        // attached pictures: only files omher saved under its own session folder are read
+        input.resolve(&user_home()?)?;
+        chats.input(id, input)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Save one file the person attached in SESSIONS chat (or dropped on its terminal) `x-session` as
+/// `~/.omher/session-files/<session>/<n>-<name>` and return that path. The body is the file's bytes; the name
+/// comes percent-encoded in `x-name`. Nothing else is written.
+#[tauri::command]
+async fn session_file_save(request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_string).unwrap_or_default();
+    let (session, name) = (header("x-session"), session_files::percent_decode(&header("x-name")));
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return Err("expected the file's bytes".into()) };
+    let data = data.clone();
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || session_files::save(&home, &session, &name, &data).map(|p| p.to_string_lossy().into_owned()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The bytes of a file saved by `session_file_save` (a sent bubble's picture after omher restarted). Any other
+/// path is refused.
+#[tauri::command]
+async fn session_file_read(path: String) -> Result<tauri::ipc::Response, String> {
+    let home = user_home()?;
+    let real = session_files::check(&home, &path)?;
+    let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(real)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// Remove session `session`'s saved files (it was closed).
+#[tauri::command]
+async fn session_files_remove(session: String) -> Result<(), String> {
+    session_files::remove(&user_home()?, &session)
+}
+
+/// Remove the saved files of every session not in `keep` (omher started; the others are gone).
+#[tauri::command]
+async fn session_files_prune(keep: Vec<String>) -> Result<(), String> {
+    session_files::prune(&user_home()?, &keep)
 }
 
 /// Stop the chat's program and forget the session.
@@ -411,6 +456,10 @@ pub fn run() {
             chat_start,
             chat_input,
             chat_close,
+            session_file_save,
+            session_file_read,
+            session_files_remove,
+            session_files_prune,
             chat_close_all,
             open_media,
             open_hermes_auth
