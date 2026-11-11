@@ -3,10 +3,11 @@
 // the agent's structured mode) or the agent's terminal. A New session (draft) is a chat that has not started, on the
 // agent picked in the SESSIONS + menu: its composer shows that agent read-only and, under it, the folder chip; the
 // first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
-// read-only too.
+// read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
+// in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ITheme } from "@xterm/xterm";
-import { selectAsks, useStore } from "../state/store";
+import { selectAsks, useStore, type OutFile } from "../state/store";
 import { resolveTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
@@ -78,10 +79,51 @@ export const termTheme = (mode: "dark" | "light") => (mode === "light" ? LIGHT :
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
+const isWindows = () => typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
+
+/** A file as the terminal's drop and paste hand it on. */
+const fileIn = (f: File) => ({ name: f.name || "pasted.png", read: async () => new Uint8Array(await f.arrayBuffer()) });
+
 function TerminalPane({ rec }: { rec: SessionRec }) {
   const s = useStore();
   const box = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
   const mode = resolveTheme(s.ui.theme);
+  // A file dropped on the terminal, or a picture pasted there, is saved and its path typed at the prompt (as a
+  // system terminal types a dropped file's path). Plain text pastes stay xterm's own.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+    const over = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (files.length) void getSessions().dropOnTerminal(rec.id, files.map(fileIn), isWindows());
+    };
+    const paste = (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (!files.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void getSessions().dropOnTerminal(rec.id, files.map(fileIn), isWindows());
+    };
+    el.addEventListener("dragenter", over);
+    el.addEventListener("dragover", over);
+    el.addEventListener("drop", drop);
+    el.addEventListener("paste", paste, true);
+    return () => {
+      el.removeEventListener("dragenter", over);
+      el.removeEventListener("dragover", over);
+      el.removeEventListener("drop", drop);
+      el.removeEventListener("paste", paste, true);
+    };
+  }, [rec.id]);
   useEffect(() => {
     if (!box.current) return;
     return getSessions().attach(rec.id, box.current, termTheme(mode));
@@ -92,7 +134,7 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
     getSessions().setTheme(termTheme(mode));
   }, [mode]);
   return (
-    <div className="term-wrap" data-testid="terminal" data-session={rec.id}>
+    <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
     </div>
   );
@@ -100,7 +142,10 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
 
 function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const s = useStore();
+  const ss = useSessions();
   const chat = s.chats[chatKey];
+  // files go to a chat agent; an oh-my-hermes session's chat is Hermes', which takes files in a bot's main chat only
+  const takesFiles = (ss.agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode) === "chat";
   const label = agentDef(rec.agent).label;
   // The bot chat's parts take a Bot: this session's chat stands in for one.
   const bot: Bot = {
@@ -154,6 +199,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         offline={rec.status !== "running"}
         offlineText={offlineText}
         onSend={(t) => void getSessions().send(rec.id, t)}
+        onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}
         onStop={() => void getSessions().interrupt(rec.id)}
         tools={<AgentFixed agent={rec.agent} />}
         foot={<Context rec={rec} />}
@@ -278,6 +324,11 @@ function DraftPane({ rec }: { rec: SessionRec }) {
   const key = `agent:${rec.id}`;
   const bot: Bot = { name: key, display_name: def.label, is_default: false, model: "", provider: "", description: "", status: "online", running: false };
   const start = (text?: string) => void getSessions().start(rec.id, text, account || undefined);
+  /** The first message with files: they are saved before the agent starts; a file that cannot be keeps the draft
+   *  (and the chips) as they were. */
+  const startWithFiles = async (text: string, files: OutFile[]) => {
+    await getSessions().start(rec.id, text, account || undefined, files);
+  };
   // the composer takes the focus once it can be typed in (the folder or the agent list may arrive after it shows)
   const live = ready && !terminal;
   useEffect(() => {
@@ -301,6 +352,7 @@ function DraftPane({ rec }: { rec: SessionRec }) {
         offline={!ready || terminal}
         offlineText={!ready ? (!rec.cwd ? t("sessions.findingHome") : missingNote(rec.agent)) : t("sessions.pressStart", { agent: def.label })}
         onSend={(text) => start(text)}
+        onSendFiles={mode === "chat" ? startWithFiles : undefined}
         onStop={() => undefined}
         tools={<AgentFixed agent={rec.agent} />}
         action={

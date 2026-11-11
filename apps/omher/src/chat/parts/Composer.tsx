@@ -40,7 +40,7 @@ export function Composer({
   asking?: boolean;
   offline: boolean;
   onSend: (text: string) => void;
-  /** Without it (a SESSIONS chat) there is no + and no drop: files go only to a bot's main chat. */
+  /** Files with the text (a bot's main chat, a SESSIONS chat agent). Without it there is no +, drop or file paste. */
   onSendFiles?: (text: string, files: OutFile[]) => Promise<void>;
   onStop: () => void;
   reply?: ReplyChip | null;
