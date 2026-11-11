@@ -60,9 +60,9 @@ export function missingNote(agent: AgentId): string {
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
 
-/** Chat agents whose Restart (and Resume) continues the conversation: Claude Code `--resume`, Codex
- *  `thread/resume`, OmO `--session`. pi and oh-my-pi start a new one. */
-export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo"];
+/** Agents whose Restart (and Resume) continues the conversation: Claude Code `--resume`, Codex `thread/resume`,
+ *  OmO `--session`, DSH `--resume <id>` (its terminal). pi, oh-my-pi and Grok start a new one. */
+export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
 

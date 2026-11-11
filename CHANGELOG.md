@@ -145,6 +145,11 @@ All notable changes will be documented here.
     longer blinks away when the first status line replaces the typing dots;
     one face stays in place from send to the end of the reply, and a SESSIONS
     chat's agent mark does the same. (#2780)
+  - **Finished turns go idle.** A session whose agent has answered no longer
+    stays on Working with Stop (OmO, pi and oh-my-pi sent statuses after the
+    turn ended), an agent that dies mid-turn ends its turn, and a running OmO
+    chat continues after omher restarts. DSH and Grok sessions that exit get
+    the Ended line and Restart a chat has. (#2782)
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the
