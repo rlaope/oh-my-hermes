@@ -442,17 +442,20 @@ _Avoid_: runtime state (the payload is a read-only projection of it)
 ### Desktop app
 
 **omher**:
-The macOS desktop app in `apps/omher/` (Tauri shell, React UI, a Python
-bridge). One Hermes profile is one bot; each bot has one main chat, the
-session titled `Bot Chat`, and omher shows its other sessions read-only. The
-app starts the bridge, which reaches the person's own Hermes gateway over
-loopback through Hermes' `connect_gateway`; omher makes no model or API call
-and is not part of the `omh` Python package. Its SESSIONS list starts one of a
-fixed set of agent programs (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`) in a
-terminal in a folder the person picks. Boundary:
+The desktop app in `apps/omher/` for macOS, Windows and Linux (Tauri shell,
+React UI, a Python bridge), released separately under `omher-v*` tags. The
+name means the app only: "OMH" and "oh-my-hermes" mean the harness this repo
+ships (the `omh` package, plugin, skills and TUI). One Hermes profile is one
+bot; each bot has one main chat, the session titled `Bot Chat`, and omher
+shows its other sessions read-only. The app starts the bridge, which reaches
+the person's own Hermes gateway over loopback through Hermes' `connect_gateway`;
+omher makes no model or API call and is not part of the `omh` Python package.
+Its SESSIONS list starts one of a fixed set of agent programs (`claude`,
+`codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`) in a folder the person
+picks, as a chat over the agent's structured mode or as a terminal. Boundary:
 `docs/OMHER-BOUNDARY.md`.
 _Avoid_: counting omher as an OMH execution surface, the OMH TUI, a Hermes
-Desktop plugin
+Desktop plugin, "OMH desktop" or "omher" for the harness
 
 **Elsewhere**:
 A session of a bot's Hermes profile whose source is not one of `tui`, `cli`,
