@@ -254,7 +254,11 @@ INLINE_UNICODE = "unicode"
 
 
 def inline_graphics(environ: Mapping[str, str]) -> str:
-    """Which form an inline image takes on this terminal, as Hermes' own TUI decides it from the environment (ui-tui `lib/terminalGraphics.ts`): kitty Unicode placeholders where they paint, else half-blocks."""
+    """Which form an inline image takes on this terminal: kitty Unicode placeholders where they paint, else half-blocks.
+
+    The order is Hermes' own TUI's (ui-tui `lib/terminalGraphics.ts`), plus Otty (`TERM_PROGRAM=otty`), which paints
+    kitty virtual placements (docs.otty.sh, Images: "Unicode placeholders (U+10EEEE virtual placement)") but sets
+    `TERM=xterm-256color` and no kitty variable, so it would otherwise get half-blocks."""
     term = environ.get("TERM", "").lower()
     program = environ.get("TERM_PROGRAM", "").lower()
     if program == "vscode" or environ.get("HERMES_PTY_HOST", "") == "dashboard":
@@ -268,7 +272,7 @@ def inline_graphics(environ: Mapping[str, str]) -> str:
         or environ.get("GHOSTTY_RESOURCES_DIR")
         or "kitty" in term
         or "ghostty" in term
-        or program == "ghostty"
+        or program in ("ghostty", "otty")
     ):
         return INLINE_KITTY
     return INLINE_UNICODE

@@ -11,6 +11,31 @@ All notable changes will be documented here.
   the two rows the echo and the blank row over it took go to the turn's own
   output.
 
+- **Enter steers a running turn in the OMH TUI, as Claude Code does.** Text
+  you type and send with Enter while Hermes is working now goes into that turn
+  at once (`session.redirect`, read at the next tool call) and shows as your
+  prompt above the working row, instead of waiting as a `⧗` queued row with a
+  `ctrl+enter to send now` hint. A slash command, a `!` line, a prompt with
+  images, a prompt sent in plan mode, one sent behind lines already queued, or
+  one sent before Hermes has started the turn still queues for the turn's end
+  as before; Ctrl+Enter, Ctrl+J and `/steer` keep working.
+- **A question's `Type something.` row is where you type.** Picking it (its
+  number, or Up/Down then Enter) or typing a character that picks nothing
+  opens the answer field on that row of the question, as Claude Code's
+  question dialog does, instead of moving the typing to the composer under
+  the question; the caret stands on the row and a long answer scrolls there.
+  Up and Down still go back to the choices with what you typed kept.
+
+- **A drag in the OMH TUI copies clean by default, long commands as one
+  line.** The main screen takes the mouse again (the owner's choice of
+  2026-11-11, back from 2026-11-06): a drag copies the transcript without
+  the `┃` rail, and rows the TUI wrapped to fit the screen are joined back
+  into the line they were written as, a space where the wrap dropped one,
+  nothing inside a long word or path, code exactly as it is. A long command
+  or path pastes as the one line it is; a line break the text had stays.
+  The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
+  `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
+  terminal.
 - **omher's Automations and Plugins pages work, by hand or by asking the
   bot, in English, Korean, Japanese or Chinese.** The two sidebar rows that
   said Soon open pages. Automations lists every bot's cron jobs from each
@@ -366,6 +391,16 @@ All notable changes will be documented here.
   it starts, so the bridge no longer stops on `No module named 'websockets'`.
   An install upgraded from a venv uses the same Python as `hermes`, not the old
   venv. Thanks to @sykuang (#2740).
+
+- **Vim editing in the OMH TUI composes like Vim, and Ctrl+N / Ctrl+P move
+  every list.** With `display.vim_mode` on, `.` and `[n].` repeat the last
+  completed change; `W B E ge gE` join the word motions; `d c y` take `j k gg
+  G` as logical hard lines with multiplied counts; `v`, `V` and `gv` select,
+  change and reselect; `r` waits on a steady underline (`REPLACE`). Ctrl+N
+  and Ctrl+P move down and up in approvals, questions, pickers, pagers,
+  `/dag`, `/bots`, and the CLI theme, model-chain and setup pickers, and
+  Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
+  Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
 
 ## 4.0.7 - 2026-11-09
 
