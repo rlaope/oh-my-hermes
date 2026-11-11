@@ -1,8 +1,8 @@
 // The small mark of each session agent: Claude and OpenAI marks (shared with the model pill), the app's
 // own mark for oh-my-hermes, the Grok mark, the official pi (pi.dev/favicon.svg) and oh-my-pi (omp.sh/favicon.svg)
 // marks, OmO's icon (oh-my-openagent `.github/assets/omo-icon-light.svg`, its viewBox trimmed to the tile) and
-// DeepSeek Harness's mark for DSH (deepseek-harness `apps/web/public/favicon.svg`, MIT, the file unchanged), and
-// OpenCode's mark (Lobe Icons) through AgentIcon.
+// DeepSeek Harness's mark for DSH (deepseek-harness `apps/web/public/favicon.svg`, MIT, the file unchanged),
+// and OpenCode's mark (Lobe Icons) through AgentIcon.
 import dshSvg from "../assets/agents/dsh.svg?raw";
 import omoMark from "../assets/agents/omo.svg";
 import ompMark from "../assets/agents/omp.svg";

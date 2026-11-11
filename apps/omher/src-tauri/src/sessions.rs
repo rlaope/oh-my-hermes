@@ -1022,8 +1022,8 @@ mod tests {
         assert_eq!(chat_args("pi").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
-        // DSH's chat takes its arguments per message (dsh_turn_args), not here
         assert_eq!(chat_args("opencode").unwrap(), ["acp"]);
+        // DSH's chat takes its arguments per message (dsh_turn_args), not here
         for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
             assert!(chat_args(none).is_none(), "{none}");
         }

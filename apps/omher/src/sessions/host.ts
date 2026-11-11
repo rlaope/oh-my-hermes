@@ -418,13 +418,13 @@ class MockChat {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
+    if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
     // DeepSeek Harness names its session `session-<uuid>` and reports no model in its headless stream
     if (agent === "dsh") {
       if (!resume) this.session = "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8";
       this.model = "";
     }
     if (how.gone) this.session = `codex-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
-    if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
   }
   private at(ms: number, fn: () => void) {
     this.timers.push(setTimeout(fn, ms));

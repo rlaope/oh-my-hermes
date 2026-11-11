@@ -689,6 +689,32 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             self.assertIn(needle, start)
         self.assertIn("pub(crate) fn spawn<F>", self.chat)
 
+    def test_acp_agents_turn_off_files_and_terminal_and_continue_inside_the_protocol(self) -> None:
+        """Rule 11: the ACP adapter offers the agent no file access and no terminal, a conversation id travels in
+        `session/resume` (checked by a strict pattern), OpenCode's only extra variable is the fixed ask rule, and an
+        approval answer is never the agent's always-allow."""
+        acp = (SHELL / "acp_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        self.assertIn('"clientCapabilities": {"fs": {"readTextFile": false, "writeTextFile": false}, "terminal": false}', acp)
+        self.assertNotIn("fs/read_text_file", acp)
+        self.assertNotIn("terminal/create", acp)
+        self.assertIn("b.is_ascii_alphanumeric() || b == b'_' || b == b'-'", acp)
+        self.assertIn("(1..=128).contains(&id.len())", acp)
+        rows = re.search(r"pub const ACP_AGENTS: \[AcpAgent; (\d+)\] = \[(.*?)\];", acp, re.S)
+        self.assertIsNotNone(rows)
+        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode"])
+        self.assertEqual(re.findall(r'env: &\[(.*?)\]', rows.group(2)), ['("OPENCODE_PERMISSION", OPENCODE_ASK)'])
+        self.assertIn('pub const OPENCODE_ASK: &str = r#"{"edit":{"*":"ask"},"bash":{"*":"ask"}}"#;', acp)
+        # the answer omher sends is the allow-once or reject option the request named, never allow_always
+        self.assertIn('let (once, deny) = (opt("allow_once"), opt("reject_once").or_else(|| opt("reject_always")));', acp)
+        self.assertNotIn('opt("allow_always")', acp)
+        # no process is started here, and no file is opened
+        for needle in ("Command::new", "std::fs::", "File::open"):
+            self.assertNotIn(needle, acp)
+        # the shell adds the row's env and nothing else, and takes an ACP id only through the protocol
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("acp.map(|a| a.env)", start)
+        self.assertIn('(_, Some(r)) if acp.is_some() && is_acp_session_id(r) => Some(r),', start)
+
     def test_dsh_is_deepseek_harness_run_headless_with_fixed_arguments(self) -> None:
         """Rule 11's DSH sentences: the CLI is DeepSeek Harness's own, each message is one fixed headless run
         continued by the harness's session id, and the one file written is the fixed credentials overlay."""
@@ -732,32 +758,6 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn('if agent_id == "dsh" {\n            // DeepSeek Harness', start)
         self.assertIn("DshChat::start(cwd, resume, sink)?", start)
-
-    def test_acp_agents_turn_off_files_and_terminal_and_continue_inside_the_protocol(self) -> None:
-        """Rule 11: the ACP adapter offers the agent no file access and no terminal, a conversation id travels in
-        `session/resume` (checked by a strict pattern), OpenCode's only extra variable is the fixed ask rule, and an
-        approval answer is never the agent's always-allow."""
-        acp = (SHELL / "acp_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
-        self.assertIn('"clientCapabilities": {"fs": {"readTextFile": false, "writeTextFile": false}, "terminal": false}', acp)
-        self.assertNotIn("fs/read_text_file", acp)
-        self.assertNotIn("terminal/create", acp)
-        self.assertIn("b.is_ascii_alphanumeric() || b == b'_' || b == b'-'", acp)
-        self.assertIn("(1..=128).contains(&id.len())", acp)
-        rows = re.search(r"pub const ACP_AGENTS: \[AcpAgent; (\d+)\] = \[(.*?)\];", acp, re.S)
-        self.assertIsNotNone(rows)
-        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode"])
-        self.assertEqual(re.findall(r'env: &\[(.*?)\]', rows.group(2)), ['("OPENCODE_PERMISSION", OPENCODE_ASK)'])
-        self.assertIn('pub const OPENCODE_ASK: &str = r#"{"edit":{"*":"ask"},"bash":{"*":"ask"}}"#;', acp)
-        # the answer omher sends is the allow-once or reject option the request named, never allow_always
-        self.assertIn('let (once, deny) = (opt("allow_once"), opt("reject_once").or_else(|| opt("reject_always")));', acp)
-        self.assertNotIn('opt("allow_always")', acp)
-        # no process is started here, and no file is opened
-        for needle in ("Command::new", "std::fs::", "File::open"):
-            self.assertNotIn(needle, acp)
-        # the shell adds the row's env and nothing else, and takes an ACP id only through the protocol
-        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn("acp.map(|a| a.env)", start)
-        self.assertIn('(_, Some(r)) if acp.is_some() && is_acp_session_id(r) => Some(r),', start)
 
     def test_chat_commands_take_an_agent_id_folder_and_resume_only(self) -> None:
         sig = re.search(r"async fn chat_start\((.*?)\) -> ", self.lib, re.S)
