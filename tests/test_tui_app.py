@@ -62,7 +62,9 @@ from omh.tui.app import (
 )
 from omh.tui.gateway import GatewayClient, GatewayUnavailable, ServerRequest, gateway_spawn
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste
-from omh.tui.launch import CLOSED_EXIT, FALLBACK_EXIT, FALLBACK_SENTINEL_ENV, SESSION_FILE_ENV
+from omh.tui.launch import (
+    BOTS_HOME_ENV, CLOSED_EXIT, FALLBACK_EXIT, FALLBACK_SENTINEL_ENV, RUNTIME_ENV, RUNTIME_OWN_VALUE, SESSION_FILE_ENV,
+)
 from omh.tui.modes import ACCEPT_LABEL, PLAN_LABEL, info_line
 from omh.tui.screen import CLEAR_SCREEN_AND_SCROLLBACK, ERASE_SCROLLBACK
 from omh.tui.style import Span
@@ -648,6 +650,28 @@ class SessionTests(AppTestCase):
         self.assertEqual((run.terminal.entered, run.terminal.exited), (1, 1))
         # The region is gone after exit; nothing of it is left on the screen.
         self.assertNotIn(BOX_MARK, run.terminal.history())
+
+    def test_the_hud_reads_the_home_the_session_runs_on_even_on_the_tuis_own_runtime(self) -> None:
+        # On its own runtime (`omh theme runtime own`) the session, its state database and the `processes.json`
+        # its background terminals land in all live in the TUI home `HERMES_HOME` names. `BOTS_HOME_ENV` names the
+        # bots' home for the bot board only: a HUD that read it found no process, so no `✳ Waiting…` row stood
+        # over the composer while the session waited on one (the owner's screen, 2026-11-11).
+        for extra, label in (({}, "shared"), ({RUNTIME_ENV: RUNTIME_OWN_VALUE, BOTS_HOME_ENV: "/bots"}, "own")):
+            with self.subTest(runtime=label):
+                run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=startup_answers()),
+                                   env=extra)
+                run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the first frame"))
+                homes: list[tuple[str | None, str | None]] = []
+
+                def make_poller(omh_home: str | None, hermes_home: str | None, run: Run = run) -> FakePoller:
+                    homes.append((omh_home, hermes_home))
+                    return run.poller
+
+                run.code = main(run.environ, stdin=TtyStream(), stdout=TtyStream(), stderr=run.stderr,
+                                open_terminal=lambda run=run: run.terminal, make_client=self.make_client(run),
+                                make_poller=make_poller, contain_faults=False)
+                self.assert_clean_run(run)
+                self.assertEqual([home for _omh, home in homes], [str(run.root)])
 
     def test_a_typed_prompt_is_submitted_and_the_reply_lands_in_scrollback(self) -> None:
         prompt = "Reply with exactly the word: ok"
