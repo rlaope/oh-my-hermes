@@ -256,7 +256,7 @@ test("the + menu: installed agents first (the last one used on top), missing one
     await expect(row).toHaveClass(/\boff\b/);
     await expect(row).toContainText("Not installed");
   }
-  await expect(menu.getByTestId("session-agent-pi")).toHaveAttribute("title", "pi was not found on this computer · install: npm i -g @mariozechner/pi-coding-agent");
+  await expect(menu.getByTestId("session-agent-pi")).toHaveAttribute("title", "pi was not found on this computer · install: npm i -g --ignore-scripts @earendil-works/pi-coding-agent");
   const dim = await menu.getByTestId("session-agent-pi").evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e.querySelector(".ss-ic")!).opacity]);
   const lit = await menu.getByTestId("session-agent-claude").evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e.querySelector(".ss-ic")!).opacity]);
   expect(dim[0]).not.toBe(lit[0]);

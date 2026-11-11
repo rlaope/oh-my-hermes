@@ -3421,11 +3421,12 @@ def chat_messages(rows) -> list[dict]:
 class FolderChat:
     """A Hermes chat this bridge created in a folder the person picked (SESSIONS `+` > oh-my-hermes)."""
 
-    def __init__(self, fid: str, cwd: str, runtime_id: str, stored_id: str):
+    def __init__(self, fid: str, cwd: str, runtime_id: str, stored_id: str, subscription_id: str = ""):
         self.id = fid
         self.cwd = cwd
         self.runtime_id = runtime_id
         self.stored_id = stored_id
+        self.subscription_id = subscription_id  # from session.create: what session.detach closes
         self.generation = None
         self.in_turn = False
         self.last_thinking = -1e9
@@ -4161,7 +4162,8 @@ class Bridge:
         snap = await self._call(conn, "session.create", title=FOLDER_CHAT_PREFIX + leaf, cwd=cwd, cwd_explicit=True,
                                 follow_profile_config=True)
         fid = "f" + uuid.uuid4().hex[:10]
-        chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]))
+        chat = FolderChat(fid, cwd, str(snap["session_id"]), str(snap.get("stored_session_id") or snap["session_id"]),
+                          str(snap.get("subscription_id") or ""))
         if snap.get("execution_generation") is not None:
             chat.generation = snap["execution_generation"]
         conn.folders[fid] = chat
@@ -4172,12 +4174,24 @@ class Bridge:
                 "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
 
     async def op_folder_close(self, p) -> dict:
-        """Close a folder chat this bridge created: Hermes stops its agent; the conversation stays saved."""
+        """Close a folder chat this bridge created: Hermes stops its agent; the conversation stays saved.
+
+        Hermes' gateway closes a conversation with ``session.detach`` of the subscription ``session.create`` gave
+        and an ``end_reason`` (a viewer closing it, not leaving); it has no ``session.close``. A gateway without
+        ``session.detach`` (``unknown_method``) gets ``session.close`` as before; any other refusal is the error."""
         conn = await self._conn(p.get("bot"))
         fid = p.get("session")
         chat = conn.folders.pop(fid, None) if isinstance(fid, str) else None
         if chat is None:
             raise BridgeError("not_found", "no such folder chat")
+        if chat.subscription_id:
+            try:
+                await self._call(conn, "session.detach", session_id=chat.runtime_id, subscription_id=chat.subscription_id,
+                                 end_reason="omher_close")
+                return {}
+            except Exception as e:
+                if not (_named(e, "GatewayRPCError") and str(e) == "unknown_method"):
+                    raise
         await self._call(conn, "session.close", session_id=chat.runtime_id)
         return {}
 

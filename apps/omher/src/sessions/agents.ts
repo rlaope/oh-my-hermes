@@ -38,24 +38,26 @@ export function terminalNote(agent: AgentId): string {
 }
 
 /** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
- *  never runs it). Grok has no one-line install, so it points at its docs. Codex also notes that the copy
- *  inside the ChatGPT (or Codex) desktop app on macOS is detected. */
+ *  never runs it), each as that product's own docs give it: pi's npm package moved to @earendil-works (its README's
+ *  npm line), oh-my-pi's npm build needs Bun so its line is the installer from its README, Grok's is the one-line
+ *  installer from docs.x.ai. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
+ *  detected. The lines of the agents with an install layout are repeated in `LAYOUTS` (src-tauri/src/sessions.rs),
+ *  which names them when the program found does not look like the agent; a Rust test keeps the two the same. */
 export const INSTALL: Record<AgentId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
   omo: "npm i -g omo-ai",
   dsh: "npm i -g @deepseek-ai/dsh",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
-  pi: "npm i -g @mariozechner/pi-coding-agent",
-  omp: "npm i -g @oh-my-pi/pi-coding-agent",
-  grok: "see grok docs",
+  pi: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+  omp: "curl -fsSL https://omp.sh/install | sh",
+  grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
 };
 
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
  *  (another `dsh` on PATH, such as deepseek-bot's, does not count) and its desktop app, which carries the CLI. */
 export function missingNote(agent: AgentId): string {
-  const how = INSTALL[agent];
-  const install = how.startsWith("see ") ? t("ss.seeDocs", { agent }) : t("ss.installHow", { cmd: how }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
+  const install = t("ss.installHow", { cmd: INSTALL[agent] }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
   return t("ss.missing", { program: agent === "dsh" ? "DeepSeek Harness (dsh)" : agentDef(agent).program, how: install });
 }
 
