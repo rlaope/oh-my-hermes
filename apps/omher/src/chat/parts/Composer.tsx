@@ -4,8 +4,9 @@ import { useStore, type OutFile, type ReplyChip } from "../../state/store";
 import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
 import { AttachButton, Chips, chipsFor, useDropZone, type Chip } from "./Attach";
 import "./attach.css";
-import { SkillPicker, mirrorText } from "./Skills";
+import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
 import { findTokens, fragmentAt, matchSkills } from "./skillTokens";
+import { commandQuery, matchCommands, pickText, type AgentCommand } from "./commands";
 import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
 import { composing as imeComposing } from "../../lib/ime";
@@ -30,6 +31,7 @@ export function Composer({
   onClearReply,
   offlineText,
   skills: skillsOn = false,
+  commands,
   tools,
   action,
   foot,
@@ -49,6 +51,8 @@ export function Composer({
   offlineText?: string;
   /** Offer the bot's skills on `./` (a bot's main chat). */
   skills?: boolean;
+  /** An agent's own commands and skills, listed when the box starts with `/` (or `$`); none = no menu. */
+  commands?: AgentCommand[];
   /** Controls in the row before Send (a New session chat's agent picker). */
   tools?: ReactNode;
   /** Stands in for Send (a terminal agent's Start). */
@@ -96,6 +100,26 @@ export function Composer({
   const picking = !!frag && focused && fragKey !== dismissed;
   const at = Math.min(active, Math.max(items.length - 1, 0));
   useEffect(() => setActive(0), [fragKey]);
+
+  // an agent's own commands: `/` or `$` at the start of the box opens them; typing narrows the list
+  const cq = commands?.length ? commandQuery(text) : null;
+  const cqKey = cq ? `${cq.prefix}${cq.query}` : null;
+  const cmd = useMemo(() => (cq && commands ? matchCommands(commands, cq.prefix, cq.query) : null), [commands, cqKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [cmdActive, setCmdActive] = useState(0);
+  const [cmdDismissed, setCmdDismissed] = useState<string | null>(null);
+  const cmdOpen = !!cmd && focused && cqKey !== cmdDismissed;
+  const cmdAt = cmd ? Math.min(cmdActive, Math.max(cmd.shown.length - 1, 0)) : 0;
+  useEffect(() => setCmdActive(0), [cqKey]);
+  const cmdPop = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (cmdOpen) cmdPop.current?.querySelector(".sk-row.on")?.scrollIntoView({ block: "nearest" });
+  }, [cmdOpen, cmdAt]);
+  const pickCommand = (c: AgentCommand) => {
+    const next = pickText(c);
+    placeCaret.current = next.length;
+    setText(next);
+    setCmdDismissed(`${c.prefix}${c.name} `);
+  };
 
   /** The mirror follows the textarea's box and scroll (its width leaves out a scrollbar). */
   const syncMirror = useCallback(() => {
@@ -213,13 +237,15 @@ export function Composer({
     }
   };
 
-  const slash = /^\/[\w-]*$/.test(text);
+  // the bot chat's `/skill` hint; a chat with its agent's own menu shows that instead
+  const slash = !commands && /^\/[\w-]*$/.test(text);
   const showStop = running && !has;
 
   return (
     <div className="cw" ref={wrap}>
       {overlay}
       {picking && <SkillPicker items={items} active={at} onPick={pick} onHover={setActive} popRef={pop} />}
+      {cmdOpen && cmd && <CommandPicker items={cmd.shown} more={cmd.total - cmd.shown.length} active={cmdAt} onPick={pickCommand} onHover={setCmdActive} popRef={cmdPop} />}
       {slash && (
         <div className="hint" role="note" data-testid="skill-hint">
           <span className="hint-k">/skill</span> {tx("cmp.skillHint", { example: <code>/plan</code>, bot: bot.display_name })}
@@ -291,6 +317,30 @@ export function Composer({
               }}
               onKeyDown={(e) => {
                 const composing = imeComposing(e);
+                if (cmdOpen && cmd && !composing) {
+                  const n = cmd.shown.length;
+                  if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
+                    e.preventDefault();
+                    setCmdActive((cmdAt + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+                    return;
+                  }
+                  if (e.key === "Tab" && n) {
+                    e.preventDefault();
+                    pickCommand(cmd.shown[cmdAt]);
+                    return;
+                  }
+                  // Enter takes the highlighted command unless the text already names it exactly (then it is sent)
+                  if (e.key === "Enter" && !e.shiftKey && n && text !== `${cmd.shown[cmdAt].prefix}${cmd.shown[cmdAt].name}`) {
+                    e.preventDefault();
+                    pickCommand(cmd.shown[cmdAt]);
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setCmdDismissed(cqKey);
+                    return;
+                  }
+                }
                 if (picking && !composing) {
                   const n = items.length;
                   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {

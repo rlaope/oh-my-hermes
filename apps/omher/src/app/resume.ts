@@ -48,6 +48,9 @@ export interface SavedSession {
   title?: string;
   agentTitle?: string;
   promptTitle?: string;
+  /** The permission mode and reasoning effort the person picked: set again when it starts. */
+  mode?: string;
+  effort?: string;
   /** The chat's last messages, text only. */
   messages?: SavedMsg[];
 }
@@ -100,7 +103,7 @@ function parseSession(v: unknown): SavedSession | null {
   if (typeof v.exitCode === "number" || v.exitCode === null) out.exitCode = v.exitCode;
   const error = str(v.error, MAX_TEXT);
   if (error) out.error = error;
-  for (const k of ["agentSession", "account", "bot", "model", "title", "agentTitle", "promptTitle"] as const) {
+  for (const k of ["agentSession", "account", "bot", "model", "title", "agentTitle", "promptTitle", "mode", "effort"] as const) {
     const s = str(v[k], 200);
     if (s) out[k] = s;
   }

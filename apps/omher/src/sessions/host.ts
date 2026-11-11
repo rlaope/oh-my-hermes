@@ -9,11 +9,15 @@ import { t } from "../i18n";
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
  *  (`saveFile`) of attached pictures, for the agent's own image input. */
 export type ChatInput =
-  | { kind: "send"; text: string; images?: string[] }
+  | { kind: "send"; text: string; images?: string[]; /** the bubble's id: a queued message is reported by it */ id?: string }
   | { kind: "interrupt" }
   | { kind: "approve"; request_id: string; choice: ApprovalChoice }
   | { kind: "clarify"; request_id: string; answer: string | ClarifyAnswers }
-  | { kind: "model"; model: string };
+  | { kind: "model"; model: string }
+  /** the permission mode, one the shell offers for the agent (controls.ts MODES) */
+  | { kind: "mode"; mode: string }
+  /** reasoning effort, one of the levels the agent reported */
+  | { kind: "effort"; effort: string };
 
 /** An event from a chat agent: the bot chat's events (`turn.start`, `tool.start`, `delta`, `message`,
  *  `approval.request`, `turn.end`, …) plus `session.info`, `session.models`, `session.error` and, once,
@@ -60,6 +64,9 @@ export interface SessionHost {
   removeFiles(session: string): Promise<void>;
   /** Remove the saved files of every session not in `keep`. */
   pruneFiles(keep: string[]): Promise<void>;
+  /** The git branch checked out in `cwd` (read from its `.git/HEAD`; no program runs), "" when it is not a
+   *  repository, a short commit id when detached. */
+  branch(cwd: string): Promise<string>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -125,6 +132,10 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_files_prune", { keep });
   }
+  async branch(cwd: string) {
+    const { invoke } = await this.core();
+    return invoke<string>("session_branch", { cwd });
+  }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -177,6 +188,8 @@ type MockGlobals = {
   __omherMockAgents?: AgentId[];
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
+  /** e2e: the branch of each folder (none = not a repository) */
+  __omherBranches?: Record<string, string>;
 };
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
@@ -302,6 +315,10 @@ export class MockHost implements SessionHost {
   async pruneFiles(keep: string[]) {
     this.log({ op: "file.prune", keep });
   }
+  async branch(cwd: string) {
+    const b = this.g.__omherBranches ?? { "/Users/you/code/omher": "feat/session-controls" };
+    return b[cwd] ?? "";
+  }
 }
 
 const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
@@ -319,9 +336,45 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
   omo: [{ id: "claude-fable-5-1", label: "Claude Fable 5.1" }],
 };
 
+/** What each mock agent reports about its controls, as the real CLIs do (see agent_chat.rs). */
+const MOCK_CONTROLS: Partial<Record<AgentId, { mode?: string; efforts: string[]; effort: string; commands: { name: string; description: string; hint: string; kind: "command" | "skill"; prefix: "/" | "$" }[]; max: number }>> = {
+  claude: {
+    mode: "default",
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    effort: "high",
+    commands: [
+      { name: "compact", description: "Free up context by summarizing the conversation so far", hint: "<instructions>", kind: "command", prefix: "/" },
+      { name: "context", description: "Visualize current context usage", hint: "", kind: "command", prefix: "/" },
+      { name: "init", description: "Initialize a new CLAUDE.md file with codebase documentation", hint: "", kind: "command", prefix: "/" },
+      { name: "review", description: "Review a pull request", hint: "<pr>", kind: "command", prefix: "/" },
+      { name: "archify", description: "Architecture diagrams as standalone HTML (user)", hint: "", kind: "skill", prefix: "/" },
+      ...Array.from({ length: 60 }, (_, i) => ({ name: `skill-${String(i + 1).padStart(2, "0")}`, description: `Sample skill ${i + 1} (user)`, hint: "", kind: "skill" as const, prefix: "/" as const })),
+    ],
+    max: 1_000_000,
+  },
+  codex: {
+    mode: "",
+    efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+    effort: "medium",
+    commands: [{ name: "review", description: "Review a change", hint: "", kind: "skill", prefix: "$" }],
+    max: 258_400,
+  },
+  omo: {
+    efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
+    effort: "medium",
+    commands: [
+      { name: "todo", description: "Show or edit the todo list", hint: "", kind: "command", prefix: "/" },
+      { name: "skill:hyperframes", description: "Make or edit a video", hint: "", kind: "skill", prefix: "$" },
+    ],
+    max: 1_000_000,
+  },
+};
+const MOCK_MODES: Partial<Record<AgentId, string[]>> = { claude: ["default", "plan", "acceptEdits"], codex: ["read-only", "ask", "auto"] };
+
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
  *  Esc; `/exit` ends the program; `/title <name>` names the conversation as the agent; anything else gets a
- *  short answer after one tool step. */
+ *  short answer after one tool step. A message sent while a turn runs is queued and answered after it, as Claude
+ *  Code and OmO do; Stop drops it. */
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
@@ -329,6 +382,8 @@ class MockChat {
   private waiting: string | null = null;
   private model: string;
   private session: string;
+  private used = 18_400;
+  private queue: { text: string; id: string; images?: string[] }[] = [];
   constructor(private agent: AgentId, private emit: (ev: ChatEvent) => void, resume?: string, private cwd = "") {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
@@ -339,8 +394,14 @@ class MockChat {
   }
   boot() {
     this.at(20, () => {
-      this.emit({ event: "session.info", agent_session: this.session, model: this.model });
+      const c = MOCK_CONTROLS[this.agent];
+      this.emit({ event: "session.info", agent_session: this.session, model: this.model, ...(c ? { effort: c.effort } : {}), ...(c?.mode !== undefined ? { mode: c.mode } : {}) });
       this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
+      if (c) {
+        this.emit({ event: "session.efforts", levels: c.efforts });
+        this.emit({ event: "session.commands", commands: c.commands });
+        this.emit({ event: "session.usage", used: this.used, max: c.max });
+      }
     });
   }
   stop() {
@@ -352,7 +413,25 @@ class MockChat {
     this.stop();
     this.turn = false;
     this.waiting = null;
+    const next = this.queue;
+    this.queue = [];
+    // Stop drops what waited (OmO clears its queue; Codex never recorded it)
+    if (outcome === "interrupted") for (const q of next) this.emit({ event: "message.dropped", id: q.id });
     this.emit({ event: "turn.end", outcome, ...(error ? { error } : {}) });
+    const c = MOCK_CONTROLS[this.agent];
+    if (c) {
+      this.used += 6_200;
+      this.emit({ event: "session.usage", used: this.used, max: c.max });
+    }
+    // a finished turn takes what was sent during it as the next turn
+    if (outcome === "done" && next.length) {
+      const [first, ...rest] = next;
+      this.queue = rest;
+      this.at(80, () => {
+        this.emit({ event: "message.taken", id: first.id });
+        this.input({ kind: "send", text: first.text, images: first.images });
+      });
+    }
   }
   private say(text: string, at: number) {
     const parts = [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))];
@@ -361,6 +440,22 @@ class MockChat {
     this.at(at + 240, () => this.emit({ event: "message", id: `m${++this.seq}`, text }));
   }
   input(i: ChatInput) {
+    if (i.kind === "send" && this.turn && i.id) {
+      // sent while a turn runs: it waits until the agent takes it
+      this.queue.push({ text: i.text, id: i.id, images: i.images });
+      this.emit({ event: "message.queued", id: i.id });
+      return;
+    }
+    if (i.kind === "mode") {
+      if (!(MOCK_MODES[this.agent] ?? []).includes(i.mode)) throw new Error(`not a mode omher offers: ${i.mode}`);
+      this.at(20, () => this.emit({ event: "session.info", mode: i.mode }));
+      return;
+    }
+    if (i.kind === "effort") {
+      if (!(MOCK_CONTROLS[this.agent]?.efforts ?? []).includes(i.effort)) throw new Error(`unknown effort ${i.effort}`);
+      this.at(20, () => this.emit({ event: "session.info", effort: i.effort }));
+      return;
+    }
     if (i.kind === "send") {
       if (!this.turn) {
         this.turn = true;

@@ -2,6 +2,7 @@ mod accounts;
 mod agent_chat;
 mod appimage;
 mod bridge;
+mod git_branch;
 mod hermes_auth;
 mod session_files;
 mod sessions;
@@ -315,8 +316,9 @@ async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume:
     .map_err(|e| e.to_string())?
 }
 
-/// What the person did in chat `id`: `{kind:"send", text}`, `{kind:"interrupt"}`,
-/// `{kind:"approve", request_id, choice}`, `{kind:"clarify", request_id, answer}`, `{kind:"model", model}`.
+/// What the person did in chat `id`: `{kind:"send", text, images, id}`, `{kind:"interrupt"}`,
+/// `{kind:"approve", request_id, choice}`, `{kind:"clarify", request_id, answer}`, `{kind:"model", model}`,
+/// `{kind:"mode", mode}` (one of `agent_chat::modes_for`), `{kind:"effort", effort}`.
 #[tauri::command]
 async fn chat_input(shell: State<'_, Shell>, id: u32, input: agent_chat::Input) -> Result<(), String> {
     let chats = shell.chats.clone();
@@ -353,6 +355,12 @@ async fn session_file_read(path: String) -> Result<tauri::ipc::Response, String>
     let real = session_files::check(&home, &path)?;
     let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(real)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// The git branch of a session's folder, from its `.git/HEAD` only (no program runs); "" outside a repository.
+#[tauri::command]
+async fn session_branch(cwd: String) -> Result<String, String> {
+    Ok(git_branch::branch(std::path::Path::new(&cwd)))
 }
 
 /// Remove session `session`'s saved files (it was closed).
@@ -459,6 +467,7 @@ pub fn run() {
             session_file_read,
             session_files_remove,
             session_files_prune,
+            session_branch,
             chat_close_all,
             open_media,
             open_hermes_auth
