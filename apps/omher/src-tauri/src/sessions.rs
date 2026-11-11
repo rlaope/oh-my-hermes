@@ -69,8 +69,10 @@ pub const AGENTS: [Agent; 9] = [
 ];
 
 /// Claude Code's structured mode: one long-lived `-p` process reading and writing stream-json, with tool
-/// approvals sent to us over the same stream (`--permission-prompt-tool stdio`) instead of a TUI prompt.
-pub const CLAUDE_CHAT_ARGS: [&str; 9] = [
+/// approvals sent to us over the same stream (`--permission-prompt-tool stdio`) instead of a TUI prompt, and each
+/// message the person sent echoed back when Claude Code takes it (`--replay-user-messages`), so a message sent
+/// while a turn runs shows as waiting until then.
+pub const CLAUDE_CHAT_ARGS: [&str; 10] = [
     "-p",
     "--input-format",
     "stream-json",
@@ -80,6 +82,7 @@ pub const CLAUDE_CHAT_ARGS: [&str; 9] = [
     "--include-partial-messages",
     "--permission-prompt-tool",
     "stdio",
+    "--replay-user-messages",
 ];
 
 /// The fixed arguments that start agent `id` in its structured mode, or `None` when it has none here. These
@@ -1013,7 +1016,7 @@ mod tests {
         );
         assert_eq!(
             chat_args("claude").unwrap(),
-            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"]
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages"]
         );
         assert_eq!(chat_args("codex").unwrap(), ["app-server"]);
         assert_eq!(chat_args("pi").unwrap(), ["--mode", "rpc"]);

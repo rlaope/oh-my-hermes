@@ -119,6 +119,9 @@ export type MessageItem = {
   text: string;
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
+  /** user rows only: sent while a turn ran, and the agent has not taken it yet (`queued`), or Stop threw it away
+   *  before the agent read it (`dropped`). */
+  wait?: "queued" | "dropped";
   /** user rows only: sent with "Reply there" (where the person pointed the bot). */
   reply?: { source: string; label: string };
   /** user rows only: files sent with it, shown from the local copies (never read back). */
@@ -893,6 +896,24 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         ]),
       );
       return bumpUnread(next, bot);
+    }
+    // a message sent while a turn ran (a SESSIONS chat): waiting until the agent takes it, or thrown away by Stop
+    case "message.queued":
+    case "message.taken":
+    case "message.dropped": {
+      const id = (ev as { id?: unknown }).id;
+      if (typeof id !== "string" || !state.chats[bot]?.items.some((i) => i.kind === "user" && i.id === id)) return state;
+      const wait = ev.event === "message.queued" ? ("queued" as const) : ev.event === "message.dropped" ? ("dropped" as const) : undefined;
+      return touchChat(state, bot, (c) =>
+        withItems(
+          c,
+          c.items.map((i) => {
+            if (i.kind !== "user" || i.id !== id) return i;
+            const { wait: _old, ...rest } = i;
+            return wait ? { ...rest, wait } : rest;
+          }),
+        ),
+      );
     }
     default:
       return state;

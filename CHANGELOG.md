@@ -300,6 +300,18 @@ All notable changes will be documented here.
     (GitHub, Slack with its channel, Google, X, YouTube, Notion, Linear, Figma,
     npm); the full URL is in the tooltip and omher fetches nothing from it.
     (#2758)
+- **A SESSIONS chat has its working controls.** The composer row shows the
+  session's permission mode as a quiet label (Claude Code: Ask, Plan, Accept
+  edits; Codex: Read-only, Ask, Auto in folder), switched with the agent's
+  own control and kept across a restart; nothing offers a mode that skips
+  approvals or lifts the sandbox. The model pill shows the agent's own
+  reasoning levels, and its menu gets the bot picker's search and provider
+  groups. `/` at the start of the box lists the commands and skills the
+  agent reported. The line under the box shows the folder's git branch and
+  the context in use as the agent counts it. A message sent while a turn
+  runs shows Waiting until the agent takes it, and Not sent when Stop drops
+  it.
+
 - **omher 0.2.2.** Codex from the ChatGPT app counts as installed, and an
   empty SESSIONS section is one quiet row.
   - **Codex.** On macOS, the Codex CLI inside the ChatGPT or Codex desktop app

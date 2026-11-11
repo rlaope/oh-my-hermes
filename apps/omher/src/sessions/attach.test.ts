@@ -106,7 +106,7 @@ describe("files in a session chat", () => {
       [id, "notes.txt", 4],
     ]);
     const send = calls().filter((c) => c.op === "chat.input").pop()!;
-    expect(send.input).toEqual({
+    expect(send.input).toMatchObject({
       kind: "send",
       text: `what is this?\n\nAttached file (a copy omher saved; open it with your tools):\n- /Users/you/.omher/session-files/${id}/1-notes.txt`,
       images: [`/Users/you/.omher/session-files/${id}/1-shot.png`],
@@ -126,7 +126,7 @@ describe("files in a session chat", () => {
     const ops = calls().map((c) => c.op).filter((o) => o !== "reset");
     expect(ops.slice(0, 3)).toEqual(["file.save", "chat.start", "chat.input"]);
     const send = calls().find((c) => c.op === "chat.input")!;
-    expect(send.input).toEqual({ kind: "send", text: "", images: [`/Users/you/.omher/session-files/${id}/1-word.png`] });
+    expect(send.input).toEqual({ kind: "send", text: "", images: [`/Users/you/.omher/session-files/${id}/1-word.png`], id: expect.stringMatching(/^local-/) });
     const user = store.getState().chats[ss.chatKey(id)!].items.find((i) => i.kind === "user")!;
     expect((user as { files: unknown[] }).files).toHaveLength(1);
   });

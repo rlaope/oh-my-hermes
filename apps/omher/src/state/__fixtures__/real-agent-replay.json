@@ -44,6 +44,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Fable 5.2"
       },
       {
@@ -107,6 +108,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Fable 5.2"
       },
       {
@@ -295,6 +297,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Fable 5.2"
       },
       {
@@ -403,6 +406,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Fable 5.2"
       },
       {
@@ -550,6 +554,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Fable 5.2"
       },
       {
@@ -629,6 +634,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Haiku 5.5"
       },
       {
@@ -721,6 +727,7 @@
         "agent_session": "bc03da85-b58e-4e10-81a0-6a7ee39a6d01",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Opus 5.5"
       },
       {
@@ -776,6 +783,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -851,6 +859,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -1077,12 +1086,14 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -1199,6 +1210,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -1240,6 +1252,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1345,6 +1358,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1591,6 +1605,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1750,6 +1765,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1889,6 +1905,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2060,6 +2077,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2165,6 +2183,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2308,6 +2327,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2393,6 +2413,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6-astra"
       },
       {
@@ -3150,7 +3171,12 @@
     "agent": "omo",
     "events": [
       {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
         "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
         "event": "session.info",
         "model": "Claude Fable 5.1"
       },
@@ -3706,6 +3732,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3756,6 +3783,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3837,6 +3865,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3905,6 +3934,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3979,6 +4009,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -4054,6 +4085,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -4100,6 +4132,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -4154,6 +4187,7 @@
     "events": [
       {
         "agent_session": "01a1c3b9-9fa8-7324-a15c-615875b6d647",
+        "effort": "off",
         "event": "session.info",
         "model": ""
       },
@@ -4171,5 +4205,367 @@
       }
     ],
     "name": "pi-signed-out.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "commands": [
+          {
+            "description": "Free up context by summarizing the conversation so far",
+            "hint": "<optional custom summarization instructions>",
+            "kind": "command",
+            "name": "compact",
+            "prefix": "/"
+          },
+          {
+            "description": "Show current context usage",
+            "hint": "",
+            "kind": "command",
+            "name": "context",
+            "prefix": "/"
+          },
+          {
+            "description": "Initialize a new CLAUDE.md file with codebase documentation",
+            "hint": "",
+            "kind": "command",
+            "name": "init",
+            "prefix": "/"
+          },
+          {
+            "description": "Create polished, validated architecture, workflow, sequence, data-flow, and lifecycle/state diagrams as explorable standalone HTML with inline SVG, dark/light …",
+            "hint": "",
+            "kind": "skill",
+            "name": "archify",
+            "prefix": "/"
+          },
+          {
+            "description": "Review Archify issues, PRs, or code through value, cost, and impact to support evidence-based maintenance decisions. Use for issue triage, change reviews, and …",
+            "hint": "",
+            "kind": "skill",
+            "name": "archify-review",
+            "prefix": "/"
+          },
+          {
+            "description": "사이오닉 테크 블로그(sionic-ai-website public/blog) 본문에 넣는 인터랙션 블록을 만든다. 글의 표·코드 블록·수치를 읽어 전/후 토글 막대(toggle-bars), 탭으로 골라 보기(tabs), 기준값 슬라이더(threshold) 중 맞는 형식을 고르고, 본문…",
+            "hint": "",
+            "kind": "skill",
+            "name": "blog-interaction",
+            "prefix": "/"
+          },
+          {
+            "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+            "hint": "",
+            "kind": "command",
+            "name": "deep-research",
+            "prefix": "/"
+          },
+          {
+            "description": "Grant or revoke Claude agent access to your Design projects",
+            "hint": "consent | revoke",
+            "kind": "command",
+            "name": "design",
+            "prefix": "/"
+          }
+        ],
+        "event": "session.commands"
+      },
+      {
+        "event": "session.info",
+        "mode": "default"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "For complex work and everyday tasks",
+            "id": "opus",
+            "label": "Opus 5.5"
+          },
+          {
+            "detail": "For your toughest challenges",
+            "id": "fable",
+            "label": "Fable 5.2"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "mode": "plan"
+      },
+      {
+        "event": "session.usage",
+        "max": 1000000,
+        "used": 23386
+      }
+    ],
+    "name": "claude-9-controls.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "52299e78-5788-4651-b086-614d325a4d12",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Fable 5.2"
+      },
+      {
+        "detail": "sleep 8",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01PKUmj2w7zBnDLEvHYMB2sh"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01PKUmj2w7zBnDLEvHYMB2sh"
+      },
+      {
+        "event": "message",
+        "id": "msg_q9-0",
+        "text": "FIRST\nSECOND"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-9-queued.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      {
+        "commands": [
+          {
+            "description": "Inspect loaded builtin hook sources and diagnostics.",
+            "hint": "",
+            "kind": "command",
+            "name": "hooks",
+            "prefix": "/"
+          },
+          {
+            "description": "Open the pending question",
+            "hint": "",
+            "kind": "command",
+            "name": "answer",
+            "prefix": "/"
+          },
+          {
+            "description": "Show or edit the todo list (edit/copy/export/import/append/start/done/drop/rm)",
+            "hint": "",
+            "kind": "command",
+            "name": "todo",
+            "prefix": "/"
+          },
+          {
+            "description": "[omh] Company hiring or HR process to structure: turn hiring and people context into a fair, structured recruiting or people-operations brief. Use when the use…",
+            "hint": "",
+            "kind": "skill",
+            "name": "skill:omh-people-ops",
+            "prefix": "$"
+          },
+          {
+            "description": "Read first to make, edit, animate or render any video with HyperFrames (HTML rendered to video), including launch films, explainers, music videos, charts, maps…",
+            "hint": "",
+            "kind": "skill",
+            "name": "skill:hyperframes",
+            "prefix": "$"
+          }
+        ],
+        "event": "session.commands"
+      }
+    ],
+    "name": "omo-9-controls.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "effort": "low",
+        "event": "session.info"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "I read this as a direct output request - print the numbers 1 to 80, one per line. I'll stop once the list is written.\n\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80"
+      },
+      {
+        "event": "message",
+        "id": "pi-m2",
+        "text": "SECOND"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omo-9-queued.jsonl"
   }
 ]

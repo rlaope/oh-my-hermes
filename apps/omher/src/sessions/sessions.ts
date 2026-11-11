@@ -34,6 +34,8 @@ import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FI
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
+import { modesOf } from "./controls";
+import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
@@ -65,6 +67,24 @@ export interface SessionsState {
   models: Record<string, ModelOption[]>;
   /** last problem a chat reported that is not a turn's own error (model refused, …), by session id */
   notes: Record<string, string>;
+  /** what each chat's agent reported about itself, by session id */
+  live: Record<string, AgentLive>;
+}
+
+/** What a chat's agent said about its controls (agent_chat.rs events). Nothing here is estimated. */
+export interface AgentLive {
+  /** the permission mode in force ("" = one omher does not offer, the agent's own) */
+  mode?: string;
+  /** the reasoning effort in force */
+  effort?: string;
+  /** the reasoning levels it takes; none = it has no effort control */
+  efforts?: string[];
+  /** its own commands and skills, for the `/` menu */
+  commands?: AgentCommand[];
+  /** context tokens in use and its window, as it counted them */
+  usage?: { used: number; max: number };
+  /** the git branch of its folder ("" = not a repository) */
+  branch?: string;
 }
 
 interface Term {
@@ -142,7 +162,7 @@ const errText = (e: unknown) =>
 const modeOf = (agents: AgentInfo[] | null, id: AgentId) => agents?.find((a) => a.id === id)?.mode ?? agentDef(id).mode;
 
 export function createSessions(host: SessionHost, store: () => Store = getStore, accounts: () => AccountGroup[] | null = () => null) {
-  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {} };
+  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {}, live: {} };
   const listeners = new Set<() => void>();
   const terms = new Map<string, Term>();
   const procs = new Map<string, ChatProc>();
@@ -194,6 +214,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (t && rec(id) && rec(id)!.agentTitle !== t) patchRec(id, { agentTitle: t });
     } catch {
       /* an older bridge, or no file yet */
+    }
+  };
+  const patchLive = (id: string, p: Partial<AgentLive>) => set({ live: { ...state.live, [id]: { ...state.live[id], ...p } } });
+  /** The folder's branch, read again when a turn ends (the agent may have switched it). */
+  const readBranch = async (id: string) => {
+    const r = rec(id);
+    if (!r?.cwd) return;
+    try {
+      const b = await host.branch(r.cwd);
+      if (rec(id) && state.live[id]?.branch !== b) patchLive(id, { branch: b });
+    } catch {
+      /* an older shell */
     }
   };
   const note = (id: string, text: string | null) => {
@@ -267,6 +299,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.title === "string" && ev.title.trim()) p.agentTitle = ev.title.trim();
         if (typeof ev.background === "number") p.background = ev.background;
         patchRec(id, p);
+        const l: Partial<AgentLive> = {};
+        if (typeof ev.mode === "string") l.mode = ev.mode;
+        if (typeof ev.effort === "string" && ev.effort) l.effort = ev.effort;
+        if (Object.keys(l).length) patchLive(id, l);
         if (fresh) {
           onAgentSession(id);
           void readAgentTitle(id);
@@ -275,6 +311,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       case "session.models":
         set({ models: { ...state.models, [id]: Array.isArray(ev.options) ? (ev.options as ModelOption[]) : [] } });
+        return;
+      case "session.efforts":
+        patchLive(id, { efforts: Array.isArray(ev.levels) ? ev.levels.filter((x): x is string => typeof x === "string" && !!x) : [] });
+        return;
+      case "session.commands": {
+        // an agent may send its list in parts (Codex: skills after start-up): keep each entry once
+        const next = parseCommands(ev.commands);
+        const had = state.live[id]?.commands ?? [];
+        const key = (c: AgentCommand) => c.prefix + c.name;
+        const seen = new Set(next.map(key));
+        patchLive(id, { commands: [...had.filter((c) => !seen.has(key(c))), ...next] });
+        return;
+      }
+      case "session.usage":
+        if (typeof ev.used === "number" && typeof ev.max === "number" && ev.max > 0) patchLive(id, { usage: { used: ev.used, max: ev.max } });
         return;
       case "session.error":
         if (ev.kind === "no_chat_mode") {
@@ -306,7 +357,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
         // the agent may have titled the conversation during the turn
-        if (ev.event === "turn.end") void readAgentTitle(id);
+        if (ev.event === "turn.end") {
+          void readAgentTitle(id);
+          void readBranch(id);
+        }
     }
   };
 
@@ -335,6 +389,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         return;
       }
       patchRec(id, { status: "running" });
+      // the mode and effort the person picked before (a restart, a Restart) are set again
+      const again = rec(id);
+      if (again?.mode && modesOf(again.agent).includes(again.mode)) await host.chatInput(proc.hostId, { kind: "mode", mode: again.mode }).catch(() => undefined);
+      if (again?.effort) await host.chatInput(proc.hostId, { kind: "effort", effort: again.effort }).catch(() => undefined);
+      void readBranch(id);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);
       patchRec(id, { status: "failed", error: errText(e) });
@@ -408,7 +467,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (pt) patchRec(id, { promptTitle: pt });
     }
     try {
-      await input(id, { kind: "send", text: t });
+      await input(id, { kind: "send", text: t, id: lid });
     } catch (e) {
       st.dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
     }
@@ -485,7 +544,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const p = await prepare(id, text, files);
     const lid = showWithFiles(id, key, text, p);
     try {
-      await input(id, p.input);
+      await input(id, { ...p.input, id: lid });
     } catch (e) {
       store().dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
     }
@@ -662,7 +721,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (!withFiles) st.dispatch({ type: "local.user", bot: key, id: lid, text, now: Date.now() });
       await startAgentChat(id);
       try {
-        await input(id, withFiles ? withFiles.input : { kind: "send", text });
+        await input(id, withFiles ? { ...withFiles.input, id: lid } : { kind: "send", text, id: lid });
       } catch (e) {
         st.dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
       }
@@ -952,6 +1011,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.title ? { title: s.title } : {}),
         ...(s.agentTitle ? { agentTitle: s.agentTitle } : {}),
         ...(s.promptTitle ? { promptTitle: s.promptTitle } : {}),
+        ...(s.mode ? { mode: s.mode } : {}),
+        ...(s.effort ? { effort: s.effort } : {}),
         ...(s.running && !auto ? { paused: true } : {}),
       };
       list.push(r);
@@ -996,7 +1057,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     delete models[id];
     const notes = { ...state.notes };
     delete notes[id];
-    set({ list, models, notes });
+    const live = { ...state.live };
+    delete live[id];
+    set({ list, models, notes, live });
     const ui = store().getState().ui;
     if (ui.view === "session" && ui.session === id) {
       const next = list[Math.min(idx, list.length - 1)];
@@ -1032,6 +1095,33 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
+  /** Change a chat session's permission mode (Claude Code's own switch; Codex from its next turn). Kept with the
+   *  session, so a restart sets it again. Only the modes controls.ts offers for the agent. */
+  const setMode = async (id: string, mode: string) => {
+    const r = rec(id);
+    if (!r || !modesOf(r.agent).includes(mode)) return;
+    note(id, null);
+    try {
+      await input(id, { kind: "mode", mode });
+      patchRec(id, { mode });
+    } catch (e) {
+      note(id, tr("ss.modelNotChanged", { error: errText(e) }));
+    }
+  };
+
+  /** Change a chat session's reasoning effort, one of the levels its agent reported. */
+  const setEffort = async (id: string, effort: string) => {
+    const r = rec(id);
+    if (!r || !(state.live[id]?.efforts ?? []).includes(effort)) return;
+    note(id, null);
+    try {
+      await input(id, { kind: "effort", effort });
+      patchRec(id, { effort });
+    } catch (e) {
+      note(id, tr("ss.modelNotChanged", { error: errText(e) }));
+    }
+  };
+
   const setTheme = (theme: ITheme) => {
     for (const t of terms.values()) t.term.options.theme = theme;
   };
@@ -1054,6 +1144,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setTheme,
     setView,
     setModel,
+    setMode,
+    setEffort,
     rename,
     restart,
     resume,

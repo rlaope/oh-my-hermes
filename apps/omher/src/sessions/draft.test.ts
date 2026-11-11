@@ -168,7 +168,8 @@ describe("a New session chat", () => {
     const start = calls().find((c) => c.op === "chat.start")!;
     expect(start).toMatchObject({ agent: "codex", cwd: "/w/api" });
     const send = calls().find((c) => c.op === "chat.input")!;
-    expect(send.input).toEqual({ kind: "send", text: "run the tests" });
+    // with the bubble's id, so a message sent while a turn runs can be shown waiting
+    expect(send.input).toEqual({ kind: "send", text: "run the tests", id: expect.stringMatching(/^local-/) });
     expect(calls().indexOf(start)).toBeLessThan(calls().indexOf(send));
     const key = ss.chatKey(id)!;
     expect(store.getState().chats[key].items.find((i) => i.kind === "user")).toMatchObject({ text: "run the tests" });
