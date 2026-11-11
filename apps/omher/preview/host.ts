@@ -81,6 +81,90 @@ const INFO: Record<string, Json> = {
   "juno-bot": { places: { slack: 9, discord: 4 }, first: 5 * 86400, skills: 20 },
   pip: { places: { telegram: 3 }, first: 12 * 86400, skills: 9 },
 };
+// Automations: every bot's cron jobs (the bridge reads each profile's cron/jobs.json), on the same clock as the
+// Schedule tab's routines above. [bot, id, name, cron line, next, last, status, deliver, made (days ago), runs, prompt]
+type AutoSeed = [string, string, string, string, number | null, number | null, string | null, string, number, number, string];
+const AUTOMATIONS: AutoSeed[] = [
+  ["kami", "cron-digest", "Morning digest", "0 9 * * *", 15 * 3600, -9 * 3600, "ok", "bot-chat:kami", 30, 29,
+    "Go through yesterday's PRs, issues and team threads and give me what needs me today, five lines at most."],
+  ["kami", "cron-pr-sweep", "Open PR sweep", "0 17 * * 1-5", 8 * 3600, -16 * 3600, "ok", "origin", 12, 9,
+    "Sort the open PRs in api-server and docs into: needs review, CI broken, ready to merge."],
+  ["juno-bot", "cron-deploy-check", "Post-deploy health check", "every 30m", 20 * MIN, -10 * MIN, "ok", "bot-chat:juno-bot", 5, 212,
+    "Check api-server's health endpoint and p95 latency; say something only when either is off."],
+  ["juno-bot", "cron-release-notes", "Release notes draft", "0 17 * * 1-5", 8 * 3600, -16 * 3600, "ok", "origin", 5, 4,
+    "Draft today's release notes for api-server from the merged PRs."],
+  ["juno-bot", "cron-dep-audit", "Dependency audit", "0 9 * * 1", 6 * 86400, -86400, "error", "local", 5, 1,
+    "Run the dependency audit on api-server and list anything with a known advisory."],
+  ["friren", "cron-tauri-watch", "Tauri release watch", "0 8 * * *", 16 * 3600, -8 * 3600, "ok", "bot-chat:friren", 9, 8,
+    "Check the Tauri releases page; write up anything new that touches the updater or the bundler."],
+  ["pip", "cron-standup", "Standup notes", "30 9 * * 1-5", 17 * 3600, -7 * 3600, "ok", "bot-chat:pip", 12, 9,
+    "Collect this morning's standup updates from #team and file them under Notes / Standups."],
+];
+const ORIGIN: Record<string, { platform: string; place: string }> = {
+  "cron-pr-sweep": { platform: "slack", place: "#eng" },
+  "cron-release-notes": { platform: "slack", place: "#releases" },
+};
+const automations = AUTOMATIONS.map(([bot, id, name, schedule, next, last, status, deliver, made, runsN, prompt]) => ({
+  bot, id, name, schedule, next, last, status, deliver, made, runs: runsN, prompt, paused: false,
+}));
+const automationRow = (a: (typeof automations)[number]) => ({
+  id: a.id, name: a.name, schedule: a.schedule, bot: a.bot,
+  next_run_at: a.paused || a.next === null ? null : nowS() + a.next,
+  last_run_at: a.last === null ? null : nowS() + a.last,
+  last_status: a.status, enabled: !a.paused, paused: a.paused, prompt: a.prompt, script: null, deliver: a.deliver,
+  origin: a.deliver === "origin" ? (ORIGIN[a.id] ?? null) : null, created_at: nowS() - a.made * 86400,
+  last_error: a.status === "error" ? "pnpm audit: registry timed out after 60s" : null, repeat: { times: null, completed: a.runs },
+});
+
+// Plugins: the curated catalog (a slice of the official and verified entries of Hermes' plugin catalog cache, as
+// the bridge's read_catalog returns them), and each bot's installs as `plugins.manage list` rows.
+// name, title, category, tier, version, repo, maintainer, platforms, tools, hooks, needs env, description, pin
+const CATALOG_ROWS: [string, string, string, string, string, string, string, string[], string[], string[], string[], string, string][] = [
+  ["advanced-delegation", "Advanced Delegation", "tools", "official", "1.1.1", "NousResearch/hermes-official-plugins", "NousResearch", [], [], [], [], "Two extra delegation modes for `delegate_task`, next to the built-in default.", "13b2c1c9c8204bf333df240b2aacf98c3e6250b7"],
+  ["agent-importers", "", "tools", "official", "1.2.1", "NousResearch/hermes-official-plugins", "NousResearch", [], [], [], [], "`hermes import-agent`: import an OpenClaw (~/.openclaw, or legacy ~/.clawdbot / ~/.moltbot), Claude Code (~/.claude), Codex CLI (~/.codex), Cursor (~/.cursor), Grok…", "471acd3b4d0d5c12f6f0f6b42db4a2f52a912dba"],
+  ["apify", "Apify", "web", "verified", "0.1.5", "apify/apify-hermes-agent-plugin", "apify", [], ["apify_discover", "apify_start", "apify_collect"], [], ["APIFY_API_TOKEN"], "Apify, the largest marketplace of tools for AI: discover, run, and collect results from thousands of ready-to-run Actors, from the comfort of your agent, plus an…", "a3a7af0c0dda9fdac79d67fb0a7a50b7a39cd91d"],
+  ["blender", "Blender", "tools", "official", "0.4.1", "NousResearch/hermes-official-plugins", "NousResearch", ["windows", "macos", "linux"], [], [], [], "Official Blender Lab MCP server over stdio, pinned to upstream v1.0.3, with a Blender workflow skill.", "9b11ffeda84b077bea9de52d22733c7a41ca581a"],
+  ["camofox", "", "web", "official", "1.1.0", "NousResearch/hermes-official-plugins", "NousResearch", [], ["browser_navigate", "browser_snapshot", "browser_click", "browser_type", "browser_scroll", "browser_back", "browser_press", "browser_get_images", "browser_vision", "browser_console", "browser_import_cookies"], ["on_session_end", "on_session_finalize"], ["CAMOFOX_URL"], "Camofox browser backend: browse with a self-hosted anti-detection Firefox (Camoufox, C++ fingerprint spoofing) through the camofox-browser REST server.", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["elevenlabs-music", "ElevenLabs Music", "tools", "official", "1.0.0", "NousResearch/hermes-official-plugins", "NousResearch", [], ["elevenlabs_music_compose", "elevenlabs_music_compose_plan", "elevenlabs_music_draft_plan", "elevenlabs_music_upload", "elevenlabs_music_stems", "elevenlabs_music_from_video", "elevenlabs_music_finetunes", "elevenlabs_music_job"], [], ["ELEVENLABS_API_KEY"], "ElevenLabs Music for Hermes: describe a song or paste your lyrics and Hermes writes, generates and sends the track, 3 seconds to 10 minutes, vocals or instrumental.", "1e326ddd28ae261821d7714d106fe114999a0bba"],
+  ["elevenlabs-sound-effects", "ElevenLabs Sound Effects", "tools", "official", "1.2.0", "NousResearch/hermes-official-plugins", "NousResearch", [], ["elevenlabs_sound_effect"], [], ["ELEVENLABS_API_KEY"], "ElevenLabs sound effects for Hermes: one tool, elevenlabs_sound_effect, that turns a text description (\"glass shattering on a tile floor\", \"90s hip-hop drum loop…", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["hermes-security", "Security", "tools", "official", "0.1.3", "NousResearch/hermes-official-plugins", "NousResearch", [], ["security_scan_start", "security_scan_get", "security_scan_checkpoint", "security_scan_submit_worker_result", "security_scan_record_validations", "security_scan_record_chains", "security_scan_finalize", "security_scan_cancel", "security_scan_export"], ["on_session_end", "subagent_start", "subagent_stop"], [], "Security review for a local repository.", "8b5b6296bbb900f90e296b4729d2c9a5d1139825"],
+  ["homeassistant", "", "platform", "official", "2.0.1", "NousResearch/hermes-official-plugins", "NousResearch", [], ["ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"], [], ["HASS_TOKEN"], "Home Assistant gateway platform (state-change events in, persistent notifications and cron notify delivery out) plus the homeassistant toolset (ha_list_entities…", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["langfuse", "", "general", "official", "2.0.0", "NousResearch/hermes-official-plugins", "NousResearch", [], [], ["pre_api_request", "post_api_request", "api_request_error", "pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call", "on_session_finalize", "on_session_end", "subagent_start", "subagent_stop"], ["HERMES_LANGFUSE_PUBLIC_KEY", "HERMES_LANGFUSE_SECRET_KEY"], "Langfuse observability for Hermes: one trace per turn, one generation per LLM call (usage and cost from Hermes' own pricing, cache and reasoning tokens included)…", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["mcp-serve", "", "tools", "official", "1.0.0", "NousResearch/hermes-official-plugins", "NousResearch", [], [], [], [], "Run Hermes as an MCP server: `hermes mcp-serve` lets any MCP client (Claude Code, Claude Desktop, Cursor, Codex) list and read your messaging conversations, poll…", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["meshy", "Meshy", "tools", "official", "0.5.0", "NousResearch/hermes-official-plugins", "NousResearch", ["windows", "macos", "linux"], [], [], ["MESHY_API_KEY"], "Meshy AI's own MCP server (pinned @meshy-ai/meshy-mcp-server@0.6.5) for text, image and multi-image to 3D, texturing, remeshing, rigging, animation, concept images…", "2937702cb55bf4c56cbaf71f6467479e3eb4f2ba"],
+  ["spotify", "", "tools", "official", "2.1.0", "NousResearch/hermes-official-plugins", "NousResearch", [], ["spotify_playback", "spotify_devices", "spotify_queue", "spotify_search", "spotify_playlists", "spotify_albums", "spotify_library"], [], [], "Spotify for Hermes: seven tools (playback, devices, queue, search, playlists, albums, library) over the Spotify Web API, plus `hermes spotify login|status|logout`…", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["tavily-plugin", "Tavily", "web", "verified", "1.0.0", "tavily-ai/tavily-hermes-plugin", "tavily-ai", [], [], [], ["TAVILY_API_KEY"], "Search, extract, map, crawl, and research through Tavily hosted MCP, with Tavily skills.", "ac556341056dc903988f63d627d595e468f1cfa9"],
+  ["tinyfish", "TinyFish", "web", "verified", "0.2.5", "tinyfish-io/tinyfish-web-agent-integrations", "tinyfish-io", [], ["tinyfish_agent", "tinyfish_list_profiles", "tinyfish_create_profile", "tinyfish_profile_sign_in", "tinyfish_update_profile", "tinyfish_delete_profile"], ["pre_tool_call", "pre_llm_call", "on_session_finalize"], ["TINYFISH_API_KEY"], "TinyFish: the web, built into Hermes.", "2b29d5c864d08fd9716d6f15c3eafdf487b148d3"],
+  ["xchat", "", "platform", "official", "0.1.0", "NousResearch/hermes-official-plugins", "NousResearch", [], [], [], ["XCHAT_ACCESS_TOKEN"], "X Chat gateway platform: talk to Hermes in X's end-to-end encrypted DMs.", "e7a218f26db88426ab3e7376f0e000b6e356f5e7"],
+  ["cua-spaces", "Cua Spaces", "tools", "verified", "0.4.0", "trycua/hermes-cua-spaces", "trycua", [], [], [], [], "Cua's own plugin: runs Hermes's terminal, file and code tools inside a Cua Space, an isolated Linux, macOS or Windows machine you can watch live, as a terminal…", "82bb8d31517d2d1b8f1ef7f64701558dcac8aea9"],
+  ["reka-provider", "Reka", "models", "verified", "1.0.3", "reka-ai/reka-hermes", "reka-ai", [], [], [], ["REKA_API_KEY"], "Reka as a Hermes model provider: Reka's agent-capable models on Reka's OpenAI-compatible API, each with its context window, tool support and image input declared…", "df031f732c9eddf8b39a0fa240b898da4ca2d6ff"],
+  ["snyk", "", "tools", "official", "", "NousResearch/hermes-official-plugins", "NousResearch", [], [], [], [], "Scan code (SAST), dependencies, container images, IaC and SBOMs with Snyk through its first-party MCP server (pinned snyk@1.1306.0 over npx stdio, CLI analytics…", "abec9e822a23089943dd1d476a104bf746f19f86"],
+  ["touchdesigner", "", "tools", "official", "", "NousResearch/hermes-official-plugins", "NousResearch", [], [], [], [], "Drive a live TouchDesigner session through the twozero MCP server (Streamable HTTP on 127.0.0.1:40404), with the touchdesigner-mcp workflow skill bundled.", "abec9e822a23089943dd1d476a104bf746f19f86"],
+];
+const CATALOG = CATALOG_ROWS.map(([name, title, category, tier, version, repo, maintainer, platforms, tools, hooks, env, description, sha]) => ({
+  name, title, category, tier, version, repo: `https://github.com/${repo}`, maintainer, platforms, tools, hooks, requires_env: env, description, sha,
+}));
+const CATEGORIES = ["automation", "tools", "memory", "voice", "web", "desktop", "models", "platform", "general"];
+const TIER_RANK: Record<string, number> = { official: 0, verified: 1, community: 2 };
+type PluginRow = { name: string; key: string; title: string; version: string; description: string; source: string; enabled: boolean; tier: string; category: string; catalog_name: string | null; tools: number; hooks: number; update_available: boolean; needs_env: string[] };
+const fromCatalog = (name: string, enabled: boolean, extra: Partial<PluginRow> = {}): PluginRow => {
+  const c = CATALOG.find((e) => e.name === name)!;
+  return { name, key: name, title: c.title, version: c.version, description: c.description, source: "user", enabled, tier: c.tier, category: c.category, catalog_name: name, tools: c.tools.length, hooks: c.hooks.length, update_available: false, needs_env: [], ...extra };
+};
+const BUILTIN: PluginRow[] = [
+  { name: "disk-cleanup", key: "disk-cleanup", title: "", version: "2.0.0", description: "Auto-track and clean up ephemeral files (test scripts, temp outputs, cron logs) created during Hermes sessions.", source: "bundled", enabled: true, tier: "bundled", category: "general", catalog_name: null, tools: 0, hooks: 3, update_available: false, needs_env: [] },
+  { name: "fal", key: "image_gen/fal", title: "", version: "1.0.0", description: "FAL.ai image generation backend.", source: "bundled", enabled: true, tier: "bundled", category: "tools", catalog_name: null, tools: 0, hooks: 0, update_available: false, needs_env: [] },
+  { name: "browserbase", key: "browser/browserbase", title: "", version: "1.0.0", description: "Browserbase cloud browser backend for the browser tools.", source: "bundled", enabled: false, tier: "bundled", category: "web", catalog_name: null, tools: 0, hooks: 0, update_available: false, needs_env: ["BROWSERBASE_API_KEY"] },
+  { name: "google_meet", key: "google_meet", title: "", version: "0.2.0", description: "Join a Google Meet call, transcribe live captions, speak in realtime, and follow up afterwards.", source: "bundled", enabled: false, tier: "bundled", category: "tools", catalog_name: null, tools: 5, hooks: 1, update_available: false, needs_env: [] },
+];
+const OMH_PLUGIN: PluginRow = { name: "omh", key: "omh", title: "", version: "4.0.7", description: "Oh My Hermes native bridge: runtime status, HUD, role context, bounded evidence probes and a file-backed memory provider.", source: "user", enabled: true, tier: "user", category: "tools", catalog_name: null, tools: 28, hooks: 12, update_available: false, needs_env: [] };
+const plugins: Record<string, PluginRow[]> = {
+  kami: [OMH_PLUGIN, fromCatalog("hermes-security", true), fromCatalog("tavily-plugin", true, { update_available: true }), fromCatalog("elevenlabs-music", false, { needs_env: ["ELEVENLABS_API_KEY"] }), ...BUILTIN],
+  friren: [fromCatalog("tavily-plugin", true), ...BUILTIN],
+  "juno-bot": [OMH_PLUGIN, fromCatalog("langfuse", true), ...BUILTIN],
+  pip: [...BUILTIN],
+};
+
 const SKILLS = [
   { name: "dag-ulw", description: "Plan big work as parts that run in parallel, each checked before it counts." },
   { name: "plan", description: "Break the work into steps and agree on them before doing it." },
@@ -164,7 +248,8 @@ export const hooks: {
   approve: (bot: string, requestId: string, choice: string) => void;
   clarify: (bot: string, requestId: string) => void;
   interrupt: (bot: string) => void;
-} = { send: () => {}, approve: () => {}, clarify: () => {}, interrupt: () => {} };
+  folder: (bot: string, session: string) => void;
+} = { send: () => {}, approve: () => {}, clarify: () => {}, interrupt: () => {}, folder: () => {} };
 
 const OPS: Record<string, (p: Json) => unknown> = {
   hello: () => ({ bridge: "mock", version: "preview", hermes: { home: "(preview: staged data)", version: "preview" } }),
@@ -178,11 +263,20 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const b = need(p);
     const text = String(p.text ?? "").trim();
     if (!text) throw new OpError("bad_request", "missing text");
+    if (p.session) {
+      setTimeout(() => hooks.folder(b.name, String(p.session)), 0);
+      return { input_id: "preview" };
+    }
     history[b.name].push({ id: `u-${Math.random().toString(36).slice(2, 9)}`, role: "user", text, ts: nowS() });
     setTimeout(() => hooks.send(b.name, text), 0);
     return { input_id: "preview" };
   },
-  "chat.interrupt": (p) => (hooks.interrupt(need(p).name), {}),
+  "chat.interrupt": (p) => {
+    const b = need(p);
+    if (p.session) broadcast({ event: "turn.end", bot: b.name, session: String(p.session), outcome: "interrupted" });
+    else hooks.interrupt(b.name);
+    return {};
+  },
   "approval.respond": (p) => (hooks.approve(need(p).name, String(p.request_id), String(p.choice)), {}),
   "clarify.respond": (p) => (hooks.clarify(need(p).name, String(p.request_id)), {}),
   "elsewhere.list": (p) => ({ sessions: awayRows(need(p).name) }),
@@ -232,6 +326,34 @@ const OPS: Record<string, (p: Json) => unknown> = {
     }
     return { prs };
   },
+  "automations.list": () => ({ automations: automations.map(automationRow) }),
+  "plugins.list": (p) => ({ plugins: structuredClone(plugins[need(p).name] ?? BUILTIN) }),
+  "plugins.catalog": (p) => {
+    need(p);
+    const q = typeof p.query === "string" ? p.query.trim().toLowerCase() : "";
+    const category = String(p.category ?? "");
+    const hits = CATALOG.filter((e) => (!category || e.category === category) && (!q || `${e.name} ${e.title} ${e.description}`.toLowerCase().includes(q)))
+      .sort((a, b) => (TIER_RANK[a.tier] ?? 3) - (TIER_RANK[b.tier] ?? 3) || a.name.localeCompare(b.name))
+      .map(({ sha: _sha, ...e }) => e);
+    const categories = Object.fromEntries(CATEGORIES.map((c) => [c, CATALOG.filter((e) => e.category === c).length]));
+    return { total: CATALOG.length, matched: hits.length, entries: hits, categories, generated_at: new Date(Date.now() - 86400_000).toISOString() };
+  },
+  "plugins.inspect": (p) => {
+    need(p);
+    const c = CATALOG.find((e) => e.name === p.catalog_name);
+    if (!c) throw new OpError("not_found", `${String(p.catalog_name)} is not in the plugin catalog`);
+    const { sha, ...entry } = c;
+    return { entry, sha, agent: c.tools.length + c.hooks.length > 0, desktop: c.category === "desktop", warnings: [] };
+  },
+  "links.places": (p) => (need(p), { places: { slack: { C02DESIGN: "design", C03RELEASES: "releases" }, discord: { "900000000000000009": "releases", "900000000000000012": "ops" } } }),
+  "cli.title": () => ({ title: "" }),
+  // an oh-my-hermes session: a Hermes chat of the bot in that folder (the story answers its first message)
+  "folder.open": (p) => {
+    const b = need(p);
+    const m = models[b.name] as Json;
+    return { session: `fold-${Math.random().toString(36).slice(2, 8)}`, cwd: String(p.cwd ?? ""), model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
+  "folder.close": () => ({}),
   "runs.cli": () => ({ runs: [], agents: { claude: "found", codex: "found", pi: "found", omp: "found", grok: "not_installed" } }),
   "usage.read": () => ({
     providers: [
@@ -247,7 +369,11 @@ const OPS: Record<string, (p: Json) => unknown> = {
   }),
 };
 // Writes the app can ask for: refused with a plain reason (nothing is stored anywhere).
-for (const op of ["bots.rename", "bots.set_avatar", "chat.attach", "folder.open", "folder.close", "accounts.add", "accounts.set_active", "accounts.label", "accounts.remove", "accounts.discard"])
+for (const op of [
+  "bots.rename", "bots.set_avatar", "chat.attach", "accounts.add", "accounts.set_active", "accounts.label", "accounts.remove", "accounts.discard",
+  "automations.add", "automations.pause", "automations.resume", "automations.remove",
+  "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove",
+])
   OPS[op] = () => {
     throw new OpError("preview", "This is a preview: download omher to do this for real.");
   };

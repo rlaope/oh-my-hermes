@@ -4,6 +4,16 @@
 import { FakeSocket } from "./host";
 
 const w = window as unknown as Record<string, unknown>;
+// The preview speaks the site's language: the one picked on omher.app (?lang= or its switch), else English, the
+// site's own default; never the browser's, which the app would take on a first run.
+export const siteLang = (): string => {
+  try {
+    const l = (window.parent !== window ? parent.document.documentElement.lang : "").slice(0, 2);
+    return ["en", "ko", "ja", "zh"].includes(l) ? l : "en";
+  } catch {
+    return "en";
+  }
+};
 // The app keeps its look, pins and recent folders in localStorage; the preview keeps them for this tab only.
 try {
   const ss = window.sessionStorage;
@@ -11,6 +21,7 @@ try {
   if (!ss.getItem("omher.theme")) ss.setItem("omher.theme", "dark");
   ss.setItem("omher.notify", "off");
   ss.setItem("omher.sounds", "off");
+  ss.setItem("omher.lang", siteLang());
 } catch {
   /* storage blocked: the app falls back to its defaults */
 }
@@ -20,8 +31,10 @@ try {
 } catch {
   /* read-only in this browser */
 }
-// The SESSIONS mock host lists these as installed (official marks in the + menu).
-w.__omherMockAgents = ["claude", "codex", "omo", "dsh", "pi", "omp"];
+// The SESSIONS mock host lists every agent as installed, so the + menu shows none dimmed as Not installed. Chat
+// agents answer their first message with the preview note, DSH and Grok open a mock terminal, and oh-my-hermes
+// opens a folder chat of the bot you are on (host.ts folder.open; the story answers it).
+w.__omherMockAgents = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"];
 // Every BridgeClient the app makes (the store's and the add-bot popover's) talks to the in-page host.
 w.WebSocket = FakeSocket;
 document.documentElement.dataset.preview = "1";

@@ -19,6 +19,11 @@
 html .window.panel-open:has(.pn-wide[data-tab="runs"]) {
   --panel-w: 552px;
 }
+/* That leaves the subagent card's head ~290px in the 400px chat: a running card's line ("2 subagents running · 1 of 2
+   · 2m 48s") and its run name fit side by side with a slightly tighter gap. */
+.sa-head {
+  gap: 5px;
+}
 .pv-toast {
   position: fixed;
   left: 50%;
