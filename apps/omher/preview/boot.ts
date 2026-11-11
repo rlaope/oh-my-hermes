@@ -21,7 +21,7 @@ try {
   /* read-only in this browser */
 }
 // The SESSIONS mock host lists these as installed (official marks in the + menu).
-w.__omherMockAgents = ["claude", "codex", "pi", "omp"];
+w.__omherMockAgents = ["claude", "codex", "omo", "dsh", "pi", "omp"];
 // Every BridgeClient the app makes (the store's and the add-bot popover's) talks to the in-page host.
 w.WebSocket = FakeSocket;
 document.documentElement.dataset.preview = "1";

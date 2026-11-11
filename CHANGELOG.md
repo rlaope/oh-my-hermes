@@ -14,32 +14,6 @@ All notable changes will be documented here.
   The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
-- **omher's Automations and Plugins pages work, by hand or by asking the
-  bot, in English, Korean, Japanese or Chinese.** The two sidebar rows that
-  said Soon open pages. Automations lists every bot's cron jobs from each
-  profile's `cron/jobs.json` (read only), with a filter per bot, a status
-  mark per job (done, failed, never ran, paused), an on/off switch, and a
-  detail panel; pause, resume, delete and "+ New" go through that bot's own
-  gateway `cron.manage`, and Hermes' own refusal text shows when it rejects
-  a schedule. Run now and Edit are chat messages, because `cron.manage` has
-  neither: Run now sends `Run my automation "<name>" (id <id>) now.` to the
-  bot's chat and opens it, Edit fills the page's box with `Change automation
-  "<name>": `. A schedule reads in words in the picked language (`0 9 * * 1-5`
-  is "weekdays at 09:00", "평일 09:00"), with Hermes' own text in the tooltip;
-  a shape omher does not know stays as written, and a script job, which has
-  no prompt, names the script it runs. Plugins shows one bot's own plugins, the curated catalog from
-  its catalog cache file and Hermes' built-in ones; toggle, update and remove
-  go through the bot's `plugins.manage`, and an install is catalog-only:
-  Hermes inspects the entry at its pin, a sheet shows the source, what it
-  adds, the keys it needs and that it applies to that bot only, and Install
-  sends that same pin back. Refusals are read from Hermes' reason code
-  (`exists`, `source_moved`). Both pages open with a box that sends a request
-  to a picked bot's chat, and a job or plugin the bot made from chat shows up
-  there as a card (run once, open, undo; open, turn off). Settings › General
-  has a Language row (English, 한국어, 日本語, 中文) that switches at once and
-  is kept in `omher.lang`; the sidebar's labels and every new string are keys
-  in all four languages. `docs/OMHER-BOUNDARY.md` gains rules 24 and 25, and
-  rule 9 names them as its only exceptions.
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
@@ -134,6 +108,15 @@ All notable changes will be documented here.
     that opens to its models grouped by vendor, a long list scrolls inside a
     capped box, and Add key opens your terminal with `hermes auth add`.
     (#2763, #2767)
+  - **Automations and Plugins.** The two sidebar pages that said Soon now
+    work, by hand or by asking a bot. Automations lists every bot's cron jobs
+    with a status mark, an on/off switch and a detail panel; pause, resume,
+    delete and New go through the bot's own gateway, and schedules read in
+    words. Plugins shows a bot's plugins and the curated catalog; toggle,
+    update, remove and a catalog-pinned install go through the bot.
+    `docs/OMHER-BOUNDARY.md` gains rules 24 and 25. (#2768)
+  - **Language.** Settings › General has a Language row (English, 한국어,
+    日本語, 中文) that switches at once. (#2768)
 - **omher 0.2.3.** New sessions open a chat at once, sessions have names, and
   an update asks first and brings you back where you were.
   - **New session.** SESSIONS `+` opens a chat right away, like the Codex app:
