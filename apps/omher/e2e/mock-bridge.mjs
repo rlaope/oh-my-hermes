@@ -158,8 +158,9 @@ const AUTOMATION_SEED = [
   { bot: "kami", id: "a1f0c2d9e801", name: "PR morning digest", schedule: "0 9 * * 1-5", next: r9.next, last: r9.last, status: "ok",
     prompt: "Go through the open PRs in rlaope/oh-my-hermes and sort them into: needs review, CI broken, ready to merge.\nFive lines at most, newest first.",
     deliver: "bot-chat:kami", created: -8 * 24 * 3600, repeat: { times: null, completed: 6 } },
+  // a script job: Hermes runs the file itself, so there is no prompt to show
   { bot: "kami", id: "b7e41d0c22aa", name: "SSO token refresh", schedule: "every 30m", next: 14 * MIN, last: -16 * MIN, status: "ok",
-    prompt: "Refresh the sionic SSO session before it expires. Say nothing unless it fails.", deliver: "local", created: -20 * 24 * 3600,
+    prompt: "", script: "sso_refresh.sh", deliver: "local", created: -20 * 24 * 3600,
     repeat: { times: null, completed: 912 } },
   { bot: "kami", id: "c93a7f1e0b55", name: "Nightly disk cleanup", schedule: "0 0 * * *", next: r0.next, last: r0.last, status: "error",
     error: "rm: /w/cache/build: Permission denied", prompt: "Clear caches and old build output in /w, then report only what was freed.",
@@ -183,7 +184,7 @@ const automationRow = (j) => ({
   id: j.id, name: j.name, schedule: j.schedule, bot: j.bot,
   next_run_at: j.paused || j.next === null ? null : BOOT + j.next,
   last_run_at: j.last === null ? null : BOOT + j.last,
-  last_status: j.status, enabled: !j.paused, paused: Boolean(j.paused), prompt: j.prompt, deliver: j.deliver,
+  last_status: j.status, enabled: !j.paused, paused: Boolean(j.paused), prompt: j.prompt, script: j.script ?? null, deliver: j.deliver,
   origin: j.origin ?? null, created_at: BOOT + j.created, last_error: j.error ?? null, repeat: j.repeat,
 });
 

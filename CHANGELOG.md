@@ -14,7 +14,10 @@ All notable changes will be documented here.
   a schedule. Run now and Edit are chat messages, because `cron.manage` has
   neither: Run now sends `Run my automation "<name>" (id <id>) now.` to the
   bot's chat and opens it, Edit fills the page's box with `Change automation
-  "<name>": `. Plugins shows one bot's own plugins, the curated catalog from
+  "<name>": `. A schedule reads in words in the picked language (`0 9 * * 1-5`
+  is "weekdays at 09:00", "평일 09:00"), with Hermes' own text in the tooltip;
+  a shape omher does not know stays as written, and a script job, which has
+  no prompt, names the script it runs. Plugins shows one bot's own plugins, the curated catalog from
   its catalog cache file and Hermes' built-in ones; toggle, update and remove
   go through the bot's `plugins.manage`, and an install is catalog-only:
   Hermes inspects the entry at its pin, a sheet shows the source, what it

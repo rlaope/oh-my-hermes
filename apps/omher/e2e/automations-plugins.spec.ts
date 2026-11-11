@@ -70,6 +70,12 @@ test("Automations lists every bot's jobs with status, filters by bot and counts 
   await expect(page.getByTestId("auto-row-a1f0c2d9e801")).toContainText("PR morning digest");
   await expect(page.getByTestId("auto-row-a1f0c2d9e801")).toContainText("Go through the open PRs in rlaope/oh-my-hermes");
   await expect(page.getByTestId("auto-row-a1f0c2d9e801")).toContainText(/next: /);
+  // the schedule in words, Hermes' own text kept in the tooltip; a script job names its script
+  await expect(page.getByTestId("auto-row-a1f0c2d9e801").locator(".au-sched")).toHaveText("weekdays at 09:00");
+  await expect(page.getByTestId("auto-row-a1f0c2d9e801").locator(".au-sched")).toHaveAttribute("title", "0 9 * * 1-5");
+  await expect(page.getByTestId("auto-row-b7e41d0c22aa").locator(".au-sched")).toHaveText("every 30 min");
+  await expect(page.getByTestId("auto-row-d01be6a4c7f3").locator(".au-sched")).toHaveText("once, Dec 1, 2026 09:00");
+  await expect(page.getByTestId("auto-row-b7e41d0c22aa")).toContainText("Runs the script sso_refresh.sh");
 
   await expect(page.getByTestId("filter-kami")).toHaveText("Kami 4");
   await page.getByTestId("filter-friren").click();
@@ -187,7 +193,7 @@ test("an automation the bot made in chat leaves a card there: run, open, undo", 
   await expect(card).toBeVisible();
   await expect(card).toContainText("CI watch on my PRs");
   await expect(card).toContainText("New automation");
-  await expect(card).toContainText("every 15m");
+  await expect(card).toContainText("every 15 min");
   await expect(card).toContainText("Kami chat (omher)");
   await expect(page.getByTestId("nav-automations")).toContainText("7");
 
@@ -300,7 +306,7 @@ test("a plugin the bot installed from chat leaves a card there: open, turn off",
 
 // ---- language --------------------------------------------------------------------------------------------------
 
-const RAW_KEY = /\b(auto|plug|nav|card|page|ask|lang|time)\.[a-z][A-Za-z0-9.]*\b/;
+const RAW_KEY = /\b(auto|plug|nav|card|page|ask|lang|time|sched)\.[a-z][A-Za-z0-9.]*\b/;
 
 test("the language picker switches at once (ko, ja); both pages translate and show no raw keys", async ({ page }) => {
   await open(page);
@@ -316,6 +322,9 @@ test("the language picker switches at once (ko, ja); both pages translate and sh
   const auto = page.getByTestId("automations");
   await expect(auto.getByTestId("header")).toContainText("봇이 정해진 시간에 혼자 하는 일");
   await expect(page.getByTestId("auto-summary")).toHaveText("실패 1 · 멈춤 1");
+  await expect(page.getByTestId("auto-row-a1f0c2d9e801").locator(".au-sched")).toHaveText("평일 09:00");
+  await expect(page.getByTestId("auto-row-b7e41d0c22aa").locator(".au-sched")).toHaveText("30분마다");
+  await expect(page.getByTestId("auto-row-b7e41d0c22aa")).toContainText("스크립트 sso_refresh.sh 실행");
   await page.getByTestId("auto-row-a1f0c2d9e801").click();
   await expect(page.getByTestId("auto-run")).toHaveText("지금 실행");
   await expect(page.getByTestId("auto-pause")).toHaveText("멈춤");

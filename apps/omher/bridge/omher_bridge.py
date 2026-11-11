@@ -1084,7 +1084,7 @@ def _origin_place(origin) -> dict | None:
 
 def read_automations(profile_dir: Path) -> list[dict]:
     """A bot's cron jobs for the Automations page: `read_routines`' fields plus what the detail panel shows
-    (prompt, delivery, created, last error, repeat). Read-only; `cron.manage` on the bot's gateway is the
+    (prompt or script name, delivery, created, last error, repeat). Read-only; `cron.manage` on the bot's gateway is the
     only way omher changes a job."""
     out = []
     for j in _read_jobs(profile_dir):
@@ -1094,6 +1094,7 @@ def read_automations(profile_dir: Path) -> list[dict]:
         out.append({**base,
                     "paused": not base["enabled"] or str(j.get("state") or "") == "paused" or bool(j.get("paused_at")),
                     "prompt": str(j.get("prompt") or "")[:AUTOMATION_PROMPT_MAX],
+                    "script": _clip(Path(str(j["script"])).name, 120) if j.get("script") else None,
                     "deliver": str(j.get("deliver") or "local"),
                     "origin": _origin_place(j.get("origin")),
                     "created_at": j.get("created_at"),

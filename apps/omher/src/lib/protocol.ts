@@ -102,6 +102,8 @@ export interface Automation extends Routine {
   paused: boolean;
   /** What the job asks the bot to do (its prompt, up to 2000 characters). */
   prompt: string;
+  /** A script job's file name (Hermes runs the script itself, with no prompt and no model); null otherwise. */
+  script: string | null;
   /** Hermes' deliver target: `bot-chat[:<profile>]`, `origin`, `local`, or a `platform:place` target. */
   deliver: string;
   /** Where `origin` lands, when the job was made from a messenger: the platform and place name. */

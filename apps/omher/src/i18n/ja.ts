@@ -228,6 +228,16 @@ export const ja: Record<Key, string> = {
   "time.inDays": "{n} 日後",
   "time.tomorrow": "明日 {at}",
   "time.today": "今日 {at}",
+  "sched.everyMin": "{n}分ごと",
+  "sched.everyHours": "{n}時間ごと",
+  "sched.everyDays": "{n}日ごと",
+  "sched.daily": "毎日 {at}",
+  "sched.weekdays": "平日 {at}",
+  "sched.weekly": "毎週{day} {at}",
+  "sched.monthly": "毎月{d}日 {at}",
+  "sched.yearly": "毎年{date} {at}",
+  "sched.once": "1回のみ、{date} {at}",
+  "auto.script": "スクリプト {script} を実行",
 
   // plugins (the page)
   "plug.title": "プラグイン",

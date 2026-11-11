@@ -11,6 +11,7 @@ import { deliverParts } from "./Automations";
 import { addsOf } from "./Plugins";
 import { ClockIcon, PlugIcon } from "./icons";
 import { errorLine, nextWords, toSec } from "./kit";
+import { scheduleWords } from "./schedule";
 
 export function RoutineAddedCard({ bot, item }: { bot: string; item: RoutineAddedItem }) {
   const s = useStore();
@@ -45,7 +46,7 @@ export function RoutineAddedCard({ bot, item }: { bot: string; item: RoutineAdde
       <dl className="mk-meta">
         <dt>{t("card.when")}</dt>
         <dd>
-          {live?.schedule ?? item.schedule}
+          {scheduleWords(live?.schedule ?? item.schedule)}
           {next && !gone && <span className="mk-quiet"> · {t("auto.next", { when: nextWords(next) })}</span>}
         </dd>
         <dt>{t("card.deliver")}</dt>

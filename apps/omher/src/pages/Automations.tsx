@@ -9,6 +9,7 @@ import { t } from "../i18n";
 import { Avatar, PlusIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
 import { AskBox, BotChip, errorLine, PageHead, Toggle, atWords, dateWords, nextWords, toSec } from "./kit";
+import { scheduleWords } from "./schedule";
 
 const OK = new Set(["ok", "success", "done", "completed", "delivered"]);
 type Status = "ok" | "failed" | "never" | "paused";
@@ -21,6 +22,8 @@ export function statusOf(a: Automation): Status {
 
 const keyOf = (a: Automation) => `${a.bot}:${a.id}`;
 const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
+/** What the job does, in a line: its prompt, or for a script job (no prompt, no model) the script it runs. */
+export const whatOf = (a: Pick<Automation, "prompt" | "script">) => a.prompt.trim() || (a.script ? t("auto.script", { script: a.script }) : "");
 const PLATFORM: Record<string, string> = { discord: "Discord", slack: "Slack", telegram: "Telegram", whatsapp: "WhatsApp", signal: "Signal" };
 
 /** Where a job's result goes, as one or more `{icon, text}` parts (Hermes' `deliver` may combine targets). */
@@ -229,11 +232,11 @@ function Row({ a, on, busy, onOpen, onToggle }: { a: Automation; on: boolean; bu
       <Avatar bot={a.bot} size={26} />
       <button type="button" className="au-main" onClick={onOpen} aria-current={on ? "true" : undefined}>
         <span className="au-name">{a.name}</span>
-        <span className="au-desc">{firstLine(a.prompt)}</span>
+        <span className="au-desc">{firstLine(whatOf(a))}</span>
       </button>
       <span className="au-when">
         <span className="au-sched" title={a.schedule}>
-          {a.schedule}
+          {scheduleWords(a.schedule)}
         </span>
         <small>{t("auto.next", { when: !a.paused && next ? nextWords(next) : t("auto.nextNone") })}</small>
       </span>
@@ -281,12 +284,12 @@ function Detail({
       </div>
       <div className="au-k">{t("auto.when")}</div>
       <div className="au-v">
-        <span className="au-mono">{a.schedule}</span>
+        <span title={a.schedule}>{scheduleWords(a.schedule)}</span>
         {!a.paused && next && <span className="au-quiet"> · {t("auto.next", { when: nextWords(next) })}</span>}
       </div>
       <div className="au-k">{t("auto.what")}</div>
       <div className="au-prompt" data-testid="auto-prompt">
-        {a.prompt}
+        {whatOf(a)}
       </div>
       <div className="au-k">{t("auto.deliver")}</div>
       <div className="au-v au-dl" data-testid="auto-deliver">

@@ -754,6 +754,15 @@ class Automations(BridgeCase):
                              ("Summarise open PRs\nin five lines", "origin", {"platform": "discord", "place": "#cron"},
                               "timeout", {"times": None, "completed": 4}, False))
             self.assertEqual((rows[1]["paused"], rows[1]["deliver"], rows[1]["repeat"]), (True, "bot-chat:kami", {"times": 1, "completed": 0}))
+            self.assertEqual((a["script"], rows[1]["script"]), (None, None))
+
+    async def test_a_script_job_names_its_script_file_only(self):
+        """A no-agent job has no prompt; the page shows the script's file name, never its folder."""
+        async with Env() as env:
+            self.write_jobs(env, [{"id": "s1", "name": "sso", "prompt": "", "script": "/Users/x/scripts/refresh.sh", "no_agent": True}])
+            s = await self.open(env)
+            row = (await s.req("automations.list"))["result"]["automations"][0]
+            self.assertEqual((row["prompt"], row["script"]), ("", "refresh.sh"))
             self.assertEqual(env.connects, [])  # a file read, no gateway
 
     async def test_writes_go_only_through_cron_manage_with_the_job_id(self):
