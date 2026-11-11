@@ -224,6 +224,10 @@ pub trait Adapter: Send {
     fn name(&self) -> &str {
         "The agent"
     }
+    /// The program found is maybe not the agent at all (`Unrecognized`): its own reason wins over "old version".
+    fn unrecognized(&self) -> bool {
+        false
+    }
 }
 
 /// The adapter for an allow-listed chat agent, or `None` for agents that have no chat mode here. `resume` is a
@@ -270,6 +274,12 @@ impl Adapter for Unrecognized {
     }
     fn in_turn(&self) -> bool {
         self.inner.in_turn()
+    }
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn unrecognized(&self) -> bool {
+        !self.spoke
     }
     fn explain(&self, err: &str) -> String {
         let inner = self.inner.explain(err);
@@ -2575,7 +2585,7 @@ impl ChatSessions {
                         // the start deadline ended it, and already said so
                         Some(why) => (a.in_turn(), why, true),
                         // it never spoke its protocol and refused omher's chat-mode arguments: an old version
-                        None if !answered.load(Ordering::SeqCst) && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
+                        None if !answered.load(Ordering::SeqCst) && !a.unrecognized() && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
                         None => (a.in_turn(), a.explain(&raw), true),
                     }
                 };
