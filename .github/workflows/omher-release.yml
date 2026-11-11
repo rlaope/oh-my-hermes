@@ -2,11 +2,12 @@ name: omher release
 
 # Open-source builds of the omher desktop app, attached to a GitHub Release. No App Store, no Apple
 # Developer certificate and no Windows code-signing certificate: macOS builds carry an ad-hoc signature
-# (`signingIdentity: "-"`), Windows installers are unsigned. The README tells people how to open them
-# the first time (right-click > Open on macOS, "More info > Run anyway" on Windows SmartScreen).
+# (`signingIdentity: "-"`), Windows installers are unsigned, Linux ships an AppImage (and a .deb). The README
+# tells people how to open them the first time (right-click > Open on macOS, "More info > Run anyway" on
+# Windows SmartScreen, `chmod +x` on Linux).
 #
-# In-app updates: each build also makes the updater bundle (macOS `.app.tar.gz`, the Windows NSIS setup exe)
-# and its `.sig`, signed with the TAURI_SIGNING_PRIVATE_KEY secret whose public half is pinned in
+# In-app updates: each build also makes the updater bundle (macOS `.app.tar.gz`, the Windows NSIS setup exe,
+# the Linux AppImage itself) and its `.sig`, signed with the TAURI_SIGNING_PRIVATE_KEY secret whose public half is pinned in
 # tauri.conf.json. The release job writes latest.json and keeps it on a rolling `omher-latest` prerelease,
 # the one fixed URL the app checks (omher releases are not the repo's "latest", which stays OMH's package).
 #
@@ -49,6 +50,11 @@ jobs:
             target: x86_64-pc-windows-msvc
             bundles: nsis,msi
             label: windows-x64
+          # 22.04 on purpose: an AppImage runs on distributions whose glibc is at least the build host's.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+            label: linux-x64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -71,6 +77,12 @@ jobs:
         run: npm install --global pnpm@11
       - name: Add the Rust target
         run: rustup target add ${{ matrix.target }}
+      - name: Install the Linux build libraries (WebKitGTK 4.1, tray, SVG, patchelf for the AppImage)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libssl-dev libgtk-3-dev file
       - name: Install dependencies
         working-directory: apps/omher
         run: pnpm install --frozen-lockfile
@@ -96,6 +108,11 @@ jobs:
               # the updater installs the NSIS setup exe itself, verified against this signature
               cp "$b"/nsis/*.exe.sig "$out/omher-$v-${{ matrix.label }}-setup.exe.sig"
               cp "$b"/msi/*.msi "$out/omher-$v-${{ matrix.label }}.msi" ;;
+            linux-*)
+              # the AppImage is both the download and the in-app updater's payload, verified against its .sig
+              cp "$b"/appimage/*.AppImage "$out/omher-$v-${{ matrix.label }}.AppImage"
+              cp "$b"/appimage/*.AppImage.sig "$out/omher-$v-${{ matrix.label }}.AppImage.sig"
+              cp "$b"/deb/*.deb "$out/omher-$v-${{ matrix.label }}.deb" ;;
           esac
           ls -la "$out"
       - name: Check the macOS app is ad-hoc signed and carries the bridge
@@ -105,6 +122,14 @@ jobs:
           test -f "$app/Contents/Resources/bridge/omher_bridge.py"
           codesign --verify --deep --strict "$app"
           codesign -dv "$app" 2>&1 | grep -q "Signature=adhoc"
+      - name: Check the AppImage carries the bridge
+        if: runner.os == 'Linux'
+        run: |
+          img=$(ls "$RUNNER_TEMP"/out/*.AppImage)
+          chmod +x "$img"
+          (cd "$RUNNER_TEMP" && "$img" --appimage-extract >/dev/null)
+          find "$RUNNER_TEMP/squashfs-root" -path '*bridge/omher_bridge.py' | grep -q .
+          rm -rf "$RUNNER_TEMP/squashfs-root"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: omher-${{ matrix.label }}
@@ -137,6 +162,7 @@ jobs:
               "darwin-aarch64": f"omher-{v}-macos-arm64.app.tar.gz",
               "darwin-x86_64": f"omher-{v}-macos-x64.app.tar.gz",
               "windows-x86_64": f"omher-{v}-windows-x64-setup.exe",
+              "linux-x86_64": f"omher-{v}-linux-x64.AppImage",
           }
           platforms = {}
           for key, name in files.items():
@@ -165,6 +191,7 @@ jobs:
           - **macOS (Apple Silicon):** \`omher-$v-macos-arm64.dmg\`
           - **macOS (Intel):** \`omher-$v-macos-x64.dmg\`
           - **Windows:** \`omher-$v-windows-x64-setup.exe\` (or the \`.msi\`)
+          - **Linux (x86_64):** \`omher-$v-linux-x64.AppImage\` (\`chmod +x\` it, then run it; or the \`.deb\`)
 
           These builds are open source and not notarized. The first time on macOS, right-click omher in
           Applications and choose **Open**. On Windows, if SmartScreen appears, choose **More info**, then

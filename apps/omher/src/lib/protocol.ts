@@ -370,6 +370,11 @@ export interface Account {
   dir?: string | null;
   /** The usage record found in that account's own folder. */
   usage?: UsageProvider | null;
+  /** "cpa": a login a local CLIProxyAPI holds, listed from its auth file name only (id `cpa:<n>`). Read-only:
+   *  no folder, never used for a session, no usage record on this computer. */
+  source?: "cpa";
+  /** This login (Claude Code's own or an omher one) is also one of CLIProxyAPI's. */
+  in_cpa?: boolean;
 }
 
 export interface AccountGroup {
@@ -403,6 +408,19 @@ export interface UsageProvider {
   state: UsageState;
   /** mtime of the file the numbers came from; null when only the CLI was found on PATH. */
   source_mtime: number | null;
+  /** Claude only, with two or more logins on this computer: each one and only its own usage record. */
+  accounts?: UsageAccount[];
+}
+
+export interface UsageAccount {
+  email: string;
+  label: string;
+  /** cli = Claude Code's own login, omher = added in omher, cpa = a local CLIProxyAPI's. */
+  source: "cli" | "omher" | "cpa";
+  in_cpa: boolean;
+  /** "no_record": nothing on this computer says how much of this login is used. */
+  state: UsageState | "no_record";
+  resets_at?: number;
 }
 
 export interface TerminalRun {

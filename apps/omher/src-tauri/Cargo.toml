@@ -24,3 +24,7 @@ tauri-plugin-process = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Linux: the opener plugin's own launcher list, run with the AppImage environment taken out (src/appimage.rs).
+[target.'cfg(target_os = "linux")'.dependencies]
+open = "5"

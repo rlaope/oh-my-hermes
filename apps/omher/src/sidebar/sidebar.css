@@ -618,6 +618,36 @@ button.upd:hover {
 .uc-state.st-limited {
   color: var(--usage-red);
 }
+/* Claude with several logins: one line each, the login on the left, what its own record says on the right */
+.uc-accts {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.uc-ah {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+.uc-a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11.5px;
+}
+.uc-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--body);
+}
+.uc-a .uc-state {
+  flex: none;
+  font-size: 11px;
+}
 
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
    Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. */

@@ -4,6 +4,7 @@ import {
   accountForNewSessions,
   accountName,
   autoSwitchOn,
+  isCpa,
   mergeRow,
   nextAccount,
   pill,
@@ -155,5 +156,24 @@ describe("autoSwitchOn", () => {
     expect(autoSwitchOn("claude", store('{"claude":false}'))).toBe(false);
     expect(autoSwitchOn("codex", store('{"claude":false}'))).toBe(true);
     expect(autoSwitchOn("codex", store("not json"))).toBe(true);
+  });
+});
+
+describe("CLIProxyAPI logins", () => {
+  const cpa = acc("cpa:2", "ready", { email: "ana@example.com", source: "cpa" });
+  it("are titled by the email in the file name and say where they live; a shared login says it is also there", () => {
+    expect(rowTitle(cpa, 1)).toBe("ana@example.com");
+    expect(rowTitle(acc("cpa:3", "ready", { source: "cpa" }), 2)).toBe("CLIProxyAPI login 3");
+    expect(rowSub({ ...cpa, plan: "" })).toBe("CLIProxyAPI");
+    expect(rowSub({ ...acc("default", "active", { email: "o@example.com", in_cpa: true }), plan: "Max 20x" })).toBe(
+      "This computer · also in CLIProxyAPI · Max 20x",
+    );
+    expect(isCpa(cpa)).toBe(true);
+    expect(isCpa(acc("work", "ready"))).toBe(false);
+  });
+  it("are never what auto-switch moves to", () => {
+    const accounts = [acc("default", "limited"), cpa, acc("work", "ready")];
+    expect(nextAccount(accounts, {}, "default")).toEqual({ from: 0, to: 2 });
+    expect(nextAccount([acc("default", "limited"), cpa], {}, "default")).toBeNull();
   });
 });

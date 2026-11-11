@@ -44,6 +44,7 @@ export function planName(plan?: string | null): string {
 export function rowTitle(a: Account, index: number): string {
   if (a.email) return a.email;
   if (a.id === "default") return "This computer";
+  if (isCpa(a)) return `CLIProxyAPI login ${index + 1}`;
   return a.label || `Account ${index + 1}`;
 }
 
@@ -52,6 +53,7 @@ const METHOD: Record<string, string> = { chatgpt: "ChatGPT login", api_key: "API
 /** Where the login lives, the same words for every CLI: "This computer" (the CLI's own) or "Added in omher". When
  *  the title already says "This computer", the login method stands in ("ChatGPT login"). */
 export function rowSource(a: Account & { method?: string | null }): string {
+  if (a.source === "cpa") return "CLIProxyAPI";
   if (a.id !== "default") return "Added in omher";
   if (a.email) return "This computer";
   return (a.method && METHOD[a.method]) || "";
@@ -61,8 +63,14 @@ export function rowSource(a: Account & { method?: string | null }): string {
  *  then source · plan. */
 export function rowSub(a: Account & { method?: string | null; plan?: string }): string {
   const named = a.label && (a.email || a.id === "default") ? a.label : "";
-  return [named, rowSource(a), a.plan ?? ""].filter(Boolean).join(" · ");
+  return [named, rowSource(a), a.in_cpa ? "also in CLIProxyAPI" : "", a.plan ?? ""].filter(Boolean).join(" · ");
 }
+
+/** A login a local CLIProxyAPI holds (listed from its file name): shown, never used for a session or switched to. */
+export const isCpa = (a: Pick<Account, "source">): boolean => a.source === "cpa";
+
+/** What a CLIProxyAPI row says where a usage line would be: nothing on this computer records its usage. */
+export const CPA_USAGE = "No usage record on this computer";
 
 /** The name used outside this page (chat line, session menu): label, else the email, else "#n". */
 export function accountName(a: Account, index: number): string {
@@ -138,7 +146,7 @@ export function nextAccount(
   const from = accounts.findIndex((a) => (activeId ? a.id === activeId : a.state === "active"));
   if (from < 0) return null;
   if (!limited(accounts[from], usage)) return null;
-  const to = accounts.findIndex((a, i) => i !== from && a.state === "ready" && !limited(a, usage));
+  const to = accounts.findIndex((a, i) => i !== from && a.state === "ready" && !isCpa(a) && !limited(a, usage));
   return to < 0 ? null : { from, to };
 }
 

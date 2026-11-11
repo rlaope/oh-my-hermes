@@ -34,15 +34,17 @@ const callsOf = async (op: string) =>
 function installHost() {
   type Ev = { kind: "line"; text: string } | { kind: "exit"; code: number | null };
   const w = window as any;
-  w.__acct = { signIns: [] as { cli: string; account: string }[], cancels: [] as number[], status: {} as Record<string, unknown>, live: {} as Record<number, (e: Ev) => void> };
+  w.__acct = { signIns: [] as { cli: string; account: string }[], cancels: [] as number[], status: {} as Record<string, unknown>, live: {} as Record<number, (e: Ev) => void>, asked: [] as string[] };
   w.__acct.status["claude:default"] = { logged_in: true, email: "owner@example.com", plan: "max_20x", method: "claude.ai" };
   w.__acct.status["codex:default"] = { logged_in: true, email: null, plan: null, method: "chatgpt" };
   w.__acct.status["codex:work"] = { logged_in: true, email: null, plan: null, method: "chatgpt" };
   w.__omherAccountHost = {
     canSignIn: true,
     clis: async () => ({ claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false }),
-    status: async (cli: string, account: string) =>
-      w.__acct.status[`${cli}:${account}`] ?? (cli === "claude" ? { logged_in: false, email: null, plan: null, method: "none" } : null),
+    status: async (cli: string, account: string) => {
+      w.__acct.asked.push(`${cli}:${account}`);
+      return w.__acct.status[`${cli}:${account}`] ?? (cli === "claude" ? { logged_in: false, email: null, plan: null, method: "none" } : null);
+    },
     signIn: async (cli: string, account: string, on: (e: Ev) => void) => {
       const n = w.__acct.signIns.push({ cli, account });
       w.__acct.live[n] = on;
@@ -94,17 +96,17 @@ test("the user row opens Accounts: one plain header line, CLIs on this computer 
   for (const gone of ["Stack your logins", "fill-first", "config.yaml", "secret-key", "CPA ", "management"]) expect(text).not.toContain(gone);
 });
 
-test("This computer: Claude's own login from its status: email, then source · plan; no In use with one login; CPA is one quiet line", async ({ page }) => {
+test("This computer: Claude's own login from its status: email, then source · plan; no In use with one login; CPA logins listed read-only", async ({ page }) => {
   await openAccounts(page);
   const me = row(page, "claude", "default");
   await expect(me.locator(".acc-n")).toHaveText("owner@example.com");
-  await expect(me.locator(".acc-sub")).toHaveText("This computer · Max 20x");
+  await expect(me.locator(".acc-sub")).toHaveText("This computer · also in CLIProxyAPI · Max 20x");
   await expect(me.getByTestId("account-plan")).toHaveText("Max 20x");
   // the only Claude login: nothing to choose between, so no "In use"
   await expect(me.getByTestId("account-pill")).toHaveCount(0);
   await expect(me).toHaveAttribute("data-in-use", "true");
   await expect(page.getByTestId("accounts-claude").getByTestId("accounts-also")).toHaveText(
-    "Also found: CLIProxyAPI with 5 accounts (managed there).",
+    "5 logins come from CLIProxyAPI, which signs in and switches them itself. The ones only it holds are read-only here, and nothing on this computer records their usage.",
   );
   await expect(page.getByTestId("accounts-also")).toHaveCount(1);
   // Codex: usage ring with a plain tooltip; only one In use per CLI
@@ -125,6 +127,27 @@ test("This computer: Claude's own login from its status: email, then source · p
   await expect(page.getByTestId("add-account-pi")).toContainText("Soon");
   const html = await page.content();
   for (const k of ["access_token", "refresh_token", "id_token", "api_key", "OPENAI_API_KEY"]) expect(html).not.toContain(k);
+});
+
+test("all five Claude logins: CLIProxyAPI's other four as read-only rows, no menu, pill, ring or switch", async ({ page }) => {
+  await openAccounts(page);
+  const g = page.getByTestId("accounts-claude");
+  await expect(g.getByTestId("account-row")).toHaveCount(5);
+  await expect(g.locator(".acc-n")).toHaveText(["owner@example.com", "ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"]);
+  const cpa = g.locator('[data-testid=account-row][data-source="cpa"]');
+  await expect(cpa).toHaveCount(4);
+  await expect(cpa.first().locator(".acc-sub")).toHaveText("CLIProxyAPI · No usage record on this computer");
+  await expect(cpa.getByTestId("account-menu")).toHaveCount(0);
+  await expect(cpa.getByTestId("account-pill")).toHaveCount(0);
+  await expect(cpa.locator(".usage-ring")).toHaveCount(0);
+  await expect(cpa.first()).toHaveAttribute("data-in-use", "false");
+  // only one login omher can start a session with: still no In use and no auto-switch for Claude
+  await expect(g.getByTestId("account-pill")).toHaveCount(0);
+  await expect(page.getByTestId("autoswitch-claude")).toHaveCount(0);
+  // the desktop app is never asked about a CLIProxyAPI login (no folder, no CLI to ask)
+  await expect.poll(() => page.evaluate(() => [...new Set((window as any).__acct.asked.filter((k: string) => k.startsWith("claude:")))])).toEqual(["claude:default"]);
+  const html = await page.content();
+  for (const k of ["access_token", "refresh_token", "auth-dir", ".cli-proxy-api"]) expect(html).not.toContain(k);
 });
 
 test("the lines under each group keep one 8px rhythm", async ({ page }) => {
@@ -191,14 +214,15 @@ test("+ Add account runs the CLI's own sign-in; when it ends signed in, the row 
 test("cancelling the sign-in stops it and removes the empty folder", async ({ page }) => {
   await openAccounts(page);
   const g = page.getByTestId("accounts-claude");
+  const own = g.locator('[data-testid=account-row]:not([data-source="cpa"])');
   await g.getByTestId("add-account-claude").click();
   await g.getByTestId("add-confirm-claude").click();
   await expect(g.getByTestId("signin-panel")).toBeVisible();
-  await expect(g.getByTestId("account-row")).toHaveCount(2);
+  await expect(own).toHaveCount(2);
   await g.getByTestId("signin-cancel").click();
   await expect(g.getByTestId("signin-panel")).toHaveCount(0);
   await expect(g.getByTestId("accounts-msg")).toHaveText("Sign-in cancelled. Nothing was added.");
-  await expect(g.getByTestId("account-row")).toHaveCount(1);
+  await expect(own).toHaveCount(1);
   expect(await page.evaluate(() => (window as any).__acct.cancels)).toEqual([1]);
   expect((await callsOf("accounts.discard")).map((c) => c.params)).toEqual([{ cli: "claude", account: "account-2" }]);
   // a sign-in the CLI ends without a login (browser closed) cleans up the same way
@@ -207,7 +231,7 @@ test("cancelling the sign-in stops it and removes the empty folder", async ({ pa
   await expect(g.getByTestId("signin-panel")).toBeVisible();
   await page.evaluate(() => (window as any).__finishSignIn(2, null));
   await expect(g.getByTestId("signin-panel")).toHaveCount(0);
-  await expect(g.getByTestId("account-row")).toHaveCount(1);
+  await expect(own).toHaveCount(1);
   expect((await callsOf("accounts.discard")).length).toBe(2);
 });
 
