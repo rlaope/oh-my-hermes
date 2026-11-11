@@ -168,3 +168,44 @@ test("Add key without the desktop app shows the command to run", async ({ page }
   await page.getByTestId("providers-key-nous").click();
   await expect(page.getByTestId("providers-key-note")).toHaveText("Run hermes auth add nous --type api-key in a terminal.");
 });
+
+test("a long open list scrolls in its own box (≤340px) under a filter that stays visible; vendor gutter is tight", async ({ page }) => {
+  await openProviders(page);
+  const box = page.getByTestId("provider-scroll-nous");
+  const filter = page.getByTestId("provider-filter-nous");
+  await expect(box.getByTestId("provider-model").first()).toBeVisible();
+  const m = await box.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { h: el.getBoundingClientRect().height, sh: el.scrollHeight, overflow: cs.overflowY, shadow: cs.boxShadow };
+  });
+  expect(m.h).toBeLessThanOrEqual(340);
+  expect(m.sh).toBeGreaterThan(m.h); // 58 models do not fit: the box scrolls
+  expect(m.overflow).toBe("auto");
+  expect(m.shadow).toBe("none");
+  // the filter sits outside (above) the scrolling box
+  expect(await filter.evaluate((f) => !!f.closest('[data-testid="provider-scroll-nous"]'))).toBe(false);
+
+  // scroll the list to its end: the filter is still on screen and the page itself did not move
+  const pageTop = await page.locator(".st-body").evaluate((el) => el.scrollTop);
+  await box.hover();
+  await page.mouse.wheel(0, 4000);
+  await expect.poll(() => box.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  await expect(box.getByTestId("provider-model").last()).toBeInViewport();
+  await expect(filter).toBeInViewport();
+  const fb = (await filter.boundingBox())!;
+  const bb = (await box.boundingBox())!;
+  expect(fb.y + fb.height).toBeLessThanOrEqual(bb.y + 0.5);
+  expect(await page.locator(".st-body").evaluate((el) => el.scrollTop)).toBe(pageTop);
+
+  // vendor gutter: chips start within 110px of the body's left edge (was 140)
+  const g = await page.getByTestId("provider-models-nous").evaluate((body) => {
+    const b = body.getBoundingClientRect();
+    const chips = body.querySelector(".pv-ms")!.getBoundingClientRect();
+    return chips.left - b.left;
+  });
+  expect(g).toBeLessThanOrEqual(110);
+
+  // the filter still narrows the scrolled list
+  await filter.fill("grok");
+  await expect(box.getByTestId("provider-model")).toHaveCount(2);
+});
