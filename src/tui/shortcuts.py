@@ -17,9 +17,11 @@ from .theme import Theme
 from .width import cell_width, wrap_line
 
 SHORTCUTS: tuple[tuple[str, str], ...] = (
-    ("Enter", "Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (/stop, "
-              "/steer, /queue, /btw, /bg, /yolo, /effort, /reasoning <level> and the commands about this terminal "
-              "run at once), whatever Hermes' busy_input_mode says"),
+    ("Enter", "Sends the composer; while a turn runs, typed text goes into it now as a steer (shown as your prompt "
+              "above the working row, read at the next tool call); a slash command, a ! line, a prompt with images, "
+              "one sent in plan mode or behind queued lines queues for the turn's end instead (/stop, /steer, "
+              "/queue, /btw, /bg, /yolo, /effort, /reasoning <level> and the commands about this terminal run at "
+              "once), whatever Hermes' busy_input_mode says"),
     ("\\ then Enter, Alt+Enter, Shift+Enter, Ctrl+J", "Adds a line; with a list or menu focused, Ctrl+J moves down instead. "
                                                  "Alt+Enter and Shift+Enter still add a line in an open menu; "
                                                  "backslash then Enter may accept a completion"),

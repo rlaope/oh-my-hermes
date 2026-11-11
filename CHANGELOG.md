@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Enter steers a running turn in the OMH TUI, as Claude Code does.** Text
+  you type and send with Enter while Hermes is working now goes into that turn
+  at once (`session.redirect`, read at the next tool call) and shows as your
+  prompt above the working row, instead of waiting as a `⧗` queued row with a
+  `ctrl+enter to send now` hint. A slash command, a `!` line, a prompt with
+  images, a prompt sent in plan mode, one sent behind lines already queued, or
+  one sent before Hermes has started the turn still queues for the turn's end
+  as before; Ctrl+Enter, Ctrl+J and `/steer` keep working.
+
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no

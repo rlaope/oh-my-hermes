@@ -1353,7 +1353,7 @@ Esc closes it):
 
 | Key | Does |
 | --- | --- |
-| Enter | Sends the composer; while a turn runs, queues it for the turn's end, a slash command too (`/stop`, `/steer`, `/queue`, `/btw`, `/bg`, `/yolo`, `/effort`, `/reasoning <level>` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
+| Enter | Sends the composer; while a turn runs, typed text goes into it now as a steer (shown as your prompt above the working row, read at the next tool call); a slash command, a `!` line, a prompt with images, one sent in plan mode or behind queued lines queues for the turn's end instead (`/stop`, `/steer`, `/queue`, `/btw`, `/bg`, `/yolo`, `/effort`, `/reasoning <level>` and the commands about this terminal run at once), whatever Hermes' `busy_input_mode` says |
 | `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
 | Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
 | Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, slash command, skill prompt or plan prompt waits its turn |
@@ -1587,7 +1587,11 @@ the line as it was and says so. `/reasoning <level>` sets the level as
 `/effort <level>` does, and a typed command says the level set under it.
 
 A steer adds what you typed to the turn that is running, without interrupting
-it: Hermes reads it after its next tool call, or, while it is compressing the
+it, as Claude Code does with text you send mid-turn: Enter sends one while a
+turn runs (so do Ctrl+Enter and `/steer <text>`), unless what you typed is a
+slash command, a `!` line, a prompt with images, a prompt in plan mode, or
+lines are already queued, which queue as before. Hermes reads it after its
+next tool call, or, while it is compressing the
 context, queues it and sends it as the next prompt once compression is done.
 Hermes gives the same answer for both. The steer shows as a dim prompt row
 (`❯ <text>`) right above the working row, as Claude Code shows one, until the
@@ -1612,8 +1616,8 @@ same way. If you
 left the session (`/new`, a switch) before Hermes answered, the text comes
 back to the composer and is not sent to the session you are in, and a notice
 says so; for an agent's steer it names the agent and the session you left. The OMH TUI
-steers only with text you typed and sent this way: a queued prompt is never
-turned into a steer.
+steers only with text you typed and sent: a prompt already queued is never
+turned into a steer unless you send it now with the send-now key.
 
 A slash command you run is echoed in the transcript as `┃ ❯ /name arg` (but
 `/steer`, whose own row is its echo, and a bare `/sessions`, `/rewind`,
@@ -1624,7 +1628,7 @@ A skill command (`/<skill> <request>`) is one row: its echo gives way to the row
 once Hermes answers. That row shows the command, as Hermes names it for the turn (the row a resumed session shows)
 or else as you typed it, not the expanded skill prompt that is sent; an echo already written to the scrollback
 before Hermes answered stays, with the prompt's row under it.
-Typed during a turn, a command waits in the queue (`⧗`, as a prompt does, whatever Hermes'
+Typed during a turn, a command waits in the queue (`⧗`, as a prompt Enter cannot steer does, whatever Hermes'
 `display.busy_input_mode` says) and runs when the turn ends, in the order you sent it: a prompt queued after a
 `/compress` goes once Hermes has answered the `/compress`, and the lines queued after a `/new` or a
 `/sessions <id>` go into the session it opens. A command that opens a picker or a question (bare `/model`, a

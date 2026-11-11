@@ -39,10 +39,11 @@ because over stdio the gateway otherwise waits out its whole deadline; events
 whose envelope `session_id` is not the live session are dropped, except
 `gateway.*` and withdrawals, which match by request id; the stored session id
 is tracked from every `session.info` and written (id only, mode 0600) to
-`HERMES_TUI_ACTIVE_SESSION_FILE`; input sent while a turn runs is queued in
-memory whatever Hermes' `display.busy_input_mode` says, a slash command too
-(only the ones `slash.RUNS_DURING_TURN` names run at once: `_run_slash`), and
-only Esc or `/stop` interrupts a turn.
+`HERMES_TUI_ACTIVE_SESSION_FILE`; typed text sent with Enter while a turn
+runs steers it (`_on_composer`, as Claude Code does), and what a steer cannot
+carry is queued in memory whatever Hermes' `display.busy_input_mode` says, a
+slash command too (only the ones `slash.RUNS_DURING_TURN` names run at once:
+`_run_slash`), and only Esc or `/stop` interrupts a turn.
 The queue is the TUI's own (the gateway has no call that withdraws a prompt):
 its prompts are listed above the composer's top rule, and Up on an empty
 composer takes them back into the composer (a `!` line on its own, never
@@ -4961,6 +4962,16 @@ class App(ModesMixin, AgentViewMixin):
         """Act on what the composer made of `event`; `steer` says the key was Ctrl+Enter. A submit's image tokens go
         with it, to the prompt it sends."""
         if action.kind == SUBMIT:
+            # Enter steers a running turn with typed text, as Claude Code's does: the text shows as a sent prompt
+            # above the working row at once, never as a queued `⧗` row. What a steer cannot carry (a slash command,
+            # a `!` line, images) still queues for the turn's end (`_steer_or_submit`).
+            # Plan mode keeps Enter's queue: a plan request must not land in a turn that can edit. So does a queue
+            # already holding lines: what is sent goes behind them, in the order it was sent. And so does a prompt
+            # sent before Hermes has started the turn (`message.start`): there is no turn yet to steer.
+            steer = steer or (
+                self.transcript.running and self._steer_keys_live() and not self.plan_mode and not self.queued
+                and bool(action.text.strip())
+            )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
             if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer):
                 return  # it goes once the pastes it was typed with are answered, with their images
@@ -5992,8 +6003,9 @@ class App(ModesMixin, AgentViewMixin):
     ) -> None:
         """Send `text`, or queue it behind the running turn; `typed` is what Up puts back in the composer.
 
-        While a turn runs it always queues, whatever Hermes' `display.busy_input_mode` says: Enter never interrupts
-        or steers a turn (Esc and `/stop` interrupt it, the send-now key and `/steer` steer it). `notice` goes under
+        While a turn runs it always queues, whatever Hermes' `display.busy_input_mode` says: it never interrupts
+        or steers a turn (Enter's typed text steers before it gets here, `_on_composer`; Esc and `/stop` interrupt,
+        the send-now key and `/steer` steer). `notice` goes under
         its row (`_submit_prompt`). One that starts a turn waits for Hermes' default model to be checked
         (`_start_turn`), and what is sent while that wait is on queues behind it (`_queue_waits`); a queue the
         person holds (`queue_held`) waits for this very prompt to go on. `images` go with it, queued too.
