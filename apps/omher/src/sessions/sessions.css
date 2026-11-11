@@ -359,7 +359,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  /* never shorter than a few words: with the right panel open the path gives way first */
+  min-width: min(8em, 100%);
   flex: 0 1 auto;
   max-width: 46%;
 }
@@ -674,4 +675,18 @@
 }
 .ss-go:not(:disabled):hover {
   filter: brightness(1.08);
+}
+
+/* "1 still running in the background": a quiet label after the status, never a button or a chip */
+.ss-head-bg {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ss-plans-rows {
+  padding: 4px 2px;
 }

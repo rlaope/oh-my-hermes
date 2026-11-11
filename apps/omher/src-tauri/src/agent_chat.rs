@@ -225,6 +225,12 @@ impl Subagents {
         }
         Some(ev("subagent", f))
     }
+    /// The subagents not yet ended, in the order they started.
+    fn open(&self) -> Vec<String> {
+        let mut v: Vec<(&String, &Sub)> = self.subs.iter().filter(|(_, s)| !s.ended).collect();
+        v.sort_by(|a, b| (&a.1.delegation, a.1.index).cmp(&(&b.1.delegation, b.1.index)));
+        v.into_iter().map(|(k, _)| k.clone()).collect()
+    }
     /// A step the subagent runs now.
     fn step(&self, st: &mut Step, id: &str, tool: &str, step: &str) {
         st.events.extend(self.event(id, "running", json!({"tool": tool, "step": clip(step, 120)})));
@@ -628,6 +634,14 @@ impl Claude {
             self.turn = false;
             self.auto_turn = false;
             self.pending.clear();
+            // a foreground subagent lives inside the turn: a turn that ends without its hand-back ended it too
+            // (Stop, an error); one in the background goes on and ends by its own task notification
+            if outcome != "done" {
+                let open: Vec<String> = self.subs.open().into_iter().filter(|id| !self.bg_subs.contains(id)).collect();
+                for id in open {
+                    self.subs.end(step, &id, "cancelled", "", None);
+                }
+            }
             let mut f = json!({"outcome": outcome});
             if let Some(e) = error.filter(|e| !e.is_empty()) {
                 f["error"] = Value::String(e);
@@ -3953,6 +3967,22 @@ mod tests {
         assert_eq!(text_of(&st.events, "message").len(), 1);
         assert!(st.events.iter().filter(|e| s(e, "event") == "tool.start").all(|e| s(e, "name") == "delegate_task"));
         assert_eq!(names(&st.events).iter().filter(|n| *n == "turn.end").count(), 1);
+    }
+
+    #[test]
+    fn a_claude_turn_stopped_with_a_subagent_out_ends_that_subagent_cancelled() {
+        // claude-9-subagents up to the first hand-back, then Stop: Claude Code ends the turn with
+        // error_during_execution and the second subagent never hands back
+        let lines = real("claude-9-subagents.jsonl");
+        let cut = lines.iter().position(|l| l.contains("\"tool_use_id\":\"toolu_01ScWBRPwx9MFSuupGNdJyEL\"") && l.contains("tool_result")).unwrap();
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        run(&mut c, &lines[..=cut]);
+        let st = c.on_line(r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":""}"#);
+        let b = subs_of(&st.events, "4hw1eo");
+        assert_eq!(b.iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["cancelled"]);
+        assert!(subs_of(&st.events, "NdJyEL").is_empty(), "the subagent that handed back stays done");
+        assert_eq!(names(&st.events).last().map(String::as_str), Some("turn.end"));
     }
 
     #[test]

@@ -185,9 +185,10 @@ test("Esc and Stop send the agent's own interrupt; the model button switches the
   await page.getByTestId("model-opt").nth(1).click();
   await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Terra");
   expect((await calls(page)).find((c) => c.input?.kind === "model")!.input).toEqual({ kind: "model", model: "gpt-6.1-terra" });
-  // the header keeps the toggle and the model button only
+  // the header keeps the toggle, the model button and the panel button (the session's Plans) only
   await page.keyboard.press("Escape");
-  expect(await page.locator("[data-testid=head-right] > *").count()).toBe(2);
+  expect(await page.locator("[data-testid=head-right] > *").count()).toBe(3);
+  await expect(page.locator("[data-testid=head-right] > *").last()).toHaveAttribute("data-testid", "panel-button");
 });
 
 test("a chat session resets first and loads xterm only when its Terminal view opens", async ({ page }) => {

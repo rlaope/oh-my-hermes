@@ -34,18 +34,29 @@ const rowMs = (s: SubagentRow, now: number) => (s.seconds !== undefined ? s.seco
 
 export function SubagentLine({ sub, now, live = true }: { sub: SubagentRow; now: number; live?: boolean }) {
   const ended = subagentEnded(sub);
+  const [open, setOpen] = useState(false);
   // a turn that ended with the child still out and nothing more heard (the bridge dropped, the chat reopened)
   const state = !ended && !live ? "stopped" : sub.state;
   const line = ended ? sub.summary : sub.step;
+  // its name and its task: "general-purpose · Read a.txt first line"; either alone when the agent gives one
+  const title = [sub.name, fewWords(sub.goal)].filter(Boolean).join(" · ") || t("sub.untitled", { n: sub.index + 1 });
+  const canOpen = !!(sub.steps?.length || (ended && sub.summary));
   return (
-    <div className={`sa-row s-${state}`} data-testid="subagent-row" data-state={state} data-sub={sub.id}>
+    <div className={`sa-row s-${state}${open ? " open" : ""}`} data-testid="subagent-row" data-state={state} data-sub={sub.id} data-agent={sub.agent}>
       <span className="sa-mark" title={sub.model ? modelName(sub.model) : undefined}>
         <ModelIcon model={sub.model} size={12} />
       </span>
       <span className="sa-main">
-        <span className="sa-top">
-          <span className="sa-goal" title={sub.goal} data-testid="subagent-goal">
-            {fewWords(sub.goal) || t("sub.untitled", { n: sub.index + 1 })}
+        <button
+          type="button"
+          className="sa-top"
+          aria-expanded={canOpen ? open : undefined}
+          disabled={!canOpen}
+          onClick={() => setOpen((v) => !v)}
+          data-testid="subagent-open"
+        >
+          <span className="sa-goal" title={[sub.name, sub.goal].filter(Boolean).join(" · ")} data-testid="subagent-goal">
+            {title}
           </span>
           <span className={`sa-st ${state}`} data-testid="subagent-state">
             {state === "stopped" ? t("sub.stopped") : t(STATE_KEY[sub.state])}
@@ -53,10 +64,24 @@ export function SubagentLine({ sub, now, live = true }: { sub: SubagentRow; now:
           <span className="sa-t" data-testid="subagent-time">
             {elapsed(rowMs(sub, now))}
           </span>
-        </span>
-        {line && (
+        </button>
+        {line && !open && (
           <span className={`sa-line${ended ? " result" : ""}`} title={line} data-testid="subagent-line">
             {!ended && sub.tool ? <code>{line}</code> : line}
+          </span>
+        )}
+        {open && (
+          <span className="sa-det" data-testid="subagent-detail">
+            {sub.steps?.map((s, i) => (
+              <span key={i} className="sa-step" data-testid="subagent-step">
+                <code>{s.text}</code>
+              </span>
+            ))}
+            {ended && sub.summary && (
+              <span className="sa-ans" data-testid="subagent-answer">
+                {sub.summary}
+              </span>
+            )}
           </span>
         )}
       </span>

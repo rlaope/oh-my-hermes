@@ -2022,7 +2022,11 @@ class DagRuns:
 # Only a session's short title and each sub-run's name, model, state, times and final text (SUMMARY_MAX) leave
 # here; prompts and message bodies are never kept. Nothing here starts, resumes or stops a CLI session.
 
-CLI_AGENTS = ("claude", "codex", "pi", "omp", "grok")
+CLI_AGENTS = ("claude", "codex", "omo", "pi", "omp", "grok")
+OMO_TASKS = 200             # newest OmO task records read per call
+_OMO_TASK = re.compile(r"^st_[A-Za-z0-9_-]{1,64}\.json$")
+_OMO_STATE = {"completed": "done", "failed": "failed", "error": "failed", "cancelled": "cancelled",
+              "aborted": "cancelled", "running": "running", "queued": "running", "pending": "running"}
 CLI_STALE = 600.0           # a sub-run with no result whose transcript has not moved for this long: failed, "no result"
 CLI_WINDOW = 7 * 86400.0    # default `since`: sessions started in the last week
 CLI_FILES = 60              # newest session files read per agent and call
@@ -2050,7 +2054,7 @@ def cli_homes(environ=None) -> dict[str, Path]:
     home = Path.home()
     return {"claude": Path(env.get("CLAUDE_CONFIG_DIR") or home / ".claude"),
             "codex": Path(env.get("CODEX_HOME") or home / ".codex"),
-            "pi": home / ".pi", "omp": home / ".omp", "grok": home / ".grok"}
+            "omo": home / ".omo", "pi": home / ".pi", "omp": home / ".omp", "grok": home / ".grok"}
 
 
 def claude_slug(cwd: str) -> str:
@@ -2200,7 +2204,7 @@ def _claude_fold(s: dict, raw: bytes) -> None:
                 t["launched"] = True  # a background agent: its end arrives later as a task notification
             else:
                 t["result"] = {"error": bool(c.get("is_error")),
-                               "text": _one_line("\n".join(_texts(c.get("content"))), SUMMARY_MAX), "ended": ts}
+                               "text": _one_line(_claude_answer(tur, c), SUMMARY_MAX), "ended": ts}
     if note:
         att = o.get("attachment") if isinstance(o.get("attachment"), dict) else {}
         blob = "\n".join(_texts(content) + _texts(o.get("content")) + _texts(att.get("prompt")))
@@ -2227,6 +2231,20 @@ def _claude_fold(s: dict, raw: bytes) -> None:
         state = _NOTE_STATE.get(str(att.get("status") or ""))
         if att.get("type") == "task_status" and state and isinstance(att.get("taskId"), str):
             s["notes"].setdefault(att["taskId"], {"state": state, "text": "", "ended": ts})
+
+
+_TOOLS_USED = re.compile(r"<tools-used-before-summary>.*?</tools-used-before-summary>", re.S)
+
+
+def _claude_answer(tur: dict, block: dict) -> str:
+    """A subagent's own words: the text of `toolUseResult.content` without the `<tools-used-before-summary>` block,
+    never Claude Code's `[Subagent hand-back]` frame around them; else the tool result's text after that frame."""
+    own = _TOOLS_USED.sub("", "\n".join(_texts(tur.get("content")))).strip()
+    if not own:
+        whole = "\n".join(_texts(block.get("content")))
+        own = whole.split("The report follows:", 1)[-1].split("\nagentId:", 1)[0]
+        own = _TOOLS_USED.sub("", own)
+    return own.replace("```", " ").strip()
 
 
 def _claude_sub_tail(path: Path) -> dict:
@@ -2341,7 +2359,8 @@ class CliRuns:
     """`runs.cli`: CLI agent sessions on this machine that ran sub-runs, as AgentRuns. Claude Code keeps one
     transcript per session in `<claude>/projects/<cwd slug>/<id>.jsonl` (subagents in `<id>/subagents/`), Codex one
     rollout per thread in `<codex>/sessions/YYYY/MM/DD/`, a spawned sub-agent being its own thread whose session
-    meta names its parent. pi, omp and grok keep no sub-run record omher can read; they return no runs."""
+    meta names its parent. OmO keeps one record per subagent in `<omo>/agent/projects/*/senpi-task/tasks/`. pi,
+    omp and grok keep no sub-run record omher can read; they return no runs."""
 
     def __init__(self, homes: dict[str, Path] | None = None, clock=time.time):
         self.homes = {**cli_homes(), **(homes or {})}
@@ -2378,6 +2397,8 @@ class CliRuns:
     def agents(self) -> dict[str, str]:
         out = {"claude": "found" if (self.homes["claude"] / "projects").is_dir() else "not_installed",
                "codex": "found" if (self.homes["codex"] / "sessions").is_dir() else "not_installed"}
+        omo = self.homes.get("omo")
+        out["omo"] = "found" if omo and (omo / "agent" / "projects").is_dir() else "not_installed"
         for name in ("pi", "omp", "grok"):
             out[name] = "no_adapter" if self.homes[name].exists() else "not_installed"
         return out
@@ -2655,6 +2676,80 @@ class CliRuns:
             runs.append(run)
         return runs
 
+    # ---- OmO
+    def omo(self, cwd: str | None, since: float, now: float) -> list[dict]:
+        """OmO's subagents: one record per subagent in `<omo>/agent/projects/<proj>/senpi-task/tasks/st_*.json`
+        (name, task summary, model, status, times, final response), keyed by the session that started them
+        (`root_session_id`, the id omher's OmO session reports). One run per session. Only these records are read,
+        never the subagents' own transcripts (`children/`)."""
+        home = self.homes.get("omo")
+        root = home / "agent" / "projects" if home else None
+        if root is None or not root.is_dir() or root.is_symlink():
+            return []
+        files: list[tuple[float, Path]] = []
+        try:
+            for proj in os.scandir(root):
+                tasks = Path(proj.path) / "senpi-task" / "tasks"
+                if not proj.is_dir(follow_symlinks=False) or not tasks.is_dir() or tasks.is_symlink():
+                    continue
+                for e in os.scandir(tasks):
+                    if _OMO_TASK.match(e.name) and e.is_file(follow_symlinks=False):
+                        m = e.stat().st_mtime
+                        if m >= since:
+                            files.append((m, Path(e.path)))
+        except OSError:
+            return []
+        files.sort(key=lambda x: -x[0])
+        groups: dict[str, list[dict]] = {}
+        for _, p in files[:OMO_TASKS]:
+            rec = self._cached(p, self._json)
+            if not isinstance(rec, dict) or not isinstance(rec.get("root_session_id"), str):
+                continue
+            groups.setdefault(rec["root_session_id"], []).append(rec)
+        runs = []
+        for sid, recs in groups.items():
+            recs.sort(key=lambda r: _iso_ts(r.get("created_at")) or 0.0)
+            nodes = []
+            for r in recs:
+                state = _OMO_STATE.get(str(r.get("status") or ""), "running")
+                started = _iso_ts(r.get("started_at")) or _iso_ts(r.get("created_at"))
+                ended = _iso_ts(r.get("terminal_at"))
+                moved = _iso_ts(r.get("updated_at")) or started or 0.0
+                reason = ""
+                if state == "running" and now - moved > CLI_STALE and ended is None:
+                    state, reason, ended = "failed", "no result", moved
+                elif state == "failed":
+                    reason = _one_line(r.get("error") or r.get("failure") or "failed", 200)
+                label = _one_line(r.get("task_summary") or r.get("description") or r.get("name") or "Subagent", CLI_TITLE)
+                node = _cli_node(str(r.get("task_id") or len(nodes)), label, state, started, ended,
+                                 summary=_one_line(r.get("final_response") or "", SUMMARY_MAX) if state == "done" else "",
+                                 reason=reason)
+                eff = r.get("effective_model") if isinstance(r.get("effective_model"), dict) else {}
+                model = eff.get("model_id") or (r.get("model") if isinstance(r.get("model"), str) else "")
+                if model:
+                    node["model"] = model.rsplit("/", 1)[-1]
+                if isinstance(eff.get("provider"), str) and eff["provider"]:
+                    node["provider"] = eff["provider"]
+                if isinstance(r.get("agent_type"), str) and r["agent_type"]:
+                    node["lane"] = r["agent_type"]
+                node["executor"] = "omo"
+                nodes.append(node)
+            run_cwd = ""
+            spec = recs[0].get("spawn_spec")
+            if isinstance(spec, dict) and isinstance(spec.get("cwd"), str):
+                run_cwd = spec["cwd"]
+            if cwd and run_cwd and _norm(run_cwd) != _norm(cwd):
+                continue
+            state, ended = _run_of(nodes)
+            started = min([n["started"] for n in nodes if n.get("started") is not None] or [0.0])
+            run = {"id": f"omo:{sid}", "kind": "session", "agent": "omo", "owner": {"type": "session", "id": sid},
+                   "title": "OmO session", "cwd": run_cwd, "state": state, "nodes": nodes, "started": started,
+                   "updated": max([_iso_ts(r.get("updated_at")) or 0.0 for r in recs] + [n.get("ended") or 0.0 for n in nodes])}
+            if ended is not None:
+                run["ended"] = ended
+            runs.append(run)
+        return runs
+
     # ---- ops
     def list(self, agent: str | None = None, cwd: str | None = None, since: float | None = None) -> dict:
         now = self.clock()
@@ -2665,6 +2760,8 @@ class CliRuns:
                 runs += self.claude(cwd, since, now)
             if agent in (None, "codex"):
                 runs += self.codex(cwd, since, now)
+            if agent in (None, "omo"):
+                runs += self.omo(cwd, since, now)
             runs.sort(key=lambda r: (r["state"] != "running", -r["updated"]))
             runs = runs[:CLI_RUNS]
             self._last.update({r["id"]: r for r in runs})
@@ -2673,7 +2770,7 @@ class CliRuns:
     def get(self, run_id: str) -> dict:
         agent = run_id.split(":", 1)[0]
         run = self._last.get(run_id)
-        if run is None and agent in ("claude", "codex"):
+        if run is None and agent in ("claude", "codex", "omo"):
             self.list(agent, None, 0.0)
             run = self._last.get(run_id)
         if run is None:
@@ -4274,12 +4371,13 @@ class Bridge:
         return {"runs": await asyncio.to_thread(self.runs.list, bot["name"], bot["path"])}
 
     async def op_runs_get(self, p) -> dict:
-        bot = self._bot(p.get("bot"))
         run = p.get("run")
         if not isinstance(run, str) or not run:
             raise BridgeError("bad_request", "missing run")
+        # a CLI agent's run (a SESSIONS chat's own, or one listed under a bot) is found by its id alone
         if run.split(":", 1)[0] in CLI_AGENTS:
             return await asyncio.to_thread(self.cli.get, run)
+        bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(self.runs.get, bot["name"], bot["path"], run)
 
     async def op_runs_prs(self, p) -> dict:
@@ -4295,7 +4393,7 @@ class Bridge:
         return {"prs": await asyncio.to_thread(self.prs.states, got["run"])}
 
     async def op_runs_cli(self, p) -> dict:
-        """CLI agent sessions with sub-runs: `agent` (claude, codex, pi, omp, grok; all when absent), `cwd` (only
+        """CLI agent sessions with sub-runs: `agent` (claude, codex, omo, pi, omp, grok; all when absent), `cwd` (only
         sessions in that folder) and `since` (epoch seconds; the last week when absent)."""
         agent, cwd, since = p.get("agent"), p.get("cwd"), p.get("since")
         if agent is not None and agent not in CLI_AGENTS:

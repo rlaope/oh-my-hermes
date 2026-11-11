@@ -437,6 +437,23 @@ function cliSeed() {
   return [live, ...runs];
 }
 
+// The mock SESSIONS Claude chat's own run (the MockHost's Claude session id, in the e2e folder): the agent's record
+// of the two subagents of "/subagents", as CliRuns reads it from the session's transcript. Its title is the agent's
+// ("Claude Code session"): the session panel shows the session row's name instead.
+function sessionRun() {
+  const t = now() - 30;
+  const node = (id, label, summary, started, ended) => ({
+    id, label, deps: [], layer: 0, state: "done", model: "claude-fable-5-2", executor: "claude", lane: "general-purpose",
+    summary, started, ended, attempts: [{ n: 1, outcome: "completed", started, ended }],
+  });
+  return {
+    id: "claude:11111111-2222-4333-8444-555555555555", kind: "claude-task", agent: "claude",
+    owner: { type: "session", id: "11111111-2222-4333-8444-555555555555" }, title: "Claude Code session",
+    cwd: "/Users/you/code/omher", state: "done", started: t, updated: t + 10, ended: t + 10,
+    nodes: [node("sa-1", "Read a.txt first line", "alpha line", t, t + 4), node("sa-2", "Count lines of b.txt", "3", t + 1, t + 10)],
+  };
+}
+
 // the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
 const runCounts = (r) => {
   const fixed = r.nodes.filter(
@@ -1031,7 +1048,7 @@ const OPS = {
       .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
   }),
   "runs.cli": (p) => {
-    const AGENTS = ["claude", "codex", "pi", "omp", "grok"];
+    const AGENTS = ["claude", "codex", "omo", "pi", "omp", "grok"];
     if (p.agent !== undefined && !AGENTS.includes(p.agent)) throw new OpError("bad_request", `agent must be one of ${AGENTS.join(", ")}`);
     if (p.cwd !== undefined && (typeof p.cwd !== "string" || !p.cwd)) throw new OpError("bad_request", "cwd must be a folder path");
     if (p.since !== undefined && typeof p.since !== "number") throw new OpError("bad_request", "since must be epoch seconds");
@@ -1066,10 +1083,10 @@ const OPS = {
     return { title: cliTitles.get(`${p.agent}:${p.session}`) ?? "" };
   },
   "runs.get": (p) => {
-    const b = needBot(p);
     const id = needStr(p, "run");
     const cli = cliRuns.find((r) => r.id === id);
     if (cli) return { run: cli, handoffs: {} };
+    const b = needBot(p);
     const run = (runs[b.name] ?? []).find((r) => r.id === id);
     if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
     return { run, handoffs: HANDOFFS[id] ?? {} };
@@ -1300,6 +1317,11 @@ const OPS = {
     if (!Array.isArray(p.events)) throw new OpError("bad_request", "events must be an array");
     for (const ev of p.events) broadcast(ev);
     return { count: p.events.length };
+  },
+  // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
+  "mock.sessionRun": () => {
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), sessionRun()];
+    return { ok: true };
   },
   "mock.reset": () => {
     reset();

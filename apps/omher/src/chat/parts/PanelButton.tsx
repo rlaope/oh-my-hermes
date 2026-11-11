@@ -26,9 +26,13 @@ export const markTabPicked = () => {
 };
 
 export function PanelButton({ bot }: { bot: Bot }) {
-  const s = useStore();
   useRunsPoll(bot.name);
-  const n = workingCount(useBotRuns(bot.name).runs);
+  return <PanelToggle working={workingCount(useBotRuns(bot.name).runs)} />;
+}
+
+/** The button itself: a bot's chat counts the subagents of its runs, a SESSIONS chat those of its own run. */
+export function PanelToggle({ working: n }: { working: number }) {
+  const s = useStore();
   const open = s.ui.panelOpen;
   const key = isMac() ? "⌘." : "Ctrl+.";
   const label = n > 0 ? t(n === 1 ? "head.panelLive1" : "head.panelLive", { n, key }) : t("head.panel", { key });

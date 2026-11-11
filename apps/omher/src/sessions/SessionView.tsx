@@ -22,6 +22,8 @@ import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
+import { PanelToggle } from "../chat/parts/PanelButton";
+import { workingSubagents } from "./SessionPlans";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 
@@ -550,6 +552,11 @@ export function SessionView() {
         >
           {status}
         </span>
+        {showChat && !!rec.background && (
+          <span className="ss-head-bg" data-testid="session-background" title={tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}>
+            {tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}
+          </span>
+        )}
         {canToggle && (
           <div className="head-right ss-head-right" data-testid="head-right">
             <button
@@ -565,6 +572,7 @@ export function SessionView() {
               {rec.view === "terminal" ? <ChatIcon /> : <TerminalIcon />}
             </button>
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
+            {showChat && <PanelToggle working={workingSubagents(c)} />}
           </div>
         )}
       </header>

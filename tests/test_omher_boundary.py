@@ -48,6 +48,8 @@ RULES = (
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
+    "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
+    " transcripts under `children/`).",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -155,6 +157,23 @@ class SubagentEvents(unittest.TestCase):
         self.assertTrue(calls, "no gateway call found: the pattern no longer matches the bridge")
         self.assertEqual({c for c in calls if c.startswith(("subagent.", "delegation."))}, set())
         self.assertNotRegex(src, r"\"(subagent|delegation)\.(steer|interrupt|kill|pause|resume|cancel)\"")
+
+
+    def test_omo_subagents_are_read_from_their_task_records_only(self) -> None:
+        # O15: Plans reads OmO's own record of each subagent (one JSON per task), never a transcript under children/
+        src = BRIDGE.read_text(encoding="utf-8")
+        body = src[src.index("    def omo(self"):src.index("    # ---- ops")]
+        self.assertIn('"senpi-task" / "tasks"', body)
+        self.assertIn("_OMO_TASK.match(e.name)", body)
+        self.assertNotIn("children", body.split('"""', 2)[2])
+        self.assertRegex(src, r'_OMO_TASK = re\.compile\(r"\^st_')
+
+    def test_session_adapters_send_no_subagent_control(self) -> None:
+        # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
+        rust = (SHELL / "agent_chat.rs").read_text(encoding="utf-8")
+        code = rust[: rust.index("#[cfg(test)]\nmod tests")]
+        for word in ("task_send", "send_input", "SendMessage", "subagent/stop", "agent/stop", "thread/interrupt", "collab"):
+            self.assertNotIn(f'"{word}', code, word)
 
 
 class DocPins(unittest.TestCase):

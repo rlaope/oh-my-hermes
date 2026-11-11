@@ -261,6 +261,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.model === "string" && ev.model) p.model = ev.model;
         // the agent named the conversation (Claude Code's session title, a Codex thread name)
         if (typeof ev.title === "string" && ev.title.trim()) p.agentTitle = ev.title.trim();
+        if (typeof ev.background === "number") p.background = ev.background;
         patchRec(id, p);
         if (fresh) {
           onAgentSession(id);
