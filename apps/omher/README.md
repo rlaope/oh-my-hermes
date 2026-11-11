@@ -1,6 +1,6 @@
 # omher
 
-omher is a desktop app for your Hermes bots, on macOS and Windows. Each Hermes profile is one bot. Each bot has one main
+omher is a desktop app for your Hermes bots, on macOS, Windows and Linux. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
 read-only. Under the bots, SESSIONS starts a terminal agent (Claude Code, Codex, oh-my-hermes, pi, oh-my-pi) in a
 folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
@@ -11,7 +11,7 @@ Boundary: [`docs/OMHER-BOUNDARY.md`](../../docs/OMHER-BOUNDARY.md).
 ## Install
 
 **One command (beta).** It installs Hermes Agent and oh-my-hermes if they are missing, then omher
-(macOS and Windows; Linux gets Hermes and OMH only). Download buttons are on [omher.app](https://omher.app/).
+(macOS, Windows and Linux x86_64). Download buttons are on [omher.app](https://omher.app/).
 
 ```sh
 curl -fsSL https://omher.app/omher | sh
@@ -23,8 +23,8 @@ irm https://omher.app/omher.ps1 | iex
 # same as: & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
 ```
 
-The installer copies omher into `/Applications` (or `~/Applications`) on macOS and runs the Windows installer
-silently for your user. `OMH_WITH_HERMES=0` skips installing Hermes; `OMH_WITH_DESKTOP=0` skips the app.
+The installer copies omher into `/Applications` (or `~/Applications`) on macOS, runs the Windows installer
+silently for your user, and on Linux puts the AppImage at `~/.local/bin/omher` with an app menu entry. `OMH_WITH_HERMES=0` skips installing Hermes; `OMH_WITH_DESKTOP=0` skips the app.
 Without `omher@beta` the one-liner installs only the `omh` command, as before.
 
 ![The omher desktop app in dark mode: a bot list on the left, and a chat with the bot Kami that reports a nightly digest from Discord, picks up a Slack thread about 502 errors, runs four steps and answers with the fix](../../assets/omher-in-use-dark.webp)
@@ -56,8 +56,14 @@ xattr -dr com.apple.quarantine /Applications/omher.app
 the `.msi`. The installer is not code-signed, so SmartScreen may say "Windows protected your PC": choose
 **More info**, then **Run anyway**. The installer fetches Microsoft's WebView2 runtime if it is missing.
 
+**Linux (x86_64).** Download `omher-<version>-linux-x64.AppImage`, make it executable and run it:
+`chmod +x omher-*.AppImage && ./omher-*.AppImage`. It needs WebKitGTK 4.1 and FUSE 2 (`libfuse2`; Ubuntu 24.04
+calls it `libfuse2t64`), which most desktops already have. A `.deb` is on the same release. The in-app update
+button replaces the AppImage in place; a `.deb` install is updated by installing the next `.deb` by hand.
+Details and troubleshooting: [`docs/omher-linux.md`](../../docs/omher-linux.md).
+
 Check a download against `SHA256SUMS.txt` on the same release:
-`shasum -a 256 <file>` (macOS) or `certutil -hashfile <file> SHA256` (Windows).
+`shasum -a 256 <file>` (macOS), `sha256sum <file>` (Linux) or `certutil -hashfile <file> SHA256` (Windows).
 
 ### Where omher looks for Hermes
 
