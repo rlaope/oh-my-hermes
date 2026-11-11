@@ -1104,7 +1104,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   calls: its state's mark (below), its name, and what it ran on (a path, a
   command, a query) in parentheses, cut with `…` where the row is too narrow
   (`┃ ● terminal(rm -rf ./tmp-cache)  1.9s`). Under it (`  ⎿  `) it shows the first three lines of what the tool
-  printed and counts the rest (`… +5 lines · ctrl+o shows all`). A read says
+  printed and counts the rest (`… +5 lines · ctrl+o shows all`); a successful
+  `terminal` or `execute_code` run, and any failed call, shows the last three
+  instead, the count above them, since a run's summary or error comes last. A read says
   in one line what it read instead: `Read 715 lines` for
   `read_file`, `12 matches` for
   `search_files` (`3 files` when it listed files, `50+ matches` when Hermes
