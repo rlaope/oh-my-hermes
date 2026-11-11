@@ -180,6 +180,8 @@ test("a file dropped on a terminal is saved and its path typed at the prompt, qu
   await page.getByTestId("session-terminal-toggle").click();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
   await drop(page, "[data-testid=terminal]", [{ name: "my shot.png", type: "image/png", text: "x" }]);
-  await expect.poll(async () => (await calls(page)).filter((x) => x.op === "write").map((x) => x.data).join("")).toMatch(/^'\/Users\/you\/\.omher\/session-files\/s\d+\/1-my shot\.png' $/);
+  // the shell's own quoting: single quotes on macOS and Linux, double quotes on Windows (the page's platform)
+  const QUOTED = process.platform === "win32" ? /^"\/Users\/you\/\.omher\/session-files\/s\d+\/1-my shot\.png" $/ : /^'\/Users\/you\/\.omher\/session-files\/s\d+\/1-my shot\.png' $/;
+  await expect.poll(async () => (await calls(page)).filter((x) => x.op === "write").map((x) => x.data).join("")).toMatch(QUOTED);
   expect((await calls(page)).find((x) => x.op === "file.save")).toMatchObject({ name: "my shot.png" });
 });
