@@ -8,7 +8,8 @@
 import { getStore } from "../src/state/store";
 import { getSessions } from "../src/sessions/sessions";
 import type { AgentId } from "../src/sessions/agents";
-import { away, history, hooks, kamiSeed, nowS, PR_REPO, runs } from "./host";
+import { refreshRuns } from "../src/runs/live";
+import { away, broadcast, history, hooks, kamiSeed, nowS, PR_REPO, runs } from "./host";
 
 type Ev = { event: string; [k: string]: unknown };
 const store = () => getStore();
@@ -18,7 +19,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 // ---- the plan ------------------------------------------------------------------------------------------------
 
-const RUN_BASE = "dag:20261110_091904_d4a1c7e2/docs-dark-mode";
+const RUN_BASE = "dag:20261110_091904_d4a1c7e2/dark-mode";
 let runSeq = 0;
 let RUN = RUN_BASE;
 const runName = () => RUN.split("/").pop()!;
@@ -46,6 +47,24 @@ const SUMMARY: Record<string, string> = {
   contrast: "Every token pair passes WCAG AA.",
   "verify-pr": "Built the docs, checked 14 pages, opened PR #128.",
 };
+// each part's subagent in the chat's fan-out card: its goal, and the step it is on while it runs
+const GOAL: Record<string, string> = {
+  "color-tokens": "Add light and dark color tokens to theme.css",
+  "theme-toggle": "Add a theme toggle to the docs header",
+  "page-styles": "Move the page styles to the new color tokens",
+  "code-colors": "Give code blocks a dark theme with the same contrast",
+  contrast: "Check every token pair against WCAG AA",
+  "verify-pr": "Build the docs, check the pages, open the PR",
+};
+const STEP: Record<string, [string, string]> = {
+  "color-tokens": ["patch", "docs/theme.css"],
+  "theme-toggle": ["patch", "docs/components/Header.tsx"],
+  "page-styles": ["patch", "docs/styles/search.css"],
+  "code-colors": ["patch", "docs/styles/code.css"],
+  contrast: ["terminal", "pnpm contrast:check"],
+  "verify-pr": ["terminal", "pnpm docs:build"],
+};
+const MODEL: Record<string, string> = {};
 // what the open part's subagent reports, line by line, while it works
 const STREAM: Record<string, string[]> = {
   "page-styles": [
@@ -62,6 +81,7 @@ const STREAM: Record<string, string[]> = {
     "- Opened **PR #128**: docs dark mode",
   ],
 };
+for (const [id, , , model] of NODES) MODEL[id] = model;
 type NodeSt = { state: string; started?: number; ended?: number };
 let st: Record<string, NodeSt> = {};
 let runStarted = 0;
@@ -82,7 +102,8 @@ function pushRun(state = "running") {
     };
   });
   runs.live = { id: RUN, kind: "dag", owner: { type: "bot", id: "kami" }, title: "Docs dark mode", goal: "Add dark mode to the docs site and open a PR.", state, started: runStarted, updated: t, nodes, ...(state === "done" ? { ended: t } : {}) };
-  window.dispatchEvent(new Event("omher-preview:runs"));
+  // the app's own reader (Plans, the header's panel button) reads the plan again now, not at its next 3 s poll
+  void refreshRuns("kami");
 }
 function setNode(id: string, state: string, at = nowS()) {
   const s = (st[id] ??= { state: "waiting" });
@@ -98,6 +119,22 @@ function stream(id: string, n: number) {
   (runs.handoffs[RUN] ??= {})[id] = lines.slice(0, n).join("\n");
 }
 const dag = (ids: string[]) => ids.map((node) => ({ run: runName(), node }));
+
+/** Hermes' subagent events for one delegate_task: the chat shows one card per fan-out, a row per part. `state`
+ *  per part: running (with its step), or done (with its result line and time). */
+function fan(key: string, ids: string[], states: Record<string, "running" | "done">, at = Date.now()) {
+  ids.forEach((id, index) => {
+    const state = states[id];
+    if (!state) return;
+    const s = st[id];
+    const [tool, step] = STEP[id];
+    ev("kami", {
+      event: "subagent", id: `${key}-${id}`, delegation: key, index, count: ids.length, goal: GOAL[id], dag: { run: runName(), node: id },
+      model: MODEL[id], state,
+      ...(state === "running" ? { tool, step } : { summary: SUMMARY[id], seconds: Math.max(1, Math.round((s?.ended ?? nowS()) - (s?.started ?? nowS()))) }),
+    }, at);
+  });
+}
 
 // ---- the story clock -----------------------------------------------------------------------------------------
 
@@ -144,9 +181,25 @@ function openNode(id: string) {
     const el = document.querySelector<HTMLButtonElement>(`[data-testid="run-node"][data-node="${id}"]`);
     if (el) {
       if (el.getAttribute("aria-pressed") !== "true") el.click();
+      setTimeout(snapPanel, 120);
     } else if (tries++ < 20) setTimeout(go, 100);
   };
   setTimeout(go, 60);
+}
+
+/** Bringing the open part's details into view scrolls the Plans panel; a line left half under its tab bar (the
+ *  plan's goal) reads as clipped in the hero, so the panel moves on until that line is out of view. */
+function snapPanel() {
+  const sc = document.querySelector<HTMLElement>('[data-testid="details"] .pn-scroll');
+  if (!sc || sc.scrollTop <= 0) return;
+  const top = sc.getBoundingClientRect().top;
+  for (const el of sc.querySelectorAll<HTMLElement>(".ph-goal, [data-testid=\"run-node\"]")) {
+    const r = el.getBoundingClientRect();
+    if (r.top < top - 1 && r.bottom > top + 1) {
+      sc.scrollTop += Math.ceil(r.bottom - top);
+      return;
+    }
+  }
 }
 
 // ---- one loop --------------------------------------------------------------------------------------------------
@@ -196,10 +249,15 @@ function startLoop() {
   st["color-tokens"].started = T / 1000 + 40;
   setNode("theme-toggle", "done", T / 1000 + 455);
   st["theme-toggle"].started = T / 1000 + 40;
+  const f1 = `deleg-${loop}-1`, f2 = `deleg-${loop}-2`, f3 = `deleg-${loop}-3`, f4 = `deleg-${loop}-4`;
+  fan(f1, ["color-tokens", "theme-toggle"], { "color-tokens": "running", "theme-toggle": "running" }, T + 41_000);
+  fan(f1, ["color-tokens", "theme-toggle"], { "color-tokens": "done" }, T + 400_000);
+  fan(f1, ["color-tokens", "theme-toggle"], { "theme-toggle": "done" }, T + 455_000);
   ev("kami", { event: "tool.end", tool_id: "k2", name: "delegate_task", ok: true, ms: 415_000 }, T + 455_000);
   const s3 = T / 1000 + 462;
   ev("kami", { event: "tool.start", tool_id: "k3", name: "delegate_task", detail: "Page styles, Code block colors", dag: dag(["page-styles", "code-colors"]) }, s3 * 1000);
   for (const id of ["page-styles", "code-colors"]) setNode(id, "running", s3 - rand(0, 20));
+  fan(f2, ["page-styles", "code-colors"], { "page-styles": "running", "code-colors": "running" }, s3 * 1000 + 1000);
   ev("kami", { event: "status", text: "Running 2 parts" });
   stream("page-styles", 1);
   pushRun();
@@ -221,21 +279,26 @@ function startLoop() {
     [k(12.5), () => ev("pip", { event: "message", id: `pip-${loop}`, text: "Standup notes are filed: 4 updates, 1 blocker (the iOS build)." })],
     [k(14), () => {
       setNode("code-colors", "done"); pushRun();
+      fan(f2, ["page-styles", "code-colors"], { "code-colors": "done" });
       ev("kami", { event: "status", text: "Running 1 part" });
     }],
     [k(16), () => { stream("page-styles", 5); pushRun(); }],
     [k(17.5), () => {
       setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
+      fan(f2, ["page-styles", "code-colors"], { "page-styles": "done" });
       ev("kami", { event: "tool.end", tool_id: "k3", name: "delegate_task", ok: true, ms: 560_000 });
       ev("kami", { event: "tool.start", tool_id: "kc", name: "delegate_task", detail: "Contrast check", dag: dag(["contrast"]) });
+      fan(f3, ["contrast"], { contrast: "running" });
       ev("kami", { event: "status", text: "Running 1 part" });
     }],
     [k(20.5), () => {
       setNode("contrast", "done"); setNode("verify-pr", "running");
       runs.handoffs[RUN]["verify-pr"] = STREAM["verify-pr"][0];
       pushRun();
+      fan(f3, ["contrast"], { contrast: "done" });
       ev("kami", { event: "tool.end", tool_id: "kc", name: "delegate_task", ok: true, ms: 3_000 });
       ev("kami", { event: "tool.start", tool_id: "k4", name: "delegate_task", detail: "Verify and open PR", dag: dag(["verify-pr"]) });
+      fan(f4, ["verify-pr"], { "verify-pr": "running" });
       openNode("verify-pr");
     }],
     [k(22.5), () => {
@@ -250,6 +313,7 @@ function startLoop() {
       stream("verify-pr", 4);
       setNode("verify-pr", "done");
       pushRun("done");
+      fan(f4, ["verify-pr"], { "verify-pr": "done" });
       ev("kami", { event: "tool.end", tool_id: "k4", name: "delegate_task", ok: true, ms: 60_000 });
     }],
     [k(32.5), () => {
@@ -350,27 +414,34 @@ function planFromScratch() {
     [2.8, () => {
       setNode("color-tokens", "running"); setNode("theme-toggle", "running"); pushRun();
       ev("kami", { event: "tool.start", tool_id: "p2", name: "delegate_task", detail: "Color tokens, Theme toggle", dag: dag(["color-tokens", "theme-toggle"]) });
+      fan(`${RUN}-1`, ["color-tokens", "theme-toggle"], { "color-tokens": "running", "theme-toggle": "running" });
       ev("kami", { event: "status", text: "Running 2 parts" });
     }],
-    [4.6, () => { setNode("color-tokens", "done"); pushRun(); ev("kami", { event: "status", text: "Running 1 part" }); }],
+    [4.6, () => { setNode("color-tokens", "done"); pushRun(); fan(`${RUN}-1`, ["color-tokens", "theme-toggle"], { "color-tokens": "done" }); ev("kami", { event: "status", text: "Running 1 part" }); }],
     [5.6, () => {
       setNode("theme-toggle", "done"); for (const id of ["page-styles", "code-colors"]) setNode(id, "running"); pushRun();
+      fan(`${RUN}-1`, ["color-tokens", "theme-toggle"], { "theme-toggle": "done" });
       ev("kami", { event: "tool.end", tool_id: "p2", name: "delegate_task", ok: true, ms: 2800 });
       ev("kami", { event: "tool.start", tool_id: "p3", name: "delegate_task", detail: "Page styles, Code block colors", dag: dag(["page-styles", "code-colors"]) });
+      fan(`${RUN}-2`, ["page-styles", "code-colors"], { "page-styles": "running", "code-colors": "running" });
       ev("kami", { event: "status", text: "Running 2 parts" });
     }],
-    [7.4, () => { setNode("code-colors", "done"); pushRun(); ev("kami", { event: "status", text: "Running 1 part" }); }],
+    [7.4, () => { setNode("code-colors", "done"); pushRun(); fan(`${RUN}-2`, ["page-styles", "code-colors"], { "code-colors": "done" }); ev("kami", { event: "status", text: "Running 1 part" }); }],
     [8.4, () => {
       setNode("page-styles", "done"); setNode("contrast", "running"); pushRun();
+      fan(`${RUN}-2`, ["page-styles", "code-colors"], { "page-styles": "done" });
       ev("kami", { event: "tool.end", tool_id: "p3", name: "delegate_task", ok: true, ms: 2800 });
       ev("kami", { event: "tool.start", tool_id: "pc", name: "delegate_task", detail: "Contrast check", dag: dag(["contrast"]) });
+      fan(`${RUN}-3`, ["contrast"], { contrast: "running" });
     }],
     [9.6, () => {
       setNode("contrast", "done"); setNode("verify-pr", "running"); pushRun();
+      fan(`${RUN}-3`, ["contrast"], { contrast: "done" });
       ev("kami", { event: "tool.end", tool_id: "pc", name: "delegate_task", ok: true, ms: 1200 });
       ev("kami", { event: "tool.start", tool_id: "p4", name: "delegate_task", detail: "Verify and open PR", dag: dag(["verify-pr"]) });
+      fan(`${RUN}-4`, ["verify-pr"], { "verify-pr": "running" });
     }],
-    [12, () => { setNode("verify-pr", "done"); pushRun("done"); ev("kami", { event: "tool.end", tool_id: "p4", name: "delegate_task", ok: true, ms: 2400 }); }],
+    [12, () => { setNode("verify-pr", "done"); pushRun("done"); fan(`${RUN}-4`, ["verify-pr"], { "verify-pr": "done" }); ev("kami", { event: "tool.end", tool_id: "p4", name: "delegate_task", ok: true, ms: 2400 }); }],
     [12.8, () => {
       ev("kami", { event: "message", id: `p-pr-${runSeq}`, text: "Done in the preview: that is how a plan runs in omher. Before and after:\n\nMEDIA:/w/media/docs-light.webp\nMEDIA:/w/media/docs-dark.webp" });
       ev("kami", { event: "turn.end", outcome: "done" });
@@ -378,6 +449,21 @@ function planFromScratch() {
     }],
   ]);
 }
+
+/** An oh-my-hermes session (a folder chat of the bot) answers its message with the preview note, through the same
+ *  bridge events a real folder chat sends. */
+hooks.folder = (bot, session) => {
+  const name = bot === "juno-bot" ? "Juno" : bot.charAt(0).toUpperCase() + bot.slice(1);
+  const text = document.documentElement.lang === "ko"
+    ? `미리보기 세션이라 ${name}는 실행되지 않았어요. omher를 내려받으면 내 폴더에서 진짜 세션을 시작할 수 있어요.`
+    : `This session is a preview, so ${name} did not run. Download omher to start a real one in your own folder.`;
+  const id = `fv-${Math.random().toString(36).slice(2, 8)}`;
+  after([
+    [0, () => { broadcast({ event: "turn.start", bot, session }); broadcast({ event: "thinking", bot, session }); }],
+    [0.9, () => broadcast({ event: "message", bot, session, id, text })],
+    [1.0, () => broadcast({ event: "turn.end", bot, session, outcome: "done" })],
+  ]);
+};
 
 hooks.approve = (bot, requestId, choice) => {
   if (bot !== "juno-bot" || requestId !== junoAsk) return;
@@ -459,9 +545,11 @@ async function seedSessions() {
   const ids: Record<string, string> = {};
   // two sessions: what fits whole under the four bots and the "needs you" strip in the hero-sized window (a third
   // row was cut in half at 975x568)
+  // the app's own New session path: a draft, its folder, then start (no first message, so nothing is sent)
   for (const [folder, agent] of [["api-server", "codex"], ["web-app", "claude"]] as [string, AgentId][]) {
-    const id = await S.launch(agent, `/Users/you/code/${folder}`);
-    if (id) ids[folder] = id;
+    const id = S.draft(agent);
+    S.setDraft(id, { cwd: `/Users/you/code/${folder}` });
+    if (await S.start(id)) ids[folder] = id;
   }
   store().actions.openSession(null);
   const t = Date.now();
