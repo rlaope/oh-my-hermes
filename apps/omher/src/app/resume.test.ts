@@ -146,6 +146,31 @@ const saved = (): ResumeSnap["sessions"] => [
 ];
 
 describe("sessions restore", () => {
+  it("a DSH session saved by omher 0.2.4 (deepseek-bot's terminal) comes back ended with a plain line and starts nothing", async () => {
+    const g: Record<string, unknown> = {};
+    const store = createStore(quietBridge());
+    const ss = createSessions(new MockHost(g), () => store);
+    ss.restore([
+      { id: "s7", agent: "dsh", cwd: "/w/bot", startedAt: T, view: "terminal", running: true, agentSession: "33333333-2222-4333-8444-555555555555" },
+      { id: "s8", agent: "dsh", cwd: "/w/bot", startedAt: T, view: "chat", running: false, exitCode: 0, agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" },
+    ]);
+    await new Promise((r) => setTimeout(r, 30));
+    const [old, now] = ss.getState().list;
+    expect(old).toMatchObject({ id: "s7", view: "chat", status: "exited", error: "This DSH session ran deepseek-bot (omher 0.2.4). DSH is DeepSeek Harness now: Restart starts it in this folder." });
+    expect(old.paused).toBeUndefined();
+    expect(old.agentSession).toBeUndefined();
+    expect(now).toMatchObject({ id: "s8", view: "chat", status: "exited", agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
+    expect(((g.__omherSessionCalls ?? []) as { op: string }[]).filter((c) => c.op !== "reset")).toEqual([]);
+    // Restart: the old one starts DeepSeek Harness fresh in its folder, the new one continues its harness session
+    await ss.restart("s7");
+    await ss.restart("s8");
+    const starts = (g.__omherSessionCalls as { op: string; agent?: string; resume?: string }[]).filter((c) => c.op === "chat.start" || c.op === "start");
+    expect(starts.map(({ op, agent, resume }) => ({ op, agent, resume }))).toEqual([
+      { op: "chat.start", agent: "dsh", resume: undefined },
+      { op: "chat.start", agent: "dsh", resume: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" },
+    ]);
+  });
+
   it("continues Claude Code and Codex in the same folder and account, pauses the others, keeps ended ones; once only", async () => {
     const g: Record<string, unknown> = {};
     const store = createStore(quietBridge());
