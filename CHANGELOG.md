@@ -4,13 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher keeps the bot's face in place while it works.** After you send a
-  message, the bot's ringed face no longer blinks away when the first status
-  line ("OMH — recalled 2 memories") replaces the typing dots: one face stays
-  in the same spot from send to the end of the reply, through status lines,
-  tool steps and the streaming answer, and a SESSIONS chat's agent mark does
-  the same.
-
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
@@ -37,6 +30,13 @@ All notable changes will be documented here.
   the language (`zh-CN`, `ja`, `ko`), dates follow it too, and `--font` falls
   back to PingFang SC, Hiragino Sans GB, Microsoft YaHei and Noto Sans CJK
   (and their Japanese and Korean siblings).
+
+- **omher keeps the bot's face in place while it works.** After you send a
+  message, the bot's ringed face no longer blinks away when the first status
+  line ("OMH — recalled 2 memories") replaces the typing dots: one face stays
+  in the same spot from send to the end of the reply, through status lines,
+  tool steps and the streaming answer, and a SESSIONS chat's agent mark does
+  the same.
 
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
