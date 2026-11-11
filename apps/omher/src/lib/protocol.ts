@@ -96,6 +96,74 @@ export interface Routine {
 
 export type ApprovalChoice = "once" | "session" | "always" | "deny";
 
+/** One cron job of a bot for the Automations page (`automations.list`), read from its `cron/jobs.json`. */
+export interface Automation extends Routine {
+  bot: string;
+  paused: boolean;
+  /** What the job asks the bot to do (its prompt, up to 2000 characters). */
+  prompt: string;
+  /** Hermes' deliver target: `bot-chat[:<profile>]`, `origin`, `local`, or a `platform:place` target. */
+  deliver: string;
+  /** Where `origin` lands, when the job was made from a messenger: the platform and place name. */
+  origin: { platform: string; place: string } | null;
+  created_at: number | string | null;
+  last_error: string | null;
+  repeat: { times: number | null; completed: number };
+}
+
+/** A curated plugin catalog entry (the bot profile's `cache/plugin-catalog.json`, read-only). */
+export interface CatalogEntry {
+  name: string;
+  title: string;
+  description: string;
+  tier: string;
+  category: string;
+  version: string;
+  repo: string;
+  maintainer: string;
+  platforms: string[];
+  tools: string[];
+  hooks: string[];
+  requires_env: string[];
+}
+
+/** One installed plugin of a bot (`plugins.manage list` through the bot's gateway). */
+export interface PluginRow {
+  name: string;
+  key: string;
+  /** The catalog's display title, when the plugin came from the catalog ("" otherwise). */
+  title: string;
+  version: string;
+  description: string;
+  /** "bundled" ships with Hermes; "user" is installed in the profile. */
+  source: string;
+  enabled: boolean;
+  tier: string;
+  category: string;
+  catalog_name: string | null;
+  tools: number;
+  hooks: number;
+  update_available: boolean;
+  /** Secret settings the plugin needs that are not set yet (env names); it stays off until they are. */
+  needs_env: string[];
+}
+
+export interface CatalogResult {
+  total: number;
+  matched: number;
+  entries: CatalogEntry[];
+  categories: Record<string, number>;
+  generated_at: string | null;
+}
+
+export interface InspectResult {
+  entry: CatalogEntry;
+  sha: string;
+  agent: boolean;
+  desktop: boolean;
+  warnings: string[];
+}
+
 /** One question of a clarify ask. Hermes' clarify tool asks 1-5 at once ("interview"); `qid` is its id. */
 export interface ClarifyQuestion {
   qid: string;
@@ -180,6 +248,34 @@ export interface OpMap {
     result: { messages: PeekMsg[]; total: number };
   };
   "routines.list": { params: { bot: string }; result: { routines: Routine[] } };
+  /** Every bot's cron jobs, each tagged with its bot (read from files; no gateway). */
+  "automations.list": { params: Record<string, never>; result: { automations: Automation[] } };
+  /** These four go through the bot's own `cron.manage` (add, pause, resume, remove) and nothing else. `deliver` is
+   *  the bot's own chat (`bot-chat:<bot>`) or left out (where the job was made). */
+  "automations.add": {
+    params: { bot: string; name: string; schedule: string; prompt: string; deliver?: string };
+    result: { job: string; name: string };
+  };
+  "automations.pause": { params: { bot: string; job: string }; result: { job: string } };
+  "automations.resume": { params: { bot: string; job: string }; result: { job: string } };
+  "automations.remove": { params: { bot: string; job: string }; result: { job: string } };
+  /** The bot's installed plugins, through its own `plugins.manage list`. */
+  "plugins.list": { params: { bot: string }; result: { plugins: PluginRow[] } };
+  /** The curated catalog from the profile's cache file (read-only), official tier first. */
+  "plugins.catalog": {
+    params: { bot: string; query?: string; category?: string; limit?: number };
+    result: CatalogResult;
+  };
+  /** Hermes reads the catalog entry at its pin (installs nothing); `sha` goes back with `plugins.install`. Only a
+   *  name the catalog cache lists is accepted: no Git URL, no `owner/repo`. */
+  "plugins.inspect": { params: { bot: string; catalog_name: string }; result: InspectResult };
+  "plugins.install": {
+    params: { bot: string; catalog_name: string; inspected_sha: string };
+    result: { name: string; enabled: boolean; restart_required: boolean; warnings: string[]; missing_env: string[] };
+  };
+  "plugins.toggle": { params: { bot: string; key: string; enable: boolean }; result: { name: string; restart_required: boolean } };
+  "plugins.update": { params: { bot: string; name: string }; result: { name: string; unchanged: boolean; restart_required: boolean } };
+  "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   "chat.set_model": {
     params: { bot: string; model?: string; provider?: string; reasoning?: string; session?: string };
@@ -426,7 +522,23 @@ export type BridgeEvent =
       name: string;
       status: string;
       ts: number;
-    });
+    })
+  /** A bot's jobs.json changed (a run, a pause, an edit): the Automations page re-reads. */
+  | (EventBase & { event: "routines.update" })
+  /** A job id the bot made itself (from chat) appeared: its chat shows a card. */
+  | (EventBase & {
+      event: "routine.added";
+      routine_id: string;
+      name: string;
+      schedule: string;
+      next_run_at: number | string | null;
+      deliver: string;
+      origin: { platform: string; place: string } | null;
+      ts: number;
+    })
+  /** A plugin folder appeared in the bot's profile (the bot installed it from chat). */
+  | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
+  | (EventBase & { event: "plugins.update" });
 
 export type EventName = BridgeEvent["event"];
 export type EventOf<K extends EventName> = Extract<BridgeEvent, { event: K }>;
