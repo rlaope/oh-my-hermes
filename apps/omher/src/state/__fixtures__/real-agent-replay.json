@@ -931,10 +931,106 @@
       },
       {
         "event": "session.info",
-        "model": "Haiku 5.5"
+        "model": "Haiku 5.5",
+        "model_next": ""
       }
     ],
     "name": "claude-7-model.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "model": "Haiku 5.5",
+        "model_next": ""
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "model_next": "Sonnet 5.5"
+      },
+      {
+        "agent_session": "8807e0e5-dd2a-4324-98d1-1949e74bd4b2",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Haiku 5.5"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgwSYtfMJpV2oL7SAAKfj-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "8807e0e5-dd2a-4324-98d1-1949e74bd4b2",
+        "approval": "default",
+        "event": "session.info",
+        "model": "Sonnet 5.5",
+        "model_next": ""
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgwSZ2pk1BfgZZ2zde1te-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-11-model-mid-turn.jsonl"
   },
   {
     "agent": "claude",
@@ -2369,6 +2465,83 @@
       }
     ],
     "name": "codex-8-resume.jsonl"
+  },
+  {
+    "agent": "codex-resume-gone",
+    "events": [
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          }
+        ]
+      },
+      {
+        "event": "session.note",
+        "kind": "new_conversation",
+        "text": "The earlier Codex conversation was not found (no rollout found for thread id 0badbeef-0000-4000-8000-000000000000); a new one started."
+      },
+      {
+        "agent_session": "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6",
+        "approval": "never",
+        "event": "session.info",
+        "model": "GPT-6.1-Sol",
+        "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e0c8f4087d09ff35d592503294d",
+        "text": "2 + 2 = 4."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-11-resume-gone.jsonl"
   },
   {
     "agent": "codex-helpers",

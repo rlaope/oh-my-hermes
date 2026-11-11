@@ -429,6 +429,12 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
           <span className={`mp-d${live ? " live" : ""}`} aria-hidden="true" />
         </span>
         <span data-testid="model-label">{rec.model || tr("ss.model")}</span>
+        {/* a pick made while a turn ran: the agent takes it from the next turn, whose start confirms it */}
+        {rec.modelNext && (
+          <span className="mp-next" title={tr("ss.modelNextTip", { model: rec.model ?? "" })} data-testid="model-next">
+            {tr("ss.modelNext", { model: rec.modelNext })}
+          </span>
+        )}
         <ChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} label={tr("ss.model")} width={256} className="mp-pop">
@@ -439,7 +445,7 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
               <div className="mp-empty">{live ? tr("ss.loadingModels") : tr("ss.agentNotRunning", { agent: label })}</div>
             ) : (
               options.map((o) => {
-                const on = o.label === rec.model || o.id === rec.model;
+                const on = rec.modelNext ? o.label === rec.modelNext || o.id === rec.modelNext : o.label === rec.model || o.id === rec.model;
                 return (
                   <button
                     key={`${o.provider ?? ""}/${o.id}`}
@@ -466,6 +472,11 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
               })
             )}
           </div>
+          {rec.modelNext && !note && (
+            <div className="mp-note" role="status" data-testid="model-next-note">
+              {tr("ss.modelNextTip", { model: rec.model ?? "" })}
+            </div>
+          )}
           {note && (
             <div className="mp-note" role="status" title={note} data-testid="model-note">
               {note}

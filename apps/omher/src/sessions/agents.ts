@@ -120,6 +120,8 @@ export interface SessionRec {
   agentSession?: string;
   /** The chat's model, when known. */
   model?: string;
+  /** A model picked while a turn ran: the agent takes it from the next turn on (Claude Code), shown until then. */
+  modelNext?: string;
   /** Hermes profile a folder chat (oh-my-hermes) runs on. */
   bot?: string;
   /** The Settings › Accounts login it started with (claude, codex, grok); none = the CLI's own. */
