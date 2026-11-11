@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw node can be read-only.** `omh_dag` define, repair and extend take
+  `read_only: true` on a node; its child's `write_file` and `patch` inside the
+  run's workspace are blocked, except its own handoff report, with a message
+  telling it to put its findings there. Before, a review, verify or explore
+  node with no write scope could change any file. A read-only node that also
+  declares a `write_scope` is refused (`read_only_with_write_scope`); a node
+  without the field keeps today's rule, and shell writes stay unjudged.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the

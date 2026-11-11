@@ -34,6 +34,9 @@ NODES = [
 
 
 class _Run(unittest.TestCase):
+    nodes = NODES
+    started = ("api", "ui")
+
     def setUp(self) -> None:
         context = homes()
         self.home = context.__enter__()
@@ -48,9 +51,9 @@ class _Run(unittest.TestCase):
         self.addCleanup(session_attendance.reset_session_attendance)
         self.addCleanup(nudge_budget.reset_nudge_budget)
         dag_tests.slots_table(self.home)
-        defined = dag_tests.call(action="define", run=RUN, goal="feature works", nodes=NODES)
+        defined = dag_tests.call(action="define", run=RUN, goal="feature works", nodes=self.nodes)
         self.assertEqual(defined["status"], "ok", defined)
-        for node_id in ("api", "ui"):
+        for node_id in self.started:
             dag_tests.child_started(self.home, RUN, node_id)
 
     def write(self, session: str, path: str, *, tool: str = "write_file", args: dict | None = None) -> dict | None:
@@ -221,6 +224,73 @@ class OtherCallsPassTest(_Run):
     def test_reads_and_shell_commands_are_not_judged(self) -> None:
         self.assertIsNone(self.write("child-api", "", tool="read_file", args={"path": "src/ui.py"}))
         self.assertIsNone(self.write("child-api", "", tool="terminal", args={"command": "echo x > src/ui.py"}))
+
+
+class ReadOnlyNodeTest(_Run):
+    """A `read_only` node's child changes nothing in the workspace but its own handoff report."""
+
+    nodes = [
+        *NODES,
+        {**dag_tests.node("explore", category="unspecified-high", label="Explore the parser", role="review"),
+         "read_only": True},
+        {**dag_tests.node("notes", category="writing", label="Take notes"), "read_only": False},
+    ]
+    started = ("api", "ui", "explore", "notes")
+
+    def _pin_root(self, root: str) -> dict:
+        path = dag_run.record_path(self.home.omh, PARENT, RUN)
+        record = dag_run.read_run(path)
+        assert record is not None
+        record["workspace_root"] = root
+        dag_run.write_run(path, record)
+        return record
+
+    def test_a_write_inside_the_workspace_is_blocked_naming_read_only(self) -> None:
+        """Mutation: drop the read_only branch in `dag_scope_directive`; the empty scope lets this write through."""
+        for path in ("src/parser.py", str(self.workspace / "README.md"), "src/api.py"):
+            with self.subTest(path=path):
+                directive = self.write("child-explore", path)
+                self.assertBlocked(directive, "explore")
+                assert directive is not None
+                self.assertIn("is read-only", directive["message"])
+                self.assertIn("write findings into your handoff report instead", directive["message"])
+
+    def test_its_own_handoff_passes_and_a_siblings_is_blocked(self) -> None:
+        handoff = dag_run.handoff_path(self.home.omh, PARENT, RUN, "explore")
+        self._pin_root(str(self.home.omh.parent.resolve()))
+        with mock.patch.dict(os.environ, {"TERMINAL_CWD": str(self.home.omh.parent)}):
+            self.assertIsNone(self.write("child-explore", str(handoff)))
+            self.assertBlocked(self.write("child-explore", str(handoff.with_name("api.md"))), "explore")
+
+    def test_a_remote_runs_handoff_under_its_handoff_root_passes(self) -> None:
+        record = self._pin_root(str(self.workspace))
+        record["backend"], record["handoff_root"] = "docker", str(self.workspace / ".omh" / "dag")
+        dag_run.write_run(dag_run.record_path(self.home.omh, PARENT, RUN), record)
+        self.assertIsNone(self.write("child-explore", dag_run.node_handoff(record, self.home.omh, "explore")))
+        self.assertBlocked(self.write("child-explore", dag_run.node_handoff(record, self.home.omh, "api")), "explore")
+
+    def test_a_v4a_patch_with_any_header_inside_is_blocked(self) -> None:
+        scratch = self.home.omh.parent / "scratch" / "notes.md"
+        body = f"*** Begin Patch\n*** Update File: {scratch}\n@@\n-a\n+b\n*** Update File: docs/x.md\n@@\n-a\n+b\n"
+        self.assertBlocked(self.write("child-explore", "", tool="patch", args={"mode": "patch", "patch": body}),
+                           "explore")
+
+    def test_a_target_outside_the_workspace_passes(self) -> None:
+        self.assertIsNone(self.write("child-explore", str(self.home.omh.parent / "scratch" / "probe.txt")))
+
+    def test_a_node_sent_read_only_false_with_no_scope_holds_nothing(self) -> None:
+        self.assertIsNone(self.write("child-notes", "src/ui.py"))
+        self.assertIsNone(self.write("child-notes", "docs/anything.md"))
+
+    def test_a_settled_read_only_node_holds_nothing(self) -> None:
+        dag_tests.handoff(self.home, RUN, "explore")
+        settled = dag_tests.call(action="settle", run=RUN, node="explore", outcome="accepted")
+        self.assertEqual(settled["status"], "ok", settled)
+        self.assertIsNone(self.write("child-explore", "src/parser.py"))
+
+    def test_reads_and_shell_commands_are_not_judged(self) -> None:
+        self.assertIsNone(self.write("child-explore", "", tool="read_file", args={"path": "src/ui.py"}))
+        self.assertIsNone(self.write("child-explore", "", tool="terminal", args={"command": "echo x > src/ui.py"}))
 
 
 if __name__ == "__main__":
