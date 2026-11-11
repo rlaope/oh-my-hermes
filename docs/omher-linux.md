@@ -46,9 +46,14 @@ carries no `.deb`, so a `.deb` install is updated by installing the next release
   `~/.cargo/bin`, `~/.npm-global/bin`, `~/.volta/bin`, `~/.local/share/pnpm`, `/usr/local/bin` and the newest
   nvm Node (`~/.nvm/versions/node/<v>/bin`), the same search as on macOS minus the app-bundle folders.
 - **The bridge** ships inside the AppImage at `usr/lib/omher/bridge/omher_bridge.py` and is found through Tauri's
-  resource folder, as on the other platforms.
+  resource folder, as on the other platforms. The bridge's Hermes Python, the agent CLIs, and the sign-in and
+  install commands get the same host environment as the link opener; AppRun's `PYTHONHOME` would otherwise send
+  the host Python into the image.
 
 ## Troubleshooting
+
+- *Known issue in 0.2.4*: the 0.2.4 AppImage opens its window but cannot reach any bot, because its bridge dies
+  with `No module named 'encodings'`. Fixed in the next release.
 
 - *Blank window*: some GPU drivers need `WEBKIT_DISABLE_DMABUF_RENDERER=1 omher`.
 - *Nothing happens on a link click*: check `xdg-open https://omher.app` works in a terminal; omher uses the same

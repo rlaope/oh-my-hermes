@@ -516,6 +516,7 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
     for (k, v) in account_env {
         cmd.env(k, v);
     }
+    crate::appimage::host_env(&mut cmd);
     cmd
 }
 

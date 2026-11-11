@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The omher Linux AppImage reaches its bots again.** The AppImage's AppRun
+  exports `PYTHONHOME` and `PYTHONPATH` pointing into the image, and omher
+  passed them to the host Hermes Python, so the bridge died with
+  `No module named 'encodings'`: the 0.2.4 window opened, but no bot
+  connected. Inside an AppImage, every host program omher starts (the bridge,
+  the agent CLIs, sign-ins, the installer) now gets the host environment, and
+  the PR CI starts the built AppImage under Xvfb and fails unless the app, its
+  window and its bridge are all up. (#2778)
 - **Enter steers a running turn in the OMH TUI, as Claude Code does.** Text
   you type and send with Enter while Hermes is working now goes into that turn
   at once (`session.redirect`, read at the next tool call) and shows as your
