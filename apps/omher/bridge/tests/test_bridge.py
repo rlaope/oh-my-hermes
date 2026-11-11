@@ -36,8 +36,9 @@ class GatewayClientError(ValueError):
 class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
-    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None):
+    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=()):
         self.name = name
+        self.lacks = set(lacks)  # methods this gateway does not have: they fail as Hermes' do, `unknown_method`
         self.caps = caps if caps is not None else {}  # client.capabilities answer, or an exception to raise
         self.events: asyncio.Queue = asyncio.Queue()
         self.calls: list[tuple[str, dict]] = []
@@ -53,6 +54,8 @@ class FakeClient:
 
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
+        if method in self.lacks:
+            raise GatewayRPCError("unknown_method")
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
                 rows = [{"id": MAIN_STORED, "title": ob.BOT_CHAT_TITLE, "source": "tui"}] if self.bot_chat else []
@@ -80,6 +83,7 @@ class FakeClient:
             if params.get("cwd"):  # a folder chat (SESSIONS > oh-my-hermes)
                 n = len(self.find("session.create")) - 1
                 return {"session_id": f"rt-folder-{n}", "stored_session_id": f"stored-folder-{n}", "messages": [],
+                        "subscription_id": f"sub-folder-{n}",
                         "info": {**self.model_info, "cwd": params["cwd"]}, "revision": 0, "execution_generation": 0}
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
@@ -1071,10 +1075,52 @@ class FolderChats(BridgeCase):
                 self.assertEqual((msg["session"], msg["text"]), (fid, "two files"))
 
                 self.assertTrue((await s.req("folder.close", bot="kami", session=fid))["ok"])
-                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+                self.assertEqual(c.find("session.detach"), [{"session_id": "rt-folder-0", "subscription_id": "sub-folder-0",
+                                                             "end_reason": "omher_close"}])
+                self.assertEqual(c.find("session.close"), [])
                 r = await s.req("chat.send", bot="kami", session=fid, text="again")
                 self.assertEqual(r["error"]["code"], "not_found")
                 self.assertEqual(len(c.find("prompt.submit")), 1)
+
+    async def test_close_ends_the_hermes_conversation_on_a_gateway_without_session_close(self):
+        """Hermes 0.23's gateway has `session.detach` and no `session.close`: closing the folder chat detaches the
+        subscription `session.create` gave, as a close (`end_reason`), so Hermes ends the conversation, and the
+        close reports no error. A gateway that has no `session.detach` gets `session.close`, as before."""
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env(lacks={"session.close"}) as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                r = await s.req("folder.close", bot="kami", session=fid)
+                self.assertTrue(r["ok"], r)
+                self.assertEqual([m for m, _ in c.calls if m in ("session.detach", "session.close")], ["session.detach"])
+                self.assertEqual(c.find("session.detach")[0], {"session_id": "rt-folder-0", "subscription_id": "sub-folder-0",
+                                                               "end_reason": "omher_close"})
+            async with Env(lacks={"session.detach"}) as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                r = await s.req("folder.close", bot="kami", session=fid)
+                self.assertTrue(r["ok"], r)
+                self.assertEqual([m for m, _ in c.calls if m in ("session.detach", "session.close")], ["session.detach", "session.close"])
+                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+            # any other refusal of the detach is the close's error, and nothing else is tried
+            async with Env() as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                real_rpc = c.rpc
+
+                async def refuse(method, **params):
+                    if method == "session.detach":
+                        c.calls.append((method, params))
+                        raise GatewayRPCError("invalid_params")
+                    return await real_rpc(method, **params)
+
+                c.rpc = refuse
+                r = await s.req("folder.close", bot="kami", session=fid)
+                self.assertEqual(r["error"]["code"], "invalid_params")
+                self.assertEqual(c.find("session.close"), [])
 
     async def test_hermes_titles_reach_the_folder_chat_and_the_create_name_does_not(self):
         with tempfile.TemporaryDirectory() as folder:
