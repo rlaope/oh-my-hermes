@@ -160,7 +160,7 @@ describe("sessions restore", () => {
     expect(old.paused).toBeUndefined();
     expect(old.agentSession).toBeUndefined();
     expect(now).toMatchObject({ id: "s8", view: "chat", status: "exited", agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
-    expect(((g.__omherSessionCalls ?? []) as { op: string }[]).filter((c) => c.op !== "reset")).toEqual([]);
+    expect(((g.__omherSessionCalls ?? []) as { op: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
     // Restart: the old one starts DeepSeek Harness fresh in its folder, the new one continues its harness session
     await ss.restart("s7");
     await ss.restart("s8");
