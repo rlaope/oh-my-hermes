@@ -1013,7 +1013,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   puts a box before each choice: Space or its digit ticks the choice (`[x]`)
   or unticks it, Enter sends the ticked ones (the highlighted one alone when
   none is ticked), and an answer of your own joins the ticked ones. Its last row, `Type something.`, opens the
-  composer as the field for an answer of your own, and so does typing any
+  field for an answer of your own on that row itself, as Claude Code's question dialog does: what you type
+  shows there and the caret stands there (a long answer scrolls on the row), and so does typing any
   character that picks nothing, which becomes the answer's first character;
   Up or Down goes back to the list and keeps what you typed for that
   question, and Enter on an empty field does too; the next question's field

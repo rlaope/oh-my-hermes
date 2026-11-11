@@ -12,6 +12,12 @@ All notable changes will be documented here.
   images, a prompt sent in plan mode, one sent behind lines already queued, or
   one sent before Hermes has started the turn still queues for the turn's end
   as before; Ctrl+Enter, Ctrl+J and `/steer` keep working.
+- **A question's `Type something.` row is where you type.** Picking it (its
+  number, or Up/Down then Enter) or typing a character that picks nothing
+  opens the answer field on that row of the question, as Claude Code's
+  question dialog does, instead of moving the typing to the composer under
+  the question; the caret stands on the row and a long answer scrolls there.
+  Up and Down still go back to the choices with what you typed kept.
 
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever

@@ -4911,6 +4911,7 @@ class App(ModesMixin, AgentViewMixin):
         """The open question's text field (the composer while a slot is open) to `slot`: as shown, and as Enter in
         the field sends it, pastes whole (`Composer.expanded`)."""
         slot.draft, slot.draft_sent = self.composer.shown(), self.composer.expanded()
+        slot.draft_before = self.composer._labelled(self.composer.text[: self.composer.caret])
 
     def _next_question(self, question: int) -> None:
         """After a key or a submit the open slot took, from its question number `question`: if it moved on.
@@ -9315,7 +9316,7 @@ class App(ModesMixin, AgentViewMixin):
         `composer_blank`).
         """
         if self.slot is not None:
-            return self.slot.picking
+            return self.slot.picking or self.slot.inline_field
         return (
             (self.picker is not None and not self.picker.waiting) or self.rewind_picker is not None
             or self.model_picker is not None
@@ -9423,10 +9424,11 @@ class App(ModesMixin, AgentViewMixin):
         """The open picker's caret, at the end of its filter row (its last render's), or the history search's, at
         the end of its query; None with neither open.
 
-        A question answered by picking has none: no key types anywhere there.
+        A question answered by picking has none: no key types anywhere there. A framed question whose text field is
+        open has it on the field's row, where what is typed shows (`PromptSlot.inline_field`).
         """
         if self.slot is not None:
-            return None
+            return self.slot.caret if self.slot.inline_field else None
         picker = self._front_picker()
         return picker.caret if picker is not None and picker is not self.launch_picker else None  # type: ignore[attr-defined]
 
