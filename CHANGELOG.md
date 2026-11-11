@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Enter steers a running turn in the OMH TUI, as Claude Code does.** Text
+  you type and send with Enter while Hermes is working now goes into that turn
+  at once (`session.redirect`, read at the next tool call) and shows as your
+  prompt above the working row, instead of waiting as a `⧗` queued row with a
+  `ctrl+enter to send now` hint. A slash command, a `!` line, a prompt with
+  images, a prompt sent in plan mode, one sent behind lines already queued, or
+  one sent before Hermes has started the turn still queues for the turn's end
+  as before; Ctrl+Enter, Ctrl+J and `/steer` keep working.
+- **A question's `Type something.` row is where you type.** Picking it (its
+  number, or Up/Down then Enter) or typing a character that picks nothing
+  opens the answer field on that row of the question, as Claude Code's
+  question dialog does, instead of moving the typing to the composer under
+  the question; the caret stands on the row and a long answer scrolls there.
+  Up and Down still go back to the choices with what you typed kept.
+
 - **A drag in the OMH TUI copies clean by default, long commands as one
   line.** The main screen takes the mouse again (the owner's choice of
   2026-11-11, back from 2026-11-06): a drag copies the transcript without

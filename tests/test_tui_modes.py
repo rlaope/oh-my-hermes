@@ -1161,8 +1161,9 @@ class SteerTests(unittest.TestCase):
 
 
 class BusyQueueTests(unittest.TestCase):
-    """While a turn runs, Enter queues what it sends, slash commands too, whatever Hermes' busy mode says; only the
-    commands `slash.RUNS_DURING_TURN` names run at once, and only Esc or /stop interrupts."""
+    """While a turn runs, Enter steers it with typed text (as Claude Code does) and queues what a steer cannot carry,
+    slash commands too, whatever Hermes' busy mode says; only the commands `slash.RUNS_DURING_TURN` names run at
+    once, and only Esc or /stop interrupts."""
 
     TURN_METHODS = ("session.interrupt", "session.redirect", "session.steer", "prompt.submit")
 
@@ -1180,6 +1181,7 @@ class BusyQueueTests(unittest.TestCase):
         app._on_event(Event("message.complete", SID, {"text": "done"}))
 
     def test_enter_during_a_turn_queues_whatever_the_busy_mode_and_never_touches_the_turn(self) -> None:
+        # Before Hermes starts the turn (no `message.start` yet) there is no turn to steer: Enter queues.
         for mode in ("queue", "steer", "interrupt", None):
             with self.subTest(busy_input_mode=mode):
                 app, client = self.settings(mode)
@@ -1192,6 +1194,51 @@ class BusyQueueTests(unittest.TestCase):
                 self.end_turn(app)
                 self.assertEqual(self.turn_calls(client),
                                  [("prompt.submit", {"session_id": SID, "text": "and the docs", "queued": True})])
+
+    def started(self, mode: str | None = None) -> tuple[App, RecordingClient]:
+        """A busy app whose turn Hermes has started (`message.start`), with a tool running."""
+        app, client = self.settings(mode)
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal", "context": "sleep 30"}))
+        return app, client
+
+    def test_enter_in_a_started_turn_steers_typed_text_as_claude_code_does(self) -> None:
+        # Owner, 2026-11-11: text sent mid-turn reads as a prompt above the working row at once, not a queued row.
+        for mode in ("queue", "steer", "interrupt", None):
+            with self.subTest(busy_input_mode=mode):
+                app, client = self.started(mode)
+                type_text(app, "and the docs")
+                app._on_input(Key(ENTER))
+                self.assertEqual(self.turn_calls(client),
+                                 [("session.redirect", {"session_id": SID, "text": "and the docs"})])
+                self.assertFalse(app.stop_asked)
+                self.assertEqual(app.queued, deque())
+                self.assertIsNone(send_now_row(app))  # nothing queued: no `to send now` row
+                screen = drawn(app)
+                self.assertIn("┃ ❯ and the docs", [line.rstrip() for line in screen])
+                self.assertFalse(any(line.startswith("⧗") for line in screen))
+                self.assertEqual(app.composer.text, "")
+
+    def test_enter_in_a_started_turn_queues_what_a_steer_cannot_carry(self) -> None:
+        # A slash command or `!` line queues for the turn's end; so does a prompt in plan mode, and one sent behind
+        # lines already queued, which keeps the order they were sent in.
+        cases = (("/compress", False, ()), ("!ls", False, ()), ("plan this", True, ()), ("after it", False, ("first",)))
+        for text, plan, ahead in cases:
+            with self.subTest(text=text):
+                app, client = self.started()
+                app.plan_mode = plan
+                queue(app, *ahead)
+                type_text(app, text)
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.named("session.redirect"), [])
+                self.assertEqual(client.named("session.steer"), [])
+                self.assertEqual(len(app.queued), len(ahead) + 1)
+
+    def test_enter_on_an_empty_composer_in_a_started_turn_sends_nothing(self) -> None:
+        app, client = self.started()
+        app._on_input(Key(ENTER))
+        self.assertEqual(self.turn_calls(client), [])
+        self.assertEqual(app.queued, deque())
 
     def test_a_command_typed_during_a_turn_waits_and_runs_in_order_once_it_ends(self) -> None:
         for mode in ("queue", "interrupt"):
