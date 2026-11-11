@@ -1,6 +1,6 @@
 """omher's boundary (docs/OMHER-BOUNDARY.md) pinned against the code: the doc's sentences, nothing in
 ``src/`` reaching ``apps/omher``, the bridge submitting a prompt from exactly one place, with the
-main chat's id or a folder chat's it created, and SESSIONS starting only the six allow-listed agent programs,
+main chat's id or a folder chat's it created, and SESSIONS starting only the eight allow-listed agent programs,
 in a terminal with no arguments or as a chat with the fixed structured-mode arguments."""
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ DOC = ROOT / "docs" / "OMHER-BOUNDARY.md"
 BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
 SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
 UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
-SESSION_AGENTS = ("claude", "codex", "omh", "pi", "omp", "grok")
-SESSION_MODES = ("Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal")
+SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok")
+SESSION_MODES = ("Chat", "Chat", "Chat", "Terminal", "Hermes", "Chat", "Chat", "Terminal")
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio")
 CONTEXT = ROOT / "CONTEXT.md"
@@ -49,11 +49,12 @@ RULES = (
     "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
-    " fixed allow-list: `claude`, `codex`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
+    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
-    " --permission-prompt-tool stdio`, `codex app-server`, `pi --mode rpc`, `omp --mode rpc`) on pipes;",
-    "the only other argument is `--resume` with a Claude Code session id the shell checks is a UUID.",
+    " --permission-prompt-tool stdio`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`) on pipes;",
+    "the only other argument continues a conversation, with an id the shell checks is a UUID:",
+    "`--resume <id>` for Claude Code and DSH, `--session <id>` for OmO.",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
     "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
@@ -620,7 +621,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.prod = self.sessions.split("#[cfg(test)]\nmod tests", 1)[0]
         self.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
 
-    def test_rust_allow_list_is_the_six_agents_and_each_id_is_its_program(self) -> None:
+    def test_rust_allow_list_is_the_eight_agents_and_each_id_is_its_program(self) -> None:
         block = re.search(r"pub const AGENTS: \[Agent; (\d+)\] = \[(.*?)\];", self.prod, re.S)
         self.assertIsNotNone(block)
         rows = re.findall(r'Agent \{ id: "([^"]+)", program: "([^"]+)", label: "[^"]+", mode: Mode::(\w+) \}', block.group(2))
@@ -643,11 +644,13 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         chat = self.prod.split("pub fn chat_args", 1)[1].split("\n}\n", 1)[0]
         arms = re.findall(r'^\s+(.+?) => (&.+?\[\.\.\]),?$', chat, re.M)
         self.assertEqual(arms, [('"claude"', "&CLAUDE_CHAT_ARGS[..]"), ('"codex"', '&["app-server"][..]'),
-                                ('"pi" | "omp"', '&["--mode", "rpc"][..]')])
+                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]')])
         resume = self.prod.split("pub fn resume_args", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn('if id != "claude"', resume)
+        # exactly two flags, each for named agents only; every other agent is refused
+        self.assertEqual(re.findall(r'^\s+(.+?) => ("--[a-z-]+"|return Err)', resume, re.M),
+                         [('"claude" | "dsh"', '"--resume"'), ('"omo"', '"--session"'), ("_", "return Err")])
         self.assertIn("if !is_uuid(session)", resume)
-        self.assertEqual(sorted(set(re.findall(r'"(--[a-z-]+)"\.into\(\)', resume))), ["--resume"])
+        self.assertEqual(re.findall(r'"(--[a-z-]+)"', resume), ["--resume", "--session"])
         # the chat spawner takes its argv only from launch_for + chat_args (+ resume_args) and is crate-internal
         start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
         for needle in ("launch_for(agent_id)?", "chat_args(agent_id)", "resume_args(agent_id, r)?", "\n        if a.mode != Mode::Chat {\n            return Err("):
@@ -685,7 +688,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         sig = re.search(r"async fn session_start\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
-        # `resume` is the only extra: a Claude Code session id that resume_args checks is a UUID
+        # `resume` is the only extra: a conversation id (Claude Code, DSH) that resume_args checks is a UUID
         self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "cols", "rows", "on_data", "on_exit"})
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref()", body)

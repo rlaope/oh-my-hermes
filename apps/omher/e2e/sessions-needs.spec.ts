@@ -48,7 +48,6 @@ async function open(page: Page, theme: "dark" | "light" = "dark") {
 /** A New session chat on Claude Code in the dialog's folder; its first message (`ask`) starts it. */
 async function startClaude(page: Page) {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId("session-agent-claude").click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
@@ -176,7 +175,6 @@ for (const theme of ["dark", "light"] as const) {
     const row = page.locator("[data-testid=session-list] .ss-row", { hasText: "web-app" });
     await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
     await page.getByTestId("session-new").click();
-    await page.getByTestId("session-agent-pick").click();
     await page.getByTestId("session-agent-codex").click();
     await page.getByTestId("session-folder").click();
     await page.getByTestId("session-choose").click();

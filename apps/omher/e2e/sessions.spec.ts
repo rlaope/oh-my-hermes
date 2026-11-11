@@ -49,7 +49,6 @@ const calls = (page: Page) =>
 /** A New session chat on `agent` in the dialog's folder, started with Start (a terminal agent gets no prompt). */
 async function startSession(page: Page, agent: string) {
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   await page.getByTestId(`session-agent-${agent}`).click();
   await page.getByTestId("session-folder").click();
   await page.getByTestId("session-choose").click();
@@ -132,24 +131,23 @@ test("thirteen bots beside an empty SESSIONS use the room: the list does not sto
   expect(name[2]).toBeLessThanOrEqual(20);
 });
 
-test("the New session chat's agent picker lists the agent CLIs with their marks; missing ones are disabled", async ({ page }) => {
+test("the + menu lists the agent CLIs with their marks; missing ones are dimmed and say so", async ({ page }) => {
   await open(page, undefined, ["claude", "codex", "omh"]);
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   const menu = page.getByTestId("session-menu");
   await expect(menu).toBeVisible();
   const rows = menu.locator("[data-testid^=session-agent-]");
-  await expect(rows).toHaveCount(6);
+  await expect(rows).toHaveCount(8);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["claude", "codex", "omh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
   );
   await expect(menu.getByTestId("session-agent-claude")).toContainText("Claude Code");
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
   await expect(menu.getByTestId("session-agent-codex").locator('svg[data-mark="openai"]')).toHaveCount(1);
   await expect(menu.getByTestId("session-agent-omh").locator('[data-mark="omh"]')).toHaveCount(1);
-  for (const a of ["claude", "codex", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`)).toBeEnabled();
-  for (const a of ["pi", "omp", "grok"]) {
-    await expect(menu.getByTestId(`session-agent-${a}`)).toBeDisabled();
+  for (const a of ["claude", "codex", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`)).not.toHaveAttribute("aria-disabled", "true");
+  for (const a of ["omo", "dsh", "pi", "omp", "grok"]) {
+    await expect(menu.getByTestId(`session-agent-${a}`)).toHaveAttribute("aria-disabled", "true");
     await expect(menu.getByTestId(`session-agent-${a}`)).toContainText("Not installed");
   }
   await page.keyboard.press("Escape");
@@ -164,19 +162,13 @@ test("the menu says which account a new session uses; This computer says nothing
   await mock("accounts.set_active", { cli: "codex", account: "work" });
   await open(page);
   await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-pick").click();
   const menu = page.getByTestId("session-menu");
   // the masked email when the account has no name, else its name
   await expect(menu.getByTestId("session-account-claude")).toHaveText("as work@…");
   await expect(menu.getByTestId("session-agent-claude")).toContainText(/Claude Code\s*as work@…/);
   await expect(menu.getByTestId("session-account-claude")).not.toContainText("example.com");
   await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
-  // the account sits on its own muted line under the agent; both are whole, and the row's tooltip names both.
-  // The picker opens above the composer, its right edge on the composer's
-  const box = (await page.getByTestId("composer-box").boundingBox())!;
-  const pop = (await menu.locator("..").boundingBox())!;
-  expect(pop.y + pop.height).toBeLessThanOrEqual(box.y);
-  expect(Math.abs(pop.x + pop.width - (box.x + box.width))).toBeLessThanOrEqual(1);
+  // the account sits on its own muted line under the agent; both are whole, and the name's tooltip names both
   for (const a of ["claude", "codex"]) {
     const fits = await menu.getByTestId(`session-agent-${a}`).evaluate((row) => {
       const as = row.querySelector(".ss-as")!;
@@ -184,21 +176,20 @@ test("the menu says which account a new session uses; This computer says nothing
       const box = row.querySelector(".ss-n")!.getBoundingClientRect();
       const label = row.querySelector(".ss-l")!;
       const l = label.getBoundingClientRect();
-      const cmd = row.querySelector(".ss-cmd")!.getBoundingClientRect();
       return {
         whole: as.scrollWidth <= as.clientWidth && r.right <= box.right + 0.5 && r.width > 0,
         label: label.scrollWidth <= label.clientWidth,
         under: r.top >= l.bottom - 1 && Math.abs(r.left - l.left) < 1,
-        gap: Math.round(cmd.left - Math.max(r.right, l.right)),
-        muted: getComputedStyle(as).color === getComputedStyle(row.querySelector(".ss-cmd")!).color,
+        inMenu: r.right <= row.getBoundingClientRect().right,
+        muted: getComputedStyle(as).color !== getComputedStyle(label).color,
         inRow: r.bottom <= row.getBoundingClientRect().bottom,
       };
     });
     expect(fits.whole, `${a} account cut off`).toBe(true);
     expect(fits.label, `${a} label cut off`).toBe(true);
     expect(fits.under, `${a} account on its own line`).toBe(true);
-    expect(fits.gap, `${a} gap to the command`).toBeGreaterThanOrEqual(8);
-    expect(fits.muted, `${a} account in --muted`).toBe(true);
+    expect(fits.inMenu, `${a} account inside the menu`).toBe(true);
+    expect(fits.muted, `${a} account muted`).toBe(true);
     expect(fits.inRow, `${a} account inside its row`).toBe(true);
   }
   await expect(menu.getByTestId("session-agent-claude").locator(".ss-n")).toHaveAttribute("title", "Claude Code as work@…");
@@ -210,13 +201,15 @@ test("the menu says which account a new session uses; This computer says nothing
     await page.waitForTimeout(350);
     await menu.screenshot({ path: join(SHOTS, "session-menu-account.png"), animations: "disabled" });
   }
-  // the chosen agent's account also shows under the composer, next to the folder
+  // the chosen agent's account also shows under its New session chat's composer, next to the folder
+  await menu.getByTestId("session-agent-claude").click();
   await expect(page.getByTestId("session-account")).toHaveText("as work@…");
   // back to This computer: the suffix goes (read-only: the menu itself never switches)
   await mock("accounts.set_active", { cli: "claude", account: "default" });
+  await expect(page.getByTestId("session-account")).toHaveCount(0);
+  await page.getByTestId("session-new").click();
   await expect(menu.getByTestId("session-account-claude")).toHaveCount(0);
   await expect(menu.getByTestId("session-account-codex")).toHaveText("as Work");
-  await expect(page.getByTestId("session-account")).toHaveCount(0);
   await page.keyboard.press("Escape");
 });
 
@@ -322,19 +315,24 @@ for (const theme of ["dark", "light"] as const) {
       await page.waitForTimeout(350);
       await page.screenshot({ path: join(SHOTS, `sessions-empty-${theme}.png`), clip: { x: 0, y: 380, width: 560, height: 220 } });
     }
-    // either opener opens the same New session chat (one draft, reused); the agent picker's dim labels meet 4.5:1
+    // either opener opens the same + menu (nothing opens until an agent is picked); its dim labels meet 4.5:1
     for (const opener of [start, plus]) {
       await opener.click();
-      await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
-      await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);
-      await page.getByTestId("session-agent-pick").click();
       const menu = page.getByTestId("session-menu");
-      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(6);
+      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(8);
+      await expect(page.getByTestId("session-chat")).toHaveCount(0);
       const popBg = await menu.locator("..").evaluate((e) => getComputedStyle(e).backgroundColor);
-      const sec = await contrast(page, [".ss-dpop .ss-cmd", ".ss-dpop .ss-missing", ".ss-dpop .ss-item:disabled .ss-n"], popBg);
+      const sec = await contrast(page, [".ss-pop .ss-missing", ".ss-pop .ss-item.off .ss-n"], popBg);
       for (const [sel, r] of sec) expect(r, sel).toBeGreaterThanOrEqual(4.5);
       await page.keyboard.press("Escape");
       await expect(menu).toHaveCount(0);
+    }
+    // picking from either opens the same New session chat (one draft, reused)
+    for (const opener of [start, plus]) {
+      await opener.click();
+      await page.keyboard.press("Enter");
+      await expect(page.getByTestId("session-chat")).toHaveAttribute("data-draft", "true");
+      await expect(page.locator("[data-testid=session-list] .ss-row")).toHaveCount(1);
     }
   });
 }
@@ -342,11 +340,11 @@ for (const theme of ["dark", "light"] as const) {
 test("the empty section's tooltip names no agent when no coding agent is installed (omh alone is not one)", async ({ page }) => {
   await open(page, undefined, ["omh"]);
   await expect(page.getByTestId("session-start")).toHaveAttribute("title", "Run a coding agent in a folder, as a chat.");
-  // omh is still offered in the New session chat, and is its agent (the only one installed)
+  // omh is still offered in the + menu, on top (the only one installed)
   await page.getByTestId("session-start").click();
-  await expect(page.getByTestId("session-agent-pick")).toHaveText("oh-my-hermes");
-  await page.getByTestId("session-agent-pick").click();
-  await expect(page.getByTestId("session-agent-omh")).toBeEnabled();
+  await expect(page.getByTestId("session-menu").locator("[role=menuitem]").first()).toHaveAttribute("data-testid", "session-agent-omh");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-agent-fixed")).toHaveText("oh-my-hermes");
 });
 
 test("start a mock terminal session, type, see the echo, then switch to a bot chat and back", async ({ page }) => {
@@ -403,10 +401,11 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
   await expect(rows.first()).toContainText("Grok");
   await expect(page.getByTestId("session-title")).toHaveText("api");
 
-  // a New session chat opens on the last folder and agent; its folder chip offers the recent folders
+  // a New session chat opens on the agent picked (the last one, on top) in the last folder; its chip offers the recents
   await page.getByTestId("session-new").click();
+  await page.keyboard.press("Enter");
   await expect(page.getByTestId("session-folder")).toHaveText("api");
-  await expect(page.getByTestId("session-agent-pick")).toHaveText("Grok");
+  await expect(page.getByTestId("session-agent-fixed")).toHaveText("Grok");
   await page.getByTestId("session-folder").click();
   await expect(page.getByTestId("session-recent")).toHaveCount(2);
   await expect(page.getByTestId("session-recent").first()).toContainText("api");

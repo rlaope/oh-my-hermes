@@ -86,12 +86,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
-- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a New session chat at once.
-  Its composer row picks the agent among the programs found on `PATH` and in the usual install folders
-  (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`), and the folder chip under it picks the folder
+- **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a menu of the agents found on
+  `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`): the
+  installed ones first, the last one used on top, the missing ones dimmed with their install line. Picking one
+  opens its New session chat at once; its composer names the agent, and the folder chip under it picks the folder
   (the last one used, else home; recent folders, Choose folder… or home). Nothing runs until the first message, which
   becomes the agent's first prompt; a terminal agent starts on Start. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
-  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omh`, `pi`, `omp`, `grok`); the shell
+  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
   and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
@@ -110,8 +111,9 @@ Rules the code keeps:
   text. 20 files, 100 MB each; if one attach fails, nothing is sent.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
-- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omh`, `pi`, `omp` or `grok`,
-  with no arguments, in the folder you picked; stopped when the session is closed or the app quits.
+- **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
+  `omp` or `grok`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
+  picked; stopped when the session is closed or the app quits.
 - **Automations and plugins change only through the bot.** The Automations page reads each profile's
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
   Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
@@ -154,6 +156,9 @@ Agent and CLI marks in `src/assets/agents/` are the projects' own marks, unedite
   The model marks in `src/ui/modelMarks.ts` come from the same set.
 - pi: `logo-auto.svg` from [pi.dev](https://pi.dev) ([pi-mono](https://github.com/badlogic/pi-mono), MIT).
 - omp: the official mark from [omp.sh](https://omp.sh).
+- OmO: `omo-icon-light.svg` from [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (its viewBox
+  trimmed to the tile).
+- DSH: deepseek-bot's `docs/assets/logo-pixel.svg` from [deepseek-bot](https://github.com/rlaope/deepseek-bot) (MIT).
 - OMH: the oh-my-hermes kami mark from this repository.
 
 Each mark belongs to its owner and is used only to name that tool in the app.

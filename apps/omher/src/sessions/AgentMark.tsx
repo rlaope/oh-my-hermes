@@ -1,10 +1,15 @@
 // The small mark of each session agent: Claude and OpenAI marks (shared with the model pill), the app's
-// own mark for oh-my-hermes, the Grok mark, and the official pi (pi.dev/favicon.svg) and
-// oh-my-pi (omp.sh/favicon.svg) marks.
+// own mark for oh-my-hermes, the Grok mark, the official pi (pi.dev/favicon.svg) and oh-my-pi (omp.sh/favicon.svg)
+// marks, OmO's icon (oh-my-openagent `.github/assets/omo-icon-light.svg`, its viewBox trimmed to the tile) and
+// deepseek-bot's logo (`docs/assets/logo-pixel.svg`) for DSH.
+import dshMark from "../assets/agents/dsh.svg";
+import omoMark from "../assets/agents/omo.svg";
 import ompMark from "../assets/agents/omp.svg";
 import logo from "../assets/omher-mark.png";
 import { ModelIcon } from "../ui";
 import type { AgentId } from "./agents";
+
+const IMG: Partial<Record<AgentId, string>> = { omp: ompMark, omo: omoMark, dsh: dshMark };
 
 export function AgentMark({ agent, size = 16 }: { agent: AgentId; size?: number }) {
   const box = { width: size, height: size };
@@ -18,6 +23,7 @@ export function AgentMark({ agent, size = 16 }: { agent: AgentId; size?: number 
         <path fill="currentColor" d="M420 280H280V140H0V0H420V280ZM560 560H420V280H560V560ZM140 560H0V140H140V280H280V420H140V560Z" />
       </svg>
     );
-  if (agent === "omp") return <img src={ompMark} alt="" className="ag-mark ag-img" style={box} data-mark="omp" />;
+  const img = IMG[agent];
+  if (img) return <img src={img} alt="" className="ag-mark ag-img" style={box} data-mark={agent} />;
   return <img src={logo} alt="" className="ag-mark ag-img" style={box} data-mark="omh" />;
 }

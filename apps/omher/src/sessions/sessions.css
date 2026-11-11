@@ -85,6 +85,21 @@
 .ss-item:disabled {
   color: var(--muted);
 }
+/* a missing agent in the + menu: dimmed, still focusable so its install line (the tooltip) can be read */
+.ss-item.off {
+  color: var(--muted);
+  cursor: default;
+}
+.ss-item.off .ss-ic {
+  opacity: 0.45;
+}
+.ss-item.off:hover {
+  background: none;
+}
+.ss-item:focus-visible {
+  outline: none;
+  background: var(--raise2);
+}
 .ss-item:disabled .ss-ic {
   /* the official mark stays as is; "Not installed" in the text says why the row is off */
   opacity: 1;
