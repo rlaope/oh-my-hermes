@@ -137,7 +137,10 @@ pub fn open(provider: &str) -> Result<(), String> {
         } else {
             PathBuf::from(&program)
         };
-        match Command::new(&exe).args(&argv).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status() {
+        let mut cmd = Command::new(&exe);
+        cmd.args(&argv).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        crate::appimage::host_env(&mut cmd);
+        match cmd.status() {
             Ok(s) if s.success() => return Ok(()),
             Ok(s) => last = format!("{program} exited with {s}"),
             Err(e) => last = format!("{program}: {e}"),

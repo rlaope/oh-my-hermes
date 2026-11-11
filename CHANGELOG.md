@@ -12,6 +12,15 @@ All notable changes will be documented here.
   a drag copies without the rail again. Ctrl+O still opens the transcript
   view.
 
+- **The omher Linux AppImage reaches its bots again.** The AppImage's AppRun
+  exports `PYTHONHOME` and `PYTHONPATH` pointing into the image, and omher
+  passed them to the host Hermes Python, so the bridge died with
+  `No module named 'encodings'`: the 0.2.4 window opened, but no bot
+  connected. Inside an AppImage, every host program omher starts (the bridge,
+  the agent CLIs, sign-ins, the installer) now gets the host environment, and
+  the PR CI starts the built AppImage under Xvfb and fails unless the app, its
+  window and its bridge are all up. (#2778)
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
