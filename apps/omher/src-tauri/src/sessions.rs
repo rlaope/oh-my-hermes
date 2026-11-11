@@ -191,6 +191,10 @@ pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBu
                     &[".volta", "bin"],
                     &["Library", "pnpm"],
                     &[".local", "share", "pnpm"],
+                    // the official installers' own folders, which only a shell's rc file puts on PATH: Grok
+                    // (x.ai/cli/install.sh, `~/.grok/bin`) and pi's managed install (pi.dev/install.sh, `~/.pi/agent/bin`)
+                    &[".grok", "bin"],
+                    &[".pi", "agent", "bin"],
                 ] {
                     dirs.push(join(&home, parts));
                 }
@@ -207,7 +211,7 @@ pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBu
                 dirs.push(join(&appdata, &["npm"]));
             }
             if let Some(profile) = set("USERPROFILE") {
-                for parts in [&[".local", "bin"][..], &[".bun", "bin"], &[".cargo", "bin"], &[".volta", "bin"]] {
+                for parts in [&[".local", "bin"][..], &[".bun", "bin"], &[".cargo", "bin"], &[".volta", "bin"], &[".grok", "bin"], &[".pi", "agent", "bin"]] {
                     dirs.push(join(&profile, parts));
                 }
             }
@@ -291,13 +295,152 @@ where
     dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| is_program(p) && is_dsh_harness(p, &real(p), |q| is_program(q) || q.is_file()))
 }
 
-/// Where allow-listed agent `a` is on this machine: `resolve` over `dirs`, except DSH ([`dsh_harness`]).
+/// Where an agent's official installs put its program, so a same-named other program earlier on PATH (Homebrew's
+/// `grok` regex tool, a `pi` or `codex` of some other project) is not started as the agent. A found program
+/// matches when its real path (links followed) holds one of these. DSH has its own check ([`is_dsh_harness`]);
+/// oh-my-hermes has no row and is found as before.
+pub struct Layout {
+    pub id: &'static str,
+    /// npm (or bun) packages: `node_modules/<package>` in the real path, or on Windows an npm `.cmd` shim with
+    /// `node_modules/<package>/package.json` beside it.
+    pub packages: &'static [&'static str],
+    /// Folder names that follow each other anywhere in the real path (an app bundle, a Homebrew keg, an
+    /// installer's own folder).
+    pub inside: &'static [&'static [&'static str]],
+    /// Folders a standalone installer copies the program itself into, under the home folder (`~`) or
+    /// `%LOCALAPPDATA%`: the real path's folder must be one of them.
+    pub folders: &'static [(&'static str, &'static [&'static str])],
+    /// The install line omher shows for it (the same text as `INSTALL` in src/sessions/agents.ts).
+    pub install: &'static str,
+}
+
+pub const LAYOUTS: [Layout; 6] = [
+    Layout {
+        id: "claude",
+        packages: &["@anthropic-ai/claude-code"],
+        // the native installer (`~/.local/bin/claude` -> `~/.local/share/claude/versions/<v>`), Homebrew's cask
+        inside: &[&[".local", "share", "claude", "versions"], &["Caskroom", "claude-code"]],
+        // Windows: the native installer's own `claude.exe`
+        folders: &[("~", &[".local", "bin"])],
+        install: "npm i -g @anthropic-ai/claude-code",
+    },
+    Layout {
+        id: "codex",
+        packages: &["@openai/codex"],
+        // the CLI inside the ChatGPT or Codex app (APP_BUNDLE_CLI_DIRS), Homebrew's cask
+        inside: &[&["ChatGPT.app", "Contents", "Resources", "codex-cli"], &["Codex.app", "Contents", "Resources", "codex-cli"], &["Caskroom", "codex"]],
+        folders: &[],
+        install: "npm i -g @openai/codex",
+    },
+    Layout {
+        id: "omo",
+        packages: &["omo-ai"],
+        inside: &[],
+        // get.omo.dev/install.sh and install.ps1 copy the binary into ~/.local/bin
+        folders: &[("~", &[".local", "bin"])],
+        install: "npm i -g omo-ai",
+    },
+    Layout {
+        id: "pi",
+        packages: &["@earendil-works/pi-coding-agent", "@mariozechner/pi-coding-agent"],
+        // pi.dev/install.sh's managed install (its launcher `~/.pi/agent/bin/pi`, which a link in ~/.local/bin
+        // or Homebrew's bin may lead to), Homebrew's formula
+        inside: &[&[".pi", "agent", "bin"], &["Cellar", "pi-coding-agent"]],
+        folders: &[],
+        install: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+    },
+    Layout {
+        id: "omp",
+        packages: &["@oh-my-pi/pi-coding-agent"],
+        // Homebrew's tap (can1357/tap/omp)
+        inside: &[&["Cellar", "omp"]],
+        // omp.sh/install's binary (~/.local/bin/omp; %LOCALAPPDATA%\\omp\\omp.exe on Windows)
+        folders: &[("~", &[".local", "bin"]), ("LOCALAPPDATA", &["omp"])],
+        install: "curl -fsSL https://omp.sh/install | sh",
+    },
+    Layout {
+        id: "grok",
+        packages: &["@xai-official/grok"],
+        // x.ai/cli/install.sh: `~/.grok/bin/grok` -> `grok-<version>` (or into ~/.grok/downloads)
+        inside: &[&[".grok", "bin"], &[".grok", "downloads"]],
+        folders: &[],
+        install: "curl -fsSL https://x.ai/cli/install.sh | bash",
+    },
+];
+
+/// The [`LAYOUTS`] row of agent `id`.
+pub fn layout(id: &str) -> Option<&'static Layout> {
+    LAYOUTS.iter().find(|l| l.id == id)
+}
+
+/// A path's folder names, split on both separators so a Windows path reads the same on any host.
+fn parts_of(p: &Path) -> Vec<String> {
+    // (the `?` of a Windows `\\?\` canonical path is no folder)
+    p.to_string_lossy().split(['/', '\\']).filter(|c| !c.is_empty() && *c != "?").map(str::to_string).collect()
+}
+
+fn holds(parts: &[String], seq: &[&str]) -> bool {
+    !seq.is_empty() && parts.windows(seq.len()).any(|w| w.iter().zip(seq).all(|(a, b)| a.eq_ignore_ascii_case(b)))
+}
+
+/// Whether program `found` (real path `real`, links followed) sits where an official install of agent `id` puts it
+/// ([`LAYOUTS`]). `exists` checks a file (the npm package beside a Windows shim). An agent without a row: false.
+pub fn in_install_layout<E, X>(id: &str, found: &Path, real: &Path, env: &E, exists: X) -> bool
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+{
+    let Some(l) = layout(id) else { return false };
+    let parts = parts_of(real);
+    let package = |pkg: &str| {
+        let seq: Vec<&str> = std::iter::once("node_modules").chain(pkg.split('/')).collect();
+        holds(&parts, &seq) || found.parent().is_some_and(|d| exists(&pkg.split('/').fold(d.join("node_modules"), |p, c| p.join(c)).join("package.json")))
+    };
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    let folder = |(base, rel): &(&str, &[&str])| {
+        let root = if *base == "~" { set("HOME").or_else(|| set("USERPROFILE")) } else { set(base) };
+        let Some(root) = root else { return false };
+        let want: Vec<String> = parts_of(Path::new(&root)).into_iter().chain(rel.iter().map(|s| s.to_string())).collect();
+        // the real path's folder (by both separators: `Path::parent` would not split a Windows path elsewhere)
+        let have = &parts[..parts.len().saturating_sub(1)];
+        have.len() == want.len() && have.iter().zip(&want).all(|(a, b)| a.eq_ignore_ascii_case(b))
+    };
+    l.packages.iter().any(|p| package(p)) || l.inside.iter().any(|seq| holds(&parts, seq)) || l.folders.iter().any(folder)
+}
+
+/// Program `program` of agent `id` in `dirs`: the first candidate that [`in_install_layout`] accepts, else (no row, or
+/// no candidate in a known layout) the first candidate, as [`resolve`] finds it. A real install in a layout this
+/// table does not know is therefore still found, never "Not installed".
+pub fn find_in_layouts<E, X, R>(id: &str, program: &str, dirs: &[PathBuf], env: &E, is_program: X, real: R, os: Os) -> Option<PathBuf>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+    R: Fn(&Path) -> PathBuf,
+{
+    let names = file_names(program, os);
+    let found: Vec<PathBuf> = dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).filter(|p| is_program(p)).collect();
+    found.iter().find(|p| in_install_layout(id, p, &real(p), env, |q| is_program(q) || q.is_file())).or(found.first()).cloned()
+}
+
+fn real_path(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
+/// Where allow-listed agent `a` is on this machine: [`find_in_layouts`] over `dirs`, except DSH ([`dsh_harness`]).
 fn find_agent(a: &Agent, dirs: &[PathBuf]) -> Option<PathBuf> {
     if a.id == "dsh" {
-        let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        return dsh_harness(&host_env, dirs, is_program_file, real, Os::current());
+        return dsh_harness(&host_env, dirs, is_program_file, real_path, Os::current());
     }
-    resolve(a.program, dirs, is_program_file, Os::current())
+    find_in_layouts(a.id, a.program, dirs, &host_env, is_program_file, real_path, Os::current())
+}
+
+/// The program omher would start for agent `id` when it lies in none of that agent's install layouts ([`LAYOUTS`]),
+/// so it may be another program with the same name; `None` when it is in one, or the agent has no row.
+pub fn unrecognized_program(id: &str) -> Option<PathBuf> {
+    let a = agent(id)?;
+    layout(id)?;
+    let path = find_agent(a, &host_dirs())?;
+    (!in_install_layout(id, &path, &real_path(&path), &host_env, |q| is_program_file(q) || q.is_file())).then_some(path)
 }
 
 /// argv for a resolved program. A Windows `.cmd`/`.bat` shim runs through `cmd.exe /c`, because
@@ -898,6 +1041,106 @@ mod tests {
         assert!(dirs.contains(&PathBuf::from("/Users/k/.local/bin")));
         assert!(dirs.contains(&PathBuf::from("/usr/local/bin")));
         assert_eq!(dirs.iter().filter(|d| **d == PathBuf::from("/opt/homebrew/bin")).count(), 1);
+        // the folders Grok's and pi's official installers use, which only a shell rc file puts on PATH
+        assert!(dirs.contains(&PathBuf::from("/Users/k/.grok/bin")));
+        assert!(dirs.contains(&PathBuf::from("/Users/k/.pi/agent/bin")));
+        let grok = PathBuf::from("/Users/k/.grok/bin/grok");
+        let pi = PathBuf::from("/Users/k/.pi/agent/bin/pi");
+        let short = env_of(&[("PATH", "/usr/bin:/bin"), ("HOME", "/Users/k")]);
+        let sdirs = search_dirs(&short, Os::Unix);
+        assert_eq!(resolve("grok", &sdirs, fs_of(&[&grok]), Os::Unix), Some(grok));
+        assert_eq!(resolve("pi", &sdirs, fs_of(&[&pi]), Os::Unix), Some(pi));
+        let win = env_of(&[("USERPROFILE", r"C:\Users\k")]);
+        let wdirs = search_dirs(&win, Os::Windows);
+        assert!(wdirs.contains(&Path::new(r"C:\Users\k").join(".grok").join("bin")));
+        assert!(wdirs.contains(&Path::new(r"C:\Users\k").join(".pi").join("agent").join("bin")));
+    }
+
+    /// H1: a same-named other program earlier on PATH (the QA report's shadow stubs; Homebrew's `grok` regex tool)
+    /// is passed over for the agent's own install; with no install in a known layout, the first one is still found.
+    #[test]
+    fn agents_are_found_in_their_install_layout_not_as_the_first_same_name_on_path() {
+        let env = env_of(&[("PATH", "/Users/k/shadow:/opt/homebrew/bin:/usr/bin"), ("HOME", "/Users/k")]);
+        let dirs = search_dirs(&env, Os::Unix);
+        // (agent, its real install as found on PATH or in an install folder, where that leads)
+        let real_installs: [(&str, &str, &str); 12] = [
+            ("claude", "/Users/k/.local/bin/claude", "/Users/k/.local/share/claude/versions/2.1.322"),
+            ("claude", "/opt/homebrew/bin/claude", "/opt/homebrew/Caskroom/claude-code/2.1.311/claude"),
+            ("codex", "/Users/k/.local/bin/codex", "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"),
+            ("codex", "/opt/homebrew/bin/codex", "/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js"),
+            ("omo", "/Users/k/.local/bin/omo", "/Users/k/.local/bin/omo"),
+            ("omo", "/opt/homebrew/bin/omo", "/opt/homebrew/lib/node_modules/omo-ai/bin/omo.js"),
+            ("pi", "/opt/homebrew/bin/pi", "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"),
+            ("pi", "/Users/k/.local/bin/pi", "/Users/k/.pi/agent/bin/pi"),
+            ("omp", "/Users/k/.bun/bin/omp", "/Users/k/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js"),
+            ("omp", "/Users/k/.local/bin/omp", "/Users/k/.local/bin/omp"),
+            ("grok", "/Users/k/.grok/bin/grok", "/Users/k/.grok/bin/grok-1.0.77"),
+            ("grok", "/usr/local/bin/grok", "/Users/k/.grok/downloads/grok-1.0.77"),
+        ];
+        for (id, found, leads_to) in real_installs {
+            let shadow = PathBuf::from(format!("/Users/k/shadow/{id}"));
+            let found = PathBuf::from(found);
+            let real = |p: &Path| if p == found { PathBuf::from(leads_to) } else { p.to_path_buf() };
+            // the plain lookup starts the shadow, the layout check the agent
+            assert_eq!(resolve(id, &dirs, fs_of(&[&shadow, &found]), Os::Unix), Some(shadow.clone()), "{id}");
+            assert_eq!(find_in_layouts(id, id, &dirs, &env, fs_of(&[&shadow, &found]), real, Os::Unix), Some(found.clone()), "{id} {leads_to}");
+            assert!(in_install_layout(id, &found, Path::new(leads_to), &env, |_| false), "{id} {leads_to}");
+            assert!(!in_install_layout(id, &shadow, &shadow, &env, |_| false), "{id}");
+            // only the shadow: still found (a real install in a layout the table does not know never reads "Not installed")
+            assert_eq!(find_in_layouts(id, id, &dirs, &env, fs_of(&[&shadow]), real, Os::Unix), Some(shadow.clone()), "{id}");
+        }
+        // Homebrew's `grok` (jordansissel/grok, a regex tool) is not Grok
+        let brew = PathBuf::from("/opt/homebrew/bin/grok");
+        assert!(!in_install_layout("grok", &brew, Path::new("/opt/homebrew/Cellar/grok/0.9.2/bin/grok"), &env, |_| false));
+        // another agent's package is not this one: oh-my-pi's npm package is not pi
+        assert!(!in_install_layout("pi", &brew, Path::new("/x/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js"), &env, |_| false));
+        // a standalone installer's folder counts only for the program itself, not for anything below it
+        assert!(!in_install_layout("omo", &brew, Path::new("/Users/k/.local/bin/x/omo"), &env, |_| false));
+        // oh-my-hermes has no row: found as before
+        let omh = PathBuf::from("/Users/k/shadow/omh");
+        assert_eq!(find_in_layouts("omh", "omh", &dirs, &env, fs_of(&[&omh]), |p: &Path| p.to_path_buf(), Os::Unix), Some(omh));
+    }
+
+    #[test]
+    fn windows_agents_are_found_in_their_install_layout() {
+        let env = env_of(&[
+            ("PATH", r"C:\tools;C:\Users\k\AppData\Roaming\npm"),
+            ("APPDATA", r"C:\Users\k\AppData\Roaming"),
+            ("USERPROFILE", r"C:\Users\k"),
+            ("LOCALAPPDATA", r"C:\Users\k\AppData\Local"),
+        ]);
+        let same = |p: &Path| p.to_path_buf();
+        let npm = Path::new(r"C:\Users\k\AppData\Roaming\npm");
+        // an npm shim counts when its package sits beside it
+        let shim = npm.join("codex.cmd");
+        let pkg = npm.join("node_modules").join("@openai").join("codex").join("package.json");
+        assert!(in_install_layout("codex", &shim, &shim, &env, fs_of(&[&pkg])));
+        assert!(!in_install_layout("codex", &shim, &shim, &env, fs_of(&[])));
+        // the official installers' own folders
+        for (id, path) in [
+            ("grok", r"C:\Users\k\.grok\bin\grok.exe"),
+            ("pi", r"C:\Users\k\.pi\agent\bin\pi.cmd"),
+            ("omp", r"C:\Users\k\AppData\Local\omp\omp.exe"),
+            ("omo", r"C:\Users\k\.local\bin\omo.exe"),
+            ("claude", r"C:\Users\k\.local\bin\claude.exe"),
+        ] {
+            assert!(in_install_layout(id, Path::new(path), Path::new(path), &env, fs_of(&[])), "{path}");
+        }
+        let dirs = search_dirs(&env, Os::Windows);
+        let shadow = Path::new(r"C:\tools").join("grok.exe");
+        let grok = Path::new(r"C:\Users\k").join(".grok").join("bin").join("grok.exe");
+        assert_eq!(find_in_layouts("grok", "grok", &dirs, &env, fs_of(&[&shadow, &grok]), same, Os::Windows), Some(grok));
+    }
+
+    /// The install line omher names when a program does not look like the agent is the one the menu shows.
+    #[test]
+    fn layout_install_lines_are_the_menus() {
+        let ts = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/sessions/agents.ts")).unwrap();
+        for l in &LAYOUTS {
+            assert!(ts.contains(&format!("  {}: \"{}\",", l.id, l.install)), "{} {}", l.id, l.install);
+            assert!(agent(l.id).is_some_and(|a| a.mode == Mode::Chat || a.mode == Mode::Terminal), "{}", l.id);
+        }
+        assert!(layout("dsh").is_none() && layout("omh").is_none());
     }
 
     #[test]

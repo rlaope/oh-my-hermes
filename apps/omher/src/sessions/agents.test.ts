@@ -115,9 +115,12 @@ describe("session agents", () => {
     expect(missingNote("claude")).toBe("claude was not found on this computer · install: npm i -g @anthropic-ai/claude-code");
     expect(missingNote("codex")).toContain("npm i -g @openai/codex");
     expect(missingNote("codex")).toContain("bundled in the ChatGPT app is found too");
-    expect(missingNote("pi")).toContain("npm i -g @mariozechner/pi-coding-agent");
-    expect(missingNote("omp")).toContain("npm i -g @oh-my-pi/pi-coding-agent");
-    expect(missingNote("grok")).toBe("grok was not found on this computer · see grok docs");
+    // as each product's own docs give it: pi's npm package moved (the old one is deprecated), oh-my-pi's npm build
+    // needs Bun (its installer does not), Grok has a one-line installer
+    expect(missingNote("pi")).toBe("pi was not found on this computer · install: npm i -g --ignore-scripts @earendil-works/pi-coding-agent");
+    expect(missingNote("omp")).toBe("omp was not found on this computer · install: curl -fsSL https://omp.sh/install | sh");
+    expect(missingNote("grok")).toBe("grok was not found on this computer · install: curl -fsSL https://x.ai/cli/install.sh | bash");
+    for (const a of AGENTS) expect(missingNote(a.id)).not.toMatch(/mariozechner|see .* docs|npm i -g @oh-my-pi/);
     expect(Object.keys(INSTALL).sort()).toEqual(AGENTS.map((a) => a.id).sort());
   });
 

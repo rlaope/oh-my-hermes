@@ -133,9 +133,9 @@ test("U14: a missing agent's Not installed tooltip carries its install line, as 
     codex: "npm i -g @openai/codex",
     omo: "npm i -g omo-ai",
     dsh: "npm i -g @deepseek-ai/dsh",
-    pi: "npm i -g @mariozechner/pi-coding-agent",
-    omp: "npm i -g @oh-my-pi/pi-coding-agent",
-    grok: "see grok docs",
+    pi: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+    omp: "curl -fsSL https://omp.sh/install | sh",
+    grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
   };
   for (const [agent, line] of Object.entries(lines)) {
     const row = page.getByTestId(`session-agent-${agent}`);
