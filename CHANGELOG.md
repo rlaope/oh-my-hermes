@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Bare `/model` in the OMH TUI lists the models you last switched to first.**
+  Each switch Hermes confirmed puts its model and provider at the front of
+  `~/.omh/tui/recent-models.json` (at most five, no repeats); a switch Hermes
+  deferred or asked to confirm records nothing. With an empty filter the picker
+  opens with those still on offer under `Recent`, then the whole list under
+  `All models`; typing filters as before, with no group.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the

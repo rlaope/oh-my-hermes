@@ -87,7 +87,8 @@ person sends from the composer is appended to Hermes' own input history
 (`history.py`), never an answer to a question Hermes asked. The other files
 the TUI writes are metadata: that session file, what OMH's HUD reader (`panels.HudPoller`, its fan-out cache
 under `<omh_home>/runtime/`) and the model-chain picker (`/omh-model`'s saved
-chains) write under the OMH home, and an empty fallback marker at the path
+chains) write under the OMH home, the models last switched to
+(`model_picker.record_recent`), and an empty fallback marker at the path
 `omh` named, which `omh` removes. An attached image is a file the
 gateway resolves and stages itself (`image.attach`, `clipboard.paste`,
 `input.detect_drop`); the TUI reads its bytes into memory once, has Hermes
@@ -232,7 +233,7 @@ from .modes import (
 from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, ROW_END, HistoryPager, Pager, Selection, forget_cells, reversed_cells
 from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
-from .model_picker import ModelPicker, model_rows, typed_switch_value
+from .model_picker import ModelPicker, model_rows, read_recent, record_recent, typed_switch_value
 from . import dag_block
 from .dag_tree import TreeState
 from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
@@ -5364,11 +5365,21 @@ class App(ModesMixin, AgentViewMixin):
         self.model = model
         self.model_deferred = None
         self.dirty = True
+        self._remember_model(value)
         global_scope = result.get("scope") == MODEL_GLOBAL_SCOPE
         self.transcript.add_notice((MODEL_SWITCHED_GLOBAL_NOTICE if global_scope else MODEL_SWITCHED_NOTICE).format(model=model))
         warning = as_text(result.get("warning")).strip()
         if warning:
             self.transcript.add_notice(warning, NOTICE_WARN)
+
+    def _remember_model(self, value: str) -> None:
+        """A switch Hermes made: the model and provider it named (`value`, as the picker's rows name them) go to the
+        front of the OMH home's recent list (`model_picker.record_recent`), which bare /model shows first. A switch
+        that named no provider, or a launch without an OMH home, records nothing."""
+        home = self._omh_home()
+        model, provider = contract.model_switch_parts(value) or ("", "")
+        if home is not None and provider:
+            record_recent(home, model, provider)
 
     def _confirm_model(
         self, result: Mapping[str, Any], intro: str, model: str, current: str,
@@ -5655,7 +5666,9 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self._picker_taken("/model"):
             return
-        self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model)
+        home = self._omh_home()
+        self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model,
+                                        recent=read_recent(home) if home is not None else [])
         if query:
             self.model_picker.query = query
             self.model_picker.index = 0

@@ -293,7 +293,10 @@ before, which `omh` reads for its exit card and removes with the directory;
 the relaunch marker beside it, when the person picked a restart after an update;
 and what OMH's own HUD reader
 and model-chain picker already write under the OMH home (the HUD fan-out cache
-and its lock, and the chains `/omh-model` saves), and a fallback marker at the
+and its lock, and the chains `/omh-model` saves); the models the person last
+switched to, `<omh_home>/tui/recent-models.json` (the model and provider of
+each switch Hermes confirmed, at most five, nothing else, written atomically;
+bare `/model` lists them first, and without an OMH home nothing is kept); and a fallback marker at the
 path `omh` named, holding what the TUI printed about why it did not start,
 which `omh` prints again once Hermes' own terminal (which clears the screen)
 closes, and then removes. A pasted clipboard image is saved by Hermes' own
