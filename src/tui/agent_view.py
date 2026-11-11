@@ -19,12 +19,12 @@ on the highlighted node's child as the list's keys do. The log is
 read-only: `subagent.tail` is asked for the open agent while it runs, at most
 every `TAIL_POLL_SECONDS`, and no more once `TAIL_MISSES_BEFORE_STOP` answers
 in a row had no tail, until that agent sends a frame; nothing is ever sent to
-a subagent. On the main screen reports are on only while the agent list (or
-the dag tree) has the keys, and the wheel and a drag are the terminal's (the
-owner's decision of 2026-11-06, back from the one of 2026-11-05). With
-`OMH_TUI_MOUSE=1` the OMH TUI takes the mouse wherever the row a report lands
-on is certain: a drag selects and copies without the rail, and the wheel
-opens the transcript view (`App._screen_mouse`). A pager, an agent's log among them,
+a subagent. On the main screen the OMH TUI takes the mouse wherever the row a
+report lands on is certain (the owner's decision of 2026-11-11, back from the
+one of 2026-11-06): a drag selects and copies without the rail, and the wheel
+opens the transcript view (`App._screen_mouse`). With `OMH_TUI_MOUSE=0`
+reports are on only while the agent list (or the dag tree) has the keys, and
+the wheel and a drag are the terminal's. A pager, an agent's log among them,
 takes them for its own wheel and drag (`pager`). A plain left click on a list
 row opens that agent's log, or on the list's main row leaves the list; on a
 tree row it takes the highlight, and on a node's row opens its child's log;
