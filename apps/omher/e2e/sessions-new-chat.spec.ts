@@ -223,7 +223,9 @@ test("closing a draft starts nothing; + while a draft is open reuses it", async 
   await expect(page.getByTestId("session-none")).toBeVisible();
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
   await page.waitForTimeout(200);
-  expect((await calls(page)).filter((c) => c.op !== "reset")).toEqual([]);
+  // nothing started; closing only removes the draft's (empty) attachment folder
+  expect((await calls(page)).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
+  expect((await calls(page)).filter((c) => c.op === "file.remove")).toEqual([expect.objectContaining({ session: "s1" })]);
 });
 
 test("the + menu: installed agents first (the last one used on top), missing ones dimmed with their install line; keys work", async ({ page }) => {

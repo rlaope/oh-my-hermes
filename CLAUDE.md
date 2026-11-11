@@ -53,10 +53,32 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   list of imports, names and name flows measured from the script. It is not a
   sandbox: an allowed Hermes function called with other arguments, and where
   the grant's url points, are beyond it.
-- omher, the desktop app under `apps/omher/`: not core. Its Python bridge
-  reaches only the person's own gateway over loopback, writes only to a bot's
-  main chat, and makes no model or API call; nothing in `src/` imports it.
-  `docs/OMHER-BOUNDARY.md` states it and `tests/test_omher_boundary.py` pins it.
+- omher, the desktop app under `apps/omher/`: not core. ("omher" is the app;
+  "OMH"/"oh-my-hermes" is the harness.) Its Python bridge reaches only the
+  person's own gateway over loopback, sends only to a bot's main chat and the
+  folder chats it opened, and makes no model or API call; nothing in `src/`
+  imports it. `docs/OMHER-BOUNDARY.md` states it and
+  `tests/test_omher_boundary.py` pins it.
+
+### omher (apps/omher/)
+
+omher has its own toolchain (Node + pnpm, Rust, Tauri 2) and its own CI
+(`.github/workflows/omher.yml` for macOS and Windows plus the bridge tests,
+`omher-ci.yml` for Linux), which run only when `apps/omher/**`, the boundary
+doc or its test changes. The dev and test commands are in
+`apps/omher/README.md` (Develop); the release steps are in its Release section
+(version in three files, then an `omher-v<version>` tag; `/releases/latest`
+is the OMH package release, not omher's).
+
+- A change that widens what the app sends, writes, reads or runs adds a
+  numbered rule to `docs/OMHER-BOUNDARY.md` and a test in
+  `tests/test_omher_boundary.py`, and raises that test's rule-count cap in the
+  same commit with a comment naming the rule.
+- Every feature must work on macOS, Windows and Linux: no macOS-only `open`,
+  POSIX-only paths or `/dev/urandom`. Releases are unsigned (ad-hoc on macOS);
+  never treat a certificate as a prerequisite.
+- The OMH gates above do not cover the app, and the app's checks do not cover
+  OMH: a PR touching both runs both.
 
 ## Build & Test
 
