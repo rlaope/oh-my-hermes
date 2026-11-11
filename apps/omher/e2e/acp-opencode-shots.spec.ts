@@ -61,4 +61,3 @@ for (const theme of ["dark", "light"]) {
     await page.screenshot({ path: join(SHOTS, `acp-opencode-approval-${TAG}-${theme}.png`), animations: "disabled" });
   });
 }
-
