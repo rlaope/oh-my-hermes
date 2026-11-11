@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UsageProvider } from "../lib/protocol";
-import { duration, limitName, meterDot, meterLabel, ringLevel, topPercent, windowRow } from "./usageFormat";
+import { accountRow, duration, limitName, meterDot, meterLabel, ringLevel, topPercent, windowRow } from "./usageFormat";
 
 const NOW = 1_794_200_000;
 const codex: UsageProvider = {
@@ -43,5 +43,25 @@ describe("usage format", () => {
     expect(topPercent(stale)).toBeNull();
     expect(windowRow(stale, stale.windows[0], NOW)).toEqual(["Weekly limit", "", "No recent record"]);
     expect(meterDot(stale)).toBe("stale");
+  });
+});
+
+describe("one line per Claude login", () => {
+  const now = new Date(2026, 10, 9, 12, 0, 0).getTime() / 1000;
+  const at17 = new Date(2026, 10, 9, 17, 0, 0).getTime() / 1000;
+  it("says what that login's own record says, and nothing for a login with no record here", () => {
+    expect(accountRow({ email: "o@example.com", label: "", source: "cli", in_cpa: true, state: "limited", resets_at: at17 }, now)).toEqual([
+      "o@example.com",
+      "Limited until 17:00",
+    ]);
+    expect(accountRow({ email: "a@example.com", label: "", source: "cpa", in_cpa: false, state: "no_record" }, now)).toEqual([
+      "a@example.com",
+      "No record",
+    ]);
+    expect(accountRow({ email: "w@example.com", label: "Work", source: "omher", in_cpa: false, state: "ok" }, now)).toEqual(["Work", "OK"]);
+    expect(accountRow({ email: "", label: "", source: "cpa", in_cpa: false, state: "limited", resets_at: now - 5 }, now)).toEqual([
+      "CLIProxyAPI login",
+      "Limited",
+    ]);
   });
 });

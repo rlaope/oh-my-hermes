@@ -389,7 +389,13 @@ const USAGE = {
         { label: "Weekly", used_percent: 60, resets_at: now() + (4 * 24 + 23) * 3600 },
       ] },
     { id: "claude", state: "limited", source_mtime: now() - 600,
-      windows: [{ label: "Weekly", resets_at: now() + 3 * 3600 + 12 * MIN }] },
+      windows: [{ label: "Weekly", resets_at: now() + 3 * 3600 + 12 * MIN }],
+      // five logins (Claude Code's own, also in CLIProxyAPI, and CLIProxyAPI's other four), each with its own record
+      accounts: [
+        { email: "owner@example.com", label: "", source: "cli", in_cpa: true, state: "limited", resets_at: now() + 3 * 3600 + 12 * MIN },
+        ...["ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"].map((email) => (
+          { email, label: "", source: "cpa", in_cpa: false, state: "no_record" })),
+      ] },
     { id: "grok", state: "connected", source_mtime: null, windows: [] },
   ],
   stale: () => [
@@ -402,10 +408,11 @@ const USAGE = {
 };
 
 // Accounts (accounts.*), shaped like the real bridge: every coding CLI, the CLI's own login first ("default").
-// Claude: signed in on this computer (owner@example.com), plus a local CLIProxyAPI holding 5 logins (counted
-// only). Codex: this computer + "Work", this computer in use. pi: on this computer, signed in. oh-my-pi, Grok,
+// Claude: signed in on this computer (owner@example.com), plus a local CLIProxyAPI holding 5 logins, listed from
+// its file names: owner@example.com is one of them (that row says so), the other 4 are read-only `cpa:<n>` rows. Codex: this computer + "Work", this computer in use. pi: on this computer, signed in. oh-my-pi, Grok,
 // Gemini: not installed. mock.accounts {limit: id, cli?} marks an account limited (as its usage record would).
 const ACCT_CLIS = ["claude", "codex", "pi", "omp", "grok", "gemini"];
+const CPA_EMAILS = ["ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"];
 const ACCT_INSTALLED = { claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false };
 let acct, acctActive, acctLimited, acctLabels;
 const ACCT_ID = /^[a-z0-9][a-z0-9._-]{0,39}$/;
@@ -423,8 +430,14 @@ function accountsList() {
           dir: a.id === "default" ? null : `/mock/.omher/accounts/${cli}/${a.id}`,
           usage: cli === "codex" && a.id === "default" ? USAGE.default()[0] : null,
           ...(limited ? { resets_at: limited } : {}),
+          ...(cli === "claude" && a.email === "owner@example.com" ? { in_cpa: true } : {}),
         };
       });
+      if (cli === "claude") {
+        CPA_EMAILS.forEach((email, i) =>
+          rows.push({ id: `cpa:${i + 2}`, label: "", email, state: "ready", dir: null, usage: null, source: "cpa" }),
+        );
+      }
       return {
         cli,
         installed: ACCT_INSTALLED[cli],

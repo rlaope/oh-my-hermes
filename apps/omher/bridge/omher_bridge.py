@@ -986,10 +986,13 @@ def _claude_usage(user_home: Path, now: float, root: Path | None = None) -> dict
     return _finish({"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}, now)
 
 
-def read_usage(user_home: Path | None = None, *, now: float | None = None, which=None) -> dict:
+def read_usage(user_home: Path | None = None, *, now: float | None = None, which=None,
+               with_accounts: bool = True) -> dict:
     """Subscription usage per CLI, from the CLIs' own local session files only (read-only, tail reads, no
     network, no tokens). Codex gives percentages; Claude Code gives a state and a reset time, never a %.
-    A CLI with no usage record shows as `connected` when it is on PATH, and not at all otherwise."""
+    A CLI with no usage record shows as `connected` when it is on PATH, and not at all otherwise.
+    With two or more Claude logins (Claude Code's own, omher accounts, a local CLIProxyAPI's auth file names),
+    the Claude meter also lists them, each with only its own usage record (see `claude_accounts`)."""
     import shutil
     user_home = Path(user_home) if user_home else Path.home()
     now = time.time() if now is None else now
@@ -998,11 +1001,36 @@ def read_usage(user_home: Path | None = None, *, now: float | None = None, which
     for pid, reader, cli in (("codex", _codex_usage, "codex"), ("claude", _claude_usage, "claude"),
                              ("grok", None, "grok"), ("gemini", None, "gemini")):
         found = reader(user_home, now) if reader else None
+        if pid == "claude" and with_accounts:
+            accounts = claude_accounts(user_home, now, found)
+            if found is None and len(accounts) > 1:
+                found = {"id": pid, "windows": [], "state": "connected", "source_mtime": None}
+            if found is not None and len(accounts) > 1:
+                found["accounts"] = accounts
         if found is None and which(cli):
             found = {"id": pid, "windows": [], "state": "connected", "source_mtime": None}
         if found is not None:
             providers.append(found)
     return {"providers": providers}
+
+
+def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> list[dict]:
+    """Every Claude login on this computer for the sidebar meter, in the Accounts page's order: Claude Code's own,
+    the omher accounts, then a local CLIProxyAPI's other logins (from its auth file names). Each carries only its
+    own usage record (`state`, `resets_at`); a CLIProxyAPI-only login has none (`no_record`)."""
+    rows = _with_cpa(_omher_rows("claude", user_home, now, default_usage, {}, lambda _: None), user_home)
+    out = []
+    for r in rows:
+        if r["state"] == "login" and r.get("source") != "cpa" and not r.get("in_cpa"):
+            continue  # nobody signed in there
+        u = r.get("usage") or {}
+        item = {"email": r["email"], "label": r["label"], "source": r.get("source") or ("cli" if r["id"] == "default" else "omher"),
+                "in_cpa": bool(r.get("in_cpa")), "state": u.get("state") or "no_record"}
+        resets = [w["resets_at"] for w in u.get("windows") or [] if "resets_at" in w and not w.get("stale")]
+        if item["state"] == "limited" and resets:
+            item["resets_at"] = max(resets)
+        out.append(item)
+    return out
 
 
 def read_routines(profile_dir: Path) -> list[dict]:
@@ -2492,7 +2520,8 @@ class CliRuns:
 # that a new session uses as the CLI's home (CLAUDE_CONFIG_DIR, CODEX_HOME, PI_CODING_AGENT_DIR…). Logging in
 # is always the CLI's own; the app runs it (Rust) and asks the CLI for its status. From here: Claude Code's
 # signed-in email (`.claude.json` `oauthAccount.emailAddress`, no token lives there), whether a login file
-# exists (a stat, never opened), and the usage records of rule 17. A local CLIProxyAPI is only counted.
+# exists (a stat, never opened), and the usage records of rule 17. A local CLIProxyAPI's Claude logins are
+# listed from its auth file NAMES only (the email CLIProxyAPI puts in each name); no auth file is ever opened.
 
 ACCOUNT_CLIS = ("claude", "codex", "pi", "omp", "grok", "gemini")
 _ACCOUNT_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
@@ -2510,19 +2539,56 @@ def omher_accounts_root(user_home: Path | None = None) -> Path:
     return (Path(user_home) if user_home else Path.home()) / ".omher" / "accounts"
 
 
-def cpa_count(user_home: Path) -> int:
-    """How many Claude logins a local CLIProxyAPI holds: auth file NAMES counted, no file opened."""
+def cpa_names(user_home: Path) -> list[str]:
+    """The Claude auth file NAMES a local CLIProxyAPI holds (`claude-*.json` in its `auth-dir`), sorted. No
+    auth file is opened: the names are listed, and the config only gives `auth-dir`."""
     if not (user_home / ".cli-proxy-api" / "config.yaml").is_file():
-        return 0
+        return []
     cfg = _load_yaml(user_home / ".cli-proxy-api" / "config.yaml")
     oauth = cfg.get("oauth") if isinstance(cfg.get("oauth"), dict) else {}
-    auth_dir = str(oauth.get("auth-dir") or cfg.get("auth-dir") or "~/.cli-proxy-api")
+    auth_dir = oauth.get("auth-dir") or cfg.get("auth-dir") or "~/.cli-proxy-api"
+    auth_dir = auth_dir if isinstance(auth_dir, str) else "~/.cli-proxy-api"
     cfg.clear()
     auth = Path(auth_dir.replace("~", str(user_home), 1) if auth_dir.startswith("~") else auth_dir)
     try:
-        return sum(1 for p in auth.iterdir() if _CPA_FILE.match(p.name)) if auth.is_dir() else 0
+        return sorted(p.name for p in auth.iterdir() if _CPA_FILE.match(p.name)) if auth.is_dir() else []
     except OSError:
-        return 0
+        return []
+
+
+def cpa_count(user_home: Path) -> int:
+    """How many Claude logins a local CLIProxyAPI holds: auth file NAMES counted, no file opened."""
+    return len(cpa_names(user_home))
+
+
+_CPA_EMAIL = re.compile(r"^claude-(?:[0-9a-f]{8}-)?([A-Za-z0-9._+-]{1,64}@[A-Za-z0-9.-]{1,60}\.[A-Za-z]{2,24})\.json$")
+
+
+def cpa_email(name: str) -> str:
+    """The email CLIProxyAPI puts in an auth file's NAME (`claude-<8 hex>-<email>.json` or `claude-<email>.json`),
+    else "". The file itself is never opened."""
+    m = _CPA_EMAIL.match(name)
+    return m.group(1) if m else ""
+
+
+def _with_cpa(rows: list[dict], user_home: Path) -> list[dict]:
+    """Claude rows plus a local CLIProxyAPI's logins, from its auth file names only. A login whose email is already
+    a row (Claude Code's own, or an omher account) marks that row `in_cpa`; every other one is a read-only row
+    (`source: cpa`, id `cpa:<n>`, never a folder, never usable for a session) with no usage: CLIProxyAPI writes no
+    usage record on this computer."""
+    seen = {r["email"].lower(): r for r in rows if r.get("email")}
+    out = list(rows)
+    for n, name in enumerate(cpa_names(user_home), 1):
+        email = cpa_email(name)
+        if email and email.lower() in seen:
+            seen[email.lower()]["in_cpa"] = True
+            continue
+        row = {"id": f"cpa:{n}", "label": "", "email": email, "state": "ready", "dir": None, "usage": None,
+               "source": "cpa"}
+        out.append(row)
+        if email:
+            seen[email.lower()] = row
+    return out
 
 
 def _read_json(path: Path) -> dict:
@@ -2604,7 +2670,7 @@ def read_accounts(user_home: Path | None = None, *, now: float | None = None, wh
     user_home = Path(user_home) if user_home else Path.home()
     now = time.time() if now is None else now
     which = which or shutil.which
-    usage = {p["id"]: p for p in read_usage(user_home, now=now, which=lambda _: None)["providers"]}
+    usage = {p["id"]: p for p in read_usage(user_home, now=now, which=lambda _: None, with_accounts=False)["providers"]}
     root = omher_accounts_root(user_home)
     active = _read_active(root)
     labels = _read_json(root / "labels.json")
@@ -2612,7 +2678,9 @@ def read_accounts(user_home: Path | None = None, *, now: float | None = None, wh
     groups = []
     for cli in ACCOUNT_CLIS:
         rows = _omher_rows(cli, user_home, now, usage.get(cli), labels, which)
-        ids = [r["id"] for r in rows]
+        if cli == "claude":
+            rows = _with_cpa(rows, user_home)
+        ids = [r["id"] for r in rows if r.get("source") != "cpa"]
         current = active.get(cli) if active.get(cli) in ids else "default"
         for r in rows:
             if r["id"] == current and r["state"] == "ready":

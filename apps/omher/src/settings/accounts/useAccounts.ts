@@ -7,7 +7,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import type { AccountCli, AccountGroup } from "../../lib/protocol";
 import { getStore, useStore } from "../../state/store";
 import { accountHost, type LoginStatus } from "./native";
-import { autoSwitchOn, nextAccount, switchNote } from "./rules";
+import { autoSwitchOn, isCpa, nextAccount, switchNote } from "./rules";
 
 const REFRESH_MS = 60_000;
 const ASKS_STATUS: AccountCli[] = ["claude", "codex"];
@@ -38,6 +38,7 @@ async function readStatuses(groups: AccountGroup[]): Promise<Record<string, Logi
   for (const g of groups) {
     if (!ASKS_STATUS.includes(g.cli)) continue;
     for (const a of g.accounts) {
+      if (isCpa(a)) continue; // CLIProxyAPI's: no folder, no CLI to ask
       asks.push(
         host.status(g.cli, a.id).then(
           (st) => {

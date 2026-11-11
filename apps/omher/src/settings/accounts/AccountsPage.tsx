@@ -12,9 +12,11 @@ import { accountHost, type LoginStatus, type SignInEvent } from "./native";
 import {
   AUTO_SWITCH_LINE,
   CLI_NAME,
+  CPA_USAGE,
   HEADER_LINE,
   SIGN_IN,
   autoSwitchOn,
+  isCpa,
   mergeRow,
   pill,
   rowSub,
@@ -134,6 +136,7 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
   live.current = signIn;
 
   const rows = g.accounts.map((a) => mergeRow(a, status[`${g.cli}:${a.id}`]));
+  const cpaRows = rows.filter(isCpa).length;
   const now = Date.now() / 1000;
   const canAdd = SIGN_IN[g.cli] === "run" && host.canSignIn;
 
@@ -194,7 +197,8 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
     }
   };
 
-  const signedIn = rows.filter((r) => r.signedIn).length;
+  // CLIProxyAPI's logins are listed, never switched to: they do not count towards auto-switch
+  const signedIn = rows.filter((r) => r.signedIn && !isCpa(r)).length;
   return (
     <section className="acc-g" data-testid={`accounts-${g.cli}`}>
       <div className="acc-gh">
@@ -210,11 +214,13 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
       )}
       <div className="st-grp">
         {rows.map((r, i) => {
-          const inUse = r.id === g.active && r.signedIn;
-          const lines = usageLines(r.usage, now);
-          const p = pill(r, inUse, now, rows.length);
+          const cpa = isCpa(r);
+          const inUse = !cpa && r.id === g.active && r.signedIn;
+          const lines = cpa ? [CPA_USAGE] : usageLines(r.usage, now);
+          const p = pill(r, inUse, now, rows.length - cpaRows);
           return (
-            <div className="acc-row" key={r.id} data-testid="account-row" data-id={r.id} data-state={r.state} data-in-use={inUse}>
+            <div className="acc-row" key={r.id} data-testid="account-row" data-id={r.id} data-state={r.state} data-in-use={inUse}
+              data-source={r.source ?? (r.id === "default" ? "cli" : "omher")}>
               <span className="acc-ring" title={lines.join("\n") || undefined} data-testid="account-usage">
                 {r.usage && <Ring p={r.usage} />}
                 <AgentIcon id={g.cli} size={16} />
@@ -233,21 +239,25 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
                   <SubLine src={rowSub({ ...r, plan: "" })} plan={r.plan} usage={lines[0]} />
                 </span>
               )}
-              {p ? (
+              {p && !cpa ? (
                 <span className={`acc-pill${inUse && r.state !== "limited" ? " use" : ""}${r.signedIn ? "" : " out"}${r.state === "limited" ? " lim" : ""}`} data-testid="account-pill">
                   {p}
                 </span>
               ) : (
                 <span />
               )}
-              <RowMenu
-                label={`Actions for ${rowTitle(r, i)}`}
-                items={[
-                  { label: "Use for new sessions", on: () => void run(() => s.setActiveAccount(g.cli, r.id)), disabled: inUse || !r.signedIn },
-                  { label: r.label ? "Rename…" : "Add a name…", on: () => setRenaming(r.id) },
-                  ...(r.id === "default" ? [] : [{ label: "Remove…", on: () => setConfirm(r), danger: true }]),
-                ]}
-              />
+              {cpa ? (
+                <span />
+              ) : (
+                <RowMenu
+                  label={`Actions for ${rowTitle(r, i)}`}
+                  items={[
+                    { label: "Use for new sessions", on: () => void run(() => s.setActiveAccount(g.cli, r.id)), disabled: inUse || !r.signedIn },
+                    { label: r.label ? "Rename…" : "Add a name…", on: () => setRenaming(r.id) },
+                    ...(r.id === "default" ? [] : [{ label: "Remove…", on: () => setConfirm(r), danger: true }]),
+                  ]}
+                />
+              )}
             </div>
           );
         })}
@@ -295,7 +305,8 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
       )}
       {g.also && (
         <p className="acc-also" data-testid="accounts-also">
-          Also found: {g.also.name} with {g.also.accounts} {g.also.accounts === 1 ? "account" : "accounts"} (managed there).
+          {g.also.accounts} {g.also.accounts === 1 ? "login comes" : "logins come"} from {g.also.name}, which signs in and switches them itself.
+          {cpaRows > 0 && " The ones only it holds are read-only here, and nothing on this computer records their usage."}
         </p>
       )}
       {msg && (

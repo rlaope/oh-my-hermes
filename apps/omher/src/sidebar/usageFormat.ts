@@ -1,6 +1,6 @@
 // Text and colour rules for the sidebar usage meters. Pure, so vitest pins them: a % appears only when the
 // source gave one, and a window whose reset time has passed says "stale" instead of a number.
-import type { UsageProvider, UsageWindow } from "../lib/protocol";
+import type { UsageAccount, UsageProvider, UsageWindow } from "../lib/protocol";
 
 export const PROVIDER_NAME: Record<string, string> = { codex: "Codex", claude: "Claude Code", grok: "Grok", gemini: "Gemini CLI" };
 
@@ -89,4 +89,15 @@ export function meterDot(p: UsageProvider): "limited" | "near" | "stale" | null 
 export function meterLabel(p: UsageProvider): string {
   const pct = topPercent(p);
   return `${PROVIDER_NAME[p.id] ?? p.id} usage: ${pct === null ? stateText(p) : `${Math.round(pct)}%`}`;
+}
+
+/** One login under the Claude card: [who, what its own record says]. The email (or the person's name for it), then
+ *  "Limited until 17:00" / "OK" / "No recent record" from that login's own usage file, or "No record" when
+ *  nothing on this computer records it (a CLIProxyAPI login). Never a number the record did not give. */
+export function accountRow(a: UsageAccount, now: number): [string, string] {
+  const who = a.label || a.email || (a.source === "cpa" ? "CLIProxyAPI login" : "This computer");
+  if (a.state === "no_record") return [who, "No record"];
+  if (a.state === "limited") return [who, typeof a.resets_at === "number" && a.resets_at > now ? `Limited until ${clock(a.resets_at, now)}` : "Limited"];
+  if (a.state === "connected") return [who, NO_USAGE];
+  return [who, stateText({ id: "claude", windows: [], state: a.state, source_mtime: null })];
 }

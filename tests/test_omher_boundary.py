@@ -40,7 +40,9 @@ RULES = (
     "Outside Hermes, omher reads only the usage records coding CLIs write about themselves",
     "it never reads their auth files or tokens, writes nothing there and sends nothing anywhere.",
     "Accounts (Settings › Accounts) are the one exception to rules 4, 10 and 17.",
-    "a local CLIProxyAPI is only counted by its auth file names.",
+    "a local CLIProxyAPI's Claude logins are listed, read-only, from its auth file names alone",
+    "omher never opens those files, never calls CLIProxyAPI or its management API, and never starts a session with, switches to or removes such a login.",
+    "The Claude meter also lists the Claude logins of rule 18 by name, each with only its own record;",
     "The app runs only the CLIs' own status and sign-in commands, as fixed argv (`claude auth status --json`, `claude auth login`,",
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
@@ -504,6 +506,48 @@ class AccountsNeverCarryAToken(unittest.TestCase):
                     text = json.dumps(ob.read_accounts(home, now=1.0, which=which))
                     for needle in self.TOKEN_KEYS + (secret, "SECRET"):
                         self.assertNotIn(needle, text)
+
+    def test_cliproxyapi_logins_are_listed_from_file_names_only(self) -> None:
+        """Rule 18's CLIProxyAPI sentence: its auth files are listed by name and never opened (a fuzzed auth dir
+        full of tokens), the bridge never calls CLIProxyAPI (no port, no management path, no HTTP client), and a
+        CLIProxyAPI row can never become the account a session starts with."""
+        import importlib.util
+        import json
+        import sys
+        import tempfile
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location("omher_bridge_cpa", BRIDGE)
+        ob = importlib.util.module_from_spec(spec)
+        sys.modules["omher_bridge_cpa"] = ob
+        spec.loader.exec_module(ob)
+        secret = "sk-ant-oat01-BOUNDARY"
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            cpa = home / ".cli-proxy-api"
+            cpa.mkdir()
+            (cpa / "config.yaml").write_text('oauth:\n  auth-dir: "~/.cli-proxy-api"\n', encoding="utf-8")
+            for i in range(5):
+                (cpa / f"claude-0000000{i}-a{i}@example.com.json").write_text(
+                    json.dumps({k: secret for k in self.TOKEN_KEYS}), encoding="utf-8")
+            real_open = open
+            opened: list[str] = []
+
+            def spy(path, *a, **k):
+                opened.append(str(path))
+                return real_open(path, *a, **k)
+
+            with mock.patch("builtins.open", spy), mock.patch("io.open", spy):
+                payload = json.dumps([ob.read_accounts(home, now=1.0, which=lambda c: None),
+                                      ob.read_usage(home, now=1.0, which=lambda c: None)])
+            self.assertEqual([p for p in opened if p.endswith(".json") and ".cli-proxy-api" in p], [])
+            self.assertNotIn(secret, payload)
+            self.assertEqual(payload.count("@example.com"), 10)  # 5 rows + 5 meter lines
+            with self.assertRaises(ob.BridgeError):
+                ob.set_active_account("claude", "cpa:1", home)
+        src = BRIDGE.read_text(encoding="utf-8")
+        for bad in ("8317", "/v0/management", "/v8/management", "management-key", "X-Management-Key"):
+            self.assertNotIn(bad, src, bad)
 
     def test_the_app_runs_only_the_fixed_status_and_sign_in_argv(self) -> None:
         src = self.ACCOUNTS_RS.read_text(encoding="utf-8")

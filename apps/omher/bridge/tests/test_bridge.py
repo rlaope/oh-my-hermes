@@ -2862,6 +2862,66 @@ class Accounts(unittest.TestCase):
         self.assertEqual(gs["claude"]["also"], {"name": "CLIProxyAPI", "accounts": 5})
         self.assertNotIn("also", gs["codex"])
         self.assertEqual(ob.cpa_count(self.home()), 0)
+        # every CLIProxyAPI login is a row, from its file name only: read-only, no folder, no usage
+        cpa = [a for a in gs["claude"]["accounts"] if a.get("source") == "cpa"]
+        self.assertEqual([(a["id"], a["email"], a["state"], a["dir"], a["usage"]) for a in cpa],
+                         [(f"cpa:{i + 1}", f"a{i}@example.com", "ready", None, None) for i in range(5)])
+        self.assertEqual(gs["claude"]["active"], "default")
+
+    def test_cpa_logins_join_the_claude_rows_by_email_from_real_file_names(self):
+        h = self.home()
+        root = h / ".cli-proxy-api"
+        root.mkdir()
+        (root / "config.yaml").write_text('oauth:\n  auth-dir: "~/.cli-proxy-api"\n', encoding="utf-8")
+        for name in ("claude-2065f4ca-one@gmail.com.json", "claude-5012cc0d-Owner@Example.com.json",
+                     "claude-a0538558-me@sionic.ai.json", "claude-nomail.json", "codex-x@example.com.json",
+                     "claude-x.json.bak"):
+            (root / name).write_text(json.dumps({k: SECRET for k in TOKEN_KEYS}), encoding="utf-8")
+        (h / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "owner@example.com"}}), encoding="utf-8")
+        claude = self.groups(h)["claude"]
+        rows = [(a["id"], a["email"], a.get("source"), a.get("in_cpa")) for a in claude["accounts"]]
+        # Claude Code's own login is one of CLIProxyAPI's (case-insensitive): marked, not listed twice
+        self.assertEqual(rows, [("default", "owner@example.com", None, True), ("cpa:1", "one@gmail.com", "cpa", None),
+                                ("cpa:3", "me@sionic.ai", "cpa", None), ("cpa:4", "", "cpa", None)])
+        self.assertEqual(claude["also"], {"name": "CLIProxyAPI", "accounts": 4})
+        self.assertEqual(ob.cpa_email("claude-89345c0d-rlaope0206@gmail.com.json"), "rlaope0206@gmail.com")
+        self.assertEqual(ob.cpa_email("claude-rlaope0206@gmail.com.json"), "rlaope0206@gmail.com")
+        self.assertEqual(ob.cpa_email("claude-../../x@y.z.json"), "")
+        # a CLIProxyAPI login can never be made the account new sessions use (no folder under ~/.omher)
+        with self.assertRaises(ob.BridgeError):
+            ob.set_active_account("claude", "cpa:1", h)
+
+    def test_the_claude_meter_lists_every_login_with_only_its_own_record(self):
+        h = self.home()
+        self.cpa(h, n=3)
+        (h / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "a0@example.com"}}), encoding="utf-8")
+        (h / ".claude/projects/-w").mkdir(parents=True)
+        (h / ".claude/projects/-w/s.jsonl").write_text(CLAUDE_LINE + "\n", encoding="utf-8")
+        orig = Path.read_text
+
+        def guard(p, *a, **k):
+            self.assertFalse("cli-proxy-api" in str(p) and Path(p).suffix == ".json", f"opened {p}")
+            return orig(p, *a, **k)
+
+        with mock.patch.object(Path, "read_text", guard):
+            p = {x["id"]: x for x in ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"]}["claude"]
+        self.assertEqual(p["state"], "limited")
+        self.assertEqual(p["accounts"], [
+            {"email": "a0@example.com", "label": "", "source": "cli", "in_cpa": True, "state": "limited",
+             "resets_at": 1794211200.0},
+            {"email": "a1@example.com", "label": "", "source": "cpa", "in_cpa": False, "state": "no_record"},
+            {"email": "a2@example.com", "label": "", "source": "cpa", "in_cpa": False, "state": "no_record"}])
+        self.assert_no_token(p)
+        # CLIProxyAPI logins alone (Claude Code not on PATH, no record) still give a Claude meter, with no number
+        h2 = self.home()
+        self.cpa(h2, n=2)
+        p2 = ob.read_usage(h2, now=1.0, which=lambda _: None)["providers"]
+        self.assertEqual([(x["id"], x["state"], x["windows"], len(x["accounts"])) for x in p2], [("claude", "connected", [], 2)])
+        # one login: no list (the meter is the login); no CLIProxyAPI, nothing on PATH: no meter at all
+        h3 = self.home()
+        self.cpa(h3, n=1)
+        self.assertNotIn("accounts", ob.read_usage(h3, now=1.0, which=lambda c: f"/bin/{c}")["providers"][0])
+        self.assertEqual(ob.read_usage(self.home(), now=1.0, which=lambda _: None), {"providers": []})
 
     def test_fuzzed_token_keys_never_reach_any_payload(self):
         import random
