@@ -7,6 +7,7 @@ import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
+import { LANG_KEY, readLang, setLang, type Lang } from "../i18n";
 import type {
   Away,
   LinkPlaces,
@@ -34,6 +35,11 @@ import type {
   AccountCli,
   AccountGroup,
   Skill,
+  Automation,
+  CatalogResult,
+  InspectResult,
+  OpMap,
+  PluginRow,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
 
@@ -137,9 +143,31 @@ export type RoutineItem = {
   name: string;
   status: string;
 };
+/** A card for an automation the bot made from this chat (`routine.added`): what, when, where it delivers. */
+export type RoutineAddedItem = {
+  kind: "routineAdded";
+  id: string;
+  ts: number;
+  routine_id: string;
+  name: string;
+  schedule: string;
+  next_run_at: number | string | null;
+  deliver: string;
+  origin: { platform: string; place: string } | null;
+};
+/** A card for a plugin the bot installed from this chat (`plugin.added`). */
+export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; name: string; title: string; tools: number; hooks: number };
 /** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
 export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
-export type ChatItem = MessageItem | ActivityItem | ApprovalItem | ClarifyItem | RoutineItem | SystemItem;
+export type ChatItem =
+  | MessageItem
+  | ActivityItem
+  | ApprovalItem
+  | ClarifyItem
+  | RoutineItem
+  | RoutineAddedItem
+  | PluginAddedItem
+  | SystemItem;
 export type TimelineItem = ChatItem | AwayItem;
 
 export interface Chat {
@@ -200,8 +228,14 @@ export interface Ui {
   draft: { bot: string; text: string; n: number } | null;
   theme: Theme;
   look: Look;
-  /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it. */
-  view: "chat" | "settings" | "session";
+  /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it.
+   *  "automations" and "plugins" are the two pages of the sidebar's foot. */
+  view: "chat" | "settings" | "session" | "automations" | "plugins";
+  /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
+  automation: string | null;
+  pluginsBot: string | null;
+  /** The UI language (Settings › General › Language), saved as `omher.lang`. */
+  lang: Lang;
   settingsPage: string;
   /** Sidebar: bots pinned to the top (in pin order) and bots hidden from the list. Saved on this computer. */
   pinned: string[];
@@ -228,6 +262,8 @@ export interface AppState {
   elsewhere: Record<string, Away[]>;
   peeks: Record<string, Peek>;
   routines: Record<string, Routine[]>;
+  /** Every bot's automations (`automations.list`, read from each profile's cron/jobs.json); null until read. */
+  automations: Automation[] | null;
   models: Record<string, ModelOptions>;
   /** Per bot: the composer's "Reply there" chip, if any. */
   replyTo: Record<string, ReplyChip | null>;
@@ -343,6 +379,7 @@ export function initialState(): AppState {
     elsewhere: {},
     peeks: {},
     routines: {},
+    automations: null,
     models: {},
     replyTo: {},
     ui: {
@@ -359,6 +396,9 @@ export function initialState(): AppState {
       hidden: readList("omher.hidden"),
       focusAsk: null,
       session: null,
+      automation: null,
+      pluginsBot: null,
+      lang: readLang(),
     },
   };
 }
@@ -501,6 +541,10 @@ export type Action =
   | { type: "peek.loaded"; id: string; messages: PeekMsg[]; total: number }
   | { type: "peek.failed"; id: string; error: string }
   | { type: "routines"; bot: string; routines: Routine[] }
+  | { type: "automations"; automations: Automation[] }
+  | { type: "ui.automations"; job?: string | null }
+  | { type: "ui.plugins"; bot?: string | null }
+  | { type: "ui.lang"; lang: Lang }
   | { type: "models"; bot: string; options: ModelOptions }
   | { type: "model.set"; bot: string; current: ModelCurrent }
   | { type: "ui.panel"; open?: boolean }
@@ -675,6 +719,28 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "bots.update":
     case "accounts.update":
       return state; // the store refetches; nothing to change here
+    case "routine.added": {
+      const id = `routine-added-${ev.routine_id}`;
+      if (state.chats[bot]?.items.some((i) => i.id === id)) return state;
+      const item: RoutineAddedItem = {
+        kind: "routineAdded",
+        id,
+        ts: ev.ts || now / 1000,
+        routine_id: ev.routine_id,
+        name: ev.name,
+        schedule: ev.schedule,
+        next_run_at: ev.next_run_at,
+        deliver: ev.deliver,
+        origin: ev.origin,
+      };
+      return bumpUnread(touchChat(state, bot, (c) => withItems(c, [...c.items, item])), bot);
+    }
+    case "plugin.added": {
+      const id = `plugin-added-${ev.name}-${ev.ts}`;
+      if (state.chats[bot]?.items.some((i) => i.id === id)) return state;
+      const item: PluginAddedItem = { kind: "pluginAdded", id, ts: ev.ts || now / 1000, name: ev.name, title: ev.title, tools: ev.tools, hooks: ev.hooks };
+      return bumpUnread(touchChat(state, bot, (c) => withItems(c, [...c.items, item])), bot);
+    }
     case "routine.ran": {
       const next = touchChat(state, bot, (c) =>
         withItems(c, [
@@ -793,6 +859,14 @@ export function reduce(state: AppState, a: Action): AppState {
       };
     case "routines":
       return { ...state, routines: { ...state.routines, [a.bot]: a.routines } };
+    case "automations":
+      return { ...state, automations: a.automations };
+    case "ui.automations":
+      return { ...state, ui: { ...state.ui, view: "automations", ...(a.job !== undefined ? { automation: a.job } : {}) } };
+    case "ui.plugins":
+      return { ...state, ui: { ...state.ui, view: "plugins", ...(a.bot ? { pluginsBot: a.bot } : {}) } };
+    case "ui.lang":
+      return { ...state, ui: { ...state.ui, lang: a.lang } };
     case "models":
       return { ...state, models: { ...state.models, [a.bot]: a.options } };
     case "model.set": {
@@ -975,6 +1049,28 @@ export interface Actions {
   respondClarify(requestId: string, answer: string | ClarifyAnswers, bot?: string): Promise<void>;
   loadElsewhere(bot?: string): Promise<void>;
   loadRoutines(bot?: string): Promise<void>;
+  /** Re-read every bot's automations (files only; no gateway). */
+  loadAutomations(): Promise<void>;
+  /** Open the Automations page, on one job (`<bot>:<id>`) when given. */
+  openAutomations(job?: string | null): void;
+  /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
+  openPlugins(bot?: string | null): void;
+  /** Open `bot`'s main chat and send `text` there (the pages' "say it in words" box, Run now). */
+  sendTo(bot: string, text: string): Promise<void>;
+  /** The bot's own `cron.manage` through the bridge: pause, resume or remove one job, or add one. Rejects with
+   *  the bridge's error (Hermes' own text when it refused). */
+  automationDo(bot: string, job: string, action: "pause" | "resume" | "remove"): Promise<void>;
+  addAutomation(p: OpMap["automations.add"]["params"]): Promise<{ job: string; name: string }>;
+  /** Plugins: reads and the bot's own `plugins.manage` (the page keeps its own copy). */
+  pluginsList(bot: string): Promise<PluginRow[]>;
+  pluginsCatalog(bot: string, query?: string, category?: string): Promise<CatalogResult>;
+  pluginsInspect(bot: string, catalogName: string): Promise<InspectResult>;
+  pluginsInstall(bot: string, catalogName: string, sha: string): Promise<OpMap["plugins.install"]["result"]>;
+  pluginsToggle(bot: string, key: string, enable: boolean): Promise<OpMap["plugins.toggle"]["result"]>;
+  pluginsUpdate(bot: string, name: string): Promise<OpMap["plugins.update"]["result"]>;
+  pluginsRemove(bot: string, name: string): Promise<void>;
+  /** Settings › General › Language: saved on this computer, applied at once (no restart). */
+  setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
   peek(sessionId: string, limit?: number, bot?: string): Promise<void>;
   setModel(change: { model?: string; provider?: string; reasoning?: string }): Promise<void>;
@@ -1147,6 +1243,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       fail(e);
     }
   };
+  const loadAutomations = async () => {
+    try {
+      dispatch({ type: "automations", automations: (await bridge.request("automations.list", {})).automations });
+    } catch {
+      /* an older bridge without the op, or a failed read: the page shows what it last had */
+    }
+  };
   const loadModels = async (bot?: string) => {
     const b = botArg(bot);
     if (!b) return;
@@ -1185,7 +1288,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     }
     const names = new Set(state.bots.map((b) => b.name));
     const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
-    await Promise.allSettled([...loaded.map(loadChat), loadElsewhere(), loadRoutines()]);
+    await Promise.allSettled([...loaded.map(loadChat), loadElsewhere(), loadRoutines(), loadAutomations()]);
   };
 
   const actions: Actions = {
@@ -1209,6 +1312,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
+        if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
       });
       await bridge.connect();
@@ -1222,6 +1326,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const back = saved ? forBots(saved, bots.map((b) => b.name)) : null;
         const first =
           state.selectedBot && bots.some((b) => b.name === state.selectedBot) ? state.selectedBot : (back?.bot ?? bots[0]?.name);
+        void loadAutomations();
         if (first) await selectBot(first);
         if (back?.bot) {
           const { panelOpen, panelTab, runsFull, runId, session } = back;
@@ -1328,7 +1433,46 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     loadElsewhere,
     loadRoutines,
+    loadAutomations,
     loadModels,
+    openAutomations: (job) => {
+      dispatch({ type: "ui.automations", job });
+      void loadAutomations();
+    },
+    openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
+    async sendTo(bot, text) {
+      if (!text.trim()) return;
+      if (state.selectedBot !== bot || state.ui.view !== "chat") await selectBot(bot);
+      await actions.send(text);
+    },
+    async automationDo(bot, job, action) {
+      await bridge.request(`automations.${action}` as "automations.pause", { bot, job });
+      await loadAutomations();
+    },
+    async addAutomation(p) {
+      const r = await bridge.request("automations.add", p);
+      await loadAutomations();
+      return r;
+    },
+    pluginsList: async (bot) => (await bridge.request("plugins.list", { bot })).plugins,
+    pluginsCatalog: (bot, query, category) =>
+      bridge.request("plugins.catalog", { bot, ...(query ? { query } : {}), ...(category ? { category } : {}) }),
+    pluginsInspect: (bot, catalogName) => bridge.request("plugins.inspect", { bot, catalog_name: catalogName }),
+    pluginsInstall: (bot, catalogName, sha) => bridge.request("plugins.install", { bot, catalog_name: catalogName, inspected_sha: sha }),
+    pluginsToggle: (bot, key, enable) => bridge.request("plugins.toggle", { bot, key, enable }),
+    pluginsUpdate: (bot, name) => bridge.request("plugins.update", { bot, name }),
+    async pluginsRemove(bot, name) {
+      await bridge.request("plugins.remove", { bot, name });
+    },
+    setLanguage(lang) {
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);
+      } catch {
+        /* no storage */
+      }
+      setLang(lang);
+      dispatch({ type: "ui.lang", lang });
+    },
     async peek(sessionId, limit, bot) {
       const b =
         bot ?? Object.keys(state.elsewhere).find((n) => state.elsewhere[n].some((a) => a.id === sessionId)) ?? state.selectedBot;

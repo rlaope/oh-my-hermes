@@ -43,9 +43,9 @@ export function openNewSession(): void {
 export function SessionsHeader() {
   return (
     <div className="side-sh side-sh-row">
-      <span>Sessions</span>
+      <span>{t("nav.sessions")}</span>
       <span className="ss-add">
-        <button type="button" className="ss-plus" aria-label="New session" title="New session" onClick={openNewSession} data-testid="session-new">
+        <button type="button" className="ss-plus" aria-label={t("sessions.new")} title={t("sessions.new")} onClick={openNewSession} data-testid="session-new">
           <PlusIcon size={14} />
         </button>
       </span>
@@ -72,7 +72,7 @@ function SessionStart() {
     <div className="ss-none" data-testid="session-none">
       <button type="button" className="ss-start" title={tip} onClick={openNewSession} data-testid="session-start">
         <PlusIcon size={16} />
-        New session
+        {t("sessions.new")}
       </button>
     </div>
   );
@@ -102,7 +102,7 @@ export function SessionList() {
   // a draft's folder is not settled yet: it never makes another row show its parent
   const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home };
   return (
-    <nav className="bot-list ss-list" aria-label="Sessions" data-testid="session-list">
+    <nav className="bot-list ss-list" aria-label={t("nav.sessions")} data-testid="session-list">
       {ss.list.map((rec) =>
         confirm === rec.id ? (
           <div

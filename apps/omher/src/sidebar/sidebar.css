@@ -265,6 +265,12 @@
   background: var(--raise2);
   color: var(--ink);
 }
+.nav-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
 .me {
   display: flex;
   flex-wrap: wrap;
