@@ -330,6 +330,8 @@
 .sa-line code {
   font-family: var(--mono);
   font-size: 11px;
+  background: none;
+  padding: 0;
   color: var(--body);
 }
 .sa-line.result {
