@@ -48,7 +48,7 @@ from .keys import (
     BUTTON_LEFT, CHAR, DOWN, END, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, UP, WHEEL_DOWN, WHEEL_UP, Key, Mouse, Paste,
 )
 from .screen import HIDE_CURSOR, SYNC_BEGIN, SYNC_END, paint_line, without_controls
-from .style import CSI, Line, Span
+from .style import CSI, WRAP_SPACE, WRAP_VERBATIM, Line, Span, wrap_of
 from .theme import Theme
 from .width import cluster_width, clusters, clusters_as_written
 
@@ -304,15 +304,32 @@ class Selection:
         return first[1] if row == first[0] else 0, last[1] if row == last[0] else ROW_END
 
     def text(self, line_of: Callable[[int], Line]) -> str:
-        """The selection's text, row by row, without gutter cells or trailing spaces; "" (and none kept) for blanks."""
+        """The selection's text, row by row, without gutter cells or trailing spaces; "" (and none kept) for blanks.
+
+        A row the TUI wrapped to fit the width (`style.wrap_of`) is joined to the row above instead of starting a new
+        line: with one space where the wrap dropped spaces, with nothing inside a word, and as it is in code, so a
+        long command or path is copied as the one line it was written as."""
         if self._span is None:
             return ""
         first, last = sorted(self._span)
-        texts = []
+        texts: list[str] = []
+        raw = ""  # the last row's text before its trailing spaces went: a code row's last space is part of the code
         for row in range(first[0], last[0] + 1):
             low, high = self.span_on(row) or (0, -1)
-            kept = (cell.text for cell in _cells(line_of(row)) if cell.start <= high and cell.end >= low and not cell.gutter)
-            texts.append("".join(kept).rstrip())
+            line = line_of(row)
+            kept = "".join(
+                cell.text for cell in _cells(line) if cell.start <= high and cell.end >= low and not cell.gutter)
+            kind = wrap_of(line) if row > first[0] and texts else None
+            if kind is None:
+                texts.append(kept.rstrip())
+                raw = kept
+            elif kind == WRAP_VERBATIM:
+                raw = raw + kept
+                texts[-1] = raw.rstrip()
+            else:
+                joined, rest = texts[-1], kept.lstrip()
+                raw = joined + (" " if kind == WRAP_SPACE and joined and rest.strip() else "") + rest
+                texts[-1] = raw.rstrip()
         while texts and not texts[-1]:
             texts.pop()  # a drag past the content: no empty rows after it
         while texts and not texts[0]:

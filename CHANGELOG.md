@@ -21,6 +21,16 @@ All notable changes will be documented here.
   the language (`zh-CN`, `ja`, `ko`), dates follow it too, and `--font` falls
   back to PingFang SC, Hiragino Sans GB, Microsoft YaHei and Noto Sans CJK
   (and their Japanese and Korean siblings).
+- **A drag in the OMH TUI copies clean by default, long commands as one
+  line.** The main screen takes the mouse again (the owner's choice of
+  2026-11-11, back from 2026-11-06): a drag copies the transcript without
+  the `┃` rail, and rows the TUI wrapped to fit the screen are joined back
+  into the line they were written as, a space where the wrap dropped one,
+  nothing inside a long word or path, code exactly as it is. A long command
+  or path pastes as the one line it is; a line break the text had stays.
+  The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
+  `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
+  terminal.
 - **omher's Automations and Plugins pages work, by hand or by asking the
   bot, in English, Korean, Japanese or Chinese.** The two sidebar rows that
   said Soon open pages. Automations lists every bot's cron jobs from each

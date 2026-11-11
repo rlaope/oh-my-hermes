@@ -20,7 +20,7 @@ from omh.tui import markdown
 from omh.tui.markdown import (
     GrowingLine, MarkdownState, clean_text, render_growing, render_line, render_lines, render_markdown, strip_escapes,
 )
-from omh.tui.style import Line, Span
+from omh.tui.style import WRAP_VERBATIM, Line, Span, wrap_mark
 from omh.tui.theme import DEFAULT_THEME as THEME
 from omh.tui.width import is_control, line_width
 
@@ -169,8 +169,8 @@ class FenceTests(unittest.TestCase):
             rows,
             [
                 (Span("+xxxxxxxxx", THEME.diff_add),),
-                (Span("xxxxxxxxxx", THEME.diff_add),),
-                (Span("xxxxx     ", THEME.diff_add),),
+                (wrap_mark(WRAP_VERBATIM), Span("xxxxxxxxxx", THEME.diff_add)),  # a copy joins the rows again
+                (wrap_mark(WRAP_VERBATIM), Span("xxxxx     ", THEME.diff_add)),
             ],
         )
 
@@ -414,8 +414,8 @@ class HighlightTests(unittest.TestCase):
             rows,
             [
                 (Span("let", THEME.syntax_keyword), Span(" s = ", THEME.text), Span('"', THEME.syntax_string)),
-                (Span('한글한글"', THEME.syntax_string),),
-                (Span(" ", THEME.text), Span("// 끝", THEME.syntax_comment)),
+                (wrap_mark(WRAP_VERBATIM), Span('한글한글"', THEME.syntax_string)),  # a copy joins the rows again
+                (wrap_mark(WRAP_VERBATIM), Span(" ", THEME.text), Span("// 끝", THEME.syntax_comment)),
             ],
         )
         self.assertEqual([line_width(row) for row in rows], [9, 9, 6])
