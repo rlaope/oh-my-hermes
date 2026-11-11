@@ -13,6 +13,7 @@ import { Seg } from "../chat/model/Seg";
 import { reasoningLabel } from "../chat/model/levels";
 import { Appearance } from "./Appearance";
 import { AccountsPage } from "./accounts/AccountsPage";
+import { ProvidersPage } from "./providers/ProvidersPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 
 export const slot = "settings";
@@ -413,42 +414,6 @@ function GeneralPage() {
             {s.conn === "open" ? "Connected" : s.conn === "connecting" ? "Connecting…" : "Not connected"}
           </Value>
         </Row>
-      </div>
-    </div>
-  );
-}
-
-function ProvidersPage() {
-  const s = useStore();
-  const name = s.selectedBot ?? s.bots[0]?.name ?? null;
-  const opts = name ? s.models[name] : undefined;
-  const bot = s.bots.find((b) => b.name === name);
-  useEffect(() => {
-    if (name && !opts && bot?.status !== "offline") void s.loadModels(name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
-  return (
-    <div className="st-page">
-      <div className="st-gh st-gh0">Providers</div>
-      <p className="st-note">Read-only. Providers and keys are set up in Hermes.</p>
-      <div className="st-grp" data-testid="providers-list">
-        {!opts ? (
-          <Row title={bot?.status === "offline" ? "Not connected" : "Loading…"} />
-        ) : (
-          opts.providers.map((p) => (
-            <Row
-              key={p.slug}
-              title={p.name}
-              icon={<ModelIcon model={p.models[0]} provider={`${p.slug} ${p.name}`} size={14} />}
-              hint={p.models.join(" · ") || "No models"}
-            >
-              <Value mono>
-                {p.slug}
-                {p.slug === opts.current.provider && <small className="st-tag">in use</small>}
-              </Value>
-            </Row>
-          ))
-        )}
       </div>
     </div>
   );

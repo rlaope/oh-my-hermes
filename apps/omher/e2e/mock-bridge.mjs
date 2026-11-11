@@ -346,6 +346,9 @@ const PROVIDERS = [
   },
   { slug: "ollama", name: "Ollama", models: ["llama-4-maverick", "my-local-model"] },
 ];
+// mock.providers {fixture: "long"}: the long catalogs of a real profile (Nous Portal ~60, OpenRouter ~60).
+const PROVIDERS_LONG = JSON.parse(readFileSync(new URL("./fixtures/providers-long.json", import.meta.url), "utf-8"));
+let providerFixture = "default";
 const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 
 // ---- mutable state ---------------------------------------------------------------------------
@@ -447,6 +450,7 @@ function acctFind(p) {
 
 function reset() {
   usageFixture = "default";
+  providerFixture = "default";
   acct = {
     claude: [{ id: "default", label: "", email: "owner@example.com", logged_in: true }],
     codex: [{ id: "default", label: "", logged_in: true }, { id: "work", label: "Work", logged_in: true }],
@@ -911,6 +915,9 @@ const OPS = {
   }),
   "models.options": (p) => {
     const b = needBot(p);
+    if (providerFixture === "long") {
+      return { providers: PROVIDERS_LONG.providers, current: { ...models[b.name], ...PROVIDERS_LONG.current }, reasoning_levels: REASONING_LEVELS };
+    }
     return { providers: PROVIDERS, current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
   },
   "chat.set_model": (p) => {
@@ -983,6 +990,11 @@ const OPS = {
   "mock.usage": (p) => {
     if (!(p.fixture in USAGE)) throw new OpError("bad_request", "unknown usage fixture");
     usageFixture = p.fixture;
+    return {};
+  },
+  "mock.providers": (p) => {
+    if (p.fixture !== "default" && p.fixture !== "long") throw new OpError("bad_request", "unknown providers fixture");
+    providerFixture = p.fixture;
     return {};
   },
   "mock.accounts": (p) => {
