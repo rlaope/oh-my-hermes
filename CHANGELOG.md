@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Scrolling up in the OMH TUI scrolls.** Since the main screen took the
+  mouse so a drag copies clean, the wheel up opened the full-screen
+  transcript view instead of scrolling, a pager that could hold as little as
+  one notice. The wheel up now hands the mouse to the terminal, which scrolls
+  its own scrollback as in any shell; the next key or paste takes it back, so
+  a drag copies without the rail again. Ctrl+O still opens the transcript
+  view.
+
 - **The omher Linux AppImage reaches its bots again.** The AppImage's AppRun
   exports `PYTHONHOME` and `PYTHONPATH` pointing into the image, and omher
   passed them to the host Hermes Python, so the bridge died with
@@ -12,6 +20,7 @@ All notable changes will be documented here.
   the agent CLIs, sign-ins, the installer) now gets the host environment, and
   the PR CI starts the built AppImage under Xvfb and fails unless the app, its
   window and its bridge are all up. (#2778)
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the

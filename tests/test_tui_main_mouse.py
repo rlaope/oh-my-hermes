@@ -6,8 +6,8 @@ is who selects. Wherever the row a report lands on is certain, the OMH TUI asks
 for clicks, a held button's motion and the wheel in SGR form. A drag over the
 rows the live region printed, the transcript's above it and its own, is
 shown reversed and copied without gutter cells, as the pager copies; a double
-click copies a word and a triple click a row. The wheel up opens Ctrl+O's
-view one notch up from its end. A row the region did not print selects
+click copies a word and a triple click a row. The wheel up opens no view: it
+turns reports off so the terminal scrolls, until the next key. A row the region did not print selects
 nothing: moving the held button from it opens the transcript view instead. A
 selection that would no longer hold what the screen showed (the live rows
 moved under it) is dropped and copies nothing. A resize drops the selection
@@ -253,52 +253,38 @@ class WheelTests(unittest.TestCase):
         native._on_input(Mouse(WHEEL_UP, 5, 3))
         self.assertIsNone(native.pager)  # OMH_TUI_MOUSE=0: the wheel scrolls the terminal
 
-    def test_the_wheel_up_opens_ctrl_os_view_one_notch_up_from_its_end_and_types_nothing(self) -> None:
+    def test_the_wheel_up_hands_the_mouse_to_the_terminal_opens_nothing_and_types_nothing(self) -> None:
+        # The owner's decision of 2026-11-11: scrolling up scrolls, it never opens a view over the screen.
         app = main_app(rows=8)
         for index in range(12):
             app.transcript.add_notice(f"notice {index}")
         drawn(app)
         type_text(app, "draft")
+        drawn(app)
+        self.assertTrue(app.terminal.mouse_reporting)
         app._on_input(Mouse(WHEEL_DOWN, 5, 3))
-        self.assertIsNone(app.pager)  # down: the main screen is at its end already
+        self.assertIsNone(app.pager)  # down: nothing
+        self.assertTrue(app.terminal.mouse_reporting)
         app._on_input(Mouse(WHEEL_UP, 5, 3))
-        self.assertIsInstance(app.pager, HistoryPager)
+        self.assertIsNone(app.pager)
+        self.assertFalse(app.terminal.mouse_reporting)  # the next notches reach the terminal, which scrolls
         drawn(app)
-        opened = (app.pager.item, app.pager.offset)  # type: ignore[union-attr]
-        app._on_input(Key(CHAR, "q"))
-        app._on_input(Key(CHAR, "o", ctrl=True))  # Ctrl+O, then one notch of the wheel in it
-        drawn(app)
-        ended = (app.pager.item, app.pager.offset)  # type: ignore[union-attr]
-        app._on_input(Mouse(WHEEL_UP, 5, 3))
-        drawn(app)
-        self.assertEqual(opened, (app.pager.item, app.pager.offset))  # type: ignore[union-attr]
-        self.assertNotEqual(opened, ended)
+        self.assertFalse(app.terminal.mouse_reporting)  # a frame does not take it back
+        self.assertFalse(app.terminal.screen.alternate)  # type: ignore[attr-defined]
         self.assertEqual(app.composer.text, "draft")  # nothing typed
 
-    def test_the_wheel_down_back_to_the_end_leaves_the_view_the_wheel_opened(self) -> None:
-        app = main_app(rows=8)
-        for index in range(12):
-            app.transcript.add_notice(f"notice {index}")
+    def test_the_next_key_takes_the_mouse_back_so_a_drag_copies_clean_again(self) -> None:
+        app = main_app()
+        app._on_input(Mouse(WHEEL_UP, 5, 3))
         drawn(app)
-        type_text(app, "draft")
-        for _ in range(3):
-            app._on_input(Mouse(WHEEL_UP, 5, 3))
-            drawn(app)
-        self.assertIsInstance(app.pager, HistoryPager)
-        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
+        self.assertFalse(app.terminal.mouse_reporting)
+        type_text(app, "x")
         drawn(app)
-        self.assertIsNotNone(app.pager)  # still above the end
-        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
-        drawn(app)
-        self.assertIsNotNone(app.pager)
-        app._on_input(Mouse(WHEEL_DOWN, 5, 3))  # the end again: the screen the wheel left
-        self.assertIsNone(app.pager)
-        self.assertEqual(app.composer.text, "draft")
-        app._on_input(Mouse(WHEEL_UP, 5, 3))  # one notch up and one down is a round trip
-        drawn(app)
-        self.assertIsNotNone(app.pager)
-        app._on_input(Mouse(WHEEL_DOWN, 5, 3))
-        self.assertIsNone(app.pager)
+        self.assertTrue(app.terminal.mouse_reporting)
+        self.assertTrue(app.terminal.mouse_drag)
+        row, text = row_of(app, "first line"), column(app, "first line")
+        drag(app, (text, row), (text + 4, row))
+        self.assertEqual(osc52(app), ["first"])
 
     def test_the_wheel_down_keeps_a_view_opened_by_key_at_its_end(self) -> None:
         app = main_app(rows=8)
@@ -733,13 +719,13 @@ class EscLatencyTests(unittest.TestCase):
 
 
 class SlotAndViewTests(unittest.TestCase):
-    def test_while_a_question_is_open_the_wheel_and_an_unmapped_drag_open_the_question_view(self) -> None:
+    def test_while_a_question_is_open_the_wheel_opens_no_view_over_it(self) -> None:
         app = main_app()
         app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
         drawn(app)
         app._on_input(Mouse(WHEEL_UP, 5, 3))
-        self.assertEqual(app.pager, app.question_view)
-        self.assertIsNotNone(app.pager)
+        self.assertIsNone(app.pager)
+        self.assertFalse(app.terminal.mouse_reporting)  # the terminal scrolls; Ctrl+O still opens the question's view
 
     def test_an_unmapped_drag_with_no_rows_to_show_opens_nothing_and_says_nothing(self) -> None:
         app, _client = make_app(rows=14, cols=60, environ=MOUSE)
@@ -830,9 +816,11 @@ class FramedPickerTests(unittest.TestCase):
         self.assertIn("3. Type something.", osc52(app)[-1])
         self.assertNotIn("Submit", osc52(app)[-1])  # the picker's own row, a gutter, as its key row is
 
-    def test_the_wheel_while_it_is_open_opens_the_question_view_without_its_key_row_or_rules(self) -> None:
+    def test_ctrl_o_while_it_is_open_opens_the_question_view_without_its_key_row_or_rules(self) -> None:
         app = self.picker()
         app._on_input(Mouse(WHEEL_UP, 5, 3))
+        self.assertIsNone(app.pager)  # the wheel opens nothing
+        app._on_input(Key(CHAR, "o", ctrl=True))
         self.assertIs(app.pager, app.question_view)
         page = "\n".join(drawn(app))
         self.assertIn("Which color do you prefer?", page)
@@ -869,10 +857,7 @@ class DefaultAgentListTests(unittest.TestCase):
         row = row_of(app, SECOND_ROW)
         app._on_input(Mouse(WHEEL_UP, 5, row))
         self.assertIsNone(app.pager)
-        app._on_input(Mouse(WHEEL_UP, 5, 1))  # above the list it does
-        self.assertIsNotNone(app.pager)
-        app._on_input(Key(CHAR, "q"))
-        drawn(app)
+        self.assertTrue(app.terminal.mouse_reporting)  # over the list the wheel does nothing
         click(app, 5, row)
         move(app, 30, row)
         release(app, 30, row)
@@ -881,6 +866,9 @@ class DefaultAgentListTests(unittest.TestCase):
         app._on_input(Key(CHAR, "q"))
         drawn(app)
         self.assertEqual(reversed_count(app.terminal.screen), 0)  # type: ignore[attr-defined]
+        app._on_input(Mouse(WHEEL_UP, 5, 1))  # above the list it hands the mouse to the terminal
+        self.assertIsNone(app.pager)
+        self.assertFalse(app.terminal.mouse_reporting)
 
 
 class ResizeTests(unittest.TestCase):
@@ -928,7 +916,7 @@ def answering_cursor_requests(terminal) -> None:  # type: ignore[no-untyped-def]
 
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class RealLoopTests(AppTestCase):
-    def test_in_the_real_loop_sgr_reports_drag_copy_without_the_rail_and_the_wheel_opens_the_view(self) -> None:
+    def test_in_the_real_loop_sgr_reports_drag_copy_without_the_rail_and_the_wheel_hands_the_mouse_back(self) -> None:
         run = self.prepare(
             Scenario("session", spans("session", "startup", "create", "plain_turn"), answers=startup_answers()),
             env={"OMH_TUI_MOUSE": "1", "TERM": "xterm-kitty"},
@@ -956,14 +944,14 @@ class RealLoopTests(AppTestCase):
             Step(b"copy me\r", when=lambda: terminal.mouse_reporting, label="a prompt"),
             drag,
             Step(b"\x1b[<64;5;3M", when=lambda: bool(terminal.screen.osc), label="the wheel up"),
-            Step(b"q", when=lambda: terminal.screen.alternate, capture="view", label="the transcript view"),
-            Step(b"\x04", when=lambda: not terminal.screen.alternate, label="the end"),
+            Step(b"\x04", when=lambda: not terminal.mouse_reporting, capture="lent", label="the end"),
         )
         self.run_main(run)
         self.assert_clean_run(run)
         copies = [text for text in terminal.screen.osc if text.startswith("52;c;")]
         self.assertEqual([base64.b64decode(text[5:].rstrip("\x07")).decode() for text in copies], ["❯ copy me"])
-        self.assertIn("copy me", "\n".join(terminal.captures["view"]))
+        self.assertFalse(terminal.screen.alternate)  # no view opened over the screen
+        self.assertIn("copy me", "\n".join(terminal.captures["lent"]))
         self.assertTrue(aimed)
 
 
