@@ -4,7 +4,9 @@
 model chain under the `omh_identity_profiles/v1` schema. Presence of the file
 IS the opt-in: an absent file behaves exactly like today, and a malformed or
 future-schema document reads the same as an absent one — a broken config must
-never block a task.
+never block a task. Profiles default to enabled; `enabled: false` keeps a
+custom identity visible in the model picker while excluding it from prompt
+injection, routing, and fanout selection.
 
 Validation is per-identity: an invalid profile is dropped and named in
 `rejected` so the remaining valid identities keep working. The returned
@@ -95,9 +97,13 @@ def _validated_identity(
     if not isinstance(raw, Mapping):
         rejected.append(f"{where}: profile must be an object")
         return None
-    unknown = sorted(set(raw) - {"prompt", "model_chain"})
+    unknown = sorted(set(raw) - {"prompt", "model_chain", "enabled"})
     if unknown:
         rejected.append(f"{where}: unsupported fields {unknown}")
+        return None
+    enabled = raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        rejected.append(f"{where}: enabled must be a boolean")
         return None
     prompt = str(raw.get("prompt", "") or "").strip()
     if not prompt:
@@ -132,7 +138,7 @@ def _validated_identity(
         if validated is None:
             return None
         chain.append(validated)
-    return {"prompt": prompt, "model_chain": tuple(chain)}
+    return {"prompt": prompt, "model_chain": tuple(chain), "enabled": enabled}
 
 
 def read_identity_profiles_config(
@@ -248,10 +254,15 @@ def set_identity_profile(
     document = _raw_document(omh_home)
     identities = document["identities"]
     assert isinstance(identities, dict)
-    identities[normalized] = {
+    existing = identities.get(normalized)
+    enabled = existing.get("enabled", True) if isinstance(existing, Mapping) else True
+    profile = {
         "prompt": prompt,
         "model_chain": [dict(entry) for entry in validated if entry],
     }
+    if enabled is False:
+        profile["enabled"] = False
+    identities[normalized] = profile
     atomic_write_json(identity_profiles_path(omh_home), document)
     return {
         "identity": normalized,
