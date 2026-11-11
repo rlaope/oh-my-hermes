@@ -22,7 +22,7 @@ in a row had no tail, until that agent sends a frame; nothing is ever sent to
 a subagent. On the main screen the OMH TUI takes the mouse wherever the row a
 report lands on is certain (the owner's decision of 2026-11-11, back from the
 one of 2026-11-06): a drag selects and copies without the rail, and the wheel
-opens the transcript view (`App._screen_mouse`). With `OMH_TUI_MOUSE=0`
+up hands the mouse to the terminal until the next key (`App._screen_mouse`). With `OMH_TUI_MOUSE=0`
 reports are on only while the agent list (or the dag tree) has the keys, and
 the wheel and a drag are the terminal's. A pager, an agent's log among them,
 takes them for its own wheel and drag (`pager`). A plain left click on a list

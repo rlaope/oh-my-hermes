@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Scrolling up in the OMH TUI scrolls.** Since the main screen took the
+  mouse so a drag copies clean, the wheel up opened the full-screen
+  transcript view instead of scrolling, a pager that could hold as little as
+  one notice. The wheel up now hands the mouse to the terminal, which scrolls
+  its own scrollback as in any shell; the next key or paste takes it back, so
+  a drag copies without the rail again. Ctrl+O still opens the transcript
+  view.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
