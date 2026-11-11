@@ -715,13 +715,18 @@ def _run_terminal(
 
 
 def _fallback_environment(scrub: bool) -> dict[str, str]:
-    """The shell's environment for Hermes' own terminal; on the TUI's own runtime (`scrub`) without the messaging
-    names its gateway must never see, as the OMH TUI's own launch strips them."""
-    if not scrub:
-        return dict(os.environ)
-    from ..tui.own_runtime import scrub_environment
+    """The shell's environment without OMH frontend launch state; on the TUI's own runtime (`scrub`) also without
+    the messaging names its gateway must never see, as the OMH TUI's own launch strips them."""
+    from ..tui.launch import TUI_LAUNCH_ENV_NAMES
 
-    return scrub_environment(dict(os.environ))[0]
+    env = dict(os.environ)
+    for name in TUI_LAUNCH_ENV_NAMES:
+        env.pop(name, None)
+    if scrub:
+        from ..tui.own_runtime import scrub_environment
+
+        env, _ = scrub_environment(env)
+    return env
 
 
 def _run_hermes_fallback(
