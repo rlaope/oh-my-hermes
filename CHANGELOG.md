@@ -165,6 +165,13 @@ All notable changes will be documented here.
     and wider), Plans re-reads itself while a run is live and says what it is
     for when empty, and a dag run nothing changed for a day reads "no update
     for 9d" instead of pulsing as live. (#2784)
+  - **Subagents in the chat.** A turn that starts a `delegate_task` shows one
+    card per fan-out ("2 subagents running · 1 of 2 · 41s", then "Ran 2
+    subagents · 3m") with one row per subagent: its model's mark, its goal,
+    its state, its current step or result, its time. The rows keep updating
+    after the bot's own turn ends, and the card's run name opens that run in
+    Plans. The word is "subagent", not "helper", in all four languages; omher
+    still never assigns, steers or stops one. (#2796)
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the

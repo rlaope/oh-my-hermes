@@ -609,3 +609,88 @@ describe("SESSIONS chats in the same reducer", () => {
     expect(s.chats[folderKey("kami", "f1")].turn).toBeNull();
   });
 });
+
+// The real fan-out turn on kami (bridge/tests/fixtures/real-subagent-turn.json), as the bridge's subagent events:
+// the parent's turn ends before the two children report back.
+describe("subagent events: one fan-out per delegate_task, one row per subagent", () => {
+  const bot = "kami";
+  const g0 = "Run the shell command `date +%F` in the terminal exactly once and return its exact stdout";
+  const g1 = "Run the shell command `uname -s` in the terminal exactly once and return its exact stdout";
+  const sub = (id: string, index: number, goal: string, state: string, extra: Record<string, unknown> = {}) =>
+    ({ event: "subagent", bot, id, index, count: 2, goal, model: "claude-fable-5-2", state, ...extra }) as BridgeEvent;
+  const d = { delegation: "deleg_40dc82e8" };
+  const turn: BridgeEvent[] = [
+    { event: "turn.start", bot },
+    { event: "tool.start", bot, tool_id: "t1", name: "delegate_task", detail: "2 tasks" },
+    sub("sa-0", 0, g0, "queued"),
+    sub("sa-1", 1, g1, "queued"),
+    sub("sa-0", 0, g0, "running", d),
+    sub("sa-1", 1, g1, "running", d),
+    { event: "tool.end", bot, tool_id: "t1", name: "delegate_task", ok: true, ms: 98 },
+    sub("sa-1", 1, g1, "thinking", d),
+    sub("sa-1", 1, g1, "running", { ...d, tool: "terminal", step: "uname -s" }),
+    { event: "message", bot, id: "m1", text: "Both are on it." },
+    { event: "turn.end", bot, outcome: "done" },
+    sub("sa-1", 1, g1, "done", { ...d, summary: "Darwin", seconds: 6.1 }),
+    sub("sa-0", 0, g0, "done", { ...d, summary: "2026-11-11", seconds: 8.8 }),
+  ];
+  const fanouts = (s: AppState) => s.chats[bot].items.flatMap((i) => (i.kind === "activity" ? i.turn.fanouts ?? [] : []));
+
+  it("groups the children into one fan-out of the turn that started them, also after that turn ended", () => {
+    const s = run(initialState(), turn);
+    const f = fanouts(s);
+    expect(f).toHaveLength(1);
+    expect(f[0].delegation).toBe("deleg_40dc82e8");
+    expect(f[0].subs.map((x) => [x.id, x.state, x.summary, x.seconds])).toEqual([
+      ["sa-0", "done", "2026-11-11", 8.8],
+      ["sa-1", "done", "Darwin", 6.1],
+    ]);
+    // the late events open no second turn and touch no new activity row
+    expect(s.chats[bot].items.filter((i) => i.kind === "activity")).toHaveLength(1);
+    expect(s.chats[bot].turn).toBeNull();
+  });
+
+  it("keeps the current step while running and drops it for the result line when done", () => {
+    const mid = run(initialState(), turn.slice(0, 9));
+    const row = fanouts(mid)[0].subs[1];
+    expect([row.state, row.tool, row.step]).toEqual(["running", "terminal", "uname -s"]);
+    const end = fanouts(run(initialState(), turn))[0].subs[1];
+    expect([end.step, end.tool, end.summary]).toEqual([undefined, undefined, "Darwin"]);
+  });
+
+  it("two delegate_task calls in one turn are two fan-outs; a late running event never revives a finished child", () => {
+    const second = [
+      sub("sb-0", 0, "Second wave A", "queued"),
+      sub("sb-1", 1, "Second wave B", "queued"),
+      sub("sb-0", 0, "Second wave A", "running", { delegation: "deleg_2" }),
+    ];
+    const s = run(initialState(), [...turn.slice(0, 9), ...second, sub("sa-1", 1, g1, "done", d), sub("sa-1", 1, g1, "running", d)]);
+    const f = fanouts(s);
+    expect(f.map((x) => x.subs.map((r) => r.id))).toEqual([["sa-0", "sa-1"], ["sb-0", "sb-1"]]);
+    expect(f[0].subs[1].state).toBe("done");
+  });
+
+  it("a second turn's fan-out with the same subagent ids lands in that turn, by its delegation id", () => {
+    const again: BridgeEvent[] = [
+      { event: "turn.start", bot },
+      { event: "tool.start", bot, tool_id: "t2", name: "delegate_task", detail: "2 tasks" },
+      sub("sa-0", 0, g0, "queued"),
+      sub("sa-1", 1, g1, "queued"),
+      sub("sa-0", 0, g0, "running", { delegation: "deleg_second" }),
+      sub("sa-1", 1, g1, "running", { delegation: "deleg_second" }),
+      { event: "turn.end", bot, outcome: "done" },
+      sub("sa-0", 0, g0, "done", { delegation: "deleg_second", summary: "again", seconds: 1 }),
+    ];
+    const s = run(initialState(), [...turn, ...again]);
+    const turns = s.chats[bot].items.flatMap((i) => (i.kind === "activity" ? [i.turn] : []));
+    expect(turns.map((t) => t.fanouts?.map((f) => [f.delegation, f.subs.map((r) => r.state).join(",")]))).toEqual([
+      [["deleg_40dc82e8", "done,done"]],
+      [["deleg_second", "done,running"]],
+    ]);
+  });
+
+  it("a subagent event with no turn to take it (chat opened afterwards) changes nothing", () => {
+    const s0 = run(initialState(), [{ event: "message", bot, id: "m0", text: "hi" }]);
+    expect(run(s0, [sub("sa-9", 0, "x", "running", d)])).toBe(s0);
+  });
+});
