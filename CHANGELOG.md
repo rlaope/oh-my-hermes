@@ -12,15 +12,6 @@ All notable changes will be documented here.
   a drag copies without the rail again. Ctrl+O still opens the transcript
   view.
 
-- **The omher Linux AppImage reaches its bots again.** The AppImage's AppRun
-  exports `PYTHONHOME` and `PYTHONPATH` pointing into the image, and omher
-  passed them to the host Hermes Python, so the bridge died with
-  `No module named 'encodings'`: the 0.2.4 window opened, but no bot
-  connected. Inside an AppImage, every host program omher starts (the bridge,
-  the agent CLIs, sign-ins, the installer) now gets the host environment, and
-  the PR CI starts the built AppImage under Xvfb and fails unless the app, its
-  window and its bridge are all up. (#2778)
-
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
@@ -29,31 +20,6 @@ All notable changes will be documented here.
   line, though the process ran and Hermes would wake the session for it. The
   HUD now reads the home `HERMES_HOME` names; the bot board alone keeps the
   bots' home.
-
-- **omher reads fully in Chinese, Korean and Japanese, and typing in them is
-  safe.** Every word omher itself shows (Settings and its pages, Accounts,
-  Providers, the sidebar, the composer and model picker, approval and question
-  cards, the activity line, the right panel, SESSIONS, the setup screen, link
-  chip words, time units and dates) is now a key in all four dictionaries
-  (285 -> 873 keys), with Simplified Chinese written for a developer in
-  mainland China; brand, model, CLI and command names stay in Latin, and what
-  the bots say is never translated. Hard-coded UI literals in `src/**/*.tsx`
-  went from 451 to 0, and a vitest guard now fails on a new one. Enter that
-  commits an IME composition (pinyin, kana, hangul) no longer saves a bot
-  rename, picks a model, or submits any other field. A first run with no
-  language chosen takes it from the system's languages (any `zh-*` is
-  Chinese) and shows a Language row on the first-run card; an install that
-  already ran stays English until the person picks one. `<html lang>` follows
-  the language (`zh-CN`, `ja`, `ko`), dates follow it too, and `--font` falls
-  back to PingFang SC, Hiragino Sans GB, Microsoft YaHei and Noto Sans CJK
-  (and their Japanese and Korean siblings).
-
-- **omher keeps the bot's face in place while it works.** After you send a
-  message, the bot's ringed face no longer blinks away when the first status
-  line ("OMH — recalled 2 memories") replaces the typing dots: one face stays
-  in the same spot from send to the end of the reply, through status lines,
-  tool steps and the streaming answer, and a SESSIONS chat's agent mark does
-  the same.
 
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
@@ -97,35 +63,6 @@ All notable changes will be documented here.
   The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
-
-- **omher's Automations and Plugins pages work, by hand or by asking the
-  bot, in English, Korean, Japanese or Chinese.** The two sidebar rows that
-  said Soon open pages. Automations lists every bot's cron jobs from each
-  profile's `cron/jobs.json` (read only), with a filter per bot, a status
-  mark per job (done, failed, never ran, paused), an on/off switch, and a
-  detail panel; pause, resume, delete and "+ New" go through that bot's own
-  gateway `cron.manage`, and Hermes' own refusal text shows when it rejects
-  a schedule. Run now and Edit are chat messages, because `cron.manage` has
-  neither: Run now sends `Run my automation "<name>" (id <id>) now.` to the
-  bot's chat and opens it, Edit fills the page's box with `Change automation
-  "<name>": `. A schedule reads in words in the picked language (`0 9 * * 1-5`
-  is "weekdays at 09:00", "평일 09:00"), with Hermes' own text in the tooltip;
-  a shape omher does not know stays as written, and a script job, which has
-  no prompt, names the script it runs. Plugins shows one bot's own plugins, the curated catalog from
-  its catalog cache file and Hermes' built-in ones; toggle, update and remove
-  go through the bot's `plugins.manage`, and an install is catalog-only:
-  Hermes inspects the entry at its pin, a sheet shows the source, what it
-  adds, the keys it needs and that it applies to that bot only, and Install
-  sends that same pin back. Refusals are read from Hermes' reason code
-  (`exists`, `source_moved`). Both pages open with a box that sends a request
-  to a picked bot's chat, and a job or plugin the bot made from chat shows up
-  there as a card (run once, open, undo; open, turn off). Settings › General
-  has a Language row (English, 한국어, 日本語, 中文) that switches at once and
-  is kept in `omher.lang`; the sidebar's labels and every new string are keys
-  in all four languages. `docs/OMHER-BOUNDARY.md` gains rules 24 and 25, and
-  rule 9 names them as its only exceptions.
-
-
 
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
@@ -202,6 +139,49 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.5.** omher reads fully in Chinese, Korean and Japanese, the
+  Linux AppImage reaches its bots, and SESSIONS chats take files.
+  - **Chinese, Korean and Japanese.** Every word omher itself shows is in all
+    four languages, Simplified Chinese written for a developer in mainland
+    China; brand, model and command names stay in Latin and what the bots say
+    is never translated. Enter that commits an IME composition (pinyin, kana,
+    hangul) no longer submits a field, a first run takes the language from the
+    system, and CJK text falls back to PingFang SC, Microsoft YaHei and Noto
+    Sans CJK. In Chinese a bot's reply reads 回复 everywhere and every Settings
+    description ends with 。. (#2777, #2786)
+  - **Linux.** The 0.2.4 AppImage opened its window but no bot connected:
+    omher passed the AppImage's own `PYTHONHOME` and `PYTHONPATH` to the host
+    Hermes Python. Every host program omher starts now gets the host
+    environment, and PR CI starts the built AppImage and checks that the app,
+    its window and its bridge are up. (#2778)
+  - **Files in SESSIONS chats.** Paste, `+` and a drop attach files in a
+    Claude Code, Codex, OmO, pi or oh-my-pi chat, with the bot chat's chips
+    and limits; files are saved under `~/.omher/session-files/<session>/` and
+    removed when the session closes, and a picture reaches the agent as an
+    image. An oh-my-hermes session takes no files (BOUNDARY rule 26). (#2781)
+  - **The bot's face stays put.** After you send, the bot's ringed face no
+    longer blinks away when the first status line replaces the typing dots;
+    one face stays in place from send to the end of the reply, and a SESSIONS
+    chat's agent mark does the same. (#2780)
+  - **Finished turns go idle.** A session whose agent has answered no longer
+    stays on Working with Stop (OmO, pi and oh-my-pi sent statuses after the
+    turn ended), an agent that dies mid-turn ends its turn, and a running OmO
+    chat continues after omher restarts. DSH and Grok sessions that exit get
+    the Ended line and Restart a chat has. (#2782)
+  - **Subagents are visible.** The bot chat's header has a panel button right
+    of the model control: it opens the right panel, on Plans when the bot has
+    live work, and carries a live dot while subagents work. A turn that starts
+    a `delegate_task` opens Plans on that run once by itself (windows 1100px
+    and wider), Plans re-reads itself while a run is live and says what it is
+    for when empty, and a dag run nothing changed for a day reads "no update
+    for 9d" instead of pulsing as live. (#2784)
+  - **Subagents in the chat.** A turn that starts a `delegate_task` shows one
+    card per fan-out ("2 subagents running · 1 of 2 · 41s", then "Ran 2
+    subagents · 3m") with one row per subagent: its model's mark, its goal,
+    its state, its current step or result, its time. The rows keep updating
+    after the bot's own turn ends, and the card's run name opens that run in
+    Plans. The word is "subagent", not "helper", in all four languages; omher
+    still never assigns, steers or stops one. (#2796)
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the
@@ -475,47 +455,6 @@ All notable changes will be documented here.
   `/dag`, `/bots`, and the CLI theme, model-chain and setup pickers, and
   Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
   Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
-
-- **A SESSIONS chat in omher takes files, as the bot chat does.** Paste, the
-  `+` menu and a drop on the chat now attach files in a Claude Code, Codex,
-  OmO, pi or oh-my-pi chat, in a draft too (its first send starts the agent
-  with them), with the bot chat's chips, limits (20 files, 100 MB) and error
-  texts; a file that cannot be saved sends nothing and keeps the chips. Each
-  file is saved under `~/.omher/session-files/<session>/`, never in the
-  project or a Hermes profile, and removed when the session closes. A
-  picture reaches the agent as its own image input (Claude Code's base64
-  image content, Codex's `localImage`, the rpc `prompt`'s `images`); any
-  other file is named in the message by its saved path. The sent bubble
-  keeps its files after omher restarts, and a file dropped on a session's
-  terminal is saved and its quoted path typed at the prompt. An
-  oh-my-hermes session takes no files (BOUNDARY rule 26).
-
-- **An omher session that has answered is idle, and an ended terminal session
-  can start again.** OmO, pi and oh-my-pi send statuses of their own after a
-  turn ends; omher used to start a new turn from them, so the chat stayed on
-  Working with Stop until the next message. A turn now starts only on its own
-  start, an agent's status shows only while its turn runs, a turn with no
-  steps reads `Worked for 13s`, an agent that dies or is stopped mid-turn ends
-  its turn, Stop before Codex names a turn still stops it, and an OmO chat
-  that was running continues by itself after omher restarts. A stopped OmO
-  turn reads Stopped, Terminal and back during a Claude Code turn leaves the
-  chat idle, the live line drops `Waiting for approval` once you answer, and
-  a CLI's config warning is no longer shown as the reason it ended. DSH and Grok
-  sessions that exit get the same Ended line and Restart as a chat, whose
-  tooltip says whether the conversation continues.
-
-- **omher's subagents are visible without knowing a shortcut.** The bot chat's
-  header has one panel button right of the model control: it opens the right
-  panel (on Plans when the bot has live work or the panel was never used, else
-  on the last tab) and closes it, and while subagents work it carries the live
-  dot and says how many in its tooltip. A turn that starts a `delegate_task`
-  opens Plans on that run by itself once (windows 1100px and wider; a close
-  sticks for that turn). Plans re-reads on its own every 3 s while a run is
-  live and right after each fan-out step, stops while the window is hidden,
-  says plainly what it is for when empty, no longer opens a bot with no plans
-  on a CLI agent's run, and the turn summary counts the rows its details show.
-  A dag run nothing changed for a day, with no helper still writing, reads
-  "no update for 9d" instead of pulsing as live.
 
 ## 4.0.7 - 2026-11-09
 

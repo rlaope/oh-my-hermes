@@ -34,6 +34,7 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const faceRow = liveFaceRow(items, chat?.turn, typing);
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const lastTop = useRef(0);
   const lastBot = useRef<string | null>(null);
 
   // Stick to the bottom unless the person scrolled up; jump to the bottom on bot switch.
@@ -51,7 +52,8 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
     const ro = new ResizeObserver(() => {
       if (pinned.current) el.scrollTop = el.scrollHeight;
     });
-    for (const row of el.querySelectorAll(".row-assistant")) ro.observe(row);
+    // and each turn's activity: a fan-out card grows after its turn ended, as its subagents report back
+    for (const row of el.querySelectorAll(".row-assistant, .row-activity")) ro.observe(row);
     return () => ro.disconnect();
   }, [bot.name, items]);
 
@@ -99,7 +101,11 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
       data-testid="timeline"
       onScroll={(e) => {
         const el = e.currentTarget;
-        pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+        // only the person scrolling up lets go of the bottom: a reflow (the side panel opening narrows the column)
+        // also fires scroll, with the bottom moved away but the position not moved up
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) pinned.current = true;
+        else if (el.scrollTop < lastTop.current) pinned.current = false;
+        lastTop.current = el.scrollTop;
       }}
     >
       {!chat?.loaded && items.length === 0 && <div className="day">{t("tl.loading")}</div>}
