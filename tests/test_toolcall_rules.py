@@ -20,7 +20,7 @@ from unittest.mock import patch
 from _cli_harness import run_cli
 
 from omh.plugin_bundle.omh import toolcall_rule_faults
-from omh.plugin_bundle.omh.hooks import tool_hooks
+from omh.plugin_bundle.omh.hooks import nudge_budget, session_attendance, tool_hooks
 from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
 from omh.plugin_bundle.omh.toolcall_rule_faults import (
     read_toolcall_rule_faults,
@@ -312,6 +312,118 @@ class HookWiringTest(unittest.TestCase):
         self.assertEqual(result.get("action"), "block")
 
 
+ASK_RULE = {**BOX_LEAK_RULE, "name": "ask-box-leak", "effect": "ask"}
+
+
+class AskEffectTest(unittest.TestCase):
+    """An `"effect": "ask"` rule sends the call to the person, or blocks.
+
+    Driven through the served `pre_tool_call`, the hook Hermes calls. The
+    attendance predicate reads process-global maps and one environment
+    marker, so each test clears both and names the session's state itself.
+    """
+
+    def setUp(self):
+        _reset_state()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        session_attendance.reset_session_attendance()
+        nudge_budget.reset_nudge_budget()
+        self.addCleanup(session_attendance.reset_session_attendance)
+        self.addCleanup(nudge_budget.reset_nudge_budget)
+        # This suite may itself run under a single-query Hermes process.
+        env = patch.dict(os.environ, {session_attendance.SINGLE_QUERY_SESSION_ENV: ""})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def _call(self, session_id="session-a", content="Box::leak(x)"):
+        return pre_tool_call(
+            tool_name="write_file",
+            tool_input={"content": content},
+            session_id=session_id,
+            omh_home=str(self.home),
+        )
+
+    def test_attended_ask_rule_escalates_with_a_per_rule_key(self):
+        _write_rules(self.home, [ASK_RULE])
+        session_attendance.note_session_platform("session-a", "cli")
+        result = self._call()
+        self.assertEqual(result["action"], "approve")
+        self.assertEqual(result["rule_key"], "omh-toolcall-rule:ask-box-leak")
+        self.assertIn(BOX_LEAK_RULE["message"], result["message"])
+        self.assertIn("ask-box-leak", result["message"])
+
+    def test_unattended_platform_gets_a_block_not_an_escalation(self):
+        _write_rules(self.home, [ASK_RULE])
+        session_attendance.note_session_platform("session-a", "api_server")
+        result = self._call()
+        self.assertEqual(result["action"], "block")
+        self.assertNotIn("rule_key", result)
+        self.assertIn("[OMH Rule] ask-box-leak", result["message"])
+
+    def test_single_query_process_gets_a_block(self):
+        _write_rules(self.home, [ASK_RULE])
+        with patch.dict(os.environ, {session_attendance.SINGLE_QUERY_SESSION_ENV: "1"}):
+            result = self._call()
+        self.assertEqual(result["action"], "block")
+
+    def test_delegated_child_gets_a_block(self):
+        _write_rules(self.home, [ASK_RULE])
+        nudge_budget.note_delegated_session("child-1")
+        self.assertEqual(self._call(session_id="child-1")["action"], "block")
+
+    def test_ask_rule_with_repeat_once_is_claimed_when_it_fires(self):
+        _write_rules(self.home, [ASK_RULE])
+        self.assertIsNone(self._call(content="Arc::new(x)"))
+        self.assertEqual(self._call()["action"], "approve")
+        # Claimed by the escalation above, so the same session is not asked again.
+        self.assertIsNone(self._call())
+        self.assertEqual(self._call(session_id="session-b")["action"], "approve")
+
+    def test_ask_rule_with_repeat_always_asks_every_time(self):
+        _write_rules(self.home, [{**ASK_RULE, "repeat": "always"}])
+        self.assertEqual(self._call()["action"], "approve")
+        self.assertEqual(self._call()["action"], "approve")
+
+    def test_missing_effect_and_explicit_block_still_block(self):
+        _write_rules(self.home, [{**BOX_LEAK_RULE, "repeat": "always"}])
+        self.assertEqual(self._call()["action"], "block")
+        _reset_state()
+        _write_rules(self.home, [{**BOX_LEAK_RULE, "effect": "block"}])
+        result = self._call()
+        self.assertEqual(result["action"], "block")
+        self.assertNotIn("rule_key", result)
+
+    def test_an_invalid_effect_skips_only_that_rule(self):
+        _write_rules(
+            self.home,
+            [{**BOX_LEAK_RULE, "name": "typo", "effect": "deny"}, {**BOX_LEAK_RULE, "name": "kept"}],
+        )
+        self.assertEqual([rule.name for rule in load_toolcall_rules(toolcall_rules_path(str(self.home)))], ["kept"])
+        self.assertIn("[OMH Rule] kept", self._call()["message"])
+
+    def test_an_invalid_effect_alone_fails_open(self):
+        _write_rules(self.home, [{**ASK_RULE, "effect": "deny"}])
+        self.assertIsNone(self._call())
+
+    def test_validation_accepts_both_effects_and_refuses_others(self):
+        errors, accepted = validate_toolcall_rules_document(
+            {
+                "schema_version": TOOLCALL_RULES_SCHEMA_VERSION,
+                "rules": [
+                    {**BOX_LEAK_RULE, "name": "a", "effect": "ask"},
+                    {**BOX_LEAK_RULE, "name": "b", "effect": "block"},
+                    {**BOX_LEAK_RULE, "name": "c", "effect": "ASK"},
+                    {**BOX_LEAK_RULE, "name": "d", "effect": None},
+                ],
+            }
+        )
+        self.assertEqual(accepted, 2)
+        self.assertEqual([error.split(":")[0] for error in errors], ["rules[2]", "rules[3]"])
+        self.assertTrue(all("effect must be one of block, ask" in error for error in errors))
+
+
 class ValidateCliTest(unittest.TestCase):
     def setUp(self):
         _reset_state()
@@ -345,6 +457,20 @@ class ValidateCliTest(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertFalse(payload["valid"])
         self.assertTrue(any("rules[0]" in error for error in payload["errors"]))
+
+    def test_ask_effect_is_accepted(self):
+        path = _write_rules(self.home, [ASK_RULE])
+        result = self._run("--path", str(path))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["accepted_rules"], 1)
+
+    def test_unknown_effect_exits_one_with_a_named_error(self):
+        path = _write_rules(self.home, [{**BOX_LEAK_RULE, "effect": "deny"}])
+        result = self._run("--path", str(path))
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["accepted_rules"], 0)
+        self.assertTrue(any(e.startswith("rules[0]: effect must be one of block, ask") for e in payload["errors"]))
 
     def test_missing_file_is_a_named_error(self):
         result = self._run("--path", str(self.home / "nope.json"))

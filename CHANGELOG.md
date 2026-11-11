@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A toolcall rule can ask you instead of blocking.** With `"effect": "ask"`,
+  a matching call goes to Hermes' approval prompt with the rule's message,
+  keyed `omh-toolcall-rule:<name>` so `[a]lways` covers that one rule. Where
+  nobody can answer (a delegated child, `hermes chat -q`, a webhook or API
+  platform) the rule blocks as before. `omh ops toolcall-rules-validate`
+  refuses any other `effect`. See `docs/TOOLCALL-RULES.md`.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the

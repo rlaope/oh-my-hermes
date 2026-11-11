@@ -21,14 +21,31 @@ and any single invalid rule degrade to "no intervention", never to a broken
 hook. Matching is plain regex over the tool name and the JSON-serialized
 tool arguments — no model call, no network, no clever parsing.
 
+A rule with ``"effect": "ask"`` asks the person instead of refusing: it
+returns the host's other strong response, ``{"action": "approve", "message",
+"rule_key"}``, which sends the call to Hermes' human-approval prompt, keyed
+``omh-toolcall-rule:<name>`` so an ``[a]lways`` answer is remembered per rule.
+Only where a person can answer that prompt, by the same attendance predicate
+the repeat guard's approval stage uses
+(``session_attendance.escalation_can_reach_a_person``); an unattended
+session gets the block instead -- the host would otherwise resolve the prompt
+by config, and at ``approvals.unattended_mode: approve`` that runs the call.
+The idea is opencode's ``ask`` permission effect, which an unattended run
+turns into a deny (``packages/core/src/permission.ts`` 184-209).
+
 A blocked call is prevented, not judged: the block is instruction to the
 model, not evidence that the rule's concern applied, and it is never
-execution, verification, review, CI, or merge evidence.
+execution, verification, review, CI, or merge evidence. An ``approve``
+directive is a question put to a person; OMH never observes the answer.
 """
 
 from __future__ import annotations
 
 from . import runtime_paths
+# The one attendance answer every OMH gate that can ask a person reads: the
+# repeat guard's approval stage, the plan-stage and team gates, and an ask
+# rule here. A second predicate could disagree about the same session.
+from .hooks.session_attendance import escalation_can_reach_a_person
 
 import json
 import re
@@ -45,6 +62,10 @@ from re import _parser as _re_parser  # type: ignore[attr-defined]
 TOOLCALL_RULES_SCHEMA_VERSION: Final = "omh_toolcall_rules/v1"
 TOOLCALL_RULES_FILE: Final = "toolcall-rules.json"
 RULE_REPEAT_MODES: Final = ("once", "always")
+RULE_EFFECTS: Final = ("block", "ask")
+# The host's `[a]lways` allowlist grain for an ask rule: one key per rule, so
+# a person's standing yes covers that rule and nothing else.
+ASK_RULE_KEY_PREFIX: Final = "omh-toolcall-rule:"
 
 MAX_RULES: Final = 64
 MAX_RULE_NAME_CHARS: Final = 64
@@ -70,6 +91,7 @@ class ToolcallRule:
     message: str
     tools: tuple[str, ...]  # empty = every tool
     repeat: str  # "once" | "always"
+    effect: str = "block"  # "block" | "ask"
 
 
 # Parsed-rules cache keyed by rules-file path; entries are (mtime_ns, size,
@@ -206,7 +228,12 @@ def toolcall_rule_directive(
     session_id: str = "",
     omh_home: str = "",
 ) -> dict[str, str] | None:
-    """The block directive for this call, or ``None`` to let it proceed."""
+    """The directive for this call, or ``None`` to let it proceed.
+
+    An ask rule escalates only when a person can answer the prompt in this
+    session; otherwise it blocks like any rule, never a silent pass. A
+    ``repeat="once"`` ask rule is claimed when it fires either way.
+    """
     rule = matched_toolcall_rule(
         tool_name=tool_name,
         tool_input=tool_input,
@@ -215,6 +242,12 @@ def toolcall_rule_directive(
     )
     if rule is None:
         return None
+    if rule.effect == "ask" and escalation_can_reach_a_person(session_id):
+        return {
+            "action": "approve",
+            "message": f"{rule.message}\nAsked by the OMH toolcall rule {rule.name!r}.",
+            "rule_key": f"{ASK_RULE_KEY_PREFIX}{rule.name}",
+        }
     return {
         "action": "block",
         "message": f"[OMH Rule] {rule.name}: {rule.message}\n{_BLOCK_SUFFIX}",
@@ -248,6 +281,7 @@ def _parse_rules(raw: object) -> tuple[ToolcallRule, ...]:
                 message=str(entry["message"]).strip(),
                 tools=tools,
                 repeat=str(entry.get("repeat", "once")),
+                effect=str(entry.get("effect", "block")),
             )
         )
     return tuple(rules)
@@ -291,6 +325,9 @@ def _entry_errors(entry: object, seen_names: set[str]) -> list[str]:
     repeat = entry.get("repeat", "once")
     if repeat not in RULE_REPEAT_MODES:
         errors.append(f"repeat must be one of {', '.join(RULE_REPEAT_MODES)}")
+    effect = entry.get("effect", "block")
+    if effect not in RULE_EFFECTS:
+        errors.append(f"effect must be one of {', '.join(RULE_EFFECTS)}; the rule is skipped")
     return errors
 
 
