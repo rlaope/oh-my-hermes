@@ -16,6 +16,12 @@
 // it): a Claude Code or Codex chat that was running continues its conversation in the same folder and account,
 // the others come back paused with a Resume button, ended ones stay ended, and a draft comes back as a draft
 // (never started). The last few folders (with the agent that used each) are remembered on this computer.
+//
+// Files the person attaches (paste, the + menu, a drop) are saved by the shell under omher's own folder, one per
+// session (`~/.omher/session-files/<id>/`, removed when the session is closed). A picture goes to the agent as its
+// own image input (Claude Code and OmO / pi inline, Codex by the saved path); any other file is named in the
+// message by its saved copy's path. An oh-my-hermes session takes no files: the bridge attaches files to a bot's
+// main chat only.
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
@@ -23,7 +29,8 @@ import { agentDef, CONTINUES, draftAgent, draftFolder, parseRecent, pushRecent, 
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
-import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
+import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
@@ -99,6 +106,15 @@ const readRecent = () => {
 };
 
 /** The names the person gave sessions, kept on this computer by the agent's own conversation id. */
+/** Files sent in session chats (saved paths), so their bubbles show them again after a restart. */
+const readSentFiles = (): SentFilesBook => {
+  try {
+    return parseSentFiles(typeof localStorage !== "undefined" ? localStorage.getItem(SENT_FILES_KEY) : null);
+  } catch {
+    return {};
+  }
+};
+
 const readTitles = () => {
   try {
     return parseTitles(typeof localStorage !== "undefined" ? localStorage.getItem(TITLES_KEY) : null);
@@ -368,6 +384,108 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
+  // ---- files --------------------------------------------------------------------------------
+
+  let sentFiles = readSentFiles();
+  const saveSentFiles = (next: SentFilesBook) => {
+    sentFiles = next;
+    try {
+      localStorage.setItem(SENT_FILES_KEY, JSON.stringify(next));
+    } catch {
+      /* no storage */
+    }
+  };
+  const forgetSentFiles = (id: string) => {
+    if (!sentFiles[id]) return;
+    const next = { ...sentFiles };
+    delete next[id];
+    saveSentFiles(next);
+  };
+
+  /** The bubble's own preview of a file (the composer lets go of its chips' copies when it goes). */
+  const preview = (name: string, kind: SentFile["kind"], bytes: Uint8Array) =>
+    kind === "file" ? null : URL.createObjectURL(new Blob([bytes as BlobPart], { type: blobType(name) }));
+
+  /** A message with files, ready for the agent: each file saved under the session's own folder (pictures the agent
+   *  reads itself listed apart), the text naming the others. Throws on the first file that cannot be saved; then
+   *  nothing is sent. */
+  const prepare = async (id: string, text: string, files: OutFile[]) => {
+    const images: string[] = [];
+    const named: string[] = [];
+    const saved: SavedFile[] = [];
+    const shown: SentFile[] = [];
+    for (const f of files) {
+      let path: string;
+      let bytes: Uint8Array;
+      try {
+        bytes = bytesOf(await f.read());
+        path = await host.saveFile(id, f.name, bytes);
+      } catch (e) {
+        throw new Error(tr("att.failed", { name: f.name, error: errText(e) }));
+      }
+      (inlinePicture(f.name, f.size) ? images : named).push(path);
+      saved.push({ name: f.name, size: f.size, kind: f.kind, path });
+      shown.push({ name: f.name, size: f.size, kind: f.kind, url: preview(f.name, f.kind, bytes) });
+    }
+    return { input: { kind: "send" as const, text: wireText(text, named), ...(images.length ? { images } : {}) }, saved, shown };
+  };
+
+  /** The bubble for a message with files, kept on this computer so it shows them again after a restart. */
+  const showWithFiles = (id: string, key: string, text: string, p: Awaited<ReturnType<typeof prepare>>) => {
+    const t = text.trim();
+    const now = Date.now();
+    const lid = `local-s${++localSeq}`;
+    store().dispatch({ type: "local.user", bot: key, id: lid, text: t, now, files: p.shown });
+    saveSentFiles(putSentFiles(sentFiles, id, String(now), { ts: now / 1000, text: t, files: p.saved }));
+    const r = rec(id);
+    const pt = t ? promptTitle(t) : "";
+    if (r && !r.promptTitle && pt) patchRec(id, { promptTitle: pt });
+    return lid;
+  };
+
+  /**
+   * Send a message with files from a running chat. The files are saved first; if one cannot be, nothing is sent
+   * and the error goes back to the composer (its chips stay).
+   */
+  const sendFiles = async (id: string, text: string, files: OutFile[]) => {
+    if (!files.length) return send(id, text);
+    const key = keys.get(id);
+    if (!key) return;
+    if (procs.get(id)?.kind !== "agent") throw new Error(tr("ss.agentNotRunning", { agent: agentDef(rec(id)?.agent ?? "claude").label }));
+    const p = await prepare(id, text, files);
+    const lid = showWithFiles(id, key, text, p);
+    try {
+      await input(id, p.input);
+    } catch (e) {
+      store().dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
+    }
+  };
+
+  /** Open a restored chat with its sent files back in their bubbles: each sent message's bubble is put down first
+   *  with the files (read back from the saved copies), and the restored message with the same text and time takes
+   *  them over; one sent with files and no text stays as it is. */
+  const openWithFiles = async (id: string, model: string, msgs: Msg[]) => {
+    const key = keys.get(id)!;
+    const entries = Object.entries(sentFiles[id] ?? {});
+    const oldest = msgs.length ? msgs[0].ts : -Infinity;
+    for (const [mid, e] of entries) {
+      if (e.ts < oldest - 1) continue; // older than what the chat kept
+      const shown: SentFile[] = await Promise.all(
+        e.files.map(async (f) => {
+          if (f.kind === "file") return { name: f.name, size: f.size, kind: f.kind, url: null };
+          try {
+            return { name: f.name, size: f.size, kind: f.kind, url: preview(f.name, f.kind, await host.readFile(f.path)) };
+          } catch {
+            return { name: f.name, size: f.size, kind: "file" as const, url: null };
+          }
+        }),
+      );
+      if (store().getState().chats[key]?.loaded) return;
+      store().dispatch({ type: "local.user", bot: key, id: `local-f${mid}`, text: e.text, now: e.ts * 1000, files: shown });
+    }
+    openChat(id, model, msgs);
+  };
+
   const registerRoute = (id: string) => {
     const key = keys.get(id)!;
     const r = rec(id);
@@ -453,14 +571,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * Start a draft: its agent in its folder, `first` as the agent's first prompt (a chat agent; the bubble shows at
    * once). A terminal agent starts in the folder and is sent nothing. From here the agent and folder are fixed.
    */
-  const start = async (id: string, first?: string, startedAs?: string): Promise<boolean> => {
+  const start = async (id: string, first?: string, startedAs?: string, files: OutFile[] = []): Promise<boolean> => {
     const r0 = rec(id);
     if (!r0 || r0.status !== "draft" || !r0.cwd) return false;
     await ready();
     const r = rec(id);
     if (!r || r.status !== "draft") return false; // closed or started meanwhile
-    picked.delete(id);
     const mode = modeOf(state.agents, r.agent);
+    const text = first?.trim() ?? "";
+    // the first message's files are saved before anything starts: one that cannot be leaves the draft as it was
+    // (its chips stay)
+    let withFiles: Awaited<ReturnType<typeof prepare>> | null = null;
+    if (files.length && mode === "chat") {
+      try {
+        withFiles = await prepare(id, text, files);
+      } catch (e) {
+        void host.removeFiles(id).catch(() => undefined);
+        throw e;
+      }
+      if (rec(id)?.status !== "draft") return false; // closed meanwhile
+    }
+    picked.delete(id);
     const app = store().getState();
     const startedAt = Date.now();
     // the account it runs as is the one picked for new sessions now (recorded so a restart continues as it)
@@ -484,9 +615,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     });
-    const text = first?.trim() ?? "";
     // the message is sent: the draft view goes before its composer clears its own unsent text, so clear it here
-    if (text) setUnsent(`agent:${id}`, "");
+    if (text || files.length) setUnsent(`agent:${id}`, "");
     // the first message names the session (as a later one would in send) until the agent or the person does
     const pt = text ? promptTitle(text) : "";
     if (pt) patchRec(id, { promptTitle: pt });
@@ -494,18 +624,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       keys.set(id, `agent:${id}`);
       registerRoute(id);
       openChat(id);
-      if (!text) {
+      if (!text && !withFiles) {
         await startAgentChat(id);
         return true;
       }
-      // the first prompt shows at once and goes to the agent as soon as it runs
+      // the first prompt shows at once (with its files) and goes to the agent as soon as it runs
       const st = store();
       const key = keys.get(id)!;
-      const lid = `local-s${++localSeq}`;
-      st.dispatch({ type: "local.user", bot: key, id: lid, text, now: Date.now() });
+      const lid = withFiles ? showWithFiles(id, key, text, withFiles) : `local-s${++localSeq}`;
+      if (!withFiles) st.dispatch({ type: "local.user", bot: key, id: lid, text, now: Date.now() });
       await startAgentChat(id);
       try {
-        await input(id, { kind: "send", text });
+        await input(id, withFiles ? withFiles.input : { kind: "send", text });
       } catch (e) {
         st.dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
       }
@@ -630,6 +760,30 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
+  /** Type text at session `id`'s terminal prompt, as if the person had (a dropped file's path). */
+  const typeAt = async (id: string, text: string) => {
+    const t = terms.get(id);
+    if (!t || t.hostId === null || t.closed) return;
+    await host.write(t.hostId, text);
+    t.term.focus();
+  };
+
+  /** Files dropped or pasted on session `id`'s terminal: each saved under the session's own folder (the page
+   *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted. */
+  const dropOnTerminal = async (id: string, files: { name: string; read: () => Promise<Uint8Array> }[], windows: boolean) => {
+    const t = terms.get(id);
+    const paths: string[] = [];
+    for (const f of files) {
+      try {
+        paths.push(shellQuote(await host.saveFile(id, f.name, await f.read()), windows));
+      } catch (e) {
+        t?.term.write(`\r\n\x1b[31m${tr("att.failed", { name: f.name, error: errText(e) })}\x1b[0m\r\n`);
+        return;
+      }
+    }
+    if (paths.length) await typeAt(id, `${paths.join(" ")} `);
+  };
+
   const stopChat = async (id: string) => {
     const p = procs.get(id);
     if (!p) return;
@@ -710,7 +864,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const restore = (saved: SavedSession[]) => {
     if (restored || state.list.length > 0) return;
     restored = true;
-    if (!saved.length) return;
+    if (!saved.length) {
+      void ready().then(() => host.pruneFiles([]).catch(() => undefined));
+      saveSentFiles({});
+      return;
+    }
     const list: SessionRec[] = [];
     const again: { id: string; resume: string }[] = [];
     for (const s of saved) {
@@ -750,12 +908,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         keys.set(s.id, `agent:${s.id}`);
         // fresh ids: the agent's own message ids start over in its new process
         const msgs: Msg[] = (s.messages ?? []).map((m) => ({ id: `r-${m.id}`, role: m.role, text: m.text, ts: m.ts }));
-        openChat(s.id, s.model ?? "", msgs);
+        if (sentFiles[s.id]) void openWithFiles(s.id, s.model ?? "", msgs);
+        else openChat(s.id, s.model ?? "", msgs);
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
     }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
+    // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
+    const ids = list.map((r) => r.id);
+    void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
+    saveSentFiles(Object.fromEntries(Object.entries(sentFiles).filter(([sid]) => ids.includes(sid))));
+
     // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them
     void loadAgents();
     if (again.length) void ready().then(() => Promise.all(again.map(({ id, resume: rid }) => (procs.has(id) ? undefined : startAgentChat(id, rid)))));
@@ -765,7 +929,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const close = (id: string) => {
     picked.delete(id);
     disposeTerm(id);
-    void stopChat(id);
+    void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));
+    forgetSentFiles(id);
     const key = keys.get(id);
     if (key) {
       setChatRoute(key, null);
@@ -841,6 +1006,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     resume,
     restore,
     send,
+    sendFiles,
+    dropOnTerminal,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
