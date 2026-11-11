@@ -606,11 +606,12 @@ class TestCV(unittest.TestCase):
         """CV-4/CV-7: help and installation expose the supported visual slice."""
         from omh.tui.shortcuts import SHORTCUTS
         description = dict(SHORTCUTS)["Esc (vim mode)"]
-        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         for wording in ("character VISUAL", "d/c/y", "Visual j/k", "VISUAL"):
             self.assertIn(wording, description)
             self.assertIn(wording, doc)
 
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX PTY only; the OMH TUI does not run on Windows")
     def test_pty(self):
         """CV-3/CV-8: real decoder/render/submit + undo, both terminal sizes."""
         from _vim_character_pty import assert_character_visual_pty

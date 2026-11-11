@@ -473,13 +473,14 @@ class TestRS(unittest.TestCase):
 
     def test_docs(self):
         from omh.tui.shortcuts import SHORTCUTS
-        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         for phrase in ("gv", "generation", "NORMAL-only", "anchor/head", "9999gv", "paste/image metadata",
                        "undo/redo", "history/draft replacement", "masking", "failed/no-op", "never block visual",
                        "Enter sends unchanged text", "clipboard image"):
             self.assertIn(phrase, dict(SHORTCUTS)["Esc (vim mode)"])
             self.assertIn(phrase, doc)
 
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX PTY only; the OMH TUI does not run on Windows")
     def test_pty(self):
         from _vim_reselect_pty import assert_reselect_pty
         assert_reselect_pty(self)

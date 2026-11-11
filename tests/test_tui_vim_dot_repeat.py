@@ -307,7 +307,7 @@ class DotRepeatTests(unittest.TestCase):
         modal = dict(SHORTCUTS)["Esc (vim mode)"]
         for phrase in ("[n].", "captured", "Escape", "oversized", "visual"):
             self.assertIn(phrase, modal)
-        docs = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        docs = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         self.assertIn("[n].", docs)
 
 

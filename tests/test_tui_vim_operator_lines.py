@@ -536,6 +536,7 @@ class TestOL(unittest.TestCase):
         send_keys(c, "w")
         self.assertEqual(c.text, "newabc")  # restore inserts at the caret; it does not replace.
 
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX PTY only; the OMH TUI does not run on Windows")
     def test_pty(self):
         """OL-9: real OS PTY, production TUI, 20×8 and 100×30."""
         assert_operator_pty(self)

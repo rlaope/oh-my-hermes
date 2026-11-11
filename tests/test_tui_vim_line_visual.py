@@ -277,11 +277,12 @@ class TestLV(unittest.TestCase):
 
     def test_docs(self):
         from omh.tui.shortcuts import SHORTCUTS
-        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text()
+        doc = (Path(__file__).resolve().parents[1] / "docs/INSTALLATION.md").read_text(encoding="utf-8")
         for text in ("VISUAL LINE", "hard-line count", "v/V", "linewise"):
             self.assertIn(text, dict(SHORTCUTS)["Esc (vim mode)"])
             self.assertIn(text, doc)
 
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX PTY only; the OMH TUI does not run on Windows")
     def test_pty(self):
         from _vim_line_pty import assert_line_visual_pty
         assert_line_visual_pty(self)

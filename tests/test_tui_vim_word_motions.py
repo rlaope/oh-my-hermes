@@ -628,6 +628,7 @@ class TestWM(unittest.TestCase):
                 self.assertEqual(client.calls[-1], ("session.steer", {"session_id": SID, "text": "queue now"}))
                 self.assertEqual(state(app.composer), ("", 0, VIM_NORMAL))
 
+    @unittest.skipIf(__import__("os").name == "nt", "POSIX PTY only; the OMH TUI does not run on Windows")
     def test_pty(self) -> None:
         """WM-7: Real terminal displays each motion destination across wraps (20 and 100 cols)."""
         assert_word_motions_pty(self)
