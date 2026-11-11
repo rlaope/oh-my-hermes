@@ -2494,6 +2494,84 @@
     "name": "codex-8-resume.jsonl"
   },
   {
+    "agent": "codex-resume-gone",
+    "events": [
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          }
+        ]
+      },
+      {
+        "event": "session.note",
+        "kind": "new_conversation",
+        "text": "The earlier Codex conversation was not found (no rollout found for thread id 0badbeef-0000-4000-8000-000000000000); a new one started."
+      },
+      {
+        "agent_session": "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6",
+        "approval": "never",
+        "event": "session.info",
+        "mode": "",
+        "model": "GPT-6.1-Sol",
+        "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "msg_0496c105c70253d8016af29e0c8f4087d09ff35d592503294d",
+        "text": "2 + 2 = 4."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "codex-11-resume-gone.jsonl"
+  },
+  {
     "agent": "claude",
     "events": [
       {
@@ -3268,84 +3346,6 @@
     "name": "omo-9-subagents.jsonl"
   },
   {
-    "agent": "codex-resume-gone",
-    "events": [
-      {
-        "event": "turn.start"
-      },
-      {
-        "event": "session.models",
-        "options": [
-          {
-            "detail": "Latest workhorse model for coding and everyday work.",
-            "id": "gpt-6.1-sol",
-            "label": "GPT-6.1-Sol"
-          },
-          {
-            "detail": "GPT-6.1 Terra Codex model.",
-            "id": "gpt-6.1-terra",
-            "label": "GPT-6.1 Terra"
-          }
-        ]
-      },
-      {
-        "event": "session.note",
-        "kind": "new_conversation",
-        "text": "The earlier Codex conversation was not found (no rollout found for thread id 0badbeef-0000-4000-8000-000000000000); a new one started."
-      },
-      {
-        "agent_session": "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6",
-        "approval": "never",
-        "event": "session.info",
-        "mode": "",
-        "model": "GPT-6.1-Sol",
-        "sandbox": "dangerFullAccess"
-      },
-      {
-        "event": "delta",
-        "text": "2"
-      },
-      {
-        "event": "delta",
-        "text": " +"
-      },
-      {
-        "event": "delta",
-        "text": " "
-      },
-      {
-        "event": "delta",
-        "text": "2"
-      },
-      {
-        "event": "delta",
-        "text": " ="
-      },
-      {
-        "event": "delta",
-        "text": " "
-      },
-      {
-        "event": "delta",
-        "text": "4"
-      },
-      {
-        "event": "delta",
-        "text": "."
-      },
-      {
-        "event": "message",
-        "id": "msg_0496c105c70253d8016af29e0c8f4087d09ff35d592503294d",
-        "text": "2 + 2 = 4."
-      },
-      {
-        "event": "turn.end",
-        "outcome": "done"
-      }
-    ],
-    "name": "codex-11-resume-gone.jsonl"
-  },
-  {
     "agent": "codex-helpers",
     "events": [
       {
@@ -3920,11 +3920,6 @@
         "seconds": 50.4,
         "state": "done",
         "summary": "Command completed successfully (exit code 0). Output: text child-late"
-      },
-      {
-        "event": "session.usage",
-        "max": 353400,
-        "used": 30543
       },
       {
         "event": "session.usage",
