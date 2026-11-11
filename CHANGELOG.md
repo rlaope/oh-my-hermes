@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI renames and deletes sessions from `/sessions`.** In the
+  session picker, Ctrl+R turns the list's last row into the highlighted
+  session's title (Enter renames, Esc cancels) and Ctrl+D asks on the row,
+  then deletes on a second press; the session you are in is never deleted
+  from there. Hermes' stdio entry gets `session.title` / `session.delete`;
+  attached to a shared gateway, the gateway child sends them as the owner's
+  revision-fenced `session.mutate rename` / `delete`, as Hermes' Ink TUI does.
+  A refusal is said on the row.
+
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home
   rather than the TUI profile the session runs on, so it never found the
