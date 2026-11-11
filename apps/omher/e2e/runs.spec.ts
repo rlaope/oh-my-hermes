@@ -1484,7 +1484,7 @@ test("a delegate_task in chat: one plain sentence per dag part, a read-only stat
   await act.getByTestId("activity-toggle").click();
   const rows = act.getByTestId("activity-dag");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText("Assigned t3-doctor to a helper");
+  await expect(rows.nth(0)).toContainText("Assigned t3-doctor to a subagent");
   await expect(rows.nth(0).getByTestId("activity-dag-status")).toHaveText("working");
   expect(await act.getByRole("button", { name: /reassign/i }).count()).toBe(0);
   await rows.nth(0).getByTestId("activity-dag-open").click();
