@@ -58,6 +58,16 @@ All notable changes will be documented here.
   the two rows the echo and the blank row over it took go to the turn's own
   output.
 
+- **DSH in omher now means DeepSeek Harness, not deepseek-bot.** omher
+  0.2.4 started the first `dsh` on PATH, which on a machine with deepseek-bot
+  is its launcher. omher now finds DeepSeek Harness's own CLI (inside its app
+  on macOS and Windows, or the npm package `@deepseek-ai/dsh`) and opens it as
+  a chat: one `dsh --profile headless --json` run per message, continued with
+  the harness's `--session-id`. The harness asks no approvals in that mode;
+  its workspace-write sandbox refuses what would need one. A DSH session saved
+  by 0.2.4 comes back ended with a note and never starts deepseek-bot; the
+  menu shows the DeepSeek Harness mark and install line.
+
 - **Enter steers a running turn in the OMH TUI, as Claude Code does.** Text
   you type and send with Enter while Hermes is working now goes into that turn
   at once (`session.redirect`, read at the next tool call) and shows as your

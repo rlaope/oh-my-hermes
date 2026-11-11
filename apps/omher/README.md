@@ -91,7 +91,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   installed ones first, the last one used on top, the missing ones dimmed with their install line. Picking one
   opens its New session chat at once; its composer names the agent, and the folder chip under it picks the folder
   (the last one used, else home; recent folders, Choose folder… or home). Nothing runs until the first message, which
-  becomes the agent's first prompt; a terminal agent starts on Start. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
+  becomes the agent's first prompt; a terminal agent starts on Start. DSH is DeepSeek Harness only (the CLI inside its
+  app, or the npm package `@deepseek-ai/dsh`; any other `dsh` on PATH is skipped) and opens as a chat: one
+  `dsh --profile headless --json` run per message, continued with the harness's `--session-id`. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
@@ -158,7 +160,7 @@ Agent and CLI marks in `src/assets/agents/` are the projects' own marks, unedite
 - omp: the official mark from [omp.sh](https://omp.sh).
 - OmO: `omo-icon-light.svg` from [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (its viewBox
   trimmed to the tile).
-- DSH: deepseek-bot's `docs/assets/logo-pixel.svg` from [deepseek-bot](https://github.com/rlaope/deepseek-bot) (MIT).
+- DSH: DeepSeek Harness's `apps/web/public/favicon.svg` from [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT), drawn in the text colour.
 - OMH: the oh-my-hermes kami mark from this repository.
 
 Each mark belongs to its owner and is used only to name that tool in the app.

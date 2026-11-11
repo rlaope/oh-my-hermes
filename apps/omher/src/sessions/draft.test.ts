@@ -38,7 +38,10 @@ describe("draft defaults", () => {
     // the install lines of the two new harnesses
     expect(INSTALL.omo).toBe("npm i -g omo-ai");
     expect(missingNote("omo")).toBe("omo was not found on this computer · install: npm i -g omo-ai");
-    expect(missingNote("dsh")).toMatch(/^dsh was not found on this computer · install: curl -fsSL https:\/\/raw\.githubusercontent\.com\/rlaope\/deepseek-bot\//);
+    // DSH is DeepSeek Harness: its own npm package or its app, never deepseek-bot's install script
+    expect(INSTALL.dsh).toBe("npm i -g @deepseek-ai/dsh");
+    expect(missingNote("dsh")).toBe("DeepSeek Harness (dsh) was not found on this computer · install: npm i -g @deepseek-ai/dsh (or the DeepSeek Harness app, which carries it)");
+    expect(missingNote("dsh")).not.toMatch(/deepseek-bot/);
   });
 
   it("the folder: the last folder used, else home, else nothing yet", () => {
@@ -121,20 +124,26 @@ describe("a New session chat", () => {
     expect(calls().filter((c) => c.op !== "reset")).toEqual([]);
   });
 
-  it("a DSH session starts in its terminal with a conversation id of its own, which its terminal continues", async () => {
-    const { ss } = setup(["dsh"]);
+  it("a DSH session is a DeepSeek Harness chat: no terminal, the harness's own session id, continued by Restart", async () => {
+    const { ss, store, calls } = setup(["dsh"]);
     await ss.loadAgents();
     const id = ss.draft("dsh");
     ss.setDraft(id, { cwd: "/w/bot" });
-    await ss.start(id);
+    await ss.start(id, "Remember PLUM-42.");
+    await wait(1000);
     const r = ss.getState().list[0];
-    expect(r).toMatchObject({ status: "starting", view: "terminal", cwd: "/w/bot" });
-    expect(r.agentSession).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    // a second DSH session gets another conversation
-    const next = ss.draft("dsh");
-    ss.setDraft(next, { cwd: "/w/bot" });
-    await ss.start(next);
-    expect(ss.getState().list[0].agentSession).not.toBe(r.agentSession);
+    expect(r).toMatchObject({ status: "running", view: "chat", cwd: "/w/bot", agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
+    expect(calls().filter((c) => c.op === "start")).toEqual([]);
+    expect(calls().find((c) => c.op === "chat.start")).toMatchObject({ agent: "dsh", cwd: "/w/bot" });
+    expect(store.getState().chats[`agent:${id}`].messages.map((m) => m.text)).toEqual(["Remember PLUM-42.", "(mock DSH) You said: Remember PLUM-42."]);
+    // another DSH session starts a harness session of its own (no id carried over)
+    await ss.close(id);
+    const again = ss.draft("dsh");
+    ss.setDraft(again, { cwd: "/w/bot" });
+    await ss.start(again);
+    await wait(60);
+    const live = calls().filter((c) => c.op === "chat.start").at(-1)!;
+    expect(live.resume).toBeUndefined();
   });
 
   it("with no recents it opens in home once home is known; a folder the person picked stays", async () => {
