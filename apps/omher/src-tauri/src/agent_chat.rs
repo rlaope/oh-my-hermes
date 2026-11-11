@@ -813,6 +813,22 @@ pub struct Codex {
     unauthorized: bool,
     /// Stop was pressed before Codex named the turn: interrupt it as soon as it does
     stop_asked: bool,
+    /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
+    /// events become `subagent` lines and never touch the person's turn, its answer or its Stop.
+    helpers: HashMap<String, CodexHelper>,
+    /// the fan-out the latest helpers belong to (the person's turn that started them) and how many it has
+    fanout: (String, usize),
+}
+
+/// One sub-agent thread, as its latest events left it.
+struct CodexHelper {
+    name: String,
+    model: String,
+    index: usize,
+    delegation: String,
+    /// its latest message: its answer once its turn completes
+    text: String,
+    ended: bool,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -835,6 +851,8 @@ impl Codex {
             changes: HashMap::new(),
             unauthorized: false,
             stop_asked: false,
+            helpers: HashMap::new(),
+            fanout: (String::new(), 0),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -895,6 +913,133 @@ impl Codex {
             _ => raw,
         }
     }
+    /// A thread other than the session's own: one of Codex's sub-agents.
+    fn is_helper(&self, thread: &str) -> bool {
+        !thread.is_empty() && self.thread.as_deref().is_some_and(|t| t != thread)
+    }
+    /// The helper of `thread`, registered on first sight (`subAgentActivity` names it; a thread first seen
+    /// elsewhere, such as a helper of a resumed turn, starts unnamed).
+    fn helper(&mut self, thread: &str, path: &str, model: &str) -> &mut CodexHelper {
+        if !self.helpers.contains_key(thread) {
+            let delegation = format!("codex-{}", self.turn_id.clone().unwrap_or_default());
+            if self.fanout.0 != delegation {
+                self.fanout = (delegation.clone(), 0);
+            }
+            let index = self.fanout.1;
+            self.fanout.1 += 1;
+            // "/root/read_first_line" -> "read first line"
+            let name = path.rsplit('/').next().unwrap_or("").replace('_', " ");
+            self.helpers.insert(thread.to_string(), CodexHelper { name: clip(&name, 120), model: String::new(), index, delegation, text: String::new(), ended: false });
+        }
+        let h = self.helpers.get_mut(thread).unwrap();
+        if !model.is_empty() {
+            h.model = model.to_string();
+        }
+        h
+    }
+    /// The `subagent` event of a helper (the bot chat's shape: id, fan-out, index of count, goal, state).
+    fn helper_event(&self, thread: &str, state: &str, extra: Value) -> Event {
+        let h = &self.helpers[thread];
+        let count = if self.fanout.0 == h.delegation { self.fanout.1 } else { h.index + 1 };
+        let mut f = json!({"id": thread, "delegation": h.delegation, "index": h.index, "count": count, "goal": h.name, "state": state});
+        if !h.model.is_empty() {
+            f["model"] = Value::String(h.model.clone());
+        }
+        if let (Value::Object(m), Value::Object(x)) = (&mut f, extra) {
+            m.extend(x);
+        }
+        ev("subagent", f)
+    }
+    /// `subAgentActivity` (on the session's thread, or a helper's for a nested one): a helper started or ended.
+    fn helper_activity(&mut self, st: &mut Step, item: &Value, done: bool) {
+        let thread = s(item, "agentThreadId");
+        if thread.is_empty() || !self.is_helper(&thread) {
+            return;
+        }
+        let model = s(item, "model");
+        let h = self.helper(&thread, &s(item, "agentPath"), &model);
+        let (ended, summary) = (h.ended, clip(&h.text, 200));
+        match (s(item, "kind").as_str(), done) {
+            ("started", false) => st.emit(self.helper_event(&thread, "running", json!({}))),
+            // its thread's own turn/completed normally says so first, with its time
+            ("completed", true) if !ended => {
+                self.helper(&thread, "", "").ended = true;
+                st.emit(self.helper_event(&thread, "done", if summary.is_empty() { json!({}) } else { json!({"summary": summary}) }));
+            }
+            _ => {}
+        }
+    }
+    /// A line of a helper's own thread: its steps and its end. Its text is held as its answer, never shown as
+    /// Codex's; its deltas, reasoning and warnings are dropped.
+    fn on_helper_line(&mut self, st: &mut Step, thread: &str, method: &str, p: &Value) {
+        let item = p.get("item").cloned().unwrap_or(Value::Null);
+        match method {
+            "item/started" => {
+                if s(&item, "type") == "subAgentActivity" {
+                    return self.helper_activity(st, &item, false);
+                }
+                if let Some((tool, step)) = self.item_step(&item) {
+                    self.helper(thread, "", "");
+                    st.emit(self.helper_event(thread, "running", json!({"tool": tool, "step": clip(&step, 120)})));
+                }
+            }
+            "item/completed" => match s(&item, "type").as_str() {
+                "agentMessage" => {
+                    let t = s(&item, "text");
+                    if !t.trim().is_empty() {
+                        self.helper(thread, "", "").text = t;
+                    }
+                }
+                "subAgentActivity" => self.helper_activity(st, &item, true),
+                _ => {}
+            },
+            "turn/completed" => {
+                let t = &p["turn"];
+                let h = self.helper(thread, "", "");
+                if h.ended {
+                    return;
+                }
+                h.ended = true;
+                let (state, text) = match s(t, "status").as_str() {
+                    "interrupted" => ("cancelled", h.text.clone()),
+                    "failed" => ("failed", t.get("error").map(|e| s(e, "message")).unwrap_or_default()),
+                    _ => ("done", h.text.clone()),
+                };
+                let mut f = json!({});
+                let summary = clip(&text, 200);
+                if !summary.is_empty() {
+                    f["summary"] = Value::String(summary);
+                }
+                if let Some(ms) = t.get("durationMs").and_then(Value::as_u64) {
+                    f["seconds"] = json!((ms as f64 / 100.0).round() / 10.0);
+                }
+                st.emit(self.helper_event(thread, state, f));
+            }
+            _ => {}
+        }
+    }
+    /// The step an item runs, as (tool kind, detail), for the items omher shows as steps.
+    fn item_step(&mut self, item: &Value) -> Option<(String, String)> {
+        let iid = s(item, "id");
+        Some(match s(item, "type").as_str() {
+            "commandExecution" => ("terminal".into(), clip(&Codex::command_of(item), 160)),
+            "fileChange" => {
+                let detail = self.file_changes(item);
+                let paths: Vec<String> = item.get("changes").and_then(Value::as_array).into_iter().flatten().map(|c| rel(&s(c, "path"), &self.cwd)).filter(|p| !p.is_empty()).collect();
+                self.changes.insert(iid, clip(&paths.join(", "), 120));
+                ("patch".into(), detail)
+            }
+            "mcpToolCall" => (s(item, "tool"), format!("{}.{}", s(item, "server"), s(item, "tool"))),
+            "dynamicToolCall" => (tool_kind(&s(item, "tool")).to_string(), tool_detail(&item["arguments"])),
+            "webSearch" => ("web_search".into(), s(item, "query")),
+            "imageView" => ("read_file".into(), rel(&s(item, "path"), &self.cwd)),
+            "sleep" => {
+                let secs = item.get("durationMs").and_then(Value::as_u64).unwrap_or(0) / 1000;
+                ("Waiting".into(), if secs > 0 { format!("{secs}s") } else { String::new() })
+            }
+            _ => return None,
+        })
+    }
     fn file_changes(&self, item: &Value) -> String {
         let files: Vec<(String, u64, u64)> = item
             .get("changes")
@@ -940,6 +1085,9 @@ impl Adapter for Codex {
                 let msg = s(err, "message");
                 if what == "turn/start" {
                     self.end(&mut st, "error", Some(clip(&msg, 200)));
+                } else if what == "turn/interrupt" && self.turn {
+                    // a refused Stop says so where the person looks: the running turn's line
+                    st.emit(ev("status", json!({"text": clip(&format!("Codex did not stop: {msg}"), 160)})));
                 } else {
                     st.emit(ev("session.error", json!({"message": format!("{what}: {msg}")})));
                 }
@@ -1004,8 +1152,10 @@ impl Adapter for Codex {
         }
         let p = v.get("params").cloned().unwrap_or(Value::Null);
         // a request from the server (approvals, questions); anything we do not handle is answered with an error
+        let thread = s(&p, "threadId");
         if let Some(rpc_id) = id {
             let key = format!("codex-{}", rpc_id);
+            let n = st.events.len();
             match method.as_str() {
                 "item/commandExecution/requestApproval" => {
                     let reason = s(&p, "reason");
@@ -1038,6 +1188,18 @@ impl Adapter for Codex {
                 }
                 _ => st.out(json!({"id": rpc_id, "error": {"code": -32601, "message": "not supported by omher"}})),
             }
+            // asked inside a helper: the card says which one
+            if self.is_helper(&thread) && st.events.len() > n {
+                let h = self.helper(&thread, "", "");
+                let who = json!({"id": thread, "goal": h.name});
+                for e in &mut st.events[n..] {
+                    e["subagent"] = who.clone();
+                }
+            }
+            return st;
+        }
+        if self.is_helper(&thread) && method != "serverRequest/resolved" {
+            self.on_helper_line(&mut st, &thread, &method, &p);
             return st;
         }
         let item = p.get("item").cloned().unwrap_or(Value::Null);
@@ -1066,29 +1228,16 @@ impl Adapter for Codex {
             }
             "item/reasoning/textDelta" | "item/reasoning/summaryTextDelta" => st.emit(ev("thinking", json!({}))),
             "item/started" => {
-                let iid = s(&item, "id");
-                match s(&item, "type").as_str() {
-                    "commandExecution" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "terminal", "detail": clip(&Codex::command_of(&item), 160)}))),
-                    "fileChange" => {
-                        let detail = self.file_changes(&item);
-                        let paths: Vec<String> = item.get("changes").and_then(Value::as_array).into_iter().flatten().map(|c| rel(&s(c, "path"), &self.cwd)).filter(|p| !p.is_empty()).collect();
-                        self.changes.insert(iid.clone(), clip(&paths.join(", "), 120));
-                        st.emit(ev("tool.start", json!({"tool_id": iid, "name": "patch", "detail": detail})));
-                    }
-                    "mcpToolCall" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": s(&item, "tool"), "detail": format!("{}.{}", s(&item, "server"), s(&item, "tool"))}))),
-                    "dynamicToolCall" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": tool_kind(&s(&item, "tool")), "detail": tool_detail(&item["arguments"])}))),
-                    "webSearch" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "web_search", "detail": s(&item, "query")}))),
-                    "imageView" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "read_file", "detail": rel(&s(&item, "path"), &self.cwd)}))),
-                    "sleep" => {
-                        let secs = item.get("durationMs").and_then(Value::as_u64).unwrap_or(0) / 1000;
-                        st.emit(ev("tool.start", json!({"tool_id": iid, "name": "Waiting", "detail": if secs > 0 { format!("{secs}s") } else { String::new() }})));
-                    }
-                    _ => {}
+                if s(&item, "type") == "subAgentActivity" {
+                    self.helper_activity(&mut st, &item, false);
+                } else if let Some((name, detail)) = self.item_step(&item) {
+                    st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
                 }
             }
             "item/completed" => {
                 let iid = s(&item, "id");
                 match s(&item, "type").as_str() {
+                    "subAgentActivity" => self.helper_activity(&mut st, &item, true),
                     "agentMessage" => {
                         // a question in the message: a question card instead of the bubble
                         let qs: Vec<(String, String, Vec<String>, bool)> = item
@@ -3302,6 +3451,9 @@ mod tests {
         out.push(("codex-4-stop.jsonl", "codex", vec![Send, File("codex-4-stop.jsonl"), Stop, File("codex-4-stopped.jsonl")]));
         out.push(("codex-7-model.jsonl", "codex", vec![Model("gpt-6-astra"), Send, File("codex-7-model.jsonl")]));
         out.push(("codex-8-resume.jsonl", "codex-resume", vec![File("codex-8-resume-init.jsonl"), File("codex-8-resume.jsonl"), Send, File("codex-8-resume-turn.jsonl")]));
+        // two sub-agents in parallel (their threads stream on the same connection), then Stop while one runs
+        out.push(("codex-9-helpers.jsonl", "codex-helpers", vec![Send, File("codex-9-helpers.jsonl")]));
+        out.push(("codex-10-helper-stop.jsonl", "codex-helper-stop", vec![Send, File("codex-10-helper-stop.jsonl"), Stop, File("codex-10-helper-stopped.jsonl")]));
         out.push(("omo-1-plain.jsonl", "omo", turn("omo-1-plain.jsonl")));
         for f in ["omp-1-plain.jsonl", "omp-2-approvals.jsonl", "omp-3-edit.jsonl", "omp-5-question.jsonl", "omp-6-error.jsonl"] {
             out.push((f, "omp", turn(f)));
@@ -3323,6 +3475,8 @@ mod tests {
             "claude" => (Box::new(Claude::new("/w/proj")), vec!["claude-init.jsonl"]),
             "codex" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-init.jsonl"]),
             "codex-resume" => (Box::new(Codex::new("/w/proj", Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"))), vec![]),
+            "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
+            "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
             "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
             "omp" => (Box::new(Pi::new("/w/proj", "oh-my-pi")), vec!["omp-ready.jsonl", "omp-init.jsonl"]),
             "pi" => (Box::new(Pi::new("/w/proj", "pi")), vec!["pi-init.jsonl"]),
@@ -3452,6 +3606,118 @@ mod tests {
         p.on_input(Input::Send { text: "again".into(), images: vec![] }).unwrap();
         let st = p.on_line(r#"{"type":"extension_ui_request","id":"s1","method":"setStatus","statusKey":"memory","statusText":"mem:khope-sionic-ai-d09472c9 9d ago (+1)"}"#);
         assert_eq!(st.events, [json!({"event": "status", "text": "mem:khope-sionic-ai-d09472c9 9d ago (+1)"})]);
+    }
+
+    /// codex-9-helpers: the person's turn spawns two sub-agents (`write_one`, `read_first_line`); their threads'
+    /// own turns, steps and answers stream on the same connection (recorded with Codex 0.167.0-alpha.3.2).
+    fn codex_helpers_up() -> Codex {
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        run(&mut x, &real("codex-9-helpers-init.jsonl"));
+        x
+    }
+
+    #[test]
+    fn a_codex_helper_finishing_does_not_end_the_persons_turn() {
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        let lines = real("codex-9-helpers.jsonl");
+        // the first helper's own turn/completed: the person's turn is still running
+        let child_end = lines.iter().position(|l| l.contains("\"turn/completed\"") && l.contains("01a1ca24-539f")).unwrap();
+        let st = run(&mut x, &lines[..=child_end]);
+        assert!(x.in_turn(), "a helper's turn/completed ended the person's turn");
+        assert!(!names(&st.events).contains(&"turn.end".to_string()), "{:?}", names(&st.events));
+        let st = run(&mut x, &lines[child_end + 1..]);
+        assert!(!x.in_turn());
+        assert_eq!(names(&st.events).iter().filter(|n| *n == "turn.end").count(), 1);
+        assert_eq!(st.events.iter().filter(|e| s(e, "event") == "turn.start").count(), 0, "a helper's step started a turn of its own");
+    }
+
+    #[test]
+    fn a_codex_helpers_text_is_never_codexs_own_answer() {
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        let st = run(&mut x, &real("codex-9-helpers.jsonl"));
+        let said = text_of(&st.events, "message");
+        assert!(!said.iter().any(|t| t == "done" || t == "alpha line"), "{said:?}");
+        assert!(said.iter().any(|t| t.starts_with("Agent 1 wrote one.txt")), "{said:?}");
+        // no streamed helper text either, and none of the helpers' commands is a step of Codex's turn
+        assert!(text_of(&st.events, "delta").iter().all(|t| !t.contains("alpha")));
+        let steps: Vec<String> = st.events.iter().filter(|e| s(e, "event") == "tool.start").map(|e| s(e, "detail")).collect();
+        assert!(!steps.iter().any(|d| d.contains("echo one") || d.contains("head -n 1")), "{steps:?}");
+    }
+
+    #[test]
+    fn codex_helpers_come_out_as_subagent_lines() {
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        let st = run(&mut x, &real("codex-9-helpers.jsonl"));
+        let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        let of = |id: &str| subs.iter().filter(|e| s(e, "id").ends_with(id)).map(|e| (*e).clone()).collect::<Vec<_>>();
+        let one = of("e39bedaf4545");
+        let two = of("13c7f1bb6917");
+        // started, its step, done with its own answer and time
+        assert_eq!(one.iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["running", "running", "done"]);
+        assert_eq!(s(&one[0], "goal"), "write one");
+        assert_eq!(s(&one[0], "model"), "gpt-6.1-sol");
+        assert_eq!(s(&one[1], "step"), "echo one > one.txt");
+        assert_eq!(s(&one[2], "summary"), "done");
+        assert_eq!(one[2]["seconds"], json!(4.8));
+        assert_eq!(s(&two[0], "goal"), "read first line");
+        assert_eq!(s(two.last().unwrap(), "summary"), "alpha line");
+        // one fan-out of two: the same delegation (the person's turn), index 0 and 1
+        let deleg = s(&one[0], "delegation");
+        assert!(deleg.starts_with("codex-") && subs.iter().all(|e| s(e, "delegation") == deleg));
+        assert_eq!((one[0]["index"].clone(), two[0]["index"].clone(), two[0]["count"].clone()), (json!(0), json!(1), json!(2)));
+        // every subagent line comes while the person's turn runs (they belong to it)
+        let end = st.events.iter().position(|e| s(e, "event") == "turn.end").unwrap();
+        assert!(st.events.iter().rposition(|e| s(e, "event") == "subagent").unwrap() < end);
+    }
+
+    #[test]
+    fn codex_stop_while_a_helper_runs_names_the_persons_turn() {
+        // codex-10: one helper runs `sleep 45`; the person presses Stop while it runs
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        run(&mut x, &real("codex-10-helper-stop-init.jsonl"));
+        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        run(&mut x, &real("codex-10-helper-stop.jsonl"));
+        let st = x.on_input(Input::Interrupt).unwrap();
+        let w = written(&st);
+        assert_eq!(w[0]["method"], "turn/interrupt");
+        // the session's own thread and turn, not the helper's (`…fa6d…`, which Codex refuses)
+        assert_eq!(w[0]["params"]["threadId"], "01a1ca32-da48-7f42-adc1-3469420bbfa8");
+        assert_eq!(w[0]["params"]["turnId"], "01a1ca32-e30e-7312-bc08-818ebbf0e1b3");
+        // the recording holds Codex's refusal of the old (helper's) id: a refused Stop shows on the turn's line
+        let st = run(&mut x, &real("codex-10-helper-stopped.jsonl")[..1]);
+        assert_eq!(names(&st.events), ["status"]);
+        assert!(s(&st.events[0], "text").starts_with("Codex did not stop: expected active turn id"));
+        // the helper's message is its summary, not Codex's
+        let st = run(&mut x, &real("codex-10-helper-stopped.jsonl")[1..]);
+        let said = text_of(&st.events, "message");
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].starts_with("The sub-agent completed"));
+        assert_eq!(names(&st.events).last().unwrap(), "turn.end");
+    }
+
+    #[test]
+    fn an_ask_inside_a_codex_helper_names_the_helper() {
+        // shape from codex-rs app-server-protocol (v2 CommandExecutionRequestApprovalParams); this Mac's Codex runs
+        // with approval_policy = never, so no helper approval was recorded
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        let lines = real("codex-9-helpers.jsonl");
+        let spawned = lines.iter().position(|l| l.contains("\"subAgentActivity\"") && l.contains("write_one")).unwrap();
+        run(&mut x, &lines[..=spawned]);
+        let st = x.on_line(r#"{"id":91,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-539f-7e51-ad88-e39bedaf4545","turnId":"01a1ca24-53f9-72c0-a436-7edf958315cf","itemId":"exec-1","command":"/bin/zsh -lc 'rm one.txt'","cwd":"/w/proj"}}"#);
+        assert_eq!(s(&st.events[0], "event"), "approval.request");
+        assert_eq!(st.events[0]["subagent"], json!({"id": "01a1ca24-539f-7e51-ad88-e39bedaf4545", "goal": "write one"}));
+        // the answer goes back to the same request
+        let st = x.on_input(Input::Approve { request_id: "codex-91".into(), choice: "deny".into() }).unwrap();
+        assert_eq!(written(&st)[0], json!({"id": 91, "result": {"decision": "decline"}}));
+        // an ask on the session's own thread names no helper
+        let st = x.on_line(r#"{"id":92,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turnId":"t","itemId":"exec-2","command":"ls"}}"#);
+        assert!(st.events[0].get("subagent").is_none());
     }
 
     #[test]

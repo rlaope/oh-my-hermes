@@ -30,6 +30,20 @@ All notable changes will be documented here.
   HUD now reads the home `HERMES_HOME` names; the bot board alone keeps the
   bots' home.
 
+- **A Codex session in omher stays on your turn while Codex's sub-agents work.**
+  Codex streams its sub-agents' threads on the same connection, and omher
+  took their events as its own: when the first sub-agent finished, the chat
+  showed Ready and Send while Codex was still working; Stop sent the
+  sub-agent's turn id, which Codex refused, so nothing stopped and nothing
+  said so; and each sub-agent's answer ("done", "alpha line") showed and
+  notified as Codex's own. omher now keeps the session's own thread apart: a
+  sub-agent's turn never ends yours, Stop names your turn, a refused Stop
+  shows on the turn's line, and each sub-agent comes out as one `subagent`
+  record (name, model, current step, state, answer, time) that the chat's
+  sub-agent rows can show; an approval asked inside a sub-agent names it.
+  Tested on recorded Codex 0.167 streams with two sub-agents in parallel and
+  Stop while one runs.
+
 - **omher reads fully in Chinese, Korean and Japanese, and typing in them is
   safe.** Every word omher itself shows (Settings and its pages, Accounts,
   Providers, the sidebar, the composer and model picker, approval and question
