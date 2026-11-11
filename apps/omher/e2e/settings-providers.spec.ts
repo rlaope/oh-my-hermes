@@ -120,3 +120,51 @@ test("900px: no horizontal overflow, collapsed rows under 40px", async ({ page }
     expect(box!.height).toBeLessThan(40);
   }
 });
+
+test("Add key: the menu and a row's action ask the host for exactly that provider; the list re-reads on focus", async ({ page }) => {
+  // stand-in for the desktop app's open_hermes_auth (the e2e page is a plain browser)
+  await page.addInitScript(() => {
+    (window as any).__authCalls = [];
+    (window as any).__omherAuthHost = {
+      open: async (provider: string) => {
+        (window as any).__authCalls.push(provider);
+      },
+    };
+  });
+  await openProviders(page);
+  const calls = () => page.evaluate(() => (window as any).__authCalls as string[]);
+
+  await page.getByTestId("providers-add-key").click();
+  const menu = page.getByTestId("providers-key-menu");
+  await expect(menu).toBeVisible();
+  const ids = await menu.getByRole("menuitem").locator("code").allTextContents();
+  // Hermes' own ids first, then the bot's custom providers, each once
+  expect(ids.slice(0, 7)).toEqual(["anthropic", "openai", "openrouter", "nous", "gemini", "xai", "deepseek"]);
+  for (const custom of ["claude-proxy", "og", "openai-codex"]) expect(ids).toContain(custom);
+  expect(new Set(ids).size).toBe(ids.length);
+  await page.getByTestId("providers-key-openrouter").click();
+  await expect(menu).toHaveCount(0);
+  expect(await calls()).toEqual(["openrouter"]);
+  await expect(page.getByTestId("providers-key-note")).toContainText("hermes auth add openrouter --type api-key");
+  // omher never offers a place to type a key
+  await expect(page.locator('input[type="password"]')).toHaveCount(0);
+
+  // a provider row's own action
+  await page.getByTestId("provider-row-og").hover();
+  await page.getByTestId("provider-key-og").click();
+  expect(await calls()).toEqual(["openrouter", "og"]);
+
+  // coming back to the window reads the providers again
+  const before = (await mock("mock.calls")).calls.filter((c: { op: string }) => c.op === "models.options").length;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect
+    .poll(async () => (await mock("mock.calls")).calls.filter((c: { op: string }) => c.op === "models.options").length)
+    .toBeGreaterThan(before);
+});
+
+test("Add key without the desktop app shows the command to run", async ({ page }) => {
+  await openProviders(page);
+  await page.getByTestId("providers-add-key").click();
+  await page.getByTestId("providers-key-nous").click();
+  await expect(page.getByTestId("providers-key-note")).toHaveText("Run hermes auth add nous --type api-key in a terminal.");
+});

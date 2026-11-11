@@ -710,19 +710,24 @@
 .pv-item + .pv-item {
   border-top: 1px solid var(--line);
 }
+.pv-head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.pv-head:hover {
+  background: var(--hover);
+}
 .pv-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
   height: 36px;
   padding: 0 12px;
   text-align: left;
   font-size: 12.5px;
-}
-.pv-row:hover {
-  background: var(--hover);
 }
 .pv-mark {
   flex: none;
@@ -887,4 +892,90 @@
   font-size: 9.5px;
   line-height: 13px;
   color: var(--quiet);
+}
+/* "Add key": a quiet action on each row and one row under the list */
+.pv-key {
+  flex: none;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  color: var(--quiet);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+}
+.pv-head:hover .pv-key,
+.pv-key:focus-visible {
+  opacity: 1;
+}
+.pv-key:hover {
+  color: var(--ink);
+  background: var(--raise2);
+}
+@media (hover: none) {
+  .pv-key {
+    opacity: 1;
+  }
+}
+.pv-add {
+  position: relative;
+  margin-top: 6px;
+}
+.pv-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.pv-add-btn:hover,
+.pv-add-btn[aria-expanded="true"] {
+  color: var(--ink);
+  background: var(--hover);
+}
+.pv-menu {
+  padding: 4px;
+}
+.pv-menu-h {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.pv-menu-i {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  color: var(--body);
+}
+.pv-menu-i:hover,
+.pv-menu-i:focus-visible {
+  background: var(--raise2);
+  color: var(--ink);
+  outline: none;
+}
+.pv-menu-i code {
+  padding: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.pv-menu-i .pv-mark {
+  color: var(--ink);
+}
+.pv-keynote code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.pv-keynote {
+  margin-top: 8px;
 }

@@ -88,6 +88,11 @@ RULES = (
     " (no preview, title or oEmbed request).",
     "of the bot's own messenger sessions in its `state.db` (`links.places`), never a message.",
     "A link opens only when the person clicks it, through the system opener:",
+    "Settings › Providers \"Add key\" may open the person's own system terminal running exactly"
+    " `hermes auth add <provider> --type api-key`, and nothing else, only when the person picks a provider.",
+    "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
+    "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
+    "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -124,15 +129,16 @@ class DocPins(unittest.TestCase):
         for sentence in RULES:
             self.assertIn(_flat(sentence), text)
 
-    def test_boundary_is_between_six_and_twenty_two_numbered_rules(self) -> None:
+    def test_boundary_is_between_six_and_twenty_three_numbered_rules(self) -> None:
         # 22: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
         # (skills.list for the ./ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
-        # through the person's own `gh`) and rule 22 (link chips: channel names read, web links opened on a
-        # click) each widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
+        # through the person's own `gh`), rule 22 (link chips: channel names read, web links opened on a
+        # click) and rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
+        # the key) each widened the boundary on purpose; the rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 22, len(rules))
+        self.assertTrue(6 <= len(rules) <= 23, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -213,9 +219,10 @@ class TheOneInstaller(unittest.TestCase):
                 spawns[path.name] = n
         # Production code only. bridge.rs starts the bridge with Hermes' Python; setup.rs runs the fixed
         # installer; agent_chat.rs starts a chat session's allow-listed agent (rule 11); accounts.rs runs the
-        # CLIs' fixed status / sign-in argv (rule 18). Terminal sessions start theirs through the PTY's
+        # CLIs' fixed status / sign-in argv (rule 18); hermes_auth.rs opens the system terminal with
+        # `hermes auth add <id> --type api-key` (rule 23). Terminal sessions start theirs through the PTY's
         # `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "setup.rs": 1})
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -541,8 +548,9 @@ class AccountsNeverCarryAToken(unittest.TestCase):
             if n:
                 spawns[path.name] = n
         # bridge.rs starts the bridge with Hermes' Python; accounts.rs runs the CLIs' fixed status / sign-in argv;
-        # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "setup.rs": 1})
+        # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11); hermes_auth.rs opens the
+        # system terminal for `hermes auth add` (rule 23).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
@@ -603,12 +611,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
 
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
-        rule 12), once in agent_chat.rs (the chat spawner) and in accounts.rs (rule 18's fixed status /
-        sign-in argv); `spawn_command` only in sessions.rs."""
+        rule 12), once in agent_chat.rs (the chat spawner), in accounts.rs (rule 18's fixed status /
+        sign-in argv) and in hermes_auth.rs (rule 23's terminal); `spawn_command` only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "accounts.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "accounts.rs", "hermes_auth.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
@@ -677,6 +685,56 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertRegex(self.lib, r"RunEvent::Exit[\s\S]*shell\.chats\.close_all\(\)")
         self.assertIn("shell.sessions.close(id)", self.lib)
         self.assertIn("shell.chats.close(id)", self.lib)
+
+
+class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
+    """Rule 23: "Add key" opens the system terminal with `hermes auth add <id> --type api-key`; omher never
+    sees the key."""
+
+    HERMES_AUTH = SHELL / "hermes_auth.rs"
+    UI = UI_SRC / "settings" / "providers"
+
+    def setUp(self) -> None:
+        text = self.HERMES_AUTH.read_text(encoding="utf-8")
+        self.prod = text.split("#[cfg(test)]", 1)[0]
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+
+    def test_the_argv_is_fixed_apart_from_the_checked_id(self) -> None:
+        args = self.prod[self.prod.index("pub fn auth_args"):]
+        args = args[: args.index("\n}\n")]
+        self.assertIn("if !valid_provider(provider)", args)
+        self.assertEqual(re.findall(r'"([^"]*)"\.into\(\)', args), ["not a provider id", "auth", "add", "--type", "api-key"])
+        self.assertIn('["auth".into(), "add".into(), provider.into(), "--type".into(), "api-key".into()]', args)
+        # the id check is the doc's regex, written out byte by byte
+        valid = self.prod[self.prod.index("pub fn valid_provider"):]
+        valid = valid[: valid.index("\n}\n")]
+        for piece in ("b.len() <= 41", "b[0].is_ascii_lowercase() || b[0].is_ascii_digit()", "*c == b'_' || *c == b'-'"):
+            self.assertIn(piece, valid)
+        # `open` checks the id before anything else, and every launcher argv comes from `launchers`
+        open_fn = self.prod[self.prod.index("pub fn open("):]
+        open_fn = open_fn[: open_fn.index("\n}\n")]
+        self.assertTrue(open_fn.split("{\n", 1)[1].lstrip().startswith("auth_args(provider)?;"))
+        self.assertEqual(self.prod.count("Command::new("), 1)
+        self.assertIn("for (program, argv) in launchers(desk, &hermes, provider, file.as_deref())?", open_fn)
+        self.assertNotIn("osascript", self.prod.replace("// ", ""))
+
+    def test_no_pty_no_stdin_and_the_command_takes_only_a_provider(self) -> None:
+        self.assertNotIn("spawn_command", self.prod)
+        self.assertNotIn("portable_pty", self.prod)
+        self.assertIn(".stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())", self.prod)
+        sig = re.search(r"async fn open_hermes_auth\((.*?)\) -> ", self.lib, re.S)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig.group(1).strip(), "provider: String")
+        self.assertIn("hermes_auth::open(&provider)", self.lib)
+
+    def test_the_page_never_takes_a_key(self) -> None:
+        for path in sorted(self.UI.glob("*.ts*")):
+            text = path.read_text(encoding="utf-8")
+            for bad in ('type="password"', "api_key", "apiKey", "clipboard.read", "session_write", "localStorage"):
+                self.assertNotIn(bad, text, f"{path.name}: {bad}")
+        host = (self.UI / "authHost.ts").read_text(encoding="utf-8")
+        self.assertIn('invoke("open_hermes_auth", { provider })', host)
+        self.assertIn("/^[a-z0-9][a-z0-9_-]{0,40}$/", host)
 
 
 if __name__ == "__main__":

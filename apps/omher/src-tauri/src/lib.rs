@@ -1,6 +1,7 @@
 mod accounts;
 mod agent_chat;
 mod bridge;
+mod hermes_auth;
 mod sessions;
 mod setup;
 
@@ -343,6 +344,14 @@ pub(crate) fn media_target<S: Fn(&str) -> bool>(path: &str, served: S) -> Result
     Ok(p)
 }
 
+/// Settings › Providers "Add key": open the system terminal running exactly
+/// `hermes auth add <provider> --type api-key` (rule 23). Hermes asks for the key there and stores it; omher
+/// takes only the provider id, checked by `hermes_auth::valid_provider`, and never sees the key.
+#[tauri::command]
+async fn open_hermes_auth(provider: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || hermes_auth::open(&provider)).await.map_err(|e| e.to_string())?
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -381,7 +390,8 @@ pub fn run() {
             chat_input,
             chat_close,
             chat_close_all,
-            open_media
+            open_media,
+            open_hermes_auth
         ])
         .setup(|app| {
             let bridge = Bridge::new();
