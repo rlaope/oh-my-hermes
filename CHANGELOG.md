@@ -330,6 +330,16 @@ All notable changes will be documented here.
   Resume after a restart continues it. Launch on first send, drafts across a
   restart and session titles work as in 0.2.3.
 
+- **Vim editing in the OMH TUI composes like Vim, and Ctrl+N / Ctrl+P move
+  every list.** With `display.vim_mode` on, `.` and `[n].` repeat the last
+  completed change; `W B E ge gE` join the word motions; `d c y` take `j k gg
+  G` as logical hard lines with multiplied counts; `v`, `V` and `gv` select,
+  change and reselect; `r` waits on a steady underline (`REPLACE`). Ctrl+N
+  and Ctrl+P move down and up in approvals, questions, pickers, pagers,
+  `/dag`, `/bots`, and the CLI theme, model-chain and setup pickers, and
+  Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
+  Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
