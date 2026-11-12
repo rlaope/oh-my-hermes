@@ -83,7 +83,9 @@ class MenuTests(unittest.TestCase):
         for prefix in prefixes:
             offered = slash.completions(prefix, pairs)
             top = offered[0].name if offered else ""
-            if top != main_top(prefix, pairs):
+            # A prefix main offered nothing for may now offer names holding its letters in order; main's own
+            # top row (the baseline) is what must not move.
+            if main_top(prefix, pairs) and top != main_top(prefix, pairs):
                 moved[prefix] = top
         self.assertEqual(moved, INTENDED_TOP_ROWS)
         self.assertGreater(len(prefixes), 200)
@@ -96,7 +98,9 @@ class MenuTests(unittest.TestCase):
         sessions = slash.parse_slash("/sessions").command
         self.assertEqual(slash.completions("resu", slash.catalog_pairs(HERMES_CATALOG)),
                          [slash.Completion("resume", sessions.summary)])
-        self.assertEqual(self.names("res"), ["resume", "compress", "egress"])  # a start before an inside
+        # A start before an inside, then (new) the names holding the letters in order only.
+        self.assertEqual(self.names("res")[:3], ["resume", "compress", "egress"])
+        self.assertEqual(self.names("res")[3:], ["reload-skills", "reasoning"])
         # The TUI's own names first, then the alias, then the catalog's names that start with what is typed.
         self.assertEqual(self.names("re")[:5], ["redraw", "rewind", "reasoning", "reload-skills", "resume"])
         for alias in ("reset", "clear", "exit", "switch", "q", "s"):

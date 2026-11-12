@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .escapes import strip_escapes
+from .fuzzy import subsequence_tail
 from .gateway_contract import MODEL_PROVIDER_FLAG, MODEL_SESSION_FLAG, model_switch_value, plain_word
 from ..system.local_store import atomic_write_json, read_json_object_result
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
@@ -198,11 +199,11 @@ class ModelPicker:
         return [listed[pair] for pair in self.recent if pair in listed]
 
     def visible(self) -> list[ModelRow]:
-        """The rows Enter can pick, in order: the recent ones, then every row; with a filter, the rows it keeps."""
-        needle = self.query.casefold()
-        if not needle:
+        """The rows Enter can pick, in order: the recent ones, then every row; with a filter, the rows it keeps
+        (`fuzzy.subsequence_tail`: the ones holding it as typed, then the ones holding its letters in order)."""
+        if not self.query:
             return [*self.recent_rows(), *self.rows]
-        return [row for row in self.rows if needle in f"{row.model}\n{row.provider}\n{row.provider_name}".casefold()]
+        return subsequence_tail(self.rows, self.query, lambda row: (row.model, row.provider, row.provider_name))
 
     def handle_key(self, event: Key | Paste) -> ModelAction | None:
         """Apply one key; a `ModelAction` when the person picked a model or closed the picker."""
