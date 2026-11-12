@@ -367,6 +367,15 @@ All notable changes will be documented here.
   px from the row above, and a session's / menu is as wide as the composer,
   with plain command names and skills marked in the accent colour.
 
+- **An OmO subagent run in the foreground ends in omher with its own answer.**
+  When OmO 5.1.56 runs subagents in the foreground (one or several in one
+  call), its result names each task but not its answer, so the rows ended
+  "done" with nothing under them. Each row now shows that subagent's answer,
+  model and time from OmO's own record of the task, the same record Plans
+  reads, so the chat and Plans agree; a row whose record is missing stays
+  without an answer rather than showing another's. OmO's todo list shows as
+  the turn's checklist instead of a step with raw JSON.
+
 - **omher session chats say what the agent really did: a retry, a Stop, its own
   permissions and its subagents.** An OmO message that OmO retried by itself is
   one turn: its line says "Retrying 1 of 5" while OmO tries again, and a retry
