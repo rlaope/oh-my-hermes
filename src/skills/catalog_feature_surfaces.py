@@ -2261,6 +2261,7 @@ _FEATURE_SURFACE_SKILLS = (
                 "A promoted instinct leaves as a store route, `memory_new_candidate/v1` for `memory-new`, `skill_update_candidate` for `workflow-learning`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
                 "A promoted instinct leaves as a store route, `memory_new_candidate/v1` for `memory-new`, a `skill_update_candidate`, or a rule candidate for `rules-distill` when the destination is AGENTS guidance or a prompt, never as a parallel store of its own.",
             ),
+            "When the evidence is git history (a fix that replaced lines another pull request landed shortly before), load `references/refixed-commits.md` for how to find the pairs, why the count is an upper bound, and why two pairs from one day count once.",
             f"On Hermes, the skill audit ledger ({_CURATOR_LEDGER_FILE}) is observed evidence of what the agent or its background review already wrote; an instinct that matches a ledger entry no store route accounts for is reported as `unreviewed_native_write` (OMH holds no record of that write, which is not to say nobody reviewed it), never counted as repeated evidence for the instinct.",
         ),
         recovery_notes=(
