@@ -784,6 +784,11 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
     cmd
 }
 
+/// Bytes every session's reader has taken from its PTY, for the bench (`pty_bench.rs`): read minus what the page
+/// has drawn is what waits somewhere on the way.
+#[cfg(all(test, unix))]
+pub(crate) static PTY_READ_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// One thread reads the PTY (macOS hands out at most 1 KB per read); another merges what arrives into
 /// one message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`], so a big dump is a few dozen Channel sends
 /// instead of one per KB.
@@ -795,6 +800,8 @@ fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink) {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
+                    #[cfg(all(test, unix))]
+                    PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
                     if tx.send(buf[..n].to_vec()).is_err() {
                         break;
                     }

@@ -6,6 +6,8 @@ mod bridge;
 mod dsh_chat;
 mod git_branch;
 mod hermes_auth;
+#[cfg(all(test, unix))]
+mod pty_bench;
 mod session_files;
 mod sessions;
 mod setup;
