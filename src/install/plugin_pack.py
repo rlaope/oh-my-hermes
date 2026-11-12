@@ -577,7 +577,14 @@ def _generated_plugin_bytecode(path: Path, plugin_dir: Path, managed: set[str]) 
     try:
         source = Path(importlib.util.source_from_cache(str(path)))
     except ValueError:
-        return False
+        module = path.stem.split(".", 1)[0]
+        if not module or module == path.stem:
+            return False
+        source = path.parent.parent / (module + ".py")
+        try:
+            source.relative_to(plugin_dir)
+        except ValueError:
+            return False
     if source.relative_to(plugin_dir).as_posix() not in managed:
         return False
     # Parsing marshal data creates a code object but never executes it. Cap
