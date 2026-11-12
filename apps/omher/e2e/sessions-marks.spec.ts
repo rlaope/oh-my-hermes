@@ -1,5 +1,5 @@
 // What a session row says about a session the person is not looking at, and the notification that goes with it:
-// amber when it waits for them (its terminal rang its bell or sent an OSC 9 message; an open ask), red when it
+// a yellow warning triangle and "waiting" when it waits for them (its terminal rang its bell or sent an OSC 9 message; an open ask), red when it
 // stopped on an error, green when it finished. On the mock host: its terminal takes `after <ms> bell|osc9|progress`
 // and `after <ms> exit [code]`.
 import { expect, test, type Page } from "@playwright/test";
@@ -78,7 +78,7 @@ test.beforeEach(async () => {
   await mock("mock.reset");
 });
 
-test("a terminal that rings while you are elsewhere turns its row amber and notifies once; opening it clears that", async ({ page }) => {
+test("a terminal that rings while you are elsewhere says waiting with a warning sign and notifies once; opening it clears that", async ({ page }) => {
   await open(page);
   await terminal(page, "claude");
   const r = row(page, "web-app");
@@ -107,14 +107,15 @@ test("a terminal that rings while you are elsewhere turns its row amber and noti
   await expect(r.getByTestId("bot-time")).toHaveText("waiting");
   await expect(r.getByTestId("session-sub")).toHaveText("Claude Code");
   expect(await notes(page)).toEqual([{ title: "web-app · Claude Code wants your attention", body: "It rang its terminal's bell." }]);
-  // the dot sits inside the row, before the view mark, and covers no text
+  // the sign is a triangle before its word in the time's place, clear of the name; the row has no dot for it
   const fit = await mark.evaluate((el) => {
     const d = el.getBoundingClientRect();
-    const sub = el.parentElement!.querySelector("[data-testid=session-sub]")!.getBoundingClientRect();
-    const view = el.parentElement!.querySelector("[data-testid=session-view]")!.getBoundingClientRect();
-    return { afterSub: d.left >= sub.right - 0.5, beforeView: d.right <= view.left + 0.5, w: d.width };
+    const word = el.parentElement!.getBoundingClientRect();
+    const name = el.closest(".ss-row")!.querySelector("[data-testid=session-name]")!.getBoundingClientRect();
+    return { shape: el.querySelectorAll("svg path, svg circle").length, inWord: d.left >= word.left - 0.5 && d.right <= word.right, clearOfName: d.left >= name.right - 0.5, w: Math.round(d.width) };
   });
-  expect(fit).toEqual({ afterSub: true, beforeView: true, w: 8 });
+  expect(fit).toEqual({ shape: 3, inWord: true, clearOfName: true, w: 13 });
+  await expect(r.locator(".needs-dot")).toHaveCount(0);
 
   // opening the session sees it
   await r.locator(".ss-open").click();
@@ -135,7 +136,7 @@ test("a terminal that rings while you are elsewhere turns its row amber and noti
   await expect(page.locator("[data-testid=bot-friren] [data-testid=session-mark]")).toHaveCount(0);
 });
 
-test("a terminal session that ends while you are elsewhere: green after a clean exit, red after a failing one, a notification each", async ({ page }) => {
+test("a terminal session that ends while you are elsewhere: done after a clean exit, error after a failing one, a notification each", async ({ page }) => {
   await open(page);
   await terminal(page, "claude");
   await type(page, "after 1500 exit");
@@ -177,7 +178,7 @@ test("a terminal session that ends while you are elsewhere: green after a clean 
   await expect(failed).not.toHaveClass(/\bover\b/);
 });
 
-test("a chat session: an answer you did not watch turns its row green, a failed turn red, an open ask amber", async ({ page }) => {
+test("a chat session: an answer you did not watch says done, a failed turn error, an open ask waiting", async ({ page }) => {
   await open(page);
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-claude").click();
@@ -214,4 +215,14 @@ test("a chat session: an answer you did not watch turns its row green, a failed 
   await expect(r).toHaveAttribute("data-mark", "needs", { timeout: 8000 });
   await expect(r.getByTestId("needs")).toBeVisible();
   await expect(r.getByTestId("session-mark")).toHaveCount(0);
+  // the pointer on the row brings its close button; the state stays in view, left of it
+  await r.hover();
+  await expect(r.getByTestId("session-close")).toBeVisible();
+  await expect(r.getByTestId("needs")).toBeVisible();
+  const clear = await r.evaluate((el) => {
+    const s = el.querySelector("[data-testid=bot-time]")!.getBoundingClientRect();
+    const x = el.querySelector("[data-testid=session-close]")!.getBoundingClientRect();
+    return s.right <= x.left + 0.5;
+  });
+  expect(clear).toBe(true);
 });

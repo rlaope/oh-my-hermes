@@ -196,9 +196,9 @@ for (const theme of ["dark", "light"] as const) {
         });
       });
 
-      // the state dots: a terminal that rang, one that ended on an error, a chat that finished unseen, a chat with an
+      // the states: a terminal that rang, one that ended on an error, a chat that finished unseen, a chat with an
       // open approval, and a terminal that just runs
-      test(`shot of the session rows with their state dots (${theme})`, async ({ page }) => {
+      test(`shot of the session rows with their state signs (${theme})`, async ({ page }) => {
         test.skip(!SHOTS, "no shot folder");
         mkdirSync(SHOTS, { recursive: true });
         await mock("bots.rename", { bot: "default", name: "Juno" });

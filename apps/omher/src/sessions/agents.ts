@@ -233,8 +233,8 @@ export interface ChatLive {
  *  its bell, or it finished (a turn, or the program itself). */
 export type Unseen = "bell" | "end";
 
-/** The state dot at the end of a row's second line: it waits for the person, it stopped on an error, or it finished
- *  something the person has not seen. */
+/** The state a row shows in the time's place, as a sign and a word: it waits for the person, it stopped on an error,
+ *  or it finished something the person has not seen. */
 export type RowMark = "needs" | "error" | "done";
 
 /** The other rows a row is told apart from: every session's folder, and the home folder for `~`. */
@@ -263,7 +263,7 @@ export function rowModel(
   sub: string;
   live: boolean;
   needsYou: boolean;
-  /** the state dot, if the row has one */
+  /** the state the row shows, if any */
   mark: RowMark | null;
   /** nothing runs in it (ended, could not start, or waiting for Resume): the row steps back */
   over: boolean;
@@ -292,7 +292,7 @@ export function rowModel(
   const mark: RowMark | null = needsYou || (alive && unseen === "bell") ? "needs" : broke ? "error" : unseen === "end" ? "done" : null;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
   // the amber dot say it, so the line is just the agent.
-  // The dot's own word (waiting, error, done) stands in the time's place on line 1, so line 2 is as before.
+  // The state's sign and word (waiting, error, done) stand in the time's place on line 1, so line 2 is as before.
   const state = needsYou
     ? ""
     : s.status === "running"
