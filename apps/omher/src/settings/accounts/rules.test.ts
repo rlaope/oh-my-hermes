@@ -10,6 +10,7 @@ import {
   nextAccount,
   pill,
   planName,
+  pruneSeen,
   resetFirstOn,
   rowSub,
   rowTitle,
@@ -315,5 +316,13 @@ describe("lapseNotices (unused quota about to lapse)", () => {
     expect(ids([acc("a", "ready", { usage: both })])).toEqual([`codex:a:${NOW + 10 * 60}`]);
     const usage = w({ used_percent: 10, resets_at: NOW + 600 });
     expect(ids([acc("a", "login", { usage }), acc("cpa:2", "ready", { source: "cpa", usage })])).toEqual([]);
+  });
+});
+
+describe("pruneSeen (told pairs kept until their reset passes)", () => {
+  it("keeps every key whose reset is still ahead, however many, and drops the ones that have passed", () => {
+    const live = Array.from({ length: 150 }, (_, i) => `codex:id${i}:${NOW + 600}`);
+    const gone = [`codex:old:${NOW - 1}`, `codex:older:${NOW}`];
+    expect(pruneSeen([...gone, ...live], NOW)).toEqual(live);
   });
 });

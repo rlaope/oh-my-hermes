@@ -239,6 +239,12 @@ export function lapseNotices(cli: AccountCli, accounts: Account[], now: number, 
   return out;
 }
 
+/** The told keys that still matter: those whose reset time (the end of the key) is still ahead. A key past its
+ *  reset can never come up again, so it is dropped; a live one is kept however many there are. */
+export function pruneSeen(seen: readonly string[], now: number): string[] {
+  return seen.filter((k) => Number(k.slice(k.lastIndexOf(":") + 1)) > now);
+}
+
 /** "Switched Codex to Work (limit on This computer, resets 14:00)": the one quiet line in the bot chat. */
 export function switchNote(g: AccountGroup, from: number, to: number, now: number, soonest?: number): string {
   const a = g.accounts[from];

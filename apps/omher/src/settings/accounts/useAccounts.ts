@@ -10,7 +10,7 @@ import { showNote } from "../../lib/notify";
 import { t } from "../../i18n";
 import { clock, limitName } from "../../sidebar/usageFormat";
 import { accountHost, type LoginStatus } from "./native";
-import { accountName, autoSwitchOn, isCpa, lapseNotices, nextAccount, resetFirstOn, switchNote, CLI_NAME } from "./rules";
+import { accountName, autoSwitchOn, isCpa, lapseNotices, nextAccount, pruneSeen, resetFirstOn, switchNote, CLI_NAME } from "./rules";
 
 const REFRESH_MS = 60_000;
 const ASKS_STATUS: AccountCli[] = ["claude", "codex"];
@@ -115,7 +115,6 @@ async function autoSwitch(groups: AccountGroup[]): Promise<void> {
 }
 
 const SEEN_KEY = "omher.lapsenoted";
-const SEEN_MAX = 100;
 
 function loadSeen(): string[] {
   try {
@@ -134,9 +133,9 @@ async function lapseNotice(groups: AccountGroup[]): Promise<void> {
   const told = new Set(seen);
   for (const g of groups) {
     for (const n of lapseNotices(g.cli, g.accounts, now, told)) {
+      if (!notifyEnabled()) continue; // not shown, so not told: turning notices on before the reset still tells once
       told.add(n.key);
       seen.push(n.key);
-      if (!notifyEnabled()) continue;
       const name = limitName(g.accounts[n.index].usage?.windows.find((w) => w.resets_at === n.resets_at)?.label ?? "");
       void showNote({
         title: t("acc.lapseTitle", { cli: CLI_NAME[g.cli], name: accountName(g.accounts[n.index], n.index) }),
@@ -147,7 +146,7 @@ async function lapseNotice(groups: AccountGroup[]): Promise<void> {
     }
   }
   try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(seen.slice(-SEEN_MAX)));
+    localStorage.setItem(SEEN_KEY, JSON.stringify(pruneSeen(seen, now)));
   } catch {
     /* no storage */
   }
