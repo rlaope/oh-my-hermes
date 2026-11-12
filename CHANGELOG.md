@@ -244,6 +244,25 @@ All notable changes will be documented here.
   recorded row, and done DAG work is drawn green. The TUI's DAG block and the chat's end
   post get the same graph as before. Thanks @yqm-307. (#2745)
 
+- **instinct-ledger can start from git history, and code-review gains two
+  rules.** A fix commit that replaces lines a different pull request landed
+  shortly before is a re-fix, and nothing turned such a pair into a lesson.
+  `instinct-ledger` now ships `references/refixed-commits.md`: how to find the
+  pairs (blame the removed lines at the fix's parent and split by first-parent
+  merge), that the count is an upper bound to read pair by pair, that two pairs
+  from one day count once, what a ledger line carries, and where a promoted rule
+  goes. Three requests that reached the generic router, `code-review` and
+  `verification-gate` (`어제 머지된 커밋 중에 다시 고친 것들 찾아서 교훈으로 정리해줘`,
+  `review yesterday's merged commits for fixes of fixes and write the lessons`,
+  `nightly lessons from merged work`) now dispatch `instinct-ledger`, through the
+  whole-phrase cues `fix of fix`, `fixes of fixes`, `re-fixed commits`,
+  `lessons from merged work`, `다시 고친 커밋` and `다시 고친 것들`; thirty
+  messages that use fix, lesson, commit, merge or review for other work keep
+  the route they had. The `code-review` quality bar adds two rules: a fix
+  reaches every place of the same shape, and a read, parse or hash that failed
+  means unknown, never empty, none or equal. The idea of mining re-fixed commits
+  comes from `yetone/magpie` (MIT), concept only, reimplemented here.
+
 - **OpenCode runs as a chat in omher SESSIONS, on one adapter for every ACP
   agent.** omher now speaks the Agent Client Protocol (JSON-RPC on stdio)
   with one adapter and a table row per agent; OpenCode (`opencode acp`) is

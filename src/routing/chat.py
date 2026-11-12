@@ -3886,6 +3886,29 @@ _MEMORY_RECALL_INCIDENT_CUES = (
     "forgot my preference",
     "memory was not used",
 )
+# Lessons taken from git history. Each phrase is a whole multi-word shape that
+# names re-fixed commits or the lessons drawn from merged work; "fix", "lesson",
+# "commit", "merge" and "review" alone also name ordinary work and are never
+# cues here. Matched as whole words (`_instinct_ledger_history_phrase_spoken`):
+# "fix of fix" must not read inside "fix of fixing the build".
+_INSTINCT_LEDGER_HISTORY_PHRASES: tuple[str, ...] = (
+    "fix of fix",
+    "fixes of fixes",
+    "re-fixed commits",
+    "refixed commits",
+    "lessons from merged work",
+    "다시 고친 커밋",
+    "다시 고친 것들",
+)
+
+
+def _instinct_ledger_history_phrase_spoken(text: str, phrase: str) -> bool:
+    """True unless an English history phrase only appears inside a longer word."""
+    if phrase not in _INSTINCT_LEDGER_HISTORY_PHRASES or not phrase.isascii():
+        return True
+    return re.search(rf"(?<![\w-]){re.escape(phrase)}(?![\w-])", text) is not None
+
+
 _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
     (
         "ralplan",
@@ -5047,6 +5070,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "전역 학습 승격",
             "학습 승격",
             "학습 패턴 승격",
+            *_INSTINCT_LEDGER_HISTORY_PHRASES,
         ),
         "operator_surface_fast_path:instinct_ledger",
         "Clear project/global instinct learning request; prepare scoped instinct candidates without automatic hooks, writes, or promotion.",
@@ -5422,6 +5446,8 @@ def _operator_surface_fast_path_match(
         if skill == "live-info-operator" and normalized_pattern == "time in" and not phrase_is_spoken(text, "time in"):
             continue
         if skill == "memory-new" and _memory_new_scope_overroutes_curation(text):
+            continue
+        if skill == "instinct-ledger" and not _instinct_ledger_history_phrase_spoken(text, phrase):
             continue
         if marker == "operator_surface_fast_path:memory_recall_incident":
             if contains_cue_phrase(message, (phrase,)):
