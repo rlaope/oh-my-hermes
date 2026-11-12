@@ -2864,6 +2864,495 @@
     "name": "claude-10-close.jsonl"
   },
   {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "d595deee-f12a-42ab-9206-db7fe8b86b5e",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Opus 5.5"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "detail": "Write gamma to c.txt",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgyggpp3EqhfNDz1bU9Pm",
+        "event": "subagent",
+        "goal": "Write gamma to c.txt",
+        "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
+        "background": 1,
+        "event": "session.info"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r"
+      },
+      {
+        "event": "delta",
+        "text": "started"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgyghANX1LK3w2P7H297S-0",
+        "text": "started"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgyggpp3EqhfNDz1bU9Pm",
+        "event": "subagent",
+        "goal": "Write gamma to c.txt",
+        "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running",
+        "step": "echo gamma > c.txt",
+        "tool": "terminal"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "echo gamma > c.txt",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "ba5c0c5a-a399-46c5-b769-ee10ded21166",
+        "subagent": {
+          "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
+          "name": "Write gamma to c.txt"
+        },
+        "title": "Run this command?"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgyggpp3EqhfNDz1bU9Pm",
+        "event": "subagent",
+        "goal": "Write gamma to c.txt",
+        "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
+        "index": 0,
+        "name": "general-purpose",
+        "seconds": 10.5,
+        "state": "done",
+        "summary": "WROTE"
+      },
+      {
+        "background": 0,
+        "event": "session.info"
+      },
+      {
+        "agent_session": "d595deee-f12a-42ab-9206-db7fe8b86b5e",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Opus 5.5"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "The subagent finished and reported WROTE, meaning it ran `echo gamma > c.txt` in `/w/proj`. I haven't opened `c.txt` to check its contents myself."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgyghwqVNuJcSuJXgCmH4-0",
+        "text": "The subagent finished and reported WROTE, meaning it ran `echo gamma > c.txt` in `/w/proj`. I haven't opened `c.txt` to check its contents myself."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-13-late-ask.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "73ed4566-5a35-46e0-a5bf-106dc6b5ac79",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Opus 5.5"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "detail": "Write d.txt file",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_01PjNxPpcdixv7tMY1cdcnXg"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgygjb68Ug5QhSjEehySG",
+        "event": "subagent",
+        "goal": "Write d.txt file",
+        "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
+        "background": 1,
+        "event": "session.info"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01PjNxPpcdixv7tMY1cdcnXg"
+      },
+      {
+        "detail": "sleep 25",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_0189DPFxsiNhvpaMvBxYZkQV"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_0189DPFxsiNhvpaMvBxYZkQV"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgygjb68Ug5QhSjEehySG",
+        "event": "subagent",
+        "goal": "Write d.txt file",
+        "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running",
+        "step": "echo delta > d.txt",
+        "tool": "terminal"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "echo delta > d.txt",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "df05cf28-0295-41b7-8673-98ac32592210",
+        "subagent": {
+          "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
+          "name": "Write d.txt file"
+        },
+        "title": "Run this command?"
+      },
+      {
+        "event": "delta",
+        "text": "main done\n\nsubagent는 백그라운드에서 시작했고 아직 실행 중입니다. 결과는 확인하지 않았습니다. 지시대로 `sleep 25`는 harness가 막아서 실행하지 못했습니다. foreground에서 단독 `sleep`은 허용되지 않는다는 이유입니다. 차단을 우회하려고 짧은 `sleep`을 이어 붙이는 방법은 쓰지 않았습니다."
+      },
+      {
+        "event": "message",
+        "id": "msg_011Cgygk4gJuvGVdvHFU22EX-0",
+        "text": "main done\n\nsubagent는 백그라운드에서 시작했고 아직 실행 중입니다. 결과는 확인하지 않았습니다. 지시대로 `sleep 25`는 harness가 막아서 실행하지 못했습니다. foreground에서 단독 `sleep`은 허용되지 않는다는 이유입니다. 차단을 우회하려고 짧은 `sleep`을 이어 붙이는 방법은 쓰지 않았습니다."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgygjb68Ug5QhSjEehySG",
+        "event": "subagent",
+        "goal": "Write d.txt file",
+        "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
+        "index": 0,
+        "name": "general-purpose",
+        "seconds": 26.0,
+        "state": "done",
+        "summary": "WROTE"
+      },
+      {
+        "background": 0,
+        "event": "session.info"
+      },
+      {
+        "agent_session": "73ed4566-5a35-46e0-a5bf-106dc6b5ac79",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Opus 5.5"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "subagent가 끝났고 `WROTE`를 반환했습니다. `echo delta > d.txt`를 실행했다는 보고입니다. 파일 내용은 직접 확인하지 않았습니다."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgygmoXYEuSS5o51ZyuAf-0",
+        "text": "subagent가 끝났고 `WROTE`를 반환했습니다. `echo delta > d.txt`를 실행했다는 보고입니다. 파일 내용은 직접 확인하지 않았습니다."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-13-late-ask-inside.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "a7dd4834-07fe-4053-b0cc-0cd55ae9e1ab",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Opus 5.5"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "detail": "Write e.txt via echo",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_01X4ibyYU7gga75eg53Nfr37"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgygoXmKAaKF9BXVTQiDx",
+        "event": "subagent",
+        "goal": "Write e.txt via echo",
+        "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
+        "background": 1,
+        "event": "session.info"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01X4ibyYU7gga75eg53Nfr37"
+      },
+      {
+        "event": "delta",
+        "text": "started"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgygopnjveahW94FyDk7D-0",
+        "text": "started"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgygoXmKAaKF9BXVTQiDx",
+        "event": "subagent",
+        "goal": "Write e.txt via echo",
+        "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running",
+        "step": "echo eps > e.txt",
+        "tool": "terminal"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "echo eps > e.txt",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "08a8ed7b-c91a-4a15-b360-5211545b9903",
+        "subagent": {
+          "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
+          "name": "Write e.txt via echo"
+        },
+        "title": "Run this command?"
+      },
+      {
+        "event": "prompt.expired",
+        "reason": "cancelled",
+        "request_id": "08a8ed7b-c91a-4a15-b360-5211545b9903"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgygoXmKAaKF9BXVTQiDx",
+        "event": "subagent",
+        "goal": "Write e.txt via echo",
+        "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "cancelled",
+        "summary": "Write e.txt via echo"
+      },
+      {
+        "background": 0,
+        "event": "session.info"
+      }
+    ],
+    "name": "claude-13-late-ask-stop.jsonl"
+  },
+  {
     "agent": "codex",
     "events": [
       {
