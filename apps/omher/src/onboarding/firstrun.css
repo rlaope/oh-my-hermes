@@ -80,6 +80,29 @@
   width: 24px;
   height: 24px;
 }
+/* three cards: Hermes is here, oh-my-hermes is not (its card is the third) */
+.onb.onb-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+/* "Recommended": a quiet word after the title, no chip or fill */
+.onb-rec {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.onb-err {
+  margin: 0 0 8px;
+  max-width: 100%;
+  font: 11.5px/1.45 var(--mono, ui-monospace, monospace);
+  color: var(--danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.onb-omh .gate-log {
+  margin-bottom: 8px;
+}
 /* the line under an empty sidebar section */
 .onb-hint {
   padding: 6px var(--side-x) 0;

@@ -121,6 +121,18 @@ All notable changes will be documented here.
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
 
+- **omher works for a person who has Hermes but not oh-my-hermes.** The
+  SESSIONS `+` menu's oh-my-hermes row needed the `omh` program to be picked,
+  though its session never runs it: it is a Hermes chat in the folder. Without
+  `omh` that row now reads Hermes, with Hermes Agent's own mark, and opens the
+  same Hermes chat in the picked folder on the bot in view; its Terminal toggle
+  (which would start `omh`) is not shown. With `omh` nothing changes. One quiet
+  "Add oh-my-hermes" line in the menu and a third first-run card, marked
+  recommended, run the first-run screen's own fixed installer and show its
+  output the same way; when it ends well the row reads oh-my-hermes, when it
+  fails the installer's last line and Install again stay. An empty Plans tab
+  says that plans in parts come with oh-my-hermes instead of naming `dag ulw`.
+
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no

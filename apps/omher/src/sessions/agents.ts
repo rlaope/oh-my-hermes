@@ -80,6 +80,23 @@ export interface AgentInfo {
   /** Missing from older shells: the UI list's mode then applies. */
   mode?: AgentMode;
   path: string | null;
+  /** `hermes`: the oh-my-hermes row of a person who has Hermes but not `omh`. Its session is the same Hermes chat in
+   *  the folder, `path` is where Hermes was found, and it has no terminal view (that would start `omh`). */
+  via?: "hermes";
+}
+
+/** The oh-my-hermes row's name when only Hermes is there (the shell's `HERMES_LABEL`). */
+export const HERMES_LABEL = "Hermes";
+
+/** Hermes is there and `omh` is not: the + menu's oh-my-hermes row opens a Hermes chat named "Hermes", and the app
+ *  offers to add oh-my-hermes. False until the look-up answers. */
+export function hermesOnly(agents: AgentInfo[] | null | undefined): boolean {
+  return !!agents?.some((a) => a.id === "omh" && a.via === "hermes" && !!a.path);
+}
+
+/** How an agent is named on this computer: "Hermes" for the oh-my-hermes row of a person without `omh`. */
+export function agentLabel(id: AgentId, agents: AgentInfo[] | null | undefined): string {
+  return id === "omh" && hermesOnly(agents) ? HERMES_LABEL : agentDef(id).label;
 }
 
 /** The last folder segment of a macOS/Linux or Windows path: `/a/b/` -> `b`, `C:\\x\\y` -> `y`, `/` -> `/`. */
@@ -165,6 +182,8 @@ export interface ChatLive {
 export interface RowContext {
   cwds: string[];
   home: string | null;
+  /** The agents found on this computer (names the oh-my-hermes row "Hermes" without `omh`). */
+  agents?: AgentInfo[] | null;
 }
 
 /** What one sidebar row shows. Line 1 is the session's name ([pickTitle]: the person's, the agent's, a summary of
@@ -186,7 +205,7 @@ export function rowModel(
   needsYou: boolean;
   ts: number;
 } {
-  const label = agentDef(s.agent).label;
+  const label = agentLabel(s.agent, ctx?.agents);
   // a draft: "New session" over the folder it will start in; it has no name yet and nothing runs, so nothing is live
   if (s.status === "draft")
     return {
