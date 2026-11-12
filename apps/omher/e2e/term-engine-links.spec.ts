@@ -86,6 +86,82 @@ test("hovering a link says which key to hold, and the hint goes when the mouse l
   await expect(tip).toHaveCount(0);
 });
 
+/** The hint's box, the terminal's screen, a line's height and the top of the row the pointer is on, in page pixels. */
+const hintBox = (page: import("@playwright/test").Page, pointerY: number) =>
+  page.evaluate((y) => {
+    const w = window as unknown as { __omherTerms?: Set<{ element?: HTMLElement; rows: number }> };
+    const host = document.querySelector('[data-testid="terminal"] .xterm')!;
+    const term = [...(w.__omherTerms ?? [])].find((t) => t.element === host)!;
+    const screen = host.querySelector(".xterm-screen")!.getBoundingClientRect();
+    const tip = document.querySelector(".term-linktip")!.getBoundingClientRect();
+    const line = screen.height / term.rows;
+    return { top: tip.top, bottom: tip.bottom, screenTop: screen.top, line, rowTop: screen.top + Math.floor((y - screen.top) / line) * line };
+  }, pointerY);
+
+test("the hint stands a line clear of the link: the line above the link stays uncovered, and a link on the first line gets it below", async ({ page }) => {
+  await ready(page);
+  const p = await hover(page, URL_OK);
+  await expect(page.locator(".term-linktip")).toBeVisible();
+  const g = await hintBox(page, p.y);
+  // one whole line of air between the hint and the link's own line: that line is the one above the link
+  expect(g.bottom).toBeLessThanOrEqual(g.rowTop - g.line + 0.5);
+  expect(g.bottom).toBeGreaterThan(g.rowTop - 2 * g.line);
+  expect(g.top).toBeGreaterThanOrEqual(g.screenTop - 0.5);
+
+  // no room above a link on the first line: the hint goes the same distance below it
+  await page.mouse.move(5, 400);
+  await feed(page, "\x1b[2J\x1b[Hhttps://example.com/top is on the first line\r\n");
+  const q = await hover(page, "https://example.com/top");
+  await expect(page.locator(".term-linktip")).toBeVisible();
+  const h = await hintBox(page, q.y);
+  expect(h.rowTop).toBeCloseTo(h.screenTop, 0);
+  expect(h.top).toBeGreaterThanOrEqual(h.rowTop + 2 * h.line - 0.5);
+});
+
+/** A hyperlink the program marks itself: `ESC ] 8 ;; url ST text ESC ] 8 ;; ST`. */
+const osc8 = (url: string, text: string) => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
+
+test("a hyperlink the program marked itself (OSC 8) follows the same rule: Cmd/Ctrl+click only, through the app's opener, with no dialog", async ({ page }) => {
+  // xterm's own handler for these asks with a confirm() dialog and then calls window.open itself
+  const dialogs: string[] = [];
+  page.on("dialog", (d) => {
+    dialogs.push(d.message());
+    void d.dismiss();
+  });
+  await openApp(page);
+  await newTerminal(page);
+  await feed(page, `\r\nread ${osc8("https://example.com/osc8", "the release notes")} first\r\n${osc8("http://user:pw@example.com/secret", "signed in")} or ${osc8("file:///etc/passwd", "a local file")}\r\n`);
+  const key = await modKey(page);
+
+  // the hint names the key, as for an address found in the text
+  const p = await hover(page, "the release notes");
+  await expect(page.locator(".term-linktip")).toBeVisible();
+  // a plain click: nothing opens and nothing asks
+  await page.mouse.click(p.x, p.y);
+  await settle(page);
+  expect(await opened(page)).toEqual([]);
+  expect(dialogs).toEqual([]);
+
+  // with the key: the marked address, once, through openExternal (the page's window.open with the address)
+  await page.keyboard.down(key);
+  await page.mouse.click(p.x, p.y);
+  await page.keyboard.up(key);
+  await expect.poll(() => opened(page)).toEqual(["https://example.com/osc8"]);
+  await settle(page);
+  expect(await opened(page)).toEqual(["https://example.com/osc8"]);
+
+  // an address with a user name and password, or another scheme: nothing, with the key held
+  for (const text of ["signed in", "a local file"]) {
+    const q = await hover(page, text);
+    await page.keyboard.down(key);
+    await page.mouse.click(q.x, q.y);
+    await page.keyboard.up(key);
+  }
+  await settle(page);
+  expect(await opened(page)).toEqual(["https://example.com/osc8"]);
+  expect(dialogs).toEqual([]);
+});
+
 test("the bell and OSC 9 / OSC 777 still reach xterm's parser with the link and find add-ons loaded", async ({ page }) => {
   await ready(page);
   // the handlers sessions.ts registers return false (not consumed), so a handler registered after them sees the

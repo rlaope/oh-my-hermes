@@ -2,7 +2,9 @@
 // browser on Cmd+click (macOS) or Ctrl+click (Windows, Linux). A plain click does nothing here, so it still selects
 // text and a program's own mouse handling is left alone. It opens through the app's one opener (`openExternal`, the
 // Tauri `open_external` command: docs/OMHER-BOUNDARY.md rule 22) and only for an address that passes the same rule:
-// http or https, no user name or password. Nothing is fetched.
+// http or https, no user name or password. Nothing is fetched. Both kinds of link follow it: an address found in
+// the text (the web-links add-on) and a hyperlink the program marked itself (OSC 8, `ESC ] 8 ;; url ST`), which
+// xterm would otherwise open through its own `confirm()` dialog and `window.open`.
 import type { Terminal } from "@xterm/xterm";
 import type { WebLinksAddon } from "@xterm/addon-web-links";
 import { openExternal } from "../../lib/openExternal";
@@ -50,6 +52,18 @@ export function activateLink(event: MouseEvent, text: string, open: (url: string
   return true;
 }
 
+/** Where the hover hint's top edge goes, in page pixels: the hint stands one line clear of the link's line, so
+ *  the line right above the link stays readable (the hint covers the ones above that). A link on the first lines
+ *  has no room above: the hint goes the same distance below it. */
+export function tipTop(pointerY: number, host: HTMLElement, rows: number, tipHeight: number): number {
+  const screen = (host.querySelector(".xterm-screen") ?? host).getBoundingClientRect();
+  const line = screen.height / Math.max(1, rows);
+  if (!(line > 0)) return pointerY - tipHeight - 16;
+  const rowTop = screen.top + Math.floor((pointerY - screen.top) / line) * line;
+  const above = rowTop - line - tipHeight;
+  return above >= screen.top ? above : rowTop + 2 * line;
+}
+
 /** Links for one terminal; returns what undoes it. */
 export function attachLinks(term: Terminal): () => void {
   let gone = false;
@@ -70,10 +84,13 @@ export function attachLinks(term: Terminal): () => void {
     el.setAttribute("role", "tooltip");
     el.textContent = t("term.linkHint", { key: isMacPlatform() ? "⌘" : "Ctrl" });
     el.style.left = `${Math.max(0, e.clientX - r.left + 6)}px`;
-    el.style.top = `${Math.max(0, e.clientY - r.top - 30)}px`;
     host.appendChild(el);
+    el.style.top = `${tipTop(e.clientY, host, term.rows, el.offsetHeight) - r.top}px`;
     tip = el;
   };
+  // a hyperlink the program marked (OSC 8): the same click rule, the same opener, the same hint. xterm passes only
+  // http and https addresses to it (`allowNonHttpProtocols` stays off) and `activateLink` checks the address again.
+  term.options.linkHandler = { activate: (e, uri) => void activateLink(e, uri), hover: (e) => show(e), leave: hide };
   void loadLinks().then(
     (Ctor) => {
       if (gone) return;
@@ -90,6 +107,7 @@ export function attachLinks(term: Terminal): () => void {
     gone = true;
     hide();
     try {
+      term.options.linkHandler = null;
       addon?.dispose();
     } catch {
       /* already gone with the terminal */
