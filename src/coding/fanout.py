@@ -231,13 +231,19 @@ def require_known_identity(
     if not name:
         return
     raw = identity_config.get("identities") if isinstance(identity_config, Mapping) else None
-    known = sorted(raw) if isinstance(raw, Mapping) else []
-    if name in known:
+    profile = raw.get(name) if isinstance(raw, Mapping) else None
+    if isinstance(profile, Mapping) and profile.get("enabled", True) is not False:
         return
     prefix = f"{where} " if where else ""
+    state = "disabled in" if isinstance(profile, Mapping) else "not in"
+    available = sorted(
+        name
+        for name, profile in raw.items()
+        if isinstance(profile, Mapping) and profile.get("enabled", True) is not False
+    ) if isinstance(raw, Mapping) else []
     raise FanoutContractError(
-        f"{prefix}identity {name!r} is not in the validated identities.json; "
-        f"available: {', '.join(known) or '(none)'}"
+        f"{prefix}identity {name!r} is {state} the validated identities.json; "
+        f"available: {', '.join(available) or '(none)'}"
     )
 
 

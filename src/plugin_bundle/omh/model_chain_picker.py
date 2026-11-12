@@ -1,8 +1,8 @@
 """The editing model behind the chain picker, shared by its two surfaces.
 
 Bare `omh model-chains` on a terminal and `/omh-model` in the OMH TUI walk
-the same rows: one per shipped mixture category, each showing the chain
-in effect, whether it is a shipped default or an override, and whether a
+one row per shipped mixture category followed by a separate custom-identity
+group. Custom rows show enabled/disabled; built-in rows show built-in/customized.
 provider this machine holds -- linked to Hermes, or recorded by `omh setup`
 -- serves its head. Left and right step the head
 model through the known aliases, minus and plus step the head's reasoning
@@ -45,6 +45,11 @@ from .hermes_delegation import (
     provider_entitlements_path,
 )
 from .tools.delegate_route_tool import _always_thinking_claude
+from .omh_identities import (
+    compose_identity_picker_changes,
+    read_identity_picker_profiles,
+    write_identity_picker_document,
+)
 
 Chain = tuple[tuple[str, str], ...]
 
@@ -70,14 +75,14 @@ EFFORT_VOCABULARY: tuple[str, ...] = ("none", "minimal", "low", "medium", "high"
 MODEL_EFFORT_OPTIONS_SCHEMA_VERSION = "model_effort_options/v1"
 
 
-class PickerChanges(dict[str, Chain]):
+class PickerChanges(dict[str, Chain | Mapping[str, Any]]):
     """Edited chains plus the categories whose heads took a -/+ press.
 
     Chain equality cannot recover that: a tail deduplicated by a model switch
     or an effort stepped away and back reads the same as no press at all.
     """
 
-    def __init__(self, changes: Mapping[str, Chain], *, effort_edits: frozenset[str] = frozenset()) -> None:
+    def __init__(self, changes: Mapping[str, Chain | Mapping[str, Any]], *, effort_edits: frozenset[str] = frozenset()) -> None:
         super().__init__(changes)
         self.effort_edits = effort_edits
 
@@ -155,7 +160,10 @@ def chain_entries(chain: Chain) -> list[dict[str, str]]:
     return [{"model": model, "reasoning_effort": effort} for model, effort in chain]
 
 
-def known_model_aliases(overrides: Mapping[str, Chain] | None = None) -> tuple[str, ...]:
+def known_model_aliases(
+    overrides: Mapping[str, Chain] | None = None,
+    identity_chains: Mapping[str, Chain] | None = None,
+) -> tuple[str, ...]:
     """Every alias a chain names today, alphabetical: each member of a shipped
     chain plus each member of the user's overrides.
 
@@ -167,6 +175,8 @@ def known_model_aliases(overrides: Mapping[str, Chain] | None = None) -> tuple[s
     """
     aliases = {model for chain in HERMES_MIXTURE_CATEGORY_CHAINS.values() for model, _ in chain}
     for chain in (overrides or {}).values():
+        aliases.update(model for model, _ in chain)
+    for chain in (identity_chains or {}).values():
         aliases.update(model for model, _ in chain)
     return tuple(sorted(aliases))
 
@@ -238,6 +248,9 @@ def picker_rows(
     purposes = purposes or {}
     omh_home = _bound_store(omh_home, hermes_home)
     overrides, status = load_mixture_chain_overrides(omh_home)
+    identity_payload = read_identity_picker_profiles(omh_home)
+    identity_records = identity_payload.get("identities")
+    identity_records = identity_records if isinstance(identity_records, Mapping) else {}
     entitlements, entitlement_status, providers = effective_provider_entitlements(omh_home, hermes_home)
     routes, _ = load_model_provider_routes(omh_home)
     effort_options, effort_status = effort_option_resolver(omh_home, contract_option)
@@ -260,6 +273,8 @@ def picker_rows(
         categories.append(
             {
                 "category": name,
+                "key": name,
+                "type": "builtin",
                 "purpose": purposes.get(name, ""),
                 "chain": [
                     {
@@ -272,17 +287,53 @@ def picker_rows(
                 ],
                 "default_chain": chain_entries(default_chain),
                 "origin": "override" if name in overrides else "default",
+                "enabled": True,
             }
         )
+    identities = []
+    identity_chains: dict[str, Chain] = {}
+    for name in sorted(identity_records):
+        record = identity_records[name]
+        if not isinstance(record, Mapping):
+            continue
+        chain = record.get("chain")
+        if not isinstance(chain, tuple):
+            continue
+        identity_chains[str(name)] = chain
+        identities.append(
+            {
+                "category": str(name),
+                "key": f"identity:{name}",
+                "type": "custom",
+                "purpose": "Custom identity",
+                "chain": [
+                    {
+                        "model": model,
+                        "reasoning_effort": effort,
+                        "label": labels.get(model, model),
+                        "served": served(model),
+                    }
+                    for model, effort in chain
+                ],
+                "default_chain": chain_entries(chain),
+                "origin": "custom",
+                "enabled": bool(record.get("enabled", True)),
+            }
+        )
+    rows = categories + identities
     return {
         "schema_version": PICKER_SCHEMA_VERSION,
         "path": str(mixture_chain_overrides_path(omh_home)),
+        "identities_path": str(identity_payload.get("path", "")),
         "document_status": status,
+        "identity_document_status": identity_payload.get("document_status", "absent"),
         "entitlements_path": str(provider_entitlements_path(omh_home)),
         "entitlements_status": entitlement_status,
         "effort_document_status": effort_status,
         "providers": [dict(row) for row in providers],
         "categories": categories,
+        "identities": identities,
+        "rows": rows,
         "models": [
             {
                 "alias": row["alias"],
@@ -290,7 +341,7 @@ def picker_rows(
                 "served": row["served"],
                 **effort_fields(row["alias"]),
             }
-            for row in model_ring(known_model_aliases(overrides), entitlements, routes)
+            for row in model_ring(known_model_aliases(overrides, identity_chains), entitlements, routes)
         ],
     }
 
@@ -462,23 +513,35 @@ def apply_picker_changes(
     hermes_home: str | Path | None = None,
     contract_option: Callable[[str], Mapping[str, Any] | None],
 ) -> dict[str, Any]:
-    """The save both picker surfaces make, as one call.
+    """Validate both edited documents, then replace each atomically.
 
-    A refusal comes back as `{"error": ...}` rather than a traceback, and the
-    surface shows the sentence; nothing is written then. The picker already
-    keeps a -/+ edit off the model's ladder from reaching this point, so the
-    effort check here only fires for a `model-efforts.json` edited or broken
-    while the picker was open: such a file is ignored whole, and checking a new
-    effort against the wider built-in ladder would undo what it meant to narrow.
-    Untouched rows and model switches are never checked, and still save with a
-    broken file, carrying a `warning` for the surface to print.
+    Only heads with an explicit -/+ edit are rechecked against the live
+    ladder. Model-only and enabled-only changes preserve historical efforts.
+    The two replacements are not a transaction; report partial writes.
     """
     try:
         omh_home = _bound_store(omh_home, hermes_home)
     except runtime_paths.RuntimeBindingError as exc:
         return {"error": str(exc)}
+    categories: dict[str, Chain] = {}
+    identities: dict[str, dict[str, Any]] = {}
+    pending: list[Chain] = []
+    for key, value in changes.items():
+        if key.startswith("identity:"):
+            if not isinstance(value, Mapping) or not isinstance(value.get("chain"), tuple):
+                return {"error": f"identity {key!r} needs a chain and enabled state"}
+            chain = value["chain"]
+            identities[key[len("identity:"):]] = {
+                "chain": chain_entries(chain), "enabled": value.get("enabled", True),
+            }
+        else:
+            if not isinstance(value, tuple):
+                return {"error": f"category {key!r} needs a model chain"}
+            chain = value
+            categories[key] = chain
+        if key in changes.effort_edits and chain:
+            pending.append(chain)
     effort_options, status = effort_option_resolver(omh_home, contract_option)
-    pending = [chain for name, chain in changes.items() if name in changes.effort_edits]
     warning = ""
     if status.startswith("invalid:"):
         reason = status[len("invalid:"):].strip()
@@ -489,21 +552,33 @@ def apply_picker_changes(
         model, effort = chain[0]
         efforts = _selectable_efforts(effort_options(model))
         if effort not in efforts:
-            return {
-                "error": (
-                    f"effort {effort!r} is not selectable for model {model!r} "
-                    f"(its list: {', '.join(efforts) or 'empty'})"
-                )
-            }
+            return {"error": f"effort {effort!r} is not selectable for model {model!r} (its list: {', '.join(efforts) or 'empty'})"}
     try:
-        document = compose_override_document(read_override_document(omh_home), changes)
-        path = write_override_document(omh_home, document)
+        document = compose_override_document(read_override_document(omh_home), categories) if categories else None
+        identity_document = compose_identity_picker_changes(omh_home, identities) if identities else None
     except (ValueError, OSError) as exc:
         return {"error": str(exc)}
+    path = mixture_chain_overrides_path(omh_home)
+    identity_path = None
+    saved_categories: list[str] = []
+    try:
+        if document is not None:
+            path = write_override_document(omh_home, document)
+            saved_categories = sorted(categories)
+        if identity_document is not None:
+            identity_path = write_identity_picker_document(omh_home, identity_document)
+    except (ValueError, OSError) as exc:
+        message = str(exc)
+        if saved_categories:
+            message = f"partially saved: categories {', '.join(saved_categories)} saved to {path}; identities not saved: {exc}"
+        return {"error": message, "path": str(path), "categories_changed": saved_categories, "identities_changed": []}
     result = {
         "schema_version": "model_chain_picker_apply/v1",
         "path": str(path),
+        "identities_path": str(identity_path) if identity_path else "",
         "changed": sorted(changes),
+        "categories_changed": sorted(categories),
+        "identities_changed": sorted(identities),
     }
     if warning:
         result["warning"] = warning

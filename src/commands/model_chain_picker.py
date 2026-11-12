@@ -21,9 +21,8 @@ The frame is painted in the OMH theme's palette so it reads as part of the
 same product as the OMH TUI: the cursor row sits on the skin's selection
 background with `◂ model ▸` and `− effort +` markers showing which keys act
 on which cell, effort bars are toned by rung, a value carries `?` when the
-model's ladder is not known and `!` when the value is off its list, and a
-row's state is a glyph plus a word (`● edited`, `◆ override`, `· default`).
-NO_COLOR or a
+model ladder is unknown and `!` off its list. Built-in rows say `built-in`
+or `customized`; custom identities say `enabled` or `disabled`. NO_COLOR or a
 non-terminal keeps the exact same text with no escape bytes. Every line is
 built from fixed-width cells sized to the terminal, and the free-text lines
 are cut with an ellipsis, so a frame never wraps — a wrapped line would put
@@ -59,6 +58,7 @@ from .theme_picker import (
     KEY_PLUS,
     KEY_QUIT,
     KEY_RIGHT,
+    KEY_TOGGLE,
     KEY_UP,
     RESET,
     SHOW_CURSOR,
@@ -70,12 +70,32 @@ from .theme_picker import (
 CURSOR_MARK = "▍"
 LEFT_MARK = "◂"
 RIGHT_MARK = "▸"
-STATE_GLYPHS = {"edited": "●", "override": "◆", "default": "·"}
+STATE_GLYPHS = {
+    "edited": "●",
+    "customized": "◆",
+    "built-in": "·",
+    "enabled": "●",
+    "disabled": "×",
+}
 # Palette token per state word and per effort rung; the palette itself is
 # the OMH theme's (`effective_theme`), so the picker follows `omh theme` like
 # the TUI does.
-STATE_TONES = {"edited": "ui_warn", "override": "ui_accent", "default": "banner_dim"}
-EFFORT_TONES = {"low": "banner_dim", "medium": "ui_ok", "high": "ui_warn", "xhigh": "ui_accent", "max": "banner_title"}
+STATE_TONES = {
+    "edited": "ui_warn",
+    "customized": "ui_accent",
+    "built-in": "banner_dim",
+    "enabled": "ui_ok",
+    "disabled": "ui_error",
+}
+EFFORT_TONES = {
+    "none": "banner_dim",
+    "minimal": "banner_dim",
+    "low": "banner_dim",
+    "medium": "ui_ok",
+    "high": "ui_warn",
+    "xhigh": "ui_accent",
+    "max": "banner_title",
+}
 _PROVIDERS_LABEL_WIDTH = 11
 KEY_HINTS = (
     ("↑↓", "category"),
@@ -85,6 +105,7 @@ KEY_HINTS = (
     ("⏎", "save"),
     ("esc", "cancel"),
 )
+CUSTOM_KEY_HINT = ("space", "toggle custom")
 
 _MARGIN = 3
 _CATEGORY_WIDTH = 19
@@ -148,11 +169,15 @@ class _Painter:
         return f"{prefix}{text}{RESET}" if prefix else text
 
 
-def row_status(row: Mapping[str, Any], chain: Chain) -> str:
-    """`edited` beats the stored origin: the row shows what Enter would do."""
+def row_status(row: Mapping[str, Any], chain: Chain, enabled: bool | None = None) -> str:
+    """Edited state wins; rows then show type-specific configuration status."""
     if chain != chain_from_entries(row["chain"]):
         return "edited"
-    return str(row["origin"])
+    if row.get("type") == "custom":
+        if enabled is None:
+            enabled = bool(row.get("enabled", True))
+        return "enabled" if enabled else "disabled"
+    return "customized" if row.get("origin") == "override" else "built-in"
 
 
 def _effort_keys_on(payload: Mapping[str, Any]) -> bool:
@@ -186,15 +211,22 @@ def _row_cells(
     models: Mapping[str, Mapping[str, Any]],
     effort_keys: bool,
     with_purpose: bool,
-) -> list[tuple[str, str]]:
+    enabled: bool,
+) -> list[tuple[str, str | None]]:
     """The row as (text, tone) cells; tones are palette tokens for the painter."""
     head_model, head_effort = chain[0]
     label = labels.get(head_model, head_model)
     unserved = not served.get(head_model, True)
-    state = row_status(row, chain)
-    cells = [
+    state = row_status(row, chain, enabled)
+    cells: list[tuple[str, str | None]] = [
         (f" {CURSOR_MARK} " if cursor else " " * _MARGIN, "ui_accent"),
-        (_fit(str(row["category"]), _CATEGORY_WIDTH), "ui_label"),
+        (
+            _fit(
+                f"custom:{row['category']}" if row.get("type") == "custom" else str(row["category"]),
+                _CATEGORY_WIDTH,
+            ),
+            "ui_label",
+        ),
     ]
     if with_purpose:
         cells.append((_fit(str(row["purpose"]), _PURPOSE_WIDTH), "banner_dim"))
@@ -228,26 +260,30 @@ def render_frame(
     width: int,
     palette: Mapping[str, str] | None = None,
     notice: str = "",
+    enabled_overrides: Mapping[str, bool] | None = None,
 ) -> list[str]:
     """One full repaint: title, column header, one row per category, the
     cursor row's detail, then the key hints. Every line fits `width`."""
     paint = _Painter(palette or default_palette(), use_color)
-    rows = payload["categories"]
+    rows = payload.get("rows") or payload["categories"]
     models = {row["alias"]: row for row in payload["models"]}
     effort_keys = _effort_keys_on(payload)
     labels = {row["alias"]: row["label"] for row in payload["models"]}
     served = {row["alias"]: bool(row["served"]) for row in payload["models"]}
+    enabled = {row.get("key", row["category"]): bool(row.get("enabled", True)) for row in rows}
+    enabled.update(enabled_overrides or {})
     with_purpose = width >= _PURPOSE_MIN_WIDTH
     row_width = min(width, _PURPOSE_MIN_WIDTH if with_purpose else _PURPOSE_MIN_WIDTH - _PURPOSE_WIDTH)
     inner = row_width - _MARGIN
 
-    title_left = " ⚚ OMH · Model chains"
+    title_name = "Models & identities" if any(row.get("type") == "custom" for row in rows) else "Model chains"
+    title_left = f" ⚚ OMH · {title_name}"
     title_right = _short_path(str(payload.get("path", "")))
     gap = row_width - len(title_left) - len(title_right)
     if gap < 2:
         title_right = _clip(title_right, max(0, row_width - len(title_left) - 2))
         gap = row_width - len(title_left) - len(title_right)
-    title = paint(" ⚚ OMH", "ui_accent", bold=True) + paint(" · Model chains", "banner_title", bold=True)
+    title = paint(" ⚚ OMH", "ui_accent", bold=True) + paint(f" · {title_name}", "banner_title", bold=True)
     title += " " * gap + paint(title_right, "banner_dim")
     rule = paint("─" * row_width, "input_rule")
 
@@ -302,10 +338,12 @@ def render_frame(
         )
     lines += [rule, header]
     for index, row in enumerate(rows):
+        if row.get("type") == "custom" and (index == 0 or rows[index - 1].get("type") != "custom"):
+            lines.append(" " * _MARGIN + paint("── Custom identities ──", "ui_accent", bold=True))
         is_cursor = index == cursor
         cells = _row_cells(
-            row, chains[row["category"]], cursor=is_cursor, labels=labels, served=served, models=models,
-            effort_keys=effort_keys, with_purpose=with_purpose,
+            row, chains[row.get("key", row["category"])], cursor=is_cursor, labels=labels, served=served, models=models,
+            effort_keys=effort_keys, with_purpose=with_purpose, enabled=enabled[row.get("key", row["category"])],
         )
         if is_cursor:
             lines.append("".join(paint(text, tone, bg="selection_bg", bold=True) for text, tone in cells))
@@ -313,9 +351,17 @@ def render_frame(
             lines.append("".join(paint(text, tone) for text, tone in cells))
 
     current = rows[cursor]
-    chain = chains[current["category"]]
+    chain = chains[current.get("key", current["category"])]
     default_chain = chain_from_entries(current["default_chain"])
-    changed = sum(1 for row in rows if chains[row["category"]] != chain_from_entries(row["chain"]))
+    changed = sum(
+        1
+        for row in rows
+        if chains[row.get("key", row["category"])] != chain_from_entries(row["chain"])
+        or (
+            row.get("type") == "custom"
+            and enabled[row.get("key", row["category"])] != bool(row.get("enabled", True))
+        )
+    )
     lines.append(rule)
     heading = paint(str(current["category"]), "ui_label", bold=True)
     if current.get("purpose"):
@@ -346,8 +392,12 @@ def render_frame(
         else:
             warning = f"! `{head_effort}` is not on this list; −/+ moves it onto the list"
         lines.append(" " * _MARGIN + paint(_clip(warning, width - _MARGIN), "ui_warn"))
-    default_text = "✓ same as shipped" if chain == default_chain else _clip(chain_text(default_chain), inner - 18)
-    lines.append(" " * _MARGIN + paint(_fit("shipped default", 18) + default_text, "banner_dim"))
+    if current.get("type") == "custom":
+        current_state = "enabled" if enabled[current.get("key", current["category"])] else "disabled"
+        lines.append(" " * _MARGIN + paint(_fit("status", 18) + current_state, "ui_ok" if current_state == "enabled" else "ui_error"))
+    else:
+        default_text = "✓ same as shipped" if chain == default_chain else _clip(chain_text(default_chain), inner - 18)
+        lines.append(" " * _MARGIN + paint(_fit("shipped default", 18) + default_text, "banner_dim"))
     if changed:
         lines.append(" " * _MARGIN + paint(f"{changed} unsaved change{'s' if changed != 1 else ''} · ⏎ writes the file", "ui_warn"))
     else:
@@ -358,7 +408,8 @@ def render_frame(
     if notice:
         lines.append(" " * _MARGIN + paint(_clip(notice, inner), "ui_error", bold=True))
     lines.append(rule)
-    hints = "   ".join(paint(keys, "ui_accent", bold=True) + " " + paint(what, "banner_dim") for keys, what in KEY_HINTS)
+    hint_items = KEY_HINTS + ((CUSTOM_KEY_HINT,) if any(row.get("type") == "custom" for row in rows) else ())
+    hints = "   ".join(paint(keys, "ui_accent", bold=True) + " " + paint(what, "banner_dim") for keys, what in hint_items)
     lines.append(" " * _MARGIN + hints)
     # Below the narrowest layout the plain frame is cut to the terminal; a
     # painted row carries escape bytes no column count applies to, and
@@ -382,7 +433,7 @@ def _refused_edit(
     can carry it off. An untouched value and a model-only switch never count.
     """
     for index, row in enumerate(rows):
-        name = row["category"]
+        name = row.get("key", row["category"])
         if name in effort_edits and chains[name] != original[name]:
             model, effort = chains[name][0]
             if effort not in ladders[model]:
@@ -408,17 +459,21 @@ def run_picker(
     row, so the session's other edits are not lost to a refused save. Writes
     nothing but frames: applying the result is the caller's job.
     """
-    rows = payload["categories"]
+    rows = payload.get("rows") or payload["categories"]
     if not rows:
         return None
     aliases = tuple(row["alias"] for row in payload["models"])
     ladders = {row["alias"]: tuple(row["efforts"]) for row in payload["models"]}
     effort_keys = _effort_keys_on(payload)
     effort_edits: set[str] = set()
-    original = {row["category"]: chain_from_entries(row["chain"]) for row in rows}
+    original = {row.get("key", row["category"]): chain_from_entries(row["chain"]) for row in rows}
     chains = dict(original)
+    original_enabled = {row.get("key", row["category"]): bool(row.get("enabled", True)) for row in rows}
+    enabled = dict(original_enabled)
     cursor = 0
-    frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette)
+    frame = render_frame(
+        payload, chains, cursor, use_color=use_color, width=width, palette=palette, enabled_overrides=enabled
+    )
     write("\n".join(frame) + "\n")
     # `max_keys` bounds a pathological reader (a stream returning nothing but
     # unknown bytes) instead of spinning forever inside a terminal in raw mode.
@@ -427,12 +482,20 @@ def run_picker(
         if key == KEY_QUIT:
             return None
         notice = ""
-        name = rows[cursor]["category"]
+        name = rows[cursor].get("key", rows[cursor]["category"])
         if key == KEY_ENTER:
             refused = _refused_edit(rows, chains, original, effort_edits, ladders)
             if refused is None:
                 return PickerChanges(
-                    {name: chain for name, chain in chains.items() if chain != original[name]},
+                    {
+                        row.get("key", row["category"]): (
+                            {"chain": chains[row["key"]], "enabled": enabled[row["key"]]}
+                            if row.get("type") == "custom" else chains[row["category"]]
+                        )
+                        for row in rows
+                        if chains[row.get("key", row["category"])] != original[row.get("key", row["category"])]
+                        or enabled[row.get("key", row["category"])] != original_enabled[row.get("key", row["category"])]
+                    },
                     effort_edits=frozenset(effort_edits),
                 )
             cursor, notice = refused
@@ -451,13 +514,15 @@ def run_picker(
             if stepped != chains[name]:
                 effort_edits.add(name)
             chains[name] = stepped
-        elif key == KEY_DEFAULT:
+        elif key == KEY_TOGGLE and rows[cursor].get("type") == "custom":
+            enabled[name] = not enabled[name]
+        elif key == KEY_DEFAULT and rows[cursor].get("type") != "custom":
             chains[name] = chain_from_entries(rows[cursor]["default_chain"])
             effort_edits.discard(name)
         else:
             continue
         previous_rows = len(frame)
-        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette, notice=notice)
+        frame = render_frame(payload, chains, cursor, use_color=use_color, width=width, palette=palette, notice=notice, enabled_overrides=enabled)
         # The frame's height follows the head's effort and the notice, so a
         # shorter one must clear what the taller one left below it.
         write(cursor_up(previous_rows) + "".join(f"{CLEAR_LINE}{line}\n" for line in frame) + f"{ESC}[J")
