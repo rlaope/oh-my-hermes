@@ -20,8 +20,9 @@ path at all, and that is where a silent data-loss defect lived until #1467.
 
 from __future__ import annotations
 
+import functools
 import os
-from pathlib import Path
+import subprocess
 import unittest
 
 try:  # probe only; mirrors the product's degraded-import pattern
@@ -66,10 +67,60 @@ requires_posix_permissions = unittest.skipUnless(
     os.name == "posix" and hasattr(os, "geteuid") and os.geteuid() != 0,
     "POSIX permission bits do not restrict root and do not exist off POSIX",
 )
-requires_hermes_host = unittest.skipUnless(
-    Path(os.environ.get("HERMES_PYTHON") or Path.home() / ".hermes/hermes-agent/venv/bin/python").expanduser().is_file(),
-    "real plugin admission requires an installed Hermes host",
-)
+
+
+@functools.cache
+def _imports_hermes_cli(python: str) -> bool:
+    """Whether this interpreter, on its own import path, can import Hermes.
+
+    Asked once per interpreter per process. `PYTHONPATH` is left out because
+    the loader observation runs its child without the runner's, so a tree
+    that is only importable through it is not a host those tests can use.
+    A probe that does not answer in time has not shown Hermes absent: the
+    test then runs and its own bounded call reports what happened.
+    """
+    env = {name: value for name, value in os.environ.items() if name != "PYTHONPATH"}
+    try:
+        return subprocess.run([python, "-c", "import hermes_cli"], capture_output=True, env=env, timeout=30).returncode == 0
+    except subprocess.TimeoutExpired:
+        return True
+    except OSError:
+        return False
+
+
+def requires_hermes_host(test):
+    """Skip a test method unless the interpreter it would run Hermes on has Hermes.
+
+    The interpreter is the product's own choice (`_find_hermes_python`: a
+    `HERMES_PYTHON` override first, then discovery), read when the test runs
+    rather than when this module is imported. A file at that path was the
+    whole question before, and an override can name a file that cannot
+    import `hermes_cli` (Hermes' TUI launcher exports its own interpreter,
+    which needs the launcher's import path too): the tests then ran and
+    failed on the runner's environment instead of skipping (#2794).
+
+    This answers for the interpreter only. With no override the loader
+    observation reaches Hermes through the `hermes` launcher on PATH, and
+    a launcher it cannot trace to a code tree still fails these tests.
+    """
+
+    @functools.wraps(test)
+    def gated(*args, **kwargs):
+        from _local_package import load_local_package
+
+        load_local_package()
+        from omh.install.plugin_loader_observation import _find_hermes_python
+
+        python = _find_hermes_python()
+        if python is None:
+            raise unittest.SkipTest("real plugin admission requires an installed Hermes host")
+        if not _imports_hermes_cli(str(python)):
+            raise unittest.SkipTest(f"real plugin admission requires a Hermes host; {python} cannot import hermes_cli")
+        return test(*args, **kwargs)
+
+    return gated
+
+
 requires_symlinks = unittest.skipUnless(
     os.name == "posix",
     "symlink creation and resolution differ off POSIX",
