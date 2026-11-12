@@ -1364,8 +1364,9 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
-  /** The bot's skills for the composer's `$` picker, read once per bot; [] when the bridge cannot list them. */
-  skills(bot: string): Promise<Skill[]>;
+  /** The bot's skills for the composer's `$` picker, read once per bot (`fresh`: read again, e.g. right after an
+   *  install); [] when the bridge cannot list them. */
+  skills(bot: string, fresh?: boolean): Promise<Skill[]>;
   /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
   linkPlaces(bot: string): Promise<LinkPlaces>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
@@ -1830,7 +1831,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
-    skills(bot) {
+    skills(bot, fresh) {
+      if (fresh) skillLists.delete(bot);
       let list = skillLists.get(bot);
       if (!list) {
         list = bridge

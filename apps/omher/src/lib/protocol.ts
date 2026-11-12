@@ -145,6 +145,8 @@ export interface PluginRow {
   catalog_name: string | null;
   tools: number;
   hooks: number;
+  /** Tools the plugin registered in the running gateway (an older bridge leaves it out). */
+  live_tools?: number;
   update_available: boolean;
   /** Secret settings the plugin needs that are not set yet (env names); it stays off until they are. */
   needs_env: string[];
