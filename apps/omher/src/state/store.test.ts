@@ -189,16 +189,73 @@ describe("reducer: a full turn", () => {
     expect(s.chats.kami.messages.at(-1)).toMatchObject({ role: "assistant", text: "partial answer" });
   });
 
-  it("closes open steps when a turn is interrupted", () => {
+  it("a step still running when the turn is stopped reads as stopped, not finished (a bot's turn too)", () => {
+    // audit O11: the bot chat shares this reducer; a step Stop cut short is not ok, and is marked stopped
     const s = run(initialState(), [
       { event: "turn.start", bot: "kami" },
       { event: "tool.start", bot: "kami", tool_id: "a", name: "terminal", detail: "sleep 9" },
+      { event: "tool.start", bot: "kami", tool_id: "b", name: "read_file", detail: "a.txt" },
+      { event: "tool.end", bot: "kami", tool_id: "b", name: "", ok: true, ms: 10 },
       { event: "turn.end", bot: "kami", outcome: "interrupted" },
     ]);
     const t = s.chats.kami.lastTurn!;
     expect(t.outcome).toBe("interrupted");
+    expect(t.steps[0]).toMatchObject({ ok: false, stopped: true });
     expect(t.steps[0].endedAt).toBeDefined();
-    expect(t.steps[0].ok).toBeUndefined();
+    // a step that had ended before Stop keeps its own end
+    expect(t.steps[1]).toMatchObject({ ok: true });
+    expect(t.steps[1].stopped).toBeUndefined();
+  });
+
+  it("a stopped turn's time is from its start to the Stop, on the recorded stream's clock (codex-B: 6.1 s)", () => {
+    // audit O11 follow-up: "Stopped after 0s" beside a step that ran on. codex-B.events.jsonl: turn.start at 8.684 s,
+    // tool.start (sleep 40) at 11.712 s, turn.end interrupted at 14.784 s
+    let s = run(initialState(), [{ event: "turn.start", bot: "agent:s1" }], 8_684);
+    s = run(s, [{ event: "tool.start", bot: "agent:s1", tool_id: "a", name: "terminal", detail: "sleep 40; echo late" }], 11_712);
+    s = run(s, [{ event: "turn.end", bot: "agent:s1", outcome: "interrupted" }], 14_784);
+    const t = s.chats["agent:s1"].lastTurn!;
+    expect(t.endedAt! - t.startedAt).toBe(6_100);
+    expect(t.steps[0].endedAt! - t.steps[0].startedAt).toBe(3_072);
+  });
+
+  it("a turn that ends on its own leaves no step marked stopped", () => {
+    for (const outcome of ["done", "ended", "error"] as const) {
+      const s = run(initialState(), [
+        { event: "turn.start", bot: "kami" },
+        { event: "tool.start", bot: "kami", tool_id: "a", name: "terminal", detail: "sleep 9" },
+        { event: "turn.end", bot: "kami", outcome },
+      ]);
+      expect(s.chats.kami.lastTurn!.steps[0].stopped, outcome).toBeUndefined();
+      expect(s.chats.kami.lastTurn!.steps[0].ok, outcome).toBeUndefined();
+    }
+  });
+
+  it("the end of a stopped step reported after its turn goes to that step; any other late end is dropped", () => {
+    const s0 = run(initialState(), [
+      { event: "turn.start", bot: "kami" },
+      { event: "tool.start", bot: "kami", tool_id: "a", name: "terminal", detail: "sleep 40; echo late" },
+      { event: "turn.end", bot: "kami", outcome: "interrupted" },
+      { event: "turn.start", bot: "kami" },
+      { event: "turn.end", bot: "kami", outcome: "done" },
+    ]);
+    const s = run(s0, [{ event: "tool.end", bot: "kami", tool_id: "a", name: "", ok: true, ms: 39_887 }], T0 + 60_000);
+    const acts = s.chats.kami.items.filter((i) => i.kind === "activity");
+    expect(acts).toHaveLength(2);
+    const step = acts[0].kind === "activity" ? acts[0].turn.steps[0] : null;
+    expect(step).toMatchObject({ ok: false, stopped: true, late: { ok: true, ms: 39_887, endedAt: T0 + 60_000 } });
+    // nothing else moved: no new turn, the later turn untouched
+    expect(s.chats.kami.turn).toBeNull();
+    expect(acts[1].kind === "activity" && acts[1].turn.steps).toEqual([]);
+    // an unknown step's end outside a turn changes nothing
+    expect(run(s, [{ event: "tool.end", bot: "kami", tool_id: "zz", name: "", ok: true, ms: 1 }], T0 + 61_000).chats.kami).toBe(s.chats.kami);
+  });
+
+  it("the agent's own retry shows on the live line as which try it is", () => {
+    const s = run(initialState(), [
+      { event: "turn.start", bot: "agent:s1" },
+      { event: "status", bot: "agent:s1", text: "Retrying 1 of 5", retry: { attempt: 1, max: 5 } },
+    ]);
+    expect(s.chats["agent:s1"].turn!.status).toBe("Retrying 1 of 5");
   });
 
   it("a second turn gets its own activity row", () => {

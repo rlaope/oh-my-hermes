@@ -29,7 +29,7 @@ describe("real agent streams through the reducer", () => {
   const all = replays as Replay[];
 
   it("covers every agent", () => {
-    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "omo", "omp", "pi", "pi-noauth"]));
+    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "codex-late", "omo", "omp", "pi", "pi-noauth"]));
     expect(all.length).toBeGreaterThanOrEqual(41);
   });
 
@@ -96,6 +96,36 @@ describe("real agent streams through the reducer", () => {
     const subs = fans(s).flatMap((x) => x.subs);
     expect(subs.length).toBe(2);
     expect(subs.every((x) => x.agent === "omo" && x.state === "done" && !!x.summary)).toBe(true);
+  });
+
+  it("OmO's own retry of one message is one turn that fails once with OmO's reason, never the raw reply", () => {
+    // audit O5, omo-12-retry.jsonl (OmO 5.1.56): agent_end with failure, auto_retry_start, a second run, auto_retry_end
+    const r = all.find((x) => x.name === "omo-12-retry.jsonl")!;
+    const s = replay(r);
+    const acts = s.chats["agent:s1"].items.filter((i) => i.kind === "activity");
+    expect(acts).toHaveLength(1);
+    const t = acts[0].kind === "activity" ? acts[0].turn : null;
+    expect(t?.outcome).toBe("error");
+    expect(t?.error).toMatch(/^Anthropic rejected this conversation's request format/);
+    expect(t?.error).not.toMatch(/\{"type"/);
+    // one error notification's worth: one failed turn.end in the stream
+    expect(r.events.filter((e) => e.event === "turn.end")).toEqual([expect.objectContaining({ outcome: "error" })]);
+    // while OmO retried, the line said which try
+    const upto = r.events.findIndex((e) => e.event === "status" && !!e.retry);
+    expect(replay({ ...r, events: r.events.slice(0, upto + 1) }).chats["agent:s1"].turn!.status).toBe("Retrying 1 of 5");
+  });
+
+  it("Codex: a command stopped mid-turn reads as stopped, then as finished late when Codex says so", () => {
+    // audit O11, codex-12-late-step.jsonl (Codex 0.167): Stop during `sleep 40; echo late`, the next turn, then
+    // the command's item/completed 37 s after Stop
+    const r = all.find((x) => x.name === "codex-12-late-step.jsonl")!;
+    const late = r.events.findIndex((e) => e.event === "tool.end" && e.tool_id === "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c");
+    const before = replay({ ...r, events: r.events.slice(0, late) });
+    const stopped = (st: AppState) =>
+      st.chats["agent:s1"].items.flatMap((i) => (i.kind === "activity" ? i.turn.steps : [])).find((x) => x.detail === "sleep 40; echo late")!;
+    expect(stopped(before)).toMatchObject({ ok: false, stopped: true });
+    expect(stopped(before).late).toBeUndefined();
+    expect(stopped(replay(r))).toMatchObject({ ok: false, stopped: true, late: { ok: true, ms: 39_887 } });
   });
 
   it("OmO's statuses after its answer start nothing (the owner's 안녕 turn)", () => {

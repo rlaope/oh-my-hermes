@@ -445,6 +445,26 @@ function cliSeed() {
 // reached the chat, after the time the chat's row says (3.7s, by Claude Code's own count, as the transcript's
 // stamps do); the second starts when its call reached the chat and takes 9.4s. With `hold` it is still out, as in
 // "/subagents hold". The same moments as host.ts's MockChat "/subagents" (0.6s and 0.17s after the send).
+/** The record OmO 5.1.56 wrote for the MockHost OmO session's two subagents, as CliRuns.omo reads it from
+ *  `senpi-task/tasks/st_*.json` (one run per session, lane `explore`, executor omo): the same run the chat shows for
+ *  "/subagents", each subagent ending when its result reached the chat (0.6 s and 1.4 s after the send) after the
+ *  time its row says (3.7 s and 9.4 s, OmO's `duration_ms`). The run is first start to last end, as the card's. */
+function omoSessionRun({ ago = 30 } = {}) {
+  const sent = now() - ago;
+  const sid = "01a1ce7b-1c30-7e45-8913-aa00b3b32296";
+  const node = (id, label, summary, ended, secs) => ({
+    id, label, deps: [], layer: 0, state: "done", model: "claude-haiku-5-5", provider: "anthropic", executor: "omo", lane: "explore",
+    started: ended - secs, ended, summary, attempts: [{ n: 1, outcome: "completed", started: ended - secs, ended }],
+  });
+  const nodes = [node("st_01a1ce7b", "Read a.txt first line", "alpha line", sent + 0.6, 3.7), node("st_01a1ce7c", "Count lines of b.txt", "3", sent + 1.4, 9.4)];
+  const started = Math.min(...nodes.map((n) => n.started));
+  const ended = Math.max(...nodes.map((n) => n.ended));
+  return {
+    id: `omo:${sid}`, kind: "session", agent: "omo", owner: { type: "session", id: sid }, title: "OmO session",
+    cwd: "/Users/you/code/omher", state: "done", started, updated: ended, ended, nodes,
+  };
+}
+
 function sessionRun({ ago = 30, hold = false } = {}) {
   const sent = now() - ago;
   const node = (id, label, summary, started, ended) => ({
@@ -1331,7 +1351,8 @@ const OPS = {
   },
   // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
   "mock.sessionRun": (p) => {
-    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), sessionRun({ ago: typeof p.ago === "number" ? p.ago : undefined, hold: p.hold === true })];
+    const ago = typeof p.ago === "number" ? p.ago : undefined;
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), p.agent === "omo" ? omoSessionRun({ ago }) : sessionRun({ ago, hold: p.hold === true })];
     return { ok: true };
   },
   "mock.reset": () => {

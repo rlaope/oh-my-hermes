@@ -493,7 +493,8 @@ export type AskSubagent = { id: string; name: string };
 
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
-  | (EventBase & { event: "status"; text: string })
+  /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try. */
+  | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number } })
   /** The agent is thinking; `text` is what it thought, when the agent sends it (SESSIONS agents). */
   | (EventBase & { event: "thinking"; text?: string })
   | (EventBase & {
