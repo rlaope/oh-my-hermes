@@ -76,7 +76,8 @@ export interface SessionHost {
 
 export class TauriHost implements SessionHost {
   readonly kind = "tauri" as const;
-  private async core() {
+  /** The shell's command bridge (a test stands in for it by overriding this). */
+  protected async core(): Promise<Pick<typeof import("@tauri-apps/api/core"), "invoke" | "Channel">> {
     return import("@tauri-apps/api/core");
   }
   async reset() {
@@ -145,19 +146,27 @@ export class TauriHost implements SessionHost {
   }
   /** Drawn bytes not yet sent to the shell, by session. */
   private drawn = new Map<number, number>();
+  /** A send of `drawn` is waiting for the end of this task. */
+  private sending = false;
   /** One `session_ack` per session for everything drawn in the same task: xterm runs the callbacks of a whole
    *  slice of its write queue (up to 12 ms of messages) in one task, so a flood costs one call per slice instead
-   *  of one per message. */
+   *  of one per message. A call that fails is not lost credit: its bytes go back into `drawn` and ride on the next
+   *  acknowledgement (any session's), so the shell's count of what the page has drawn stays whole. */
   ack(id: number, bytes: number) {
-    const first = this.drawn.size === 0;
     this.drawn.set(id, (this.drawn.get(id) ?? 0) + bytes);
-    if (!first) return;
+    if (this.sending) return;
+    this.sending = true;
     queueMicrotask(() => {
+      this.sending = false;
       const all = [...this.drawn];
       this.drawn.clear();
-      void this.core()
-        .then(({ invoke }) => Promise.all(all.map(([sid, n]) => invoke("session_ack", { id: sid, bytes: n }))))
-        .catch(() => undefined);
+      const keep = (sid: number, n: number) => void this.drawn.set(sid, (this.drawn.get(sid) ?? 0) + n);
+      void this.core().then(
+        ({ invoke }) => {
+          for (const [sid, n] of all) void invoke("session_ack", { id: sid, bytes: n }).catch(() => keep(sid, n));
+        },
+        () => all.forEach(([sid, n]) => keep(sid, n)),
+      );
     });
   }
   async resize(id: number, cols: number, rows: number) {
@@ -213,6 +222,10 @@ export interface MockFlow {
 }
 
 const utf8 = new TextEncoder();
+
+/** One message of a mock program that prints fast: 64 KiB of 64-byte lines, the size the shell hands output on in
+ *  (`COALESCE_BYTES` in src-tauri/src/sessions.rs). */
+const FLOOD_MESSAGE = `${"build output ".repeat(5).slice(0, 62)}\r\n`.repeat(1024);
 
 type MockGlobals = {
   __omherPickFolder?: string | null;
@@ -298,9 +311,10 @@ export class MockHost implements SessionHost {
           setTimeout(() => s.exit(0), 10);
           return;
         }
-        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]`: the program rings (BEL, or an OSC 9 message),
-        // reports progress (OSC 9;4, not a ring) or ends later, as an agent does while the person looks elsewhere
-        const later = /^after (\d+) (bell|osc9|progress|exit)(?: (\d+))?$/.exec(line);
+        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]` / `after <ms> flood [MiB]`: the program rings
+        // (BEL, or an OSC 9 message), reports progress (OSC 9;4, not a ring), ends, or prints a lot at once (1 MiB
+        // unless told, as 64 KiB messages) later, as an agent does while the person looks elsewhere
+        const later = /^after (\d+) (bell|osc9|progress|exit|flood)(?: (\d+))?$/.exec(line);
         if (later) {
           s.out(`\r\n${PROMPT}`);
           setTimeout(() => {
@@ -308,6 +322,10 @@ export class MockHost implements SessionHost {
             if (later[2] === "bell") return s.out("\x07");
             if (later[2] === "osc9") return s.out("\x1b]9;Needs your approval\x07");
             if (later[2] === "progress") return s.out("\x1b]9;4;1;50\x07");
+            if (later[2] === "flood") {
+              for (let i = 0; i < Number(later[3] ?? 1) * 16; i++) s.out(FLOOD_MESSAGE);
+              return;
+            }
             this.live.delete(id);
             s.exit(Number(later[3] ?? 0));
           }, Number(later[1]));
