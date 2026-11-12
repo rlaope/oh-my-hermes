@@ -3639,7 +3639,11 @@ class RestartArgv(unittest.TestCase):
             ("cron job zz9 in external worker pid 77, running 1m00s", ("cron", None, 60, None)),
             ("background delegation d9 pid 5, running 12s [fix the flaky test]", ("task", None, 12, None)),
             ("tui run 20261112_1, running 2m", ("run", "tui", 120, None)),
+            ("webhook run agent:kami:hook:x pid 3, running 5s", ("run", "webhook", 5, "kami")),
             ("something new from Hermes, running 7s", ("work", None, 7, None)),
+            # a shape Hermes adds later still says whose it is when it names the session; never from a word inside one
+            ("drain wait for agent:main:telegram:dm:9, running 2m", ("work", None, 120, "default")),
+            ("note xagent:kami:y", ("work", None, None, None)),
             ("??", ("work", None, None, None)),
         ):
             u = ob.work_unit(line, {"a1b2": "friren"})

@@ -12,16 +12,37 @@ export function runFor(secs: number): string {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-/** One short line per live unit: whose it is, what it is in plain words, its name when Hermes gave one, how long. */
-export function workLine(u: WorkUnit, who?: string): string {
+/** One live unit in two parts: whose it is and what it is in plain words, with its name when Hermes gave one (this
+ *  part may be cut), and how long it has run (never cut: it is what a person weighs before Restart anyway). A line
+ *  Hermes sent that the bridge could not read is "something else", still with whose it is when Hermes named it. */
+export function workParts(u: WorkUnit, who?: string): { what: string; time: string | null } {
+  const time = u.secs == null ? null : runFor(u.secs);
+  if (u.kind === "work") return { what: who ? t("rs.w.otherOf", { bot: who }) : t("rs.w.other"), time };
   const what =
     u.kind === "chat" ? t("rs.w.chat")
     : u.kind === "cron" ? (u.name ? t("rs.w.cronNamed", { name: u.name }) : t("rs.w.cron"))
     : u.kind === "task" ? t("rs.w.task")
-    : u.kind === "run" ? t("rs.w.run", { name: u.name ?? "" })
-    : t("rs.w.work");
-  const line = u.secs == null ? what : `${what}, ${runFor(u.secs)}`;
-  return who ? t("rs.w.of", { bot: who, what: line }) : line;
+    : t("rs.w.run", { name: u.name ?? "" });
+  return { what: who ? t("rs.w.of", { bot: who, what }) : what, time };
+}
+
+/** The same unit as one line, for its tooltip. */
+export function workLine(u: WorkUnit, who?: string): string {
+  const p = workParts(u, who);
+  return p.time ? `${p.what}, ${p.time}` : p.what;
+}
+
+/** What a refused restart lists: one row per unit; the units Hermes said nothing readable about (no owner, no time)
+ *  share one honest row at the end, "1 more thing is running", or "Hermes did not say what." when they are all. */
+export function workRows(work: WorkUnit[], who: (u: WorkUnit) => string | undefined): { what: string; time: string | null; title: string }[] {
+  const blank = (u: WorkUnit) => u.kind === "work" && u.secs == null && !who(u);
+  const rows = work.filter((u) => !blank(u)).map((u) => ({ ...workParts(u, who(u)), title: workLine(u, who(u)) }));
+  const n = work.length - rows.length;
+  if (n) {
+    const what = !rows.length ? t("rs.w.unsaid") : n === 1 ? t("rs.w.more1") : t("rs.w.more", { n });
+    rows.push({ what, time: null, title: what });
+  }
+  return rows;
 }
 
 /** Hermes' refusal (what is running on that gateway) and a failure, for `bot`; nothing while idle or restarting. */
@@ -40,16 +61,14 @@ export function RestartLine({ bot, testId = "restart-line", pop = false }: { bot
     const who = (u: WorkUnit) => (shared && u.bot ? (st.bots.find((b) => b.name === u.bot)?.display_name ?? u.bot) : undefined);
     return (
       <div className={cls} role="alertdialog" aria-label={t("rs.busyTitle", { bot: bot.display_name })} data-testid={testId} data-step="refused">
-        <p className="rs-t">{t("rs.busy")}</p>
+        <p className="rs-t">{st.work.length > 1 ? t("rs.busy", { n: st.work.length }) : t("rs.busy1")}</p>
         <ul className="rs-work" data-testid="restart-work">
-          {st.work.map((u, i) => {
-            const line = workLine(u, who(u));
-            return (
-              <li key={i} title={line}>
-                {line}
-              </li>
-            );
-          })}
+          {workRows(st.work, who).map((w, i) => (
+            <li key={i} title={w.title}>
+              <span className="rs-what">{w.what}</span>
+              {w.time && <span className="rs-for">{w.time}</span>}
+            </li>
+          ))}
         </ul>
         <div className="rs-acts">
           {quiet(t("rs.cancel"), "restart-cancel")}

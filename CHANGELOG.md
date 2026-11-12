@@ -364,7 +364,8 @@ All notable changes will be documented here.
   gateway (`-p default`, always named, never Hermes' sticky active profile) for a bot it serves, or the bot's own
   gateway when it runs standalone. Every bot on that gateway reads "Restarting" together, and a bot that shares
   its gateway names the others under Restart before the press. A busy gateway is never cut silently: Hermes
-  refuses while anything runs, omher shows each thing in plain words with the bot it belongs to, Cancel first,
+  refuses while anything runs, omher shows each thing in plain words with the bot it belongs to and how long it
+  has run (the time is never cut), Cancel first,
   and only "Restart anyway" passes `--yes`. After a plugin install the sheet says when it is ready (the bot's
   next conversation), asks the gateway to reload its plugins when it did not (Hermes' `reload-plugins`, which
   interrupts nothing), and offers the same Restart only when Hermes says one is still needed, naming every bot

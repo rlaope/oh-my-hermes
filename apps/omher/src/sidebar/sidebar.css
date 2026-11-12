@@ -1157,10 +1157,21 @@ button.upd:hover {
 }
 /* one line per unit, never broken mid-word: an ellipsis when it does not fit (the full line is its title) */
 .rs-work li {
+  display: flex;
+  gap: 8px;
   margin-top: 2px;
   white-space: nowrap;
+}
+.rs-what {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.rs-for {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 .rs-acts {
   display: flex;

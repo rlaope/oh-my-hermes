@@ -155,31 +155,57 @@ for (const theme of ["dark", "light"] as const) {
       { kind: "chat", name: null, secs: 185, bot: "kami" },
       { kind: "cron", name: "PR digest", secs: 40, bot: "friren" },
       { kind: "cron", name: "Nightly digest of every open pull request in every repository", secs: 3720, bot: "default" },
+      // a line Hermes sent that the bridge could not read, but whose session key named the profile
+      { kind: "work", name: null, secs: 120, bot: "default" },
+      // and one it said nothing readable about
       { kind: "work", name: null, secs: null, bot: null },
     ] });
     await (await menuOf(page, "kami")).getByTestId("row-restart").click();
     const line = page.getByTestId("restart-line-kami");
     await expect(line).toHaveAttribute("data-step", "refused");
+    // the sentence agrees with the count
+    await expect(line.locator(".rs-t")).toHaveText("5 things are running. Restarting now stops them all:");
     const items = line.getByTestId("restart-work").locator("li");
-    await expect(items).toHaveText([
-      "Kami: A chat turn, 3m",
-      "Friren: Scheduled job PR digest, 40s",
-      "Hermes: Scheduled job Nightly digest of every open pull request in every repository, 1h 2m",
-      "Something it is doing",
+    await expect(items.locator(".rs-what")).toHaveText([
+      "Kami: A chat turn",
+      "Friren: Scheduled job PR digest",
+      "Hermes: Scheduled job Nightly digest of every open pull request in every repository",
+      "Hermes: something else",
+      "1 more thing is running",
     ]);
+    // the time, the one thing a person weighs, is its own part: right-aligned, never cut
+    await expect(items.nth(0).locator(".rs-for")).toHaveText("3m");
+    await expect(items.nth(1).locator(".rs-for")).toHaveText("40s");
+    await expect(items.nth(2).locator(".rs-for")).toHaveText("1h 2m");
+    await expect(items.nth(3).locator(".rs-for")).toHaveText("2m");
+    await expect(items.nth(4).locator(".rs-for")).toHaveCount(0);
+    await expect(line).not.toContainText("Something it is doing");
     // no run id, pid, job id or bracket in what a person reads
     await expect(line).not.toContainText(/pid|\[|\]|20261112|a1b2|in-process/);
-    // each thing on ONE line, an ellipsis when it does not fit, never broken mid-word
+    // each thing on ONE line; only the description takes the ellipsis, never the time, never broken mid-word
     const rows = await items.evaluateAll((els) => els.map((el) => {
-      const s = getComputedStyle(el);
-      return { h: el.getBoundingClientRect().height, lh: parseFloat(s.lineHeight), ws: s.whiteSpace, to: s.textOverflow, over: el.scrollWidth > el.clientWidth };
+      const li = el.getBoundingClientRect();
+      const what = el.querySelector<HTMLElement>(".rs-what")!;
+      const time = el.querySelector<HTMLElement>(".rs-for");
+      const w = getComputedStyle(what);
+      const tr = time?.getBoundingClientRect();
+      return {
+        h: li.height, lh: parseFloat(getComputedStyle(el).lineHeight), ws: getComputedStyle(el).whiteSpace, to: w.textOverflow,
+        over: what.scrollWidth > what.clientWidth,
+        time: time ? { cut: time.scrollWidth > time.clientWidth, right: Math.abs(tr!.right - li.right), afterWhat: tr!.left >= what.getBoundingClientRect().right } : null,
+      };
     }));
     for (const r of rows) {
       expect(r.h).toBeLessThanOrEqual(r.lh + 1);
       expect(r.ws).toBe("nowrap");
       expect(r.to).toBe("ellipsis");
+      if (r.time) {
+        expect(r.time.cut).toBe(false);
+        expect(r.time.right).toBeLessThanOrEqual(0.5);
+        expect(r.time.afterWhat).toBe(true);
+      }
     }
-    expect(rows[2].over).toBe(true); // the long name is cut with the ellipsis, not wrapped
+    expect(rows[2].over).toBe(true); // the long name is cut with the ellipsis, not wrapped; its time stays whole
     await expect(items.nth(2)).toHaveAttribute("title", "Hermes: Scheduled job Nightly digest of every open pull request in every repository, 1h 2m");
     // nothing went down while Hermes refused
     await expect(page.getByTestId("bot-friren").getByTestId("bot-time")).not.toHaveText("Restarting");
@@ -298,6 +324,16 @@ for (const theme of ["dark", "light"] as const) {
     // the title follows the state
     await expect(sheet.getByTestId("sheet-title")).toHaveText("babysit is installed");
     await expect(sheet).not.toContainText("Install babysit?");
+    // the body starts with what is new, not the title's words again
+    await expect(sheet.getByTestId("sheet-done")).not.toContainText("installed");
+    // the press sits on its own line under its sentence at the sheet's own gap, not tight against it
+    const gap = await press.evaluate((el) => {
+      const p = el.parentElement!;
+      const line = parseFloat(getComputedStyle(p).lineHeight);
+      return { gap: el.getBoundingClientRect().top - p.getBoundingClientRect().top - line, sheet: parseFloat(getComputedStyle(el.closest(".pl-sheet")!).rowGap) };
+    });
+    expect(gap.sheet).toBe(14);
+    expect(Math.abs(gap.gap - gap.sheet)).toBeLessThanOrEqual(0.5);
     await shot(page, "plugins-restart", theme);
     // the press is the same Restart as the row's: the gateway that serves Kami, every bot on it reads Restarting
     await mock("mock.restart", { bot: "kami", outcome: "slow" });
@@ -341,13 +377,62 @@ for (const theme of ["dark", "light"] as const) {
     const load = sheet.getByTestId("sheet-load");
     await expect(load).toHaveAttribute("data-load", "live");
     await expect(load).toHaveText("Ready in Kami's next conversation.");
+    // the title says it is installed; the body is only what is new
+    await expect(sheet.getByTestId("sheet-done")).toHaveText("Ready in Kami's next conversation.");
     await expect(sheet.getByRole("button", { name: /Restart|Load now/ })).toHaveCount(0);
     expect((await calls("bots.restart")).length).toBe(0);
     await shot(page, "plugins-ready", theme);
   });
 }
 
+test("one thing running: the sentence says it in the singular, and a line Hermes said nothing about reads honestly", async ({ page }) => {
+  await setup(page);
+  await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "chat", name: null, secs: 65, bot: "kami" }] });
+  await (await menuOf(page, "kami")).getByTestId("row-restart").click();
+  const line = page.getByTestId("restart-line-kami");
+  await expect(line.locator(".rs-t")).toHaveText("Something is running. Restarting now stops it:");
+  await expect(line.getByTestId("restart-work").locator(".rs-what")).toHaveText(["Kami: A chat turn"]);
+  await expect(line.getByTestId("restart-work").locator(".rs-for")).toHaveText(["1m"]);
+  await line.getByTestId("restart-cancel").click();
+  // Hermes refused but named nothing readable: one honest line, not a placeholder
+  await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "work", name: null, secs: null, bot: null }] });
+  await (await menuOf(page, "kami")).getByTestId("row-restart").click();
+  await expect(line.getByTestId("restart-work").locator("li")).toHaveText(["Hermes did not say what."]);
+  await line.getByTestId("restart-cancel").click();
+  // two such lines beside a readable one: they share one row with the count
+  await mock("mock.restart", { bot: "kami", outcome: "refused", work: [
+    { kind: "cron", name: "PR digest", secs: 40, bot: "kami" },
+    { kind: "work", name: null, secs: null, bot: null },
+    { kind: "work", name: null, secs: null, bot: null },
+  ] });
+  await (await menuOf(page, "kami")).getByTestId("row-restart").click();
+  await expect(line.locator(".rs-t")).toHaveText("3 things are running. Restarting now stops them all:");
+  await expect(line.getByTestId("restart-work").locator(".rs-what")).toHaveText(["Kami: Scheduled job PR digest", "2 more things are running"]);
+});
+
+const BUSY: Record<string, [string, string]> = {
+  ko: ["하던 일이 있어요. 지금 다시 시작하면 멈춰요:", "하던 일이 2개 있어요. 지금 다시 시작하면 모두 멈춰요:"],
+  ja: ["実行中の作業があります。いま再起動すると止まります:", "実行中の作業が 2 件あります。いま再起動するとすべて止まります:"],
+  zh: ["有一项正在进行的工作。现在重启会中断它：", "有 2 项正在进行的工作。现在重启会把它们全部中断："],
+};
+
 for (const lang of ["ko", "ja", "zh"]) {
+  test(`the busy sentence agrees with the count in ${lang}`, async ({ page }) => {
+    await setup(page, "dark", lang);
+    await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "cron", name: "PR digest", secs: 40, bot: null }] });
+    await (await menuOf(page, "kami")).getByRole("menuitem").nth(2).click();
+    const line = page.getByTestId("restart-line-kami");
+    await expect(line.locator(".rs-t")).toHaveText(BUSY[lang][0]);
+    await line.getByTestId("restart-cancel").click();
+    await mock("mock.restart", { bot: "kami", outcome: "refused", work: [
+      { kind: "cron", name: "PR digest", secs: 40, bot: null },
+      { kind: "work", name: null, secs: 7, bot: null },
+    ] });
+    await (await menuOf(page, "kami")).getByRole("menuitem").nth(2).click();
+    await expect(line.locator(".rs-t")).toHaveText(BUSY[lang][1]);
+    await expect(line).not.toContainText(/rs\.[a-z]|\{/);
+  });
+
   test(`the restart words read in ${lang}, with no raw keys`, async ({ page }) => {
     await setup(page, "dark", lang);
     await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "cron", name: "PR digest", secs: 40 }] });

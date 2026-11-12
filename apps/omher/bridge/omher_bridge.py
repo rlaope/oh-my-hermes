@@ -1561,10 +1561,12 @@ _WORK_CRON = re.compile(r"^cron job \S+(?: \((?P<name>[^)]*)\))? in(?:-process| 
 _WORK_RUN = re.compile(r"^(?P<kind>[a-z][a-z_-]{0,23}) run\b")
 
 
-def _session_bot(session: str) -> str | None:
+def _session_bot(session: str, anywhere: bool = False) -> str | None:
     """The profile a gateway session key belongs to: `agent:<ns>:...` (gateway/session.py:679-688: `agent:main` for
-    the default profile, `agent:main~` for a profile named main, else `agent:<name>`)."""
-    m = re.match(r"agent:([a-z0-9][a-z0-9_~-]{0,64}):", session)
+    the default profile, `agent:main~` for a profile named main, else `agent:<name>`). `anywhere`: the first such key
+    in a line whose shape is not otherwise read (a `<kind> run <session>` line, or one Hermes added later)."""
+    key = r"agent:([a-z0-9][a-z0-9_~-]{0,64}):"
+    m = re.search(r"(?:^|\s)" + key, session) if anywhere else re.match(key, session)
     if not m:
         return None
     ns = m.group(1)
@@ -1575,8 +1577,9 @@ def work_unit(line: str, jobs: dict[str, str] | None = None) -> dict:
     """One live unit Hermes named, in plain parts: what it is and how long it has run; no run id, pid or job id.
     Reads Hermes' own `describe_active_work_unit` (hermes_cli/update_cmd_drain_report.py:48-72): `chat turn <s>
     [pid N][, running 3m05s] [model.., tool..]`, `cron job <id> (<name>) in-process|in external worker..`,
-    `background delegation <id>..`, `<kind> run..`. Anything else keeps only the time it names. `bot`: whose it is,
-    from a chat's session key or a cron job's id in that bot's jobs.json (`jobs`); None when the line does not say."""
+    `background delegation <id>..`, `<kind> run..`. Anything else keeps only the time it names and whose it is. `bot`:
+    whose it is, from a session key in the line or a cron job's id in that bot's jobs.json (`jobs`); None when the
+    line does not say."""
     m = _WORK_TIME.search(line)
     secs = (int(m.group(1)) * 60 + int(m.group(2) or 0)) if m and m.group(1) else (int(m.group(3)) if m else None)
     if line.startswith("chat turn "):
@@ -1590,8 +1593,8 @@ def work_unit(line: str, jobs: dict[str, str] | None = None) -> dict:
         return {"kind": "task", "name": None, "secs": secs, "bot": None}
     r = _WORK_RUN.match(line)
     if r:
-        return {"kind": "run", "name": r.group("kind"), "secs": secs, "bot": None}
-    return {"kind": "work", "name": None, "secs": secs, "bot": None}
+        return {"kind": "run", "name": r.group("kind"), "secs": secs, "bot": _session_bot(line, anywhere=True)}
+    return {"kind": "work", "name": None, "secs": secs, "bot": _session_bot(line, anywhere=True)}
 
 
 def restart_outcome(code: int | None, output: str, jobs: dict[str, str] | None = None) -> dict:

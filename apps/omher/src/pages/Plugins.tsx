@@ -468,7 +468,7 @@ type SheetState =
   | { step: "checking" }
   | { step: "ready"; ins: InspectResult }
   | { step: "installing"; ins: InspectResult }
-  | { step: "done"; line: string; load: "live" | "reload" | "restart"; restartBot?: string }
+  | { step: "done"; off: string | null; load: "live" | "reload" | "restart"; restartBot?: string }
   | { step: "refused"; line: string; recheck: boolean }
   | { step: "failed"; line: string };
 
@@ -501,7 +501,8 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
       const env = r.missing_env.join(", ");
       setSt({
         step: "done",
-        line: r.enabled ? t("plug.sheet.doneOn", { name: label }) : t("plug.sheet.doneOff", { name: label, env }),
+        // the title says it is installed; the body says only what is new: off until a value is set, or when it loads
+        off: r.enabled ? null : t("plug.sheet.doneOff", { env }),
         // when it takes effect, from Hermes' own answer; an older bridge without `load` falls back to restart_required
         load: !r.enabled ? "live" : (r.load ?? (r.restart_required ? "reload" : "live")),
         restartBot: r.restart_bot,
@@ -536,8 +537,11 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
           </p>
         ) : st.step === "done" ? (
           <div className="pl-sheet-res" data-testid="sheet-done">
-            <b>{st.line}</b>
-            <PluginLoad bot={bot} plugin={entry.name} load={st.load} restartBot={st.restartBot} testId="sheet-load" />
+            {st.off ? (
+              <span data-testid="sheet-off">{st.off}</span>
+            ) : (
+              <PluginLoad bot={bot} plugin={entry.name} load={st.load} restartBot={st.restartBot} testId="sheet-load" />
+            )}
           </div>
         ) : st.step === "refused" || st.step === "failed" ? (
           <p className="pg-err" role="alert" data-testid="sheet-error">
