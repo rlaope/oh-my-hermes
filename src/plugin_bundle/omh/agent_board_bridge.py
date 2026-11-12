@@ -164,14 +164,16 @@ class AgentBoardBridge:
             return state.status(request_id)
 
     def pre(self, *, host: HostIdentity | None, tool_name: str, arguments: Mapping[str, object],
-            schemas: Mapping[str, object], hooks: frozenset[str]) -> dict[str, object] | None:
+            schemas: Mapping[str, object], hooks: frozenset[str], dry_run: bool = False) -> dict[str, object] | None:
+        """Admit a tracked board call (reserve it, `begin`), or refuse it. With `dry_run` the same refusals come
+        back but nothing is reserved or saved: what the hook asks before a person decides (`refusal`)."""
         board = arguments.get("board")
         if not isinstance(board, str) or not tool_name.startswith("kanban_"):
             return None
         state = self._board(board)
         if not self._path(state).exists():
             return None
-        with self._transaction(board) as state:
+        with self._transaction(board, write=not dry_run) as state:
             matches = state.matching_requests(host=host, tool_name=tool_name, arguments=arguments)
             if not matches:
                 return None
@@ -179,8 +181,11 @@ class AgentBoardBridge:
                     or not native_schema_supported(schemas.get(tool_name), {"tool_name": tool_name, "arguments": dict(arguments)})
                     or not {"pre_tool_call", "post_tool_call"} <= hooks):
                 return {"action": "block", "message": "OMH board capability unavailable; action not admitted."}
-            if len(matches) != 1 or not state.begin(matches[0], host=host, tool_name=tool_name, arguments=arguments):
+            admit = state.would_begin if dry_run else state.begin
+            if len(matches) != 1 or not admit(matches[0], host=host, tool_name=tool_name, arguments=arguments):
                 return {"action": "block", "message": "OMH board action refused: stale, foreign, replayed or reconciliation required."}
+            if dry_run:
+                return None
             pending = _Pending(board, matches[0])
         # A failed save must never arm this process or permit native dispatch.
         with self._lock:
@@ -391,7 +396,9 @@ def installed_status(request_id: str) -> AgentBoardRequest:
     return results[0]
 
 
-def pre_agent_board(kwargs: Mapping[str, object]) -> dict[str, object] | None:
+def pre_agent_board(kwargs: Mapping[str, object], *, dry_run: bool = False) -> dict[str, object] | None:
+    """The board's `block` for this call, or None. With `dry_run` it only reads: a refusal comes back as it would,
+    but no call is reserved and no prepare call armed (`AgentBoardBridge.pre`)."""
     if not _BOARD_CORE_AVAILABLE:
         # No engine on this host means nothing here ever prepared a request,
         # so there is no tracked action to admit and none to refuse. Blocking
@@ -401,9 +408,10 @@ def pre_agent_board(kwargs: Mapping[str, object]) -> dict[str, object] | None:
     args = kwargs.get("args", kwargs.get("tool_input"))
     identity = _host(kwargs)
     if tool_name == "omh_agent_board":
-        _disarm_prepare_call(identity)
-        if identity is not None and _object(args):
-            _arm_prepare_call(identity, _input_digest(args))
+        if not dry_run:
+            _disarm_prepare_call(identity)
+            if identity is not None and _object(args):
+                _arm_prepare_call(identity, _input_digest(args))
         return None
     if not isinstance(tool_name, str) or not tool_name.startswith("kanban_") or not _object(args):
         return None
@@ -422,7 +430,8 @@ def pre_agent_board(kwargs: Mapping[str, object]) -> dict[str, object] | None:
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", board):
             return None
         schemas, hooks = host_capabilities()
-        return bridge.pre(host=identity, tool_name=tool_name, arguments=args, schemas=schemas, hooks=hooks)
+        return bridge.pre(host=identity, tool_name=tool_name, arguments=args, schemas=schemas, hooks=hooks,
+                          dry_run=dry_run)
     except (ValueError, OSError, DescriptorLockError):
         return {"action": "block", "message": "OMH board correlation unavailable; no tracked action admitted."}
 

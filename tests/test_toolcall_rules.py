@@ -860,6 +860,65 @@ class DoctorRulesVisibilityTest(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertNotIn("plugin_hook_errors", self._checks())
 
+class AskRuleDoesNotOverrideTheBoardTest(unittest.TestCase):
+    """Review round 2: an ask rule over a tracked Kanban call the board refuses is still refused, before the person
+    is asked, and asking reserves nothing; an admissible one is asked and stays unreserved until the yes."""
+
+    def _run(self, variant: str) -> tuple[object, str, bool]:
+        from unittest.mock import patch as _patch
+        from _delegation_state import homes
+        from five_issue_cases.kanban import request, supplied_schemas
+        from test_agent_board_plugin import HOOKS, host, native_action
+        from omh.plugin_bundle.omh import agent_board_bridge as board
+        from omh.plugin_bundle.omh import toolcall_rules as rules
+
+        with homes() as home, _patch.object(board, "default_omh_home", return_value=home.omh), \
+                _patch.object(board, "effective_root", return_value="fixture-root") as root, \
+                _patch.object(board, "host_capabilities", return_value=(supplied_schemas(), HOOKS)) as caps:
+            session_attendance.reset_session_attendance()
+            session_attendance.note_session_platform("session", "cli")
+            bridge = board.installed_bridge("qa-board")
+            prepared = bridge.prepare(request(), host=host(), schemas=supplied_schemas(), hooks=HOOKS)
+            action = native_action(prepared)
+            args = dict(action["arguments"])
+            if variant == "foreign-board":
+                args["board"] = "foreign-board"
+            elif variant == "revoked-binding":
+                root.return_value = None
+            elif variant == "revoked-schema":
+                caps.return_value = ({}, HOOKS)
+            path = rules.toolcall_rules_path(str(home.omh))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"schema_version": rules.TOOLCALL_RULES_SCHEMA_VERSION, "rules": [
+                {"name": "ask-before-board", "pattern": "kanban_create", "message": "Allow this board action?",
+                 "tools": ["kanban_create"], "effect": "ask", "repeat": "always"}]}), encoding="utf-8")
+            _reset_state()
+            directive = pre_tool_call(tool_name=action["tool_name"], args=args, session_id="session",
+                                      task_id="host-task", tool_call_id="call", **home.hooks())
+            status = bridge.status("qa-board", "qa-create-1")
+            return directive, status["state"], bool(status.get("in_flight"))
+
+    def setUp(self):
+        env = patch.dict(os.environ, {session_attendance.SINGLE_QUERY_SESSION_ENV: ""})
+        env.start()
+        self.addCleanup(env.stop)
+        self.addCleanup(session_attendance.reset_session_attendance)
+        self.addCleanup(_reset_state)
+
+    def test_a_board_refusal_wins_over_the_ask(self):
+        for variant in ("foreign-board", "revoked-binding", "revoked-schema"):
+            with self.subTest(variant=variant):
+                directive, state, in_flight = self._run(variant)
+                self.assertEqual(directive["action"], "block")
+                self.assertIn("OMH board", directive["message"])
+                self.assertEqual((state, in_flight), ("prepared", False))
+
+    def test_an_admissible_board_call_is_asked_and_not_reserved_yet(self):
+        directive, state, in_flight = self._run("ordinary")
+        self.assertEqual(directive["action"], "approve")
+        self.assertEqual(directive["rule_key"], "omh-toolcall-rule:ask-before-board")
+        self.assertEqual((state, in_flight), ("prepared", False))
+
 
 if __name__ == "__main__":
     unittest.main()

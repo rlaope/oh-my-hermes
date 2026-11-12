@@ -42,7 +42,7 @@ from .session_attendance import escalation_can_reach_a_person
 class _BoardBridge(Protocol):
     """The two names the tool-call hooks need from the board bridge."""
 
-    def pre_agent_board(self, kwargs: Mapping[str, object]) -> dict[str, object] | None: ...
+    def pre_agent_board(self, kwargs: Mapping[str, object], *, dry_run: bool = False) -> dict[str, object] | None: ...
     def post_agent_board(self, kwargs: Mapping[str, object]) -> None: ...
 
 
@@ -389,8 +389,15 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         return _route_gated(_veto_over_ask(team_directive, pending_ask), **route_gate)
     # No gate above refused, so the rule's held ask goes to the person now,
     # before anything below records a dispatch; `_route_gated` still runs
-    # the route gate under it, as for every other `approve`.
+    # the route gate under it, as for every other `approve`. The board's own
+    # refusal is read first without reserving the call (`dry_run`): a call it
+    # would refuse is refused now, and one the person may still turn down is
+    # not claimed; a yes then reaches the real admission below as usual.
     if pending_ask is not None:
+        board = _agent_board_bridge()
+        board_refusal = board.pre_agent_board(kwargs, dry_run=True) if board is not None else None
+        if board_refusal is not None:
+            return board_refusal
         return _route_gated(pending_ask, **route_gate)
     # Last of the gates, so it writes only for a call nothing above refused:
     # a `delegate_task` spawn runs on the route its OWN conversation set,
