@@ -52,6 +52,8 @@ RULES = (
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
+    "so for a session's own folder omher also reads `<that folder>/.omo/senpi-task/tasks/st_*.json`, the same records"
+    " and nothing else in `.omo`, never a symlinked `.omo` or `senpi-task`, and never another folder's.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -103,6 +105,10 @@ RULES = (
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
     "For the composer's `$` skill picker omher reads, never writes, the bot's own skill files",
+    "then the folders the profile's `config.yaml` names in `skills.external_dirs`, where oh-my-hermes registers its skills",
+    "pressing it puts the model-setup skill's `/command` and one sentence into the composer, and nothing is sent;",
+    "omher restarts and reloads nothing and runs nothing for it.",
+    "omher asks that gateway's own `plugins.manage` `list` (rule 25) and reads only whether the `omh` row is enabled",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
@@ -191,6 +197,22 @@ class SubagentEvents(unittest.TestCase):
         self.assertIn("_OMO_TASK.match(e.name)", body)
         self.assertNotIn("children", body.split('"""', 2)[2])
         self.assertRegex(src, r'_OMO_TASK = re\.compile\(r"\^st_')
+
+    def test_omo_records_in_a_folder_are_read_only_for_the_sessions_own_folder(self) -> None:
+        # O15: OmO 5.0 (and 5.1 once a folder holds them) keeps its records in `<folder>/.omo/senpi-task/tasks/`;
+        # omher reads them only for the folder the session runs in, never through a link, and nothing else in .omo
+        src = BRIDGE.read_text(encoding="utf-8")
+        body = src[src.index("    def omo(self"):src.index("    # ---- ops")]
+        code = body.split('"""', 2)[2]
+        self.assertIn('dot = Path(cwd) / ".omo"', code)
+        self.assertIn("if cwd:", code)
+        self.assertIn("not dot.is_symlink()", code)
+        self.assertIn('not (dot / "senpi-task").is_symlink()', code)
+        self.assertEqual(code.count('".omo"'), 1)
+        self.assertEqual(re.findall(r'dot / "([a-z-]+)"', code), ["senpi-task", "senpi-task"])
+        rule = next(r for r in re.split(r"\n(?=\d+\. )", DOC.read_text(encoding="utf-8")) if "OmO's subagent records" in r)
+        self.assertIn("`<that folder>/.omo/senpi-task/tasks/st_*.json`", rule)
+        self.assertIn("never a symlinked `.omo` or `senpi-task`, and never another folder's", rule)
 
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
@@ -467,7 +489,13 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         op = ast.unparse(fns["op_skills_list"])
         self.assertIn("asyncio.to_thread(read_skills, bot['path'])", op)
         self.assertNotIn("conn", op)  # no gateway call: a file read
-        reader = "\n".join(ast.unparse(fns[n]) for n in ("read_skills", "read_skill_head", "_frontmatter_value"))
+        names = ("read_skills", "skill_roots", "_scan_skills", "read_skill_head", "_frontmatter_value")
+        reader = "\n".join(ast.unparse(fns[n]) for n in names)
+        # the profile's own folder first, then the config's skills.external_dirs (parsed, never written)
+        roots = ast.unparse(fns["skill_roots"])
+        self.assertIn("roots = [profile_dir / 'skills']", roots)
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('skills')", roots)
+        self.assertIn("cfg.get('external_dirs')", roots)
         self.assertIn("os.walk(root, followlinks=True)", reader)
         self.assertIn("real = os.path.realpath(dirpath)", reader)
         self.assertIn("if real in seen:", reader)
@@ -476,11 +504,29 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("read_skill_head(skill)", reader)
         self.assertIn("fh.read(SKILL_HEAD_MAX)", reader)
         self.assertIn("SKILL_HEAD_MAX = 8 * 1024", self.source)
-        opens = [c for n in ("read_skills", "read_skill_head", "_frontmatter_value") for c in ast.walk(fns[n])
+        opens = [c for n in names for c in ast.walk(fns[n])
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
         self.assertEqual([ast.unparse(c) for c in opens], ["open(path, 'rb')"])
         for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self."):
             self.assertNotIn(banned, reader, banned)
+
+    def test_the_model_setup_line_only_fills_the_composer(self) -> None:
+        """Rule 19: the one-time line after omher's own install writes into the composer on the person's press
+        (`actions.prefill`) and sends nothing; it runs no program, restarts nothing and asks the shell for nothing."""
+        app = ROOT / "apps" / "omher" / "src" / "onboarding"
+        line = (app / "OmhPromptLine.tsx").read_text(encoding="utf-8")
+        logic = (app / "omhPrompt.ts").read_text(encoding="utf-8")
+        self.assertIn("getStore().actions.prefill(promptText(p.command!))", line)
+        for text in (line, logic):
+            for banned in (".send(", "sendWithFiles", "chat.send", "invoke(", "@tauri-apps", "gateShell", "install("):
+                self.assertNotIn(banned, text, banned)
+        # the command comes from skills.list, never written as a literal
+        self.assertNotIn('"/omh-model-setup"', logic)
+        self.assertIn("getStore().actions.skills(bot, true)", logic)
+        # the plugin check reads the running gateway's list only (rule 25's `list`), never a toggle or an install
+        self.assertIn("getStore().actions.pluginsList(bot)", logic)
+        for banned in ("togglePlugin", "installPlugin", "plugins.toggle", "plugins.install", "updatePlugin", "removePlugin"):
+            self.assertNotIn(banned, logic, banned)
 
     def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
         """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""
@@ -1161,6 +1207,19 @@ class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
             self.assertNotIn(f'"{banned}"', self.chat, banned)
             self.assertNotIn(banned, self.ui, banned)
         self.assertNotIn('"never"', self.chat.split("fn codex_mode(", 1)[1].split("\n}\n", 1)[0])
+
+    def test_an_agents_own_unguarded_setting_is_only_said_never_offered(self) -> None:
+        # O13: ownSetting.ts recognises the agent's reported values to name them; it sends, offers and writes nothing
+        own = (UI_SRC / "sessions" / "ownSetting.ts").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'^import .*$', own, re.M), ['import { t } from "../i18n";', 'import { MODES } from "./controls";'])
+        for banned in ("setMode", "getSessions", "invoke(", "input(", "export const MODES", "localStorage"):
+            self.assertNotIn(banned, own, banned)
+        self.assertIn("export function ownSetting(", own)
+        view = (UI_SRC / "sessions" / "SessionView.tsx").read_text(encoding="utf-8")
+        # the menu still lists only omher's modes
+        self.assertIn("{modesOf(rec.agent).map((m) => {", view)
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("the session only says so where the mode is shown, naming the agent's own config as where it comes from", text)
 
     def test_mode_and_effort_go_through_the_agents_own_messages_only(self) -> None:
         self.assertIn('json!({"subtype": "set_permission_mode", "mode": mode})', self.chat)

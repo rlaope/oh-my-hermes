@@ -2,7 +2,7 @@
 // its actions; they never edit this file.
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
-import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { noteFor, sessionNote, showNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
@@ -57,6 +57,10 @@ export interface Step {
   startedAt: number; // ms
   endedAt?: number; // ms
   ok?: boolean;
+  /** Still running when the person pressed Stop (`ok` false, `endedAt` the Stop). */
+  stopped?: boolean;
+  /** A stopped step the agent later said it finished (Codex runs a command on after Stop): how it ended and when. */
+  late?: { ok: boolean; endedAt: number; ms: number };
   /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
   dag?: { run: string; node: string }[];
 }
@@ -558,17 +562,33 @@ function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
   });
 }
 
-/** Closes the running turn (if any) and moves it to lastTurn. */
+/** Closes the running turn (if any) and moves it to lastTurn. A step still open when the person stopped the turn
+ *  reads as stopped, not as finished. */
 function endTurn(chat: Chat, now: number, outcome: NonNullable<Turn["outcome"]>, error?: string): Chat {
   if (!chat.turn) return chat;
+  const stop = outcome === "interrupted";
   const patched = patchTurn(chat, (t) => ({
     ...t,
     endedAt: now,
     outcome,
     ...(error ? { error } : {}),
-    steps: t.steps.map((s) => (s.endedAt ? s : { ...s, endedAt: now })),
+    steps: t.steps.map((s) => (s.endedAt ? s : { ...s, endedAt: now, ...(stop ? { ok: false, stopped: true } : {}) })),
   }));
   return { ...patched, lastTurn: patched.turn, turn: null };
+}
+
+/** The end of a step the person stopped, reported after its turn was over (Codex's command ran on): the stopped
+ *  step, in whichever turn holds it, says it kept running and how it ended. Any other step end outside its turn
+ *  is dropped. */
+function lateStepEnd(chat: Chat, ev: EventOf<"tool.end">, now: number): Chat {
+  const held = [...chat.items]
+    .reverse()
+    .find((i): i is ActivityItem => i.kind === "activity" && i.turn.steps.some((s) => s.id === ev.tool_id && s.stopped && !s.late));
+  if (!held) return chat;
+  return patchTurnById(chat, held.id, (t) => ({
+    ...t,
+    steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, late: { ok: ev.ok, endedAt: now, ms: ev.ms > 0 ? ev.ms : now - s.startedAt } } : s)),
+  }));
 }
 
 function touchChat(state: AppState, bot: string, fn: (c: Chat) => Chat): AppState {
@@ -753,10 +773,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
         return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null };
       });
-    case "status":
-      return touchChat(state, bot, (c) =>
-        c.turn ? patchTurn(c, (t) => ({ ...t, status: ev.text })) : { ...c, early: { text: ev.text, at: now } },
-      );
+    case "status": {
+      // the agent's own retry of this turn: the line says which try, in the person's language
+      const text = ev.retry ? tr("live.retrying", { n: ev.retry.attempt, max: ev.retry.max }) : ev.text;
+      return touchChat(state, bot, (c) => (c.turn ? patchTurn(c, (t) => ({ ...t, status: text })) : { ...c, early: { text, at: now } }));
+    }
     case "thinking":
       return touchChat(state, bot, (c) => (c.turn && !c.turn.status ? patchTurn(c, (t) => ({ ...t, status: THINKING })) : c));
     case "tool.start":
@@ -772,10 +793,12 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       );
     case "tool.end":
       return touchChat(state, bot, (c) =>
-        patchTurn(c, (t) => ({
-          ...t,
-          steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
-        })),
+        c.turn?.steps.some((s) => s.id === ev.tool_id)
+          ? patchTurn(c, (t) => ({
+              ...t,
+              steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
+            }))
+          : lateStepEnd(c, ev, now),
       );
     case "subagent": {
       const c = state.chats[bot];
@@ -1286,8 +1309,9 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
-  /** The bot's skills for the composer's `$` picker, read once per bot; [] when the bridge cannot list them. */
-  skills(bot: string): Promise<Skill[]>;
+  /** The bot's skills for the composer's `$` picker, read once per bot (`fresh`: read again, e.g. right after an
+   *  install); [] when the bridge cannot list them. */
+  skills(bot: string, fresh?: boolean): Promise<Skill[]>;
   /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
   linkPlaces(bot: string): Promise<LinkPlaces>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
@@ -1752,7 +1776,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
-    skills(bot) {
+    skills(bot, fresh) {
+      if (fresh) skillLists.delete(bot);
       let list = skillLists.get(bot);
       if (!list) {
         list = bridge
@@ -1894,6 +1919,14 @@ export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
     if (route) route.open();
     else void singleton?.actions.selectBot(note.bot);
   });
+}
+
+/** A system notification for what session `id` did outside its chat (its program ended, it could not start, its
+ *  terminal rang), unless the person is looking at that session. A click opens the session. */
+export function notifySessionNote(id: string, n: SessionNote, state: AppState): void {
+  if (!notifyEnabled()) return;
+  if (windowWatched() && state.ui.view === "session" && state.ui.session === id) return;
+  void showNote(sessionNote(id, n), () => singleton?.actions.openSession(id));
 }
 
 /** Set by SESSIONS: the chat key shown for a session id (so its own notifications stay quiet). */

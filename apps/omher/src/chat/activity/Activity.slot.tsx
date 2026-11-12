@@ -91,7 +91,7 @@ function Ticker({ label }: { label: Label }) {
  *  status is read-only (nothing here reassigns); the run link opens the Runs tab on that run. */
 function DagRows({ step, live }: { step: Step; live: boolean }) {
   const running = step.endedAt === undefined;
-  const status = step.ok === false ? "failed" : running ? (live ? "working" : "stopped") : "returned";
+  const status = step.stopped ? "stopped" : step.ok === false ? "failed" : running ? (live ? "working" : "stopped") : "returned";
   return (
     <>
       {step.dag!.map((d) => (
@@ -117,18 +117,28 @@ function DagRows({ step, live }: { step: Step; live: boolean }) {
   );
 }
 
+/** A stopped step's time: how long it had run at Stop, or, when the agent later said it finished, that it kept
+ *  running and how long the command ran in all (from its own start, by the agent's count). */
+function stoppedTime(step: Step, ms: number): string {
+  if (!step.late) return stepTime(ms);
+  return tr(step.late.ok ? "act.stepLate" : "act.stepLateFailed", { t: stepTime(step.late.ms) });
+}
+
 function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }) {
   if (step.name === "delegate_task" && step.dag?.length) return <DagRows step={step} live={live} />;
-  const failed = step.ok === false;
+  const stopped = !!step.stopped;
+  const failed = step.ok === false && !stopped;
   const running = step.endedAt === undefined;
   const ms = (step.endedAt ?? now) - step.startedAt;
   return (
     <div
-      className={`act-step${failed ? " fail" : ""}`}
+      className={`act-step${failed ? " fail" : ""}${stopped ? " stopped" : ""}`}
       data-testid="activity-step"
-      data-ok={failed ? "false" : running ? "running" : "true"}
+      data-ok={stopped ? "stopped" : failed ? "false" : running ? "running" : "true"}
+      {...(step.late ? { "data-late": step.late.ok ? "done" : "failed" } : {})}
     >
-      <span className="k">{stepVerb(step.name)}</span>
+      {stopped && <span className="act-ic interrupted" aria-hidden>■</span>}
+      <span className="k">{stopped ? tr("act.stoppedVerb") : stepVerb(step.name)}</span>
       {step.detail &&
         (isCode(step.name) ? (
           <code className="v" title={step.detail}>
@@ -139,7 +149,9 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
             {step.detail}
           </span>
         ))}
-      <span className="s">{running && live ? "…" : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}</span>
+      <span className="s" data-testid="activity-step-time">
+        {running && live ? "…" : stopped ? stoppedTime(step, ms) : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}
+      </span>
     </div>
   );
 }
@@ -193,7 +205,7 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
         {live ? (
           <Ticker label={shownLabel(liveLabel(t))} />
         ) : (
-          <span className="act-sum" data-testid="activity-text">
+          <span className={`act-sum${state === "error" ? " wrap" : ""}`} data-testid="activity-text">
             {summary}
           </span>
         )}

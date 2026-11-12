@@ -196,6 +196,9 @@ type MockGlobals = {
   __omherMockNoChat?: AgentId[];
   /** e2e: the Codex thread a chat resumes is gone (deleted or archived): the shell starts a new one */
   __omherMockGoneThreads?: boolean;
+  /** e2e: Codex's own config runs without approvals and with full disk access (its thread reports
+   *  `approvalPolicy: never`, `sandbox: dangerFullAccess`, as codex-12-late-step-init.jsonl) */
+  __omherMockCodexUnguarded?: boolean;
 };
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
@@ -253,6 +256,21 @@ export class MockHost implements SessionHost {
           setTimeout(() => s.exit(0), 10);
           return;
         }
+        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]`: the program rings (BEL, or an OSC 9 message),
+        // reports progress (OSC 9;4, not a ring) or ends later, as an agent does while the person looks elsewhere
+        const later = /^after (\d+) (bell|osc9|progress|exit)(?: (\d+))?$/.exec(line);
+        if (later) {
+          s.out(`\r\n${PROMPT}`);
+          setTimeout(() => {
+            if (this.live.get(id) !== s) return;
+            if (later[2] === "bell") return s.out("\x07");
+            if (later[2] === "osc9") return s.out("\x1b]9;Needs your approval\x07");
+            if (later[2] === "progress") return s.out("\x1b]9;4;1;50\x07");
+            this.live.delete(id);
+            s.exit(Number(later[3] ?? 0));
+          }, Number(later[1]));
+          continue;
+        }
         s.out(line ? `\r\n\x1b[2m(mock) you said:\x1b[0m ${line}\r\n${PROMPT}` : `\r\n${PROMPT}`);
       } else if (ch === "\x03") {
         s.line = "";
@@ -288,6 +306,7 @@ export class MockHost implements SessionHost {
     const c = new MockChat(agent, onEvent, resume, cwd, {
       noChat: !!this.g.__omherMockNoChat?.includes(agent),
       gone: agent === "codex" && !!resume && !!this.g.__omherMockGoneThreads,
+      unguarded: agent === "codex" && !!this.g.__omherMockCodexUnguarded,
     });
     this.chats.set(id, c);
     c.boot();
@@ -418,18 +437,22 @@ class MockChat {
   private session: string;
   private used = 18_400;
   private queue: { text: string; id: string; images?: string[] }[] = [];
+  /** "/stoplate": the command still runs after Stop and ends on its own later */
+  private lateStep = "";
   private dead = false;
   constructor(
     private agent: AgentId,
     private emit: (ev: ChatEvent) => void,
     resume?: string,
     private cwd = "",
-    private how: { noChat?: boolean; gone?: boolean } = {},
+    private how: { noChat?: boolean; gone?: boolean; unguarded?: boolean } = {},
   ) {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     if (agent === "claude" && !resume) this.session = "11111111-2222-4333-8444-555555555555";
     if (agent === "opencode" && !resume) this.session = "ses_e34e28c01ffeKlpLA61p3XV1cy";
+    // the id a real OmO 5.1.56 session reported (its subagents' records are keyed by it; mock.sessionRun agent omo)
+    if (agent === "omo" && !resume) this.session = "01a1ce7b-1c30-7e45-8913-aa00b3b32296";
     if (how.gone) this.session = `codex-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
     // DeepSeek Harness names its session `session-<uuid>` and reports no model in its headless stream
     if (agent === "dsh") {
@@ -459,6 +482,9 @@ class MockChat {
       if (this.how.gone) this.emit({ event: "session.note", kind: "new_conversation", text: "The earlier Codex conversation was not found; a new one started." });
       const c = MOCK_CONTROLS[this.agent];
       this.emit({ event: "session.info", agent_session: this.session, ...(this.model ? { model: this.model } : {}), ...(c ? { effort: c.effort } : {}), ...(c?.mode !== undefined ? { mode: c.mode } : {}) });
+      // the thread's own approval policy and sandbox, as the Codex adapter reports them
+      if (this.agent === "codex")
+        this.emit({ event: "session.info", ...(this.how.unguarded ? { approval: "never", sandbox: "dangerFullAccess" } : { approval: "untrusted", sandbox: "workspaceWrite" }) });
       this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
       if (c) {
         this.emit({ event: "session.efforts", levels: c.efforts });
@@ -607,8 +633,10 @@ class MockChat {
         // the events the Claude adapter emitted for a real run (claude-9-subagents.jsonl): two Agent calls in one
         // message, each subagent's own step, then each one's own answer and time; the second one is slow enough to
         // look at while it works. "/subagents hold" leaves the second one working until Stop or "/release".
+        // (OmO's `task` names its subagents' type, `explore`; Claude Code's Agent calls are `general-purpose`)
+        const kind = this.agent === "omo" ? "explore" : "general-purpose";
         const sub = (id: string, index: number, goal: string, extra: Record<string, unknown> = {}) =>
-          this.emit({ event: "subagent", id, agent: this.agent, name: "general-purpose", goal, delegation: "claude-msg_1", index, count: index + 1, state: "running", ...extra });
+          this.emit({ event: "subagent", id, agent: this.agent, name: kind, goal, delegation: "claude-msg_1", index, count: index + 1, state: "running", ...extra });
         this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-1", name: "delegate_task", detail: "Read a.txt first line" }));
         this.at(50, () => sub("sa-1", 0, "Read a.txt first line"));
         this.at(120, () => sub("sa-1", 0, "Read a.txt first line", { tool: "read_file", step: "a.txt" }));
@@ -644,6 +672,23 @@ class MockChat {
         });
         return;
       }
+      if (text.startsWith("/retry")) {
+        // omo-12-retry.jsonl as the Pi adapter emits it: OmO retries the failed run once by itself (the line says
+        // which try), the retry fails too, and the turn ends once with OmO's own reason
+        this.at(60, () => this.emit({ event: "status", text: "Retrying 1 of 5", retry: { attempt: 1, max: 5 } }));
+        if (text.includes("hold")) return;
+        this.at(900, () =>
+          this.end("error", "Anthropic rejected this conversation's request format, even after retrying without web search replay data. Run /compact or start a new session to continue, and report it if it happens again."),
+        );
+        return;
+      }
+      if (text.startsWith("/stoplate")) {
+        // codex-12-late-step.jsonl: a foreground command; Stop ends the turn at once but the command runs on, and
+        // Codex reports its end after the turn (`item/completed`, 39.9 s in all)
+        this.at(60, () => this.emit({ event: "tool.start", tool_id: "exec-late", name: "terminal", detail: "sleep 40; echo late" }));
+        this.lateStep = "exec-late";
+        return;
+      }
       if (text.startsWith("/background")) {
         // the turn ends with a command still running in the background (Claude background_tasks_changed, OmO
         // waiting_background): the header says so until it ends
@@ -670,7 +715,10 @@ class MockChat {
         // as the Claude adapter does: a subagent still out when the turn stops is cancelled with it
         if (this.holding) this.emit({ event: "subagent", id: "sa-2", agent: this.agent, name: "general-purpose", goal: "Count lines of b.txt", delegation: "claude-msg_1", index: 1, count: 2, state: "cancelled" });
         this.holding = false;
+        const late = this.lateStep;
+        this.lateStep = "";
         this.end("interrupted");
+        if (late) this.timers.push(setTimeout(() => this.emit({ event: "tool.end", tool_id: late, name: "", ok: true, ms: 39_887 }), 600));
       });
     } else if (i.kind === "approve") {
       if (i.request_id !== this.waiting) throw new Error("no such request");
