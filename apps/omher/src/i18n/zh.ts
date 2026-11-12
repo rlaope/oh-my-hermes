@@ -111,6 +111,10 @@ export const zh: Record<Key, string> = {
   "omh.icon": "未安装 oh-my-hermes",
   "omh.pop.body": "装上后，机器人会把大任务分成几部分来计划并分派出去，计划的进展会显示在 Plans 里。",
   "omh.pop.hide": "不再显示",
+  "omhp.ready": "oh-my-hermes 已就绪。要设置模型吗？",
+  "omhp.fill": "放入输入框",
+  "omhp.ask": "用这台电脑上已有的提供商帮我设置模型。应用任何更改之前，先告诉我会改动什么。",
+  "omhp.restart": "{bot} 需要重启才能使用 oh-my-hermes：{cmd}",
   "onb.botsHint": "每个机器人是一个 Hermes 配置档。用上方的 + 添加。",
   "onb.sessionsHint": "在文件夹中以聊天方式运行编程代理。",
 

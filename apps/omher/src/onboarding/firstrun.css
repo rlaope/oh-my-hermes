@@ -5,3 +5,61 @@
   line-height: 1.45;
   color: var(--muted);
 }
+
+/* after omher installed oh-my-hermes: one quiet line above the composer, in the flow (it covers nothing) */
+.omhp {
+  width: min(var(--thread-w), calc(100% - 56px));
+  margin: 0 auto 6px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+  min-height: 22px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.omhp-t {
+  min-width: 0;
+}
+.omhp-cmd {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--body);
+  user-select: all;
+}
+.omhp-go {
+  flex: none;
+  padding: 1px 4px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.omhp-go:hover,
+.omhp-x:hover {
+  background: var(--hover);
+}
+.omhp-x {
+  flex: none;
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--quiet);
+  cursor: pointer;
+}
+.omhp-x:hover {
+  color: var(--ink);
+}

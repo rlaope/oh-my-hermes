@@ -9,6 +9,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import mark from "../assets/omher-mark.png";
 import "./gate.css";
 import { t } from "../i18n";
+import { omhInstalled } from "../onboarding/omhPrompt";
 
 export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes" };
 export type InstallEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };
@@ -168,6 +169,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         // The shell starts the bridge again after a clean install; poll it from "starting".
         setInstall("idle");
         setStatus({ state: "starting" });
+        omhInstalled();
       } else {
         setInstall("failed");
       }

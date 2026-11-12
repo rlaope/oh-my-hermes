@@ -1885,6 +1885,36 @@ class Skills(BridgeCase):
                 ob.read_skills(skills.parent)
             self.assertEqual(head.call_count, 1)  # three links back into the tree, one read
 
+    async def test_external_dirs_of_the_profile_config_are_listed_after_its_own(self):
+        """oh-my-hermes registers its skills in `skills.external_dirs` (not the profile's own folder): `skills.list`
+        reads those folders too, after the profile's own, as Hermes' skill scan does; a missing folder is skipped."""
+        async with Env() as env:
+            prof = env.home / "profiles" / "kami"
+            own = prof / "skills" / "plan"
+            own.mkdir(parents=True)
+            (own / "SKILL.md").write_text("---\nname: plan\ndescription: the bot's own\n---\n")
+            omh = env.home / "omh-skills"
+            for name, desc in (("omh-model-setup", "Model and provider configuration"), ("plan", "OMH's plan")):
+                (omh / "guide" / name).mkdir(parents=True)
+                (omh / "guide" / name / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {desc}\n---\n")
+            rel = prof / "more"
+            (rel / "x").mkdir(parents=True)
+            (rel / "x" / "SKILL.md").write_text("---\nname: relative-one\n---\n")
+            cfg = prof / "config.yaml"
+            cfg.write_text(cfg.read_text() + f"skills:\n  external_dirs:\n    - {omh}\n    - {env.home}/missing\n    - more\n    - {omh}\n")
+            before = self._tree(env.home)
+            s = await self.open(env)
+            got = {x["name"]: x["description"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(sorted(got), ["omh-model-setup", "plan", "relative-one"])
+            self.assertEqual(got["plan"], "the bot's own")  # the profile's own folder wins, as in Hermes
+            self.assertEqual(got["omh-model-setup"], "Model and provider configuration")
+            self.assertEqual(self._tree(env.home), before)
+            self.assertEqual(env.connects, [])
+            # one entry as a plain string (Hermes reads a scalar too)
+            cfg.write_text(cfg.read_text().split("skills:")[0] + f"skills:\n  external_dirs: {omh}\n")
+            again = {x["name"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(again, {"omh-model-setup", "plan"})
+
     async def test_no_skills_folder_and_unknown_bot(self):
         async with Env() as env:
             s = await self.open(env)

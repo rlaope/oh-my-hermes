@@ -530,6 +530,9 @@ const SKILL_SEED = [
   { name: "research", description: "Find sources, read them and answer with citations." },
   { name: "review", description: "Review a diff for correctness, tests and risk, worst first." },
 ];
+// Skills that arrive later (mock.skills): an install that registers oh-my-hermes' skills, listed from the
+// `after`-th skills.list read on (0 = at once). Cleared by mock.reset.
+let skillsLater = { add: [], after: 0 };
 
 // Subscription usage (usage.read). "default": Codex 73 % / 60 %, Claude limited (no %), Grok on PATH only.
 // "stale": the same Codex record after both reset times passed (no numbers). Switch with mock.usage {fixture}.
@@ -613,6 +616,7 @@ function acctFind(p) {
 
 function reset() {
   usageFixture = "default";
+  skillsLater = { add: [], after: 0 };
   providerFixture = "default";
   acct = {
     claude: [{ id: "default", label: "", email: "owner@example.com", logged_in: true }],
@@ -1008,7 +1012,11 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
-  "skills.list": (p) => (needBot(p), { skills: SKILL_SEED.map((x) => ({ ...x })) }),
+  "skills.list": (p) => {
+    needBot(p);
+    const late = skillsLater.after-- <= 0 ? skillsLater.add : [];
+    return { skills: [...SKILL_SEED, ...late].sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...x })) };
+  },
   "links.places": (p) => ({ places: structuredClone(LINK_PLACES[needBot(p).name] ?? { slack: {}, discord: {} }) }),
   "panel.terminal": (p) => ({
     runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
@@ -1262,6 +1270,10 @@ const OPS = {
     return {};
   },
   // ---- test control (not part of the protocol)
+  "mock.skills": (p) => {
+    skillsLater = { add: Array.isArray(p.add) ? p.add : [], after: Number(p.after) || 0 };
+    return {};
+  },
   "mock.usage": (p) => {
     if (!(p.fixture in USAGE)) throw new OpError("bad_request", "unknown usage fixture");
     usageFixture = p.fixture;

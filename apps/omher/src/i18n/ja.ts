@@ -111,6 +111,10 @@ export const ja: Record<Key, string> = {
   "omh.icon": "oh-my-hermes がインストールされていません",
   "omh.pop.body": "入れると、ボットが大きな仕事を部分に分けて計画して割り振り、その計画が進む様子を Plans で見られます。",
   "omh.pop.hide": "今後表示しない",
+  "omhp.ready": "oh-my-hermes の準備ができました。モデルを設定しますか？",
+  "omhp.fill": "入力欄に入れる",
+  "omhp.ask": "このコンピューターにすでにあるプロバイダーで、私のモデルを設定して。適用する前に、何が変わるかを先に見せて。",
+  "omhp.restart": "{bot} で oh-my-hermes を使うには再起動が必要です: {cmd}",
   "onb.botsHint": "ボットは Hermes プロファイルです。上の + で追加します。",
   "onb.sessionsHint": "フォルダでコーディングエージェントをチャットとして実行します。",
 
