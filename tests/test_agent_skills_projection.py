@@ -538,7 +538,10 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             self.assertFalse((mirror / "ulw-work/SKILL.md").is_symlink())
             from omh.install.agent_skills_projection import claude_skill_files
 
-            self.assertEqual((mirror / "ulw-work/SKILL.md").read_text(), claude_skill_files()["ulw-work/SKILL.md"])
+            # Skill files hold non-ASCII text; without an explicit encoding Windows decodes them as cp1252 and fails.
+            self.assertEqual(
+                (mirror / "ulw-work/SKILL.md").read_bytes(), claude_skill_files()["ulw-work/SKILL.md"].encode("utf-8")
+            )
             self.assertNotEqual((target / "ulw-work/SKILL.md").read_bytes(), (mirror / "ulw-work/SKILL.md").read_bytes())
             (mirror / "ulw-work/SKILL.md").write_bytes(b"local mirror edit")
             status = agent_skills_status(target, mirror=mirror)
