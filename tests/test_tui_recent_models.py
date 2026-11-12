@@ -17,7 +17,7 @@ from _tui_lines import lines_text
 from test_tui_modes import SID, RecordingClient, answer, make_app, notices
 from test_tui_muscle_memory import OPTIONS, send
 from omh.tui.app import App
-from omh.tui.gateway import Event
+from omh.tui.gateway import Event, Response
 from omh.tui.keys import CHAR, ENTER, Key
 from omh.tui.model_picker import (
     ALL_GROUP, RECENT_GROUP, RECENT_LIMIT, RECENT_SCHEMA, ModelPicker, model_rows, read_recent, record_recent,
@@ -106,6 +106,27 @@ class RecordTests(HomeTests):
         app._on_event(Event("session.info", SID, {"model": "claude-opus-5-5", "provider": "anthropic"}))
         answer(app, client, {"key": "model", "value": "claude-opus-5-5", "scope": "session"})
         self.assertIn("This session now runs claude-opus-5-5.", notices(app))
+        self.assertEqual(self.stored(), [OPUS])
+
+    def test_a_second_switch_sent_before_the_first_answer_keeps_the_first_route(self) -> None:
+        # Review round 2: /model opus, its session.info, then /model sonnet before opus' answer; Hermes' real order.
+        app, client = self.app()
+        send(app, "/model opus")
+        first = len(client.calls)
+        app._on_event(Event("session.info", SID, {"model": "claude-opus-5-5", "provider": "anthropic"}))
+        send(app, "/model sonnet")
+        self.assertEqual([name for name, _ in client.calls[first - 1:]], ["config.set", "config.set"])
+        app._on_response(Response(first, {"key": "model", "value": "claude-opus-5-5", "scope": "session"}, None))
+        app._on_event(Event("session.info", SID, {"model": "claude-sonnet-4-6", "provider": "anthropic"}))
+        answer(app, client, {"key": "model", "value": "claude-sonnet-4-6", "scope": "session"})
+        self.assertEqual(self.stored(), [("claude-sonnet-4-6", "anthropic"), OPUS])
+
+    def test_switching_to_the_model_already_running_reads_its_fresh_info(self) -> None:
+        app, client = self.app()
+        app._on_event(Event("session.info", SID, {"model": "claude-opus-5-5", "provider": "anthropic"}))
+        send(app, "/model claude-opus-5-5")
+        app._on_event(Event("session.info", SID, {"model": "claude-opus-5-5", "provider": "anthropic"}))
+        answer(app, client, {"key": "model", "value": "claude-opus-5-5", "scope": "session"})
         self.assertEqual(self.stored(), [OPUS])
 
     def test_the_provider_in_hermes_answer_wins_over_the_one_sent(self) -> None:

@@ -518,6 +518,8 @@ MODEL_CONFIRM_QID = "confirm"
 MODEL_KEEP_CHOICE = "Keep {current}"
 MODEL_SWITCH_CHOICE = "Switch to {model} anyway"
 MODEL_KEPT_NOTICE = "Model not switched: this session stays on {current}."
+# The `session.info` routes kept for an outstanding /model switch to read its provider from (`info_routes`).
+INFO_ROUTES_KEPT = 16
 MODEL_CONFIRM_STALE_NOTICE = "Model not switched: the session changed before the confirmation landed; run /model again."
 # A question the TUI asks itself goes through the slot like Hermes' own; its answer stays here (`_respond`).
 LOCAL_QUESTION_PREFIX = "omh-local-"
@@ -2216,9 +2218,12 @@ class App(ModesMixin, AgentViewMixin):
         # The model a switch was deferred to (Hermes makes it as the next turn starts) and `turns_ended` then; None
         # once it is over. A drop Hermes reports names it (`_model_switch_dropped`).
         self.model_deferred: tuple[str, int] | None = None
-        # The (model, provider) the newest `session.info` named since a /model switch went out; Hermes' stdio entry
-        # says the switched route there before it answers `config.set`, whose answer names no provider.
-        self.switch_route: tuple[str, str] | None = None
+        # Every (model, provider) a `session.info` named, in arrival order, and how many came before the first one
+        # kept; Hermes' stdio entry says a switched route there before it answers `config.set`, whose answer names no
+        # provider. Each switch reads only the routes said after it went out (`_switch_model` notes the count), so a
+        # second /model sent while the first is out cannot take the first one's route away.
+        self.info_routes: list[tuple[str, str]] = []
+        self.info_routes_dropped = 0
         # Hermes' configured default model and provider (a sessionless `model.options`) when last read, and the
         # config file's mtime then; None until read. A default that moves is switched to (`_check_default`).
         self.default_route: tuple[str, str] | None = None
@@ -4346,7 +4351,10 @@ class App(ModesMixin, AgentViewMixin):
         self.model = as_text(payload.get("model")) or self.model
         route = (as_text(payload.get("model")).strip(), as_text(payload.get("provider")).strip())
         if all(route):
-            self.switch_route = route
+            self.info_routes.append(route)
+            if len(self.info_routes) > INFO_ROUTES_KEPT:
+                del self.info_routes[0]
+                self.info_routes_dropped += 1
         self._take_usage(payload.get("usage"))
         self._take_session_state(payload)
         # `running` is not read: the previous turn's closing `running: false` arrives after
@@ -5337,15 +5345,17 @@ class App(ModesMixin, AgentViewMixin):
             with self._for_command(echo):
                 self.transcript.add_notice(CALL_EXPIRED_NOTICE.format(method="config.set", seconds=seconds), NOTICE_WARN)
 
-        self.switch_route = None  # an earlier info names the route being left, not the one Hermes confirms
+        # An info said before this switch went out names the route being left, not the one Hermes confirms for it.
+        since = self.info_routes_dropped + len(self.info_routes)
         sent = self._request(
-            "config.set", params, lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result)),
+            "config.set", params,
+            lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result, since)),
             lambda _error: bool(settled()), unanswered,
         )
         if sent is not None and echo is not None and not echo.done:
             self.transcript.add_notice(line)  # under the echo until the answer takes its place
 
-    def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any]) -> None:
+    def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any], since: int = -1) -> None:
         """A `config.set model` answer: switched (for this session, or as Hermes' default too), switched at the next
         turn, or not until the person confirms."""
         if result.get("confirm_required"):
@@ -5372,26 +5382,26 @@ class App(ModesMixin, AgentViewMixin):
         self.model = model
         self.model_deferred = None
         self.dirty = True
-        self._remember_model(model, as_text(result.get("provider")).strip(), value)
+        self._remember_model(model, as_text(result.get("provider")).strip(), value, since)
         global_scope = result.get("scope") == MODEL_GLOBAL_SCOPE
         self.transcript.add_notice((MODEL_SWITCHED_GLOBAL_NOTICE if global_scope else MODEL_SWITCHED_NOTICE).format(model=model))
         warning = as_text(result.get("warning")).strip()
         if warning:
             self.transcript.add_notice(warning, NOTICE_WARN)
 
-    def _remember_model(self, model: str, provider: str, value: str) -> None:
+    def _remember_model(self, model: str, provider: str, value: str, since: int = -1) -> None:
         """A switch Hermes made to `model`, the model its answer named (an alias sent resolves to it), goes to the front
         of the OMH home's recent list (`model_picker.record_recent`), which bare /model shows first.
 
         The provider is Hermes' too: its answer's (the attach adapter passes the shared owner's), else the one the
-        `session.info` since the switch went out named with that model (the stdio entry's), else the one `value`
-        sent, which Hermes switched on. A switch none of them names a provider for, or a launch without an OMH home,
-        records nothing.
+        `session.info` said after this switch went out (`since`, a count of infos) named with that model (the stdio
+        entry's), else the one `value` sent, which Hermes switched on. A switch none of them names a provider for, or
+        a launch without an OMH home, records nothing.
         """
         home = self._omh_home()
-        route = self.switch_route
-        if not provider and route is not None and route[0] == model:
-            provider = route[1]
+        if not provider and since >= 0:
+            heard = self.info_routes[max(since - self.info_routes_dropped, 0):]
+            provider = next((said for named, said in reversed(heard) if named == model), "")
         provider = provider or (contract.model_switch_parts(value) or ("", ""))[1]
         if home is not None and provider:
             record_recent(home, model, provider)
