@@ -1,7 +1,8 @@
 // Colours for the matches find highlights, taken from the terminal's own theme so they read on every one of them:
-// a match is a quiet tint of the theme's yellow over its background, the active match a much stronger mix with the
-// theme's foreground as its outline, so it is the one the eye lands on. A mix is eased back toward the background until the
-// theme's text is still readable on it (xterm wants plain #rrggbb here, no alpha).
+// a match is a quiet tint of the theme's yellow over its background, eased back toward the background until the
+// theme's text is still readable on it. The active match is the one the eye lands on: the theme's yellow at full
+// strength (its hue, saturated), made just light or dark enough for the theme's text to read on it, with the
+// theme's foreground as its outline. (xterm wants plain #rrggbb here, no alpha.)
 import type { ITheme } from "@xterm/xterm";
 import { luminance } from "./themes";
 
@@ -26,6 +27,10 @@ const mix = (base: [number, number, number], top: [number, number, number], amou
 /** How much of the theme's yellow a plain match takes at most. Kept low so the active match, which takes as much as
  *  its text allows, is plainly the strongest thing on the screen. */
 const PLAIN_AMOUNT = 0.22;
+/** The active match's fill is at least this saturated, whatever the theme's yellow is. */
+const ACTIVE_SATURATION = 0.85;
+/** Under dark text (a light theme) the active fill is no darker than this: a deep amber, not a brown. */
+const ACTIVE_LIGHTNESS_UNDER_DARK_TEXT = 0.38;
 /** The least contrast the theme's text keeps on the active match. */
 export const ACTIVE_TEXT_CONTRAST = 3.05;
 
@@ -45,6 +50,41 @@ function readableAmount(bg: [number, number, number], hue: [number, number, numb
   return amount;
 }
 
+/** A colour's hue (degrees) and saturation, as HSL has them. */
+function hueOf([r, g, b]: [number, number, number]): { h: number; s: number } {
+  const [x, y, z] = [r / 255, g / 255, b / 255];
+  const max = Math.max(x, y, z);
+  const min = Math.min(x, y, z);
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0 };
+  const l = (max + min) / 2;
+  const h = max === x ? ((y - z) / d) % 6 : max === y ? (z - x) / d + 2 : (x - y) / d + 4;
+  return { h: (h * 60 + 360) % 360, s: d / (1 - Math.abs(2 * l - 1)) };
+}
+function hsl(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return hex([r, g, b].map((v) => (v + m) * 255));
+}
+
+/** The strongest fill of `hue`'s own colour the theme's text reads on at `target`: saturated, and as far from the
+ *  background as the text allows. It starts as a deep amber under dark text and at the colour's full strength under
+ *  light text, and moves away from the text only as far as the text needs to read. Null when the hue is a grey,
+ *  which has no colour to strengthen. */
+function strongFill(hue: [number, number, number], fgHex: string, bgHex: string, target: number): string | null {
+  const { h, s } = hueOf(hue);
+  if (s < 0.15) return null;
+  const sat = Math.max(s, ACTIVE_SATURATION);
+  const textIsDark = (luminance(fgHex) ?? 1) < (luminance(bgHex) ?? 0);
+  for (let i = 0; i <= 55; i++) {
+    const c = hsl(h, sat, textIsDark ? ACTIVE_LIGHTNESS_UNDER_DARK_TEXT + i / 100 : 0.5 - i / 100);
+    if (contrastRatio(fgHex, c) >= target) return c;
+  }
+  return null;
+}
+
 export function findColors(theme: ITheme): FindColors {
   const bg = rgb(theme.background) ?? [0, 0, 0];
   const fgHex = theme.foreground ?? "#ffffff";
@@ -57,10 +97,12 @@ export function findColors(theme: ITheme): FindColors {
   const m = readableAmount(bg, hue, fgHex, PLAIN_AMOUNT, 0.08, target);
   // the active match: the strongest fill the theme's text still reads on (3:1, large-text contrast: it is one
   // word, outlined), so it stands out from the other matches instead of sitting among them; outlined in the
-  // theme's text colour (which stands out from both mixes on any theme)
-  const a = readableAmount(bg, hue, fgHex, Math.min(0.95, m + 0.5), m + 0.08, Math.min(ACTIVE_TEXT_CONTRAST, target));
+  // theme's text colour (which stands out from both fills on any theme). A theme with no colour in its yellow
+  // gets the strongest mix instead.
+  const activeTarget = Math.min(ACTIVE_TEXT_CONTRAST, target);
+  const a = readableAmount(bg, hue, fgHex, Math.min(0.95, m + 0.5), m + 0.08, activeTarget);
   const match = mix(bg, hue, m);
-  const active = mix(bg, hue, a);
+  const active = strongFill(hue, fgHex, hex(bg), activeTarget) ?? mix(bg, hue, a);
   return {
     matchBackground: match,
     matchOverviewRuler: match,
