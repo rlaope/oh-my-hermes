@@ -253,6 +253,21 @@ export class MockHost implements SessionHost {
           setTimeout(() => s.exit(0), 10);
           return;
         }
+        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]`: the program rings (BEL, or an OSC 9 message),
+        // reports progress (OSC 9;4, not a ring) or ends later, as an agent does while the person looks elsewhere
+        const later = /^after (\d+) (bell|osc9|progress|exit)(?: (\d+))?$/.exec(line);
+        if (later) {
+          s.out(`\r\n${PROMPT}`);
+          setTimeout(() => {
+            if (this.live.get(id) !== s) return;
+            if (later[2] === "bell") return s.out("\x07");
+            if (later[2] === "osc9") return s.out("\x1b]9;Needs your approval\x07");
+            if (later[2] === "progress") return s.out("\x1b]9;4;1;50\x07");
+            this.live.delete(id);
+            s.exit(Number(later[3] ?? 0));
+          }, Number(later[1]));
+          continue;
+        }
         s.out(line ? `\r\n\x1b[2m(mock) you said:\x1b[0m ${line}\r\n${PROMPT}` : `\r\n${PROMPT}`);
       } else if (ch === "\x03") {
         s.line = "";

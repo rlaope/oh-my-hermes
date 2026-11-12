@@ -8,7 +8,7 @@ import { t } from "../i18n";
 import { percent, shortError, updateHost, type PendingUpdate } from "./updater";
 import { runningLine, UpdateConfirm } from "./UpdateConfirm";
 import { getSessions } from "../sessions/sessions";
-import { agentDef } from "../sessions/agents";
+import { sessionMode } from "../sessions/agents";
 import { saveResumeNow } from "../app/resumeBoot";
 
 const EVERY_MS = 6 * 60 * 60 * 1000;
@@ -109,7 +109,7 @@ export function UpdateButton() {
       {asking && ss && (
         <UpdateConfirm
           version={update.version}
-          running={runningLine(ss.list, (r) => ss.agents?.find((a) => a.id === r.agent)?.mode ?? agentDef(r.agent).mode)}
+          running={runningLine(ss.list, (r) => sessionMode(ss.agents, r))}
           onCancel={close}
           onConfirm={() => {
             setAsking(false);

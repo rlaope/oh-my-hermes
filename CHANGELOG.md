@@ -291,6 +291,29 @@ All notable changes will be documented here.
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.
 
+- **A New session in omher opens as a chat or in the agent's own terminal.**
+  Beside the agent in a New session, a quiet Chat | Terminal choice (Chat by
+  default, the last pick remembered per agent) lets a person run `claude`,
+  `codex`, `omo`, `pi`, `omp`, `opencode` or `omh` as the real CLI in a
+  terminal instead of omher's chat; Start opens it in the folder and types
+  nothing. A session opened as a terminal ends with its program (an ended line
+  and Restart), has no Chat toggle or model control, shows the live dot in the
+  list, and after omher restarts comes back not running, waiting for Resume.
+  Every session row ends with a small mark for its view, a speech bubble for a
+  chat and a prompt window for a terminal, so the list says which is which.
+  A row also shows what happened while you looked elsewhere, with a system
+  notification for each: a yellow warning triangle and "waiting" when the
+  session waits for you (an approval or question, or its terminal rang its
+  bell or sent an OSC 9 / 777 notification), a red exclamation mark and
+  "error" when it stopped on an error or a non-zero exit, a green check and
+  "done" when it finished an answer or its program ended; opening the session
+  clears the waiting and done ones, and a session nothing runs in steps back
+  in the list.
+  OpenCode works both ways: its chat is as before, and as a terminal it is the
+  person's own OpenCode with their own rules. DSH has no terminal, Grok has no
+  chat, and Hermes alone (no `omh`) has only its chat; the choice shows those
+  dimmed with the reason. Bot chats are unchanged.
+
 - **omher starts the agent you picked, not another program with its name, and
   finds Grok and pi where their installers put them.** When Homebrew's `grok`
   regex tool, or any other program called `claude`, `codex`, `omo`, `pi` or

@@ -124,6 +124,52 @@ export function tildePath(path: string, home: string | null): string {
   return path;
 }
 
+/** How a session opens: as omher's chat, or as the agent's own terminal. The person picks it in a New session. */
+export type OpenAs = "chat" | "terminal";
+
+/** What the person picked per agent last time (`omher.sessions.open`). */
+export type Opens = Partial<Record<AgentId, OpenAs>>;
+
+export const OPEN_KEY = "omher.sessions.open";
+
+/** Saved picks, defensively: anything malformed is dropped. */
+export function parseOpens(raw: string | null): Opens {
+  try {
+    const v = raw ? JSON.parse(raw) : {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    const out: Opens = {};
+    for (const [k, w] of Object.entries(v)) if (isAgentId(k) && (w === "chat" || w === "terminal")) out[k] = w;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Which ways `agent` can open: omher's chat and/or its own terminal. oh-my-hermes has a terminal (`omh`) but, for a
+ *  person who has Hermes and no `omh`, only the Hermes chat; DSH has no terminal here; Grok has no chat here. */
+export function opensAs(agent: AgentId, agents?: AgentInfo[] | null): Record<OpenAs, boolean> {
+  if (agent === "dsh") return { chat: true, terminal: false };
+  if (agent === "grok") return { chat: false, terminal: true };
+  if (agent === "omh" && hermesOnly(agents)) return { chat: true, terminal: false };
+  return { chat: true, terminal: true };
+}
+
+/** The way a New session opens: the one remembered for the agent if it still has it, else Chat, else the terminal
+ *  (an agent with only one way). */
+export function draftOpen(agent: AgentId, agents: AgentInfo[] | null | undefined, remembered?: Opens): OpenAs {
+  const has = opensAs(agent, agents);
+  const w = remembered?.[agent];
+  if (w && has[w]) return w;
+  return has.chat ? "chat" : "terminal";
+}
+
+/** Whether a session runs as a chat, a Hermes chat or a terminal: a session opened as a terminal is one whatever
+ *  its agent usually does; any other is as its agent opens (the shell's list, else this app's). */
+export function sessionMode(agents: AgentInfo[] | null | undefined, rec: Pick<SessionRec, "agent" | "open">): AgentMode {
+  if (rec.open === "terminal") return "terminal";
+  return agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode;
+}
+
 /** `draft` = a New session chat whose agent and folder can still change: nothing runs until its first message
  *  (or Start, for an agent that opens in its terminal). */
 export type SessionStatus = "draft" | "starting" | "running" | "exited" | "failed";
@@ -140,6 +186,9 @@ export interface SessionRec {
   error?: string;
   /** What the main column shows: the chat or the terminal. */
   view: "chat" | "terminal";
+  /** `terminal` = the person opened it as the agent's own terminal (it has no chat, whatever the agent usually
+   *  does). None = as the agent opens. */
+  open?: OpenAs;
   /** The chat's own session id (Claude Code session, Codex thread, pi session), when the agent said. */
   agentSession?: string;
   /** The chat's model, when known. */
@@ -176,7 +225,17 @@ export interface ChatLive {
   turn: boolean;
   /** an approval or question waits for the person */
   needsYou: boolean;
+  /** its last turn stopped on an error and no turn has run since */
+  failed?: boolean;
 }
+
+/** What a session did while the person was not looking at it, kept on its row until they open it: its terminal rang
+ *  its bell, or it finished (a turn, or the program itself). */
+export type Unseen = "bell" | "end";
+
+/** The state a row shows in the time's place, as a sign and a word: it waits for the person, it stopped on an error,
+ *  or it finished something the person has not seen. */
+export type RowMark = "needs" | "error" | "done";
 
 /** The other rows a row is told apart from: every session's folder, and the home folder for `~`. */
 export interface RowContext {
@@ -195,6 +254,7 @@ export function rowModel(
   s: SessionRec,
   chat?: ChatLive,
   ctx?: RowContext,
+  unseen?: Unseen,
 ): {
   title: string;
   titleSource: TitleSource;
@@ -203,6 +263,10 @@ export function rowModel(
   sub: string;
   live: boolean;
   needsYou: boolean;
+  /** the state the row shows, if any */
+  mark: RowMark | null;
+  /** nothing runs in it (ended, could not start, or waiting for Resume): the row steps back */
+  over: boolean;
   ts: number;
 } {
   const label = agentLabel(s.agent, ctx?.agents);
@@ -215,24 +279,33 @@ export function rowModel(
       sub: s.cwd ? tildePath(s.cwd, ctx?.home ?? null) : label,
       live: false,
       needsYou: false,
+      mark: null,
+      over: false,
       ts: s.startedAt / 1000,
     };
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
+  // an error: it could not start, its program ended with an error or a non-zero exit, or its last turn failed
+  const failedTurn = s.status === "running" && !!chat?.failed;
+  const broke =
+    s.status === "failed" || failedTurn || (s.status === "exited" && !s.paused && (!!s.error || (typeof s.exitCode === "number" && s.exitCode !== 0)));
+  const mark: RowMark | null = needsYou || (alive && unseen === "bell") ? "needs" : broke ? "error" : unseen === "end" ? "done" : null;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
   // the amber dot say it, so the line is just the agent.
-  const state =
-    needsYou || s.status === "running"
+  // The state's sign and word (waiting, error, done) stand in the time's place on line 1, so line 2 is as before.
+  const state = needsYou
+    ? ""
+    : s.status === "running"
       ? ""
       : s.paused
         ? t("ss.paused")
         : s.status === "starting"
-        ? t("ss.starting")
-        : s.status === "failed"
-          ? t("ss.couldNotStart")
-          : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
-            ? t("ss.ended")
-            : t("ss.endedExit", { code: s.exitCode });
+          ? t("ss.starting")
+          : s.status === "failed"
+            ? t("ss.couldNotStart")
+            : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
+              ? t("ss.ended")
+              : t("ss.endedExit", { code: s.exitCode });
   // A chat is live while a turn runs; a terminal while its program runs.
   const live = s.view === "chat" && chat ? alive && chat.turn : alive;
   const folder = folderName(s.cwd);
@@ -249,6 +322,8 @@ export function rowModel(
     sub: `${place}${agent}`,
     live,
     needsYou,
+    mark,
+    over: !alive,
     ts: s.startedAt / 1000,
   };
 }
