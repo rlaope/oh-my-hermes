@@ -14,6 +14,7 @@ import { AutomationsPage } from "../pages/Automations";
 import { PluginsPage } from "../pages/Plugins";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
+import { useAsksBadge } from "./badge";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
 const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
@@ -24,6 +25,7 @@ export function App() {
   useThemeAttribute(s.ui.theme);
   useLookAttributes(s.ui.look);
   useShortcuts();
+  useAsksBadge();
   useEffect(() => {
     void s.init();
     // init is idempotent in the store; run once on mount

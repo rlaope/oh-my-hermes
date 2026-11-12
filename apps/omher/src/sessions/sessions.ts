@@ -28,7 +28,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
-import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
+import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
@@ -737,6 +737,85 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return id;
   };
 
+  /** New session here: a draft with session `id`'s agent and folder (an open draft takes them instead). */
+  const draftHere = (id: string): string | null => {
+    const r = rec(id);
+    if (!r) return null;
+    const d = draft(r.agent);
+    if (r.cwd) setDraft(d, { agent: r.agent, cwd: r.cwd });
+    return d;
+  };
+
+  /**
+   * Continue a conversation Claude Code or Codex keeps for a folder (made in its CLI, or anywhere else): a session in
+   * that folder whose chat shows the conversation's last messages, and whose agent continues it (Claude Code
+   * `--resume`, Codex `thread/resume`). A session that already runs that conversation is opened instead.
+   */
+  const continuePast = async (chat: PastChat): Promise<string> => {
+    const there = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && r.status !== "draft");
+    if (there) {
+      store().actions.openSession(there.id);
+      if (there.status === "exited" || there.status === "failed") void restart(there.id);
+      return there.id;
+    }
+    const id = `s${++seq}`;
+    const startedAt = Date.now();
+    const r: SessionRec = {
+      id,
+      agent: chat.agent,
+      cwd: chat.cwd,
+      startedAt,
+      status: "starting",
+      view: "chat",
+      agentSession: chat.id,
+      ...(chat.named ? { agentTitle: chat.title } : { promptTitle: chat.title }),
+    };
+    const recent = pushRecent(state.recent, { agent: chat.agent, cwd: chat.cwd, at: startedAt });
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    } catch {
+      /* no storage */
+    }
+    set({ list: [r, ...state.list], recent });
+    keys.set(id, `agent:${id}`);
+    registerRoute(id);
+    store().actions.openSession(id);
+    await ready();
+    let msgs: Msg[] = [];
+    try {
+      msgs = (await host.pastMessages(chat.agent, chat.id, chat.cwd)).map((m, i) => ({ id: `p-${i}`, role: m.role, text: m.text, ts: m.ts }));
+    } catch {
+      /* the conversation continues all the same; only its earlier messages are not shown */
+    }
+    if (!rec(id)) return id; // closed meanwhile
+    openChat(id, "", msgs);
+    onAgentSession(id);
+    await startAgentChat(id, chat.id);
+    return id;
+  };
+
+  /** Show session `id`'s folder in the file manager; a failure is said under its chat. */
+  const revealFolder = async (id: string) => {
+    const r = rec(id);
+    if (!r?.cwd) return;
+    try {
+      await host.reveal(r.cwd);
+    } catch (e) {
+      note(id, errText(e));
+    }
+  };
+
+  /** Open the person's own system terminal in session `id`'s folder; a failure is said under its chat. */
+  const openTerminal = async (id: string) => {
+    const r = rec(id);
+    if (!r?.cwd) return;
+    try {
+      await host.openTerminal(r.cwd);
+    } catch (e) {
+      note(id, errText(e));
+    }
+  };
+
   /** Change a draft's agent or folder (refused once it has started). */
   const setDraft = (id: string, p: { agent?: AgentId; cwd?: string }) => {
     const r = rec(id);
@@ -1300,6 +1379,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     reset: ready,
     loadAgents,
     draft,
+    draftHere,
+    continuePast,
+    revealFolder,
+    openTerminal,
     setDraft,
     setOpen,
     chooseFolder,

@@ -118,7 +118,7 @@ test("shortcuts: Mod+2 opens the second bot, Mod+K searches, Mod+. toggles Detai
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
 
   await page.keyboard.press(`${key}+k`);
-  await expect(page.getByRole("searchbox", { name: "Search bots" })).toBeFocused();
+  await expect(page.getByRole("searchbox", { name: "Search bots and sessions" })).toBeFocused();
   await page.keyboard.press("Escape");
 
   const details = page.getByTestId("details");
@@ -139,7 +139,7 @@ test("Esc stops a running answer, but not while the search field has focus", asy
   await send(page, "check the 502s");
   await expect(page.getByTestId("stop")).toBeVisible();
   // Esc inside the search field only clears the search
-  await page.getByRole("searchbox", { name: "Search bots" }).focus();
+  await page.getByRole("searchbox", { name: "Search bots and sessions" }).focus();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("stop")).toBeVisible();
   expect((await mock("mock.calls")).calls.filter((c: any) => c.op === "chat.interrupt")).toEqual([]);
