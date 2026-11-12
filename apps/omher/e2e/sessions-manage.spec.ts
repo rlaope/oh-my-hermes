@@ -213,7 +213,15 @@ test("⌘N opens the + menu; ⌘⇧] and ⌘⇧[ move between sessions; nothing 
 test("the asks count follows the approvals and questions waiting", async ({ page }) => {
   await open(page);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherBadge?: number }).__omherBadge)).toBe(0);
-  await start(page, "/Users/you/code/web-app", "/approve");
+  // a chat whose first message asks for an approval: it waits on the person ("Needs you"), not Ready
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/web-app"));
+  await page.getByTestId("session-new").click();
+  await page.getByTestId("session-agent-claude").click();
+  await page.getByTestId("session-folder").click();
+  await page.getByTestId("session-choose").click();
+  await page.getByTestId("composer").fill("/approve");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-status")).toHaveText("Needs you");
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherBadge?: number }).__omherBadge)).toBe(1);
   await page.getByTestId("card-approval").getByRole("button", { name: "Allow once" }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __omherBadge?: number }).__omherBadge)).toBe(0);

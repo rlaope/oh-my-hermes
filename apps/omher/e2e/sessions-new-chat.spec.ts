@@ -285,6 +285,10 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
+  // up from the top wraps to the menu's last row: "Continue a conversation" with Codex, under the agents
+  await expect(menu.getByTestId("session-past-codex")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
   await expect(menu.getByTestId("session-agent-opencode")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
