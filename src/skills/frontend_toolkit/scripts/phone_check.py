@@ -39,7 +39,8 @@ NO_DATA_HINT = "no row-like element found; pass --data '<css selector>' for the 
 PAST_EDGE_NOTE = ("an element clipped by an overflow:hidden ancestor can appear here; "
                   "the overflow number above is the verdict, this list only points")
 PAST_LEFT_EDGE_NOTE = ("this page starts at its right edge and overflows to the left, so this lists elements "
-                       "whose left edge passes the viewport's left edge; " + PAST_EDGE_NOTE)
+                       "whose left edge lies left of page x 0, a document coordinate and not the screen's "
+                       "left edge at load; " + PAST_EDGE_NOTE)
 
 # One fixed script; every user string reaches it as a plain argument, never as code.
 # It classifies every shown element in the page and returns a count over all of
