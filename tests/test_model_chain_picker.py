@@ -1656,6 +1656,53 @@ class PickerSaveRegressionTests(unittest.TestCase):
                 self.assertFalse(changes)
                 self.assertEqual([p.read_bytes() for p in paths], before)
 
+    def test_an_enable_only_save_leaves_the_stored_chain_as_written(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            chain = [
+                {"model_id": "deepseek-flash", "reasoning_effort": "HIGH", "note": "kept"},
+                {"model_id": "glm-5.3", "reasoning_effort": ""},
+            ]
+            _write_identities(root, {"review": {"prompt": "  same  ", "model_chain": chain}})
+            path = _omh_home(root) / "routing" / "identities.json"
+            for expected_enabled in (False, True):
+                payload = _payload(root)
+                changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [KEY_TOGGLE, KEY_ENTER])
+                result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+                self.assertNotIn("error", result)
+                stored = json.loads(path.read_text(encoding="utf-8"))["identities"]["review"]
+                self.assertEqual(stored["model_chain"], chain)
+                self.assertEqual(stored["prompt"], "  same  ")
+                self.assertEqual(stored.get("enabled", True), expected_enabled)
+
+    def test_a_chain_edit_still_rewrites_the_stored_chain(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "same", "model_chain": [
+                {"model_id": "deepseek-flash", "reasoning_effort": "HIGH", "note": "kept"}]}})
+            payload = _payload(root)
+            changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [KEY_RIGHT, KEY_ENTER])
+            result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+            self.assertNotIn("error", result)
+            stored = json.loads((_omh_home(root) / "routing" / "identities.json").read_text(encoding="utf-8"))
+            head = stored["identities"]["review"]["model_chain"][0]
+            self.assertNotEqual(head["model_id"], "deepseek-flash")
+            self.assertEqual(set(head), {"model_id", "reasoning_effort"})
+
+    def test_a_document_nested_too_deeply_at_save_is_refused_not_raised(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "same", "model_chain": [{"model_id": "deepseek-flash"}]}})
+            payload = _payload(root)
+            changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [KEY_TOGGLE, KEY_ENTER])
+            path = _omh_home(root) / "routing" / "identities.json"
+            # Rewritten while the picker was open.
+            deep = "[" * 100_000 + "]" * 100_000
+            path.write_text(deep, encoding="utf-8")
+            result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+            self.assertIn("nested too deeply", result["error"])
+            self.assertEqual(path.read_text(encoding="utf-8"), deep)
+
     def test_identity_edit_preserves_invalid_sibling_and_category_bytes(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

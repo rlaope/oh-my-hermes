@@ -175,6 +175,24 @@ class BundleChainReaderTest(unittest.TestCase):
                 self.assertEqual(bool(bundle["identities"]), enabled is True)
                 self.assertEqual(bool(read_identity_prompts(self.homes.omh)), enabled is True)
 
+    def test_a_document_without_the_enabled_field_keeps_its_earlier_fingerprint(self):
+        # A route frozen before `enabled` existed carries this digest; the fallback compares it with the
+        # live one, so a moved digest would stop every such conversation with `identity_config_changed`.
+        profile = {"prompt": "review code", "model_chain": [{"model_id": "claude-opus-5-5", "reasoning_effort": "high"}]}
+        digests = {}
+        for label, extra in (("absent", {}), ("true", {"enabled": True}), ("false", {"enabled": False})):
+            self.homes.write_identities({
+                "schema_version": "omh_identity_profiles/v1",
+                "identities": {"reviewer": {**profile, **extra}},
+            })
+            canonical = read_identity_profiles_config(self.homes.omh)["fingerprint"]["digest"]
+            self.assertEqual(read_identity_chains(self.homes.omh)["fingerprint"]["digest"], canonical)
+            digests[label] = canonical
+        # The digest this document had before the field was added.
+        self.assertEqual(digests["absent"], "3048b8b8776e6139")
+        self.assertEqual(digests["true"], digests["absent"])
+        self.assertNotEqual(digests["false"], digests["absent"])
+
     def test_absent_document_reads_empty(self):
         result = read_identity_chains(self.homes.omh)
         self.assertEqual(result["identities"], {})

@@ -46,7 +46,14 @@ def identity_profiles_path(omh_home: Path) -> Path:
 
 
 def _fingerprint(identities: Mapping[str, object]) -> dict[str, str]:
-    canonical = json.dumps(identities, sort_keys=True, separators=(",", ":"))
+    # `enabled` enters the digest only when it is false: a document written before the field existed, or one
+    # that spells the default out, keeps the digest it had, so a route frozen under it still matches.
+    basis = {
+        name: {key: value for key, value in profile.items() if not (key == "enabled" and value is True)}
+        if isinstance(profile, Mapping) else profile
+        for name, profile in identities.items()
+    }
+    canonical = json.dumps(basis, sort_keys=True, separators=(",", ":"))
     return {
         "source": "identities.json",
         "digest": sha256(canonical.encode("utf-8")).hexdigest()[:16],

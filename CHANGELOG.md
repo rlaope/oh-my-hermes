@@ -549,6 +549,18 @@ All notable changes will be documented here.
   Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
   Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
 
+- **Custom identities show up in the model picker, and Space turns one off.**
+  `omh model` and `/omh-model` list each identity from `identities.json`
+  under the built-in categories; left/right and `-`/`+` edit its model chain
+  and Space disables or restores it, without touching its prompt. A disabled
+  identity stays in the picker but is refused by routing, prompt injection
+  and fanout. A new session's system prompt also names the enabled
+  identities, so the main agent can pick one. Saving only the on/off state
+  leaves the stored chain as written, and a document without the new
+  `enabled` field keeps the fingerprint it had, so a conversation already
+  routed under an identity keeps its fallback chain across the update.
+  Contributed by @yqm-307 (#2799).
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

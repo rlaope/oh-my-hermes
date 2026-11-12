@@ -200,7 +200,7 @@ def identity_context_payload(
 # provider path is stripped (the same spelling `model_family` reads).
 #
 # The fingerprint is `sha256(canonical JSON of the validated identities)`
-# over `{prompt, model_chain, enabled}` profiles — the same canonical form the
+# over `{prompt, model_chain}` profiles, plus `enabled` only when it is false — the same canonical form the
 # `omh.coding` loader computes, so a digest from this reader names the same
 # basis as one from the resolver side.
 
@@ -287,7 +287,14 @@ def _validated_profiles(identities: Mapping | None) -> dict[str, dict[str, objec
 
 
 def _fingerprint(identities: Mapping[str, object]) -> dict[str, str]:
-    canonical = json.dumps(identities, sort_keys=True, separators=(",", ":"))
+    # `enabled` enters the digest only when it is false: a document written before the field existed, or one
+    # that spells the default out, keeps the digest it had, so a route frozen under it still matches.
+    basis = {
+        name: {key: value for key, value in profile.items() if not (key == "enabled" and value is True)}
+        if isinstance(profile, Mapping) else profile
+        for name, profile in identities.items()
+    }
+    canonical = json.dumps(basis, sort_keys=True, separators=(",", ":"))
     return {
         "source": "identities.json",
         "digest": hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16],
@@ -353,7 +360,11 @@ def compose_identity_picker_changes(
 ) -> dict[str, object]:
     """Compose and validate all edits before either picker file is written."""
     path = identity_profiles_path(omh_home)
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except RecursionError as exc:
+        # Not a ValueError, so the save's refusal path would miss it and the picker would end in a traceback.
+        raise ValueError(f"refusing to edit {path}: the document is nested too deeply to read") from exc
     if (
         not isinstance(raw, dict)
         or raw.get("schema_version") != IDENTITY_PROFILES_SCHEMA_VERSION
@@ -386,7 +397,10 @@ def compose_identity_picker_changes(
                 if validated is None:
                     raise ValueError(f"identity {name!r} chain entry {position} is invalid")
                 chain.append(validated)
-            candidate["model_chain"] = chain
+            # A save that only toggles the identity still names its chain. Leave the stored entries as the
+            # person wrote them unless the chain itself changed.
+            if tuple(chain) != tuple(valid_names[name]["model_chain"]):  # type: ignore[arg-type]
+                candidate["model_chain"] = chain
         if "enabled" in change:
             enabled = change["enabled"]
             if not isinstance(enabled, bool):
