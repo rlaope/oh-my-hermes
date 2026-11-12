@@ -111,6 +111,20 @@ _BINARY = getattr(os, "O_BINARY", 0)
 # does not already import it from there (`omh_import_root`). `omh` always sets
 # it, so a value left in the person's environment never picks the tree.
 SITE_ENV = "OMH_TUI_SITE"
+# Frontend-only launch state: Hermes' own terminal must not inherit it on fallback.
+# OMH_HOME is a general store selection, not frontend state; HERMES_HOME is set by the caller.
+TUI_LAUNCH_ENV_NAMES = (
+    "HERMES_TUI_DIR",
+    "OMH_TUI_PYTHON",
+    SITE_ENV,
+    FALLBACK_SENTINEL_ENV,
+    SESSION_FILE_ENV,
+    PICK_SESSION_ENV,
+    RELAUNCH_FILE_ENV,
+    UPDATED_ENV,
+    RUNTIME_ENV,
+    BOTS_HOME_ENV,
+)
 # Signals that end `omh` while the TUI runs: closing the terminal window sends SIGHUP.
 EXIT_SIGNALS = ("SIGTERM", "SIGHUP")
 

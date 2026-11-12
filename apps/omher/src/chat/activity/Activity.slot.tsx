@@ -1,13 +1,14 @@
 // The one activity line per turn (design rule 6). Tool/skill calls never get their own timeline rows:
 // while the turn runs, this line's text slides up in place; when it ends it collapses to
 // "Worked for 2m 41s · 6 steps" and a click opens one detail row per step.
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import type { SlotProps } from "../../features";
-import { activityText, getStore, liveLabel, THINKING, WORKING, type Step, type Turn } from "../../state/store";
+import { activityText, getStore, liveLabel, subagentEnded, THINKING, WORKING, type Step, type Turn } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
+import { useClock } from "../../app/clock";
 import { t, t as tr, tx, type Key } from "../../i18n";
-import { FanoutCard } from "./Subagents";
+import { FanoutCard, rowMs } from "./Subagents";
 import { DiffView, PlanList, ThinkingText } from "./Work";
 import "./activity.css";
 
@@ -173,18 +174,18 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
   );
 }
 
-export default function Activity({ item, live }: SlotProps["activity"]) {
+export default function Activity({ bot, item, live }: SlotProps["activity"]) {
   const t = item.turn;
   const [open, setOpen] = useState(false);
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!live) return;
-    const h = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(h);
-  }, [live]);
-
-  const now = Date.now();
+  // the app's one clock: the elapsed time here and a subagent row's time below read the same instant
+  const now = useClock(live);
   const total = elapsed((t.endedAt ?? now) - t.startedAt);
+  // while the line names a subagent that is still out ("Asking `Count lines of b.txt`"), its time is that subagent's,
+  // the number its row in the card shows; otherwise the turn's
+  const last = t.steps[t.steps.length - 1];
+  const named = live && last?.name === "delegate_task" && last.endedAt === undefined && liveLabel(t).code === last.detail;
+  const sub = named ? t.fanouts?.flatMap((f) => f.subs).find((x) => x.id === last.id && !subagentEnded(x)) : undefined;
+  const shownTime = sub ? elapsed(rowMs(sub, now)) : total;
   // what the details show: a delegate_task that handed out dag parts is one row per part
   const n = t.steps.reduce((k, st) => k + (st.name === "delegate_task" && st.dag?.length ? st.dag.length : 1), 0);
   const state = live ? "live" : t.outcome === "interrupted" || t.outcome === "ended" || t.outcome === "error" ? t.outcome : "done";
@@ -228,7 +229,7 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
         )}
         {live && (
           <span className="act-el" data-testid="activity-elapsed">
-            {total}
+            {shownTime}
           </span>
         )}
         {canOpen && (
@@ -240,7 +241,7 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
       {t.thinking && <ThinkingText text={t.thinking} />}
       {t.plan && t.plan.length > 0 && <PlanList items={t.plan} />}
       {t.fanouts?.map((f) => (
-        <FanoutCard key={f.key} fan={f} live={live || now - f.updatedAt < FANOUT_QUIET_MS} />
+        <FanoutCard key={f.key} fan={f} live={live || now - f.updatedAt < FANOUT_QUIET_MS} bot={bot} />
       ))}
       {open && canOpen && (
         <div className="act-det" data-testid="activity-details">

@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Hermes' own terminal opens as Hermes' own when `omh` falls back from
+  inside an OMH TUI session.** When the OMH TUI could not start, `omh` handed
+  Hermes the shell's whole environment, so an `omh` run from a shell that had
+  inherited the OMH TUI's launch state (its `HERMES_TUI_DIR` among it) could
+  point Hermes' launcher at the OMH frontend again. The fallback now drops
+  the names the OMH TUI launch sets for its own frontend, on both the
+  `hermes --tui` and plain `hermes` paths; `OMH_HOME` and the chosen
+  `HERMES_HOME` still reach Hermes.
+
 - **Scrolling up in the OMH TUI scrolls.** Since the main screen took the
   mouse so a drag copies clean, the wheel up opened the full-screen
   transcript view instead of scrolling, a pager that could hold as little as
@@ -199,6 +208,17 @@ All notable changes will be documented here.
   another can be folded into the node it follows. A run whose only chain is its
   baseline, review and verify steps no longer gets it, nor does a chain of three
   builds beside one other build (3 of 4).
+
+- **omher's session and chat screens say what is happening, once and in full.**
+  A subagent card that is still running counts the way Plans does ("Running ·
+  1 of 2 done"), and a subagent waiting on your approval reads "waiting" in
+  the sidebar's amber until you answer. The activity line and the subagent it
+  names show the same seconds. A session whose agent never answered says why
+  once, beside Restart. A bot's chat header keeps the model name whole from
+  900px up with Plans open, in every language; the places chip drops to its
+  marks first. The SESSIONS + menu fades where its list is cut and keeps a few
+  px from the row above, and a session's / menu is as wide as the composer,
+  with plain command names and skills marked in the accent colour.
 
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
