@@ -91,7 +91,7 @@ function Ticker({ label }: { label: Label }) {
  *  status is read-only (nothing here reassigns); the run link opens the Runs tab on that run. */
 function DagRows({ step, live }: { step: Step; live: boolean }) {
   const running = step.endedAt === undefined;
-  const status = step.ok === false ? "failed" : running ? (live ? "working" : "stopped") : "returned";
+  const status = step.stopped ? "stopped" : step.ok === false ? "failed" : running ? (live ? "working" : "stopped") : "returned";
   return (
     <>
       {step.dag!.map((d) => (
@@ -117,16 +117,25 @@ function DagRows({ step, live }: { step: Step; live: boolean }) {
   );
 }
 
+/** A stopped step's time: "Stopped · 3s", or when the agent later said it finished, that it kept running and how
+ *  long it ran in all. */
+function stoppedTime(step: Step, ms: number): string {
+  if (!step.late) return tr("act.stepStopped", { t: stepTime(ms) });
+  return tr(step.late.ok ? "act.stepLate" : "act.stepLateFailed", { t: stepTime(step.late.ms) });
+}
+
 function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }) {
   if (step.name === "delegate_task" && step.dag?.length) return <DagRows step={step} live={live} />;
-  const failed = step.ok === false;
+  const stopped = !!step.stopped;
+  const failed = step.ok === false && !stopped;
   const running = step.endedAt === undefined;
   const ms = (step.endedAt ?? now) - step.startedAt;
   return (
     <div
-      className={`act-step${failed ? " fail" : ""}`}
+      className={`act-step${failed ? " fail" : ""}${stopped ? " stopped" : ""}`}
       data-testid="activity-step"
-      data-ok={failed ? "false" : running ? "running" : "true"}
+      data-ok={stopped ? "stopped" : failed ? "false" : running ? "running" : "true"}
+      {...(step.late ? { "data-late": step.late.ok ? "done" : "failed" } : {})}
     >
       <span className="k">{stepVerb(step.name)}</span>
       {step.detail &&
@@ -139,7 +148,9 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
             {step.detail}
           </span>
         ))}
-      <span className="s">{running && live ? "…" : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}</span>
+      <span className="s" data-testid="activity-step-time">
+        {running && live ? "…" : stopped ? stoppedTime(step, ms) : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}
+      </span>
     </div>
   );
 }

@@ -191,6 +191,10 @@
 .act-step.fail .s {
   color: var(--danger);
 }
+/* stopped by the person: not a failure, the time says so in words */
+.act-step.stopped .s {
+  color: var(--muted);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .act-tick-t.in,
