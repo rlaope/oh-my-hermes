@@ -10,9 +10,11 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 
 from _local_package import load_local_package
+from _module_patch import patch_modules
 from _toolkit_path_guard import (POSIX_ONLY, assert_alias_does_not_exempt_links_below,
                                  assert_only_system_aliases_trusted)
 
@@ -43,6 +45,72 @@ def browser_available():
     except Exception:
         return False
     return True
+
+
+def fake_playwright(on_goto):
+    """A stand-in for `playwright.sync_api` whose `goto` runs `on_goto` first.
+
+    Its `screenshot` behaves like the real one: given a path it opens it with
+    "wb" (truncating an existing file and following a link), and it always
+    returns the image bytes.
+    """
+    error = type("FakePlaywrightError", (Exception,), {})
+    raw = {"viewport_meta": None, "scroll_width": 390, "client_width": 390, "inner_width": 390,
+           "document_height": 844, "past_right": [], "past_right_total": 0, "data_selector": ".row",
+           "first_data_y": 120, "first_action_y": 200, "targets_total": 0, "small_targets_total": 0,
+           "small_targets": [], "fields_total": 0, "small_inputs_total": 0, "small_inputs": [],
+           "measure": []}
+
+    class Page:
+        def set_default_timeout(self, *_):
+            pass
+
+        def on(self, *_):
+            pass
+
+        def goto(self, *_, **__):
+            on_goto()
+
+        def wait_for_timeout(self, *_):
+            pass
+
+        def evaluate(self, *_):
+            return raw
+
+        def screenshot(self, path=None, **_):
+            data = b"\x89PNG fake shot"
+            if path is not None:
+                with open(path, "wb") as handle:
+                    handle.write(data)
+            return data
+
+    class Browser:
+        def new_context(self, **_):
+            return self
+
+        def new_page(self):
+            return Page()
+
+        def close(self):
+            pass
+
+    class Runner:
+        def __init__(self):
+            self.chromium = self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def launch(self, **_):
+            return Browser()
+
+    module = types.ModuleType("playwright.sync_api")
+    module.Error = error
+    module.sync_playwright = Runner
+    return {"playwright": types.ModuleType("playwright"), "playwright.sync_api": module}
 
 
 class Fixture(unittest.TestCase):
@@ -103,6 +171,57 @@ class OfflineCliTests(Fixture):
         self.refused([str(CLEAN), "--shot", link], "symlink")
         self.assertEqual(existing.read_bytes(), b"x")
 
+    def test_shot_path_that_appears_during_load_is_left_untouched(self):
+        # The early check passes, then a file or a link is created while the
+        # page loads; the write must refuse instead of replacing or following it.
+        victim = self.root / "victim.txt"
+        victim.write_bytes(b"victim bytes")
+        for name in ("file", "symlink"):
+            with self.subTest(planted=name):
+                shot = self.root / f"shot-{name}.png"
+
+                def plant(shot=shot, name=name):
+                    if name == "file":
+                        shot.write_bytes(b"planted bytes")
+                    else:
+                        shot.symlink_to(victim)
+
+                with patch_modules(fake_playwright(plant)):
+                    code, out, err = self.run_main(CLEAN, "--shot", shot)
+                self.assertEqual(code, 2, err)
+                self.assertEqual(out, "")
+                self.assertIn("--shot", err)
+                self.assertEqual(victim.read_bytes(), b"victim bytes")
+                if name == "file":
+                    self.assertEqual(shot.read_bytes(), b"planted bytes")
+                else:
+                    self.assertTrue(shot.is_symlink())
+
+    @POSIX_ONLY
+    def test_shot_parent_replaced_by_a_link_during_load_is_refused(self):
+        folder = self.root / "out"
+        folder.mkdir()
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+
+        def swap_parent():
+            folder.rmdir()
+            folder.symlink_to(elsewhere, target_is_directory=True)
+
+        with patch_modules(fake_playwright(swap_parent)):
+            code, _, err = self.run_main(CLEAN, "--shot", folder / "shot.png")
+        self.assertEqual(code, 2, err)
+        self.assertIn("symlink", err)
+        self.assertEqual(list(elsewhere.iterdir()), [])
+
+    def test_shot_is_written_once_when_the_path_stays_new(self):
+        shot = self.root / "shot.png"
+        with patch_modules(fake_playwright(lambda: None)):
+            code, out, err = self.run_main(CLEAN, "--shot", shot)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["shot"], str(shot))
+        self.assertEqual(shot.read_bytes(), b"\x89PNG fake shot")
+
     def test_symlinked_target_refused(self):
         link = self.root / "page.html"
         link.symlink_to(CLEAN)
@@ -140,23 +259,58 @@ class PureHelperTests(unittest.TestCase):
         self.assertEqual(api.overflow_px(300, 390), 0)
         self.assertEqual(api.overflow_px(390.5, 390), 0.5)
 
-    def test_target_classification(self):
+    def test_finding_counts_everything_and_lists_a_bounded_few(self):
         api = helper_api()
-        self.assertFalse(api.is_small_target(44, 44))
-        self.assertTrue(api.is_small_target(43.9, 60))
-        self.assertTrue(api.is_small_target(60, 30))
-        rects = [{"path": f"b{i}", "width": 30, "height": 30} for i in range(25)]
-        rects.append({"path": "ok", "width": 48, "height": 48})
-        result = api.small_targets(rects)
+        examples = [{"path": f"b{i}"} for i in range(25)]
+        result = api.finding(25, examples)
         self.assertEqual(result["count"], 25)
         self.assertEqual(len(result["first"]), 20)
-        self.assertEqual(api.small_targets([], minimum=10), {"count": 0, "first": []})
+        # The count is the page's total, not the length of the example list.
+        self.assertEqual(api.finding(7000, examples[:1]), {"count": 7000, "first": examples[:1]})
+        self.assertEqual(api.finding(0, []), {"count": 0, "first": []})
 
-    def test_input_classification(self):
+    def test_report_counts_come_from_the_page_totals(self):
+        # A page with 5001 targets and 5001 fields where only the last of each
+        # is undersized: the page script returns totals over all of them and one
+        # example each, and the report must carry those totals unchanged.
         api = helper_api()
-        fields = [{"path": "a", "font_px": 15.9}, {"path": "b", "font_px": 16}, {"path": "c", "font_px": 12}]
-        self.assertEqual(api.small_inputs(fields)["count"], 2)
-        self.assertEqual(api.small_inputs(fields, minimum=12)["count"], 0)
+        args = api.parser().parse_args([str(CLEAN)])
+        plan = api.validate(args)
+        raw = {"viewport_meta": None, "scroll_width": 390, "client_width": 390, "inner_width": 390,
+               "document_height": 844, "past_right": [{"path": "p", "right": 400}] * 20,
+               "past_right_total": 5001, "data_selector": ".row", "first_data_y": 120,
+               "first_action_y": 200, "targets_total": 5001, "small_targets_total": 1,
+               "small_targets": [{"path": "b5000", "width": 43, "height": 44}], "fields_total": 5001,
+               "small_inputs_total": 1, "small_inputs": [{"path": "i5000", "font_px": 15}], "measure": []}
+        report = api.build_report(args, plan, api.emulation(args), raw, [])
+        self.assertEqual((report["small_targets"]["count"], report["small_targets"]["checked"]), (1, 5001))
+        self.assertEqual((report["small_inputs"]["count"], report["small_inputs"]["checked"]), (1, 5001))
+        self.assertEqual(report["elements_past_right_edge"]["count"], 5001)
+        self.assertEqual(len(report["elements_past_right_edge"]["first"]), 20)
+
+    def test_only_text_entry_controls_are_font_checked(self):
+        api = helper_api()
+        for name, kind in (("textarea", ""), ("select", ""), ("input", ""), ("input", "text"),
+                           ("input", "search"), ("input", "email"), ("input", "number"), ("input", "date")):
+            self.assertTrue(api.is_text_entry(name, kind), (name, kind))
+        for kind in ("checkbox", "radio", "button", "submit", "reset", "file", "image", "range",
+                     "color", "hidden", "RADIO"):
+            self.assertFalse(api.is_text_entry("input", kind), kind)
+        self.assertIn("opts.non_text_types", api.PAGE_SCRIPT)
+
+    def test_first_action_must_reach_into_the_document_area(self):
+        api = helper_api()
+        self.assertTrue(api.in_document_area(bottom=48, right=120))
+        self.assertFalse(api.in_document_area(bottom=-60, right=120))  # skip link parked above
+        self.assertFalse(api.in_document_area(bottom=48, right=-1))    # parked left of the page
+        self.assertFalse(api.in_document_area(bottom=0, right=120))
+        self.assertIn("firstOnPage(opts.action_selector)", api.PAGE_SCRIPT)
+
+    def test_page_script_takes_thresholds_and_list_limit_as_arguments(self):
+        api = helper_api()
+        for name in ("opts.min_target_px", "opts.min_input_font_px", "opts.list_limit"):
+            self.assertIn(name, api.PAGE_SCRIPT)
+        self.assertNotIn("raw_limit", api.PAGE_SCRIPT)
 
     def test_measure_list_splits_at_the_top_level(self):
         api = helper_api()
@@ -278,6 +432,47 @@ class BrowserTests(Fixture):
         self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
         width, height = int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
         self.assertEqual((width, height), (390 * 3, 844 * 3))
+
+    def test_counts_cover_every_element_past_a_few_thousand(self):
+        # 5001 targets and 5001 fields; only the last of each is undersized.
+        # Every other button is exactly 44 px, the boundary that is not small.
+        buttons = "".join('<button style="width:44px;height:44px">b</button>' for _ in range(5000))
+        buttons += '<button style="width:43px;height:44px">last</button>'
+        fields = "".join('<input style="height:48px;font-size:16px">' for _ in range(5000))
+        fields += '<input style="height:48px;font-size:15px">'
+        wide = "".join('<div style="width:500px;height:2px"></div>' for _ in range(25))
+        page = self.root / "many.html"
+        page.write_text('<!doctype html><meta name="viewport" content="width=device-width">'
+                        f'<style>body{{margin:0}} button,input{{display:block}}</style>{buttons}{fields}{wide}')
+        report = self.measure(page, "--timeout", "120")
+        self.assertEqual(report["small_targets"]["checked"], 10002)
+        self.assertEqual(report["small_targets"]["count"], 1)
+        self.assertEqual(report["small_targets"]["first"][0]["width"], 43)
+        self.assertEqual(report["small_inputs"]["checked"], 5001)
+        self.assertEqual(report["small_inputs"]["count"], 1)
+        self.assertEqual(report["small_inputs"]["first"][0]["font_px"], 15)
+        self.assertEqual(report["elements_past_right_edge"]["count"], 25)
+        self.assertEqual(len(report["elements_past_right_edge"]["first"]), 20)
+
+    def test_choice_controls_are_not_font_checked(self):
+        page = self.root / "choices.html"
+        page.write_text('<!doctype html><meta name="viewport" content="width=device-width"><style>'
+                        'input{font-size:13.3px;width:48px;height:48px}</style>'
+                        + '<input type="radio" name="r">' * 6
+                        + '<input type="checkbox"><input type="range"><input type="text">')
+        report = self.measure(page)
+        self.assertEqual(report["small_inputs"]["checked"], 1)
+        self.assertEqual(report["small_inputs"]["count"], 1)
+        self.assertEqual(report["small_inputs"]["first"][0]["font_px"], 13.3)
+
+    def test_skip_link_parked_above_the_page_is_not_the_first_action(self):
+        page = self.root / "skip.html"
+        page.write_text('<!doctype html><meta name="viewport" content="width=device-width"><style>'
+                        'body{margin:0} .skip{position:absolute;top:-100px;left:0}'
+                        ' main{padding-top:150px}</style>'
+                        '<a class="skip" href="#main">Skip to content</a>'
+                        '<main id="main"><a href="/start" style="display:block;height:48px">Start</a></main>')
+        self.assertEqual(self.measure(page)["first_action_y"], 150)
 
     def test_bad_selector_is_exit_2(self):
         self.refused([str(CLEAN), "--data", "li["], "measuring failed")

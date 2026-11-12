@@ -29,9 +29,9 @@ ran.
 | `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0 |
 | `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width |
 | `first_data_y` | top of the first visible match of `--data`, in document px; without `--data` the guess is `table tbody tr, [role=row], li, article`, and `"not_found"` plus a hint means pass `--data` |
-| `first_action_y` | top of the first visible `a[href]` or `button` |
+| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped |
 | `small_targets` | visible `a, button, [role=button], input, select, summary` under 44 px in either dimension: count and first 20 |
-| `small_inputs` | visible `input, select, textarea` whose computed font size is under 16 px: count and first 20 |
+| `small_inputs` | visible text-entry controls (`textarea`, `select`, and `input` other than checkbox, radio, button, submit, reset, file, image, range, color and hidden) whose computed font size is under 16 px: count and first 20; `checked` counts only these |
 | `console_errors` | `console.error` messages and uncaught page errors during load |
 | `measure` | height of the first visible match of each `--measure` selector |
 

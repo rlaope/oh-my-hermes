@@ -57,6 +57,13 @@ class GateBodyTests(unittest.TestCase):
         self.assertIn("Lay controls flat before hiding them", self.body)
         self.assertIn("two taps", self.body)
 
+    def test_saving_a_row_keeps_the_visible_label(self) -> None:
+        # Density never removes a label: it shortens it or sets it beside the control.
+        self.assertIn("shorten the label or set it beside its control", self.body)
+        self.assertIn("Every control keeps its visible label", self.body)
+        self.assertIn("a placeholder is never the label", self.body)
+        self.assertNotIn("may go", self.body)
+
     def test_hiding_bar_uses_transform_and_reduced_motion(self) -> None:
         self.assertIn("`transform`", self.body)
         self.assertIn("`display`", self.body)

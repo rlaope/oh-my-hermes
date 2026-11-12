@@ -56,6 +56,10 @@ class ContractRulesTest(unittest.TestCase):
     def test_source_checks_run_in_the_build(self) -> None:
         for token in ("becomes a test", "build", "emoji used as icons", "motion profiles", "danger"):
             self.assertIn(token, self.rules)
+        # The mechanism is fixed; which rules a project holds come from its contract.
+        self.assertIn("The mechanism is fixed here; the rules are the project's", self.rules)
+        self.assertIn("A contract may hold rules that reading source alone can judge, for example", self.rules)
+        self.assertNotIn("The kinds of rule are fixed here", self.rules)
 
     def test_one_escape_marker(self) -> None:
         for token in ("One escape marker", "one named attribute or comment", "skips only that element", "lists those files"):

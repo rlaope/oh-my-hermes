@@ -24,7 +24,6 @@ PHONE_USER_AGENT = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Appl
 MIN_TARGET_PX = 44
 MIN_INPUT_FONT_PX = 16
 LIST_LIMIT = 20
-RAW_LIMIT = 5000
 DEFAULT_TIMEOUT_S = 30.0
 MAX_TIMEOUT_S = 300.0
 MIN_SIDE_PX, MAX_SIDE_PX = 200, 4000
@@ -32,9 +31,14 @@ DEFAULT_DATA_SELECTOR = "table tbody tr, [role=row], li, article"
 TARGET_SELECTOR = "a, button, [role=button], input, select, summary"
 FIELD_SELECTOR = "input, select, textarea"
 ACTION_SELECTOR = "a[href], button"
+# Input types that take no typed text, so focusing them never zooms the page.
+NON_TEXT_INPUT_TYPES = ("checkbox", "radio", "button", "submit", "reset", "file", "image", "range",
+                        "color", "hidden")
 NO_DATA_HINT = "no row-like element found; pass --data '<css selector>' for the first data row"
 
 # One fixed script; every user string reaches it as a plain argument, never as code.
+# It classifies every shown element in the page and returns a count over all of
+# them; only the listed examples stop at `list_limit`, so output stays bounded.
 PAGE_SCRIPT = """
 (opts) => {
   const doc = document.documentElement;
@@ -68,6 +72,17 @@ PAGE_SCRIPT = """
     return null;
   };
   const top = (el) => (el ? r1(el.getBoundingClientRect().top + sy) : null);
+  const onPage = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom + sy > 0 && r.right + sx > 0;
+  };
+  const firstOnPage = (selector) => {
+    for (const el of document.querySelectorAll(selector)) {
+      if (shown(el) && onPage(el)) return el;
+    }
+    return null;
+  };
+  const textEntry = (el) => el.localName !== 'input' || !opts.non_text_types.includes(el.type);
   const out = {};
   const meta = document.querySelector('meta[name=viewport]');
   out.viewport_meta = meta ? meta.getAttribute('content') : null;
@@ -84,7 +99,7 @@ PAGE_SCRIPT = """
     const right = r.right + sx;
     if (right > opts.width + 0.5) {
       out.past_right_total += 1;
-      if (out.past_right.length < opts.raw_limit) out.past_right.push({path: path(el), right: r1(right)});
+      if (out.past_right.length < opts.list_limit) out.past_right.push({path: path(el), right: r1(right)});
     }
   }
 
@@ -92,28 +107,34 @@ PAGE_SCRIPT = """
   const data = firstShown(dataSelector);
   out.data_selector = dataSelector;
   out.first_data_y = top(data);
-  out.first_action_y = top(firstShown(opts.action_selector));
+  out.first_action_y = top(firstOnPage(opts.action_selector));
 
-  out.targets = [];
   out.targets_total = 0;
+  out.small_targets_total = 0;
+  out.small_targets = [];
   for (const el of document.querySelectorAll(opts.target_selector)) {
     if (el.localName === 'input' && el.type === 'hidden') continue;
     if (!shown(el)) continue;
     out.targets_total += 1;
-    if (out.targets.length < opts.raw_limit) {
-      const r = el.getBoundingClientRect();
-      out.targets.push({path: path(el), width: r1(r.width), height: r1(r.height)});
+    const r = el.getBoundingClientRect();
+    if (r.width < opts.min_target_px || r.height < opts.min_target_px) {
+      out.small_targets_total += 1;
+      if (out.small_targets.length < opts.list_limit) {
+        out.small_targets.push({path: path(el), width: r1(r.width), height: r1(r.height)});
+      }
     }
   }
 
-  out.fields = [];
   out.fields_total = 0;
+  out.small_inputs_total = 0;
+  out.small_inputs = [];
   for (const el of document.querySelectorAll(opts.field_selector)) {
-    if (el.localName === 'input' && el.type === 'hidden') continue;
-    if (!shown(el)) continue;
+    if (!textEntry(el) || !shown(el)) continue;
     out.fields_total += 1;
-    if (out.fields.length < opts.raw_limit) {
-      out.fields.push({path: path(el), font_px: parseFloat(getComputedStyle(el).fontSize)});
+    const font = parseFloat(getComputedStyle(el).fontSize);
+    if (font < opts.min_input_font_px) {
+      out.small_inputs_total += 1;
+      if (out.small_inputs.length < opts.list_limit) out.small_inputs.push({path: path(el), font_px: font});
     }
   }
 
@@ -139,22 +160,30 @@ def overflow_px(scroll_width, requested_width):
     return int(value) if value.is_integer() else value
 
 
-def is_small_target(width, height, minimum=MIN_TARGET_PX):
-    return width < minimum or height < minimum
+def is_text_entry(local_name, input_type=""):
+    """True for a control that takes typed text: the page script's field rule.
+
+    Only these trigger focus zoom, so only these are checked for font size.
+    """
+    return local_name != "input" or input_type.lower() not in NON_TEXT_INPUT_TYPES
 
 
-def small_targets(rects, minimum=MIN_TARGET_PX, limit=LIST_LIMIT):
-    small = [item for item in rects if is_small_target(item["width"], item["height"], minimum)]
-    return {"count": len(small), "first": small[:limit]}
+def in_document_area(bottom, right):
+    """True when a box in page coordinates reaches into the document area.
+
+    A skip link parked above or left of the page (negative top and left) is
+    not where the first action sits; the page script skips such controls.
+    """
+    return bottom > 0 and right > 0
 
 
-def small_inputs(fields, minimum=MIN_INPUT_FONT_PX, limit=LIST_LIMIT):
-    small = [item for item in fields if item["font_px"] < minimum]
-    return {"count": len(small), "first": small[:limit]}
+def finding(total, examples, limit=LIST_LIMIT):
+    """A count taken over every shown element, with at most `limit` examples.
 
-
-def past_right_edge(items, limit=LIST_LIMIT):
-    return items[:limit]
+    The page script counts in the page, so `total` covers the whole page even
+    when it holds thousands of elements; only the example list is bounded.
+    """
+    return {"count": total, "first": list(examples)[:limit]}
 
 
 def split_selectors(text):
@@ -286,6 +315,35 @@ class RunError(Exception):
     """The page could not be measured; carries the exit-2 message."""
 
 
+def write_new_file(value, data):
+    """Create `value` and write `data`, never replacing or following anything.
+
+    The `--shot` check runs before the page loads, and loading can take long
+    enough for a file or a link to appear at that path. So the parent is
+    resolved again here and the file is created exclusively without following a
+    link: a path that came to exist in between is refused and left untouched.
+    """
+    try:
+        path = safe_path(value)
+    except ValueError as exc:
+        raise RunError(f"--shot: {exc}") from exc
+    flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_BINARY", 0))
+    try:
+        fd = os.open(path, flags, 0o644)
+    except FileExistsError as exc:
+        raise RunError("--shot path appeared while the page loaded; refusing to replace it") from exc
+    except OSError as exc:
+        raise RunError(f"--shot could not be created: {exc.strerror}") from exc
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+    except OSError as exc:
+        path.unlink(missing_ok=True)
+        raise RunError(f"--shot could not be written: {exc.strerror}") from exc
+    return path
+
+
 def measure_page(args, plan, emu):
     try:
         from playwright.sync_api import Error as PlaywrightError
@@ -326,18 +384,22 @@ def measure_page(args, plan, emu):
                     raw = page.evaluate(PAGE_SCRIPT, {
                         "width": emu["width"], "data": args.data, "default_data": DEFAULT_DATA_SELECTOR,
                         "action_selector": ACTION_SELECTOR, "target_selector": TARGET_SELECTOR,
-                        "field_selector": FIELD_SELECTOR, "measure": plan["measure"], "raw_limit": RAW_LIMIT})
+                        "field_selector": FIELD_SELECTOR, "measure": plan["measure"], "list_limit": LIST_LIMIT,
+                        "min_target_px": MIN_TARGET_PX, "min_input_font_px": MIN_INPUT_FONT_PX,
+                        "non_text_types": list(NON_TEXT_INPUT_TYPES)})
                 except PlaywrightError as exc:
                     raise RunError(f"measuring failed (check the selectors): {str(exc).splitlines()[0]}") from exc
                 if plan["shot"] is not None:
                     if args.scroll:
                         page.evaluate("(y) => window.scrollTo(0, y)", args.scroll)
                         page.wait_for_timeout(100)
-                    page.screenshot(path=str(plan["shot"]), full_page=False)
+                    shot_bytes = page.screenshot(full_page=False)
             finally:
                 browser.close()
     except PlaywrightError as exc:
         raise RunError(f"browser error: {str(exc).splitlines()[0]}") from exc
+    if plan["shot"] is not None:
+        write_new_file(plan["shot"], shot_bytes)
     return raw, errors
 
 
@@ -355,18 +417,17 @@ def build_report(args, plan, emu, raw, errors):
         "client_width": raw["client_width"],
         "inner_width": raw["inner_width"],
         "elements_past_right_edge": {
-            "count": raw["past_right_total"],
-            "first": past_right_edge(raw["past_right"]),
+            **finding(raw["past_right_total"], raw["past_right"]),
             "note": "an element clipped by an overflow:hidden ancestor can appear here; "
                     "the overflow number above is the verdict, this list only points",
         },
         "data_selector": raw["data_selector"],
         "first_data_y": first_data if first_data is not None else "not_found",
         "first_action_y": raw["first_action_y"] if raw["first_action_y"] is not None else "not_found",
-        "small_targets": {**small_targets(raw["targets"]), "minimum_px": MIN_TARGET_PX,
-                          "checked": raw["targets_total"]},
-        "small_inputs": {**small_inputs(raw["fields"]), "minimum_font_px": MIN_INPUT_FONT_PX,
-                         "checked": raw["fields_total"]},
+        "small_targets": {**finding(raw["small_targets_total"], raw["small_targets"]),
+                          "minimum_px": MIN_TARGET_PX, "checked": raw["targets_total"]},
+        "small_inputs": {**finding(raw["small_inputs_total"], raw["small_inputs"]),
+                         "minimum_font_px": MIN_INPUT_FONT_PX, "checked": raw["fields_total"]},
         "console_errors": errors,
         "measure": raw["measure"],
         "document_height_px": raw["document_height"],

@@ -36,8 +36,10 @@ stacked filters above its first row; record two verdicts, one per axis.
   short controls often fit on one line at phone width.
 - Collapse behind a button last. A control used on every visit then costs
   two taps (open, then act), so collapse only what is used rarely.
-- A label whose value already names itself (a search box with a
-  placeholder) may go; the reader loses nothing and the row gets shorter.
+- To save a row, shorten the label or set it beside its control instead of
+  above it. Every control keeps its visible label
+  (`references/forms-and-input.md`), and a placeholder is never the label: it
+  disappears on the first keystroke.
 
 ## Extend the rule the project already has
 

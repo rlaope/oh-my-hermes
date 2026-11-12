@@ -9,10 +9,13 @@ in `references/taste-foundations.md`.
 ## Hierarchy before boxes
 
 Build the order of attention from whitespace and type-size contrast first.
-Group related items with space and thin rules, and reach for a filled or
-bordered box only when the item is a separate object the reader acts on. A page
-where every group sits in a box has no group that leads, because the boxes
-carry the same weight.
+Where the chosen direction does not make the box its own language, group
+related items with space and thin rules, and keep a filled or bordered box for
+an item the reader acts on as a separate object: a page where every group sits
+in a box has no group that leads, because the boxes carry the same weight. In
+a direction that boxes everything on purpose (`references/taste-foundations.md`
+names such directions), hierarchy comes from size, weight and position, because
+the boxes carry equal weight.
 
 ## The seven axes
 

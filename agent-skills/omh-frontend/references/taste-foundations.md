@@ -222,7 +222,6 @@ Reject on sight:
 
 - 01 / 02 / 03 numbering on content that has no order. Numbers promise a
   sequence; use them only when the reader must take the items in that order.
-- A button label that does not say what happens when it is pressed.
 - An outcome number with no source.
 
 The test for any number on the page is: "what is this number trying to prove?"

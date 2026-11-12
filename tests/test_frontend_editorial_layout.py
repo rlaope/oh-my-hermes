@@ -54,6 +54,12 @@ class EditorialLayoutReferenceTests(unittest.TestCase):
         # radius belongs to the contract's Shapes section.
         self.assertIn("Corner radius is not this axis", self.body)
 
+    def test_box_restriction_follows_the_chosen_direction(self) -> None:
+        self.assertIn("Where the chosen direction does not make the box its own language", self.body)
+        self.assertIn("a direction that boxes everything on purpose", self.body)
+        self.assertIn("hierarchy comes from size, weight and position", self.body)
+        self.assertNotIn("bordered box only when", self.body)
+
     def test_differ_from_previous_output(self) -> None:
         self.assertIn("change at least three of the seven axes", self.body)
         self.assertIn('"like last time"', self.body)
@@ -109,7 +115,8 @@ class ScreenCopyReviewTests(unittest.TestCase):
 
     def test_reject_on_sight(self) -> None:
         self.assertIn("01 / 02 / 03 numbering on content that has no order", self.section)
-        self.assertIn("A button label that does not say what happens", self.section)
+        # The button-label rule is owned by the Interface copy section, not repeated here.
+        self.assertNotIn("A button label that does not say what happens", self.section)
         self.assertIn("An outcome number with no source", self.section)
 
     def test_number_test(self) -> None:

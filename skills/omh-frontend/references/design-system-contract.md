@@ -195,15 +195,17 @@ no rendered evidence.
 
 A rule that lives only in this document is re-broken by whoever did not read
 it, person or agent. The rules below are how a contract gets held by the
-project's own build instead of by memory. The kinds of rule are fixed here;
-the values are the project's.
+project's own build instead of by memory. The mechanism is fixed here; the
+rules are the project's: which rules a project holds, and their values, come
+from its own contract.
 
-- **A rule judged from source alone becomes a test.** Arbitrary corner
-  values, durations or easings outside the motion profiles, several colours
-  for one meaning (success, warning and danger each have one), and emoji used
-  as icons can all be found by reading source, so they become a check in the
-  project's own test or lint step and run in its build. A rule that needs a
-  rendered page stays with the visual-QA owner.
+- **A rule judged from source alone becomes a test.** A contract may hold
+  rules that reading source alone can judge, for example corner values outside
+  its set, durations or easings outside the motion profiles, more than one
+  colour per meaning (success, warning, danger), or emoji used as icons. Each
+  such rule the contract holds becomes a check in the project's own test or
+  lint step and runs in its build. A rule that needs a rendered page stays
+  with the visual-QA owner.
 - **One escape marker.** Where a rule has legitimate exceptions, the
   exception is declared with one named attribute or comment on the element,
   and the check skips only that element. An exception limited to certain
