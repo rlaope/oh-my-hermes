@@ -355,7 +355,7 @@ All notable changes will be documented here.
   folders and home, read-only from their own files, and picking one continues it in omher with its last messages
   shown. ⌘N (Ctrl+N) opens the `+` menu and ⌘⇧] / ⌘⇧[ move to the next and previous session. The Dock shows how
   many approvals and questions wait (Linux launchers that show counts too; Windows gets a dot on the taskbar
-  button). BOUNDARY rule 29.
+  button). BOUNDARY rule 30.
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
   split a run into parallel lanes now looks only at the build nodes: it comes
   when at least 80% of two or more build nodes sit on one chain, in a run of
@@ -389,6 +389,20 @@ All notable changes will be documented here.
   mode. An OmO session whose subagent records sit in the project folder
   (`.omo/senpi-task/tasks/`, where OmO 5.0 and a folder that already has them
   keep them) shows its run in Plans, with the same time as its chat card.
+
+- **Restart a bot from omher with one press.** A bot row's right-click (or `...`) menu has Restart under
+  Edit (Start for a bot that is not connected, and an offline bot's chat offers Start in place). Restart runs
+  Hermes' own `hermes -p <profile> gateway restart` for the gateway process that serves the bot: the host
+  gateway (`-p default`, always named, never Hermes' sticky active profile) for a bot it serves, or the bot's own
+  gateway when it runs standalone. Every bot on that gateway reads "Restarting" together, and a bot that shares
+  its gateway names the others under Restart before the press. A busy gateway is never cut silently: Hermes
+  refuses while anything runs, omher shows each thing in plain words with the bot it belongs to and how long it
+  has run (the time is never cut), Cancel first,
+  and only "Restart anyway" passes `--yes`. After a plugin install the sheet says when it is ready (the bot's
+  next conversation), asks the gateway to reload its plugins when it did not (Hermes' `reload-plugins`, which
+  interrupts nothing), and offers the same Restart only when Hermes says one is still needed, naming every bot
+  that restarts with it. omher never stops a bot, never restarts every gateway and never restarts by itself
+  (BOUNDARY rule 29).
 
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
@@ -798,6 +812,67 @@ All notable changes will be documented here.
   (System Settings › Privacy & Security › Open Anyway), keep right-click ›
   Open for macOS 14 and earlier, and say that the one-line installer needs
   neither. The builds themselves are unchanged.
+
+- **frontend judges a phone-used surface on density as well as hygiene,
+  and ships a script that measures it.** A new
+  `references/mobile-density-gate.md` keeps two verdicts apart: hygiene
+  (no sideways scroll, no clipped label, no small target, no input that
+  zooms the page) and density (the y of the first data row on a named
+  phone viewport, against a default limit of 300 CSS px that a project may
+  change). It asks for touch and mobile user-agent emulation and names a
+  width-only capture as width-only, and it reports each change as a before
+  and after pair in px. The bundled `toolkit/scripts/phone_check.py` loads
+  a page in Playwright at 390x844 with touch and a mobile user agent and
+  prints `omh_phone_check/v1` JSON: horizontal overflow, the first data and
+  action y, touch targets under 44 px, inputs under 16 px and console
+  errors. OMH never runs it; when no browser is available the measurement
+  is `not_observed`. `visual-qa` records in the capture manifest whether
+  emulation was on.
+
+- **frontend names the layout before it builds a new page, and reviews
+  what the page says about itself.** A new `references/editorial-layout.md`
+  asks for one value and one reason per axis (skeleton, first screen,
+  section boundary, image placement, signature moment, density, screen
+  corners and navigation), a change of at least three axes from the last
+  page built for the same user, read from a one-line-per-page record, one
+  frame with varied interiors across a site, and a static build reviewed
+  before any motion is added. `taste-foundations.md` gains a screen-copy
+  section: hero sentences, section descriptions, "not X but Y" headlines
+  and numbers on the page are reviewed against the captured screen, and a
+  number without a source goes or gets one.
+
+- **A design contract names the rules the project's build holds.**
+  `design-system-contract.md` gains a section on turning a rule that can be
+  judged from source into the project's own test or lint step, with one
+  escape marker for exceptions, closed sets whose steps each name a role, a
+  dated history per rule, decided and open lists kept apart, and a
+  styleguide page built from the real components. A check counts only when
+  it ran. `reference-token-extraction.md` separates a reference's skeleton
+  from its brand and asks for a searched, not read, removal of the
+  reference's traces before work leaves the team. `design-orchestration`
+  shows direction options as rendered images and runs to the end without
+  asking only when nobody can answer or the user handed the choice over.
+
+- **Korean redesign and phone-layout requests reach frontend.** "대시보드
+  다시 디자인해줘", "폰에서 가로 스크롤 생기는데 고쳐줘" and their English
+  forms now dispatch `frontend`. The guard reads the whole request against
+  closed sentence shapes (a redesign whose only object is a named UI
+  surface, or a sideways scroll or breakage tied to a phone viewport with a
+  repair ask), and checks the message as sent as well as after masking. A
+  qualifier, a second clause or a question mark stands it down, so a car
+  dashboard, a database redesign or a cracked phone screen keeps the verdict
+  it had. Thirty routing-precision cases pin both sides.
+
+- **show-reel's references state more of the craft rules they relied
+  on.** The brief records `motion_limits` per genre before scenes; the
+  storyboard writes a motion theme as one sentence with a verb and an
+  entity legend every renderer draws from; numbers count up only when every
+  intermediate value was true, and a value one scene ended on carries into
+  the next; the first frame shows a value at its final state; a vertical
+  frame is composed for its height; the no-context judge is named in the
+  record and runs two rounds by default before an open rebuild goes to the
+  person; and every name the kit's checkers print maps to an edit. The
+  skill body is unchanged.
 
 ## 4.0.7 - 2026-11-09
 

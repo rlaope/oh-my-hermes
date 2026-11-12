@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { getRestarts } from "./restart";
 import "./sidebar.css";
 import logo from "../assets/omher-mark.png";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
@@ -80,6 +81,8 @@ export function Sidebar() {
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),
                 onEdit: () => s.openSettings(`bot:${b.name}`),
+                onRestart: () => void getRestarts().press(b.name),
+                offline: b.status === "offline",
                 onHide: () => s.hideBot(b.name, true),
                 onShowHidden: hiddenCount ? () => setShowHidden(true) : undefined,
               }}

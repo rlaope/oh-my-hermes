@@ -1,4 +1,4 @@
-//! Continue a conversation made outside omher (BOUNDARY rule 29). The SESSIONS + menu lists, read-only, the
+//! Continue a conversation made outside omher (BOUNDARY rule 30). The SESSIONS + menu lists, read-only, the
 //! recent Claude Code and Codex conversations for the folders it offers, and opening one shows its last messages
 //! before the agent continues it (`--resume <id>`, Codex `thread/resume`; rule 11).
 //!

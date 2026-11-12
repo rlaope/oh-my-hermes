@@ -437,7 +437,7 @@ async fn open_hermes_auth(provider: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || hermes_auth::open(&provider)).await.map_err(|e| e.to_string())?
 }
 
-/// A SESSIONS row's "Reveal": show the session's folder in the file manager (rule 29). Only an absolute path to a
+/// A SESSIONS row's "Reveal": show the session's folder in the file manager (rule 30). Only an absolute path to a
 /// folder that exists crosses from the page.
 #[tauri::command]
 async fn session_reveal(cwd: String) -> Result<(), String> {
@@ -445,14 +445,14 @@ async fn session_reveal(cwd: String) -> Result<(), String> {
 }
 
 /// A SESSIONS row's "Open in Terminal": the person's own system terminal, in the session's folder, running their
-/// shell with nothing typed into it (rule 29).
+/// shell with nothing typed into it (rule 30).
 #[tauri::command]
 async fn session_open_terminal(cwd: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || folder_open::open_terminal(&cwd)).await.map_err(|e| e.to_string())?
 }
 
 /// The home a new session of `agent` reads its conversations from: the account picked for new sessions, else the
-/// CLI's own (rule 29).
+/// CLI's own (rule 30).
 fn past_home(agent: &str) -> Result<PathBuf, String> {
     if !past_chats::lists(agent) {
         return Err(format!("{agent} conversations are not listed"));
@@ -462,13 +462,13 @@ fn past_home(agent: &str) -> Result<PathBuf, String> {
     past_chats::cli_home(&home, agent, &env, &|k| std::env::var(k).ok()).ok_or_else(|| "no home".to_string())
 }
 
-/// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 29).
+/// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 30).
 #[tauri::command]
 async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_chats::PastChat>, String> {
     tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
 }
 
-/// The last messages of one of those conversations, shown before the agent continues it (rule 29).
+/// The last messages of one of those conversations, shown before the agent continues it (rule 30).
 #[tauri::command]
 async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
     tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?

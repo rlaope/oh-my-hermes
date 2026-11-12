@@ -61,6 +61,8 @@ from .policy import (
     dependency_upgrade_guard_applies,
     employer_hiring_intent,
     explicit_skill_invocation,
+    FRONTEND_DESIGN_GUARD,
+    frontend_design_guard_applies,
     is_explicit_one_off_request,
     jit_learn_guard_applies,
     llm_wiki_request,
@@ -115,6 +117,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         # A game request names no UI vocabulary `frontend` triggers on ("슈팅
         # 게임 만들어줘", "make the game feel juicier"), so the guard's boost
         # needs a candidate to land on.
+        "frontend_design_before_generic_picker",
         "game_build_before_greenfield_interview",
         # A greenfield request scores 0 on `deep-interview` by construction - the
         # user types "build a todo list", never "interview me" - so without
@@ -2931,6 +2934,12 @@ def _scored_field(
         guards = active_routing_guard_rules(
             normalized_query, query_tokens, explicit_skill=explicit_skill, loop_timer=loop_timer
         )
+        # The frontend design guard admits a whole request, and
+        # `normalized_query` has lost whatever masking, path stripping or a
+        # reply pointer removed ("대시보드 `schema.sql` 다시 디자인해줘" reads as
+        # the bare redesign). The shape must hold on the message as sent too.
+        if (shielded or raw_query) and not frontend_design_guard_applies(normalized_phrase(raw_query)):
+            guards = tuple(guard for guard in guards if guard.id != FRONTEND_DESIGN_GUARD.id)
         public_plugin_connector_match = _public_plugin_connector_readiness_match(normalized_query)
         if (
             ecosystem_identity_connector_match

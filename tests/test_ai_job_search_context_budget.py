@@ -185,8 +185,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 542200 -> 542510 and the digest re-derived: the dag-ulw row's split quality bar says to split for work
             # that can run side by side and keep a small follow-on step in the node it follows (+310, at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was 935a86d2...a5b7.
-            (skill_capabilities, 542510, FULL_ROW_DELTA_CAP,
-             'd09dd42e0005c7d3db4f02e745284225b2030ada33466aac495cfd7901cd786f',
+            # 542510 -> 542640 and the digest re-derived: design-orchestration's new fourth quality-bar line (direction
+            # options shown as rendered images) enters its row's first-four slice (+130, at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and the pin before it was d09dd42e...786f.
+            (skill_capabilities, 542640, FULL_ROW_DELTA_CAP,
+             '2da9f59b7e4b16895d47821a7169d55c47d3e515818908e237da55bc5ac1f6c9',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 145483, STANDALONE_ROW_DELTA_CAP,
              '57ef3e89e97c4ed9dc45338c18f01ce384842bad7cfa16b37fb9a4e5a7d0794e',
@@ -496,7 +499,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # in the node it follows; only dag-ulw moves, and the pin before it was 1f3c01fa...fbf4.
         # model-setup's chain sentence then names Fable 5.2 ahead of Opus 5.5 in visual-engineering; only
         # model-setup moves, and the pin before it was 5518142e...68d0.
-        self.assertEqual(_digest(legacy_hashes), '3a23f50656c683878e5b27ebcffeeafa71d8edbc43a5ae8e9446a7a3fc0127cf')
+        # The design-skills run then adds the mobile density and editorial layout lines to frontend, a capture line to
+        # visual-qa and two direction lines to design-orchestration; only those three move, and the pin before it was
+        # 3a23f506...27cf.
+        self.assertEqual(_digest(legacy_hashes), '11dd603425210913661c922bf886c8db405d949f29f7b3ff2e5bb29aedba72d9')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

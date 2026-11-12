@@ -1,5 +1,5 @@
 //! A SESSIONS row's menu: show the session's folder in the file manager, or open the person's own system terminal
-//! in it (BOUNDARY rule 29). Neither runs anything in the folder: the file manager is the system opener, and the
+//! in it (BOUNDARY rule 30). Neither runs anything in the folder: the file manager is the system opener, and the
 //! terminal starts the person's own shell there with no command and nothing typed into it. That terminal is not the
 //! agent's terminal view inside omher (sessions.rs); it is the desktop's own Terminal / console window.
 //!
