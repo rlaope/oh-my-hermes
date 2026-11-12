@@ -98,7 +98,7 @@
    the accent colour at the row's right edge; at most a whole number of rows tall */
 [data-testid="command-picker"] {
   width: 100%;
-  max-height: 234px; /* 8 rows of 28px, the padding and the border: no row cut through */
+  max-height: 230px; /* the top padding, 8 rows of 28px and the border: the 9th row starts below the edge */
 }
 .sk-name {
   flex: none;
