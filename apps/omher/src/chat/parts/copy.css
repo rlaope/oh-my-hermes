@@ -46,6 +46,10 @@
 .md-pre {
   position: relative;
 }
+/* room for it, so a long wrapped line never runs under the icon */
+.md-pre > pre {
+  padding-right: 32px;
+}
 .md-pre-copy {
   position: absolute;
   top: 4px;

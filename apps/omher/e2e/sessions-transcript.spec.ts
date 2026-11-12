@@ -163,6 +163,18 @@ test("edit and resend: the agent takes the last message back and the box holds i
   await expect(page.getByTestId("bubble-edit")).toHaveCount(1);
 });
 
+test("after Terminal and back, the new process offers no Edit for the old one's message", async ({ page }) => {
+  await session(page, "claude", "hello");
+  await done(page);
+  await expect(page.getByTestId("bubble-edit")).toHaveCount(1);
+  await page.getByTestId("session-terminal-toggle").click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await page.getByTestId("session-terminal-toggle").click();
+  await expect(page.getByTestId("session-status")).toHaveText("Ready");
+  await expect(page.getByTestId("bubble-user")).toHaveText("hello");
+  await expect(page.getByTestId("bubble-edit")).toHaveCount(0);
+});
+
 test("no Edit while a turn runs, and none for an agent without its own rewind", async ({ page }) => {
   await session(page, "claude", "/work hold");
   await expect(page.getByTestId("plan")).toHaveCount(1);

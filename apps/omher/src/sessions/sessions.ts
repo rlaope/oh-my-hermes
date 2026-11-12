@@ -401,6 +401,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id)!;
     const proc: ChatProc = { kind: "agent" };
     procs.set(id, proc);
+    // a new process can take back only what it was sent itself (its own rewind)
+    if (state.live[id]?.rewind) patchLive(id, { rewind: false });
     try {
       proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r));
       if (procs.get(id) !== proc) {
