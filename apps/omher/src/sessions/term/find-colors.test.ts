@@ -32,6 +32,17 @@ describe("find colours come from the terminal's own theme", () => {
     }
   });
 
+  it("the active match is the one the eye lands on: its fill is apart from a plain match's and stands well further from the background, on every theme", () => {
+    for (const th of TERM_THEMES) {
+      const c = findColors(th.theme);
+      const bg = th.theme.background!;
+      const plain = contrastRatio(c.matchBackground, bg) - 1;
+      const active = contrastRatio(c.activeMatchBackground, bg) - 1;
+      expect(active, `${th.name}: the active fill against the background, beside a plain match's`).toBeGreaterThanOrEqual(plain * 1.5);
+      expect(contrastRatio(c.activeMatchBackground, c.matchBackground), `${th.name}: active against plain`).toBeGreaterThanOrEqual(1.15);
+    }
+  });
+
   it("the colours follow the theme: a dark and a light theme get different ones, and no one pair is hard-coded", () => {
     const dark = TERM_THEMES.find((t) => t.kind === "dark")!;
     const light = TERM_THEMES.find((t) => t.kind === "light")!;
