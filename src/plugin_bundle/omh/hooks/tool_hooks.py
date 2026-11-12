@@ -243,11 +243,19 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         session_id=session_id,
         omh_home=omh_home,
     )
+    # A rule's `block` returns here. A rule's `approve` (an `"effect": "ask"`
+    # rule) is held instead: a person's yes must not let through a call a
+    # gate below would refuse, so every gate down to the team gate still
+    # runs, any `block` among them wins, and the held ask is returned only
+    # when none blocks (`_veto_over_ask`).
+    pending_ask: dict[str, object] | None = None
     if rule_directive is not None:
-        # A blocked call never dispatches, so it must not tick the
-        # parallel-shot burst ledger (its claim boundary is "the host
-        # dispatched the calls as one batch").
-        return _route_gated(rule_directive, **route_gate)
+        if rule_directive.get("action") != "approve":
+            # A blocked call never dispatches, so it must not tick the
+            # parallel-shot burst ledger (its claim boundary is "the host
+            # dispatched the calls as one batch").
+            return _route_gated(rule_directive, **route_gate)
+        pending_ask = rule_directive
     # An edit to a skill OMH installed is refused with a pointer to where the
     # lesson goes (`skill_ownership`). After the person's own rules, before
     # anything that records a dispatch, for the same reason as the guards
@@ -260,7 +268,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         hermes_home=hermes_home,
     )
     if ownership_directive is not None:
-        return _route_gated(ownership_directive, **route_gate)
+        return _route_gated(_veto_over_ask(ownership_directive, pending_ask), **route_gate)
     # A `write_file`/`patch` into a store OMH's own code keeps (ledgers, dag
     # runs, decision gates, fetch receipts, todos) is refused: a line written
     # by a tool call reads exactly like one OMH observed (`evidence_store_guard`).
@@ -272,7 +280,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         omh_home=omh_home,
     )
     if evidence_directive is not None:
-        return _route_gated(evidence_directive, **route_gate)
+        return _route_gated(_veto_over_ask(evidence_directive, pending_ask), **route_gate)
     # A dag-ulw node's child writing outside its node's write scope is refused
     # (`dag_scope_guard`): the scope was checked at define and never again.
     scope_directive = dag_scope_directive(
@@ -284,7 +292,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         hermes_home=hermes_home,
     )
     if scope_directive is not None:
-        return _route_gated(scope_directive, **route_gate)
+        return _route_gated(_veto_over_ask(scope_directive, pending_ask), **route_gate)
     # The repeat guard runs after the user's own rules and before anything
     # that observes a dispatch, for the same reason: it intervenes on a
     # call, so nothing downstream may record that call as having happened.
@@ -332,7 +340,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         # after it are the same loop (`catch_log`).
         if counted is not None and counted["intercepted"] == 1:
             record_catch(omh_home, session_id, REPEAT_LOOP, period=counted["period"], laps=counted["laps"])
-        return _route_gated(repeat_directive, **route_gate)
+        return _route_gated(_veto_over_ask(repeat_directive, pending_ask), **route_gate)
     # The plan-stage gate sits here for the same reason the two guards above
     # it do: it intervenes on a call, so nothing that observes a dispatch may
     # run first. Ordered after them because they answer about THIS call --
@@ -355,7 +363,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         # own allowlist is what remembers a person's answer. A counter here
         # would be a second record of the same fact, and OMH cannot observe
         # how the gate was answered anyway.
-        return _route_gated(plan_stage_directive, **route_gate)
+        return _route_gated(_veto_over_ask(plan_stage_directive, pending_ask), **route_gate)
     # A dag-ulw turn's first markerless `delegate_task`, before the run is
     # defined, goes back to `omh_dag define` once (`dag_define_gate`). Before
     # anything records a dispatch, like the gates above: it dispatches nothing.
@@ -368,7 +376,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         hermes_home=hermes_home,
     )
     if dag_define_directive is not None:
-        return _route_gated(dag_define_directive, **route_gate)
+        return _route_gated(_veto_over_ask(dag_define_directive, pending_ask), **route_gate)
     # `omh_team` `team_start` freezes commands OMH will later run by itself,
     # so the person sees the exact list and answers for it (`team_gate`).
     # Where nobody can answer, the call is blocked rather than let through.
@@ -378,7 +386,12 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         escalation_allowed=escalation_allowed,
     )
     if team_directive is not None:
-        return _route_gated(team_directive, **route_gate)
+        return _route_gated(_veto_over_ask(team_directive, pending_ask), **route_gate)
+    # No gate above refused, so the rule's held ask goes to the person now,
+    # before anything below records a dispatch; `_route_gated` still runs
+    # the route gate under it, as for every other `approve`.
+    if pending_ask is not None:
+        return _route_gated(pending_ask, **route_gate)
     # Last of the gates, so it writes only for a call nothing above refused:
     # a `delegate_task` spawn runs on the route its OWN conversation set,
     # which is put back in the profile-wide `delegation.*` keys here if
@@ -574,6 +587,20 @@ def _route_gated(
         if route_directive is not None:
             return {**directive, **route_directive}
     return dict(directive)
+
+
+def _veto_over_ask(
+    directive: Mapping[str, object], pending_ask: Mapping[str, object] | None
+) -> Mapping[str, object]:
+    """A later gate's `block` over a toolcall rule's held ask; otherwise the ask.
+
+    This hook returns one directive, so it ranks the way Hermes ranks across
+    plugins (`hermes_cli/plugins.py`, `_get_pre_tool_call_directive_details`):
+    `block` over `approve`, and among approves the first, which is the rule's.
+    """
+    if pending_ask is None or directive.get("action") == "block":
+        return directive
+    return pending_ask
 
 
 def _tool_arguments(kwargs: Mapping[str, object]) -> object:

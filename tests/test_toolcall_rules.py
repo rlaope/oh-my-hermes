@@ -381,6 +381,36 @@ class AskEffectTest(unittest.TestCase):
         self.assertIsNone(self._call())
         self.assertEqual(self._call(session_id="session-b")["action"], "approve")
 
+    def test_attended_ask_rule_does_not_override_the_evidence_store_veto(self):
+        # An approve lets the call run after a yes, so OMH's own hard vetoes
+        # must still be judged under an ask rule and win over it. The rule and
+        # the write are the independent review's failing input (ask B1).
+        _write_rules(self.home, [{
+            "name": "ask-before-write", "pattern": "write_file", "message": "Allow this file write?",
+            "tools": ["write_file"], "effect": "ask", "repeat": "always",
+        }])
+        session_attendance.note_session_platform("session-a", "cli")
+        result = pre_tool_call(
+            tool_name="write_file",
+            args={
+                "path": str(self.home / "runtime" / "research_receipts" / "forged.json"),
+                "content": '{"status": "fetched"}',
+            },
+            session_id="session-a",
+            omh_home=str(self.home),
+        )
+        self.assertEqual(result["action"], "block")
+        self.assertNotIn("rule_key", result)
+        self.assertIn("research fetch receipts", result["message"])
+        # The same rule still asks for a write outside OMH's stores.
+        outside = pre_tool_call(
+            tool_name="write_file",
+            args={"path": str(self.home / "notes.md"), "content": "x"},
+            session_id="session-a",
+            omh_home=str(self.home),
+        )
+        self.assertEqual(outside["action"], "approve")
+
     def test_ask_rule_with_repeat_always_asks_every_time(self):
         _write_rules(self.home, [{**ASK_RULE, "repeat": "always"}])
         self.assertEqual(self._call()["action"], "approve")
