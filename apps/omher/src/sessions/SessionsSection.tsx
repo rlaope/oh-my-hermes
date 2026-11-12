@@ -4,6 +4,12 @@
 // answer ring around the agent mark and the turn's elapsed time while a turn runs, and the amber dot with
 // "waiting" while one of its approvals or questions is open (the same asks the Needs-you strip lists). A
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
+// Every row ends line 2 with a small mark for the view it opens to: an outlined speech bubble for omher's chat, a
+// solid little prompt window for the agent's terminal (a draft shows the way picked for it). A session's state takes
+// the time's place on line 1 as a sign and a word: a yellow warning triangle and "waiting" while it waits for the
+// person (an open ask, or its terminal rang), a red exclamation mark and "error" when it stopped on an error, a green
+// check and "done" when it finished something the person has not opened yet. No dots: the row already has the live
+// dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
@@ -14,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 import { getAddOmh } from "./addOmh";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
@@ -379,7 +385,16 @@ export function SessionList() {
             </button>
           </div>
         ) : (
-          <Row key={rec.id} rec={rec} ctx={ctx} active={current === rec.id} onClose={() => ask(rec)} />
+          <Row
+            key={rec.id}
+            rec={rec}
+            ctx={ctx}
+            // a draft has no view yet: its mark is the way picked for it
+            view={rec.status === "draft" ? draftOpen(rec.agent, ss.agents, ss.opens) : rec.view}
+            unseen={ss.unseen[rec.id]}
+            active={current === rec.id}
+            onClose={() => ask(rec)}
+          />
         ),
       )}
     </nav>
@@ -390,7 +405,7 @@ export function SessionList() {
 function chatLive(s: AppState, key: string | null): ChatLive | undefined {
   const c = key ? s.chats[key] : undefined;
   if (!c) return undefined;
-  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key) };
+  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key), failed: !c.turn && c.lastTurn?.outcome === "error" };
 }
 
 /** Right-click menu of a session row: Rename, Close session. Placed at the pointer, inside the window. */
@@ -492,11 +507,59 @@ function NameInput({ initial, auto, onDone }: { initial: string; auto: boolean; 
   );
 }
 
-function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; active: boolean; onClose: () => void }) {
+/** The sign before a row's state word: a warning triangle (it waits for you), an exclamation mark (it stopped on an
+ *  error), a check (it finished). Three shapes, so the state reads without its colour. */
+function StateSign({ mark }: { mark: RowMark }) {
+  if (mark === "needs")
+    return (
+      <svg width="13" height="12" viewBox="0 0 13 12" aria-hidden="true">
+        <path d="M6.5 1.3 11.9 10.7H1.1Z" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M6.5 4.5v2.8" fill="none" stroke="var(--needs-ink, #1b1204)" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="6.5" cy="9.2" r="0.8" fill="var(--needs-ink, #1b1204)" />
+      </svg>
+    );
+  if (mark === "error")
+    return (
+      <svg width="5" height="12" viewBox="0 0 5 12" aria-hidden="true">
+        <path d="M2.5 1.5v5.6" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+        <circle cx="2.5" cy="10.3" r="1.25" fill="currentColor" />
+      </svg>
+    );
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M2 6.4 4.8 9.2 10 3.2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** The row's view mark. The two must differ at a glance at 16 by 13: the terminal is a solid window with the prompt
+ *  cut out of it, the chat an outlined bubble. The header's line icons at this size both read as "a small box". */
+function ViewMark({ view }: { view: "chat" | "terminal" }) {
+  return view === "terminal" ? (
+    <svg width="16" height="13" viewBox="0 0 16 13" aria-hidden="true">
+      <rect width="16" height="13" rx="3" fill="currentColor" />
+      <path d="M4 4 6.5 6.5 4 9M8.3 9.2h3.9" fill="none" stroke="var(--ss-cut)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg width="16" height="13" viewBox="0 0 16 13" aria-hidden="true">
+      <path
+        d="M3 .8h10a2.2 2.2 0 0 1 2.2 2.2v4.2A2.2 2.2 0 0 1 13 9.4H7.6l-3.1 2.8V9.4H3A2.2 2.2 0 0 1 .8 7.2V3A2.2 2.2 0 0 1 3 .8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx: RowContext; view: "chat" | "terminal"; unseen?: Unseen; active: boolean; onClose: () => void }) {
   const s = useStore();
   const key = getSessions().chatKey(rec.id);
   const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
-  const m = rowModel(rec, chat, ctx);
+  const m = rowModel(rec, chat, ctx, unseen);
+  // what the state's sign says, for a pointer and a screen reader (an error says its own text when it has one)
+  const markSays = m.mark === "needs" ? t("ss.mark.bell") : m.mark === "error" ? rec.error || t("ss.mark.error") : t("ss.mark.done");
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -542,9 +605,19 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
               )}
             </span>
           )}
-          {m.needsYou ? (
-            <span className="bot-t wait" data-testid="bot-time">
-              {t("ss.waiting")}
+          {m.mark ? (
+            <span className={`bot-t ${m.mark === "needs" ? "wait" : m.mark === "error" ? "err" : "ok"}`} data-testid="bot-time">
+              <span
+                className={`ss-sign ${m.mark}`}
+                data-testid={m.needsYou ? "needs" : "session-mark"}
+                data-mark={m.mark}
+                role="img"
+                aria-label={m.needsYou ? t("ss.needsAnswer") : markSays}
+                title={m.needsYou ? t("ss.needsAnswer") : markSays}
+              >
+                <StateSign mark={m.mark} />
+              </span>
+              {t(m.mark === "needs" ? "ss.waiting" : m.mark === "error" ? "ss.at.error" : "ss.at.done")}
             </span>
           ) : busySince !== null ? (
             <span className="bot-t busy" data-testid="bot-time">
@@ -561,10 +634,16 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
             {m.sub}
           </span>
           {ring && <TypingDots size={3} testId="bot-typing" />}
-          {m.needsYou && (
-            // the bot row's plain amber dot: no number (the strip carries the count)
-            <span className="needs-dot" data-testid="needs" role="status" aria-label={t("ss.needsAnswer")} title={t("ss.needsAnswer")} />
-          )}
+          <span
+            className="ss-view"
+            role="img"
+            data-testid="session-view"
+            data-view={view}
+            aria-label={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
+            title={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
+          >
+            <ViewMark view={view} />
+          </span>
         </span>
       </span>
     </>
@@ -572,10 +651,11 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
   return (
     <div
       ref={wrap}
-      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${menu ? " menu-open" : ""}`}
+      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${m.over ? " over" : ""}${menu ? " menu-open" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
       data-needs-you={m.needsYou ? "true" : undefined}
+      data-mark={m.needsYou ? "needs" : (m.mark ?? undefined)}
       onContextMenu={(e) => {
         e.preventDefault();
         if (editing) return;

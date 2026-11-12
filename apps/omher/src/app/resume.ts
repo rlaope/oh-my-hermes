@@ -29,6 +29,8 @@ export interface SavedSession {
   cwd: string;
   startedAt: number;
   view: "chat" | "terminal";
+  /** Opened as `terminal` (the agent's own terminal, no chat); none = as its agent opens. */
+  open?: "chat" | "terminal";
   /** Its program ran (or was starting) when omher closed. */
   running: boolean;
   /** A New session chat that never started: it comes back as a draft and is never started by the restart. */
@@ -95,6 +97,7 @@ function parseSession(v: unknown): SavedSession | null {
     view: v.view === "terminal" ? "terminal" : "chat",
     running: v.running === true,
   };
+  if (v.open === "chat" || v.open === "terminal") out.open = v.open;
   if (v.failed === true) out.failed = true;
   if (v.draft === true) {
     out.draft = true;

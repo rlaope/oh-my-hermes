@@ -2,7 +2,7 @@
 // its actions; they never edit this file.
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
-import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { noteFor, sessionNote, showNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
@@ -1974,6 +1974,14 @@ export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
     if (route) route.open();
     else void singleton?.actions.selectBot(note.bot);
   });
+}
+
+/** A system notification for what session `id` did outside its chat (its program ended, it could not start, its
+ *  terminal rang), unless the person is looking at that session. A click opens the session. */
+export function notifySessionNote(id: string, n: SessionNote, state: AppState): void {
+  if (!notifyEnabled()) return;
+  if (windowWatched() && state.ui.view === "session" && state.ui.session === id) return;
+  void showNote(sessionNote(id, n), () => singleton?.actions.openSession(id));
 }
 
 /** Set by SESSIONS: the chat key shown for a session id (so its own notifications stay quiet). */
