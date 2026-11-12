@@ -207,6 +207,17 @@ describe("reducer: a full turn", () => {
     expect(t.steps[1].stopped).toBeUndefined();
   });
 
+  it("a stopped turn's time is from its start to the Stop, on the recorded stream's clock (codex-B: 6.1 s)", () => {
+    // audit O11 follow-up: "Stopped after 0s" beside a step that ran on. codex-B.events.jsonl: turn.start at 8.684 s,
+    // tool.start (sleep 40) at 11.712 s, turn.end interrupted at 14.784 s
+    let s = run(initialState(), [{ event: "turn.start", bot: "agent:s1" }], 8_684);
+    s = run(s, [{ event: "tool.start", bot: "agent:s1", tool_id: "a", name: "terminal", detail: "sleep 40; echo late" }], 11_712);
+    s = run(s, [{ event: "turn.end", bot: "agent:s1", outcome: "interrupted" }], 14_784);
+    const t = s.chats["agent:s1"].lastTurn!;
+    expect(t.endedAt! - t.startedAt).toBe(6_100);
+    expect(t.steps[0].endedAt! - t.steps[0].startedAt).toBe(3_072);
+  });
+
   it("a turn that ends on its own leaves no step marked stopped", () => {
     for (const outcome of ["done", "ended", "error"] as const) {
       const s = run(initialState(), [

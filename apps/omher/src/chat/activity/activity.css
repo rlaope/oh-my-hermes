@@ -128,6 +128,12 @@
   text-overflow: ellipsis;
   color: var(--muted);
 }
+/* a failed turn's reason ends with what to do: it wraps instead of being cut */
+.act-sum.wrap {
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .act-el {
   color: var(--quiet);
   font-size: 11px;
@@ -191,9 +197,16 @@
 .act-step.fail .s {
   color: var(--danger);
 }
-/* stopped by the person: not a failure, the time says so in words */
+/* stopped by the person: not a failure; its own mark and verb, the time in words */
+.act-step.stopped .k,
 .act-step.stopped .s {
   color: var(--muted);
+}
+.act-step .act-ic {
+  align-self: center;
+  font-size: 8px;
+  width: 8px;
+  margin-right: -4px;
 }
 
 @media (prefers-reduced-motion: reduce) {

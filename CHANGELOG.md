@@ -291,6 +291,29 @@ All notable changes will be documented here.
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.
 
+- **A New session in omher opens as a chat or in the agent's own terminal.**
+  Beside the agent in a New session, a quiet Chat | Terminal choice (Chat by
+  default, the last pick remembered per agent) lets a person run `claude`,
+  `codex`, `omo`, `pi`, `omp`, `opencode` or `omh` as the real CLI in a
+  terminal instead of omher's chat; Start opens it in the folder and types
+  nothing. A session opened as a terminal ends with its program (an ended line
+  and Restart), has no Chat toggle or model control, shows the live dot in the
+  list, and after omher restarts comes back not running, waiting for Resume.
+  Every session row ends with a small mark for its view, a speech bubble for a
+  chat and a prompt window for a terminal, so the list says which is which.
+  A row also shows what happened while you looked elsewhere, with a system
+  notification for each: a yellow warning triangle and "waiting" when the
+  session waits for you (an approval or question, or its terminal rang its
+  bell or sent an OSC 9 / 777 notification), a red exclamation mark and
+  "error" when it stopped on an error or a non-zero exit, a green check and
+  "done" when it finished an answer or its program ended; opening the session
+  clears the waiting and done ones, and a session nothing runs in steps back
+  in the list.
+  OpenCode works both ways: its chat is as before, and as a terminal it is the
+  person's own OpenCode with their own rules. DSH has no terminal, Grok has no
+  chat, and Hermes alone (no `omh`) has only its chat; the choice shows those
+  dimmed with the reason. Bot chats are unchanged.
+
 - **omher starts the agent you picked, not another program with its name, and
   finds Grok and pi where their installers put them.** When Homebrew's `grok`
   regex tool, or any other program called `claude`, `codex`, `omo`, `pi` or
@@ -348,15 +371,16 @@ All notable changes will be documented here.
   permissions and its subagents.** An OmO message that OmO retried by itself is
   one turn: its line says "Retrying 1 of 5" while OmO tries again, and a retry
   that fails ends the turn once with OmO's own reason, not two failed turns with
-  a raw `400 {"type":"error",…}` reply. A step still running when you press Stop
-  reads "Stopped", in a session and in a bot's chat, and when Codex reports
-  later that the command ran on, the same row says it kept running and when it
-  finished. A Codex session whose own config asks for no approvals and reaches
+  a raw `400 {"type":"error",…}` reply; that reason wraps so its advice is
+  whole. A step still running when you press Stop reads "Stopped" with its own
+  mark, in a session and in a bot's chat, and when Codex reports later that the
+  command ran on, the same row says it kept running and how long after its
+  start it finished. A Codex session whose own config asks for no approvals and reaches
   the whole disk says "No approvals · full disk access" where the mode is shown,
   from its first message, naming Codex's own config; omher still offers no such
   mode. An OmO session whose subagent records sit in the project folder
   (`.omo/senpi-task/tasks/`, where OmO 5.0 and a folder that already has them
-  keep them) shows its run in Plans.
+  keep them) shows its run in Plans, with the same time as its chat card.
 
 - **Restart a bot from omher with one press.** A bot row's right-click (or `...`) menu has Restart under
   Edit (Start for a bot that is not connected, and an offline bot's chat offers Start in place). Restart runs

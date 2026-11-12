@@ -118,10 +118,10 @@ function DagRows({ step, live }: { step: Step; live: boolean }) {
   );
 }
 
-/** A stopped step's time: "Stopped · 3s", or when the agent later said it finished, that it kept running and how
- *  long it ran in all. */
+/** A stopped step's time: how long it had run at Stop, or, when the agent later said it finished, that it kept
+ *  running and how long the command ran in all (from its own start, by the agent's count). */
 function stoppedTime(step: Step, ms: number): string {
-  if (!step.late) return tr("act.stepStopped", { t: stepTime(ms) });
+  if (!step.late) return stepTime(ms);
   return tr(step.late.ok ? "act.stepLate" : "act.stepLateFailed", { t: stepTime(step.late.ms) });
 }
 
@@ -155,7 +155,8 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
           }
         : {})}
     >
-      <span className="k">{stepVerb(step.name)}</span>
+      {stopped && <span className="act-ic interrupted" aria-hidden>■</span>}
+      <span className="k">{stopped ? tr("act.stoppedVerb") : stepVerb(step.name)}</span>
       {step.detail &&
         (isCode(step.name) ? (
           <code className="v" title={step.detail}>
@@ -234,7 +235,7 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
         {live ? (
           <Ticker label={shownLabel(liveLabel(t))} />
         ) : (
-          <span className="act-sum" data-testid="activity-text">
+          <span className={`act-sum${state === "error" ? " wrap" : ""}`} data-testid="activity-text">
             {summary}
           </span>
         )}
