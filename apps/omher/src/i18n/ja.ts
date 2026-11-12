@@ -737,6 +737,11 @@ export const ja: Record<Key, string> = {
   "note.question": "{bot} から質問があります",
   "note.error": "{bot} がエラーで停止しました",
   "note.failed": "ターンが失敗しました。",
+  "note.session.ended": "{name} のセッションが終了しました",
+  "note.session.endedBody": "プログラムが終了しました。",
+  "note.session.failed": "{name} のセッションを開始できませんでした",
+  "note.session.bell": "{name} のセッションが確認を待っています",
+  "note.session.bellBody": "ターミナルのベルを鳴らしました。",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "パネル",
@@ -922,6 +927,11 @@ export const ja: Record<Key, string> = {
   "ss.answering": "回答中",
   "ss.liveDot": "実行中",
   "ss.waiting": "待機中",
+  "ss.mark.bell": "確認を求めています",
+  "ss.at.error": "エラー",
+  "ss.at.done": "完了",
+  "ss.mark.error": "エラー",
+  "ss.mark.done": "完了",
   "ss.needsAnswer": "回答が必要です",
   "ss.paused": "一時停止",
   "ss.newTitle": "新しいセッション",

@@ -579,6 +579,38 @@
 .ss-row .needs-dot {
   margin-left: 6px;
 }
+/* the state dot shares the amber dot's place and size. Amber stays "it waits for you"; red is "it stopped on an
+   error"; green is "it finished and you have not looked yet". */
+.ss-row .ss-mark.error {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent);
+}
+/* a finished session does not call for anything: its dot has no halo */
+.ss-row .ss-mark.done {
+  background: var(--ok);
+  box-shadow: none;
+}
+/* the dot's word in the time's place, in the dot's colour ("waiting" is the bot row's amber) */
+.ss-row .bot-t.err {
+  color: var(--danger);
+}
+.ss-row .bot-t.ok {
+  color: var(--ok);
+}
+/* 11px green on the light sidebar: a deeper shade, as the amber has */
+[data-theme="light"] .ss-row .bot-t.ok {
+  color: #17693f;
+}
+/* a session nothing runs in steps back: its agent mark fades and its name is muted, so the running ones lead */
+.ss-row.over .ss-av > * {
+  opacity: 0.5;
+}
+.ss-row.over .bot-n {
+  color: var(--muted);
+}
+.ss-row.over .ss-view {
+  opacity: 0.55;
+}
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {
   flex: 0 1 auto;

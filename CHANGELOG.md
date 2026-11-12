@@ -220,6 +220,13 @@ All notable changes will be documented here.
   list, and after omher restarts comes back not running, waiting for Resume.
   Every session row ends with a small mark for its view, a speech bubble for a
   chat and a prompt window for a terminal, so the list says which is which.
+  A row also shows what happened while you looked elsewhere, with a system
+  notification for each: an amber dot when the session waits for you (an
+  approval or question, or its terminal rang its bell or sent an OSC 9 / 777
+  notification), a red dot when it stopped on an error or a non-zero exit, a
+  green dot when it finished an answer or its program ended; opening the
+  session clears the amber and green ones, and a session nothing runs in
+  steps back in the list.
   OpenCode works both ways: its chat is as before, and as a terminal it is the
   person's own OpenCode with their own rules. DSH has no terminal, Grok has no
   chat, and Hermes alone (no `omh`) has only its chat; the choice shows those

@@ -737,6 +737,11 @@ export const ko: Record<Key, string> = {
   "note.question": "{bot}가 질문했어요",
   "note.error": "{bot}가 오류로 멈췄어요",
   "note.failed": "요청이 실패했어요.",
+  "note.session.ended": "{name} 세션이 끝났어요",
+  "note.session.endedBody": "프로그램이 종료됐어요.",
+  "note.session.failed": "{name} 세션을 시작하지 못했어요",
+  "note.session.bell": "{name} 세션이 확인을 기다려요",
+  "note.session.bellBody": "터미널 벨을 울렸어요.",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "패널",
@@ -922,6 +927,11 @@ export const ko: Record<Key, string> = {
   "ss.answering": "답하는 중",
   "ss.liveDot": "실행 중",
   "ss.waiting": "대기 중",
+  "ss.mark.bell": "확인을 요청했어요",
+  "ss.at.error": "오류",
+  "ss.at.done": "완료",
+  "ss.mark.error": "오류",
+  "ss.mark.done": "완료",
   "ss.needsAnswer": "답이 필요해요",
   "ss.paused": "멈춤",
   "ss.newTitle": "새 세션",

@@ -25,11 +25,11 @@
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Opens, type Recent, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
-import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
@@ -37,6 +37,7 @@ import { accountGroups } from "../settings/accounts/useAccounts";
 import { modesOf } from "./controls";
 import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
+import { windowWatched, type SessionNote } from "../lib/notify";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const ACCOUNT_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -71,6 +72,8 @@ export interface SessionsState {
   notes: Record<string, string>;
   /** what each chat's agent reported about itself, by session id */
   live: Record<string, AgentLive>;
+  /** what a session did while the person was not looking at it, by session id (gone once they open it) */
+  unseen: Record<string, Unseen>;
 }
 
 /** What a chat's agent said about its controls (agent_chat.rs events). Nothing here is estimated. */
@@ -172,7 +175,7 @@ const readOpens = () => {
 };
 
 export function createSessions(host: SessionHost, store: () => Store = getStore, accounts: () => AccountGroup[] | null = () => null) {
-  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), opens: readOpens(), models: {}, notes: {}, live: {} };
+  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), opens: readOpens(), models: {}, notes: {}, live: {}, unseen: {} };
   const listeners = new Set<() => void>();
   const terms = new Map<string, Term>();
   const procs = new Map<string, ChatProc>();
@@ -189,12 +192,46 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** drafts whose agent / folder the person picked: a late agent or home look-up no longer moves them */
   const picked = new Map<string, { agent?: boolean; cwd?: boolean }>();
   let notify: ((ev: BridgeEvent) => void) | null = null;
+  let notifyState: ((id: string, n: SessionNote) => void) | null = null;
 
   const set = (patch: Partial<SessionsState>) => {
     state = { ...state, ...patch };
     for (const l of [...listeners]) l();
   };
   const rec = (id: string) => state.list.find((s) => s.id === id);
+
+  // ---- what a session did while the person looked elsewhere --------------------------------
+
+  /** The person sees session `id` right now: the window has focus and shows it. */
+  const watching = (id: string) => {
+    const ui = store().getState().ui;
+    return windowWatched() && ui.view === "session" && ui.session === id;
+  };
+  /** `web-app · Claude Code`, as its notifications and its Needs-you row name it. */
+  const nameOf = (r: SessionRec) => `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentLabel(r.agent, state.agents)}`;
+  /** Session `id` did something the person did not see: its row carries it until they open the session. True when
+   *  this is news (they are not watching, and the row does not say it already). */
+  const flag = (id: string, what: Unseen): boolean => {
+    if (!rec(id) || watching(id) || state.unseen[id] === what) return false;
+    set({ unseen: { ...state.unseen, [id]: what } });
+    return true;
+  };
+  /** The person opened session `id`: what its row carried for them is seen. */
+  const seen = (id: string) => {
+    if (!(id in state.unseen)) return;
+    const unseen = { ...state.unseen };
+    delete unseen[id];
+    set({ unseen });
+  };
+  /** Session `id`'s program ended or could not start while the person was elsewhere: its row says so and a
+   *  notification goes out. */
+  const tellEnd = (id: string, kind: "ended" | "failed", detail: { code?: number | null; error?: string }, told = false) => {
+    const r = rec(id);
+    if (!r || watching(id)) return;
+    flag(id, "end");
+    // `told`: the turn that failed with it already raised a notification with the same reason
+    if (!told) notifyState?.(id, { kind, name: nameOf(r), ...detail });
+  };
   const patchRec = (id: string, p: Partial<SessionRec>) => set({ list: state.list.map((s) => (s.id === id ? { ...s, ...p } : s)) });
   let titles = readTitles();
   const saveTitles = (next: Record<string, string>) => {
@@ -364,13 +401,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // the turn the exit failed says "Failed after 0s"; its reason is the Ended line's, said once beside Restart
         const key = keys.get(id);
         if (key && error) store().dispatch({ type: "turn.reasonMoved", bot: key, error });
+        const last = key ? store().getState().chats[key]?.lastTurn : null;
+        tellEnd(id, "ended", { code, error }, !!last && last.outcome === "error" && Date.now() - (last.endedAt ?? 0) < 3000);
         return;
       }
       default:
         if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
         // the agent may have titled the conversation during the turn
+        // a new turn: the finished one its row still showed is behind it
+        if (ev.event === "turn.start" && state.unseen[id] === "end") seen(id);
         if (ev.event === "turn.end") {
+          // an answer the person did not watch arrive: the row says it finished until they open it
+          if (ev.outcome === "done") flag(id, "end");
           void readAgentTitle(id);
           void readBranch(id);
         }
@@ -411,7 +454,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (procs.get(id) === proc) procs.delete(id);
       // the shell's refusal to start an agent whose ask rules it could not prove (acp_chat.rs NO_RULES), translated
       const why = errText(e);
-      patchRec(id, { status: "failed", error: why === NO_RULES ? tr("ss.noRules") : why });
+      const error = why === NO_RULES ? tr("ss.noRules") : why;
+      patchRec(id, { status: "failed", error });
+      tellEnd(id, "failed", { error });
     }
   };
 
@@ -444,7 +489,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       void loadHermesModels(id, bot);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);
-      patchRec(id, { status: "failed", error: errText(e) });
+      const error = errText(e);
+      patchRec(id, { status: "failed", error });
+      tellEnd(id, "failed", { error });
     }
   };
 
@@ -616,8 +663,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     for (const [id, p] of procs) {
       if (p.kind === "folder" && p.bot === ev.bot && p.fid === ev.session) {
         procs.delete(id);
-        patchRec(id, { status: "exited", exitCode: null, error: ev.reason || tr("ss.hermesClosed") });
+        const error = ev.reason || tr("ss.hermesClosed");
+        patchRec(id, { status: "exited", exitCode: null, error });
+        tellEnd(id, "ended", { code: null, error });
       }
+    }
+  });
+
+  // A Hermes folder chat's turns come over the bridge: an answer the person did not watch arrive marks its row, and
+  // the next turn puts it behind.
+  onBridgeEvent((ev) => {
+    if (!ev.session || (ev.event !== "turn.start" && !(ev.event === "turn.end" && ev.outcome === "done"))) return;
+    for (const [id, p] of procs) {
+      if (p.kind !== "folder" || p.bot !== ev.bot || p.fid !== ev.session) continue;
+      if (ev.event === "turn.end") flag(id, "end");
+      else if (state.unseen[id] === "end") seen(id);
     }
   });
 
@@ -784,7 +844,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         (d) => t.term.write(d),
         (code) => {
           t.closed = true;
-          if (!ofChat) patchRec(id, { status: "exited", exitCode: code });
+          if (!ofChat) {
+            patchRec(id, { status: "exited", exitCode: code });
+            tellEnd(id, "ended", { code });
+          }
           t.term.write(`\r\n\x1b[2m[${code ? tr("ss.termEndedExit", { agent: agentDef(r.agent).label, code }) : tr("ss.termEnded", { agent: agentDef(r.agent).label })}]\x1b[0m\r\n`);
         },
         resume,
@@ -800,7 +863,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     } catch (e) {
       t.closed = true;
       const error = errText(e);
-      if (!ofChat) patchRec(id, { status: "failed", error });
+      if (!ofChat) {
+        patchRec(id, { status: "failed", error });
+        tellEnd(id, "failed", { error });
+      }
       t.term.write(`\x1b[31m${error}\x1b[0m\r\n`);
     }
   };
@@ -857,6 +923,24 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       });
       term.onResize(({ cols, rows }) => {
         if (tt.hostId !== null && !tt.closed) void host.resize(tt.hostId, cols, rows).catch(() => undefined);
+      });
+      // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
+      // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
+      // out, once, until the person comes back to the session.
+      const ring = () => {
+        const r = rec(id);
+        if (r && !tt.closed && flag(id, "bell")) notifyState?.(id, { kind: "bell", name: nameOf(r) });
+      };
+      term.onBell(ring);
+      // The notification escapes agents send instead of a bell count as a ring too: OSC 9 with a message (not a
+      // `9;<number>` report such as the 9;4 progress bar) and OSC 777 `notify`. Their text is never shown or kept.
+      term.parser.registerOscHandler(9, (d) => {
+        if (!/^\d+(;|$)/.test(d)) ring();
+        return false; // not consumed: another handler may want the escape
+      });
+      term.parser.registerOscHandler(777, (d) => {
+        if (d.startsWith("notify;")) ring();
+        return false;
       });
     }
     const tt = t;
@@ -1111,7 +1195,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     delete notes[id];
     const live = { ...state.live };
     delete live[id];
-    set({ list, models, notes, live });
+    const unseen = { ...state.unseen };
+    delete unseen[id];
+    set({ list, models, notes, live, unseen });
     const ui = store().getState().ui;
     if (ui.view === "session" && ui.session === id) {
       const next = list[Math.min(idx, list.length - 1)];
@@ -1223,6 +1309,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setNotify(fn: ((ev: BridgeEvent) => void) | null) {
       notify = fn;
     },
+    /** The person opened session `id`: what its row carried for them is seen. */
+    seen,
+    /** Hook for system notifications of what a session did outside its chat (the app sets it). */
+    setNotifyState(fn: ((id: string, n: SessionNote) => void) | null) {
+      notifyState = fn;
+    },
   };
 }
 
@@ -1235,6 +1327,7 @@ export function getSessions(): SessionsStore {
     singleton = s;
     setSessionKeyLookup((id) => s.chatKey(id));
     s.setNotify((ev) => notifySessionEvent(ev, getStore().getState()));
+    s.setNotifyState((id, n) => notifySessionNote(id, n, getStore().getState()));
   }
   return singleton;
 }

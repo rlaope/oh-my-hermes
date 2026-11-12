@@ -5,7 +5,10 @@
 // "waiting" while one of its approvals or questions is open (the same asks the Needs-you strip lists). A
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
 // Every row ends line 2 with a small mark for the view it opens to: an outlined speech bubble for omher's chat, a
-// solid little prompt window for the agent's terminal (a draft shows the way picked for it).
+// solid little prompt window for the agent's terminal (a draft shows the way picked for it). Just before it sits the
+// state dot: amber while the session waits for the person (an open ask, or its terminal rang), red when it stopped on
+// an error, green when it finished something the person has not opened yet; its word (waiting, error, done) takes the
+// time's place on line 1. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
@@ -16,7 +19,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec, type Unseen } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 import { getAddOmh, useAddOmh } from "./addOmh";
 import { InstallLog } from "../app/BridgeGate";
@@ -396,6 +399,7 @@ export function SessionList() {
             ctx={ctx}
             // a draft has no view yet: its mark is the way picked for it
             view={rec.status === "draft" ? draftOpen(rec.agent, ss.agents, ss.opens) : rec.view}
+            unseen={ss.unseen[rec.id]}
             active={current === rec.id}
             onClose={() => ask(rec)}
           />
@@ -409,7 +413,7 @@ export function SessionList() {
 function chatLive(s: AppState, key: string | null): ChatLive | undefined {
   const c = key ? s.chats[key] : undefined;
   if (!c) return undefined;
-  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key) };
+  return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key), failed: !c.turn && c.lastTurn?.outcome === "error" };
 }
 
 /** Right-click menu of a session row: Rename, Close session. Placed at the pointer, inside the window. */
@@ -532,11 +536,13 @@ function ViewMark({ view }: { view: "chat" | "terminal" }) {
   );
 }
 
-function Row({ rec, ctx, view, active, onClose }: { rec: SessionRec; ctx: RowContext; view: "chat" | "terminal"; active: boolean; onClose: () => void }) {
+function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx: RowContext; view: "chat" | "terminal"; unseen?: Unseen; active: boolean; onClose: () => void }) {
   const s = useStore();
   const key = getSessions().chatKey(rec.id);
   const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
-  const m = rowModel(rec, chat, ctx);
+  const m = rowModel(rec, chat, ctx, unseen);
+  // what the state dot says, for a pointer and a screen reader (an error says its own text when it has one)
+  const markSays = m.mark === "needs" ? t("ss.mark.bell") : m.mark === "error" ? rec.error || t("ss.mark.error") : t("ss.mark.done");
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -582,9 +588,17 @@ function Row({ rec, ctx, view, active, onClose }: { rec: SessionRec; ctx: RowCon
               )}
             </span>
           )}
-          {m.needsYou ? (
+          {m.mark === "needs" ? (
             <span className="bot-t wait" data-testid="bot-time">
               {t("ss.waiting")}
+            </span>
+          ) : m.mark === "error" ? (
+            <span className="bot-t err" data-testid="bot-time">
+              {t("ss.at.error")}
+            </span>
+          ) : m.mark === "done" ? (
+            <span className="bot-t ok" data-testid="bot-time">
+              {t("ss.at.done")}
             </span>
           ) : busySince !== null ? (
             <span className="bot-t busy" data-testid="bot-time">
@@ -601,6 +615,12 @@ function Row({ rec, ctx, view, active, onClose }: { rec: SessionRec; ctx: RowCon
             {m.sub}
           </span>
           {ring && <TypingDots size={3} testId="bot-typing" />}
+          {m.needsYou ? (
+            // the bot row's plain amber dot: no number (the strip carries the count)
+            <span className="needs-dot" data-testid="needs" role="status" aria-label={t("ss.needsAnswer")} title={t("ss.needsAnswer")} />
+          ) : (
+            m.mark && <span className={`needs-dot ss-mark ${m.mark}`} data-testid="session-mark" data-mark={m.mark} role="status" aria-label={markSays} title={markSays} />
+          )}
           <span
             className="ss-view"
             role="img"
@@ -611,10 +631,6 @@ function Row({ rec, ctx, view, active, onClose }: { rec: SessionRec; ctx: RowCon
           >
             <ViewMark view={view} />
           </span>
-          {m.needsYou && (
-            // the bot row's plain amber dot: no number (the strip carries the count)
-            <span className="needs-dot" data-testid="needs" role="status" aria-label={t("ss.needsAnswer")} title={t("ss.needsAnswer")} />
-          )}
         </span>
       </span>
     </>
@@ -622,10 +638,11 @@ function Row({ rec, ctx, view, active, onClose }: { rec: SessionRec; ctx: RowCon
   return (
     <div
       ref={wrap}
-      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${menu ? " menu-open" : ""}`}
+      className={`ss-row bot${active ? " active" : ""}${m.needsYou ? " needs" : ""}${m.over ? " over" : ""}${menu ? " menu-open" : ""}`}
       data-testid={`session-${rec.id}`}
       data-status={rec.status}
       data-needs-you={m.needsYou ? "true" : undefined}
+      data-mark={m.needsYou ? "needs" : (m.mark ?? undefined)}
       onContextMenu={(e) => {
         e.preventDefault();
         if (editing) return;

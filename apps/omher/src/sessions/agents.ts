@@ -225,7 +225,17 @@ export interface ChatLive {
   turn: boolean;
   /** an approval or question waits for the person */
   needsYou: boolean;
+  /** its last turn stopped on an error and no turn has run since */
+  failed?: boolean;
 }
+
+/** What a session did while the person was not looking at it, kept on its row until they open it: its terminal rang
+ *  its bell, or it finished (a turn, or the program itself). */
+export type Unseen = "bell" | "end";
+
+/** The state dot at the end of a row's second line: it waits for the person, it stopped on an error, or it finished
+ *  something the person has not seen. */
+export type RowMark = "needs" | "error" | "done";
 
 /** The other rows a row is told apart from: every session's folder, and the home folder for `~`. */
 export interface RowContext {
@@ -244,6 +254,7 @@ export function rowModel(
   s: SessionRec,
   chat?: ChatLive,
   ctx?: RowContext,
+  unseen?: Unseen,
 ): {
   title: string;
   titleSource: TitleSource;
@@ -252,6 +263,10 @@ export function rowModel(
   sub: string;
   live: boolean;
   needsYou: boolean;
+  /** the state dot, if the row has one */
+  mark: RowMark | null;
+  /** nothing runs in it (ended, could not start, or waiting for Resume): the row steps back */
+  over: boolean;
   ts: number;
 } {
   const label = agentLabel(s.agent, ctx?.agents);
@@ -264,24 +279,33 @@ export function rowModel(
       sub: s.cwd ? tildePath(s.cwd, ctx?.home ?? null) : label,
       live: false,
       needsYou: false,
+      mark: null,
+      over: false,
       ts: s.startedAt / 1000,
     };
   const alive = s.status === "running" || s.status === "starting";
   const needsYou = alive && !!chat?.needsYou;
+  // an error: it could not start, its program ended with an error or a non-zero exit, or its last turn failed
+  const failedTurn = s.status === "running" && !!chat?.failed;
+  const broke =
+    s.status === "failed" || failedTurn || (s.status === "exited" && !s.paused && (!!s.error || (typeof s.exitCode === "number" && s.exitCode !== 0)));
+  const mark: RowMark | null = needsYou || (alive && unseen === "bell") ? "needs" : broke ? "error" : unseen === "end" ? "done" : null;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
   // the amber dot say it, so the line is just the agent.
-  const state =
-    needsYou || s.status === "running"
+  // The dot's own word (waiting, error, done) stands in the time's place on line 1, so line 2 is as before.
+  const state = needsYou
+    ? ""
+    : s.status === "running"
       ? ""
       : s.paused
         ? t("ss.paused")
         : s.status === "starting"
-        ? t("ss.starting")
-        : s.status === "failed"
-          ? t("ss.couldNotStart")
-          : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
-            ? t("ss.ended")
-            : t("ss.endedExit", { code: s.exitCode });
+          ? t("ss.starting")
+          : s.status === "failed"
+            ? t("ss.couldNotStart")
+            : s.exitCode === 0 || s.exitCode === null || s.exitCode === undefined
+              ? t("ss.ended")
+              : t("ss.endedExit", { code: s.exitCode });
   // A chat is live while a turn runs; a terminal while its program runs.
   const live = s.view === "chat" && chat ? alive && chat.turn : alive;
   const folder = folderName(s.cwd);
@@ -298,6 +322,8 @@ export function rowModel(
     sub: `${place}${agent}`,
     live,
     needsYou,
+    mark,
+    over: !alive,
     ts: s.startedAt / 1000,
   };
 }

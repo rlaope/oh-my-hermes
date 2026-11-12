@@ -737,6 +737,11 @@ export const zh: Record<Key, string> = {
   "note.question": "{bot} 有个问题",
   "note.error": "{bot} 因出错而停止",
   "note.failed": "这次回复失败了。",
+  "note.session.ended": "{name} 会话已结束",
+  "note.session.endedBody": "程序已退出。",
+  "note.session.failed": "{name} 会话无法启动",
+  "note.session.bell": "{name} 会话在等你确认",
+  "note.session.bellBody": "它响了终端铃。",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "面板",
@@ -922,6 +927,11 @@ export const zh: Record<Key, string> = {
   "ss.answering": "正在回复",
   "ss.liveDot": "运行中",
   "ss.waiting": "等待中",
+  "ss.mark.bell": "请求你的确认",
+  "ss.at.error": "出错",
+  "ss.at.done": "已完成",
+  "ss.mark.error": "出错",
+  "ss.mark.done": "已完成",
   "ss.needsAnswer": "需要你回复",
   "ss.paused": "已暂停",
   "ss.newTitle": "新建会话",

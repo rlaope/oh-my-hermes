@@ -66,6 +66,8 @@ describe("draft defaults", () => {
       sub: "~/code/app",
       live: false,
       needsYou: false,
+      mark: null,
+      over: false,
       ts: 1,
     });
     expect(rowModel({ ...d, cwd: "" }).sub).toBe("Codex");

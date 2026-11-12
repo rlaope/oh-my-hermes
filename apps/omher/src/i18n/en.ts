@@ -739,6 +739,11 @@ export const en = {
   "note.question": "{bot} has a question",
   "note.error": "{bot} stopped with an error",
   "note.failed": "The turn failed.",
+  "note.session.ended": "{name} ended",
+  "note.session.endedBody": "Its program finished.",
+  "note.session.failed": "{name} could not start",
+  "note.session.bell": "{name} wants your attention",
+  "note.session.bellBody": "It rang its terminal's bell.",
 
   // right panel, sessions, routines, runs drawer, setup gate (i18n 0.2.5)
   "pn.panel": "Panel",
@@ -924,6 +929,11 @@ export const en = {
   "ss.answering": "Answering",
   "ss.liveDot": "running",
   "ss.waiting": "waiting",
+  "ss.mark.bell": "Rang for your attention",
+  "ss.at.error": "error",
+  "ss.at.done": "done",
+  "ss.mark.error": "Error",
+  "ss.mark.done": "Done",
   "ss.needsAnswer": "Needs your answer",
   "ss.paused": "Paused",
   "ss.newTitle": "New session",

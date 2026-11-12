@@ -195,6 +195,61 @@ for (const theme of ["dark", "light"] as const) {
           clip: { x: 0, y: list.y - 34, width: list.x + list.width + 8, height: list.height + 42 },
         });
       });
+
+      // the state dots: a terminal that rang, one that ended on an error, a chat that finished unseen, a chat with an
+      // open approval, and a terminal that just runs
+      test(`shot of the session rows with their state dots (${theme})`, async ({ page }) => {
+        test.skip(!SHOTS, "no shot folder");
+        mkdirSync(SHOTS, { recursive: true });
+        await mock("bots.rename", { bot: "default", name: "Juno" });
+        const folder = (p: string) => page.evaluate((v) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = v), p);
+        const line = async (text: string) => {
+          await page.locator(".xterm-helper-textarea").focus();
+          await page.keyboard.type(text);
+          await page.keyboard.press("Enter");
+        };
+        const terminal = async (agent: string, mark: string) => {
+          await draft(page, agent);
+          await page.getByTestId("session-way-terminal").click();
+          await page.getByTestId("session-go").click();
+          await expect(page.locator(".xterm-rows")).toContainText(mark);
+        };
+        const rowOf = (name: string) => page.locator("[data-testid=session-list] .ss-row").filter({ hasText: name });
+        await open(page, theme);
+        await terminal("claude", "(mock)");
+        await line("after 2500 bell");
+        await folder("/Users/you/code/api-server");
+        await terminal("opencode", "opencode");
+        await line("after 2500 exit 3");
+        await folder("/Users/you/code/docs-site");
+        await draft(page, "claude");
+        await page.getByTestId("session-way-chat").click();
+        await page.getByTestId("composer").fill("Summarize the README");
+        await page.keyboard.press("Enter");
+        await page.getByTestId("bot-kami").click();
+        await folder("/Users/you/code/infra");
+        await draft(page, "codex");
+        await page.getByTestId("session-way-chat").click();
+        await page.getByTestId("composer").fill("/approve clean the build folder");
+        await page.keyboard.press("Enter");
+        await page.getByTestId("bot-kami").click();
+        await folder("/Users/you/code/mobile-app");
+        await terminal("claude", "(mock)");
+        await page.getByTestId("bot-kami").click();
+        await expect(rowOf("web-app")).toHaveAttribute("data-mark", "needs", { timeout: 10_000 });
+        await expect(rowOf("api-server")).toHaveAttribute("data-mark", "error", { timeout: 10_000 });
+        await expect(rowOf("docs-site")).toHaveAttribute("data-mark", "done", { timeout: 10_000 });
+        await expect(rowOf("infra")).toHaveAttribute("data-mark", "needs", { timeout: 10_000 });
+        await expect(rowOf("mobile-app")).not.toHaveAttribute("data-mark", /.+/);
+        await page.mouse.move(700, 300);
+        await page.waitForTimeout(350);
+        const list = (await page.getByTestId("session-list").boundingBox())!;
+        await page.screenshot({
+          path: join(SHOTS, `open-term-marks-${theme}.png`),
+          animations: "disabled",
+          clip: { x: 0, y: list.y - 34, width: list.x + list.width + 8, height: list.height + 42 },
+        });
+      });
     });
   });
 }
