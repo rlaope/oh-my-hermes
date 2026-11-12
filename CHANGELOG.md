@@ -10,6 +10,16 @@ All notable changes will be documented here.
   view, the last mouse path that did after the wheel stopped opening it. It
   now selects nothing and opens nothing; only Ctrl+O opens the view.
 
+- **A resumed session no longer shows Hermes' own turns as your prompts.**
+  When `omh --resume` or `/resume` redrew a session, every user-role row in
+  Hermes' history was drawn as a `❯` prompt, including the ones Hermes wrote
+  itself: an async delegation's results (`[ASYNC DELEGATION BATCH COMPLETE
+  …]`), a background process finishing, an internal notice, a resumed turn,
+  a model switch. They now draw as one dim `↳` row with the title Hermes
+  stored for them (`↳ Subagent Tasks Completed: Review the TUI branches`), as
+  Hermes' own TUI draws them. Your own prompts, skill lines and steers are
+  unchanged.
+
 - **A successful shell run in the OMH TUI shows the end of what it printed.**
   A `terminal` or `execute_code` call that exited 0 (a long build, a test run
   piped through `tee`) showed its first three lines and cut the summary or
@@ -563,6 +573,15 @@ All notable changes will be documented here.
   says the level set. The info line keeps the model's name beside the mode
   label at 120 columns (the context goes first), and the launch look's file
   is named as `~/…`.
+
+- **`omh update` no longer waits forever on a stalled package manager.** The
+  step that runs npm, bun or Homebrew had no time limit and printed nothing
+  while it ran, so a registry that never answered left `[1/2] Updating omh
+  command package...` on screen for good. The step now prints a `still
+  running` line with the seconds passed about every 30 seconds, and after 900
+  seconds it stops the package manager and names the command to run yourself
+  before rerunning `omh update`. `OMH_UPDATE_PACKAGE_TIMEOUT` sets another
+  limit in whole seconds, up to one day; `--json` output is unchanged.
 
 - **omher finds Hermes installed by its package manager.** Hermes installs
   made with the unified package manager have no `venv`, so omher said Hermes
