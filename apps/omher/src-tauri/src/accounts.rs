@@ -263,9 +263,9 @@ pub fn parse_version(stdout: &str) -> Option<String> {
         if parts < 3 {
             continue;
         }
-        // the suffix is one `-pre.release.1` run (letters, digits, dots), nothing after it
+        // the suffix is one `-pre-release.1` run (letters, digits, dots, hyphens), nothing after it
         let tail = if b.get(end) == Some(&b'-') {
-            1 + b[end + 1..].iter().take_while(|c| c.is_ascii_alphanumeric() || **c == b'.').count()
+            1 + b[end + 1..].iter().take_while(|c| c.is_ascii_alphanumeric() || **c == b'.' || **c == b'-').count()
         } else {
             0
         };
@@ -723,7 +723,8 @@ mod tests {
         assert_eq!(parse_version("v1.2.3.").as_deref(), Some("1.2.3"));
         assert_eq!(parse_version("tool 12.34 build 7"), None);
         assert_eq!(parse_version(""), None);
-        assert_eq!(parse_version("x 1.2.3-beta.1-rest of the text").as_deref(), Some("1.2.3-beta.1"));
+        assert_eq!(parse_version("x 1.2.3-beta.1-rest of the text").as_deref(), Some("1.2.3-beta.1-rest"));
+        assert_eq!(parse_version("1.2.3-alpha-beta.1 rest").as_deref(), Some("1.2.3-alpha-beta.1"));
         assert_eq!(version(Path::new("/h"), "pi"), Ok(None));
         assert!(fixed_args("pi", Step::Version).is_none() && fixed_args("bash", Step::Version).is_none());
     }
