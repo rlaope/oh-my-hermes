@@ -137,14 +137,24 @@ const secs = (s: string) => {
 /** The header once the panel has stopped sliding: from 1100px up an open panel takes its column, so the header
  *  ends where the panel begins; below, the panel lies over the chat and the header keeps the window's width. */
 async function settled(page: Page, open: boolean, width: number) {
-  // (the grid's column slides: the header and the panel move together, so two reads 80ms apart must agree too)
-  const read = () => page.evaluate(() => ["header", "details"].map((id) => document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().toJSON()));
+  // The grid's column slides (0.25s), and the header and the panel move together, so the header's right edge always
+  // equals the panel's left edge and says nothing about the slide being over. A slide the resize starts is also only
+  // pending until the next frame and holds its start value until then, so two reads 80ms apart could agree before it
+  // began. Each read therefore waits two frames, and the motion is over when neither the window's columns nor the
+  // panel have a transition running or pending and two reads of the header, the panel and the controls agree.
+  const read = () =>
+    page.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const moving = [".window", '[data-testid="details"]'].some((sel) => document.querySelector(sel)!.getAnimations().some((a) => a.pending || a.playState === "running"));
+      const boxes = ["header", "details", "session-terminal-toggle", "model-pill", "panel-button"].map((id) => document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().toJSON());
+      return { moving, boxes };
+    });
   await expect
     .poll(async () => {
-      const [h, d] = await read();
-      await page.waitForTimeout(80);
-      const [h2] = await read();
-      return h.right === h2.right && Math.round(h.right) === (open && width >= 1100 ? Math.round(d.left) : width);
+      const a = await read();
+      const b = await read();
+      const [h, d] = b.boxes;
+      return !a.moving && !b.moving && JSON.stringify(a.boxes) === JSON.stringify(b.boxes) && Math.round(h.right) === (open && width >= 1100 ? Math.round(d.left) : width);
     })
     .toBe(true);
   return (await page.getByTestId("header").boundingBox())!;
