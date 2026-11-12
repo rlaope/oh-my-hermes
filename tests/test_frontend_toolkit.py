@@ -782,6 +782,55 @@ class BrowserTests(Fixture):
         self.assertEqual(report["first_action_y"], 0)
         self.assertEqual(report["horizontal_overflow_px"], 250)
 
+    def parked_left_page(self, name, style, body):
+        # Standards mode, right-to-left: a skip link parked at left:-9999px,
+        # y 20, the way a left-to-right site hides one, and the control the
+        # reader meets first at y 300.
+        path = self.root / name
+        path.write_text('<!doctype html><html dir="rtl"><head><meta name="viewport" content="width=device-width,'
+                        'initial-scale=1"><style>body{margin:0;height:2000px} a,button{display:block;'
+                        'width:120px;height:48px;box-sizing:border-box}'
+                        ' #skip{position:absolute;top:20px;left:-9999px} #real{position:absolute;top:300px;right:0}'
+                        f' {style}</style></head><body>{body}<button id="real">real</button></body></html>')
+        return path
+
+    def test_rtl_link_parked_left_inside_a_clipping_box_is_not_the_first_action(self):
+        # No scroll or pan shows a link clipped away by its container, so the
+        # reachable button at 300 is first; counting every box left of the
+        # start edge reported the link at 20. The same link in a box the
+        # reader can scroll is reachable and stays first.
+        box = ".box{position:absolute;top:0;right:0;width:390px;height:100px;overflow-x:%s}"
+        body = '<div class="box"><a id="skip" href="#">Skip</a></div>'
+        for overflow, expected in (("hidden", 300), ("auto", 20)):
+            with self.subTest(overflow=overflow):
+                report = self.measure(self.parked_left_page(f"box-{overflow}.html", box % overflow, body))
+                self.assertEqual(report["first_action_y"], expected)
+                self.assertEqual(report["horizontal_overflow_px"], 0)
+
+    def test_rtl_link_parked_left_of_a_held_viewport_is_not_the_first_action(self):
+        # With overflow-x hidden on the root the pan stops 1170 px out, far
+        # short of the link; without it the same link is 9999 px of real left
+        # overflow the reader can pan to.
+        body = '<a id="skip" href="#">Skip</a>'
+        for label, style, expected in (("held", "html,body{overflow-x:hidden}", 300), ("open", "", 20)):
+            with self.subTest(viewport=label):
+                report = self.measure(self.parked_left_page(f"viewport-{label}.html", style, body))
+                self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_reachable_left_overflow_counts_beside_a_clipped_link(self):
+        # One page with both: the clipped link at 20 is skipped and the control
+        # in the 130 px left overflow at 50 is first, not the button at 300.
+        page = self.parked_left_page(
+            "both.html",
+            ".box{position:absolute;top:0;right:0;width:390px;height:100px;overflow:hidden}"
+            " .wide{position:absolute;top:0;right:0;width:520px;height:10px}"
+            " #first{position:absolute;top:50px;right:400px}",
+            '<div class="wide"></div><div class="box"><a id="skip" href="#">Skip</a></div>'
+            '<button id="first">first</button>')
+        report = self.measure(page)
+        self.assertEqual(report["first_action_y"], 50)
+        self.assertEqual(report["horizontal_overflow_px"], 130)
+
     def test_left_to_right_neighbours_are_unchanged(self):
         # These pass on the code before the right-to-left change as well; they
         # pin the left-to-right numbers the change must not move.

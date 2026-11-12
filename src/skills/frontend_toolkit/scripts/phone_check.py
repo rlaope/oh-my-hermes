@@ -45,7 +45,7 @@ PAST_LEFT_EDGE_NOTE = ("this page starts at its right edge and overflows to the 
 # It classifies every shown element in the page and returns a count over all of
 # them; only the listed examples stop at `list_limit`, so output stays bounded.
 PAGE_SCRIPT = """
-(opts) => {
+async (opts) => {
   const doc = document.documentElement;
   const sx = window.scrollX, sy = window.scrollY;
   // The page's start side comes from the writing mode and direction of
@@ -55,8 +55,9 @@ PAGE_SCRIPT = """
   // scrolling box's client width in page px, cannot scroll past it, and
   // overflows to the left instead (scrollX goes negative).
   const principal = getComputedStyle(document.body || doc);
-  const mode = principal.writingMode;
-  const startRight = /^(vertical|sideways)-/.test(mode) ? mode.endsWith('-rl') : principal.direction === 'rtl';
+  const startsRight = (style) => /^(vertical|sideways)-/.test(style.writingMode)
+    ? style.writingMode.endsWith('-rl') : style.direction === 'rtl';
+  const startRight = startsRight(principal);
   const scroller = document.scrollingElement || doc;
   const startEdge = scroller.clientWidth;
   const r1 = (v) => Math.round(v * 10) / 10;
@@ -134,6 +135,104 @@ PAGE_SCRIPT = """
     }
     return null;
   };
+  // The edge test above is all a page that starts at the left gets. On a page
+  // that starts at the right the far side is the left, where a site built
+  // left-to-right parks its skip link (left: -9999px), so there a box counts
+  // only when a scroll or a pan can put part of it on screen. Two things say
+  // so, and neither is a list of properties that clip:
+  // - IntersectionObserver reports the part of a box left after every
+  //   ancestor's clip, wherever on the page that part is: the root margin
+  //   takes the screen's own edges out of the answer.
+  // - Content moves under the reader's hand only in a box that offers a
+  //   scroll: `overflow` auto or scroll, and the viewport unless hidden or
+  //   clip reached it from <html>, or from <body> when <html> leaves both axes
+  //   visible. A page whose viewport is held reports the same scrollX,
+  //   innerWidth and scrollWidth as one that scrolls; only the pan differs,
+  //   and it stops at the layout viewport, client x 0 to innerWidth, the band
+  //   a box fixed to the viewport is judged by.
+  const offersScroll = (value) => value === 'auto' || value === 'scroll';
+  const rootStyle = getComputedStyle(doc);
+  const viewportFromBody = Boolean(document.body)
+    && rootStyle.overflowX === 'visible' && rootStyle.overflowY === 'visible';
+  const viewportOverflow = (viewportFromBody ? principal : rootStyle).overflowX;
+  const pageScrolls = viewportOverflow === 'visible' || offersScroll(viewportOverflow);
+  const anywhere = '10000000px';
+  // One observer round takes a frame however many boxes it watches, so boxes
+  // are asked about together, never one by one.
+  const partLeft = (els, root, rootMargin) => new Promise((resolve) => {
+    const observer = new IntersectionObserver((entries) => {
+      observer.disconnect();
+      resolve(new Map(entries.map((entry) => [entry.target, entry.intersectionRect])));
+    }, {root, rootMargin});
+    for (const el of els) observer.observe(el);
+  });
+  const hasArea = (rect) => Boolean(rect) && rect.width > 0 && rect.height > 0;
+  // `part` is what is left of a box that scrolls with the page: where the
+  // viewport scrolls it is held to the start edge like the box itself, and
+  // where the viewport is held, to the band the screen pans over.
+  const inReach = (el, part) => pageScrolls ? onPageFromRight(el, part)
+    : part.bottom + sy > 0 && part.left < window.innerWidth && part.right > 0;
+  // The nearest box at or above `node` that offers a scroll and has somewhere
+  // to scroll to, with its scrollport grown by how far it still scrolls each
+  // way: what the reader can bring into it. <body> is not such a box while
+  // the viewport has taken its overflow.
+  const scrollBoxAbove = (node) => {
+    for (let box = node; box && box !== doc; box = box.parentElement) {
+      if (box === document.body && viewportFromBody) continue;
+      const style = getComputedStyle(box);
+      const dx = offersScroll(style.overflowX) ? Math.max(0, box.scrollWidth - box.clientWidth) : 0;
+      const dy = offersScroll(style.overflowY) ? Math.max(0, box.scrollHeight - box.clientHeight) : 0;
+      if (!dx && !dy) continue;
+      const fromRight = box.scrollLeft < 0 || (box.scrollLeft === 0 && startsRight(style));
+      const left = Math.min(dx, Math.max(0, box.scrollLeft + (fromRight ? dx : 0)));
+      const up = Math.min(dy, Math.max(0, box.scrollTop));
+      return {node: box, grown: [up, dx - left, dy - up, left].map((px) => px + 'px').join(' ')};
+    }
+    return null;
+  };
+  // A box clipped where it stands may still be brought in by an ancestor that
+  // scrolls, when that ancestor is reachable itself; the grown scrollport
+  // keeps every clip between the two.
+  const reach = new Map();
+  const settle = async (els) => {
+    const moving = [];
+    for (const el of els) {
+      if (reach.has(el)) continue;
+      if (fixedToViewport(el)) reach.set(el, onPage(el)); else moving.push(el);
+    }
+    if (!moving.length) return;
+    const parts = await partLeft(moving, null, anywhere);
+    let pending = [];
+    for (const el of moving) {
+      const part = parts.get(el);
+      if (hasArea(part) && inReach(el, part)) reach.set(el, true);
+      else pending.push({el, box: scrollBoxAbove(el.parentElement)});
+    }
+    while (pending.length) {
+      const groups = new Map();
+      for (const item of pending) {
+        if (!item.box) { reach.set(item.el, false); continue; }
+        if (!groups.has(item.box.node)) groups.set(item.box.node, {box: item.box, els: []});
+        groups.get(item.box.node).els.push(item.el);
+      }
+      const batches = Array.from(groups.values());
+      const seen = await Promise.all(batches.map((batch) => partLeft(batch.els, batch.box.node, batch.box.grown)));
+      await settle(batches.filter((batch, i) => batch.els.some((el) => hasArea(seen[i].get(el))))
+        .map((batch) => batch.box.node));
+      pending = [];
+      batches.forEach((batch, i) => {
+        for (const el of batch.els) {
+          if (hasArea(seen[i].get(el)) && reach.get(batch.box.node)) reach.set(el, true);
+          else pending.push({el, box: scrollBoxAbove(batch.box.node.parentElement)});
+        }
+      });
+    }
+  };
+  const firstReachable = async (selector) => {
+    const els = Array.from(document.querySelectorAll(selector)).filter(shown);
+    await settle(els);
+    return els.find((el) => reach.get(el)) || null;
+  };
   const textEntry = (el) => el.localName !== 'input' || !opts.non_text_types.includes(el.type);
   const out = {};
   const meta = document.querySelector('meta[name=viewport]');
@@ -154,9 +253,9 @@ PAGE_SCRIPT = """
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) continue;
     if (startRight) {
-      // Mirror of the rule below: the overflowing side is the left. The first
-      // screen of such a page runs from page x 0 to the start edge, so a box
-      // whose left edge is below page x 0 passes the viewport's left edge.
+      // Mirror of the rule below: the overflowing side is the left. At the
+      // requested width such a page runs from page x 0 to the start edge, so
+      // a box whose left edge is below page x 0 lies in the left overflow.
       const left = r.left + sx;
       if (left < -0.5) {
         out.past_right_total += 1;
@@ -175,7 +274,8 @@ PAGE_SCRIPT = """
   const data = firstShown(dataSelector);
   out.data_selector = dataSelector;
   out.first_data_y = top(data);
-  out.first_action_y = top(firstOnPage(opts.action_selector));
+  out.first_action_y = top(startRight ? await firstReachable(opts.action_selector)
+    : firstOnPage(opts.action_selector));
 
   out.targets_total = 0;
   out.small_targets_total = 0;
@@ -262,6 +362,12 @@ def in_document_area(bottom, right, left=None, start_edge=None, fixed=False):
     starts at the right such a box must lie across the band the reader pans
     over, client x 0 to the layout viewport width; pass that width as
     `start_edge`.
+
+    On a page that starts at the right the page script applies this to the
+    part of a box that its ancestors do not clip away, and to the same band
+    (`fixed`) when the viewport itself cannot scroll sideways; a box with no
+    such part counts only through an ancestor the reader can scroll. That
+    needs the browser and has no mirror here.
     """
     if start_edge is not None:
         return bottom > 0 and left < start_edge and (not fixed or right > 0)
