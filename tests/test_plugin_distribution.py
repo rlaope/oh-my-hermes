@@ -2111,6 +2111,56 @@ class PluginReinstallSafetyTests(unittest.TestCase):
                 self.assertTrue(Path(cache_name).is_file())
                 self.assertTrue(install_plugin_bundle(self.paths)["register_smoke"])
 
+    def _pytest_cache(self, module: str = "__init__", version: str = "9.2.0") -> Path:
+        """A cache named and written the way pytest's assertion rewriting does: a checked-hash pyc under its own tag."""
+        import py_compile
+
+        plain = Path(py_compile.compile(
+            str(self.target / f"{module}.py"), doraise=True,
+            invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH,
+        ))
+        cache = plain.with_name(f"{module}.{sys.implementation.cache_tag}-pytest-{version}.pyc")
+        plain.replace(cache)
+        return cache
+
+    def test_pytest_rewritten_bytecode_does_not_block_reinstall(self) -> None:
+        # The bundle ships `test_expectation_check.py`, a name pytest's rewriting matches, so a pytest run that
+        # imports the installed plugin leaves `<module>.<tag>-pytest-<version>.pyc` beside it.
+        for version in ("9.2.0", "10.0.0.dev3+g1a2b3c4"):
+            with self.subTest(version=version):
+                cache = self._pytest_cache("test_expectation_check", version)
+                self.assertTrue(cache.is_file())
+                result = install_plugin_bundle(self.paths)
+                self.assertFalse(result["changed"])
+                self.assertTrue(result["register_smoke"])
+                cache.unlink()
+
+    def test_pytest_named_counterfeits_are_preserved(self) -> None:
+        cache = self._pytest_cache()
+        valid = cache.read_bytes()
+        version = int.from_bytes(importlib.util.MAGIC_NUMBER[:2], "little")
+        cases = {
+            # The name alone owns nothing: the bytes still have to be one code object.
+            cache.name: valid + b"private trailing data",
+            # A foreign magic under this interpreter's own tag, pytest suffix or not.
+            f"__init__.{sys.implementation.cache_tag}-pytest-9.2.1.pyc":
+                (version - 1).to_bytes(2, "little") + b"\r\n" + b"\0" * 12 + b"private user data",
+            # Valid bytecode, but for a source the bundle does not ship.
+            f"private.{sys.implementation.cache_tag}-pytest-9.2.0.pyc": valid,
+            # Dotted names that are not pytest's: a version that is no version, a dot inside the interpreter tag.
+            f"__init__.{sys.implementation.cache_tag}-pytest-a.b.c.pyc": valid,
+            "__init__.c.python-pytest-9.2.0.pyc": valid,
+        }
+        cache.unlink()
+        for name, payload in cases.items():
+            with self.subTest(name=name):
+                counterfeit = self.target / "__pycache__" / name
+                counterfeit.write_bytes(payload)
+                with self.assertRaisesRegex(PluginPackError, "unmanaged plugin entries"):
+                    install_plugin_bundle(self.paths)
+                self.assertEqual(counterfeit.read_bytes(), payload)
+                counterfeit.unlink()
+
     def test_first_install_refuses_competing_catalog_tree_arriving_during_staging(self) -> None:
         from omh.install import plugin_pack as plugin_pack_module
 

@@ -33,7 +33,7 @@ use serde_json::{json, Map, Value};
 use crate::acp_chat::{acp_agent, is_acp_session_id, Acp, RuleProbe, NO_RULES};
 use crate::dsh_chat::DshChat;
 use crate::session_files;
-use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
+use crate::sessions::{agent, chat_args, cmd_path_arg, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
 /// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
@@ -3003,6 +3003,20 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, accoun
     Ok(cmd)
 }
 
+/// `--add-dir <dir>` with `dir` as one argument. A Windows `.cmd` shim runs through `cmd.exe /c`, which parses the
+/// line itself: there the folder goes in as [`cmd_path_arg`] allows it, and a folder it refuses adds nothing (the
+/// person then answers a card per read, as before).
+fn add_dir_args(program: &OsString, dir: &Path) -> Vec<OsString> {
+    let dir = dir.as_os_str().to_owned();
+    if program == "cmd.exe" {
+        return match cmd_path_arg(&dir.to_string_lossy()) {
+            Ok(d) => vec!["--add-dir".into(), d.into()],
+            Err(_) => vec![],
+        };
+    }
+    vec!["--add-dir".into(), dir]
+}
+
 /// How long an agent's rule listing ([`RuleProbe`]) may take before the chat is refused.
 const RULES_DEADLINE: Duration = Duration::from_secs(30);
 
@@ -3058,7 +3072,7 @@ impl ChatSessions {
     /// continues that conversation. `account_env` is `accounts::session_env` for that agent, as for a terminal session:
     /// the chosen account's home variable, or nothing. Anything not on the allow-list, or without a chat
     /// mode, is refused before a process exists.
-    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], sink: F) -> Result<u32, String>
+    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], files: Option<&Path>, sink: F) -> Result<u32, String>
     where
         F: FnMut(ChatOut) + Send + 'static,
     {
@@ -3094,6 +3108,12 @@ impl ChatSessions {
         argv.extend(args.iter().map(OsString::from));
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
+        }
+        // Claude Code reads the files the person attached without a card: the session's own attachment folder
+        // (`session_files::session_dir`, made before the start; a folder made later is not honoured) is its one
+        // extra working directory, as one argument. Reads anywhere else outside `cwd` still ask.
+        if let Some(dir) = files.filter(|_| agent_id == "claude") {
+            argv.extend(add_dir_args(&argv[0], dir));
         }
         // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own resolved rules,
         // so nothing the person allows runs unasked and nothing they deny becomes askable; or it does not start
@@ -3691,6 +3711,37 @@ mod tests {
         assert_eq!((s(&m, "provider"), s(&m, "modelId")), ("anthropic".into(), "claude-x".into()));
     }
 
+    /// H10, recorded from the real Claude Code started with `--add-dir` on the session's attachment folder (made before
+    /// the start): reading the attached copy needs no card; reading a file in another folder still asks.
+    #[test]
+    fn claude_reads_an_attached_file_without_a_card_and_asks_for_anything_else() {
+        let mut c = claude_up();
+        let lines = real("claude-12-attach-read.jsonl");
+        let second = lines.iter().rposition(|l| l.contains("\"subtype\":\"init\"")).unwrap();
+        c.on_input(Input::send("first line of the attached file?")).unwrap();
+        let one = run(&mut c, &lines[..second]);
+        assert!(!names(&one.events).contains(&"approval.request".to_string()), "{:?}", one.events);
+        assert!(one.events.iter().any(|e| s(e, "event") == "tool.start" && s(e, "detail").ends_with("/.omher/session-files/s1/1-meeting notes.txt")));
+        assert!(one.events.iter().any(|e| s(e, "event") == "message" && s(e, "text") == "PERIWINKLE is the first line"));
+        c.on_input(Input::send("read /w/elsewhere/plan.txt")).unwrap();
+        let two = run(&mut c, &lines[second..]);
+        let asks: Vec<&Event> = two.events.iter().filter(|e| s(e, "event") == "approval.request").collect();
+        assert_eq!(asks.len(), 1, "{:?}", two.events);
+        assert!(serde_json::to_string(asks[0]).unwrap().contains("/w/elsewhere/plan.txt"));
+    }
+
+    #[test]
+    fn the_attachment_folder_is_one_add_dir_argument() {
+        // one argv element, spaces and all, exactly the folder given: never split, never a parent
+        let dir = Path::new("/Users/me/.omher/session-files/s12");
+        assert_eq!(add_dir_args(&OsString::from("/opt/bin/claude"), dir), [OsString::from("--add-dir"), OsString::from("/Users/me/.omher/session-files/s12")]);
+        let spaced = Path::new("/Users/Jane Doe/.omher/session-files/s3");
+        assert_eq!(add_dir_args(&OsString::from("/opt/bin/claude"), spaced), [OsString::from("--add-dir"), OsString::from("/Users/Jane Doe/.omher/session-files/s3")]);
+        // through `cmd.exe /c` (a Windows .cmd shim) the folder goes as cmd allows it, or not at all
+        assert_eq!(add_dir_args(&OsString::from("cmd.exe"), Path::new(r"C:\Users\a&b\.omher\session-files\s1")), [OsString::from("--add-dir"), OsString::from(r"C:\Users\a^&b\.omher\session-files\s1")]);
+        assert!(add_dir_args(&OsString::from("cmd.exe"), Path::new(r"C:\Users\50%\.omher\session-files\s1")).is_empty());
+    }
+
     #[test]
     fn only_chat_agents_have_adapters() {
         for id in ["claude", "codex", "omo", "pi", "omp", "opencode"] {
@@ -3702,12 +3753,12 @@ mod tests {
         }
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
-        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], |_| {}).is_err());
+        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], None, |_| {}).is_err());
         for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
-            assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent(bad, &tmp, None, &[], None, |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
-        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], |_| {}).is_err());
+        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], None, |_| {}).is_err());
+        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], None, |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 
@@ -3931,7 +3982,7 @@ mod tests {
             let c = ChatSessions::default();
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
-            let id = c.start_agent("omo", &dir, resume, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            let id = c.start_agent("omo", &dir, resume, &[], None, move |x| o.lock().unwrap().push(x)).unwrap();
             c.input(id, Input::send(text)).unwrap();
             let deadline = Instant::now() + Duration::from_secs(150);
             while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
@@ -3968,7 +4019,7 @@ mod tests {
             let c = ChatSessions::default();
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
-            let id = c.start_agent(agent, &dir, None, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            let id = c.start_agent(agent, &dir, None, &[], None, move |x| o.lock().unwrap().push(x)).unwrap();
             if agent == "omo" {
                 // OmO's own default can be a model its provider refuses on this machine: pick one it serves
                 thread::sleep(Duration::from_secs(3));
@@ -4035,7 +4086,7 @@ mod tests {
         let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
         let me2 = me.clone();
         let id = c
-            .start_agent(&agent, &dir, None, &[], move |x| {
+            .start_agent(&agent, &dir, None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") == "approval.request" {
                         println!("approval {} {}", s(e, "title"), s(e, "command"));
@@ -4148,7 +4199,7 @@ mod tests {
         let out = Arc::new(Mutex::new(Vec::new()));
         let o = out.clone();
         let id = c
-            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], move |x| {
+            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") != "session.models" {
                         println!("event {e}");
@@ -5381,6 +5432,8 @@ mod tests {
         out.push(("claude-12-rewind.jsonl", "claude", vec![Send, Lines("claude-12-rewind.jsonl", 0, 5), Rewind, Lines("claude-12-rewind.jsonl", 5, 6), Send, Lines("claude-12-rewind.jsonl", 6, 11)]));
         // a model picked between turns, then one picked right after the next message went out (QA H7)
         out.push(("claude-11-model-mid-turn.jsonl", "claude", vec![Model("haiku"), Lines("claude-11-model-mid-turn.jsonl", 0, 1), Send, Model("sonnet"), Lines("claude-11-model-mid-turn.jsonl", 1, 6), Send, Tail("claude-11-model-mid-turn.jsonl")]));
+        // H10: started with `--add-dir <the session's attachment folder>`; turn 1 reads the attached copy, turn 2 a file elsewhere
+        out.push(("claude-12-attach-read.jsonl", "claude", vec![Model("haiku"), Lines("claude-12-attach-read.jsonl", 0, 1), Send, Head("claude-12-attach-read.jsonl"), Send, Tail("claude-12-attach-read.jsonl")]));
         // a resumed conversation: an old background task's empty result, then the person's answer
         out.push(("claude-8-resume.jsonl", "claude", vec![Send, File("claude-8-resume.jsonl"), Head("claude-4-stop.jsonl")]));
         // omher closed the chat mid-command: the exit watcher ends the turn
@@ -5948,9 +6001,9 @@ mod tests {
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
         for bad in ["x", "--yolo", "01a1c3b9-4b7f-7542-900c-c5f4dc80eef", "../01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"] {
-            assert!(c.start_agent("codex", &tmp, Some(bad), &[], |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent("codex", &tmp, Some(bad), &[], None, |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], |_| {}).is_err());
+        assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], None, |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 

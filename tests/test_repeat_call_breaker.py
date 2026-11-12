@@ -1407,17 +1407,26 @@ class UnattendedLaneTest(CycleAndResultHarness):
 
         An earlier version of this module read that variable and a test
         set it with `mock.patch.dict`, which proved the predicate reads a
-        name and not that the host ever writes it. Asserting the variable
-        is absent AND the lane still escalates is the claim that can
-        actually be checked.
+        name and not that the host ever writes it. Removing the variable
+        here and asserting the lane still escalates, then setting it and
+        asserting nothing changed, is the claim that can actually be
+        checked. The test takes the variable away itself instead of
+        asserting the runner's environment lacks it: a shell started by
+        Hermes' terminal tool carries the name exported empty
+        (`tools/environments/local.py` `_inject_session_context_env`), so
+        that assertion failed for a suite run from inside a session.
         """
         note_session_platform("session-cron", "telegram")
 
-        self.assertIsNone(os.environ.get("HERMES_CRON_SESSION"))
-        self.assertTrue(escalation_can_reach_a_person("session-cron"))
-        # Setting it changes nothing, because nothing reads it.
-        with mock.patch.dict(os.environ, {"HERMES_CRON_SESSION": "1"}):
+        with mock.patch.dict(os.environ):
+            os.environ.pop("HERMES_CRON_SESSION", None)
             self.assertTrue(escalation_can_reach_a_person("session-cron"))
+            # Setting it changes nothing, because nothing reads it: neither
+            # the empty value a session shell inherits nor the cron marker.
+            for value in ("", "1"):
+                with self.subTest(HERMES_CRON_SESSION=value):
+                    os.environ["HERMES_CRON_SESSION"] = value
+                    self.assertTrue(escalation_can_reach_a_person("session-cron"))
 
     def test_a_session_with_no_recorded_platform_still_escalates(self):
         """Unknown is not unattended, and the direction matches the host.
