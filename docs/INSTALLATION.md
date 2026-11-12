@@ -2649,19 +2649,33 @@ The shipped catalog is editorial policy, not benchmark output:
 
 Chain customization is a config edit, not a source edit — bare
 `omh model-chains` (or `omh model`) opens an arrow-key picker on a terminal:
-one row per category, up/down to move (stopping at the first and the last
-row), left/right to step the head model through the aliases chains name
-today, `-`/`+` to step its effort, `d` to restore the shipped default, Enter
-to save and Esc (or `q`) to leave the file alone;
-inside the OMH TUI, `/omh-model` opens the same picker over the
-transcript (Hermes' own `/model` picks the session model and keeps its name;
-the two edit different things); `omh model-chains show` prints the current
-per-category state, `omh model-chains interview` walks every category with
-numbered choices — the
-interactive `omh setup` offers that walk right after its provider question,
-default No, and a "no" leaves the seeded defaults in effect — and
-`omh model-chains set <category> "model[:effort], ..."` is the scriptable
-write (agents included).
+one row per built-in category and one row per validated custom identity. Built-in
+rows keep the shipped/default versus override model-chain controls. Custom
+identity rows are labelled `Custom identity`, keep their prompt untouched, and
+use the same left/right and `-`/`+` controls for their model chain; `space`
+toggles a custom identity between active and disabled. Disabled custom
+identities remain visible so they can be restored, but routing, prompt
+injection, and fanout reject them until re-enabled. Up/down moves through both
+sections, Enter saves and Esc (or `q`) leaves the files alone;
+inside the OMH TUI, `/omh-model` opens the same picker over the transcript
+(Hermes' own `/model` picks the session model and keeps its name; the two edit
+different things); `omh model-chains show` prints the current per-category
+state, `omh model-chains interview` walks every built-in category with numbered
+choices, and `omh model-chains set <category> "model[:effort], ..."` remains the
+scriptable category write (agents included).
+
+The custom-identity discovery catalog is main-agent-only and is frozen when
+Hermes builds the session system prompt. Start a new session after editing
+identities to refresh discovery. It contains complete bounded entries; overflow
+is explicitly counted, and `routing/identities.json` under the active OMH home
+is the full directory (readable with `read_file`). Route explicitly with
+`omh_delegate_route(identity=NAME)` before `delegate_task`; the GOAL marker
+selects prompt guidance, not the model chain. No automatic routing hook runs.
+
+Picker saves validate both documents before writing. Each file replacement is
+atomic, but the pair is not a transaction: if identity I/O fails after category
+save, CLI/TUI report the saved categories and unsaved identities. Existing
+operator writers share no global lock; concurrent edits are not isolated.
 
 ![Bare omh model-chains on a fresh OMH home: one row per category with its shipped head model, effort bar and state; the cursor row shows the left/right and -/+ handles, and the key row ends with esc cancel](../assets/model-chain-picker-cli.png)
 
