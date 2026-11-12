@@ -30,7 +30,7 @@ describe("real agent streams through the reducer", () => {
 
   it("covers every agent", () => {
     expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "omo", "omp", "pi", "pi-noauth"]));
-    expect(all.length).toBeGreaterThanOrEqual(38);
+    expect(all.length).toBeGreaterThanOrEqual(41);
   });
 
   for (const r of all) {
@@ -44,6 +44,39 @@ describe("real agent streams through the reducer", () => {
       for (const it of c.items) if (it.kind === "activity") expect(it.turn.endedAt, `${r.name} ${it.id}`).toBeDefined();
     });
   }
+
+  const fans = (s: AppState) => s.chats["agent:s1"].items.flatMap((i) => (i.kind === "activity" ? (i.turn.fanouts ?? []) : []));
+
+  it("Claude Code's two subagents in parallel: one card, two rows with name, task, steps and their own answer", () => {
+    const s = replay(all.find((r) => r.name === "claude-9-subagents.jsonl")!);
+    const f = fans(s);
+    expect(f.map((x) => x.subs.length)).toEqual([2, 1]);
+    const [a, b] = f[0].subs;
+    expect([a.agent, a.name, a.goal, a.state, a.summary]).toEqual(["claude", "general-purpose", "Read a.txt first line", "done", "alpha line"]);
+    expect([b.goal, b.state]).toEqual(["Count lines of b.txt", "done"]);
+    expect(a.steps?.map((x) => x.text)).toEqual(["/w/proj/a.txt"]);
+    expect(a.seconds).toBeGreaterThan(0);
+    // the second turn's subagent asked for approval: the card named it, and the answer closed it
+    const r = all.find((x) => x.name === "claude-9-subagents.jsonl")!;
+    const ask = r.events.find((e) => e.event === "approval.request") as { subagent?: { name: string } };
+    expect(ask.subagent?.name).toBe("Write c.txt via echo");
+  });
+
+  it("an approval inside a subagent is an ask that names the subagent", () => {
+    const r = all.find((x) => x.name === "claude-9-subagents.jsonl")!;
+    const upto = r.events.findIndex((e) => e.event === "approval.request");
+    const s = replay({ ...r, events: r.events.slice(0, upto + 1) });
+    const asks = selectAsks(s).filter((a) => a.bot === "agent:s1");
+    expect(asks).toHaveLength(1);
+    expect((asks[0].item as { subagent?: { name: string } }).subagent?.name).toBe("Write c.txt via echo");
+  });
+
+  it("OmO's two background subagents: one card, each with its own answer", () => {
+    const s = replay(all.find((r) => r.name === "omo-9-subagents.jsonl")!);
+    const subs = fans(s).flatMap((x) => x.subs);
+    expect(subs.length).toBe(2);
+    expect(subs.every((x) => x.agent === "omo" && x.state === "done" && !!x.summary)).toBe(true);
+  });
 
   it("OmO's statuses after its answer start nothing (the owner's 안녕 turn)", () => {
     const omo = all.find((r) => r.name === "omo-1-plain.jsonl")!;

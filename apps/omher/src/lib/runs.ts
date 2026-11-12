@@ -271,11 +271,11 @@ export function fromDag(rec: DagRecord, bot: string, handoffs: Iterable<string> 
 // ---- CLI agent runs (`runs.cli`): Claude Code Task/Agent subagents and Codex spawned sub-agents, read by the bridge
 // from the CLIs' own session files. One session with sub-runs = one run, one sub-run = one node.
 
-export type CliAgent = "claude" | "codex" | "pi" | "omp" | "grok";
+export type CliAgent = "claude" | "codex" | "omo" | "pi" | "omp" | "grok";
 /** `found`: the CLI's session folder exists; `no_adapter`: installed, but it keeps no sub-run record omher reads. */
 export type CliAgentStatus = "found" | "not_installed" | "no_adapter";
-export const CLI_AGENTS: CliAgent[] = ["claude", "codex", "pi", "omp", "grok"];
-const CLI_NAME: Record<CliAgent, string> = { claude: "Claude", codex: "Codex", pi: "pi", omp: "omp", grok: "Grok" };
+export const CLI_AGENTS: CliAgent[] = ["claude", "codex", "omo", "pi", "omp", "grok"];
+const CLI_NAME: Record<CliAgent, string> = { claude: "Claude", codex: "Codex", omo: "OmO", pi: "pi", omp: "omp", grok: "Grok" };
 
 /** "Claude" / "Codex": the badge on a CLI run's row. */
 export const cliName = (agent: CliAgent | undefined) => (agent ? CLI_NAME[agent] : "");

@@ -401,6 +401,10 @@ class MockChat {
   private turn = false;
   private seq = 0;
   private waiting: string | null = null;
+  /** the open approval is a subagent's (/subask) */
+  private subWaiting = false;
+  /** "/subagents hold": the second subagent is still out */
+  private holding = false;
   private model: string;
   /** a model picked while a turn ran (Claude Code): the next turn's init confirms it */
   private next = "";
@@ -592,6 +596,58 @@ class MockChat {
         });
         return;
       }
+      if (text.startsWith("/subagents")) {
+        // the events the Claude adapter emitted for a real run (claude-9-subagents.jsonl): two Agent calls in one
+        // message, each subagent's own step, then each one's own answer and time; the second one is slow enough to
+        // look at while it works. "/subagents hold" leaves the second one working until Stop or "/release".
+        const sub = (id: string, index: number, goal: string, extra: Record<string, unknown> = {}) =>
+          this.emit({ event: "subagent", id, agent: this.agent, name: "general-purpose", goal, delegation: "claude-msg_1", index, count: index + 1, state: "running", ...extra });
+        this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-1", name: "delegate_task", detail: "Read a.txt first line" }));
+        this.at(50, () => sub("sa-1", 0, "Read a.txt first line"));
+        this.at(120, () => sub("sa-1", 0, "Read a.txt first line", { tool: "read_file", step: "a.txt" }));
+        this.at(160, () => this.emit({ event: "tool.start", tool_id: "sa-2", name: "delegate_task", detail: "Count lines of b.txt" }));
+        this.at(170, () => sub("sa-2", 1, "Count lines of b.txt", { count: 2 }));
+        this.at(260, () => sub("sa-2", 1, "Count lines of b.txt", { count: 2, tool: "read_file", step: "b.txt" }));
+        this.at(600, () => {
+          this.emit({ event: "tool.end", tool_id: "sa-1", name: "", ok: true, ms: 0 });
+          sub("sa-1", 0, "Read a.txt first line", { count: 2, state: "done", summary: "alpha line", seconds: 3.7, model: "claude-fable-5-2" });
+        });
+        if (text.includes("hold")) {
+          this.holding = true;
+          return;
+        }
+        this.at(1400, () => {
+          this.emit({ event: "tool.end", tool_id: "sa-2", name: "", ok: true, ms: 0 });
+          sub("sa-2", 1, "Count lines of b.txt", { count: 2, state: "done", summary: "3", seconds: 9.4, model: "claude-fable-5-2" });
+        });
+        this.say("a.txt starts with alpha line; b.txt has 3 lines.", 1500);
+        this.at(1900, () => this.end("done"));
+        return;
+      }
+      if (text.startsWith("/subask")) {
+        // claude-9-subagent-ask.jsonl: a subagent's Bash needs approval; the card names the subagent
+        const rid = `req-${++this.seq}`;
+        this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-3", name: "delegate_task", detail: "Write c.txt via echo" }));
+        this.at(50, () => this.emit({ event: "subagent", id: "sa-3", agent: this.agent, name: "general-purpose", goal: "Write c.txt via echo", delegation: "claude-msg_2", index: 0, count: 1, state: "running" }));
+        this.at(120, () => this.emit({ event: "subagent", id: "sa-3", agent: this.agent, name: "general-purpose", goal: "Write c.txt via echo", delegation: "claude-msg_2", index: 0, count: 1, state: "running", tool: "terminal", step: "echo three > c.txt" }));
+        this.at(160, () => {
+          this.waiting = rid;
+          this.subWaiting = true;
+          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "echo three > c.txt", cwd: this.cwd, choices: ["deny", "once", "session"], subagent: { id: "sa-3", name: "Write c.txt via echo" } });
+        });
+        return;
+      }
+      if (text.startsWith("/background")) {
+        // the turn ends with a command still running in the background (Claude background_tasks_changed, OmO
+        // waiting_background): the header says so until it ends
+        this.at(40, () => this.emit({ event: "session.info", background: 1 }));
+        this.say("started", 80);
+        this.at(400, () => {
+          this.end("done"); // clears the pending timers: the background's end is scheduled after it
+          this.at(1100, () => this.emit({ event: "session.info", background: 0 }));
+        });
+        return;
+      }
       if (text.startsWith("/slow")) {
         for (let k = 0; k < 40; k++) this.at(100 + k * 250, () => this.emit({ event: "delta", text: `line ${k + 1}\n` }));
         return;
@@ -603,11 +659,24 @@ class MockChat {
       this.at(800, () => this.end("done"));
     } else if (i.kind === "interrupt") {
       if (!this.turn) throw new Error("nothing is running");
-      this.at(20, () => this.end("interrupted"));
+      this.at(20, () => {
+        // as the Claude adapter does: a subagent still out when the turn stops is cancelled with it
+        if (this.holding) this.emit({ event: "subagent", id: "sa-2", agent: this.agent, name: "general-purpose", goal: "Count lines of b.txt", delegation: "claude-msg_1", index: 1, count: 2, state: "cancelled" });
+        this.holding = false;
+        this.end("interrupted");
+      });
     } else if (i.kind === "approve") {
       if (i.request_id !== this.waiting) throw new Error("no such request");
       this.waiting = null;
-      if (i.choice === "deny") {
+      if (i.request_id.startsWith("req-") && this.subWaiting) {
+        // the subagent's command ran (or was refused); the subagent hands back, then the agent answers
+        this.subWaiting = false;
+        const done = i.choice !== "deny";
+        this.at(60, () => this.emit({ event: "tool.end", tool_id: "sa-3", name: "", ok: true, ms: 0 }));
+        this.at(80, () => this.emit({ event: "subagent", id: "sa-3", agent: this.agent, name: "general-purpose", goal: "Write c.txt via echo", delegation: "claude-msg_2", index: 0, count: 1, state: "done", summary: done ? "done" : "The command was not allowed.", seconds: 4.2 }));
+        this.say(done ? "ok" : "The subagent could not write c.txt.", 120);
+        this.at(500, () => this.end("done"));
+      } else if (i.choice === "deny") {
         this.at(40, () => this.emit({ event: "tool.end", tool_id: "t-rm", name: "", ok: false, ms: 0 }));
         this.say("Okay, I left the build folder alone.", 80);
         this.at(500, () => this.end("done"));

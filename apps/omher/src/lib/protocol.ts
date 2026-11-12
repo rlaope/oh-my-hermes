@@ -488,6 +488,8 @@ interface EventBase {
 }
 
 export type SubagentState = "queued" | "running" | "thinking" | "done" | "failed" | "cancelled";
+/** The subagent an approval or question came from. */
+export type AskSubagent = { id: string; name: string };
 
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
@@ -502,10 +504,16 @@ export type BridgeEvent =
       dag?: { run: string; node: string }[];
     })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
-  /** One of Hermes' `subagent.*` events of the bot's own turn (a delegate_task child), clipped by the bridge. */
+  /** A subagent's latest state, in ONE agent-neutral shape: Hermes' `subagent.*` events of a bot's turn (clipped by the
+   *  bridge), and every SESSIONS agent's subagents (Claude Code Agent/Task, Codex sub-agent threads, OmO `task`; any
+   *  later agent emits the same). The same `id` updates the same row; `delegation` groups one fan-out. */
   | (EventBase & {
       event: "subagent";
       id: string;
+      /** Which agent reported it (a session's CLI: "claude", "codex", "omo", …); absent for a bot's own. */
+      agent?: string;
+      /** Its name or type ("general-purpose", "first-line"), when the agent gives one apart from its task. */
+      name?: string;
       /** The fan-out it belongs to (absent on the first, queued event). */
       delegation?: string;
       index: number;
@@ -532,6 +540,8 @@ export type BridgeEvent =
       title: string;
       command: string;
       choices: ApprovalChoice[];
+      /** Asked inside a subagent: which one (its id and name or task). */
+      subagent?: AskSubagent;
       /** The folder the command runs in (agent sessions say it). */
       cwd?: string;
       /** Seconds the gateway waits before giving up on it, when it says. */
@@ -541,6 +551,7 @@ export type BridgeEvent =
       event: "clarify.request";
       request_id: string;
       question: string;
+      subagent?: AskSubagent;
       choices?: string[];
       multi_select?: boolean;
       /** Set when the bot asks several questions at once (an interview); `question` is then the first. */

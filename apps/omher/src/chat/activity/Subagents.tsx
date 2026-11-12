@@ -34,18 +34,29 @@ const rowMs = (s: SubagentRow, now: number) => (s.seconds !== undefined ? s.seco
 
 export function SubagentLine({ sub, now, live = true }: { sub: SubagentRow; now: number; live?: boolean }) {
   const ended = subagentEnded(sub);
+  const [open, setOpen] = useState(false);
   // a turn that ended with the child still out and nothing more heard (the bridge dropped, the chat reopened)
   const state = !ended && !live ? "stopped" : sub.state;
   const line = ended ? sub.summary : sub.step;
+  // its name and its task: "general-purpose · Read a.txt first line"; either alone when the agent gives one
+  const title = [sub.name, fewWords(sub.goal)].filter(Boolean).join(" · ") || t("sub.untitled", { n: sub.index + 1 });
+  const canOpen = !!(sub.steps?.length || (ended && sub.summary));
   return (
-    <div className={`sa-row s-${state}`} data-testid="subagent-row" data-state={state} data-sub={sub.id}>
+    <div className={`sa-row s-${state}${open ? " open" : ""}`} data-testid="subagent-row" data-state={state} data-sub={sub.id} data-agent={sub.agent}>
       <span className="sa-mark" title={sub.model ? modelName(sub.model) : undefined}>
         <ModelIcon model={sub.model} size={12} />
       </span>
       <span className="sa-main">
-        <span className="sa-top">
-          <span className="sa-goal" title={sub.goal} data-testid="subagent-goal">
-            {fewWords(sub.goal) || t("sub.untitled", { n: sub.index + 1 })}
+        <button
+          type="button"
+          className="sa-top"
+          aria-expanded={canOpen ? open : undefined}
+          disabled={!canOpen}
+          onClick={() => setOpen((v) => !v)}
+          data-testid="subagent-open"
+        >
+          <span className="sa-goal" title={[sub.name, sub.goal].filter(Boolean).join(" · ")} data-testid="subagent-goal">
+            {title}
           </span>
           <span className={`sa-st ${state}`} data-testid="subagent-state">
             {state === "stopped" ? t("sub.stopped") : t(STATE_KEY[sub.state])}
@@ -53,10 +64,24 @@ export function SubagentLine({ sub, now, live = true }: { sub: SubagentRow; now:
           <span className="sa-t" data-testid="subagent-time">
             {elapsed(rowMs(sub, now))}
           </span>
-        </span>
-        {line && (
+        </button>
+        {line && !open && (
           <span className={`sa-line${ended ? " result" : ""}`} title={line} data-testid="subagent-line">
             {!ended && sub.tool ? <code>{line}</code> : line}
+          </span>
+        )}
+        {open && (
+          <span className="sa-det" data-testid="subagent-detail">
+            {sub.steps?.map((s, i) => (
+              <span key={i} className="sa-step" data-testid="subagent-step">
+                <code>{s.text}</code>
+              </span>
+            ))}
+            {ended && sub.summary && (
+              <span className="sa-ans" data-testid="subagent-answer">
+                {sub.summary}
+              </span>
+            )}
           </span>
         )}
       </span>
@@ -72,12 +97,16 @@ export function FanoutCard({ fan, live }: { fan: Fanout; live: boolean }) {
   const [, tick] = useState(0);
   useEffect(() => {
     if (!running) return;
-    const h = setInterval(() => tick((n) => n + 1), 1000);
+    // a quarter second: a row read here and the same subagent read in Plans never stand a whole second apart
+    const h = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(h);
   }, [running]);
   const now = Date.now();
-  const ends = subs.map((s) => s.startedAt + rowMs(s, now));
-  const span = elapsed((running ? now : Math.max(fan.startedAt, ...ends)) - fan.startedAt);
+  // the fan-out's elapsed time: from its first subagent's start (one that ended with its own time began that long
+  // before it ended, which can be before omher heard of it) to now, or to its last end; never less than its longest row
+  const begun = Math.min(fan.startedAt, ...subs.map((s) => (s.seconds !== undefined && s.endedAt !== undefined ? s.endedAt - s.seconds * 1000 : s.startedAt)));
+  const ends = subs.map((s) => s.endedAt ?? s.startedAt + rowMs(s, now));
+  const span = elapsed(Math.max((running ? now : Math.max(begun, ...ends)) - begun, ...subs.map((s) => rowMs(s, now))));
   const failed = subs.filter((s) => s.state === "failed").length;
   const run = subs.find((s) => s.dag)?.dag?.run ?? null;
   const open = () => getStore().actions.openRun(run ?? (fan.delegation ? `delegate:${fan.delegation}` : null));

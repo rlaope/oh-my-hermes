@@ -300,6 +300,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.model_next === "string") p.modelNext = ev.model_next || undefined;
         // the agent named the conversation (Claude Code's session title, a Codex thread name)
         if (typeof ev.title === "string" && ev.title.trim()) p.agentTitle = ev.title.trim();
+        if (typeof ev.background === "number") p.background = ev.background;
         patchRec(id, p);
         const l: Partial<AgentLive> = {};
         if (typeof ev.mode === "string") l.mode = ev.mode;
