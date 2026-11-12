@@ -26,7 +26,15 @@ export interface PluginLoad {
   restart_bot?: string;
 }
 
-export type RestartResult = { outcome: "ok" } | { outcome: "refused"; lines: string[] } | { outcome: "failed"; line: string };
+/** One live unit Hermes named when it refused: what it is, its name when Hermes gave one, how long it has run, and
+ *  whose it is (a chat by its session key, a scheduled job by the bot that holds it; null when Hermes did not say). */
+export type WorkUnit = { kind: "chat" | "cron" | "task" | "run" | "work"; name: string | null; secs: number | null; bot: string | null };
+export type RestartResult =
+  | { outcome: "ok"; bots?: string[] }
+  | { outcome: "refused"; work: WorkUnit[] }
+  | { outcome: "failed"; line: string };
+/** The gateway process that serves a bot (named by the profile that owns it) and every bot on it, it included. */
+export type RestartScope = { gateway: string; bots: { name: string; display_name: string }[] };
 
 /** What a bot has done, for its page: sessions per place (slack, discord, cron…), skills, routines. */
 export interface BotInfo {
@@ -294,10 +302,11 @@ export interface OpMap {
   };
   /** Hermes' own `reload-plugins` on the bot's gateway: restarts nothing, interrupts nothing. */
   "plugins.reload": { params: { bot: string; name?: string }; result: { load: "live" | "restart" | "failed"; line?: string; missing?: string[]; restart_bot?: string } };
-  /** Hermes' own `hermes -p <bot> gateway restart` (`--yes` only with `interrupt`, right after a refusal). */
+  /** Hermes' own `hermes -p <gateway> gateway restart` of the process that serves `bot` (`--yes` only with
+   *  `interrupt`, right after a refusal); ok names every bot that went down with it. */
   "bots.restart": { params: { bot: string; interrupt?: boolean }; result: RestartResult };
-  /** The other bots a restart of `bot` takes along (the default profile's host gateway serves them). */
-  "bots.restart_scope": { params: { bot: string }; result: { others: { name: string; display_name: string }[] } };
+  /** Which gateway process serves `bot` and every bot that restarts with it. */
+  "bots.restart_scope": { params: { bot: string }; result: RestartScope };
   "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   "chat.set_model": {

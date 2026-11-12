@@ -526,7 +526,7 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
             <CategoryIcon category={e.category} />
           </span>
           <div>
-            <h2>{t("plug.sheet.title", { name: label })}</h2>
+            <h2 data-testid="sheet-title">{st.step === "done" ? t("plug.sheet.titleDone", { name: label }) : t("plug.sheet.title", { name: label })}</h2>
             <p className="pl-ds">{e.description}</p>
           </div>
         </div>

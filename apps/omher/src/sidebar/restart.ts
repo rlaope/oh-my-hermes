@@ -1,38 +1,48 @@
-// Restart one bot, only on the person's press, through Hermes' own `hermes -p <bot> gateway restart` (the bridge's
-// `bots.restart`, BOUNDARY rule 29). Every place that offers it (the bot row's menu, the Plugins sheet when only a
-// restart loads a plugin, an offline bot's chat) goes through `press` here, so the row shows one state:
-//   idle -> (the default profile: "also restarts N bots" confirm) -> restarting -> back when the bot is attached
-//   again (`bot.restarted`); Hermes refused for live work -> the lines it named, Cancel first, then "Restart
-//   anyway" (`--yes`); failed -> the last line Hermes printed, once, with "Try again".
+// Restart, only on the person's press: Hermes' own `hermes gateway restart` of the PROCESS that serves the bot (the
+// bridge's `bots.restart`, BOUNDARY rule 29): the host gateway for a bot it serves, the bot's own gateway for a
+// standalone one. Every place that offers it (the bot row's menu, the Plugins sheet when only a restart loads a
+// plugin, an offline bot's chat, the omh load line) goes through `press` here:
+//   idle -> every bot on that gateway reads "restarting" -> each back when the bridge says it is attached again
+//   (`bot.restarted`); Hermes refused for live work -> under the pressed row, what it named in plain words with whose
+//   it is, Cancel first, then "Restart anyway" (`--yes`); failed -> the last line Hermes printed, once, with "Try again".
 // A busy bot is never cut silently: the first press never passes `--yes`. Nothing here restarts by itself.
-import { useSyncExternalStore } from "react";
-import type { BridgeEvent } from "../lib/protocol";
+import { useEffect, useSyncExternalStore } from "react";
+import type { BridgeEvent, RestartResult, RestartScope, WorkUnit } from "../lib/protocol";
 import { getStore } from "../state/store";
+
+type Named = RestartScope["bots"][number];
 
 export type RestartState =
   | { step: "idle" }
-  | { step: "confirm"; others: { name: string; display_name: string }[] }
   | { step: "restarting" }
-  | { step: "refused"; lines: string[] }
+  | { step: "refused"; work: WorkUnit[]; bots: Named[] }
   | { step: "failed"; line: string };
 
 export interface RestartDeps {
-  restart(bot: string, interrupt: boolean): Promise<
-    { outcome: "ok" } | { outcome: "refused"; lines: string[] } | { outcome: "failed"; line: string }
-  >;
-  scope(bot: string): Promise<{ name: string; display_name: string }[]>;
+  restart(bot: string, interrupt: boolean): Promise<RestartResult>;
+  scope(bot: string): Promise<RestartScope>;
   onEvent(fn: (ev: BridgeEvent) => void): () => void;
 }
 
 const IDLE: RestartState = { step: "idle" };
+const NONE: Named[] = [];
 
 export function createRestarts(deps: RestartDeps) {
   const states = new Map<string, RestartState>();
+  // per bot: the bots on its gateway (it included), and the others (stable arrays, for useSyncExternalStore)
+  const scopes = new Map<string, { all: Named[]; others: Named[] }>();
+  const asked = new Set<string>();
   const fns = new Set<() => void>();
-  const set = (bot: string, st: RestartState) => {
+  const changed = () => {
+    for (const f of [...fns]) f();
+  };
+  const put = (bot: string, st: RestartState) => {
     if (st.step === "idle") states.delete(bot);
     else states.set(bot, st);
-    for (const f of [...fns]) f();
+  };
+  const set = (bot: string, st: RestartState) => {
+    put(bot, st);
+    changed();
   };
   const get = (bot: string): RestartState => states.get(bot) ?? IDLE;
 
@@ -41,41 +51,60 @@ export function createRestarts(deps: RestartDeps) {
     set(ev.bot, ev.ok ? IDLE : { step: "failed", line: "" });
   });
 
+  /** Which bots `bot`'s gateway serves (it included), from the bridge; kept for the words before the press. */
+  const scope = async (bot: string) => {
+    asked.add(bot);
+    const s = await deps.scope(bot).catch(() => ({ gateway: bot, bots: NONE }));
+    const all = s.bots.some((b) => b.name === bot) ? s.bots : [{ name: bot, display_name: bot }, ...s.bots];
+    const got = { all, others: all.filter((b) => b.name !== bot) };
+    scopes.set(bot, got);
+    changed();
+    return got;
+  };
+
   const run = async (bot: string, interrupt: boolean) => {
-    set(bot, { step: "restarting" });
-    let r: Awaited<ReturnType<RestartDeps["restart"]>>;
+    const sc = scopes.get(bot) ?? (await scope(bot));
+    // the whole gateway goes down: every bot on it reads "restarting" together
+    for (const m of sc.all) put(m.name, { step: "restarting" });
+    put(bot, { step: "restarting" });
+    changed();
+    let r: RestartResult;
     try {
       r = await deps.restart(bot, interrupt);
     } catch (e) {
       const msg = typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
+      for (const m of sc.all) put(m.name, IDLE);
       return set(bot, { step: "failed", line: msg });
     }
-    // ok: stays "restarting" until the bridge says the bot is attached again
-    if (r.outcome === "refused") set(bot, { step: "refused", lines: r.lines });
-    else if (r.outcome === "failed") set(bot, { step: "failed", line: r.line });
+    if (r.outcome === "ok") return; // each bot stays "restarting" until the bridge says it is attached again
+    for (const m of sc.all) put(m.name, IDLE);
+    if (r.outcome === "refused") set(bot, { step: "refused", work: r.work, bots: sc.all });
+    else set(bot, { step: "failed", line: r.line });
   };
 
   return {
     get,
+    /** The bots that share `bot`'s gateway (it excluded); [] until the bridge has answered `ensure`. */
+    mates: (bot: string): Named[] => scopes.get(bot)?.others ?? NONE,
+    /** Ask the bridge once which bots share `bot`'s gateway. */
+    ensure(bot: string) {
+      if (!asked.has(bot)) void scope(bot);
+    },
     subscribe(f: () => void) {
       fns.add(f);
       return () => {
         fns.delete(f);
       };
     },
-    /** The press. An idle named bot restarts at once; the default profile first names the bots it takes along. */
+    /** The press: restarts the gateway that serves `bot`, without `--yes`. No confirm: Hermes refuses while any bot
+     *  on it is working, and the refusal is the confirm. */
     async press(bot: string) {
-      const st = get(bot);
-      if (st.step === "restarting") return;
-      const others = await deps.scope(bot).catch(() => []);
-      if (others.length) return set(bot, { step: "confirm", others });
+      if (get(bot).step === "restarting") return;
       await run(bot, false);
     },
-    /** The confirm's "Restart" (the default profile): still without `--yes`. */
-    confirm: (bot: string) => (get(bot).step === "confirm" ? run(bot, false) : Promise.resolve()),
     /** "Restart anyway", offered only after Hermes refused for live work. */
     anyway: (bot: string) => (get(bot).step === "refused" ? run(bot, true) : Promise.resolve()),
-    /** Cancel, the x, or a failure read: back to normal. */
+    /** Cancel, or Close after a failure: back to normal. */
     dismiss: (bot: string) => set(bot, IDLE),
   };
 }
@@ -98,4 +127,11 @@ export function getRestarts(): Restarts {
 export function useRestart(bot: string): RestartState {
   const r = getRestarts();
   return useSyncExternalStore(r.subscribe, () => r.get(bot), () => r.get(bot));
+}
+
+/** The bots that share `bot`'s gateway (it excluded), for the words before the press. */
+export function useMates(bot: string): Named[] {
+  const r = getRestarts();
+  useEffect(() => r.ensure(bot), [r, bot]);
+  return useSyncExternalStore(r.subscribe, () => r.mates(bot), () => r.mates(bot));
 }

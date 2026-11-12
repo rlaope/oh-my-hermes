@@ -1543,18 +1543,61 @@ def hermes_path(which=None, root: Path | None = None) -> str | None:
 
 
 def restart_argv(hermes: str, bot: str, interrupt: bool) -> list[str]:
-    """`hermes -p <bot> gateway restart --detach`, plus `--yes` only for "Restart anyway". `--detach`: with no
-    service manager Hermes starts the replacement in the background instead of becoming it (a child of omher).
-    The profile id is checked here as one argv element; nothing else varies."""
+    """`hermes -p <gateway> gateway restart --detach`, plus `--yes` only for "Restart anyway". `bot` is the profile
+    that owns the gateway process (gateway_of): `default` for the host gateway, else a bot with its own gateway, so
+    this is always a process restart, never one profile's unserve/serve inside the host
+    (gateway_profile_lifecycle.py:69 returns early for `default`, :72-75 for a standalone profile). `-p default`,
+    not a bare `hermes gateway restart`: without `-p` Hermes follows the sticky `active_profile` file
+    (hermes_cli/main.py:525-536), which may name a served profile. `--detach`: with no service manager Hermes starts
+    the replacement in the background instead of becoming it (a child of omher). The profile id is checked here as
+    one argv element; nothing else varies."""
     if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
         raise ValueError(f"not a profile id: {bot!r}")
     return [hermes, "-p", bot, "gateway", "restart", "--detach", *(["--yes"] if interrupt is True else [])]
 
 
-def restart_outcome(code: int | None, output: str) -> dict:
+_WORK_TIME = re.compile(r", running (?:(\d+)m(?:(\d+)s)?|(\d+)s)\b")
+_WORK_CRON = re.compile(r"^cron job \S+(?: \((?P<name>[^)]*)\))? in(?:-process| external worker)")
+_WORK_RUN = re.compile(r"^(?P<kind>[a-z][a-z_-]{0,23}) run\b")
+
+
+def _session_bot(session: str) -> str | None:
+    """The profile a gateway session key belongs to: `agent:<ns>:...` (gateway/session.py:679-688: `agent:main` for
+    the default profile, `agent:main~` for a profile named main, else `agent:<name>`)."""
+    m = re.match(r"agent:([a-z0-9][a-z0-9_~-]{0,64}):", session)
+    if not m:
+        return None
+    ns = m.group(1)
+    return "default" if ns == "main" else ("main" if ns == "main~" else ns)
+
+
+def work_unit(line: str, jobs: dict[str, str] | None = None) -> dict:
+    """One live unit Hermes named, in plain parts: what it is and how long it has run; no run id, pid or job id.
+    Reads Hermes' own `describe_active_work_unit` (hermes_cli/update_cmd_drain_report.py:48-72): `chat turn <s>
+    [pid N][, running 3m05s] [model.., tool..]`, `cron job <id> (<name>) in-process|in external worker..`,
+    `background delegation <id>..`, `<kind> run..`. Anything else keeps only the time it names. `bot`: whose it is,
+    from a chat's session key or a cron job's id in that bot's jobs.json (`jobs`); None when the line does not say."""
+    m = _WORK_TIME.search(line)
+    secs = (int(m.group(1)) * 60 + int(m.group(2) or 0)) if m and m.group(1) else (int(m.group(3)) if m else None)
+    if line.startswith("chat turn "):
+        return {"kind": "chat", "name": None, "secs": secs, "bot": _session_bot(line[len("chat turn "):].split(" ", 1)[0])}
+    c = _WORK_CRON.match(line)
+    if c:
+        name = (c.group("name") or "").strip()
+        job = line[len("cron job "):].split(" ", 1)[0]
+        return {"kind": "cron", "name": _clip(name, 60) if name else None, "secs": secs, "bot": (jobs or {}).get(job)}
+    if line.startswith("background delegation "):
+        return {"kind": "task", "name": None, "secs": secs, "bot": None}
+    r = _WORK_RUN.match(line)
+    if r:
+        return {"kind": "run", "name": r.group("kind"), "secs": secs, "bot": None}
+    return {"kind": "work", "name": None, "secs": secs, "bot": None}
+
+
+def restart_outcome(code: int | None, output: str, jobs: dict[str, str] | None = None) -> dict:
     """What Hermes' restart said: ok, refused (live work, with the lines it named) or failed (one line).
     Hermes refuses with exit 1 and `Refusing to restart the gateway: N live session(s)...` plus one `  • <unit>`
-    line per unit (hermes_cli/gateway_lifecycle_guards.py `_work_lines`); a served profile's restart that the host
+    line per unit (read into plain parts by work_unit) (hermes_cli/gateway_lifecycle_guards.py `_work_lines`); a served profile's restart that the host
     did not confirm exits 0 with `... was not confirmed: <why>.` (gateway_profile_lifecycle.py)."""
     lines = [ln.rstrip() for ln in _ANSI.sub("", output or "").splitlines()]
     text = [ln.strip() for ln in lines if ln.strip()]
@@ -1563,7 +1606,8 @@ def restart_outcome(code: int | None, output: str) -> dict:
     if any("Refusing to restart the gateway:" in ln for ln in text):
         units = [ln.lstrip("•").strip() for ln in text if ln.startswith("•")]
         head = next(ln for ln in text if "Refusing to restart the gateway:" in ln)
-        return {"outcome": "refused", "lines": [_clip(u, 200) for u in units][:RESTART_LINES] or [_clip(head.lstrip("✗ "), 200)]}
+        del head  # the count line: the units below say what each one is
+        return {"outcome": "refused", "work": [work_unit(u, jobs) for u in units][:RESTART_LINES] or [work_unit("")]}
     unconfirmed = next((ln for ln in text if "was not confirmed" in ln), None)
     if code == 0 and unconfirmed is None:
         return {"outcome": "ok"}
@@ -1572,7 +1616,8 @@ def restart_outcome(code: int | None, output: str) -> dict:
     return {"outcome": "failed", "line": _clip(pick.lstrip("✗ ").strip(), 300) or f"Hermes exited with code {code}."}
 
 
-def run_hermes_restart(hermes: str, bot: str, home: Path, interrupt: bool, timeout: float = RESTART_TIMEOUT) -> dict:
+def run_hermes_restart(hermes: str, bot: str, home: Path, interrupt: bool, timeout: float = RESTART_TIMEOUT,
+                       jobs: dict[str, str] | None = None) -> dict:
     """Run Hermes' own restart for one bot and read what it said. No shell, nothing on stdin (so Hermes refuses
     rather than asks while work is live), the Hermes root as HERMES_HOME, and none of the gateway's own markers."""
     argv = restart_argv(hermes, bot, interrupt)
@@ -1588,7 +1633,7 @@ def run_hermes_restart(hermes: str, bot: str, home: Path, interrupt: bool, timeo
         return restart_outcome(None, "")
     except OSError as e:
         return {"outcome": "failed", "line": _clip(f"Hermes could not be started: {e}", 300)}
-    return restart_outcome(r.returncode, r.stdout)
+    return restart_outcome(r.returncode, r.stdout, jobs)
 
 
 def _standalone(profile_dir: Path) -> bool:
@@ -1597,27 +1642,61 @@ def _standalone(profile_dir: Path) -> bool:
     return v is True or (isinstance(v, str) and v.strip().lower() in ("1", "true", "yes", "on"))
 
 
-def host_bot_for(home: Path, bot: str) -> str:
-    """The bot whose restart restarts the process serving `bot`: the bot itself when it is the default profile or
-    opts out of the host gateway (`gateway.standalone`), else the default profile (the host gateway)."""
+def _hermes_gateway_pid(home: Path) -> int | None:
+    """The verified pid of the gateway `home` runs itself: Hermes' own gateway.status.live_gateway_pid_for_home (pid
+    file + lock, then the runtime record, each proven against the live process). None when no gateway runs there,
+    or when Hermes cannot be imported (the bridge's own tests)."""
+    try:
+        from gateway.status import live_gateway_pid_for_home
+    except ImportError:
+        return None
+    try:
+        return live_gateway_pid_for_home(Path(home))
+    except Exception:
+        return None
+
+
+def _hermes_served(root: Path) -> list[str] | None:
+    """`served_profiles` the live host gateway recorded about itself (gateway/run_adapters `_record_served_profiles`,
+    read the way Hermes' gateway_multiplex_served.recorded_served_profiles reads it); None with no live host/record."""
+    if _hermes_gateway_pid(root) is None:
+        return None
+    try:
+        from gateway.status import read_runtime_status
+        served = (read_runtime_status(Path(root) / "gateway_state.json") or {}).get("served_profiles")
+    except Exception:
+        return None
+    return [str(x) for x in served] if isinstance(served, list) else None
+
+
+def gateway_of(home: Path, bot: str) -> str:
+    """Which gateway process serves `bot`, named by the profile that owns it, as Hermes decides it: a bot with
+    `gateway.standalone` (hermes_cli/gateway_profile_lifecycle.py:72-75) or a live gateway of its own (:101-102) is
+    served by that process; every other bot by the host gateway, the default profile's (:103-106)."""
     for b in discover_bots(home):
         if b["name"] == bot:
-            return bot if b["is_default"] or _standalone(b["path"]) else "default"
+            if b["is_default"]:
+                return "default"
+            return bot if _standalone(b["path"]) or _hermes_gateway_pid(b["path"]) is not None else "default"
     return "default"
 
 
-def restart_takes_along(home: Path, bot: str) -> list[dict]:
-    """The other bots a restart of `bot` also restarts: for the default profile (the host gateway) every named
-    profile it serves, i.e. not opted out (`gateway.standalone`) and not parked (`gateway.parked`), the same tests
-    as Hermes' profiles.profile_is_standalone / profile_is_parked; a named bot takes none along."""
-    if bot != "default":
-        return []
+def gateway_bots(home: Path, gateway: str) -> list[dict]:
+    """Every bot that goes down when `gateway`'s process restarts. A bot's own gateway: that bot. The host: the
+    default profile plus what the live host recorded it serves, else every named profile Hermes would serve (not
+    parked, not standalone, no gateway of its own: the tests of hermes_cli.profiles.profiles_to_serve)."""
+    bots = discover_bots(home)
+    if gateway != "default":
+        return [{"name": b["name"], "display_name": b["display_name"]} for b in bots if b["name"] == gateway]
+    served = _hermes_served(home)
     out = []
-    for b in discover_bots(home):
-        if b["is_default"] or (b["path"] / "gateway.parked").exists():
-            continue
-        if _standalone(b["path"]):
-            continue
+    for b in bots:
+        if not b["is_default"]:
+            if served is not None:
+                if b["name"] not in served:
+                    continue
+            elif (b["path"] / "gateway.parked").exists() or _standalone(b["path"]) or _hermes_gateway_pid(b["path"]) is not None:
+                continue
         out.append({"name": b["name"], "display_name": b["display_name"]})
     return out
 
@@ -4499,8 +4578,10 @@ class Bridge:
     # service manager call, a stop or a "restart all"; `--yes` only right after Hermes refused for live work.
 
     async def op_bots_restart_scope(self, p) -> dict:
+        """The gateway process that serves this bot and every bot that restarts with it (this one included)."""
         bot = self._bot(p.get("bot"))
-        return {"others": await asyncio.to_thread(restart_takes_along, self.home, bot["name"])}
+        gw = await asyncio.to_thread(gateway_of, self.home, bot["name"])
+        return {"gateway": gw, "bots": await asyncio.to_thread(gateway_bots, self.home, gw)}
 
     async def op_bots_restart(self, p) -> Reply:
         bot = self._bot(p.get("bot"))
@@ -4508,27 +4589,30 @@ class Bridge:
         if not PROFILE_ID.fullmatch(name):
             raise BridgeError("bad_request", f"{name} is not a profile id Hermes accepts")
         interrupt = p.get("interrupt") is True
-        if interrupt and self.clock() - self._refused.get(name, -1e9) > RESTART_ANYWAY_WINDOW:
+        # the process that serves this bot: the host gateway (default) or the bot's own; every bot on it restarts
+        gw = await asyncio.to_thread(gateway_of, self.home, name)
+        if interrupt and self.clock() - self._refused.get(gw, -1e9) > RESTART_ANYWAY_WINDOW:
             raise BridgeError("bad_request", "Restart anyway follows a refusal for live work")
-        if name in self._restarting:
+        if gw in self._restarting:
             raise BridgeError("busy", f"{bot['display_name']} is already restarting")
         hermes = hermes_path()
         if not hermes:
             return Reply({"outcome": "failed", "line": "Hermes is not on this computer."})
-        others = [o["name"] for o in await asyncio.to_thread(restart_takes_along, self.home, name)]
-        self._restarting.add(name)
+        down = [o["name"] for o in await asyncio.to_thread(gateway_bots, self.home, gw)]
+        jobs = {str(j["id"]): o for o in down for j in _read_jobs(self._bot(o)["path"])}
+        self._restarting.add(gw)
         try:
-            out = await asyncio.to_thread(run_hermes_restart, hermes, name, self.home, interrupt)
+            out = await asyncio.to_thread(run_hermes_restart, hermes, gw, self.home, interrupt, RESTART_TIMEOUT, jobs)
         finally:
-            self._restarting.discard(name)
-        self._refused.pop(name, None)
+            self._restarting.discard(gw)
+        self._refused.pop(gw, None)
         if out["outcome"] == "refused":
-            self._refused[name] = self.clock()
+            self._refused[gw] = self.clock()
         if out["outcome"] != "ok":
             return Reply(out)
         async def reattach() -> None:
-            self._spawn(self._reattach([name, *others]))
-        return Reply(out, after=reattach)
+            self._spawn(self._reattach(down or [name]))
+        return Reply({**out, "bots": down}, after=reattach)
 
     async def _reattach(self, names: list[str]) -> None:
         """After a restart: drop the old connections (their gateway is gone or replaced) and attach again, so the
@@ -4801,7 +4885,7 @@ class Bridge:
         self._own_plugins.add((bot["name"], installed))
         return {"name": installed, "enabled": bool(res.get("enabled", True)),
                 "restart_required": bool(res.get("restart_required")), "load": plugin_load(res),
-                "restart_bot": host_bot_for(self.home, bot["name"]),
+                "restart_bot": gateway_of(self.home, bot["name"]),
                 "warnings": _strs(res.get("warnings"), 6),
                 "missing_env": _strs(res.get("missing_env"), 12)}
 
@@ -4813,7 +4897,7 @@ class Bridge:
         conn = await self._conn(bot["name"])
         res = await self._plugins(conn, "toggle", key=key, enable=p["enable"])
         return {"name": str(res.get("name") or key), "restart_required": bool(res.get("restart_required")),
-                "load": plugin_load(res) if p["enable"] else "live", "restart_bot": host_bot_for(self.home, bot["name"])}
+                "load": plugin_load(res) if p["enable"] else "live", "restart_bot": gateway_of(self.home, bot["name"])}
 
     async def op_plugins_update(self, p) -> dict:
         bot = self._bot(p.get("bot"))
@@ -4825,7 +4909,7 @@ class Bridge:
         return {"name": str(res.get("name") or name), "unchanged": bool(res.get("unchanged")),
                 "restart_required": bool(res.get("restart_required")),
                 "load": "live" if res.get("unchanged") else plugin_load(res),
-                "restart_bot": host_bot_for(self.home, bot["name"])}
+                "restart_bot": gateway_of(self.home, bot["name"])}
 
     async def op_plugins_reload(self, p) -> dict:
         """Ask the bot's running gateway to load newly enabled plugins now (Hermes' `reload-plugins`): handlers go
@@ -4848,7 +4932,7 @@ class Bridge:
                 break
         missing = (act or {}).get("missing_dependencies") or []
         return {"load": "restart" if missing else "live", "missing": _strs(missing, 12),
-                "restart_bot": host_bot_for(self.home, bot["name"])}
+                "restart_bot": gateway_of(self.home, bot["name"])}
 
     async def op_plugins_remove(self, p) -> dict:
         bot = self._bot(p.get("bot"))

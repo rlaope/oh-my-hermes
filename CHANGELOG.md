@@ -301,15 +301,16 @@ All notable changes will be documented here.
   keep them) shows its run in Plans.
 
 - **Restart a bot from omher with one press.** A bot row's right-click (or `...`) menu has Restart under
-  Edit (Start for a bot that is not connected, and an offline bot's chat offers Start in place). omher runs
-  Hermes' own `hermes -p <bot> gateway restart`; the row reads "Restarting" with the ring and the open chat
-  re-reads itself once the bot is back. A busy bot is never cut silently: Hermes refuses while it has live work,
-  omher shows what it named with Cancel first, and only "Restart anyway" passes `--yes`. Restarting the default
-  profile names every bot its host gateway also restarts. Restarting one named bot does not load a new plugin
-  (Hermes serves it again inside the same process), so the Plugins sheet no longer suggests it: it says when the
-  plugin is ready (the bot's next conversation), asks the bot's gateway to reload its plugins when it did not
-  (Hermes' `reload-plugins`, which interrupts nothing), and offers a restart only when Hermes says one is still
-  needed, naming the process. omher never stops a bot, never restarts all of them and never restarts by itself
+  Edit (Start for a bot that is not connected, and an offline bot's chat offers Start in place). Restart runs
+  Hermes' own `hermes -p <profile> gateway restart` for the gateway process that serves the bot: the host
+  gateway (`-p default`, always named, never Hermes' sticky active profile) for a bot it serves, or the bot's own
+  gateway when it runs standalone. Every bot on that gateway reads "Restarting" together, and a bot that shares
+  its gateway names the others under Restart before the press. A busy gateway is never cut silently: Hermes
+  refuses while anything runs, omher shows each thing in plain words with the bot it belongs to, Cancel first,
+  and only "Restart anyway" passes `--yes`. After a plugin install the sheet says when it is ready (the bot's
+  next conversation), asks the gateway to reload its plugins when it did not (Hermes' `reload-plugins`, which
+  interrupts nothing), and offers the same Restart only when Hermes says one is still needed, naming every bot
+  that restarts with it. omher never stops a bot, never restarts every gateway and never restarts by itself
   (BOUNDARY rule 29).
 
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The

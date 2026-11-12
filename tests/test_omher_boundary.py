@@ -147,9 +147,10 @@ RULES = (
     "A session's folder is removed when the session is closed, and the folders of sessions that are no longer in the list"
     " are removed when omher starts.",
     "An oh-my-hermes session takes no files: rule 3 keeps files to a bot's main chat.",
-    "omher restarts a bot only when the person presses Restart (or Start, for a bot that is not connected), and only through Hermes' own command:",
-    "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because the bot had live work,",
-    "omher never stops a bot, never restarts every bot at once, never restarts anything by itself",
+    "what it restarts is the gateway process that serves that bot, through Hermes' own command:",
+    "never one profile's unserve and serve inside the host. The profile is always named, never left to Hermes'",
+    "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because something was running,",
+    "omher never stops a bot, never restarts every gateway at once, never restarts anything by itself",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -1279,8 +1280,9 @@ class SessionTranscriptComesFromTheAgentsOwnStream(unittest.TestCase):
 
 
 class RestartOneBotOnAPress(unittest.TestCase):
-    """Rule 29: one fixed Hermes argv per press, `--yes` only after a refusal, no stop, no restart-all, no automatic
-    restart, no signal or service manager; plugins load through Hermes' `reload-plugins`, never a restart."""
+    """Rule 29: one fixed Hermes argv per press, for the gateway process that serves the bot (always a named profile),
+    `--yes` only after a refusal, no stop, no restart-all, no automatic restart, no signal or service manager; plugins
+    load through Hermes' `reload-plugins`, never a restart."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -1318,7 +1320,16 @@ class RestartOneBotOnAPress(unittest.TestCase):
         body = self._body("op_bots_restart")
         self.assertIn("bot = self._bot(p.get('bot'))", body)
         self.assertIn("interrupt = p.get('interrupt') is True", body)
-        self.assertIn("if interrupt and self.clock() - self._refused.get(name, -1000000000.0) > RESTART_ANYWAY_WINDOW:", body)
+        # the process that serves the bot, as Hermes decides it; the refusal window belongs to that gateway
+        self.assertIn("gw = await asyncio.to_thread(gateway_of, self.home, name)", body)
+        self.assertIn("if interrupt and self.clock() - self._refused.get(gw, -1000000000.0) > RESTART_ANYWAY_WINDOW:", body)
+        self.assertIn("run_hermes_restart, hermes, gw, self.home, interrupt", body)
+
+    def test_the_gateway_is_the_host_or_the_bots_own_never_a_served_profile(self):
+        body = self._body("gateway_of")
+        self.assertIn("if b['is_default']:\n            return 'default'", body)
+        self.assertIn("return bot if _standalone(b['path']) or _hermes_gateway_pid(b['path']) is not None else 'default'", body)
+        self.assertIn("from gateway.status import live_gateway_pid_for_home", self._body("_hermes_gateway_pid"))
 
     def test_no_stop_no_restart_all_and_nothing_restarts_by_itself(self) -> None:
         # the one Hermes verb omher sends is `gateway restart`, from one function: never stop, start or --all
@@ -1339,7 +1350,7 @@ class RestartOneBotOnAPress(unittest.TestCase):
         self.assertEqual(callers, ["sidebar/restart.ts"])
         restart = files["sidebar/restart.ts"]
         self.assertEqual(len(re.findall(r"deps\.restart\(", restart)), 1)
-        self.assertEqual(sorted(re.findall(r"run\(bot, (true|false)\)", restart)), ["false", "false", "true"])
+        self.assertEqual(sorted(re.findall(r"run\(bot, (true|false)\)", restart)), ["false", "true"])
         self.assertIn('anyway: (bot: string) => (get(bot).step === "refused" ? run(bot, true)', restart)
 
     def test_plugins_load_through_reload_plugins_never_a_restart(self) -> None:

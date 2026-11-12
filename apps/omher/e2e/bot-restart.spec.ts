@@ -1,4 +1,5 @@
-// Restart one bot from the app (BOUNDARY rule 29), against the mock bridge:
+// Restart from the app (BOUNDARY rule 29): the gateway PROCESS that serves the bot, against the mock bridge (the host
+// gateway serves Kami, Friren and Hermes; OMH TUI runs its own, as on the owner's Mac):
 // 1. the bot row's menu (right-click and ⋯) has Restart under Edit, borderless, 12px, like its neighbours;
 // 2. an idle bot restarts on the first press with no confirm and no --yes; the row's time slot reads "Restarting"
 //    with the ring, and is normal again once the bridge says the bot is attached;
@@ -54,6 +55,7 @@ async function setup(page: Page, theme: "dark" | "light" = "dark", lang = "en") 
 async function shot(page: Page, what: string, theme: string) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
+  if (what !== "menu") await page.mouse.move(900, 600); // a hovered row shows its ⋯ in place of its status
   await page.waitForTimeout(250);
   await page.screenshot({ path: join(SHOTS, `bot-restart-${what}-${TAG}-${theme}.png`), animations: "disabled", caret: "initial" });
 }
@@ -74,13 +76,32 @@ for (const theme of ["dark", "light"] as const) {
     await setup(page, theme);
     const menu = await menuOf(page, "friren");
     const items = menu.getByRole("menuitem");
-    await expect(items).toHaveText(["Pin to top", "Edit bot", "Restart", "Hide from sidebar"]);
+    // Friren shares the host gateway: the Restart item says who restarts with it, before the press, quietly
+    await expect(menu.getByTestId("row-restart-with")).toHaveText("with Kami and Hermes");
+    await expect(items.nth(2)).toHaveText(/^Restart/);
+    await expect(items.nth(0)).toHaveText("Pin to top");
+    await expect(items.nth(3)).toHaveText("Hide from sidebar");
+    const sub = await menu.getByTestId("row-restart-with").evaluate((el) => {
+      const s = getComputedStyle(el);
+      const main = getComputedStyle(el.parentElement!);
+      return { size: parseFloat(s.fontSize), color: s.color, mainColor: main.color, ws: s.whiteSpace };
+    });
+    expect(sub.size).toBeLessThan(12.5);
+    expect(sub.color).not.toBe(sub.mainColor); // dim
+    expect(sub.ws).toBe("nowrap");
     const restart = items.nth(2);
     const css = await restart.evaluate((el) => {
       const s = getComputedStyle(el);
       return { size: s.fontSize, border: s.borderTopWidth, radius: s.borderRadius, bg: s.backgroundColor, h: el.getBoundingClientRect().height };
     });
     const edit = await items.nth(1).evaluate((el) => getComputedStyle(el).fontSize);
+    // a bot with its own gateway restarts alone: no second line
+    await page.keyboard.press("Escape");
+    const solo = await menuOf(page, "omh-tui");
+    await expect(solo.getByRole("menuitem").nth(2)).toHaveText("Restart");
+    await expect(solo.getByTestId("row-restart-with")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await menuOf(page, "friren");
     expect(css.size).toBe(edit);
     expect(parseFloat(css.size)).toBeGreaterThanOrEqual(12);
     expect(parseFloat(css.size)).toBeLessThanOrEqual(13);
@@ -95,54 +116,111 @@ for (const theme of ["dark", "light"] as const) {
     await page.keyboard.press("Escape");
     await page.getByTestId("bot-friren").hover();
     await page.getByTestId("bot-more-friren").click();
-    await expect(page.getByTestId("row-menu").getByRole("menuitem").nth(2)).toHaveText("Restart");
+    await expect(page.getByTestId("row-menu").getByRole("menuitem").nth(2)).toHaveText(/^Restart/);
   });
 
-  test(`an idle bot restarts on one press: Restarting with the ring, then back (${theme})`, async ({ page }) => {
+  test(`one press restarts the host gateway: every bot on it reads Restarting together, then back (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await mock("mock.restart", { bot: "friren", outcome: "slow" });
-    await (await menuOf(page, "friren")).getByRole("menuitem", { name: "Restart" }).click();
-    const time = page.getByTestId("bot-friren").getByTestId("bot-time");
-    await expect(time).toHaveText("Restarting");
-    await expect(time).toHaveAttribute("data-restarting", "true");
-    await expect(page.getByTestId("restart-line-friren")).toHaveCount(0); // no confirm for an idle named bot
+    await (await menuOf(page, "friren")).getByTestId("row-restart").click();
+    for (const b of ["friren", "kami", "default"]) {
+      const time = page.getByTestId(`bot-${b}`).getByTestId("bot-time");
+      await expect(time, b).toHaveText("Restarting");
+      await expect(time, b).toHaveAttribute("data-restarting", "true");
+    }
+    // OMH TUI runs its own gateway: untouched
+    await expect(page.getByTestId("bot-omh-tui")).not.toContainText("Restarting");
+    await expect(page.getByTestId("restart-line-friren")).toHaveCount(0); // nothing was running: no confirm
     expect((await calls("bots.restart")).map((c) => c.params)).toEqual([{ bot: "friren" }]);
     await shot(page, "restarting", theme);
     await mock("mock.restartDone", { bot: "friren" });
-    await expect(time).not.toHaveText("Restarting");
+    for (const b of ["friren", "kami", "default"])
+      await expect(page.getByTestId(`bot-${b}`).getByTestId("bot-time"), b).not.toHaveText("Restarting");
+  });
+
+  test(`a bot with its own gateway restarts alone (${theme})`, async ({ page }) => {
+    await setup(page, theme);
+    await mock("mock.restart", { bot: "omh-tui", outcome: "slow" });
+    await (await menuOf(page, "omh-tui")).getByTestId("row-restart").click();
+    await expect(page.getByTestId("bot-omh-tui").getByTestId("bot-time")).toHaveText("Restarting");
+    for (const b of ["friren", "kami", "default"])
+      await expect(page.getByTestId(`bot-${b}`).getByTestId("bot-time"), b).not.toHaveText("Restarting");
+    await mock("mock.restartDone", { bot: "omh-tui" });
   });
 
   test(`a busy bot is never cut silently: what it does, Cancel first, then Restart anyway (${theme})`, async ({ page }) => {
     await setup(page, theme);
-    await mock("mock.restart", { bot: "kami", outcome: "refused", lines: [
-      "chat turn 20261112_0915 pid 4242, running 3m [model claude-opus-5-5, tool terminal]",
-      "cron job a1b2 (PR digest) in-process, running 40s",
+    // what the real bridge's work_unit reads out of Hermes' two unit lines (bridge test pins that reading)
+    await mock("mock.restart", { bot: "kami", outcome: "refused", work: [
+      { kind: "chat", name: null, secs: 185, bot: "kami" },
+      { kind: "cron", name: "PR digest", secs: 40, bot: "friren" },
+      { kind: "cron", name: "Nightly digest of every open pull request in every repository", secs: 3720, bot: "default" },
+      { kind: "work", name: null, secs: null, bot: null },
     ] });
-    await (await menuOf(page, "kami")).getByRole("menuitem", { name: "Restart" }).click();
+    await (await menuOf(page, "kami")).getByTestId("row-restart").click();
     const line = page.getByTestId("restart-line-kami");
     await expect(line).toHaveAttribute("data-step", "refused");
-    await expect(line.getByTestId("restart-work").locator("li")).toHaveText([
-      "chat turn 20261112_0915 pid 4242, running 3m [model claude-opus-5-5, tool terminal]",
-      "cron job a1b2 (PR digest) in-process, running 40s",
+    const items = line.getByTestId("restart-work").locator("li");
+    await expect(items).toHaveText([
+      "Kami: A chat turn, 3m",
+      "Friren: Scheduled job PR digest, 40s",
+      "Hermes: Scheduled job Nightly digest of every open pull request in every repository, 1h 2m",
+      "Something it is doing",
     ]);
+    // no run id, pid, job id or bracket in what a person reads
+    await expect(line).not.toContainText(/pid|\[|\]|20261112|a1b2|in-process/);
+    // each thing on ONE line, an ellipsis when it does not fit, never broken mid-word
+    const rows = await items.evaluateAll((els) => els.map((el) => {
+      const s = getComputedStyle(el);
+      return { h: el.getBoundingClientRect().height, lh: parseFloat(s.lineHeight), ws: s.whiteSpace, to: s.textOverflow, over: el.scrollWidth > el.clientWidth };
+    }));
+    for (const r of rows) {
+      expect(r.h).toBeLessThanOrEqual(r.lh + 1);
+      expect(r.ws).toBe("nowrap");
+      expect(r.to).toBe("ellipsis");
+    }
+    expect(rows[2].over).toBe(true); // the long name is cut with the ellipsis, not wrapped
+    await expect(items.nth(2)).toHaveAttribute("title", "Hermes: Scheduled job Nightly digest of every open pull request in every repository, 1h 2m");
+    // nothing went down while Hermes refused
+    await expect(page.getByTestId("bot-friren").getByTestId("bot-time")).not.toHaveText("Restarting");
     const buttons = line.getByRole("button");
     await expect(buttons).toHaveText(["Cancel", "Restart anyway"]);
     const look = await line.evaluate((el) => {
       const s = getComputedStyle(el);
-      const b = getComputedStyle(el.querySelector(".rs-act")!);
-      const li = getComputedStyle(el.querySelector("li")!);
-      return { size: s.fontSize, li: li.fontSize, bg: s.backgroundColor, border: s.borderTopWidth, bBg: b.backgroundColor, bBorder: b.borderTopWidth, bRadius: b.borderRadius };
+      const menu = document.createElement("div");
+      menu.className = "row-menu";
+      document.body.appendChild(menu);
+      const m = getComputedStyle(menu);
+      const want = { bg: m.backgroundColor, border: m.borderTopColor, shadow: m.boxShadow };
+      menu.remove();
+      const [c, a] = [...el.querySelectorAll<HTMLElement>(".rs-act")].map((b) => getComputedStyle(b));
+      const row = el.closest(".bot-w")!.querySelector(".bot")!.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return {
+        size: s.fontSize, bg: s.backgroundColor, border: s.borderTopWidth, borderColor: s.borderTopColor, shadow: s.boxShadow, want,
+        inRow: r.left >= row.left && r.right <= row.right + 0.5, rowW: row.width, w: r.width,
+        cancel: { bg: c.backgroundColor, border: c.borderTopWidth, deco: c.textDecorationLine },
+        anyway: { bg: a.backgroundColor, border: a.borderTopWidth, radius: a.borderRadius, color: a.color, deco: a.textDecorationLine },
+        ink: getComputedStyle(el.querySelector(".rs-t")!).color,
+      };
     });
-    for (const v of [look.size, look.li]) {
-      expect(parseFloat(v)).toBeGreaterThanOrEqual(12);
-      expect(parseFloat(v)).toBeLessThanOrEqual(13);
-    }
-    expect(look.bg).toBe("rgba(0, 0, 0, 0)"); // no box
-    expect(look.border).toBe("0px");
-    expect(look.bBg).toBe("rgba(0, 0, 0, 0)");
-    expect(look.bBorder).toBe("0px");
-    expect(parseFloat(look.bRadius)).toBeGreaterThanOrEqual(4);
-    expect(parseFloat(look.bRadius)).toBeLessThanOrEqual(6);
+    expect(parseFloat(look.size)).toBeGreaterThanOrEqual(12);
+    expect(parseFloat(look.size)).toBeLessThanOrEqual(13);
+    // the menu's own surface: its background, border and shadow, inside the row's width
+    expect(look.bg).toBe(look.want.bg);
+    expect(look.border).toBe("1px");
+    expect(look.borderColor).toBe(look.want.border);
+    expect(look.shadow).toBe(look.want.shadow);
+    expect(look.inRow).toBe(true);
+    expect(look.w).toBeGreaterThan(look.rowW - 20);
+    // Cancel quiet (no border), "Restart anyway" the outlined one; neither filled
+    expect(look.cancel.border).toBe("0px");
+    expect(look.cancel.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(look.anyway.border).toBe("1px");
+    expect(look.anyway.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(look.anyway.deco).toBe("none");
+    expect(parseFloat(look.anyway.radius)).toBeGreaterThanOrEqual(4);
+    expect(parseFloat(look.anyway.radius)).toBeLessThanOrEqual(6);
     expect((await calls("bots.restart")).map((c) => c.params)).toEqual([{ bot: "kami" }]); // no interrupt yet
     await shot(page, "busy", theme);
     // Cancel: nothing more is sent
@@ -150,7 +228,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(line).toHaveCount(0);
     expect((await calls("bots.restart")).length).toBe(1);
     // again, then Restart anyway: the one press that sends interrupt
-    await (await menuOf(page, "kami")).getByRole("menuitem", { name: "Restart" }).click();
+    await (await menuOf(page, "kami")).getByTestId("row-restart").click();
     await page.getByTestId("restart-line-kami").getByTestId("restart-anyway").click();
     await expect.poll(async () => (await calls("bots.restart")).map((c) => c.params)).toEqual([
       { bot: "kami" },
@@ -163,12 +241,14 @@ for (const theme of ["dark", "light"] as const) {
   test(`a failed restart shows Hermes' last line once, with Try again (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await mock("mock.restart", { bot: "friren", outcome: "failed", line: "Gateway service restart failed." });
-    await (await menuOf(page, "friren")).getByRole("menuitem", { name: "Restart" }).click();
+    await (await menuOf(page, "friren")).getByTestId("row-restart").click();
     const line = page.getByTestId("restart-line-friren");
     await expect(line).toHaveAttribute("data-step", "failed");
     await expect(line).toContainText("Friren did not restart.");
     await expect(line.getByTestId("restart-why")).toHaveText("Gateway service restart failed.");
-    await expect(line.getByRole("button")).toHaveText(["Cancel", "Try again"]);
+    // nothing is left to cancel after a failure: the app's dismiss word
+    await expect(line.getByRole("button")).toHaveText(["Close", "Try again"]);
+    await expect(line.getByRole("button", { name: "Cancel" })).toHaveCount(0);
     await shot(page, "failed", theme);
     await line.getByTestId("restart-again").click();
     await expect.poll(async () => (await calls("bots.restart")).length).toBe(2);
@@ -178,7 +258,7 @@ for (const theme of ["dark", "light"] as const) {
     await setup(page, theme);
     await mock("mock.botStatus", { bot: "friren", status: "offline" });
     await expect(page.getByTestId("bot-friren").getByTestId("bot-sub")).toHaveText("Not connected");
-    await expect((await menuOf(page, "friren")).getByRole("menuitem").nth(2)).toHaveText("Start");
+    await expect((await menuOf(page, "friren")).getByRole("menuitem").nth(2)).toHaveText(/^Start/);
     await page.keyboard.press("Escape");
     await page.getByTestId("bot-friren").click();
     const note = page.getByTestId("chat-offline");
@@ -202,18 +282,31 @@ for (const theme of ["dark", "light"] as const) {
     await sheet.getByTestId("sheet-install").click();
     const load = sheet.getByTestId("sheet-load");
     await expect(load).toHaveAttribute("data-load", "restart");
-    await expect(load).toContainText("Only a restart of Hermes loads it.");
-    await expect(load.getByTestId("sheet-load-restart")).toHaveText("Restart");
-    await shot(page, "plugins", theme);
-    // the host gateway's restart names the bots it takes along before anything runs
-    await load.getByTestId("sheet-load-restart").click();
-    const confirm = load.getByTestId("sheet-load-restart-line");
-    await expect(confirm).toHaveAttribute("data-step", "confirm");
-    await expect(confirm).toContainText("Restarting Hermes also restarts Kami, Friren, OMH TUI.");
-    await expect(confirm.getByRole("button")).toHaveText(["Cancel", "Restart"]);
-    expect((await calls("bots.restart")).length).toBe(0);
-    await confirm.getByTestId("restart-cancel").click();
-    expect((await calls("bots.restart")).length).toBe(0);
+    // what goes down, in the person's terms, before any press: every bot that restarts with it
+    await expect(load).toContainText("Only a restart loads it, and Kami, Friren and Hermes restart with it.");
+    const press = load.getByTestId("sheet-load-restart");
+    await expect(press).toHaveText("Restart them");
+    // visibly an action: outlined like the offline line's Start, not the sentence's colour and weight
+    const st = await press.evaluate((el) => {
+      const b = getComputedStyle(el);
+      const p = getComputedStyle(el.parentElement!);
+      return { border: b.borderTopWidth, bg: b.backgroundColor, deco: b.textDecorationLine, w: b.fontWeight, pw: p.fontWeight };
+    });
+    expect(st.border).toBe("1px");
+    expect(st.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(st.deco).toBe("none");
+    // the title follows the state
+    await expect(sheet.getByTestId("sheet-title")).toHaveText("babysit is installed");
+    await expect(sheet).not.toContainText("Install babysit?");
+    await shot(page, "plugins-restart", theme);
+    // the press is the same Restart as the row's: the gateway that serves Kami, every bot on it reads Restarting
+    await mock("mock.restart", { bot: "kami", outcome: "slow" });
+    await press.click();
+    await expect.poll(async () => (await calls("bots.restart")).map((c) => c.params)).toEqual([{ bot: "kami" }]);
+    for (const b of ["kami", "friren", "default"])
+      await expect(page.getByTestId(`bot-${b}`).getByTestId("bot-time"), b).toHaveText("Restarting");
+    await expect(page.getByTestId("bot-omh-tui")).not.toContainText("Restarting");
+    await mock("mock.restartDone", { bot: "kami" });
   });
 }
 
@@ -235,10 +328,29 @@ test("Plugins: a gateway that did not reload gets Load now (Hermes' reload-plugi
   expect((await calls("bots.restart")).length).toBe(0);
 });
 
+for (const theme of ["dark", "light"] as const) {
+  test(`Plugins: the reload was enough: ready in the next conversation, no restart offered (${theme})`, async ({ page }) => {
+    await setup(page, theme);
+    await page.getByTestId("nav-plugins").click();
+    await page.getByTestId("plug-tab-browse").click();
+    await mock("mock.pluginLoad", { load: "live" });
+    await page.getByTestId("plug-install-babysit").click();
+    const sheet = page.getByTestId("install-sheet");
+    await sheet.getByTestId("sheet-install").click();
+    await expect(sheet.getByTestId("sheet-title")).toHaveText("babysit is installed");
+    const load = sheet.getByTestId("sheet-load");
+    await expect(load).toHaveAttribute("data-load", "live");
+    await expect(load).toHaveText("Ready in Kami's next conversation.");
+    await expect(sheet.getByRole("button", { name: /Restart|Load now/ })).toHaveCount(0);
+    expect((await calls("bots.restart")).length).toBe(0);
+    await shot(page, "plugins-ready", theme);
+  });
+}
+
 for (const lang of ["ko", "ja", "zh"]) {
   test(`the restart words read in ${lang}, with no raw keys`, async ({ page }) => {
     await setup(page, "dark", lang);
-    await mock("mock.restart", { bot: "kami", outcome: "refused", lines: ["chat turn s1"] });
+    await mock("mock.restart", { bot: "kami", outcome: "refused", work: [{ kind: "cron", name: "PR digest", secs: 40 }] });
     const menu = await menuOf(page, "kami");
     await expect(menu).not.toContainText(/row\.|rs\./);
     await menu.getByRole("menuitem").nth(2).click();
