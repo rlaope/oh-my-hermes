@@ -829,7 +829,8 @@ function Resolve-OmhLatestReleaseLocation {
 function Read-OmhInstallerArgs {
     <#  $true for omher@beta, $false otherwise. Also sets the --uninstall,
         --purge and --dry-run switches. Anything else, and any combination the
-        installer does not offer, stops with the usage before any work.  #>
+        installer does not offer, stops with the usage before any work and exit
+        code 2, the code install.sh uses for a usage refusal.  #>
     param([object[]]$Arguments = @())
     $beta = $false
     $script:OmhUninstall = $false
@@ -841,6 +842,7 @@ function Read-OmhInstallerArgs {
         if ($text -match '^--?uninstall$') { $script:OmhUninstall = $true; continue }
         if ($text -match '^--?purge$') { $script:OmhUninstallPurge = $true; continue }
         if ($text -match '^--?dry-run$') { $script:OmhUninstallDryRun = $true; continue }
+        $script:OmhExitCode = 2
         Stop-OmhInstall @(
             "omh installer: unknown argument '$argument'. The arguments are omher@beta (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH):",
             "  $OmhOmherBetaOneLiner",
@@ -852,6 +854,7 @@ function Read-OmhInstallerArgs {
     elseif (-not $script:OmhUninstall -and $script:OmhUninstallPurge) { $refusal = '--purge only works together with --uninstall.' }
     elseif (-not $script:OmhUninstall -and $script:OmhUninstallDryRun) { $refusal = '--dry-run only works together with --uninstall.' }
     if ($refusal) {
+        $script:OmhExitCode = 2
         Stop-OmhInstall @(
             "omh installer: $refusal",
             "  $OmhOmherBetaOneLiner",

@@ -4,9 +4,10 @@
 #   Read-OmhInstallerArgs        : --uninstall / --purge / --dry-run, and every refused combination
 #   Get-OmhUninstallArguments    : --purge becomes --all, --dry-run passes through, --language only when set
 #   Get-OmhUninstallCandidates   : the places the installer puts the command, never PATH alone
-#   the run                      : install.ps1 --uninstall with a stub omh.cmd in a private bin dir
-#                                  runs it, leaves its exit code behind, and with no command found
-#                                  exits non-zero and creates nothing
+#   the run                      : install.ps1 --uninstall with a stub omh.cmd and a PATH and environment the
+#                                  test owns (the real omh, OMH_* and HERMES_* never reach the child):
+#                                  runs the stub, leaves its exit code behind, with no command found
+#                                  exits 1 and creates nothing, and a usage refusal exits 2
 # -InjectRegression swaps in an argument reader that treats --purge as a plain
 # no-op flag; the "--purge alone is refused" case must catch it.
 param([switch]$InjectRegression)
@@ -128,8 +129,14 @@ try {
     Assert-Omh 'nothing set, nothing to look in' (@(Get-OmhUninstallCandidates -BinDir '' -ManagedRoot '' -VenvDir '').Count) 0
 
     # -- the run, end to end ------------------------------------------------------------------
-    # install.ps1 as a script with a private bin dir (OMH_BIN_DIR) holding a stub omh.cmd. USERPROFILE,
-    # LOCALAPPDATA and PATH point into the test's own folders, so the real command is never seen.
+    # install.ps1 as a script, run by a child shell whose environment this function replaces:
+    #   PATH      : only the System32 folder (so cmd.exe can run omh.cmd), or, for the PATH case, the
+    #               test's own stub folder in front of it. The real omh, which CI installs before this
+    #               step, is on the inherited PATH and install.ps1 looks on PATH first, so it must not
+    #               be inherited.
+    #   OMH_*, HERMES_* : every inherited one is cleared, then this function sets the few it needs.
+    #   USERPROFILE, LOCALAPPDATA, OMH_BIN_DIR, OMH_VENV_DIR : the test's own folders.
+    # All of it is restored afterwards.
     $hostExe = (Get-Process -Id $PID).Path
     $work = Join-Path ([System.IO.Path]::GetTempPath()) ('omh-uninstall-' + [guid]::NewGuid().ToString('N'))
     try {
@@ -141,25 +148,37 @@ try {
         [System.IO.File]::WriteAllText((Join-Path $binDir 'omh.cmd'), $stub)
 
         function Invoke-Installer {
-            param([string[]]$InstallerArguments, [string]$Status = '0', [string]$BinDirectory = $binDir)
+            param([string[]]$InstallerArguments, [string]$Status = '0', [string]$BinDirectory = $binDir, [string]$PathPrefix = '')
+            $system32 = Join-Path ([Environment]::GetEnvironmentVariable('SystemRoot')) 'System32'
+            $childPath = $system32
+            if ($PathPrefix) { $childPath = $PathPrefix + ';' + $system32 }
             $saved = @{}
-            foreach ($name in 'USERPROFILE', 'LOCALAPPDATA', 'OMH_BIN_DIR', 'OMH_STUB_STATUS', 'XDG_DATA_HOME', 'OMH_VENV_DIR', 'OMH_LANG') {
+            $names = @('PATH', 'USERPROFILE', 'LOCALAPPDATA', 'XDG_DATA_HOME')
+            foreach ($item in @(Get-ChildItem Env:)) {
+                if ($item.Name -match '^(OMH_|HERMES_)') { $names += $item.Name }
+            }
+            foreach ($name in @('OMH_BIN_DIR', 'OMH_VENV_DIR', 'OMH_STUB_STATUS')) {
+                if ($names -notcontains $name) { $names += $name }
+            }
+            foreach ($name in $names) {
                 $saved[$name] = [Environment]::GetEnvironmentVariable($name)
             }
             try {
+                foreach ($name in $names) {
+                    if ($name -match '^(OMH_|HERMES_)' -or $name -eq 'XDG_DATA_HOME') { [Environment]::SetEnvironmentVariable($name, $null) }
+                }
+                [Environment]::SetEnvironmentVariable('PATH', $childPath)
                 [Environment]::SetEnvironmentVariable('USERPROFILE', $profileDir)
                 [Environment]::SetEnvironmentVariable('LOCALAPPDATA', (Join-Path $work 'local'))
                 [Environment]::SetEnvironmentVariable('OMH_BIN_DIR', $BinDirectory)
                 [Environment]::SetEnvironmentVariable('OMH_VENV_DIR', (Join-Path $work 'venv'))
-                [Environment]::SetEnvironmentVariable('XDG_DATA_HOME', $null)
-                [Environment]::SetEnvironmentVariable('OMH_LANG', $null)
                 [Environment]::SetEnvironmentVariable('OMH_STUB_STATUS', $Status)
                 $output = & $hostExe -NoProfile -ExecutionPolicy Bypass -File $installerPath @InstallerArguments 2>&1 | Out-String
                 $code = $LASTEXITCODE
                 $global:LASTEXITCODE = 0
                 return [pscustomobject]@{ Code = $code; Output = $output }
             } finally {
-                foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
+                foreach ($name in @($saved.Keys)) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
             }
         }
 
@@ -173,18 +192,31 @@ try {
         $run = Invoke-Installer @('--uninstall') -Status '3'
         Assert-Omh 'the stub exit code is the script exit code' $run.Code 3
 
+        # PATH is looked at before OMH_BIN_DIR: a stub on PATH wins over the empty bin dir.
+        $pathBin = Join-Path $work 'path-bin'
+        $unusedBin = Join-Path $work 'unused-bin'
+        New-Item -ItemType Directory -Path $pathBin, $unusedBin -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $pathBin 'omh.cmd'), $stub)
+        $run = Invoke-Installer @('--uninstall') -Status '5' -BinDirectory $unusedBin -PathPrefix $pathBin
+        Assert-Omh 'a command on PATH is found and its exit code is kept' $run.Code 5
+        Assert-Omh 'a command on PATH is the stub' ([bool]($run.Output -match 'stub omh ran')) $true
+
         $emptyBin = Join-Path $work 'empty-bin'
         New-Item -ItemType Directory -Path $emptyBin -Force | Out-Null
         $before = @(Get-ChildItem -LiteralPath $work -Recurse -Force | ForEach-Object { $_.FullName }).Count
         $run = Invoke-Installer @('--uninstall') -BinDirectory $emptyBin
-        Assert-Omh 'nothing found is non-zero' ($run.Code -ne 0) $true
+        Assert-Omh 'nothing found exits 1' $run.Code 1
         Assert-Omh 'nothing found says so' ([bool]($run.Output -match 'no installed omh command was found')) $true
         Assert-Omh 'nothing found points at the manual steps' ([bool]($run.Output -match 'docs/INSTALLATION.md#uninstall')) $true
         Assert-Omh 'nothing found creates nothing' (@(Get-ChildItem -LiteralPath $work -Recurse -Force | ForEach-Object { $_.FullName }).Count) $before
 
         $run = Invoke-Installer @('--purge')
-        Assert-Omh '--purge alone exits non-zero' ($run.Code -ne 0) $true
+        Assert-Omh '--purge alone exits 2' $run.Code 2
         Assert-Omh '--purge alone says why' ([bool]($run.Output -match '--purge only works together with --uninstall')) $true
+
+        $run = Invoke-Installer @('--unknown')
+        Assert-Omh 'an unknown argument exits 2' $run.Code 2
+        Assert-Omh 'an unknown argument is named' ([bool]($run.Output -match "unknown argument '--unknown'")) $true
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
