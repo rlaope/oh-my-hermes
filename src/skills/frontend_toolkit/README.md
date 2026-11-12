@@ -26,10 +26,10 @@ ran.
 
 | field | meaning |
 |---|---|
-| `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0 |
-| `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width |
+| `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0; on a page that starts at its right edge (see `first_action_y`) the scrolling element's `scrollWidth` is used, because the root's misses an absolutely placed box overflowing to the left |
+| `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width. On a page that starts at its right edge the overflowing side is the left: the same key then lists elements whose left edge passes the first screen's left edge, each with `left` (page px, negative) instead of `right`, and the `note` says so |
 | `first_data_y` | top of the first visible match of `--data`, in document px (a match fixed to the viewport is placed by its viewport box); without `--data` the guess is `table tbody tr, [role=row], li, article`, and `"not_found"` plus a hint means pass `--data` |
-| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped, and a control fixed to the viewport is judged and placed by its viewport box, so one parked above the screen stays skipped after the page scrolls. `position: fixed` under an ancestor with a transform, a filter or paint containment is fixed to that ancestor, scrolls with the page and is measured in document px like any other control |
+| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped, and a control fixed to the viewport is judged and placed by its viewport box, so one parked above the screen stays skipped after the page scrolls. `position: fixed` under an ancestor with a transform, a filter or paint containment is fixed to that ancestor, scrolls with the page and is measured in document px like any other control. The edge the page cannot scroll past is its start edge, read from `<body>`: the left for left-to-right text, the right under `direction: rtl` or a `vertical-rl` writing mode. On a right-start page a control in the left overflow counts, a control parked past the right edge is skipped, and a fixed control counts only when it lies across the band the reader pans over |
 | `small_targets` | visible `a, button, [role=button], input, select, summary` under 44 px in either dimension: count and first 20 |
 | `small_inputs` | visible text-entry controls (`textarea`, `select`, and `input` other than checkbox, radio, button, submit, reset, file, image, range, color and hidden) whose computed font size is under 16 px: count and first 20; `checked` counts only these |
 | `console_errors` | `console.error` messages and uncaught page errors during load |
@@ -49,6 +49,11 @@ the lists, not the counts.
 - **An element in the past-right list may be clipped.** A child inside an
   `overflow: hidden` ancestor can sit past the edge without scrolling the page.
   The verdict is `horizontal_overflow_px`; the list points at where to look.
+- **A right-to-left page overflows to the left.** Under `direction: rtl` on
+  `<body>` a page that is too wide starts at its right edge with a negative
+  `scrollX`, and the reader pans left to reach the rest. The script reads the
+  start side from `<body>`, so `<html dir="rtl"><body dir="ltr">` is measured
+  as a left-to-right page and `body{direction:rtl}` as a right-to-left one.
 - **Width alone misses touch rules.** A desktop window resized to 390 px keeps
   hover and a fine pointer, so hover-only controls look fine and a 30 px button
   passes by eye. The touch and mobile flags are what make the pointer media

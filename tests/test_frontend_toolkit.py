@@ -385,6 +385,47 @@ class PureHelperTests(unittest.TestCase):
         # `position: fixed` under a containing ancestor is not fixed to the viewport.
         self.assertIn("if (!node.offsetParent) return true;", api.PAGE_SCRIPT)
 
+    def test_start_side_follows_the_principal_writing_mode(self):
+        api = helper_api()
+        self.assertFalse(api.starts_at_right("horizontal-tb", "ltr"))
+        self.assertTrue(api.starts_at_right("horizontal-tb", "rtl"))
+        self.assertTrue(api.starts_at_right("vertical-rl", "ltr"))
+        self.assertTrue(api.starts_at_right("sideways-rl", "ltr"))
+        self.assertFalse(api.starts_at_right("vertical-lr", "rtl"))
+        # The page script reads the start side from <body>, not from <html>.
+        self.assertIn("getComputedStyle(document.body || doc)", api.PAGE_SCRIPT)
+
+    def test_a_page_that_starts_at_the_right_is_reachable_leftward(self):
+        # Client 0..120 on an RTL page scrolled to -130 is page -130..-10: on
+        # the page, in the left overflow. Past the start edge (390) it is not.
+        api = helper_api()
+        self.assertTrue(api.in_document_area(bottom=98, right=-10, left=-130, start_edge=390))
+        self.assertFalse(api.in_document_area(bottom=68, right=590, left=470, start_edge=390))
+        self.assertFalse(api.in_document_area(bottom=-60, right=390, left=270, start_edge=390))
+        # A control fixed to the viewport must cross the band the reader pans over.
+        self.assertFalse(api.in_document_area(bottom=98, right=-10, left=-130, start_edge=520, fixed=True))
+        self.assertTrue(api.in_document_area(bottom=98, right=390, left=270, start_edge=520, fixed=True))
+        # The left-to-right rule is unchanged.
+        self.assertFalse(api.in_document_area(bottom=48, right=-1))
+        self.assertIn("if (startRight) return onPageFromRight(el, r);", api.PAGE_SCRIPT)
+
+    def test_past_edge_note_names_the_left_side_on_a_right_start_page(self):
+        api = helper_api()
+        args = api.parser().parse_args([str(CLEAN)])
+        plan = api.validate(args)
+        raw = {"viewport_meta": None, "scroll_width": 520, "client_width": 390, "inner_width": 520,
+               "document_height": 844, "past_right": [{"path": "div", "left": -130}], "past_right_total": 1,
+               "data_selector": ".row", "first_data_y": None, "first_action_y": 50, "targets_total": 0,
+               "small_targets_total": 0, "small_targets": [], "fields_total": 0, "small_inputs_total": 0,
+               "small_inputs": [], "measure": [], "start_right": True}
+        report = api.build_report(args, plan, api.emulation(args), raw, [])
+        self.assertEqual(report["horizontal_overflow_px"], 130)
+        self.assertEqual(report["elements_past_right_edge"]["note"], api.PAST_LEFT_EDGE_NOTE)
+        self.assertIn("left edge", api.PAST_LEFT_EDGE_NOTE)
+        raw["start_right"] = False
+        report = api.build_report(args, plan, api.emulation(args), raw, [])
+        self.assertEqual(report["elements_past_right_edge"]["note"], api.PAST_EDGE_NOTE)
+
     def test_page_script_takes_thresholds_and_list_limit_as_arguments(self):
         api = helper_api()
         for name in ("opts.min_target_px", "opts.min_input_font_px", "opts.list_limit"):
@@ -617,6 +658,110 @@ class BrowserTests(Fixture):
                         '<div style="position:fixed;top:10px;left:0"><a href="#x">Pinned</a></div></div>'
                         '<script>addEventListener("load", () => scrollTo(0, 200))</script>')
         self.assertEqual(self.measure(page)["first_action_y"], 40)
+
+    def page(self, name, root_attrs, style, body):
+        path = self.root / name
+        path.write_text(f'<html {root_attrs}><head><meta name="viewport" content="width=device-width,'
+                        'initial-scale=1"><style>body{margin:0;height:2000px} a,button{display:block;'
+                        f'width:120px;height:48px;box-sizing:border-box}} {style}</style></head>{body}</html>')
+        return path
+
+    def left_overflow_page(self, name, root_attrs='dir="rtl"', body_attrs="", first="right:400px",
+                           scroll=""):
+        # A 520 px absolutely placed row on a page that starts at the right
+        # overflows 130 px to the left; Chromium starts it at scrollX -130.
+        # `#first` at right 400 px sits inside that left overflow at y 50.
+        script = f'<script>addEventListener("load", () => scrollTo({scroll}))</script>' if scroll else ""
+        return self.page(name, root_attrs,
+                         ".wide{position:absolute;top:0;right:0;width:520px;height:10px}"
+                         f" #first{{position:absolute;top:50px;{first}}}"
+                         " #real{position:absolute;top:300px;right:0}",
+                         f'<body {body_attrs}><div class="wide"></div><button id="first">first</button>'
+                         f'<button id="real">real</button>{script}</body>')
+
+    def test_rtl_page_overflowing_left_is_measured_where_the_reader_pans(self):
+        # Before: the control in the left overflow was skipped (300) and the
+        # root's scrollWidth missed the absolutely placed row (overflow 0).
+        cases = (("plain", "right:400px", ""), ("scrolled", "right:400px", "-130, 200"),
+                 ("visible-first", "right:0", "-130, 200"))
+        for label, first, scroll in cases:
+            with self.subTest(case=label):
+                report = self.measure(self.left_overflow_page(f"rtl-{label}.html", first=first, scroll=scroll),
+                                      "--data", "#first")
+                self.assertEqual(report["first_action_y"], 50)
+                self.assertEqual(report["first_data_y"], 50)
+                self.assertEqual(report["horizontal_overflow_px"], 130)
+                past = report["elements_past_right_edge"]
+                self.assertIn({"path": "body > div", "left": -130}, past["first"])
+                self.assertIn("left edge", past["note"])
+
+    def test_the_start_side_is_read_from_body(self):
+        # <body dir="rtl"> and body{direction:rtl} start at the right while
+        # <html> still computes ltr; <html dir="rtl"><body dir="ltr"> starts at
+        # the left and is measured exactly as a left-to-right page.
+        for label, root, body in (("body-dir", "", 'dir="rtl"'), ("body-css", "", 'style="direction:rtl"')):
+            with self.subTest(case=label):
+                report = self.measure(self.left_overflow_page(f"{label}.html", root, body))
+                self.assertEqual((report["first_action_y"], report["horizontal_overflow_px"]), (50, 130))
+        ltr_body = self.page("ltr-body.html", 'dir="rtl"',
+                             ".wide{position:absolute;top:0;left:0;width:520px;height:10px}"
+                             " #first{position:absolute;top:50px;left:400px}",
+                             '<body dir="ltr"><div class="wide"></div><button id="first">first</button></body>')
+        report = self.measure(ltr_body)
+        self.assertEqual((report["first_action_y"], report["horizontal_overflow_px"]), (50, 0))
+        self.assertEqual(report["elements_past_right_edge"]["first"][0], {"path": "body > div", "right": 520})
+
+    def test_rtl_control_parked_past_the_right_edge_stays_skipped(self):
+        # An RTL page cannot scroll past its right edge, so a link parked
+        # 200 px beyond it is off the page, with or without a left overflow.
+        parked = "#parked{position:absolute;top:20px;right:-200px} #real{position:absolute;top:150px;right:0}"
+        body = '<a id="parked" href="#">Parked</a><button id="real">real</button>'
+        wide = '<div style="position:absolute;top:0;right:0;width:520px;height:10px"></div>'
+        for label, extra in (("no-overflow", ""), ("left-overflow", wide)):
+            with self.subTest(case=label):
+                report = self.measure(self.page(f"parked-{label}.html", 'dir="rtl"', parked, extra + body))
+                self.assertEqual(report["first_action_y"], 150)
+
+    def test_rtl_scrolled_page_keeps_the_fixed_skip_link_skipped(self):
+        # Scrolled down 200 px: a fixed skip link parked above stays skipped
+        # and the control in the left overflow at document y 250 is first.
+        page = self.page("rtl-fixed.html", 'dir="rtl"',
+                         ".wide{position:absolute;top:0;right:0;width:520px;height:10px}"
+                         " #skip{position:fixed;top:-100px;right:0} #pinned{position:fixed;top:400px;left:0}"
+                         " #first{position:absolute;top:250px;right:400px}"
+                         " #real{position:absolute;top:600px;right:0}",
+                         '<div class="wide"></div><a id="skip" href="#">Skip</a>'
+                         '<button id="pinned">left of the screen</button><button id="first">first</button>'
+                         '<button id="real">real</button>'
+                         '<script>addEventListener("load", () => scrollTo(0, 200))</script>')
+        report = self.measure(page)
+        self.assertEqual(report["first_action_y"], 250)
+        self.assertEqual(report["horizontal_overflow_px"], 130)
+
+    def test_vertical_rl_page_starts_at_the_right(self):
+        # Vertical-rl text starts at the right edge: the first column of
+        # controls sits in the left overflow at client x 0 and is the first action.
+        page = self.page("vertical.html", 'style="writing-mode:vertical-rl"',
+                         "body{height:auto} .wide{width:520px;height:10px}",
+                         '<div class="wide"></div><button id="first">first</button>')
+        report = self.measure(page)
+        self.assertEqual(report["first_action_y"], 0)
+        self.assertEqual(report["horizontal_overflow_px"], 250)
+
+    def test_left_to_right_neighbours_are_unchanged(self):
+        # These pass on the code before the right-to-left change as well; they
+        # pin the left-to-right numbers the change must not move.
+        parked = self.page("ltr-parked.html", "",
+                           "#parked{position:absolute;top:20px;left:-200px} #real{position:absolute;top:150px;left:0}",
+                           '<a id="parked" href="#">Parked</a><button id="real">real</button>')
+        self.assertEqual(self.measure(parked)["first_action_y"], 150)
+        hidden = self.page("hidden.html", 'style="overflow-x:hidden"',
+                           "body{overflow-x:hidden} .wide{width:600px;height:20px}",
+                           '<div class="wide"></div><button>b</button>')
+        clip = self.page("clip.html", "", "body{overflow-x:clip} .wide{width:600px;height:20px}",
+                         '<div class="wide"></div><button>b</button>')
+        self.assertEqual(self.measure(hidden)["horizontal_overflow_px"], 0)
+        self.assertEqual(self.measure(clip)["horizontal_overflow_px"], 210)
 
     def test_bad_selector_is_exit_2(self):
         self.refused([str(CLEAN), "--data", "li["], "measuring failed")

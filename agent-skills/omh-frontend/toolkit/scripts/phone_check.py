@@ -36,6 +36,10 @@ ACTION_SELECTOR = "a[href], button"
 NON_TEXT_INPUT_TYPES = ("checkbox", "radio", "button", "submit", "reset", "file", "image", "range",
                         "color", "hidden")
 NO_DATA_HINT = "no row-like element found; pass --data '<css selector>' for the first data row"
+PAST_EDGE_NOTE = ("an element clipped by an overflow:hidden ancestor can appear here; "
+                  "the overflow number above is the verdict, this list only points")
+PAST_LEFT_EDGE_NOTE = ("this page starts at its right edge and overflows to the left, so this lists elements "
+                       "whose left edge passes the viewport's left edge; " + PAST_EDGE_NOTE)
 
 # One fixed script; every user string reaches it as a plain argument, never as code.
 # It classifies every shown element in the page and returns a count over all of
@@ -44,6 +48,17 @@ PAGE_SCRIPT = """
 (opts) => {
   const doc = document.documentElement;
   const sx = window.scrollX, sy = window.scrollY;
+  // The page's start side comes from the writing mode and direction of
+  // <body>, the principal writing mode: <html dir="rtl"><body dir="ltr">
+  // starts at the left, body{direction:rtl} at the right, a vertical-rl page
+  // at the right. A page that starts at its right edge holds that edge at the
+  // scrolling box's client width in page px, cannot scroll past it, and
+  // overflows to the left instead (scrollX goes negative).
+  const principal = getComputedStyle(document.body || doc);
+  const mode = principal.writingMode;
+  const startRight = /^(vertical|sideways)-/.test(mode) ? mode.endsWith('-rl') : principal.direction === 'rtl';
+  const scroller = document.scrollingElement || doc;
+  const startEdge = scroller.clientWidth;
   const r1 = (v) => Math.round(v * 10) / 10;
   const shown = (el) => {
     const r = el.getBoundingClientRect();
@@ -96,8 +111,20 @@ PAGE_SCRIPT = """
     if (!el) return null;
     return r1(el.getBoundingClientRect().top + (fixedToViewport(el) ? 0 : sy));
   };
+  // A box is on the page when it reaches below the top and past the start
+  // edge, the two sides the page cannot scroll beyond. On a page that starts
+  // at the right the start edge is the right one, at `startEdge` in page px;
+  // the left, where such a page overflows, stays reachable. A box fixed to the
+  // viewport is judged by its viewport box: the reader pans the screen over
+  // the layout viewport, client x 0 to innerWidth, and the scroll position
+  // cannot bring anything outside that band into view.
+  const onPageFromRight = (el, r) => {
+    if (fixedToViewport(el)) return r.bottom > 0 && r.left < window.innerWidth && r.right > 0;
+    return r.bottom + sy > 0 && r.left + sx < startEdge;
+  };
   const onPage = (el) => {
     const r = el.getBoundingClientRect();
+    if (startRight) return onPageFromRight(el, r);
     if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;
     return r.bottom + sy > 0 && r.right + sx > 0;
   };
@@ -111,7 +138,12 @@ PAGE_SCRIPT = """
   const out = {};
   const meta = document.querySelector('meta[name=viewport]');
   out.viewport_meta = meta ? meta.getAttribute('content') : null;
-  out.scroll_width = doc.scrollWidth;
+  // On a page that starts at its right edge the root's own scrollWidth misses
+  // an absolutely placed box overflowing to the left; the scrolling element's
+  // scrollWidth is the width the reader pans over. Left-to-right pages keep
+  // the root's number.
+  out.start_right = startRight;
+  out.scroll_width = startRight ? scroller.scrollWidth : doc.scrollWidth;
   out.client_width = doc.clientWidth;
   out.inner_width = window.innerWidth;
   out.document_height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
@@ -121,6 +153,17 @@ PAGE_SCRIPT = """
   for (const el of document.querySelectorAll('body, body *')) {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) continue;
+    if (startRight) {
+      // Mirror of the rule below: the overflowing side is the left. The first
+      // screen of such a page runs from page x 0 to the start edge, so a box
+      // whose left edge is below page x 0 passes the viewport's left edge.
+      const left = r.left + sx;
+      if (left < -0.5) {
+        out.past_right_total += 1;
+        if (out.past_right.length < opts.list_limit) out.past_right.push({path: path(el), left: r1(left)});
+      }
+      continue;
+    }
     const right = r.right + sx;
     if (right > opts.width + 0.5) {
       out.past_right_total += 1;
@@ -193,14 +236,35 @@ def is_text_entry(local_name, input_type=""):
     return local_name != "input" or input_type.lower() not in NON_TEXT_INPUT_TYPES
 
 
-def in_document_area(bottom, right):
+def starts_at_right(writing_mode, direction):
+    """True when a page with this principal (body) writing mode starts at its right edge.
+
+    Horizontal text starts at the right under `direction: rtl`; vertical text
+    starts at the right in the `-rl` modes whatever the direction.
+    """
+    if writing_mode.startswith(("vertical-", "sideways-")):
+        return writing_mode.endswith("-rl")
+    return direction == "rtl"
+
+
+def in_document_area(bottom, right, left=None, start_edge=None, fixed=False):
     """True when a box reaches into the area the reader can get to.
 
-    A skip link parked above or left of the page (negative top and left) is
-    not where the first action sits; the page script skips such controls. The
-    box is in page coordinates, except for a control fixed to the viewport,
-    whose box is its viewport rectangle whatever the scroll position.
+    A skip link parked above or before the page's start edge is not where the
+    first action sits; the page script skips such controls. On a page that
+    starts at the left the start edge is x 0 and the box must reach past it
+    (`right > 0`). On a page that starts at the right, pass the box's `left`
+    and the `start_edge` (the scrolling box's client width): the box must
+    reach left of that edge, which the page cannot scroll past, while the
+    left side it overflows to stays reachable. The box is in page
+    coordinates, except for a control fixed to the viewport (`fixed`), whose
+    box is its viewport rectangle whatever the scroll position. On a page that
+    starts at the right such a box must lie across the band the reader pans
+    over, client x 0 to the layout viewport width; pass that width as
+    `start_edge`.
     """
+    if start_edge is not None:
+        return bottom > 0 and left < start_edge and (not fixed or right > 0)
     return bottom > 0 and right > 0
 
 
@@ -499,8 +563,7 @@ def build_report(args, plan, emu, raw, errors):
         "inner_width": raw["inner_width"],
         "elements_past_right_edge": {
             **finding(raw["past_right_total"], raw["past_right"]),
-            "note": "an element clipped by an overflow:hidden ancestor can appear here; "
-                    "the overflow number above is the verdict, this list only points",
+            "note": PAST_LEFT_EDGE_NOTE if raw.get("start_right") else PAST_EDGE_NOTE,
         },
         "data_selector": raw["data_selector"],
         "first_data_y": first_data if first_data is not None else "not_found",
