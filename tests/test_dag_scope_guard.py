@@ -19,7 +19,9 @@ load_local_package()
 
 import test_dag_tool as dag_tests  # noqa: E402  (helpers only; a module import keeps its tests out of this file)
 from _delegation_state import PARENT, homes, start  # noqa: E402
-from omh.plugin_bundle.omh import dag_run, dag_scope_guard  # noqa: E402
+import json  # noqa: E402
+
+from omh.plugin_bundle.omh import dag_run, dag_scope_guard, toolcall_rules  # noqa: E402
 from omh.plugin_bundle.omh.hooks import nudge_budget, session_attendance  # noqa: E402
 from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call  # noqa: E402
 
@@ -165,6 +167,34 @@ class ReviewFindingsTest(_Run):
               now=time.time())
         self.assertBlocked(self.write("gc-ui", "src/ui.py"), "api")
         self.assertBlocked(self.write("gc-none", "src/other.py"), "api")
+
+
+class AskRuleDoesNotOverrideTheScopeTest(_Run):
+    """A toolcall rule with `"effect": "ask"` is held until this guard has judged the call.
+
+    An `approve` lets the call run after a person's yes, so returning the rule's
+    ask first would turn this guard's refusal into a prompt the person can pass.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        toolcall_rules._reset_state()
+        self.addCleanup(toolcall_rules._reset_state)
+        path = toolcall_rules.toolcall_rules_path(str(self.home.omh))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rule = {"name": "ask-before-write", "pattern": "write_file", "message": "Allow this file write?",
+                "tools": ["write_file"], "effect": "ask", "repeat": "always"}
+        path.write_text(json.dumps({"schema_version": toolcall_rules.TOOLCALL_RULES_SCHEMA_VERSION,
+                                    "rules": [rule]}), encoding="utf-8")
+
+    def test_a_write_outside_the_scope_is_still_blocked(self) -> None:
+        self.assertBlocked(self.write("child-api", "src/other.py"), "api")
+
+    def test_a_write_inside_the_scope_still_asks(self) -> None:
+        directive = self.write("child-api", "src/api.py")
+        assert directive is not None
+        self.assertEqual(directive["action"], "approve")
+        self.assertEqual(directive["rule_key"], "omh-toolcall-rule:ask-before-write")
 
 
 class OtherCallsPassTest(_Run):
