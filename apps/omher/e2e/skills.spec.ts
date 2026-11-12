@@ -78,7 +78,9 @@ test("tokens typed by hand at the start, middle and end are recognised; paths, u
   await openFriren(page);
   const box = page.getByTestId("composer");
   await box.pressSequentially("check /review then /plan it, and /research");
-  await expect(page.getByTestId("skill-picker")).toHaveCount(0); // the caret is past the last one
+  await expect(page.getByTestId("skill-picker")).toBeVisible(); // the caret is still on the last one
+  await box.pressSequentially(" ");
+  await expect(page.getByTestId("skill-picker")).toHaveCount(0); // past it: Enter sends (the trailing space is trimmed)
   await expect(page.getByTestId("composer-mirror").locator(".cm-tok")).toHaveText(["/review", "/plan", "/research"]);
   await page.keyboard.press("Enter");
   await expect.poll(sends).toEqual(["/review /plan /research check then it, and"]);
@@ -302,6 +304,7 @@ test("screenshots: the / picker mid-message, a sent bubble and ./ as plain text,
     await openFriren(page);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const box = page.getByTestId("composer");
+    await box.fill(""); // the other theme's unsent draft is kept across reloads
     await box.pressSequentially("Look at the failing upload test /review and then /pl");
     await expect(options(page).first()).toHaveAttribute("data-name", "plan");
     await shoot(`skills-slash-picker-after-${theme}.png`);
