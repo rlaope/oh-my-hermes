@@ -250,9 +250,20 @@ function OpenPick({ rec, way }: { rec: SessionRec; way: OpenAs }) {
           className={`ss-way-o${way === w ? " on" : ""}`}
           aria-checked={way === w}
           aria-disabled={!has[w] || undefined}
+          // one Tab stop for the pair; the arrow keys move between the two, as in any radio group
+          tabIndex={way === w ? 0 : -1}
           title={tip(w)}
           onClick={() => {
             if (has[w]) getSessions().setOpen(rec.id, w);
+          }}
+          onKeyDown={(e) => {
+            if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+            e.preventDefault();
+            const other = w === "chat" ? "terminal" : "chat";
+            // the focus moves even to a way the agent lacks, so its reason can be read; only one it has is picked
+            // (picking Chat then hands the focus to the box, as a click on Chat does)
+            e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid=session-way-${other}]`)?.focus();
+            if (has[other]) getSessions().setOpen(rec.id, other);
           }}
           data-testid={`session-way-${w}`}
         >

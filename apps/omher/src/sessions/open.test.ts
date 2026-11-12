@@ -81,8 +81,8 @@ function bridgeStub(): BridgeLike {
   return { connect: async () => undefined, onAny: () => () => {}, onStatus: () => () => {}, request: (async () => ({})) as BridgeLike["request"] };
 }
 
-function setup(installed: string[], storedOpens?: Record<string, string>) {
-  const g: Record<string, unknown> = { __omherMockAgents: installed };
+function setup(installed: string[], storedOpens?: Record<string, string>, more: Record<string, unknown> = {}) {
+  const g: Record<string, unknown> = { __omherMockAgents: installed, ...more };
   const host = new MockHost(g);
   const store = createStore(bridgeStub());
   const storage = new Map<string, string>();
@@ -161,6 +161,27 @@ describe("a session saved before this", () => {
     expect(after.ss.getState().list[0]).toMatchObject({ status: "starting", view: "terminal", open: "terminal" });
     expect(after.ss.getState().list[0].paused).toBeUndefined();
     expect(after.calls().some((c) => c.op === "chat.start")).toBe(false);
+  });
+
+  it("a saved terminal session whose agent has no terminal here any more resumes as the agent opens by itself", async () => {
+    // oh-my-hermes was opened as its terminal; since then `omh` was removed and only Hermes is left (no terminal)
+    const { ss, calls } = setup(["claude"], undefined, { __omherMockNoOmh: true });
+    ss.restore([saved({ agent: "omh", open: "terminal", view: "terminal" })]);
+    await ss.loadAgents();
+    expect(ss.getState().list[0]).toMatchObject({ view: "terminal", open: "terminal", paused: true });
+    await ss.resume("s2");
+    await wait(30);
+    const r = ss.getState().list[0];
+    expect(r.open).toBeUndefined();
+    expect(r.view).toBe("chat");
+    expect(calls().filter((c) => c.op === "start")).toEqual([]); // the program that is not there is never started
+
+    // an agent that still has its terminal keeps it
+    const kept = setup(["claude"]);
+    kept.ss.restore([saved({ open: "terminal", view: "terminal" })]);
+    await kept.ss.loadAgents();
+    await kept.ss.resume("s2");
+    expect(kept.ss.getState().list[0]).toMatchObject({ view: "terminal", open: "terminal", status: "starting" });
   });
 
   it("keeps `open` in the snapshot and reads it back; a snapshot without it has none", () => {

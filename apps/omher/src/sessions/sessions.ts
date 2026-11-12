@@ -940,12 +940,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     patchRec(id, { view });
   };
 
+  /** A session opened as a terminal whose agent has no terminal on this computer any more (oh-my-hermes was removed
+   *  and only Hermes is left) goes on as its agent opens by itself, instead of starting a program that is not there. */
+  const lostTerminal = (id: string) => {
+    const r = rec(id);
+    if (!r || r.open !== "terminal" || state.agents === null || opensAs(r.agent, state.agents).terminal) return;
+    const t = terms.get(id);
+    if (t && !t.closed) return; // its program still runs: leave it be
+    disposeTerm(id);
+    // a Hermes chat runs on a bot: the one in view (else the first), as a New session picks it
+    const app = store().getState();
+    const bot = agentDef(r.agent).mode === "hermes" && !r.bot ? (app.selectedBot ?? app.bots[0]?.name) : undefined;
+    patchRec(id, { open: undefined, view: "chat", ...(bot ? { bot } : {}) });
+  };
+
   /**
    * Start an ended session's agent again: a chat agent in the same chat, a terminal agent in a fresh terminal, in
    * the same folder and account. Agents in `CONTINUES` continue their conversation (Claude Code `--resume`, Codex
    * `thread/resume`, OmO `--session`, DSH `--session-id`); the others (pi, oh-my-pi, Grok's terminal) start a new one.
    */
   const restart = async (id: string) => {
+    lostTerminal(id);
     const r = rec(id);
     if (!r || (r.status !== "exited" && r.status !== "failed")) return;
     if (sessionMode(state.agents, r) === "terminal") {
@@ -969,6 +984,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * oh-my-hermes, a chat whose conversation id was never reported), in the same folder and account. Once only.
    */
   const resume = async (id: string) => {
+    lostTerminal(id);
     const r = rec(id);
     if (!r?.paused || procs.has(id) || terms.has(id)) return;
     const mode = sessionMode(state.agents, r);
