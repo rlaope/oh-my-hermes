@@ -61,6 +61,22 @@ describe("terminal settings", () => {
     expect(parseTermSettings({}).optionIsMeta).toBe(true);
   });
 
+  it("copy on select and right-click paste: booleans, off by default; anything else is the default (off)", () => {
+    expect(TERM_DEFAULTS).toMatchObject({ copyOnSelect: false, rightClickPaste: false });
+    expect(parseTermSettings({ copyOnSelect: true, rightClickPaste: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: true });
+    expect(parseTermSettings({ copyOnSelect: false, rightClickPaste: false })).toMatchObject({ copyOnSelect: false, rightClickPaste: false });
+    for (const bad of ["yes", 1, null, [true], {}]) {
+      expect(parseTermSettings({ copyOnSelect: bad }).copyOnSelect).toBe(false);
+      expect(parseTermSettings({ rightClickPaste: bad }).rightClickPaste).toBe(false);
+    }
+    // settings saved before these fields existed read as off: nothing changes for people today
+    const old = { themeDark: "dracula", fontSize: 14, gpu: "off", optionIsMeta: false };
+    expect(parseTermSettings(JSON.stringify(old))).toMatchObject({ copyOnSelect: false, rightClickPaste: false });
+    // one does not switch the other
+    expect(writeTermSettings({ copyOnSelect: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: false });
+    expect(writeTermSettings({ rightClickPaste: true })).toMatchObject({ copyOnSelect: true, rightClickPaste: true });
+  });
+
   it("font size 9 to 24, line height 1 to 2, scrollback 1,000 to 50,000 rows: clamped, or the default for a wrong type", () => {
     expect(parseTermSettings({ fontSize: 2, lineHeight: 0.4, scrollback: 9e9 })).toMatchObject({ fontSize: 9, lineHeight: 1, scrollback: 50000 });
     expect(parseTermSettings({ fontSize: 99, lineHeight: 7, scrollback: 25000.4 })).toMatchObject({ fontSize: 24, lineHeight: 2, scrollback: 25000 });

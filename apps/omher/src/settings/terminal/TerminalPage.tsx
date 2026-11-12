@@ -253,6 +253,16 @@ export function TerminalPage() {
           <Seg small label={t("term.gpu")} value={term.gpu} options={TERM_GPUS.map((g) => ({ value: g, label: t(GPU[g]) }))} onChange={(v) => set({ gpu: v as TermGpu })} testId="term-gpu" />
         </Row>
       </div>
+
+      <div className="st-gh">{t("term.clipboard")}</div>
+      <div className="st-grp">
+        <Row title={t("term.copyOnSelect")} hints={[t("term.copyOnSelectHint")]} testId="term-copy-select-row">
+          <Seg small label={t("term.copyOnSelect")} value={term.copyOnSelect ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ copyOnSelect: v === "on" })} testId="term-copy-select" />
+        </Row>
+        <Row title={t("term.rightClickPaste")} hints={[t("term.rightClickPasteHint")]} testId="term-right-paste-row">
+          <Seg small label={t("term.rightClickPaste")} value={term.rightClickPaste ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ rightClickPaste: v === "on" })} testId="term-right-paste" />
+        </Row>
+      </div>
     </div>
   );
 }

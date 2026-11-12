@@ -24,6 +24,8 @@ import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
+import { FindBar } from "./term/find-bar";
+import { FIND_EVENT, type FindRequest } from "./term/engine-find";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
 import { workingSubagents } from "./SessionPlans";
@@ -42,6 +44,15 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   const box = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const mode = resolveTheme(s.ui.theme);
+  // Cmd/Ctrl+F in this terminal: the engine says so with an event, the bar opens for that terminal only
+  const [find, setFind] = useState<FindRequest | null>(null);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const on = (e: Event) => setFind((e as CustomEvent<FindRequest>).detail);
+    el.addEventListener(FIND_EVENT, on);
+    return () => el.removeEventListener(FIND_EVENT, on);
+  }, []);
   // A file dropped on the terminal, or a picture pasted there, is saved and its path typed at the prompt (as a
   // system terminal types a dropped file's path). Plain text pastes stay xterm's own.
   useEffect(() => {
@@ -89,6 +100,7 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   return (
     <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
+      {find && <FindBar req={find} onClose={() => setFind(null)} />}
     </div>
   );
 }

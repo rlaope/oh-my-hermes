@@ -36,6 +36,10 @@ export interface TermSettings {
   optionIsMeta: boolean;
   /** The GPU renderer: `auto` uses it where it is known to work and falls back by itself. */
   gpu: TermGpu;
+  /** Releasing the mouse on a selection copies it. Off: nothing is copied until the person copies. */
+  copyOnSelect: boolean;
+  /** A right click pastes the clipboard (Ctrl+right-click keeps the menu). Off: right click is the program's or the menu's. */
+  rightClickPaste: boolean;
 }
 
 export const TERM_KEY = "omher.term";
@@ -53,6 +57,8 @@ export const TERM_DEFAULTS: TermSettings = {
   padding: 16,
   optionIsMeta: true,
   gpu: "auto",
+  copyOnSelect: false,
+  rightClickPaste: false,
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -88,6 +94,8 @@ export function parseTermSettings(raw: unknown): TermSettings {
     padding: Math.round(num(o.padding, TERM_PADDING.min, TERM_PADDING.max, d.padding)),
     optionIsMeta: bool(o.optionIsMeta, d.optionIsMeta),
     gpu: one(o.gpu, TERM_GPUS, d.gpu),
+    copyOnSelect: bool(o.copyOnSelect, d.copyOnSelect),
+    rightClickPaste: bool(o.rightClickPaste, d.rightClickPaste),
   };
 }
 

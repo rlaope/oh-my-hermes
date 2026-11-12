@@ -10,6 +10,9 @@ import type { Terminal } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
 import { onTermSettings, type TermSettings } from "./settings";
+import { attachLinks } from "./engine-links";
+import { attachInput } from "./engine-input";
+import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
 let webglLoad: Promise<typeof WebglAddon> | null = null;
@@ -167,9 +170,19 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
     },
     release, // the chunk would not load: xterm's own widths
   );
+  // links (Cmd/Ctrl+click), find (Cmd/Ctrl+F, the bar listens for the event) and the two clipboard settings
+  const finder = makeFinder(term);
+  const undoLinks = attachLinks(term);
+  const undoInput = attachInput(term, el, () => {
+    const detail: FindRequest = { term, finder };
+    el.dispatchEvent(new CustomEvent<FindRequest>(FIND_EVENT, { bubbles: true, detail }));
+  });
   stopSettings ??= onTermSettings(reconsider);
   attach(s);
   return () => {
+    undoInput();
+    undoLinks();
+    finder.dispose();
     s.gone = true;
     s.held = null;
     if (s.retry) clearTimeout(s.retry);
