@@ -17,7 +17,9 @@ export type ChatInput =
   /** the permission mode, one the shell offers for the agent (controls.ts MODES) */
   | { kind: "mode"; mode: string }
   /** reasoning effort, one of the levels the agent reported */
-  | { kind: "effort"; effort: string };
+  | { kind: "effort"; effort: string }
+  /** take back the last message, through the agent's own rewind (Claude Code and Codex) */
+  | { kind: "rewind" };
 
 /** An event from a chat agent: the bot chat's events (`turn.start`, `tool.start`, `delta`, `message`,
  *  `approval.request`, `turn.end`, …) plus `session.info`, `session.models`, `session.error` and, once,
@@ -422,6 +424,33 @@ const MOCK_MODES: Partial<Record<AgentId, string[]>> = { claude: ["default", "pl
  *  short answer after one tool step. A message sent while a turn runs is queued and answered after it, as Claude
  *  Code and OmO do; Stop drops it. `noChat`: an old version that never speaks its chat protocol, ended by the
  *  shell's start deadline (shortened here). `gone`: a Codex resume onto a thread that no longer exists. */
+/** The agents that can take a message back (their own rewind): Claude Code and Codex. */
+const MOCK_REWINDS: AgentId[] = ["claude", "codex"];
+
+/** A real two-file edit as the Claude adapter emitted it (claude-12-work.jsonl, paths made relative). */
+const MOCK_WORK = {
+  thinking: ["Three small steps: a docstring on `add`, a new `mul`, ", "then list the functions in README.md."],
+  todo: ["Add docstring to add() in calc.py", "Add mul(a, b) function to calc.py", "Update README.md with function list"],
+  edits: [
+    {
+      id: "e-1",
+      detail: "calc.py +2 -1",
+      file: { path: "calc.py", kind: "update", lines: ["@@ -1,4 +1,5 @@", " def add(a, b):", '+    """Return the sum of a and b."""', "     return a + b", " ", " "], added: 1, removed: 0 },
+    },
+    {
+      id: "e-2",
+      detail: "calc.py +5 -2",
+      file: { path: "calc.py", kind: "update", lines: ["@@ -5,3 +5,7 @@", " def sub(a, b):", "     return a - b", "+", "+", "+def mul(a, b):", "+    return a * b"], added: 4, removed: 0 },
+    },
+    {
+      id: "e-3",
+      detail: "README.md +3 -1",
+      file: { path: "README.md", kind: "update", lines: ["@@ -1,3 +1,5 @@", " # calc", " ", " Tiny math helpers.", "+", "+Functions: `add(a, b)`, `sub(a, b)`, `mul(a, b)`"], added: 2, removed: 0 },
+    },
+  ],
+  answer: "Done. `add` has a docstring, `mul(a, b)` is in calc.py, and README.md lists the functions:\n\n```python\ndef mul(a, b):\n    return a * b\n```",
+};
+
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
@@ -440,6 +469,8 @@ class MockChat {
   /** "/stoplate": the command still runs after Stop and ends on its own later */
   private lateStep = "";
   private dead = false;
+  /** messages this process took, for a rewind (Claude Code and Codex only) */
+  private sent = 0;
   constructor(
     private agent: AgentId,
     private emit: (ev: ChatEvent) => void,
@@ -510,6 +541,7 @@ class MockChat {
     // Stop drops what waited (OmO clears its queue; Codex never recorded it)
     if (outcome === "interrupted") for (const q of next) this.emit({ event: "message.dropped", id: q.id });
     this.emit({ event: "turn.end", outcome, ...(error ? { error } : {}) });
+    if (MOCK_REWINDS.includes(this.agent)) this.emit({ event: "session.info", rewind: this.sent > 0 });
     const c = MOCK_CONTROLS[this.agent];
     if (c) {
       this.used += 6_200;
@@ -704,11 +736,43 @@ class MockChat {
         for (let k = 0; k < 40; k++) this.at(100 + k * 250, () => this.emit({ event: "delta", text: `line ${k + 1}\n` }));
         return;
       }
+      this.sent++;
+      if (text.startsWith("/work")) {
+        // the events the Claude adapter emitted for a real two-file edit (Claude Code 2.1.322, claude-12-work.jsonl):
+        // thinking text, its todo list (TaskCreate, then TaskUpdate per item), an Edit per file with its change,
+        // then the answer. "/work hold" stops before the last item and the answer.
+        const hold = text.includes("hold");
+        const plan = (s: string[]) => this.emit({ event: "plan", items: MOCK_WORK.todo.map((t, k) => ({ text: t, status: s[k] })) });
+        MOCK_WORK.thinking.forEach((t, k) => this.at(30 + k * 20, () => this.emit({ event: "thinking", text: t })));
+        this.at(120, () => plan(["pending", "pending", "pending"]));
+        this.at(160, () => plan(["in_progress", "pending", "pending"]));
+        // held: the last edit has not run yet (the list shows it under way)
+        MOCK_WORK.edits.slice(0, hold ? -1 : undefined).forEach((e, k) => {
+          const at = 200 + k * 160;
+          this.at(at, () => this.emit({ event: "tool.start", tool_id: e.id, name: "patch", detail: e.detail }));
+          this.at(at + 10, () => this.emit({ event: "tool.diff", tool_id: e.id, files: [e.file] }));
+          this.at(at + 80, () => this.emit({ event: "tool.end", tool_id: e.id, name: "", ok: true, ms: 70 }));
+          this.at(at + 100, () => plan(MOCK_WORK.todo.map((_, j) => (j <= k ? "completed" : j === k + 1 ? "in_progress" : "pending"))));
+        });
+        if (hold) return;
+        this.say(MOCK_WORK.answer, 620);
+        this.at(1000, () => this.end("done"));
+        return;
+      }
       this.at(60, () => this.emit({ event: "tool.start", tool_id: `t${this.seq}`, name: "read_file", detail: "README.md" }));
       this.at(300, () => this.emit({ event: "tool.end", tool_id: `t${this.seq}`, name: "", ok: true, ms: 240 }));
       const pics = i.images?.length ? ` (${i.images.length} picture${i.images.length > 1 ? "s" : ""})` : "";
       this.say(`(mock ${agentDef(this.agent).label}) You said: ${text}${pics}`, 360);
       this.at(800, () => this.end("done"));
+    } else if (i.kind === "rewind") {
+      if (!MOCK_REWINDS.includes(this.agent)) throw new Error(`${agentDef(this.agent).label} cannot take a message back here`);
+      if (this.turn) throw new Error("wait until the turn ends");
+      if (this.sent < 1) throw new Error("nothing to take back");
+      this.sent--;
+      this.at(30, () => {
+        this.emit({ event: "rewound" });
+        this.emit({ event: "session.info", rewind: this.sent > 0 });
+      });
     } else if (i.kind === "interrupt") {
       if (!this.turn) throw new Error("nothing is running");
       this.at(20, () => {
