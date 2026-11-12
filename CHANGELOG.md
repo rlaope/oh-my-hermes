@@ -112,20 +112,19 @@ All notable changes will be documented here.
   62 of 123 OMH skills (`omh-plan` and all eight `ulw-*` among them) were listed
   by name only. The Claude copy is now its own generated pack,
   `.claude/agent-skills/`, which `.claude/install.sh`, `install.ps1` and
-  `omh install --target agents` write to `.claude/skills`. It lists `omh-plan`,
-  `omh-code-review` and the eight `ulw-*` skills, and flags the other 113
-  `disable-model-invocation: true`; they are still run by typing `/<name>`. A
-  new `omh-index` skill lists those 113 with each one's description and path.
-  On Claude Code 2.1.322 with `claude-opus-5-5` and an empty config directory
-  (2026-11-12), `/context` shows 11 of 11 OMH skills with a description and a
-  3.2k skills listing, where it showed 61 of 123 and 9.9k. In four task
-  prompts whose fitting skill is in the index, the model loaded that skill in
-  0 of 4 runs on this pack and 3 of 4 on the old one; see
-  `docs/AGENT-SKILLS.md#claude-code-skill-listing`. `.agents/skills` and
-  the Hermes skills keep their bytes. An existing `.claude/skills` mirror from
+  `omh install --target agents` write to `.claude/skills`. It keeps all 123
+  skills and cuts each description to its lead, at most 160 characters; the
+  trigger phrases stay in the portable pack. On Claude Code 2.1.322 with
+  `claude-opus-5-5` and an empty config directory (2026-11-13), `/context`
+  shows 123 of 123 OMH skills with a description in an 8.5k listing, where it
+  showed 61 of 123 in 9.9k. In four task prompts the model loaded the fitting
+  skill in 4 of 4 runs on this pack and 3 of 4 on the old one; see
+  `docs/AGENT-SKILLS.md#claude-code-skill-listing`. A listing already full
+  from other skills stays full. `.agents/skills` and the Hermes skills keep
+  their bytes. An existing `.claude/skills` mirror from
   `omh install --target agents` reports stale until that install is rerun (a
-  user-scope one is also refreshed by `omh update`). `tools/claude_context_skills.py` counts the
-  skill rows of a saved `/context` output.
+  user-scope one is also refreshed by `omh update`). `tools/claude_context_skills.py`
+  counts the skill rows of a saved `/context` output.
 
 - **A session in omher shows the subagents its agent starts, and opens Plans
   for that session.** Claude Code's subagent messages were dropped and a Task

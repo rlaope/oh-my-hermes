@@ -164,44 +164,47 @@ budget scales at 1% of the model's context window."
 
 The whole portable pack did not fit. So the Claude copy, generated into
 `.claude/agent-skills/` and installed by `.claude/install.sh`, `.ps1` and the
-CLI's `.claude/skills` root, makes one change: only the ten skills in
-`CLAUDE_DIRECT_SKILLS` (`src/skills/catalog_portable.py`) are listed with their
-descriptions. They are `omh-plan`, `omh-code-review` and the eight `ulw-*`
-skills. Every other skill gets `disable-model-invocation: true`. That
-documented key means "Claude can't invoke the skill on its own", and its
-description is not in context ([Control who invokes a
-skill](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill)).
-Typing `/<name>` still runs it. One generated skill, `omh-index`, lists those
-skills with their full descriptions and a `file: ../<name>/SKILL.md` path
-relative to the index, so it resolves in repo and in user scope. Bodies,
-references and toolkit files are otherwise byte-identical to `agent-skills/`.
-`.agents/skills` and the Hermes `skills/` tree do not change.
+CLI's `.claude/skills` root, changes one thing: each `SKILL.md`'s frontmatter
+`description:` is cut to its lead (the text before the generated ` Use when the
+user says:` trigger list) and, if that is still longer than
+`CLAUDE_DESCRIPTION_CAP` (160 characters, `src/install/agent_skills_projection.py`),
+to the last clause boundary under the cap, else the last word, never ending on
+a function word, closed with a full stop. The leading `[omh] ` stays. All 123
+skills stay listed and model-invocable; no flag and no extra skill is added.
+The trigger phrases remain in the portable pack and in the skill bodies.
+Bodies, references and toolkit files are byte-identical to `agent-skills/`,
+and `.agents/skills` and the Hermes `skills/` tree do not change. The built
+descriptions run from 61 to 160 characters (mean 134).
 
-Measured on 2026-11-12 with Claude Code 2.1.322 and `claude-opus-5-5` (1M
-context), in a fresh git project after `.claude/install.sh`:
+Measured on 2026-11-13 with Claude Code 2.1.322 and `claude-opus-5-5` (1M
+context), in a fresh git project after `.claude/install.sh`, with an empty
+`CLAUDE_CONFIG_DIR`:
 
-| Setting | Pack | Skills listing | OMH rows | With a description | Name-only (`< 20`) |
-| --- | --- | --- | --- | --- | --- |
-| Empty `CLAUDE_CONFIG_DIR` | before this change | 9.9k | 123 | 61 | 62 |
-| Empty `CLAUDE_CONFIG_DIR` | this pack | 3.2k | 11 | 11 | 0 |
-| `--setting-sources project`, signed in | before this change | 9.9k | 123 | 60 | 63 |
-| `--setting-sources project`, signed in | this pack | 3.4k | 11 | 11 | 0 |
-| User scope (`install.sh --user`), scratch `HOME` | this pack | 3.2k | 11 (User) | 11 | 0 |
+| Pack | Skills listing | OMH rows | With a description | Name-only (`< 20`) |
+| --- | --- | --- | --- | --- |
+| before this change | 9.9k | 123 | 61 | 62 |
+| this pack (cap 160) | 8.5k | 123 | 123 | 0 |
 
-Before this change, the rows that lost their description were everything from
-`omh-localization-review` on, `omh-plan` and all eight `ulw-*` among them. A
-`< 20` row can also be a description of about 45 characters or less. Every
-listed OMH description in this pack is longer than that, so for these rows
-`< 20` means the description was dropped.
+The same pack in user scope (`install.sh --user`, scratch `HOME`) lists 123 of
+123 with a description. Before this change, the rows that lost their
+description were everything from `omh-localization-review` on, `omh-plan` and
+all eight `ulw-*` among them. A `< 20` row can also be a description of about
+45 characters or less; the shortest description here is 61, so `< 20` means
+dropped.
 
-**What a model picks is a different measurement.** In eight runs (four task
-prompts whose fitting skill is in the index, once per pack;
-`claude -p --setting-sources project --tools "Read,Skill" --max-turns 4`, same
-version and model), the model loaded the fitting skill in 3 of 4 runs on the
-pack before this change and in 0 of 4 on this pack. On this pack it answered
-directly without opening `omh-index`. Four prompts are too few to give a rate,
-but the index route is not taken unprompted the way a listed description is.
-A typed `/omh-accessibility-audit` still delivered that skill's body.
+**What a model picks is a different measurement.** In four task prompts, one
+run each (`claude -p --setting-sources project --tools "Read,Skill" --max-turns 4`,
+same version and model, 2026-11-13), the model loaded the fitting skill in 4 of
+4 runs on this pack; on the pack before this change it did in 3 of 4
+(2026-11-12). Four prompts are too few to give a rate.
+
+**Tried and rejected.** The first design flagged 113 skills
+`disable-model-invocation: true` and listed them in one generated `omh-index`
+skill. It listed 11 skills (3.2k), but in the same four prompts the model
+loaded the fitting skill in 0 of 4 runs and never opened the index. The
+index idea came from `yetone/magpie` (MIT, commit
+`5e933e153a87c4017a19502e1d2e87aa714572b9`); concept only, reimplemented and
+then dropped.
 
 To measure your own setup, run `/context` in the project and count the rows:
 
@@ -214,13 +217,12 @@ The script prints, per source, how many skills are listed, how many have a
 description, and how many are name-only. It reads the saved file and does not
 run `claude`.
 
-**When your own listing is already full.** With the owner's real home on the
-same date (55 user skills, 124 plugin skills, listing 9.9k), an empty project
-kept 35 of 55 user descriptions. With the pack before this change, the project
-had 2 of 123 OMH descriptions and the user skills dropped to 28. With this
-pack, the user skills kept 35. Of the 11 OMH rows only `omh-index` kept its
-description; `omh-plan` and the `ulw-*` skills were name-only. The pack cannot
-create budget that your other skills already use. Claude Code documents these
+**When your own listing is already full.** The shorter descriptions do not
+create budget. With the owner's real home on 2026-11-13 (55 user skills, 124
+plugin skills, listing 9.9k), an empty project kept 35 of 55 user
+descriptions; with the pack before this change the user skills kept 25 of 55
+and the project 5 of 123 OMH descriptions; with this pack, 28 of 55 and 6 of
+123. A full listing is not fixed by this change. Claude Code documents these
 settings for it:
 
 - `skillListingBudgetFraction` raises the share of the context window the

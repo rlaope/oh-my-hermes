@@ -536,7 +536,10 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             # One receipt per root, same target_dirs; the mirror lists the Claude copy's bytes.
             self.assertEqual(json.loads((mirror / MANIFEST_NAME).read_text())["target_dirs"], manifest["target_dirs"])
             self.assertFalse((mirror / "ulw-work/SKILL.md").is_symlink())
-            self.assertEqual((target / "ulw-work/SKILL.md").read_bytes(), (mirror / "ulw-work/SKILL.md").read_bytes())
+            from omh.install.agent_skills_projection import claude_skill_files
+
+            self.assertEqual((mirror / "ulw-work/SKILL.md").read_text(), claude_skill_files()["ulw-work/SKILL.md"])
+            self.assertNotEqual((target / "ulw-work/SKILL.md").read_bytes(), (mirror / "ulw-work/SKILL.md").read_bytes())
             (mirror / "ulw-work/SKILL.md").write_bytes(b"local mirror edit")
             status = agent_skills_status(target, mirror=mirror)
             self.assertEqual(status["drift"], "locally_modified")
