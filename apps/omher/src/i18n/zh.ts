@@ -114,8 +114,8 @@ export const zh: Record<Key, string> = {
   "omhp.ready": "oh-my-hermes 已就绪。要设置模型吗？",
   "omhp.fill": "放入输入框",
   "omhp.ask": "用这台电脑上已有的提供商帮我设置模型。应用任何更改之前，先告诉我会改动什么。",
-  "omhp.restart": "{bot} 需要重启才能使用 oh-my-hermes：{cmd}",
-  "omhp.tools": "oh-my-hermes 的其余部分（工具和子代理计划）在 {bot} 重启后可用：{cmd}",
+  "omhp.noSkills": "{bot} 还没有列出 oh-my-hermes 的技能。",
+  "omhp.tools": "{bot} 还没有 oh-my-hermes 的工具（子代理计划等）。模型设置不需要这些工具。",
   "onb.botsHint": "每个机器人是一个 Hermes 配置档。用上方的 + 添加。",
   "onb.sessionsHint": "在文件夹中以聊天方式运行编程代理。",
 

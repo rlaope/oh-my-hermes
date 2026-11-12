@@ -2,7 +2,7 @@
 // line is offered once (pending -> done on this computer), and a bot whose skills never show it gets the restart line.
 import { describe, expect, it } from "vitest";
 import type { PluginRow, Skill } from "../lib/protocol";
-import { createOmhPrompt, modelSetupCommand, omhPluginLoaded, PROMPT_KEY, promptText, restartCommand } from "./omhPrompt";
+import { createOmhPrompt, modelSetupCommand, omhPluginLoaded, PROMPT_KEY, promptText } from "./omhPrompt";
 
 const mem = (init: Record<string, string> = {}) => {
   const m = new Map(Object.entries(init));
@@ -41,11 +41,6 @@ describe("the model-setup command", () => {
     const text = promptText("/omh-model-setup");
     expect(text.startsWith("/omh-model-setup Set up my models")).toBe(true);
     expect(text).not.toMatch(/key|token|secret|password/i);
-  });
-
-  it("restart command: Hermes' own, the profile named unless it is the default", () => {
-    expect(restartCommand({ name: "kami", is_default: false })).toBe("hermes -p kami gateway restart");
-    expect(restartCommand({ name: "default", is_default: true })).toBe("hermes gateway restart");
   });
 });
 

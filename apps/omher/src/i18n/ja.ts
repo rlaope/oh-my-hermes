@@ -114,8 +114,8 @@ export const ja: Record<Key, string> = {
   "omhp.ready": "oh-my-hermes の準備ができました。モデルを設定しますか？",
   "omhp.fill": "入力欄に入れる",
   "omhp.ask": "このコンピューターにすでにあるプロバイダーで、私のモデルを設定して。適用する前に、何が変わるかを先に見せて。",
-  "omhp.restart": "{bot} で oh-my-hermes を使うには再起動が必要です: {cmd}",
-  "omhp.tools": "oh-my-hermes の残り（ツールとサブエージェントの計画）は {bot} の再起動後に使えます: {cmd}",
+  "omhp.noSkills": "{bot} にはまだ oh-my-hermes のスキルが見えません。",
+  "omhp.tools": "{bot} にはまだ oh-my-hermes のツール（サブエージェントの計画など）がありません。モデル設定はツールなしでできます。",
   "onb.botsHint": "ボットは Hermes プロファイルです。上の + で追加します。",
   "onb.sessionsHint": "フォルダでコーディングエージェントをチャットとして実行します。",
 

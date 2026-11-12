@@ -114,8 +114,8 @@ export const ko: Record<Key, string> = {
   "omhp.ready": "oh-my-hermes가 준비됐어요. 모델을 설정할까요?",
   "omhp.fill": "입력창에 넣기",
   "omhp.ask": "이 컴퓨터에 이미 있는 프로바이더로 내 모델을 설정해 줘. 적용하기 전에 무엇이 바뀌는지 먼저 보여 줘.",
-  "omhp.restart": "{bot} 봇이 oh-my-hermes를 쓰려면 다시 시작해야 해요: {cmd}",
-  "omhp.tools": "oh-my-hermes의 나머지(도구와 서브에이전트 계획)는 {bot} 봇을 다시 시작하면 들어와요: {cmd}",
+  "omhp.noSkills": "{bot} 봇에는 아직 oh-my-hermes 스킬이 보이지 않아요.",
+  "omhp.tools": "{bot} 봇에는 아직 oh-my-hermes 도구(서브에이전트 계획 등)가 없어요. 모델 설정은 도구 없이도 돼요.",
   "onb.botsHint": "봇 하나가 Hermes 프로필 하나예요. 위의 +로 추가해요.",
   "onb.sessionsHint": "폴더에서 코딩 에이전트를 채팅으로 실행해요.",
 

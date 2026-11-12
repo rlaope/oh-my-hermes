@@ -42,6 +42,15 @@ const READY = {
   ja: "oh-my-hermes の準備ができました。モデルを設定しますか？",
   zh: "oh-my-hermes 已就绪。要设置模型吗？",
 } as const;
+const NO_SKILLS = {
+  en: "Kami does not list oh-my-hermes' skills yet.",
+  ko: "Kami 봇에는 아직 oh-my-hermes 스킬이 보이지 않아요.",
+  ja: "Kami にはまだ oh-my-hermes のスキルが見えません。",
+  zh: "Kami 还没有列出 oh-my-hermes 的技能。",
+} as const;
+const TOOLS = {
+  en: "Friren does not have oh-my-hermes' tools yet (subagent plans and the rest). Model setup works without them.",
+} as const;
 type Lang = keyof typeof ASK;
 
 test.beforeEach(async () => {
@@ -177,10 +186,9 @@ for (const theme of ["dark", "light"]) {
     await expect(line).toContainText(READY.en);
     await expect(page.getByTestId("omh-prompt-fill")).toHaveText("Put it in the message box");
     const tools = page.getByTestId("omh-prompt-tools");
-    await expect(tools).toHaveText(
-      "The rest of oh-my-hermes (its tools and subagent plans) reaches Friren after a restart: hermes -p friren gateway restart",
-    );
-    await expect(tools.locator("code")).toHaveText("hermes -p friren gateway restart");
+    await expect(tools).toHaveText(TOOLS.en);
+    await expect(tools).not.toContainText("restart"); // no command: one bot's restart does not load a new plugin
+    await expect(tools.locator("code")).toHaveCount(0);
     const sub = await tools.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const a = document.querySelector("[data-testid=omh-prompt]")!.getBoundingClientRect();
@@ -228,7 +236,7 @@ for (const theme of ["dark", "light"]) {
     expect((await sends()).length).toBe(before);
   });
 
-  test(`a bot whose skills never show the command: the restart line with the exact command (${theme})`, async ({ page }) => {
+  test(`a bot whose skills never show the command: one quiet line says so, naming no command (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 1180, height: 760 });
     await open(page, { theme });
     await installFromPopover(page, "never");
@@ -237,8 +245,8 @@ for (const theme of ["dark", "light"]) {
     const line = page.getByTestId("omh-prompt-restart");
     await expect(line).toBeVisible();
     await shot(page, "restart", theme, "after");
-    await expect(line).toHaveText("Kami needs a restart to get oh-my-hermes: hermes -p kami gateway restart");
-    await expect(line.locator("code")).toHaveText("hermes -p kami gateway restart");
+    await expect(line).toHaveText(NO_SKILLS.en);
+    await expect(line.locator("code")).toHaveCount(0);
     await expect(page.getByTestId("omh-prompt")).toHaveCount(0);
     noOverlap(await geometry(page));
     const ops = (await mock("mock.calls")).calls!.map((c) => c.op);
@@ -266,8 +274,7 @@ test("a bot whose gateway loaded oh-my-hermes' plugin gets no restart line; one 
   await expect(page.getByTestId("composer")).toHaveValue(`/omh-model-setup ${ASK.en}`);
   await expect(page.getByTestId("omh-prompt")).toHaveCount(0);
   const rest = page.getByTestId("omh-prompt-restart");
-  await expect(rest).toContainText("hermes -p kami gateway restart");
-  await expect(rest).toContainText("The rest of oh-my-hermes");
+  await expect(rest).toHaveText(TOOLS.en.replace("Friren", "Kami"));
   expect((await sends()).length).toBe(0);
   const ops = (await mock("mock.calls")).calls!.map((c) => c.op);
   expect(ops).toContain("plugins.list"); // the running gateway's own record was asked
@@ -367,16 +374,11 @@ for (const lang of ["ko", "ja", "zh"] as const) {
   });
 }
 
-const RESTART = {
-  ko: "Kami 봇이 oh-my-hermes를 쓰려면 다시 시작해야 해요: hermes -p kami gateway restart",
-  ja: "Kami で oh-my-hermes を使うには再起動が必要です: hermes -p kami gateway restart",
-  zh: "Kami 需要重启才能使用 oh-my-hermes：hermes -p kami gateway restart",
-} as const;
 for (const lang of ["ko", "ja", "zh"] as const) {
-  test(`the restart line in ${lang} names the bot and the exact command`, async ({ page }) => {
+  test(`the "not yet" lines in ${lang} name the bot and no command`, async ({ page }) => {
     await open(page, { lang });
     await installFromPopover(page, "never");
-    await expect(page.getByTestId("omh-prompt-restart")).toHaveText(RESTART[lang]);
+    await expect(page.getByTestId("omh-prompt-restart")).toHaveText(NO_SKILLS[lang]);
   });
 }
 

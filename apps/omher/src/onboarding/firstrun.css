@@ -32,12 +32,6 @@
 .omhp-t {
   min-width: 0;
 }
-.omhp-cmd {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--body);
-  user-select: all;
-}
 .omhp-go {
   flex: none;
   padding: 1px 4px;

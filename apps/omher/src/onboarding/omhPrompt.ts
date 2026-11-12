@@ -2,27 +2,30 @@
 // oh-my-hermes), the app shows a bot's chat with one quiet line above the composer, once: pressing it puts a
 // model-setup request in the composer (the bot's own `/…model-setup` command from `skills.list`, then one sentence
 // in the app's language). Nothing is sent; the person reads it, may edit it and presses Enter. The line is offered
-// only when the bot's skills really hold that command (asked again for about a minute); else it says the bot needs
-// a restart, with the exact command as text. omher restarts nothing and runs nothing for it.
+// only when the bot's skills really hold that command (asked again for about a minute); else it says only that the
+// bot does not list oh-my-hermes' skills yet. omher restarts and reloads nothing and runs nothing for it.
 //
 // A gateway that was already running when oh-my-hermes was installed sees its skills at once (Hermes rescans skill
 // folders) but not its plugin: plugins load once per gateway process. The model-setup skill needs no `omh_*` tool
 // (it reads with the terminal and Hermes' own commands), so the ready line shows at once; when the bot's own gateway
 // lists the `omh` plugin as enabled with no tool of its own registered (`plugins.manage list`, the loader's record),
-// a second quiet line under it says the rest of oh-my-hermes arrives after a restart, with the command as text.
+// a second quiet line under it says the bot does not have oh-my-hermes' tools yet. It names no command: restarting
+// one named bot does not load a new plugin (Hermes' `reload-plugins` or a host-gateway restart does), and the action
+// for it attaches at OmhLoadAction.
 //
 // Kept on this computer under PROMPT_KEY: "pending" from the install's success until the person presses the action
 // or the x, then "done" for good. A person who had oh-my-hermes all along, or installed it outside omher, never has
 // "pending", so never sees the line.
 import { useSyncExternalStore } from "react";
-import type { Bot, PluginRow, Skill } from "../lib/protocol";
+import type { PluginRow, Skill } from "../lib/protocol";
 import { getStore } from "../state/store";
 import { t } from "../i18n";
 
 export const PROMPT_KEY = "omher.omhPrompt";
 
 /** off: nothing to show. pending: the install ended well, no check yet. checking: asking the bot's skills.
- *  ready: the line with the action. restart: the bot's skills never showed the command; the restart line. */
+ *  ready: the line with the action. restart: what is still missing in the bot (its skills never showed the
+ *  command, or, after the action, its gateway has not loaded oh-my-hermes' tools); no command is named. */
 export type PromptPhase = "off" | "pending" | "checking" | "ready" | "restart";
 
 export interface PromptState {
@@ -31,7 +34,7 @@ export interface PromptState {
   bot: string | null;
   /** The command exactly as `skills.list` names it, with its slash (`/omh-model-setup`). */
   command: string | null;
-  /** With `ready`: the bot's running gateway has not loaded the oh-my-hermes plugin yet (a restart loads it). */
+  /** With `ready`: the bot's running gateway has not loaded the oh-my-hermes plugin yet. */
   restart: boolean;
 }
 
@@ -56,11 +59,6 @@ export function omhPluginLoaded(rows: readonly PluginRow[] | null): boolean | nu
   const omh = rows?.find((r) => r.name === "omh" || r.key === "omh");
   if (!omh || !omh.enabled || typeof omh.live_tools !== "number") return null;
   return omh.live_tools > 0;
-}
-
-/** The command a person runs to restart this bot's gateway (Hermes' own; omher never runs it). */
-export function restartCommand(bot: Pick<Bot, "name" | "is_default">): string {
-  return bot.is_default ? "hermes gateway restart" : `hermes -p ${bot.name} gateway restart`;
 }
 
 type Kv = Pick<Storage, "getItem" | "setItem">;
@@ -134,7 +132,7 @@ export function createOmhPrompt(deps: PromptDeps) {
     set({ phase: "off" });
   };
 
-  /** The action: the ready line goes for good; a restart line under it stays until its x (this run only). */
+  /** The action: the ready line goes for good; the "no tools yet" line under it stays until its x (this run only). */
   const used = () => {
     if (state.phase === "ready" && state.restart) {
       write("done");

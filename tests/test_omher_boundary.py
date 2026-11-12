@@ -103,7 +103,7 @@ RULES = (
     "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
     "then the folders the profile's `config.yaml` names in `skills.external_dirs`, where oh-my-hermes registers its skills",
     "pressing it puts the model-setup skill's `/command` and one sentence into the composer, and nothing is sent;",
-    "omher restarts nothing and runs nothing for it.",
+    "omher restarts and reloads nothing and runs nothing for it.",
     "omher asks that gateway's own `plugins.manage` `list` (rule 25) and reads only whether the `omh` row is enabled",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
