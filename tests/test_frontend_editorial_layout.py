@@ -45,11 +45,14 @@ class EditorialLayoutReferenceTests(unittest.TestCase):
             "Image placement",
             "Signature moment",
             "Density",
-            "Corner / navigation",
+            "Screen corners and navigation",
         ):
             self.assertIn(f"**{axis}**", self.body)
         self.assertIn("one line of reason", self.body)
         self.assertIn("not a closed list", self.body)
+        # The corner axis is about what sits at the screen edges, never radius:
+        # radius belongs to the contract's Shapes section.
+        self.assertIn("Corner radius is not this axis", self.body)
 
     def test_differ_from_previous_output(self) -> None:
         self.assertIn("change at least three of the seven axes", self.body)

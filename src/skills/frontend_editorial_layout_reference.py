@@ -34,7 +34,7 @@ list; a value that fits the subject and is not listed is allowed.
    full-bleed image with a text panel, a product capture under one line, an
    index of what the page contains.
 3. **Section boundary** - thin rule, a change of ground, empty space only, a
-   large running number, a label in the margin, a hard edge between bands.
+   label in the margin, a full-width image, a hard edge between bands.
 4. **Image placement** - full-bleed, inset with a caption, split against the
    text, overlapping a type block, a strip of small frames, one image per
    section pinned while text moves.
@@ -43,9 +43,11 @@ list; a value that fits the subject and is not listed is allowed.
    closing line.
 6. **Density** - sparse with one idea per screen, a steady reading column,
    mixed with one dense block per section, dense and tabular throughout.
-7. **Corner / navigation** - sharp corners with a top bar, soft corners with a
-   floating bar, a side rail, a text-only index, navigation folded into the
-   first screen.
+7. **Screen corners and navigation** - what sits at the edges of the screen:
+   one top bar, an identity label in one corner with the main action in the
+   opposite one, a floating bar, a side rail, a text-only index, navigation
+   folded into the first screen. Corner radius is not this axis; it belongs
+   to the contract's Shapes section.
 
 State the seven values and their reasons in the plan before building. A value
 with no reason from the subject is the unmade decision this list exists to
@@ -74,8 +76,8 @@ is accepted, so a rejected draft does not count as history.
 
 ## One frame, varied interiors
 
-Inside one site, pages share the frame: skeleton, corner and navigation
-treatment, section boundary, and theme. They do not share the inner
+Inside one site, pages share the frame: skeleton, navigation and what sits in
+the screen corners, section boundary, and theme. They do not share the inner
 composition, because a shared frame already makes them one site. Within a page,
 consecutive sections of the same kind change composition. Candidates: a
 timeline, a mirrored split, one large figure with one line, three small cases,
