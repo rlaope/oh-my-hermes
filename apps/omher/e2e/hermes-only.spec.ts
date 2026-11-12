@@ -216,14 +216,14 @@ test("C. the popover: title, one sentence, Install and Don't show again; 12-13px
   for (const b of [m.icon!, m.plus!]) expect(m.pop!.top >= b.bottom || m.pop!.bottom <= b.top).toBe(true);
 });
 
-/** Every sidebar element against the popover's box: fully inside it, fully outside it, or (the bad case) partly under it. */
+/** Every sidebar element beside the popover: one it lies over must be under it across its whole width, never cut by
+ *  the popover's left or right edge (the bottom edge may cross a row: the popover has its own border). */
 const partly = (page: Page) =>
   page.evaluate(() => {
     const pop = document.querySelector(".omh-pop")!.getBoundingClientRect();
     const side = document.querySelector(".side")!;
     const bad: string[] = [];
-    // what paints: the rows themselves, the search field, and every leaf (text, icons, rings); a list or section that
-    // holds rows runs on past the popover by design, so it is judged by its rows
+    // what paints: the rows themselves, the search field, and every leaf (text, icons, rings)
     const painted = [...side.querySelectorAll(".search, .bot-list > *, .ss-list > *, .side-sec > .side-sh, .side-foot > *, *")].filter(
       (e) => e.matches(".search, .bot-list > *, .ss-list > *, .side-sec > .side-sh, .side-foot > *") || e.children.length === 0 || e.matches(".ui-ring, svg"),
     );
@@ -231,17 +231,29 @@ const partly = (page: Page) =>
       if (e.closest(".omh-note") || e.closest("svg") !== e && e.closest("svg")) continue;
       const r = e.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) continue;
-      const out = r.right <= pop.left + 0.5 || r.left >= pop.right - 0.5 || r.bottom <= pop.top + 0.5 || r.top >= pop.bottom - 0.5;
-      const inside = r.left >= pop.left - 0.5 && r.right <= pop.right + 0.5 && r.top >= pop.top - 0.5 && r.bottom <= pop.bottom + 0.5;
-      // a clipped child counts by what shows: its visible part inside a scrolled list
-      if (!out && !inside) bad.push(`${e.className || e.tagName} ${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)}`);
+      if (r.bottom <= pop.top + 0.5 || r.top >= pop.bottom - 0.5) continue;
+      const cutLeft = r.left < pop.left - 0.5 && r.right > pop.left + 0.5;
+      const cutRight = r.left < pop.right - 0.5 && r.right > pop.right + 0.5;
+      if (cutLeft || cutRight) bad.push(`${e.className || e.tagName} ${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)}`);
     }
     return { bad, pop: { left: pop.left, right: pop.right, top: pop.top, bottom: pop.bottom } };
   });
 
+/** The popover's vertical gaps, top to bottom: its edge to the title, between each part (title, sentence, log, error,
+ *  actions), and the actions to its edge. */
+const gaps = (page: Page) =>
+  page.evaluate(() => {
+    const pop = document.querySelector(".omh-pop")!.getBoundingClientRect();
+    const parts = [...document.querySelectorAll(".omh-pop-c > *"), document.querySelector(".omh-pop-a")!].map((e) => e.getBoundingClientRect());
+    const edges = [pop.top, ...parts.flatMap((r) => [r.top, r.bottom]), pop.bottom];
+    const out: number[] = [];
+    for (let i = 0; i < edges.length; i += 2) out.push(Math.round((edges[i + 1] - edges[i]) * 10) / 10);
+    return { gaps: out, pop: { top: pop.top, bottom: pop.bottom, left: pop.left, right: pop.right }, h: innerHeight, w: innerWidth };
+  });
+
 const settled = (page: Page) => page.waitForFunction(() => document.querySelector(".omh-pop")!.getAnimations().every((a) => a.playState !== "running"));
 
-test("C. the popover is exactly as wide as a sidebar row, starts under the top row, and covers each sidebar element whole or not at all", async ({ page }) => {
+test("C. the popover is exactly as wide as a sidebar row, starts under the top row, and cuts no sidebar element at its left or right edge", async ({ page }) => {
   await open(page);
   await page.getByTestId("omh-notice").click();
   await expect(page.getByTestId("omh-pop")).toBeVisible();
@@ -262,20 +274,18 @@ test("C. the popover is exactly as wide as a sidebar row, starts under the top r
   expect(c.bad, JSON.stringify(c.pop)).toEqual([]);
 });
 
-test("C. the same padding above the title and below the actions; any extra room sits between the sentence and the actions", async ({ page }) => {
+test("C. the popover takes its natural height: the same padding above the title and below the actions, even gaps between its parts", async ({ page }) => {
   await open(page);
   await page.getByTestId("omh-notice").click();
   await settled(page);
-  const m = await page.evaluate(() => {
-    const pop = document.querySelector(".omh-pop")!.getBoundingClientRect();
-    const t = document.querySelector(".omh-pop-t")!.getBoundingClientRect();
-    const p = document.querySelector(".omh-pop-p")!.getBoundingClientRect();
-    const a = document.querySelector(".omh-pop-a")!.getBoundingClientRect();
-    const b = getComputedStyle(document.querySelector(".omh-pop")!).borderTopWidth;
-    return { above: t.top - pop.top, below: pop.bottom - a.bottom, between: a.top - p.bottom, border: parseFloat(b) };
-  });
-  expect(Math.abs(m.above - m.below), JSON.stringify(m)).toBeLessThanOrEqual(0.5);
-  expect(m.between).toBeGreaterThanOrEqual(10);
+  const m = await gaps(page);
+  // edge→title, title→sentence, sentence→actions, actions→edge
+  expect(m.gaps.length, JSON.stringify(m)).toBe(4);
+  expect(Math.abs(m.gaps[0] - m.gaps[m.gaps.length - 1]), JSON.stringify(m)).toBeLessThanOrEqual(0.5);
+  for (const g of m.gaps) {
+    expect(g, JSON.stringify(m)).toBeGreaterThanOrEqual(10);
+    expect(g, JSON.stringify(m)).toBeLessThanOrEqual(16);
+  }
 });
 
 test("C. running: Installing… keeps Install's outlined box and left edge, only lower contrast", async ({ page }) => {
@@ -543,6 +553,25 @@ for (const height of [600, 720, 820]) {
     expect(c.bad, JSON.stringify(c.pop)).toEqual([]);
     // Install again's buttons are in view: the actions never scroll away
     await expect(page.getByTestId("omh-pop-install")).toBeInViewport();
+    // no dead band inside it: every vertical gap (edges, title, sentence, log, actions) is at most 16px
+    const g = await gaps(page);
+    expect(g.gaps.length, JSON.stringify(g)).toBe(5);
+    for (const v of g.gaps) expect(v, JSON.stringify(g)).toBeLessThanOrEqual(16);
+  });
+
+  test(`C. at rest in a ${height}px window the popover has no vertical gap over 16px and stays inside the window`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height });
+    await open(page);
+    await page.getByTestId("omh-notice").click();
+    await settled(page);
+    const g = await gaps(page);
+    for (const v of g.gaps) expect(v, JSON.stringify(g)).toBeLessThanOrEqual(16);
+    expect(g.pop.top).toBeGreaterThanOrEqual(4);
+    expect(g.pop.bottom).toBeLessThanOrEqual(g.h - 4);
+    expect(g.pop.left).toBeGreaterThanOrEqual(4);
+    expect(g.pop.right).toBeLessThanOrEqual(g.w - 4);
+    const c = await partly(page);
+    expect(c.bad, JSON.stringify(c.pop)).toEqual([]);
   });
 }
 

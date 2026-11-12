@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The mouse never opens the OMH TUI's history view.** A drag that started
+  on a row the OMH TUI did not print (the shell's output above the session,
+  the rows from before a Ctrl+Z) still opened the full-screen transcript
+  view, the last mouse path that did after the wheel stopped opening it. It
+  now selects nothing and opens nothing; only Ctrl+O opens the view.
+
 - **A resumed session no longer shows Hermes' own turns as your prompts.**
   When `omh --resume` or `/resume` redrew a session, every user-role row in
   Hermes' history was drawn as a `❯` prompt, including the ones Hermes wrote
