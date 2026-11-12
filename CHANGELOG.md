@@ -418,6 +418,20 @@ All notable changes will be documented here.
   (`.omo/senpi-task/tasks/`, where OmO 5.0 and a folder that already has them
   keep them) shows its run in Plans, with the same time as its chat card.
 
+- **Restart a bot from omher with one press.** A bot row's right-click (or `...`) menu has Restart under
+  Edit (Start for a bot that is not connected, and an offline bot's chat offers Start in place). Restart runs
+  Hermes' own `hermes -p <profile> gateway restart` for the gateway process that serves the bot: the host
+  gateway (`-p default`, always named, never Hermes' sticky active profile) for a bot it serves, or the bot's own
+  gateway when it runs standalone. Every bot on that gateway reads "Restarting" together, and a bot that shares
+  its gateway names the others under Restart before the press. A busy gateway is never cut silently: Hermes
+  refuses while anything runs, omher shows each thing in plain words with the bot it belongs to and how long it
+  has run (the time is never cut), Cancel first,
+  and only "Restart anyway" passes `--yes`. After a plugin install the sheet says when it is ready (the bot's
+  next conversation), asks the gateway to reload its plugins when it did not (Hermes' `reload-plugins`, which
+  interrupts nothing), and offers the same Restart only when Hermes says one is still needed, naming every bot
+  that restarts with it. omher never stops a bot, never restarts every gateway and never restarts by itself
+  (BOUNDARY rule 29).
+
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
   nothing new), and the verify node marks each one met, not met or not

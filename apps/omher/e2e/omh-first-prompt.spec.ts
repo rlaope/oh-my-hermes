@@ -186,8 +186,10 @@ for (const theme of ["dark", "light"]) {
     await expect(line).toContainText(READY.en);
     await expect(page.getByTestId("omh-prompt-fill")).toHaveText("Put it in the message box");
     const tools = page.getByTestId("omh-prompt-tools");
-    await expect(tools).toHaveText(TOOLS.en);
-    await expect(tools).not.toContainText("restart"); // no command: one bot's restart does not load a new plugin
+    await expect(tools.locator(".omhp-t")).toHaveText(TOOLS.en);
+    // slot 14's action beside it: Hermes' reload-plugins, never one bot's restart (that loads no new plugin)
+    await expect(tools.getByTestId("omh-load-now")).toHaveText("Load now");
+    await expect(tools).not.toContainText("restart");
     await expect(tools.locator("code")).toHaveCount(0);
     const sub = await tools.evaluate((el) => {
       const r = el.getBoundingClientRect();
@@ -245,7 +247,8 @@ for (const theme of ["dark", "light"]) {
     const line = page.getByTestId("omh-prompt-restart");
     await expect(line).toBeVisible();
     await shot(page, "restart", theme, "after");
-    await expect(line).toHaveText(NO_SKILLS.en);
+    await expect(line.locator(".omhp-t")).toHaveText(NO_SKILLS.en);
+    await expect(line.getByTestId("omh-load-now")).toHaveText("Load now");
     await expect(line.locator("code")).toHaveCount(0);
     await expect(page.getByTestId("omh-prompt")).toHaveCount(0);
     noOverlap(await geometry(page));
@@ -274,7 +277,7 @@ test("a bot whose gateway loaded oh-my-hermes' plugin gets no restart line; one 
   await expect(page.getByTestId("composer")).toHaveValue(`/omh-model-setup ${ASK.en}`);
   await expect(page.getByTestId("omh-prompt")).toHaveCount(0);
   const rest = page.getByTestId("omh-prompt-restart");
-  await expect(rest).toHaveText(TOOLS.en.replace("Friren", "Kami"));
+  await expect(rest.locator(".omhp-t")).toHaveText(TOOLS.en.replace("Friren", "Kami"));
   expect((await sends()).length).toBe(0);
   const ops = (await mock("mock.calls")).calls!.map((c) => c.op);
   expect(ops).toContain("plugins.list"); // the running gateway's own record was asked
@@ -378,7 +381,7 @@ for (const lang of ["ko", "ja", "zh"] as const) {
   test(`the "not yet" lines in ${lang} name the bot and no command`, async ({ page }) => {
     await open(page, { lang });
     await installFromPopover(page, "never");
-    await expect(page.getByTestId("omh-prompt-restart")).toHaveText(NO_SKILLS[lang]);
+    await expect(page.getByTestId("omh-prompt-restart").locator(".omhp-t")).toHaveText(NO_SKILLS[lang]);
   });
 }
 
