@@ -456,7 +456,7 @@ export const ja: Record<Key, string> = {
   "term.blink": "点滅",
   "term.more": "その他",
   "term.scrollback": "スクロールバック",
-  "term.scrollbackHint": "画面より上に残す行数。これから開くターミナルに適用されます。",
+  "term.scrollbackHint": "画面より上に残す行数",
   "term.optionMeta": "Option を Meta として使う",
   "term.optionMetaHint": "Option がプログラムに Meta として送られ、Option+B と Option+F で単語単位に移動できます。オフにすると、そのキーの文字が入力されます。",
   "term.gpu": "GPU レンダラー",

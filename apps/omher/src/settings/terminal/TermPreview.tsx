@@ -31,6 +31,8 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
     const { theme: th, settings: s } = now.current;
     applyLook(l.term, th.theme, s);
     l.term.options.cursorInactiveStyle = s.cursorStyle;
+    // the sample is one screen: it keeps no rows above it, whatever the setting
+    l.term.options.scrollback = 0;
   };
 
   /** The sample's selection (a resize and a rewrite both clear it). */

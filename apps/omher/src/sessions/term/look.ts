@@ -69,7 +69,8 @@ function expose(term: Terminal): void {
   set.add(term);
 }
 
-/** The look again, on an open terminal. Scrollback is not here: a terminal keeps the rows it was made with. */
+/** The look again, on an open terminal. Scrollback too: xterm resizes the buffer when the option is set, keeping
+ *  the rows it has when the limit grows and the newest ones when it shrinks (the older ones are gone for good). */
 export function applyLook(term: Terminal, theme: ITheme, s: TermSettings): void {
   const next = termOptions(theme, s);
   const o = term.options;
@@ -80,6 +81,7 @@ export function applyLook(term: Terminal, theme: ITheme, s: TermSettings): void 
   o.cursorStyle = next.cursorStyle;
   o.cursorInactiveStyle = next.cursorInactiveStyle;
   o.cursorBlink = next.cursorBlink;
+  o.scrollback = next.scrollback;
   o.minimumContrastRatio = next.minimumContrastRatio;
   o.macOptionIsMeta = next.macOptionIsMeta;
   // the box the terminal sits in: a session's (sessions.css) or the Settings preview's; both read these two

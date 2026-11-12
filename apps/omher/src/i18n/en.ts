@@ -458,7 +458,7 @@ export const en = {
   "term.blink": "Blink",
   "term.more": "More",
   "term.scrollback": "Scrollback",
-  "term.scrollbackHint": "Rows kept above the screen. Applies to terminals opened from now on.",
+  "term.scrollbackHint": "Rows kept above the screen",
   "term.optionMeta": "Option as Meta",
   "term.optionMetaHint": "Option sends Meta to the program, so Option+B and Option+F move by word. Off types the key’s own character.",
   "term.gpu": "GPU renderer",

@@ -1,6 +1,6 @@
 // Settings > Terminal: how the SESSIONS terminals look. A theme for each app theme (dark, light) picked from the
 // catalog with a live preview, then text, cursor and the rest. Every change is saved on this computer and reaches
-// the open terminals at once (term/settings.ts hands it to them); only scrollback waits for the next terminal.
+// the open terminals at once (term/settings.ts hands it to them).
 import { useEffect, useState, useSyncExternalStore } from "react";
 import "./terminal.css";
 import { useStore } from "../../state/store";

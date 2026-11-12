@@ -456,7 +456,7 @@ export const zh: Record<Key, string> = {
   "term.blink": "闪烁",
   "term.more": "其他",
   "term.scrollback": "回滚行数",
-  "term.scrollbackHint": "屏幕上方保留的行数。之后打开的终端才会生效。",
+  "term.scrollbackHint": "屏幕上方保留的行数。",
   "term.optionMeta": "Option 作为 Meta",
   "term.optionMetaHint": "Option 会作为 Meta 发送给程序，可用 Option+B 和 Option+F 按单词移动。关闭后则输入该键对应的字符。",
   "term.gpu": "GPU 渲染器",

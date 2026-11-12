@@ -235,10 +235,11 @@ test("cursor, contrast and the other options reach the open terminal and are kep
   await page.getByTestId("term-contrast").getByRole("radio", { name: "As the theme" }).click();
   expect((await look(page))?.contrast).toBe(1);
 
-  // scrollback: the four presets, and the row says when it applies
+  // scrollback: the four presets; the row no longer says it waits for the next terminal
   const sb = page.getByTestId("term-scrollback");
   await expect(sb.getByRole("radio")).toHaveText(["5,000", "10,000", "25,000", "50,000"]);
-  await expect(page.getByTestId("term-scrollback-row")).toContainText("Applies to terminals opened from now on");
+  await expect(page.getByTestId("term-scrollback-row")).toContainText("Rows kept above the screen");
+  await expect(page.getByTestId("term-scrollback-row")).not.toContainText("opened from now on");
   await sb.getByRole("radio", { name: "25,000" }).click();
   await page.getByTestId("term-blink").getByRole("radio", { name: "Off" }).click();
   await page.getByTestId("term-font").fill("Menlo");
@@ -313,6 +314,72 @@ test("the contrast hints are true: High lifts a text colour to 4.5:1 and leaves 
   await page.getByTestId("term-contrast").getByRole("radio", { name: "Auto" }).click();
   await expect(row).toContainText("4.5:1 on a light background and 3:1 on a dark one. Dim text can stay below that.");
   await expect(row).not.toContainText("Faint text");
+});
+
+/** The open terminal's buffer: its scrollback limit, how many rows it holds, and the first and last `row N` line. */
+const buffer = (page: Page) =>
+  page.evaluate(() => {
+    type T = { element?: HTMLElement; rows: number; options: { scrollback?: number }; buffer: { normal: { length: number; getLine(i: number): { translateToString(t: boolean): string } | undefined } } };
+    const set = (window as unknown as { __omherTerms?: Set<T> }).__omherTerms;
+    const t = [...(set ?? [])].find((x) => x.element?.closest(".term-host"))!;
+    const b = t.buffer.normal;
+    const at = (i: number) => b.getLine(i)?.translateToString(true) ?? "";
+    let first = "";
+    let last = "";
+    for (let i = 0; i < b.length && !first; i++) if (/^row \d+$/.test(at(i))) first = at(i);
+    for (let i = b.length - 1; i >= 0 && !last; i--) if (/^row \d+$/.test(at(i))) last = at(i);
+    return { limit: t.options.scrollback, kept: b.length - t.rows, first, last };
+  });
+const numbered = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `row ${from + i}\r\n`).join("");
+
+test("a new scrollback limit reaches a terminal that is already open: more rows are kept, and a smaller limit keeps the newest", async ({ page }) => {
+  await open(page);
+  await terminalClaude(page);
+  expect((await buffer(page)).limit).toBe(5000);
+
+  // 10,000 picked in Settings while the terminal is open (it is off the page meanwhile)
+  await settings(page);
+  await page.getByTestId("term-scrollback").getByRole("radio", { name: "10,000" }).click();
+  expect((await buffer(page)).limit).toBe(10000);
+  await session(page);
+
+  // 8,000 rows, more than the limit the terminal was made with: the first one is still there
+  await feed(page, "\r\n" + numbered(0, 8000));
+  const grown = await buffer(page);
+  expect(grown).toMatchObject({ limit: 10000, first: "row 0", last: "row 7999" });
+  // more rows above the screen than the 5,000 it was made with could hold (8,000 printed, one screen of them showing)
+  expect(grown.kept).toBeGreaterThan(7900);
+  // and it can be scrolled to
+  await page.evaluate(() => {
+    type T = { element?: HTMLElement; scrollToLine(n: number): void; buffer: { normal: { length: number; getLine(i: number): { translateToString(t: boolean): string } | undefined } } };
+    const t = [...((window as unknown as { __omherTerms?: Set<T> }).__omherTerms ?? [])].find((x) => x.element?.closest(".term-host"))!;
+    for (let i = 0; i < t.buffer.normal.length; i++) if (t.buffer.normal.getLine(i)?.translateToString(true) === "row 0") return t.scrollToLine(i);
+  });
+  await expect(page.locator('[data-testid="terminal"] .xterm-rows > div').first()).toHaveText("row 0");
+
+  // back to 5,000: the open terminal drops its oldest rows and keeps the newest
+  await settings(page);
+  await page.getByTestId("term-scrollback").getByRole("radio", { name: "5,000", exact: true }).click();
+  const shrunk = await buffer(page);
+  expect(shrunk).toMatchObject({ limit: 5000, kept: 5000, last: "row 7999" });
+  expect(Number(shrunk.first.slice(4))).toBeGreaterThan(2900);
+  // what is printed next is kept as before
+  await session(page);
+  await feed(page, numbered(8000, 8010));
+  expect(await buffer(page)).toMatchObject({ limit: 5000, kept: 5000, last: "row 8009" });
+});
+
+test("the Settings preview keeps no rows above its one screen, whatever the scrollback setting", async ({ page }) => {
+  await open(page);
+  await settings(page);
+  await expect(page.getByTestId("term-preview").locator(".xterm-rows")).toContainText("42 passed");
+  await page.getByTestId("term-scrollback").getByRole("radio", { name: "25,000" }).click();
+  const pv = await page.evaluate(() => {
+    type T = { element?: HTMLElement; rows: number; options: { scrollback?: number }; buffer: { normal: { length: number } } };
+    const t = [...((window as unknown as { __omherTerms?: Set<T> }).__omherTerms ?? [])].find((x) => x.element?.closest(".term-pv"))!;
+    return { limit: t.options.scrollback, length: t.buffer.normal.length, rows: t.rows };
+  });
+  expect(pv).toEqual({ limit: 0, length: 10, rows: 10 });
 });
 
 test("the search field filters the list", async ({ page }) => {

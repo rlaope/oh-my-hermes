@@ -77,13 +77,13 @@ describe("a terminal's look", () => {
     expect(termFont('"Fira Co', "M")).toBe('"Fira Co", M');
   });
 
-  it("applies the look again to an open terminal: every live option, and not the scrollback it was made with", () => {
+  it("applies the look again to an open terminal: every option, the scrollback limit too", () => {
     const options: Record<string, unknown> = { scrollback: 5000 };
     const term = { options } as unknown as Terminal;
     const s: TermSettings = { ...TERM_DEFAULTS, fontFamily: "Menlo", fontSize: 18, lineHeight: 1.4, cursorStyle: "underline", cursorBlink: false, scrollback: 50000, contrast: "auto", optionIsMeta: false };
     applyLook(term, light, s);
     expect(options).toEqual({
-      scrollback: 5000,
+      scrollback: 50000,
       theme: light,
       fontFamily: '"Menlo", monospace',
       fontSize: 18,

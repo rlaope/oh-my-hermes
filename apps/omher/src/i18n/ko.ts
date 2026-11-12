@@ -456,7 +456,7 @@ export const ko: Record<Key, string> = {
   "term.blink": "깜빡임",
   "term.more": "기타",
   "term.scrollback": "스크롤백",
-  "term.scrollbackHint": "화면 위로 보관하는 줄 수. 지금부터 여는 터미널에 적용돼요.",
+  "term.scrollbackHint": "화면 위로 보관하는 줄 수",
   "term.optionMeta": "Option을 Meta로",
   "term.optionMetaHint": "Option이 프로그램에 Meta로 전달돼서 Option+B, Option+F로 단어 단위로 움직여요. 끄면 그 키의 문자가 입력돼요.",
   "term.gpu": "GPU 렌더러",
