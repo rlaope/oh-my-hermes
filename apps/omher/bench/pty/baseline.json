@@ -1,0 +1,309 @@
+{
+  "commit": "f9fab5d17 (the seam commit's shell, unchanged) + the bench",
+  "machine": "Darwin 25.6.0 arm64; Apple M4 Pro; 14 cores; 48 GB",
+  "profile": "release",
+  "runs_each": 3,
+  "load_average_at_start": [
+    10.421,
+    7.728,
+    7.086
+  ],
+  "results": {
+    "sink_cat_200mb_cpu_ms_per_mb": {
+      "median": 6.237,
+      "min": 6.191,
+      "max": 6.45,
+      "runs": [
+        6.191,
+        6.45,
+        6.237
+      ]
+    },
+    "sink_cat_200mb_mb_s": {
+      "median": 158.45,
+      "min": 151.682,
+      "max": 160.521,
+      "runs": [
+        160.521,
+        151.682,
+        158.45
+      ]
+    },
+    "sink_yes_5s_mb_s": {
+      "median": 110.875,
+      "min": 109.953,
+      "max": 111.171,
+      "runs": [
+        110.875,
+        111.171,
+        109.953
+      ]
+    },
+    "sink_yes_5s_messages_per_s": {
+      "median": 1772.718,
+      "min": 1757.982,
+      "max": 1777.446,
+      "runs": [
+        1772.718,
+        1777.446,
+        1757.982
+      ]
+    },
+    "sink_slow_2ms_10s_drawn_mb_s": {
+      "median": 8.466,
+      "min": 8.232,
+      "max": 8.536,
+      "runs": [
+        8.232,
+        8.466,
+        8.536
+      ]
+    },
+    "sink_slow_2ms_10s_peak_rss_mb": {
+      "median": 1186.359,
+      "min": 1151.938,
+      "max": 1189.094,
+      "runs": [
+        1189.094,
+        1151.938,
+        1186.359
+      ]
+    },
+    "sink_slow_2ms_10s_queued_mb": {
+      "median": 1133.991,
+      "min": 1100.626,
+      "max": 1136.527,
+      "runs": [
+        1136.527,
+        1100.626,
+        1133.991
+      ]
+    },
+    "sink_interrupt_2ms_mb_after_key": {
+      "median": 236.987,
+      "min": 233.5,
+      "max": 239.688,
+      "runs": [
+        233.5,
+        236.987,
+        239.688
+      ]
+    },
+    "sink_interrupt_2ms_ms_to_last_byte": {
+      "median": 29254.081,
+      "min": 27532.312,
+      "max": 29755.269,
+      "runs": [
+        27532.312,
+        29755.269,
+        29254.081
+      ]
+    },
+    "echo_200_median_ms": {
+      "median": 15.69,
+      "min": 14.995,
+      "max": 19.093,
+      "runs": [
+        19.093,
+        14.995,
+        15.69
+      ]
+    },
+    "echo_200_p95_ms": {
+      "median": 20.073,
+      "min": 20.072,
+      "max": 20.078,
+      "runs": [
+        20.072,
+        20.073,
+        20.078
+      ]
+    },
+    "page_cat_200mb_cpu_ms_per_mb": {
+      "median": 6.531,
+      "min": 6.46,
+      "max": 6.768,
+      "runs": [
+        6.46,
+        6.531,
+        6.768
+      ]
+    },
+    "page_cat_200mb_mb_s": {
+      "median": 152.372,
+      "min": 146.511,
+      "max": 154.19,
+      "runs": [
+        152.372,
+        154.19,
+        146.511
+      ]
+    },
+    "page_yes_5s_mb_s": {
+      "median": 109.519,
+      "min": 106.729,
+      "max": 109.769,
+      "runs": [
+        106.729,
+        109.519,
+        109.769
+      ]
+    },
+    "page_yes_5s_messages_per_s": {
+      "median": 1751.244,
+      "min": 1706.487,
+      "max": 1755.041,
+      "runs": [
+        1706.487,
+        1751.244,
+        1755.041
+      ]
+    },
+    "page_slow_20ms_10s_drawn_mb_s": {
+      "median": 0.956,
+      "min": 0.926,
+      "max": 1.016,
+      "runs": [
+        0.926,
+        1.016,
+        0.956
+      ]
+    },
+    "page_slow_20ms_10s_peak_rss_mb": {
+      "median": 1238.094,
+      "min": 1232.031,
+      "max": 1258.641,
+      "runs": [
+        1258.641,
+        1232.031,
+        1238.094
+      ]
+    },
+    "page_slow_20ms_10s_queued_mb": {
+      "median": 1096.277,
+      "min": 1084.42,
+      "max": 1106.788,
+      "runs": [
+        1106.788,
+        1084.42,
+        1096.277
+      ]
+    },
+    "page_interrupt_2ms_mb_after_key": {
+      "median": 206.818,
+      "min": 199.073,
+      "max": 214.898,
+      "runs": [
+        199.073,
+        214.898,
+        206.818
+      ]
+    },
+    "page_interrupt_2ms_ms_to_last_byte": {
+      "median": 23724.554,
+      "min": 23276.726,
+      "max": 24834.863,
+      "runs": [
+        23276.726,
+        24834.863,
+        23724.554
+      ]
+    },
+    "page_interrupt_20ms_mb_after_key": {
+      "median": 219.686,
+      "min": 205.837,
+      "max": 224.584,
+      "runs": [
+        224.584,
+        219.686,
+        205.837
+      ]
+    },
+    "page_interrupt_20ms_ms_to_last_byte": {
+      "median": 291596.475,
+      "min": 243999.989,
+      "max": 293682.243,
+      "runs": [
+        291596.475,
+        293682.243,
+        243999.989
+      ]
+    },
+    "slice_cat_200mb_cpu_ms_per_mb": {
+      "median": 19.795,
+      "min": 19.63,
+      "max": 19.82,
+      "runs": [
+        19.795,
+        19.63,
+        19.82
+      ]
+    },
+    "slice_cat_200mb_mb_s": {
+      "median": 75.444,
+      "min": 75.295,
+      "max": 75.665,
+      "runs": [
+        75.295,
+        75.665,
+        75.444
+      ]
+    },
+    "slice_yes_5s_mb_s": {
+      "median": 75.686,
+      "min": 75.654,
+      "max": 75.697,
+      "runs": [
+        75.686,
+        75.697,
+        75.654
+      ]
+    },
+    "slice_yes_5s_messages_per_s": {
+      "median": 1734.766,
+      "min": 1725.738,
+      "max": 1741.046,
+      "runs": [
+        1725.738,
+        1734.766,
+        1741.046
+      ]
+    },
+    "slice_interrupt_mb_after_key": {
+      "median": 67.417,
+      "min": 64.673,
+      "max": 69.125,
+      "runs": [
+        67.417,
+        64.673,
+        69.125
+      ]
+    },
+    "slice_interrupt_ms_to_last_byte": {
+      "median": 890.475,
+      "min": 854.922,
+      "max": 912.49,
+      "runs": [
+        890.475,
+        854.922,
+        912.49
+      ]
+    }
+  },
+  "load_average_at_end": [
+    8.042,
+    7.234,
+    6.563
+  ],
+  "load_average_at_start_slice_scenarios": [
+    7.131,
+    8.421,
+    9.191
+  ],
+  "load_average_at_end_slice_scenarios": [
+    7.148,
+    8.292,
+    9.112
+  ],
+  "note": "sink_*, page_* and echo were measured in one run; slice_* (added to the bench afterwards) in a second run of the same unchanged shell source"
+}

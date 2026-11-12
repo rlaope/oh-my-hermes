@@ -6,6 +6,8 @@ mod bridge;
 mod dsh_chat;
 mod git_branch;
 mod hermes_auth;
+#[cfg(all(test, unix))]
+mod pty_bench;
 mod session_files;
 mod sessions;
 mod setup;
@@ -277,6 +279,15 @@ async fn session_write(shell: State<'_, Shell>, id: u32, data: String) -> Result
     shell.sessions.write(id, data.as_bytes())
 }
 
+/// The terminal view has drawn `bytes` more of session `id`'s output. The session's reader stops reading its
+/// program while the page is behind and reads again as this credit comes back (`FLOW_HIGH` / `FLOW_LOW` in
+/// sessions.rs). Two numbers only; nothing is read or written.
+#[tauri::command]
+async fn session_ack(shell: State<'_, Shell>, id: u32, bytes: u64) -> Result<(), String> {
+    shell.sessions.ack(id, bytes);
+    Ok(())
+}
+
 #[tauri::command]
 async fn session_resize(shell: State<'_, Shell>, id: u32, cols: u16, rows: u16) -> Result<(), String> {
     shell.sessions.resize(id, cols, rows)
@@ -466,6 +477,7 @@ pub fn run() {
             sessions_agents,
             session_start,
             session_write,
+            session_ack,
             session_resize,
             session_close,
             session_close_all,

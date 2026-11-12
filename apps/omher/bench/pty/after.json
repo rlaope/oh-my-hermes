@@ -1,0 +1,298 @@
+{
+  "commit": "abb724589 + FLOW_HIGH 2 MiB / FLOW_LOW 1 MiB (the tree of the commit that adds this file)",
+  "machine": "Darwin 25.6.0 arm64; Apple M4 Pro; 14 cores; 48 GB",
+  "profile": "release",
+  "runs_each": 3,
+  "load_average_at_start": [
+    9.784,
+    7.239,
+    6.952
+  ],
+  "results": {
+    "sink_cat_200mb_cpu_ms_per_mb": {
+      "median": 3.019,
+      "min": 2.904,
+      "max": 3.033,
+      "runs": [
+        3.019,
+        2.904,
+        3.033
+      ]
+    },
+    "sink_cat_200mb_mb_s": {
+      "median": 195.044,
+      "min": 193.034,
+      "max": 200.662,
+      "runs": [
+        195.044,
+        200.662,
+        193.034
+      ]
+    },
+    "sink_yes_5s_mb_s": {
+      "median": 116.517,
+      "min": 114.888,
+      "max": 117.137,
+      "runs": [
+        116.517,
+        117.137,
+        114.888
+      ]
+    },
+    "sink_yes_5s_messages_per_s": {
+      "median": 1864.275,
+      "min": 1838.211,
+      "max": 1874.2,
+      "runs": [
+        1864.275,
+        1874.2,
+        1838.211
+      ]
+    },
+    "sink_slow_2ms_10s_drawn_mb_s": {
+      "median": 7.929,
+      "min": 7.725,
+      "max": 8.053,
+      "runs": [
+        7.929,
+        8.053,
+        7.725
+      ]
+    },
+    "sink_slow_2ms_10s_peak_rss_mb": {
+      "median": 10.688,
+      "min": 10.672,
+      "max": 10.734,
+      "runs": [
+        10.734,
+        10.672,
+        10.688
+      ]
+    },
+    "sink_slow_2ms_10s_queued_mb": {
+      "median": 0.126,
+      "min": 0.126,
+      "max": 0.126,
+      "runs": [
+        0.126,
+        0.126,
+        0.126
+      ]
+    },
+    "sink_interrupt_2ms_mb_after_key": {
+      "median": 0.125,
+      "min": 0.105,
+      "max": 0.125,
+      "runs": [
+        0.105,
+        0.125,
+        0.125
+      ]
+    },
+    "sink_interrupt_2ms_ms_to_last_byte": {
+      "median": 18.537,
+      "min": 10.664,
+      "max": 19.698,
+      "runs": [
+        19.698,
+        10.664,
+        18.537
+      ]
+    },
+    "echo_200_median_ms": {
+      "median": 15.408,
+      "min": 14.911,
+      "max": 16.093,
+      "runs": [
+        14.911,
+        15.408,
+        16.093
+      ]
+    },
+    "echo_200_p95_ms": {
+      "median": 20.059,
+      "min": 20.057,
+      "max": 20.064,
+      "runs": [
+        20.059,
+        20.057,
+        20.064
+      ]
+    },
+    "page_cat_200mb_cpu_ms_per_mb": {
+      "median": 2.894,
+      "min": 2.867,
+      "max": 2.978,
+      "runs": [
+        2.978,
+        2.867,
+        2.894
+      ]
+    },
+    "page_cat_200mb_mb_s": {
+      "median": 207.463,
+      "min": 202.288,
+      "max": 209.93,
+      "runs": [
+        202.288,
+        209.93,
+        207.463
+      ]
+    },
+    "page_yes_5s_mb_s": {
+      "median": 114.335,
+      "min": 112.144,
+      "max": 115.931,
+      "runs": [
+        112.144,
+        114.335,
+        115.931
+      ]
+    },
+    "page_yes_5s_messages_per_s": {
+      "median": 1829.353,
+      "min": 1794.307,
+      "max": 1854.893,
+      "runs": [
+        1794.307,
+        1829.353,
+        1854.893
+      ]
+    },
+    "page_slow_20ms_10s_drawn_mb_s": {
+      "median": 0.833,
+      "min": 0.813,
+      "max": 0.894,
+      "runs": [
+        0.894,
+        0.813,
+        0.833
+      ]
+    },
+    "page_slow_20ms_10s_peak_rss_mb": {
+      "median": 14.875,
+      "min": 14.844,
+      "max": 14.922,
+      "runs": [
+        14.844,
+        14.922,
+        14.875
+      ]
+    },
+    "page_slow_20ms_10s_queued_mb": {
+      "median": 1.251,
+      "min": 1.063,
+      "max": 1.501,
+      "runs": [
+        1.501,
+        1.251,
+        1.063
+      ]
+    },
+    "page_interrupt_2ms_mb_after_key": {
+      "median": 1.252,
+      "min": 1.063,
+      "max": 1.752,
+      "runs": [
+        1.252,
+        1.063,
+        1.752
+      ]
+    },
+    "page_interrupt_2ms_ms_to_last_byte": {
+      "median": 177.171,
+      "min": 151.215,
+      "max": 255.322,
+      "runs": [
+        177.171,
+        151.215,
+        255.322
+      ]
+    },
+    "page_interrupt_20ms_mb_after_key": {
+      "median": 1.251,
+      "min": 1.001,
+      "max": 1.251,
+      "runs": [
+        1.001,
+        1.251,
+        1.251
+      ]
+    },
+    "page_interrupt_20ms_ms_to_last_byte": {
+      "median": 1479.999,
+      "min": 1159.315,
+      "max": 1586.574,
+      "runs": [
+        1159.315,
+        1479.999,
+        1586.574
+      ]
+    },
+    "slice_cat_200mb_cpu_ms_per_mb": {
+      "median": 16.271,
+      "min": 16.211,
+      "max": 16.33,
+      "runs": [
+        16.271,
+        16.33,
+        16.211
+      ]
+    },
+    "slice_cat_200mb_mb_s": {
+      "median": 75.391,
+      "min": 75.242,
+      "max": 75.472,
+      "runs": [
+        75.472,
+        75.391,
+        75.242
+      ]
+    },
+    "slice_yes_5s_mb_s": {
+      "median": 75.702,
+      "min": 75.543,
+      "max": 75.709,
+      "runs": [
+        75.543,
+        75.709,
+        75.702
+      ]
+    },
+    "slice_yes_5s_messages_per_s": {
+      "median": 1213.284,
+      "min": 1213.038,
+      "max": 1218.535,
+      "runs": [
+        1213.284,
+        1213.038,
+        1218.535
+      ]
+    },
+    "slice_interrupt_mb_after_key": {
+      "median": 1.329,
+      "min": 1.299,
+      "max": 1.345,
+      "runs": [
+        1.345,
+        1.329,
+        1.299
+      ]
+    },
+    "slice_interrupt_ms_to_last_byte": {
+      "median": 16.678,
+      "min": 16.468,
+      "max": 17.024,
+      "runs": [
+        17.024,
+        16.678,
+        16.468
+      ]
+    }
+  },
+  "load_average_at_end": [
+    7.986,
+    7.532,
+    7.121
+  ]
+}
