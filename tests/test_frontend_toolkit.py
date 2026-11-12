@@ -904,6 +904,46 @@ class BrowserTests(Fixture):
         self.assertEqual(report["first_action_y"], 50)
         self.assertEqual(report["horizontal_overflow_px"], 130)
 
+    def test_rtl_link_the_browser_has_not_rendered_yet_counts_when_scrolling_reaches_it(self):
+        # `content-visibility: auto` leaves off-screen content unrendered, and an
+        # unrendered box has no part an observer reports. Scrolling down renders
+        # the link at 5000, so it is the first action; the same box inside a
+        # container that clips it away is never rendered, and the button at 300 is.
+        lazy = ('<div style="position:absolute;top:5000px;right:0;width:300px;height:200px;'
+                'content-visibility:auto"><a id="first" href="#">first</a></div>')
+        clip = '<div style="position:absolute;top:0;right:0;width:390px;height:100px;overflow:hidden">%s</div>'
+        for label, body, expected in (("reachable", lazy, 5000), ("clipped", clip % lazy, 300)):
+            with self.subTest(lazy=label):
+                report = self.measure(self.parked_left_page(f"lazy-{label}.html", "", body))
+                self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_link_in_a_box_that_scrolls_the_other_way_counts(self):
+        # A reversed flex line scrolls from 0 to a negative position. At 0 the
+        # link sits above the scrollport (152) or left of it (500) and the reader
+        # scrolls to it. The twins park a link on the side the box cannot scroll
+        # toward, where it is never shown and the button at 300 is first.
+        box = "position:absolute;top:500px;right:0;width:300px;height:100px;"
+        tall = '<div style="height:400px;flex:none"></div>'
+        wide = '<div style="width:600px;flex:none"></div>'
+        link = '<a id="first" href="#" style="flex:none">first</a>'
+        cases = (
+            ("column-reverse", f'<div style="{box}overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                               f'{tall}{link}</div>', 152),
+            ("column-reverse-below", f'<div style="{box}overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                                     '<div style="height:448px;flex:none"></div>'
+                                     '<a id="first" href="#" style="position:absolute;top:300px;right:0">first</a></div>',
+             300),
+            ("row-reverse", f'<div dir="ltr" style="{box}overflow-x:auto;display:flex;flex-direction:row-reverse">'
+                            f'{wide}{link}</div>', 500),
+            ("row-left-parked", f'<div dir="ltr" style="{box}overflow-x:auto">'
+                                '<a id="first" href="#" style="position:absolute;left:-200px;top:0">first</a>'
+                                '<div style="width:720px;height:10px"></div></div>', 300),
+        )
+        for label, body, expected in cases:
+            with self.subTest(box=label):
+                report = self.measure(self.parked_left_page(f"reverse-{label}.html", "", body))
+                self.assertEqual(report["first_action_y"], expected)
+
     def test_left_to_right_neighbours_are_unchanged(self):
         # These pass on the code before the right-to-left change as well; they
         # pin the left-to-right numbers the change must not move.

@@ -177,6 +177,37 @@ async (opts) => {
   // to scroll to, with its scrollport grown by how far it still scrolls each
   // way: what the reader can bring into it. <body> is not such a box while
   // the viewport has taken its overflow.
+  // How far a box still scrolls toward lower and toward higher positions. It
+  // scrolls from 0 up to `d`, or from -`d` up to 0 (right-to-left text, a
+  // reversed flex line, a vertical-rl box). Away from 0 the sign of the
+  // position says which. At 0 no property the box reports does, so the box is
+  // asked: it is sent to its lowest position on that axis and put back at
+  // once, without animation. That is the one place this script moves anything
+  // on the page, and only a box that clips a candidate control at 0 gets it.
+  const lowestOf = (box, horizontal) => {
+    const at = [box.scrollLeft, box.scrollTop];
+    box.scrollTo({left: horizontal ? -1e7 : at[0], top: horizontal ? at[1] : -1e7, behavior: 'instant'});
+    const lowest = horizontal ? box.scrollLeft : box.scrollTop;
+    box.scrollTo({left: at[0], top: at[1], behavior: 'instant'});
+    return lowest;
+  };
+  const travel = (at, d, lowest) => at > 0 ? [Math.min(d, at), Math.max(0, d - at)]
+    : at < 0 ? [Math.max(0, d + at), Math.min(d, -at)]
+    : d && lowest() < 0 ? [d, 0] : [0, d];
+  // Content the browser has not rendered yet (`content-visibility: auto`, off
+  // screen) has no part an observer can report, though scrolling to it renders
+  // it. The browser says which boxes those are. Such a box counts when the box
+  // that skips it can be reached and its own box lies where the page reaches;
+  // a clip between the two is not seen until the browser renders it.
+  const rendered = (el) => typeof el.checkVisibility !== 'function'
+    || el.checkVisibility({contentVisibilityAuto: true});
+  const renderSkipped = (el) => typeof el.checkVisibility === 'function'
+    && el.checkVisibility() && !rendered(el);
+  const skippedBy = (el) => {
+    let box = el.parentElement;
+    while (box && !rendered(box)) box = box.parentElement;
+    return box;
+  };
   const scrollBoxAbove = (node) => {
     for (let box = node; box && box !== doc; box = box.parentElement) {
       if (box === document.body && viewportFromBody) continue;
@@ -184,10 +215,9 @@ async (opts) => {
       const dx = offersScroll(style.overflowX) ? Math.max(0, box.scrollWidth - box.clientWidth) : 0;
       const dy = offersScroll(style.overflowY) ? Math.max(0, box.scrollHeight - box.clientHeight) : 0;
       if (!dx && !dy) continue;
-      const fromRight = box.scrollLeft < 0 || (box.scrollLeft === 0 && startsRight(style));
-      const left = Math.min(dx, Math.max(0, box.scrollLeft + (fromRight ? dx : 0)));
-      const up = Math.min(dy, Math.max(0, box.scrollTop));
-      return {node: box, grown: [up, dx - left, dy - up, left].map((px) => px + 'px').join(' ')};
+      const [left, right] = travel(box.scrollLeft, dx, () => lowestOf(box, true));
+      const [up, down] = travel(box.scrollTop, dy, () => lowestOf(box, false));
+      return {node: box, grown: [up, right, down, left].map((px) => px + 'px').join(' ')};
     }
     return null;
   };
@@ -204,10 +234,18 @@ async (opts) => {
     if (!moving.length) return;
     const parts = await partLeft(moving, null, anywhere);
     let pending = [];
+    const skipped = [];
     for (const el of moving) {
       const part = parts.get(el);
       if (hasArea(part) && inReach(el, part)) reach.set(el, true);
+      else if (renderSkipped(el)) skipped.push({el, by: skippedBy(el)});
       else pending.push({el, box: scrollBoxAbove(el.parentElement)});
+    }
+    if (skipped.length) {
+      await settle(Array.from(new Set(skipped.map((item) => item.by).filter(Boolean))));
+      for (const {el, by} of skipped) {
+        reach.set(el, Boolean(by) && reach.get(by) === true && inReach(el, el.getBoundingClientRect()));
+      }
     }
     while (pending.length) {
       const groups = new Map();
