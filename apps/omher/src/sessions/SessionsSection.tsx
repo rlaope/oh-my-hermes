@@ -80,8 +80,8 @@ const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
 
 /** Space kept between the menu and what it must not cover. */
 const MENU_GAP = 6;
-/** Space kept between the menu's edge and a sidebar row it stops at. */
-const ROW_CLEAR = 2;
+/** Space kept between the menu's edge and a sidebar row it stops at: a few px of air, never a hairline. */
+const ROW_CLEAR = 5;
 
 /** Where the + menu goes and how tall it may be in all (`max`). It opens under its row when the whole list fits above the sidebar's
  *  bottom rows (Automations, Plugins, Settings, You), else on the side with more room, scrolling inside. The edge
@@ -139,6 +139,25 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
   return fit;
 }
 
+/** Whether the list `el` has more below what it shows: its bottom edge then fades, saying it scrolls. */
+function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
+  const [more, setMore] = useState(false);
+  useLayoutEffect(() => {
+    const list = el.current;
+    if (!on || !list) return;
+    const read = () => setMore(list.scrollTop + list.clientHeight < list.scrollHeight - 1);
+    read();
+    list.addEventListener("scroll", read, { passive: true });
+    const ro = new ResizeObserver(read);
+    ro.observe(list);
+    return () => {
+      list.removeEventListener("scroll", read);
+      ro.disconnect();
+    };
+  }, [el, on]);
+  return more;
+}
+
 /** The SESSIONS + menu: every agent with its mark and name, the installed ones first (the last one used on top),
  *  the missing ones dimmed with their install line in the tooltip. Picking one opens its New session chat at once
  *  (the folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
@@ -155,6 +174,8 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const fit = useMenuFit(box, ready);
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
+  const list = useRef<HTMLDivElement>(null);
+  const more = useMoreBelow(list, placed);
   useEffect(() => {
     if (placed) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
   }, [placed]);
@@ -186,7 +207,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       >
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
-        <div className="ss-scroll" style={fit ? { maxHeight: fit.max } : undefined}>
+        <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
         {(agents ?? []).map((a) => {
           const def = agentDef(a.id);
           const account = sessionAccountSuffix(accounts.groups, a.id);

@@ -57,6 +57,11 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* more agents below the cut: the last rows fade out, so the list reads as one that scrolls; gone at the end */
+.ss-scroll.more {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
 /* the first frame, before the menu knows where it fits, is not shown */
 .ss-pop-measuring {
   visibility: hidden;

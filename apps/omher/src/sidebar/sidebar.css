@@ -650,14 +650,17 @@ button.upd:hover {
 }
 
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
-   Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. */
-.side {
+   Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. A subagent row in the
+   chat that waits on the person (.sa-row) says "waiting" in the same amber. */
+.side,
+.sa-row {
   --needs: #e9a23b;
   --needs-ink: #1b1204;
   --needs-soft: rgba(233, 162, 59, 0.12);
   --needs-text: #e9a23b;
 }
-[data-theme="light"] .side {
+[data-theme="light"] .side,
+[data-theme="light"] .sa-row {
   --needs: #e39a2a;
   --needs-ink: #1b1204;
   --needs-soft: rgba(227, 154, 42, 0.14);
