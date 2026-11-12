@@ -47,6 +47,10 @@ export interface SessionHost {
     account?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
+  /** The terminal has drawn `bytes` more of session `id`'s output. The shell stops reading the program while the
+   *  page is behind and reads again as these come back, so every message handed to `onData` is acknowledged once,
+   *  in order. Never waited for; a session that is gone takes none. */
+  ack(id: number, bytes: number): void;
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
   /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code or OmO session id or a Codex thread id to continue;
@@ -139,6 +143,23 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
   }
+  /** Drawn bytes not yet sent to the shell, by session. */
+  private drawn = new Map<number, number>();
+  /** One `session_ack` per session for everything drawn in the same task: xterm runs the callbacks of a whole
+   *  slice of its write queue (up to 12 ms of messages) in one task, so a flood costs one call per slice instead
+   *  of one per message. */
+  ack(id: number, bytes: number) {
+    const first = this.drawn.size === 0;
+    this.drawn.set(id, (this.drawn.get(id) ?? 0) + bytes);
+    if (!first) return;
+    queueMicrotask(() => {
+      const all = [...this.drawn];
+      this.drawn.clear();
+      void this.core()
+        .then(({ invoke }) => Promise.all(all.map(([sid, n]) => invoke("session_ack", { id: sid, bytes: n }))))
+        .catch(() => undefined);
+    });
+  }
   async resize(id: number, cols: number, rows: number) {
     const { invoke } = await this.core();
     await invoke("session_resize", { id, cols, rows });
@@ -152,8 +173,10 @@ export class TauriHost implements SessionHost {
 // ---- mock (browser, e2e) --------------------------------------------------------------------
 
 export interface MockCall {
-  op: "reset" | "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close" | "file.save" | "file.remove" | "file.prune";
+  op: "reset" | "start" | "write" | "ack" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close" | "file.save" | "file.remove" | "file.prune";
   id?: number;
+  /** ack: how many drawn bytes it acknowledges */
+  bytes?: number;
   agent?: string;
   cwd?: string;
   data?: string;
@@ -182,9 +205,20 @@ const BANNER: Record<AgentId, string> = {
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
+/** One step of a mock terminal's output: a message handed to the terminal (`feed`), or its acknowledgement. */
+export interface MockFlow {
+  op: "feed" | "ack";
+  id: number;
+  bytes: number;
+}
+
+const utf8 = new TextEncoder();
+
 type MockGlobals = {
   __omherPickFolder?: string | null;
   __omherSessionCalls?: MockCall[];
+  /** e2e: every message a mock terminal's program printed and every acknowledgement of one, in the order they happened */
+  __omherSessionFlow?: MockFlow[];
   __omherMockAgents?: AgentId[];
   /** e2e: Hermes is here and `omh` is not (the oh-my-hermes row reads "Hermes" and opens a Hermes chat) */
   __omherMockNoOmh?: boolean;
@@ -233,11 +267,19 @@ export class MockHost implements SessionHost {
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
     const id = ++this.next;
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
-    this.live.set(id, { line: "", out: onData, exit: onExit });
+    const out = (d: string) => {
+      (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
+      onData(d);
+    };
+    this.live.set(id, { line: "", out, exit: onExit });
     setTimeout(() => {
-      onData(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      out(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
     }, 30);
     return id;
+  }
+  ack(id: number, bytes: number) {
+    this.log({ op: "ack", id, bytes });
+    (this.g.__omherSessionFlow ??= []).push({ op: "ack", id, bytes });
   }
   async write(id: number, data: string) {
     this.log({ op: "write", id, data });

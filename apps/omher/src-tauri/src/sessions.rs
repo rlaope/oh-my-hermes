@@ -13,7 +13,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -603,6 +603,8 @@ struct Live {
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
     exited: Arc<AtomicBool>,
+    /// Its output on the way to the page.
+    out: Arc<Out>,
 }
 
 /// Pending writes per session (keystrokes or whole pastes). A program that stops reading fills it, and
@@ -614,11 +616,25 @@ pub(crate) const COALESCE_BYTES: usize = 64 * 1024;
 /// ...collected for at most this long after the first byte arrives (keeps typing echo prompt).
 pub(crate) const COALESCE_WINDOW: Duration = Duration::from_millis(4);
 
+/// Output the page was handed and has not yet said it drew ([`Sessions::ack`]). At [`FLOW_HIGH`] the session's
+/// reader stops reading the PTY, so the kernel holds the program back as a real terminal does, and at
+/// [`FLOW_LOW`] it reads again. What a session can have undrawn is at most `FLOW_HIGH` plus two messages and one
+/// read (the message that crossed the mark, the one being built, the read under way).
+pub(crate) const FLOW_HIGH: u64 = 1024 * 1024;
+pub(crate) const FLOW_LOW: u64 = 256 * 1024;
+
 /// Every running session of this app. Dropped sessions are stopped; [`Sessions::close_all`] runs on exit.
-#[derive(Default)]
 pub struct Sessions {
     live: Mutex<HashMap<u32, Live>>,
     next: AtomicU32,
+    /// (high, low) of each new session's output credit
+    marks: (u64, u64),
+}
+
+impl Default for Sessions {
+    fn default() -> Sessions {
+        Sessions { live: Mutex::default(), next: AtomicU32::new(0), marks: (FLOW_HIGH, FLOW_LOW) }
+    }
 }
 
 fn clamp_size(cols: u16, rows: u16) -> PtySize {
@@ -628,6 +644,12 @@ fn clamp_size(cols: u16, rows: u16) -> PtySize {
 impl Sessions {
     pub fn new() -> Arc<Sessions> {
         Arc::new(Sessions::default())
+    }
+
+    /// Sessions whose readers hold off at `high` and read again at `low` (the bench's sweep).
+    #[cfg(all(test, unix))]
+    pub(crate) fn with_marks(high: u64, low: u64) -> Arc<Sessions> {
+        Arc::new(Sessions { marks: (high, low), ..Sessions::default() })
     }
 
     /// Start `argv` in a new pseudo-terminal in `cwd`. Crate-internal: the app reaches it only through
@@ -660,7 +682,8 @@ impl Sessions {
         let sink: Sink = Arc::new(Mutex::new(Box::new(sink)));
 
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
-        spawn_reader(reader, sink.clone());
+        let out = Out::new(self.marks);
+        spawn_reader(reader, sink.clone(), out.clone());
         let (input, queued) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
         let writer_done = Arc::new(AtomicBool::new(false));
         {
@@ -676,21 +699,21 @@ impl Sessions {
             });
         }
         {
-            let exited = exited.clone();
+            let (exited, out) = (exited.clone(), out.clone());
             thread::spawn(move || {
                 let code = match child.wait() {
                     Ok(st) if st.signal().is_none() => Some(st.exit_code()),
                     _ => None,
                 };
                 exited.store(true, Ordering::SeqCst);
-                // let the reader drain what the program printed last
-                thread::sleep(Duration::from_millis(120));
+                // what the program printed last is handed on before its exit is, whatever the page has drawn
+                out.flow.drain(Duration::from_millis(120));
                 if let Ok(mut f) = sink.lock() {
                     f(Output::Exit(code));
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out });
         Ok(id)
     }
 
@@ -732,6 +755,14 @@ impl Sessions {
         }
     }
 
+    /// The page has drawn `bytes` more of session `id`'s output: credit for its reader ([`FLOW_HIGH`]). A session
+    /// that is gone takes none.
+    pub fn ack(&self, id: u32, bytes: u64) {
+        if let Some(s) = self.live.lock().unwrap().get(&id) {
+            s.out.flow.ack(bytes);
+        }
+    }
+
     pub fn resize(&self, id: u32, cols: u16, rows: u16) -> Result<(), String> {
         let g = self.live.lock().unwrap();
         let s = g.get(&id).ok_or("no such session")?;
@@ -758,6 +789,12 @@ impl Sessions {
     #[cfg(test)]
     pub fn count(&self) -> usize {
         self.live.lock().unwrap().len()
+    }
+
+    /// Bytes session `id`'s page was handed and has not acknowledged.
+    #[cfg(all(test, unix))]
+    pub(crate) fn unacked(&self, id: u32) -> Option<u64> {
+        self.live.lock().unwrap().get(&id).map(|s| s.out.flow.state.lock().unwrap().unacked)
     }
 }
 
@@ -789,35 +826,236 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
 #[cfg(all(test, unix))]
 pub(crate) static PTY_READ_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// One thread reads the PTY (macOS hands out at most 1 KB per read); another merges what arrives into
-/// one message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`], so a big dump is a few dozen Channel sends
-/// instead of one per KB.
-fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink) {
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    thread::spawn(move || {
-        let mut buf = [0u8; 16 * 1024];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    #[cfg(all(test, unix))]
-                    PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
-                    if tx.send(buf[..n].to_vec()).is_err() {
-                        break;
+/// One thread reads the PTY (macOS hands out at most 1 KB per read) into the session's [`Pipe`]; another takes one
+/// message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`] out of it and hands it to the sink, so a big dump is a few
+/// dozen Channel sends instead of one per KB. The reader holds off while the page is behind ([`Flow`]).
+fn spawn_reader(mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
+    {
+        let out = out.clone();
+        thread::spawn(move || {
+            let mut buf = [0u8; 16 * 1024];
+            // Once the session is closed, what is left is read and dropped instead of handed on: closing a
+            // pseudo-terminal can wait until its output has been read (ConPTY, documented for ClosePseudoConsole).
+            let mut forward = true;
+            loop {
+                forward = forward && out.flow.may_read();
+                match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        #[cfg(all(test, unix))]
+                        PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
+                        forward = forward && out.pipe.push(&buf[..n]);
                     }
                 }
             }
-        }
-    });
+            out.pipe.end();
+        });
+    }
     thread::spawn(move || {
-        coalesce(rx, COALESCE_BYTES, COALESCE_WINDOW, |b| {
+        while let Some(b) = out.pipe.take(COALESCE_WINDOW) {
+            // counted before the sink has it: the acknowledgement may come back while the sink still runs
+            out.flow.sent(b.len());
             if let Ok(mut f) = sink.lock() {
                 f(Output::Data(b));
             }
-        })
+        }
+        out.flow.finished();
     });
 }
 
+/// One session's output on its way to the page: what was read and not yet handed on ([`Pipe`]), and how much the
+/// page still has to draw ([`Flow`]).
+struct Out {
+    pipe: Pipe,
+    flow: Flow,
+}
+
+impl Out {
+    fn new(marks: (u64, u64)) -> Arc<Out> {
+        Arc::new(Out { pipe: Pipe::new(COALESCE_BYTES), flow: Flow::new(marks) })
+    }
+
+    /// The session is closed: nothing more is handed on, and nothing holds the reader back.
+    fn close(&self) {
+        self.pipe.close();
+        self.flow.close();
+    }
+}
+
+/// Bytes on their way from the thread that reads the PTY to the thread that hands messages to the sink. At most
+/// `cap` of them wait here: a reader that is ahead waits for room, so nothing piles up between the two, and a read
+/// costs no allocation (its bytes are copied once, into the message being built).
+pub(crate) struct Pipe {
+    cap: usize,
+    state: Mutex<PipeState>,
+    /// a first byte came, the pipe filled up, or nothing more will come
+    filled: Condvar,
+    /// a message was taken: there is room again
+    room: Condvar,
+}
+
+#[derive(Default)]
+struct PipeState {
+    buf: Vec<u8>,
+    /// the reading side is done: what is here is the last of it
+    ended: bool,
+    /// the session is closed: nothing more is taken
+    closed: bool,
+}
+
+impl Pipe {
+    pub(crate) fn new(cap: usize) -> Pipe {
+        Pipe { cap, state: Mutex::default(), filled: Condvar::new(), room: Condvar::new() }
+    }
+
+    /// Add `data`, in order, waiting while the pipe is full. False once the pipe is closed (the bytes are dropped).
+    pub(crate) fn push(&self, mut data: &[u8]) -> bool {
+        let mut s = self.state.lock().unwrap();
+        while !data.is_empty() {
+            while s.buf.len() >= self.cap && !s.closed {
+                s = self.room.wait(s).unwrap();
+            }
+            if s.closed {
+                return false;
+            }
+            let first = s.buf.is_empty();
+            let n = data.len().min(self.cap - s.buf.len());
+            s.buf.extend_from_slice(&data[..n]);
+            data = &data[n..];
+            if first || s.buf.len() >= self.cap {
+                self.filled.notify_one();
+            }
+        }
+        true
+    }
+
+    /// The reading side is done.
+    pub(crate) fn end(&self) {
+        self.state.lock().unwrap().ended = true;
+        self.filled.notify_one();
+    }
+
+    pub(crate) fn close(&self) {
+        let mut s = self.state.lock().unwrap();
+        s.closed = true;
+        s.buf = Vec::new();
+        self.filled.notify_all();
+        self.room.notify_all();
+    }
+
+    /// The next message: waits for a first byte, then up to `window` while more arrive, and takes everything that
+    /// is here (never more than `cap`). `None` when the reading side is done and nothing is left, or once closed.
+    pub(crate) fn take(&self, window: Duration) -> Option<Vec<u8>> {
+        let mut s = self.state.lock().unwrap();
+        while s.buf.is_empty() && !s.ended && !s.closed {
+            s = self.filled.wait(s).unwrap();
+        }
+        let deadline = Instant::now() + window;
+        while s.buf.len() < self.cap && !s.ended && !s.closed {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            s = self.filled.wait_timeout(s, left).unwrap().0;
+        }
+        if s.closed || s.buf.is_empty() {
+            return None;
+        }
+        // a flood's next message gets its full room at once; a keystroke's stays small
+        let next = Vec::with_capacity(s.buf.len());
+        let message = std::mem::replace(&mut s.buf, next);
+        self.room.notify_one();
+        Some(message)
+    }
+}
+
+/// A session's credit with the page: bytes handed to the sink minus bytes the page acknowledged.
+struct Flow {
+    high: u64,
+    low: u64,
+    state: Mutex<FlowState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct FlowState {
+    unacked: u64,
+    /// set at `high`, cleared at `low`: the reader holds off while it is set
+    paused: bool,
+    /// the program has just ended: its last output is read whatever the page has drawn
+    draining: bool,
+    /// the session is closed
+    closed: bool,
+    /// the end of the program's output was read and all of it handed on
+    done: bool,
+}
+
+impl Flow {
+    fn new((high, low): (u64, u64)) -> Flow {
+        Flow { high, low, state: Mutex::default(), changed: Condvar::new() }
+    }
+
+    /// `n` more bytes are on their way to the page.
+    fn sent(&self, n: usize) {
+        let mut s = self.state.lock().unwrap();
+        s.unacked += n as u64;
+        if s.unacked >= self.high {
+            s.paused = true;
+        }
+    }
+
+    /// The page drew `n` bytes.
+    fn ack(&self, n: u64) {
+        let mut s = self.state.lock().unwrap();
+        s.unacked = s.unacked.saturating_sub(n);
+        if s.paused && s.unacked <= self.low {
+            s.paused = false;
+            self.changed.notify_all();
+        }
+    }
+
+    /// The reader asks before every read, and waits here while the page is behind. False once the session is
+    /// closed: the reader then reads on to the end without handing anything on.
+    fn may_read(&self) -> bool {
+        let mut s = self.state.lock().unwrap();
+        while s.paused && !s.draining && !s.closed {
+            s = self.changed.wait(s).unwrap();
+        }
+        !s.closed
+    }
+
+    fn close(&self) {
+        self.state.lock().unwrap().closed = true;
+        self.changed.notify_all();
+    }
+
+    /// The end of the output was read and all of it handed to the sink.
+    fn finished(&self) {
+        self.state.lock().unwrap().done = true;
+        self.changed.notify_all();
+    }
+
+    /// The program has ended: until all its output is handed on, and for `limit` at most (something it started
+    /// may still hold the terminal), the reader is not held back.
+    fn drain(&self, limit: Duration) {
+        let mut s = self.state.lock().unwrap();
+        s.draining = true;
+        self.changed.notify_all();
+        let deadline = Instant::now() + limit;
+        while !s.done {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            s = self.changed.wait_timeout(s, left).unwrap().0;
+        }
+        s.draining = false;
+    }
+}
+
+/// A chat session's stdout (crate::agent_chat, on pipes) is merged with this; a terminal session's PTY goes through
+/// [`Pipe`] instead.
+///
 /// Wait for a chunk, then keep taking chunks until `max` bytes or `window` after that first chunk, and
 /// emit them as one buffer. Returns when the sender is gone and everything was emitted.
 pub(crate) fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut emit: impl FnMut(Vec<u8>)) {
@@ -846,6 +1084,7 @@ pub(crate) fn coalesce(rx: Receiver<Vec<u8>>, max: usize, window: Duration, mut 
 /// closes the terminal, which hangs up anything still attached to it. A writer thread stuck on a full PTY
 /// is waited for only briefly: it ends once the terminal is gone, and nothing here waits on it for long.
 fn stop(mut s: Live, grace: Duration) {
+    s.out.close();
     // A program that already ended is not signalled: its pid may belong to someone else by now.
     if !s.exited.load(Ordering::SeqCst) {
         signal_group(s.pid, false);
@@ -1440,6 +1679,88 @@ mod tests {
     }
 
     #[test]
+    fn the_pipe_merges_reads_up_to_the_size_cap() {
+        let pipe = Arc::new(Pipe::new(64 * 1024));
+        let p = pipe.clone();
+        let t = thread::spawn(move || {
+            for _ in 0..200 {
+                assert!(p.push(&[b'a'; 1024]));
+            }
+            p.end();
+        });
+        let mut out = Vec::new();
+        while let Some(b) = pipe.take(Duration::from_secs(5)) {
+            out.push(b.len());
+        }
+        t.join().unwrap();
+        assert_eq!(out.iter().sum::<usize>(), 200 * 1024);
+        assert_eq!(out, [64 * 1024, 64 * 1024, 64 * 1024, 8 * 1024]);
+    }
+
+    #[test]
+    fn the_pipe_hands_on_a_lone_keystroke_after_the_window() {
+        let pipe = Arc::new(Pipe::new(COALESCE_BYTES));
+        let (got_tx, got) = mpsc::channel();
+        let p = pipe.clone();
+        let t = thread::spawn(move || {
+            while let Some(b) = p.take(COALESCE_WINDOW) {
+                got_tx.send((b, Instant::now())).unwrap();
+            }
+        });
+        let sent = Instant::now();
+        assert!(pipe.push(b"k"));
+        let (b, at) = got.recv_timeout(Duration::from_secs(2)).expect("a lone chunk must not wait for more");
+        assert_eq!(b, b"k");
+        assert!(at - sent < Duration::from_millis(100), "{:?}", at - sent);
+        pipe.end();
+        t.join().unwrap();
+    }
+
+    /// 50 MB of a counter (every 8 bytes are their own position) through the bounded pipe, pushed in reads of
+    /// every size up to 16 KB while the taking side now and then falls behind: every byte arrives once and in
+    /// order, and never more than the cap waits.
+    #[test]
+    fn the_pipe_never_drops_or_reorders_bytes() {
+        use std::hash::Hasher;
+        const TOTAL: usize = 50 * 1024 * 1024;
+        const CAP: usize = 64 * 1024;
+        let pipe = Arc::new(Pipe::new(CAP));
+        let p = pipe.clone();
+        let producer = thread::spawn(move || {
+            let mut sent = std::collections::hash_map::DefaultHasher::new();
+            let mut buf = vec![0u8; 16 * 1024];
+            let (mut at, mut k) = (0usize, 0usize);
+            while at < TOTAL {
+                let n = (1 + (k * 7919) % buf.len()).min(TOTAL - at);
+                for (i, b) in buf[..n].iter_mut().enumerate() {
+                    *b = (((at + i) / 8) as u64).to_le_bytes()[(at + i) % 8];
+                }
+                sent.write(&buf[..n]);
+                assert!(p.push(&buf[..n]));
+                at += n;
+                k += 1;
+            }
+            p.end();
+            sent.finish()
+        });
+        let mut got = std::collections::hash_map::DefaultHasher::new();
+        let (mut total, mut messages, mut full) = (0usize, 0usize, 0usize);
+        while let Some(b) = pipe.take(Duration::from_micros(200)) {
+            assert!(!b.is_empty() && b.len() <= CAP, "{}", b.len());
+            got.write(&b);
+            total += b.len();
+            messages += 1;
+            full += (b.len() == CAP) as usize;
+            if messages % 64 == 0 {
+                thread::sleep(Duration::from_millis(1)); // the producer runs into the cap and waits
+            }
+        }
+        assert_eq!(total, TOTAL);
+        assert_eq!(got.finish(), producer.join().unwrap(), "bytes were dropped, repeated or reordered");
+        assert!(full > 0, "the pipe never filled, so its limit was not exercised");
+    }
+
+    #[test]
     fn empty_env_still_has_system_folders() {
         let dirs = search_dirs(&env_of(&[]), Os::Unix);
         assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
@@ -1594,6 +1915,218 @@ mod tests {
         assert!(total >= 524288, "{total}");
         // 1 KB per read would be over 500 messages
         assert!(ev.len() < 64, "{} messages for {total} bytes", ev.len());
+    }
+
+    /// What the sink of a flow test was handed. It acknowledges nothing by itself.
+    #[cfg(unix)]
+    #[derive(Default)]
+    struct Seen {
+        bytes: std::sync::atomic::AtomicU64,
+        exit: AtomicBool,
+    }
+
+    #[cfg(unix)]
+    fn flood(s: &Sessions, argv: &[&str]) -> (u32, Arc<Seen>) {
+        let seen = Arc::new(Seen::default());
+        let w = seen.clone();
+        let id = s
+            .spawn(argv.iter().map(OsString::from).collect(), &std::env::temp_dir().canonicalize().unwrap(), None, &[], 80, 24, move |ev| match ev {
+                Output::Data(b) => {
+                    w.bytes.fetch_add(b.len() as u64, Ordering::SeqCst);
+                }
+                Output::Exit(_) => w.exit.store(true, Ordering::SeqCst),
+            })
+            .unwrap();
+        (id, seen)
+    }
+
+    /// Wait until the sink has been handed at least `least` bytes and then nothing more for 300 ms; the count then.
+    #[cfg(unix)]
+    fn held_at(seen: &Seen, least: u64) -> u64 {
+        assert!(wait_for(|| seen.bytes.load(Ordering::SeqCst) >= least), "only {} of {least} bytes came", seen.bytes.load(Ordering::SeqCst));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let before = seen.bytes.load(Ordering::SeqCst);
+            thread::sleep(Duration::from_millis(300));
+            if seen.bytes.load(Ordering::SeqCst) == before {
+                return before;
+            }
+            assert!(Instant::now() < deadline, "the output never stopped");
+        }
+    }
+
+    /// What can still reach the page once the high mark is crossed: the message that crossed it, the one being
+    /// built, and the read under way.
+    #[cfg(unix)]
+    const OVER_HIGH: u64 = 2 * COALESCE_BYTES as u64 + 16 * 1024;
+
+    #[cfg(unix)]
+    #[test]
+    fn the_reader_pauses_above_the_high_mark_and_resumes_below_the_low_mark() {
+        let s = Sessions::default();
+        let (id, seen) = flood(&s, &["/usr/bin/yes"]);
+        // nothing is acknowledged: the page is handed the high mark and what was already on its way, no more
+        let first = held_at(&seen, FLOW_HIGH);
+        assert!(first < FLOW_HIGH + OVER_HIGH, "{first}");
+        assert_eq!(s.unacked(id), Some(first));
+        assert!(!seen.exit.load(Ordering::SeqCst), "the program is held back, not ended");
+        // one byte above the low mark: still held
+        s.ack(id, first - FLOW_LOW - 1);
+        assert_eq!(s.unacked(id), Some(FLOW_LOW + 1));
+        assert_eq!(held_at(&seen, first), first);
+        // at the low mark it reads again, up to the high mark
+        s.ack(id, 1);
+        assert!(wait_for(|| seen.bytes.load(Ordering::SeqCst) > first), "did not read again at the low mark");
+        let second = held_at(&seen, first + FLOW_HIGH - FLOW_LOW);
+        let unacked = s.unacked(id).unwrap();
+        assert_eq!(unacked, FLOW_LOW + (second - first));
+        assert!((FLOW_HIGH..FLOW_HIGH + OVER_HIGH).contains(&unacked), "{unacked}");
+        assert!(!seen.exit.load(Ordering::SeqCst));
+        s.close_all();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn close_stops_a_program_whose_page_never_acknowledged() {
+        let s = Sessions::default();
+        // held at the high mark, the program blocked in its write
+        let (id, seen) = flood(&s, &["/usr/bin/yes"]);
+        held_at(&seen, FLOW_HIGH);
+        let t = Instant::now();
+        s.close(id);
+        assert!(wait_for(|| seen.exit.load(Ordering::SeqCst)), "close did not stop it");
+        // inside close's grace (1.5 s): the hang-up reached it, no hard kill was needed
+        assert!(t.elapsed() < Duration::from_millis(1500), "the hang-up took {:?}", t.elapsed());
+        // one that ignores the hang-up goes when the grace is over, no later
+        let (id, seen) = flood(&s, &["/bin/sh", "-c", "trap '' HUP; exec /usr/bin/yes"]);
+        held_at(&seen, FLOW_HIGH);
+        let t = Instant::now();
+        s.close(id);
+        assert!(wait_for(|| seen.exit.load(Ordering::SeqCst)), "close did not stop the one that ignores the hang-up");
+        assert!(t.elapsed() < Duration::from_millis(1500 + 1500), "{:?}", t.elapsed());
+        assert_eq!(s.count(), 0);
+    }
+
+    /// The app quits, or the page was loaded again (`session_close_all`), while a session waits for a page that
+    /// never acknowledged: it stops at once, and the session the page starts next has its own full credit.
+    #[cfg(unix)]
+    #[test]
+    fn close_all_stops_a_program_whose_page_never_acknowledged_and_the_next_session_starts_clean() {
+        let s = Sessions::default();
+        let (old, seen) = flood(&s, &["/usr/bin/yes"]);
+        held_at(&seen, FLOW_HIGH);
+        let t = Instant::now();
+        s.close_all();
+        assert!(t.elapsed() < Duration::from_secs(2), "close_all took {:?}", t.elapsed());
+        assert_eq!(s.count(), 0);
+        assert!(wait_for(|| seen.exit.load(Ordering::SeqCst)), "the held program survived close_all");
+        let (id, out, exit) = collect(&s, &["/bin/sh", "-c", "echo fresh"], 80, 24);
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "no exit");
+        assert!(String::from_utf8_lossy(&out.lock().unwrap()).contains("fresh"));
+        // an acknowledgement still on its way for the session that is gone changes nothing
+        s.ack(old, u64::MAX);
+        assert_eq!(s.unacked(old), None);
+        assert_eq!(s.unacked(id), Some(out.lock().unwrap().len() as u64));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_lone_keystroke_still_echoes_within_the_window() {
+        let s = Sessions::default();
+        let (tx, rx) = mpsc::channel();
+        let id = s
+            .spawn(
+                ["/bin/sh", "-c", "stty raw -echo; echo ready; exec /bin/cat"].iter().map(OsString::from).collect(),
+                &std::env::temp_dir().canonicalize().unwrap(),
+                None,
+                &[],
+                80,
+                24,
+                move |ev| {
+                    if let Output::Data(b) = ev {
+                        let _ = tx.send((b, Instant::now()));
+                    }
+                },
+            )
+            .unwrap();
+        let mut text = Vec::new();
+        while !text.windows(5).any(|w| w == b"ready") {
+            text.extend(rx.recv_timeout(Duration::from_secs(10)).expect("the program did not start").0);
+        }
+        thread::sleep(Duration::from_millis(300));
+        while rx.try_recv().is_ok() {}
+        let mut fastest = Duration::MAX;
+        for key in *b"abcde" {
+            let sent = Instant::now();
+            s.write(id, &[key]).unwrap();
+            let (b, at) = rx.recv_timeout(Duration::from_secs(2)).expect("no echo");
+            assert_eq!(b, [key], "a keystroke's echo is its own message");
+            fastest = fastest.min(at - sent);
+            thread::sleep(Duration::from_millis(40));
+        }
+        // nothing but the window (4 ms) holds an echo back; the rest of this bound is the machine's own scheduling
+        assert!(fastest < Duration::from_millis(100), "{fastest:?}");
+        s.close_all();
+    }
+
+    /// Six high marks of output through a real session whose page acknowledges only when the output has stopped:
+    /// the reader pauses and reads again several times, and every byte still arrives once and in order.
+    #[cfg(unix)]
+    #[test]
+    fn output_arrives_whole_and_in_order_across_pauses() {
+        use std::fmt::Write as _;
+        // a counter in decimal with no newline in it (the terminal would add a byte to each)
+        let total = 6 * FLOW_HIGH as usize;
+        let mut want = String::with_capacity(total + 16);
+        let mut n = 0u64;
+        while want.len() < total {
+            write!(want, "{n:08} ").unwrap();
+            n += 1;
+        }
+        let file = std::env::temp_dir().canonicalize().unwrap().join(format!("omher-flow-{}.txt", std::process::id()));
+        std::fs::write(&file, &want).unwrap();
+        let s = Sessions::default();
+        let (id, out, exit) = collect(&s, &["/bin/cat", file.to_str().unwrap()], 80, 24);
+        let mut pauses = 0;
+        let mut last = (0usize, Instant::now());
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while out.lock().unwrap().len() < want.len() {
+            assert!(Instant::now() < deadline, "stuck with {} of {} bytes", out.lock().unwrap().len(), want.len());
+            thread::sleep(Duration::from_millis(5));
+            let len = out.lock().unwrap().len();
+            if len != last.0 {
+                last = (len, Instant::now());
+            } else if last.1.elapsed() > Duration::from_millis(100) {
+                // nothing for 100 ms: the reader is held (or the machine was busy); the page draws all it has
+                let owed = s.unacked(id).unwrap();
+                pauses += (owed >= FLOW_HIGH) as usize;
+                s.ack(id, owed);
+                last.1 = Instant::now();
+            }
+        }
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "no exit");
+        let _ = std::fs::remove_file(&file);
+        let got = out.lock().unwrap();
+        assert_eq!(got.len(), want.len());
+        assert!(*got == want.as_bytes(), "bytes were dropped, repeated or reordered");
+        assert!(pauses >= 3, "only {pauses} pauses: the credit was not exercised");
+    }
+
+    /// The page sends one size once a drag has settled (sessions.ts); whatever sizes came before it, the program
+    /// has the last one.
+    #[cfg(unix)]
+    #[test]
+    fn a_burst_of_resizes_leaves_the_program_with_the_last_size() {
+        let s = Sessions::default();
+        let (id, out, exit) = collect(&s, &["/bin/sh", "-c", "echo ready; read x; stty size"], 80, 24);
+        assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("ready")));
+        for (cols, rows) in [(100, 30), (61, 17), (132, 43), (90, 20), (117, 38)] {
+            s.resize(id, cols, rows).unwrap();
+        }
+        s.write(id, b"\r").unwrap();
+        assert!(wait_for(|| exit.lock().unwrap().is_some()), "no exit");
+        let text = String::from_utf8_lossy(&out.lock().unwrap()).to_string();
+        assert!(text.contains("38 117"), "{text:?}");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! The PTY flow bench (`apps/omher/bench/pty/`): how fast a program's output reaches the page, what piles up when
 //! the page is slower than the program, how long Ctrl+C takes under a flood, and how long a keystroke's echo takes.
 //! Real programs (`/bin/cat`, `/usr/bin/yes`) run through the same [`Sessions::spawn`] a session uses, and this
-//! file stands in for the page in two ways ([`Page`]). Neither is a webview: no number here is the app window's.
+//! file stands in for the page in three ways ([`Page`]). None is a webview: no number here is the app window's.
 //!
 //! One test here is one run of one scenario; `bench/pty/run.mjs` starts each run as its own process (so one run's
 //! memory never counts in the next) and folds the numbers. Ignored by default.
@@ -17,12 +17,18 @@ use serde_json::{json, Map, Value};
 
 use crate::sessions::{Output, Sessions, PTY_READ_BYTES};
 
-/// The page's acknowledgement of `n` drawn bytes. The seam commit has no such call.
-fn ack(_s: &Sessions, _id: u32, _n: usize) {}
+/// The page's acknowledgement of `n` drawn bytes (a no-op when the baseline was measured: the seam commit had no
+/// such call).
+fn ack(s: &Sessions, id: u32, n: usize) {
+    s.ack(id, n as u64);
+}
 
-/// The sessions a run uses; `marks` (high, low) is for the sweep. The seam commit has no marks.
-fn sessions(_marks: Option<(u64, u64)>) -> Arc<Sessions> {
-    Sessions::new()
+/// The sessions a run uses; `marks` (high, low) is for the sweep (the baseline had none).
+fn sessions(marks: Option<(u64, u64)>) -> Arc<Sessions> {
+    match marks {
+        Some((high, low)) => Sessions::with_marks(high, low),
+        None => Sessions::new(),
+    }
 }
 
 /// What stands in for the page.
@@ -34,10 +40,25 @@ enum Page {
     /// limit (the webview's own); a page thread takes them in order, spends this long drawing each, and
     /// acknowledges once per [`SLICE`] of work.
     Queued(Duration),
+    /// The same queue, drawn the way xterm draws: this many MB a second for one [`SLICE`], then the acknowledgement
+    /// of what the slice drew, then [`GAP`] before the next slice.
+    Slices(f64),
 }
 
 /// xterm takes its write queue in slices of 12 ms; `TauriHost` sends one `session_ack` for all a slice drew.
 const SLICE: Duration = Duration::from_millis(12);
+/// Between slices xterm waits on a timer, and a browser gives a timer set from a timer at least 4 ms.
+const GAP: Duration = Duration::from_millis(4);
+/// A fast page: about what xterm takes plain text at on this machine in the render bench (Playwright WebKit).
+const FAST_PAGE_MB_S: f64 = 100.0;
+
+/// Busy for `d`, to the microsecond (this machine stretches a short sleep: one of 2 ms takes about 7).
+fn spin(d: Duration) {
+    let until = Instant::now() + d;
+    while Instant::now() < until {
+        std::hint::spin_loop();
+    }
+}
 
 /// What the sink and the page saw.
 #[derive(Default)]
@@ -73,7 +94,7 @@ fn id_of(cell: &AtomicU32) -> u32 {
 fn start(s: &Arc<Sessions>, argv: &[&str], page: Page, probe: &Arc<Probe>) -> u32 {
     let cell = Arc::new(AtomicU32::new(0));
     let (queue, waiting) = mpsc::channel::<Vec<u8>>();
-    if let Page::Queued(delay) = page {
+    if !matches!(page, Page::Sink(_)) {
         let (s, cell, p) = (s.clone(), cell.clone(), probe.clone());
         thread::spawn(move || {
             while let Ok(first) = waiting.recv() {
@@ -81,14 +102,22 @@ fn start(s: &Arc<Sessions>, argv: &[&str], page: Page, probe: &Arc<Probe>) -> u3
                 let mut owed = 0usize;
                 let mut next = Some(first);
                 while let Some(b) = next {
-                    if !delay.is_zero() {
-                        thread::sleep(delay);
+                    match page {
+                        Page::Slices(mb_s) => spin(Duration::from_secs_f64(b.len() as f64 / (mb_s * MB))),
+                        Page::Queued(delay) | Page::Sink(delay) => {
+                            if !delay.is_zero() {
+                                thread::sleep(delay);
+                            }
+                        }
                     }
                     p.draw(b.len());
                     owed += b.len();
                     next = if Instant::now() < slice_end { waiting.try_recv().ok() } else { None };
                 }
                 ack(&s, id_of(&cell), owed);
+                if let Page::Slices(_) = page {
+                    spin(GAP);
+                }
             }
         });
     }
@@ -110,7 +139,7 @@ fn start(s: &Arc<Sessions>, argv: &[&str], page: Page, probe: &Arc<Probe>) -> u3
                         p.draw(b.len());
                         ack(&s2, id_of(&c2), b.len());
                     }
-                    Page::Queued(_) => {
+                    Page::Queued(_) | Page::Slices(_) => {
                         let _ = queue.send(b);
                     }
                 }
@@ -275,6 +304,10 @@ fn pty_bench_one() {
         "page_slow_20ms" => slow(&s, Page::Queued(ms(20)), "page_slow_20ms_"),
         "page_interrupt_2ms" => interrupt(&s, Page::Queued(ms(2)), "page_interrupt_2ms_"),
         "page_interrupt_20ms" => interrupt(&s, Page::Queued(ms(20)), "page_interrupt_20ms_"),
+        // a fast page that draws in slices, as xterm does
+        "slice_cat" => cat(&s, Page::Slices(FAST_PAGE_MB_S), "slice_"),
+        "slice_yes" => yes(&s, Page::Slices(FAST_PAGE_MB_S), "slice_"),
+        "slice_interrupt" => interrupt(&s, Page::Slices(FAST_PAGE_MB_S), "slice_interrupt_"),
         other => panic!("unknown scenario {other}"),
     };
     println!("PTY_BENCH {res}");

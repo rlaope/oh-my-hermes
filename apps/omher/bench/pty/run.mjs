@@ -3,6 +3,7 @@
 // three times, every run in its own process, and writes median / min / max of each number.
 //   node bench/pty/run.mjs bench/pty/after.json
 //   node bench/pty/run.mjs bench/pty/sweep.json --sweep     the high and low marks tried against each other
+//   node bench/pty/run.mjs out.json --only=slice_yes,echo   some scenarios only
 // Real programs (/bin/cat, /usr/bin/yes); macOS or Linux. Nothing else heavy should run beside it.
 import { spawnSync } from "node:child_process";
 import { closeSync, mkdtempSync, openSync, rmSync, writeFileSync, writeSync } from "node:fs";
@@ -12,26 +13,29 @@ import { fileURLToPath } from "node:url";
 
 const RUNS = 3;
 // sink_*: the sink stands in for the page (it takes the time itself). page_*: the sink returns at once, as the
-// app's does, and a page thread draws behind it.
-const SCENARIOS = ["sink_cat", "sink_yes", "sink_slow_2ms", "sink_interrupt_2ms", "echo", "page_cat", "page_yes", "page_slow_20ms", "page_interrupt_2ms", "page_interrupt_20ms"];
+// app's does, and a page thread draws behind it. slice_*: that page draws 100 MB/s in slices, as xterm does.
+const ALL = ["sink_cat", "sink_yes", "sink_slow_2ms", "sink_interrupt_2ms", "echo", "page_cat", "page_yes", "page_slow_20ms", "page_interrupt_2ms", "page_interrupt_20ms", "slice_cat", "slice_yes", "slice_interrupt"];
 // (high, low) in bytes, for --sweep
 const KB = 1024;
 const SWEEP = [
-  [128 * KB, 32 * KB],
   [256 * KB, 64 * KB],
   [512 * KB, 128 * KB],
-  [1024 * KB, 64 * KB],
   [1024 * KB, 256 * KB],
   [1024 * KB, 512 * KB],
   [2048 * KB, 512 * KB],
+  [2048 * KB, 1024 * KB],
   [4096 * KB, 1024 * KB],
+  [8192 * KB, 2048 * KB],
 ];
-const SWEEP_SCENARIOS = ["page_yes", "page_cat", "page_slow_20ms", "page_interrupt_2ms", "page_interrupt_20ms"];
+// what the marks decide: how fast a fast page is fed, and how far behind Ctrl+C a fast and a slow page are
+const SWEEP_SCENARIOS = ["slice_yes", "slice_interrupt", "page_interrupt_20ms"];
 
 const args = process.argv.slice(2);
 const out = args.find((a) => !a.startsWith("--"));
-if (!out) {
-  console.error("usage: node bench/pty/run.mjs <out.json> [--sweep]");
+const only = args.find((a) => a.startsWith("--only="))?.slice(7).split(",");
+const SCENARIOS = only ?? ALL;
+if (!out || SCENARIOS.some((s) => !ALL.includes(s))) {
+  console.error(`usage: node bench/pty/run.mjs <out.json> [--sweep] [--only=${ALL.join(",")}]`);
   process.exit(2);
 }
 const here = path.dirname(fileURLToPath(import.meta.url));

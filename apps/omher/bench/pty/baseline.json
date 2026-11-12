@@ -228,11 +228,82 @@
         293682.243,
         243999.989
       ]
+    },
+    "slice_cat_200mb_cpu_ms_per_mb": {
+      "median": 19.795,
+      "min": 19.63,
+      "max": 19.82,
+      "runs": [
+        19.795,
+        19.63,
+        19.82
+      ]
+    },
+    "slice_cat_200mb_mb_s": {
+      "median": 75.444,
+      "min": 75.295,
+      "max": 75.665,
+      "runs": [
+        75.295,
+        75.665,
+        75.444
+      ]
+    },
+    "slice_yes_5s_mb_s": {
+      "median": 75.686,
+      "min": 75.654,
+      "max": 75.697,
+      "runs": [
+        75.686,
+        75.697,
+        75.654
+      ]
+    },
+    "slice_yes_5s_messages_per_s": {
+      "median": 1734.766,
+      "min": 1725.738,
+      "max": 1741.046,
+      "runs": [
+        1725.738,
+        1734.766,
+        1741.046
+      ]
+    },
+    "slice_interrupt_mb_after_key": {
+      "median": 67.417,
+      "min": 64.673,
+      "max": 69.125,
+      "runs": [
+        67.417,
+        64.673,
+        69.125
+      ]
+    },
+    "slice_interrupt_ms_to_last_byte": {
+      "median": 890.475,
+      "min": 854.922,
+      "max": 912.49,
+      "runs": [
+        890.475,
+        854.922,
+        912.49
+      ]
     }
   },
   "load_average_at_end": [
     8.042,
     7.234,
     6.563
-  ]
+  ],
+  "load_average_at_start_slice_scenarios": [
+    7.131,
+    8.421,
+    9.191
+  ],
+  "load_average_at_end_slice_scenarios": [
+    7.148,
+    8.292,
+    9.112
+  ],
+  "note": "sink_*, page_* and echo were measured in one run; slice_* (added to the bench afterwards) in a second run of the same unchanged shell source"
 }
