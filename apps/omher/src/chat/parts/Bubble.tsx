@@ -21,6 +21,7 @@ export const Bubble = memo(function Bubble({
   faceEl,
   live,
   onEdit,
+  editKeepsFiles,
 }: {
   item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "sent" | "wait">;
   streaming?: boolean;
@@ -33,6 +34,8 @@ export const Bubble = memo(function Bubble({
   live?: boolean;
   /** A user bubble the agent can take back (a SESSIONS chat's last message): its Edit control. */
   onEdit?: () => void;
+  /** The turn Edit takes back changed files: a quiet line beside it says they stay as they are. */
+  editKeepsFiles?: boolean;
 }) {
   if (item.kind === "user") {
     return (
@@ -63,6 +66,11 @@ export const Bubble = memo(function Bubble({
           <button type="button" className="msg-edit" onClick={onEdit} title={t("rw.tip")} data-testid="bubble-edit">
             {t("rw.edit")}
           </button>
+        )}
+        {onEdit && editKeepsFiles && (
+          <div className="msg-edit-note" data-testid="bubble-edit-note">
+            {t("rw.filesStay")}
+          </div>
         )}
       </div>
     );

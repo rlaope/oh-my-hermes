@@ -959,6 +959,7 @@ export const zh: Record<Key, string> = {
   "think.label": "思考",
   "rw.edit": "编辑",
   "rw.tip": "撤回这条消息并编辑",
+  "rw.filesStay": "代理改过的文件会保持原样",
   "id.picKinds": "请使用 PNG、JPEG 或 WebP 图片",
   "id.picUnreadable": "无法读取这张图片",
   "upd.restarting": "正在重启…",

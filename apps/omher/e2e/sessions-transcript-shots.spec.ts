@@ -80,5 +80,21 @@ for (const theme of ["dark", "light"] as const) {
     else await bubble.hover();
     await page.waitForTimeout(250);
     await shot(page, "copy", theme);
+
+    // edit and resend, both from this tree: "edit-before" is the control on the hovered last message (with the line
+    // that the files stay), "edit-after" the box holding its text once Edit was pressed
+    if (TAG !== "after") return;
+    const editShot = (when: string) =>
+      page.screenshot({ path: join(SHOTS, `sessions-transcript-edit-${when}-${theme}.png`), animations: "disabled" });
+    const user = page.getByTestId("bubble-user").last();
+    await user.scrollIntoViewIfNeeded();
+    await user.hover();
+    await page.waitForTimeout(250);
+    await editShot("before");
+    await page.getByTestId("bubble-edit").click();
+    await expect(page.getByTestId("composer")).toHaveValue("/work");
+    await page.mouse.move(900, 790);
+    await page.waitForTimeout(300);
+    await editShot("after");
   });
 }

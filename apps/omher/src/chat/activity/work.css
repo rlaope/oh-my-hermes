@@ -204,6 +204,10 @@
   scrollbar-width: thin;
   overscroll-behavior: contain;
 }
+/* inline code in thinking text: as in the answer */
+.th-body code {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
 @media (prefers-reduced-motion: reduce) {
   .th-chev {
     transition: none;

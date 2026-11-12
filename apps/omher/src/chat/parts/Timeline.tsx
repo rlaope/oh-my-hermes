@@ -38,6 +38,10 @@ export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode
   const lastBot = useRef<string | null>(null);
   // the person's last message, when the chat can take it back (a SESSIONS agent's own rewind)
   const lastUser = onEditLast ? [...items].reverse().find((i) => i.kind === "user") : undefined;
+  // taking it back rewinds the conversation only: when its turn changed files, the Edit control says they stay
+  const lastUserAt = lastUser ? items.indexOf(lastUser) : -1;
+  const keptFiles =
+    lastUserAt >= 0 && items.slice(lastUserAt + 1).some((i) => i.kind === "activity" && i.turn.steps.some((st) => st.diff?.length));
 
   // Stick to the bottom unless the person scrolled up; jump to the bottom on bot switch.
   useLayoutEffect(() => {
@@ -62,7 +66,7 @@ export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode
   const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {
       case "user":
-        return <Bubble item={it} onEdit={it === lastUser && !it.error && !it.wait ? onEditLast : undefined} />;
+        return <Bubble item={it} onEdit={it === lastUser && !it.error && !it.wait ? onEditLast : undefined} editKeepsFiles={it === lastUser && keptFiles} />;
       case "assistant":
         // the face shows on the first bot bubble after something else (the user, a day line, a card)
         return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} />;

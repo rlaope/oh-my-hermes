@@ -959,6 +959,7 @@ export const ja: Record<Key, string> = {
   "think.label": "思考",
   "rw.edit": "編集",
   "rw.tip": "このメッセージを取り消して編集する",
+  "rw.filesStay": "エージェントが変更したファイルはそのまま残ります",
   "id.picKinds": "PNG、JPEG、WebP の画像を使ってください",
   "id.picUnreadable": "その画像を読み込めませんでした",
   "upd.restarting": "再起動中…",

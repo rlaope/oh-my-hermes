@@ -959,6 +959,7 @@ export const ko: Record<Key, string> = {
   "think.label": "생각",
   "rw.edit": "수정",
   "rw.tip": "이 메시지를 되돌리고 고쳐 보내기",
+  "rw.filesStay": "에이전트가 바꾼 파일은 그대로 남아요",
   "id.picKinds": "PNG, JPEG, WebP 사진을 쓰세요",
   "id.picUnreadable": "그 사진을 읽지 못했어요",
   "upd.restarting": "다시 시작하는 중…",

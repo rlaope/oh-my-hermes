@@ -961,6 +961,7 @@ export const en = {
   "think.label": "Thinking",
   "rw.edit": "Edit",
   "rw.tip": "Take this message back and edit it",
+  "rw.filesStay": "Files the agent changed stay as they are",
   "id.picKinds": "Use a PNG, JPEG or WebP picture",
   "id.picUnreadable": "Could not read that picture",
   "upd.restarting": "Restarting…",

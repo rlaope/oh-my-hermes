@@ -101,7 +101,14 @@ test("thinking text is kept, closed by default, and opens on a click", async ({ 
   await expect(th).toBeVisible();
   await expect(page.getByTestId("thinking-text")).toHaveCount(0);
   await th.getByTestId("thinking-toggle").click();
-  await expect(page.getByTestId("thinking-text")).toHaveText("Three small steps: a docstring on `add`, a new `mul`, then list the functions in README.md.");
+  await expect(page.getByTestId("thinking-text")).toHaveText("Three small steps: a docstring on add, a new mul, then list the functions in README.md.");
+  // `add` and `mul` show as inline code, the way the answer shows them, not as raw backticks
+  await expect(page.getByTestId("thinking-text").locator("code")).toHaveText(["add", "mul"]);
+  const [inThinking, inAnswer] = await Promise.all([
+    page.getByTestId("thinking-text").locator("code").first().evaluate((el) => getComputedStyle(el).fontFamily),
+    page.getByTestId("bubble-bot").last().locator("p code").first().evaluate((el) => getComputedStyle(el).fontFamily),
+  ]);
+  expect(inThinking).toBe(inAnswer);
   // an agent that sends no thinking text shows no thinking line
   await page.getByTestId("composer").fill("plain question");
   await page.keyboard.press("Enter");
@@ -125,7 +132,11 @@ test("an answer and a code block can be copied with one click; the control shows
   const pre = bubble.locator(".md-pre");
   await pre.hover();
   await pre.getByTestId("copy-code").click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("def mul(a, b):\n    return a * b");
+  // omher writes the code with \n. On Windows the web engine itself stores clipboard text with CRLF (Chromium's
+  // SystemClipboard::WritePlainText runs NormalizeLineEndingsToCrLf there; WebView2 is the same engine) and reads it
+  // back unchanged, so the line endings are compared after normalising them; every other character must match.
+  const code = await page.evaluate(() => navigator.clipboard.readText());
+  expect(code.replace(/\r\n/g, "\n")).toBe("def mul(a, b):\n    return a * b");
   // showing it moves nothing: the bubble's box is the same with and without the control visible
   const before = await bubble.locator(".b").boundingBox();
   await page.mouse.move(5, 5);
@@ -161,6 +172,46 @@ test("edit and resend: the agent takes the last message back and the box holds i
   await page.keyboard.press("Enter");
   await done(page);
   await expect(page.getByTestId("bubble-edit")).toHaveCount(1);
+});
+
+test("Edit says the files stay as they are, only when the turn it takes back changed files", async ({ page }) => {
+  // a turn that edited calc.py and README.md: the line shows with Edit, on hover
+  await session(page, "claude", "/work");
+  await done(page);
+  const user = page.getByTestId("bubble-user").last();
+  const note = page.getByTestId("bubble-edit-note");
+  await expect(note).toHaveCount(1);
+  await expect(note).toHaveText("Files the agent changed stay as they are");
+  await user.hover();
+  await expect.poll(() => note.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+  const size = await note.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBeGreaterThanOrEqual(12);
+  expect(size).toBeLessThanOrEqual(13);
+  expect(await note.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  expect(await note.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe("none");
+  // a turn that changed nothing: Edit alone
+  await page.getByTestId("composer").fill("what does add do?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("activity")).toHaveCount(2);
+  await done(page);
+  await expect(page.getByTestId("bubble-edit")).toHaveCount(1);
+  await expect(note).toHaveCount(0);
+  // taken back, the earlier edit turn is last again and its line returns
+  await page.getByTestId("bubble-user").last().hover();
+  await page.getByTestId("bubble-edit").click();
+  await expect(page.getByTestId("composer")).toHaveValue("what does add do?");
+  await expect(note).toHaveCount(1);
+  // taking back a turn whose diff is open: the diff goes with it and the app stays (an effect cleanup bug blanked it)
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.getByTestId("activity-toggle").last().click();
+  await page.getByTestId("activity-step").nth(1).click();
+  await expect(page.getByTestId("diff-view")).toHaveCount(1);
+  await page.getByTestId("bubble-user").last().hover();
+  await page.getByTestId("bubble-edit").click();
+  await expect(page.getByTestId("composer")).toHaveValue("/work");
+  await expect(page.getByTestId("diff-view")).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test("after Terminal and back, the new process offers no Edit for the old one's message", async ({ page }) => {

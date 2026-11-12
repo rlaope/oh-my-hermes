@@ -71,7 +71,17 @@
   opacity: 0;
   transition: opacity 0.12s;
 }
+/* shown with Edit when the turn it takes back changed files: those files stay as they are */
+.msg-edit-note {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--quiet);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
 .msg.u:hover .msg-edit,
+.msg.u:hover .msg-edit-note,
+.msg.u:has(.msg-edit:focus-visible) .msg-edit-note,
 .msg-edit:focus-visible {
   opacity: 1;
 }
@@ -81,7 +91,8 @@
 
 @media (hover: none) {
   .copy-btn,
-  .msg-edit {
+  .msg-edit,
+  .msg-edit-note {
     opacity: 1;
   }
 }

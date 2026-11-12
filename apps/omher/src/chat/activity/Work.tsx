@@ -1,7 +1,7 @@
 // What a SESSIONS agent showed of its work inside one turn's activity line: a file edit's change (DiffView), its
 // todo list (PlanList) and its thinking (ThinkingText). The adapters send all three in one agent-neutral shape
 // (`tool.diff`, `plan`, `thinking.text`); an agent that sends none of them shows none of these.
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { DiffFile, PlanItem } from "../../lib/protocol";
 import { t, type Key } from "../../i18n";
 import { ChevronRight } from "../../ui";
@@ -39,7 +39,11 @@ function DiffFileView({ f }: { f: DiffFile }) {
  *  answer streams). */
 export function DiffView({ files }: { files: DiffFile[] }) {
   const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => ref.current?.scrollIntoView?.({ block: "nearest" }), []);
+  // a block body: newer Chromium (WebView2) returns a Promise from scrollIntoView, which React would then call as
+  // this effect's cleanup when the diff closes or its turn is taken back ("destroy is not a function", blank app)
+  useLayoutEffect(() => {
+    ref.current?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   return (
     <div className="dv" data-testid="diff-view" ref={ref}>
       {files.map((f, i) => (
@@ -69,6 +73,11 @@ export function PlanList({ items }: { items: PlanItem[] }) {
   );
 }
 
+/** `name` spans as inline code, the way the answer shows them; the rest of markdown stays plain text here. */
+function inlineCode(text: string): ReactNode[] {
+  return text.split(/`([^`\n]+)`/).map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part));
+}
+
 /** What the agent thought: one quiet line, closed by default; a click opens the text. */
 export function ThinkingText({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -82,7 +91,7 @@ export function ThinkingText({ text }: { text: string }) {
       </button>
       {open && (
         <div className="th-body" data-testid="thinking-text">
-          {text.trim()}
+          {inlineCode(text.trim())}
         </div>
       )}
     </div>
