@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A resumed session no longer shows Hermes' own turns as your prompts.**
+  When `omh --resume` or `/resume` redrew a session, every user-role row in
+  Hermes' history was drawn as a `❯` prompt, including the ones Hermes wrote
+  itself: an async delegation's results (`[ASYNC DELEGATION BATCH COMPLETE
+  …]`), a background process finishing, an internal notice, a resumed turn,
+  a model switch. They now draw as one dim `↳` row with the title Hermes
+  stored for them (`↳ Subagent Tasks Completed: Review the TUI branches`), as
+  Hermes' own TUI draws them. Your own prompts, skill lines and steers are
+  unchanged.
+
 - **A successful shell run in the OMH TUI shows the end of what it printed.**
   A `terminal` or `execute_code` call that exited 0 (a long build, a test run
   piped through `tee`) showed its first three lines and cut the summary or
@@ -77,6 +87,17 @@ All notable changes will be documented here.
   <model>" instead of flipping the header. A line with a byte-order mark, or two
   protocol messages on one line, no longer gets dropped. On Windows, closing a chat also
   ends the `node.exe` behind the agent's `.cmd` shim.
+
+- **Claude Code in omher reads the files you attach without asking.** A
+  file attached to a Claude Code session is saved in that session's own
+  folder under `~/.omher/session-files`, outside the work folder, so every
+  read of it raised a "Run this command?" card. omher now makes that folder
+  before Claude Code starts and passes it, and only it, as one `--add-dir`
+  argument: the attached file reads with no card, while a read anywhere else
+  outside the work folder still asks. Also fixed: a chat whose history arrived
+  after a turn had started could end that turn early (the e2e flake in
+  `runs.spec.ts`), and a click on the side panel while the app was still
+  loading could be undone.
 
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the

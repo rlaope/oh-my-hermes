@@ -1086,6 +1086,240 @@
         ]
       },
       {
+        "event": "session.info",
+        "model": "Haiku 5.5",
+        "model_next": ""
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "model_next": ""
+      },
+      {
+        "agent_session": "372c81cb-b88e-4c05-8e7c-98529d1f5554",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Haiku 5.5"
+      },
+      {
+        "detail": "/home/u/.omher/session-files/s1/1-meeting notes.txt",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01TG7EdpAKp4Zk2tocSvCpjj"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01TG7EdpAKp4Zk2tocSvCpjj"
+      },
+      {
+        "event": "delta",
+        "text": "PERIWINKLE"
+      },
+      {
+        "event": "delta",
+        "text": " is the fi"
+      },
+      {
+        "event": "delta",
+        "text": "rst line"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxGLhAoNRPUgTppxq85u-0",
+        "text": "PERIWINKLE is the first line"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "372c81cb-b88e-4c05-8e7c-98529d1f5554",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Haiku 5.5"
+      },
+      {
+        "detail": "/w/elsewhere/plan.txt",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01Ae34vNHvcJ3mMBYQiqpQCU"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "/w/elsewhere/plan.txt",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "59f1836e-edfa-44c9-95da-3285979ad6f8",
+        "title": "Allow Read?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_01Ae34vNHvcJ3mMBYQiqpQCU"
+      },
+      {
+        "event": "delta",
+        "text": "The Read o"
+      },
+      {
+        "event": "delta",
+        "text": "f `/w/else"
+      },
+      {
+        "event": "delta",
+        "text": "where/plan"
+      },
+      {
+        "event": "delta",
+        "text": ".txt` was "
+      },
+      {
+        "event": "delta",
+        "text": "denied, so"
+      },
+      {
+        "event": "delta",
+        "text": " I have no"
+      },
+      {
+        "event": "delta",
+        "text": " first lin"
+      },
+      {
+        "event": "delta",
+        "text": "e to repor"
+      },
+      {
+        "event": "delta",
+        "text": "t. I did n"
+      },
+      {
+        "event": "delta",
+        "text": "ot try ano"
+      },
+      {
+        "event": "delta",
+        "text": "ther path "
+      },
+      {
+        "event": "delta",
+        "text": "or a diffe"
+      },
+      {
+        "event": "delta",
+        "text": "rent tool "
+      },
+      {
+        "event": "delta",
+        "text": "to get aro"
+      },
+      {
+        "event": "delta",
+        "text": "und the de"
+      },
+      {
+        "event": "delta",
+        "text": "nial. If y"
+      },
+      {
+        "event": "delta",
+        "text": "ou want me"
+      },
+      {
+        "event": "delta",
+        "text": " to read i"
+      },
+      {
+        "event": "delta",
+        "text": "t, approve"
+      },
+      {
+        "event": "delta",
+        "text": " the read "
+      },
+      {
+        "event": "delta",
+        "text": "or tell me"
+      },
+      {
+        "event": "delta",
+        "text": " another w"
+      },
+      {
+        "event": "delta",
+        "text": "ay to acce"
+      },
+      {
+        "event": "delta",
+        "text": "ss it."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxGLzHhhP2Lo8pRRAKSF-0",
+        "text": "The Read of `/w/elsewhere/plan.txt` was denied, so I have no first line to report. I did not try another path or a different tool to get around the denial. If you want me to read it, approve the read or tell me another way to access it."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-12-attach-read.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
         "event": "turn.start"
       },
       {

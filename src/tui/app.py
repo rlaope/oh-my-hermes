@@ -1561,6 +1561,43 @@ def refusal_sentence(error: Mapping[str, Any]) -> str:
     return f"{sentence} {plain_sentence(detail)}" if sentence and detail else sentence
 
 
+# A resumed session's user rows Hermes wrote itself, not the person (`session_history.py` types them by
+# `display_kind`): a background process or a delegation finishing, its own internal notice, a turn it resumed after a
+# restart, a model or personality switch. Each is drawn as one dim row with Hermes' title for it
+# (`display_metadata.display_text`) or the label here, as Hermes' own TUI draws them (`ui-tui` `domain/messages.ts`),
+# never as a `❯` prompt the person sent.
+MACHINE_ROW_LABELS = {
+    "process_complete": "background process finished",
+    "async_delegation_complete": "background agent work finished",
+    "internal_notification": "Hermes notice",
+    "auto_continue": "resumed interrupted turn",
+    "model_switch": "model changed",
+    "personality_switch": "personality changed",
+}
+
+
+# A row persisted before Hermes typed it (a turn killed mid-run never reached the stamp) keeps only its opening:
+# these are Hermes' exact openings for the two (`conversation_compression_scaffolding`, `process_registry_notifications`).
+MACHINE_ROW_OPENINGS = {
+    "[IMPORTANT: Background process ": "process_complete",
+    "[ASYNC DELEGATION BATCH COMPLETE — ": "async_delegation_complete",
+}
+
+
+def machine_row_line(message: Mapping[str, Any]) -> str:
+    """The dim row a resumed user row Hermes wrote (`MACHINE_ROW_LABELS`) is drawn as; "" for the person's own."""
+    kind = as_text(message.get("display_kind"))
+    if not kind:
+        text = as_text(message.get("text")).lstrip()
+        kind = next((found for opening, found in MACHINE_ROW_OPENINGS.items() if text.startswith(opening)), "")
+    label = MACHINE_ROW_LABELS.get(kind)
+    if label is None:
+        return ""
+    meta = message.get("display_metadata")
+    title = clean_text(as_text(meta.get("display_text"))).strip() if isinstance(meta, Mapping) else ""
+    return f"↳ {title or label}"
+
+
 def side_answer_line(kind: str, payload: Mapping[str, Any], text: str) -> str:
     """A `/bg` or `/btw` answer as Ink shows it: `[bg <task>] <text>`, `[btw "<question>"] <text>`."""
     if kind == "background.complete":
@@ -2710,7 +2747,8 @@ class App(ModesMixin, AgentViewMixin):
     def _draw_history(self, messages: object) -> None:
         """A resumed session's earlier turns as transcript blocks: prompts, replies, and each tool call one row as
         a live call draws it (`Transcript.add_recorded_tools`); the calls between two messages with words are one
-        group, with no row between them.
+        group, with no row between them. A user row Hermes wrote itself (`machine_row_line`) is one dim row, not
+        a prompt.
 
         Only the last `REDRAW_TAIL_ROWS` rows of them are printed; /history shows the rest.
         """
@@ -2730,7 +2768,10 @@ class App(ModesMixin, AgentViewMixin):
             if tools:
                 self.transcript.add_recorded_tools(tools)
                 tools = []
-            if role == "user":
+            machine = machine_row_line(message) if role == "user" else ""
+            if machine:
+                self.transcript.add_aside(NoticeBlock(machine, one_line=True))
+            elif role == "user":
                 self.transcript.add_user(text, known=self.known_slash, recorded=True)
                 # Its `[Image #N]` labels are taken: the next image this run attaches is numbered past them.
                 self.image_count = max([self.image_count, *map(int, IMAGE_LABEL_NUMBERS.findall(text))])
