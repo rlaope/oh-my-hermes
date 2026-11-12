@@ -41,6 +41,8 @@ export function PluginsPage() {
   const [category, setCategory] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // after an enable or update: when it takes effect, from Hermes' own answer (PluginLoad), until the next action
+  const [loaded, setLoaded] = useState<{ plugin: string; load: "live" | "reload" | "restart"; restartBot?: string; n: number } | null>(null);
   const [sheet, setSheet] = useState<CatalogEntry | null>(null);
   const askTo = bots.find((b) => b.name === askBot) ?? scope;
   const scopeName = scope?.name;
@@ -105,6 +107,7 @@ export function PluginsPage() {
   const run = async (fn: () => Promise<string | null>) => {
     setErr(null);
     setNote(null);
+    setLoaded(null);
     try {
       setNote(await fn());
     } catch (e) {
@@ -164,6 +167,11 @@ export function PluginsPage() {
               {note}
             </p>
           )}
+          {loaded && scope && (
+            <p className="pg-note" role="status">
+              <PluginLoad key={loaded.n} bot={scope} plugin={loaded.plugin} load={loaded.load} restartBot={loaded.restartBot} testId="page-load" />
+            </p>
+          )}
           {tab === "browse" ? (
             <Browse
               bot={scope}
@@ -191,13 +199,17 @@ export function PluginsPage() {
                   bot={scope!}
                   onToggle={(on) =>
                     void run(async () => {
-                      await s.pluginsToggle(scope!.name, r.key, on);
+                      const res = await s.pluginsToggle(scope!.name, r.key, on);
+                      if (on && res.load && res.load !== "live")
+                        setLoaded({ plugin: r.name, load: res.load, restartBot: res.restart_bot, n: Date.now() });
                       return null;
                     })
                   }
                   onUpdate={() =>
                     void run(async () => {
                       const u = await s.pluginsUpdate(scope!.name, r.name);
+                      if (!u.unchanged && u.load && u.load !== "live")
+                        setLoaded({ plugin: r.name, load: u.load, restartBot: u.restart_bot, n: Date.now() });
                       return u.unchanged ? t("plug.upToDate", { name: r.title || r.name }) : t("plug.updated", { name: r.title || r.name });
                     })
                   }

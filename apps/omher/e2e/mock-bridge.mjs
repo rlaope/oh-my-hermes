@@ -520,6 +520,7 @@ let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs
 let automations, plugins, inspected, offlineWrites;
 /** bots.restart: what the next restart answers per bot, which bot refused last (for "Restart anyway"). */
 let restartNext, restartRefused, pluginLoadNext;
+const restartTimers = new Set();
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 /** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
@@ -671,6 +672,8 @@ function reset() {
   inspected = new Map(); // `<bot>:<catalog name>` -> the sha plugins.inspect handed out
   offlineWrites = new Set();
   restartNext = new Map();
+  for (const h of restartTimers) clearTimeout(h);
+  restartTimers.clear();
   restartRefused = new Set();
   pluginLoadNext = null;
   pending = new Map();
@@ -1385,7 +1388,13 @@ const OPS = {
     };
     // "slow" holds the restarting state until the test calls mock.restartDone
     if (next.outcome === "slow") restartNext.set(b.name, { outcome: "held", back });
-    else setTimeout(back, 600);
+    else {
+      const h = setTimeout(() => {
+        restartTimers.delete(h);
+        back();
+      }, 600);
+      restartTimers.add(h);
+    }
     return { outcome: "ok" };
   },
   "plugins.reload": (p) => {

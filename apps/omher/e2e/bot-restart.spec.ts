@@ -177,12 +177,13 @@ for (const theme of ["dark", "light"] as const) {
   test(`an offline bot: "not connected" with Start in place (${theme})`, async ({ page }) => {
     await setup(page, theme);
     await mock("mock.botStatus", { bot: "friren", status: "offline" });
+    await expect(page.getByTestId("bot-friren").getByTestId("bot-sub")).toHaveText("Not connected");
+    await expect((await menuOf(page, "friren")).getByRole("menuitem").nth(2)).toHaveText("Start");
+    await page.keyboard.press("Escape");
     await page.getByTestId("bot-friren").click();
     const note = page.getByTestId("chat-offline");
     await expect(note).toContainText("Friren is not connected.");
     await expect(note.getByTestId("chat-start")).toHaveText("Start");
-    await expect((await menuOf(page, "friren")).getByRole("menuitem").nth(2)).toHaveText("Start");
-    await page.keyboard.press("Escape");
     await shot(page, "offline", theme);
     await note.getByTestId("chat-start").click();
     await expect(page.getByTestId("bot-friren").getByTestId("bot-time")).toHaveText(/Starting|Restarting/);
