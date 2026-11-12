@@ -5906,6 +5906,15 @@ CREDENTIAL_ROTATION_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; replacing a live credential needs an overlap window, a cutover order, and a check that the old credential stopped working.",
     activation_status="active",
 )
+FRONTEND_DESIGN_GUARD = RoutingGuardRule(
+    id="frontend_design_before_generic_picker",
+    rule="A UI design or repair request reaches frontend before generic matches.",
+    matched_label="guard:frontend_design",
+    preferred_skills=("frontend",),
+    score_boost=30,
+    why="Matched a UI surface and a design or repair action, excluding neighbouring work.",
+    activation_status="active",
+)
 GAME_BUILD_GUARD = RoutingGuardRule(
     id="game_build_before_greenfield_interview",
     rule="Building or polishing a browser game should route to frontend, which owns the rendered-scene craft bar and the screenshot loop, before the greenfield interview or the browser and live-score lanes.",
@@ -6046,6 +6055,7 @@ ROUTING_GUARD_RULES = (
     NAMED_CODING_AGENT_DELIVERY_GUARD,
     CODING_HANDOFF_STATUS_GUARD,
     GAME_BUILD_GUARD,
+    FRONTEND_DESIGN_GUARD,
 )
 
 
@@ -6104,6 +6114,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "gateway_intent_before_feedback_triage": (GUARD_TRUSTED, "messenger thread or delivery policy named as the task; measured 2 right / 0 wrong"),
     "generated_artifact_provenance_before_deliverable_package": (GUARD_TRUSTED, "asks whether a change touches a generated file; no measured record as a winner, keeps its shape label"),
     "github_event_ops_before_generic_planning": (GUARD_TRUSTED, "an explicit PR, CI, or issue-to-PR event; measured 0 right / 1 wrong; kept trusted: demoting it removes no measured wrong dispatch and moves canonical pins"),
+    "frontend_design_before_generic_picker": (GUARD_TRUSTED, "a surface and a design or repair action, excluding neighbouring work"),
     "game_build_before_greenfield_interview": (GUARD_TRUSTED, "a build or look-and-feel cue on a browser game, native engines and topic uses excluded; no measured record as a winner, keeps its shape label"),
     "github_issue_intake_before_event_ops_or_feedback": (GUARD_TRUSTED, "an imperative to file a new issue; no measured record as a winner, keeps its shape label"),
     "greenfield_build_before_generic_picker": (GUARD_CONTEXT_ONLY, "fires on build plus the absence of a named existing surface; no measured record as a winner, keeps its shape label"),
@@ -6708,6 +6719,8 @@ def _active_routing_guard_rules_cached(
         rules.append(CONTRACT_REDLINE_GUARD)
     if credential_rotation_guard_applies(normalized_query):
         rules.append(CREDENTIAL_ROTATION_GUARD)
+    if frontend_design_guard_applies(normalized_query):
+        rules.append(FRONTEND_DESIGN_GUARD)
     if not direct_coding_task_applies and game_build_guard_applies(normalized_query):
         rules.append(GAME_BUILD_GUARD)
     if dependency_upgrade_guard_applies(normalized_query):
@@ -10452,6 +10465,16 @@ def contract_redline_guard_applies(normalized_query: str) -> bool:
     return _contains_phrase(normalized_query, _CONTRACT_MARKUP_CUES) and _contains_phrase(
         normalized_query, _CONTRACT_DOCUMENT_NOUNS
     )
+
+
+def frontend_design_guard_applies(normalized_query: str) -> bool:
+    """A UI surface plus an appearance or repair action, excluding neighbouring lanes."""
+    surfaces = ("대시보드", "화면", "폰", "랜딩 페이지", "page", "pages")
+    actions = ("디자인해", "디자인을 다시", "고쳐", "레이아웃 다시", "less generic")
+    blockers = (*_GREENFIELD_QUESTION_OPENERS, "스킬", "지표", "분석", "앱 스토어", "ios", "영상", "녹화", "뭐야", "리뷰")
+    return (_contains_phrase(normalized_query, surfaces)
+            and _contains_phrase(normalized_query, actions)
+            and not _contains_phrase(normalized_query, blockers))
 
 
 def game_build_guard_applies(normalized_query: str) -> bool:
