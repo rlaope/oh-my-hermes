@@ -57,6 +57,7 @@
     "omh-iac-change",
     "omh-idea-to-deploy",
     "omh-image-cards",
+    "omh-index",
     "omh-inference-serving",
     "omh-instinct-ledger",
     "omh-internal-audit",
@@ -129,7 +130,7 @@
     "ulw-research",
     "ulw-work"
   ],
-  "source": "agent-skills",
+  "source": ".claude/agent-skills",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

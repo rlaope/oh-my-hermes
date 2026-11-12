@@ -325,6 +325,19 @@ _PORTABILITY: dict[str, str] = {
 }
 
 
+# The portable skills Claude Code may pick on its own. Claude Code lists every
+# skill's name and description within a budget of 1% of the context window and
+# drops descriptions past it (docs/AGENT-SKILLS.md#claude-code-skill-listing);
+# the full pack overflowed it. The Claude copy lists these with their
+# descriptions and flags every other portable skill `disable-model-invocation`,
+# reachable through the generated `omh-index` skill or by typing `/<name>`.
+# `.agents/skills` and the Hermes `skills/` tree do not read this set.
+CLAUDE_DIRECT_SKILLS = frozenset({
+    "omh-plan", "omh-code-review",
+    "ulw-plan", "ulw-work", "ulw-loop", "ulw-qa", "ulw-research", "ulw-interview", "ulw-context", "ulw-perf",
+})
+
+
 def skill_portability(name: str) -> str:
     """Return the reviewed class, failing closed for unknown names."""
     key = name if name in _PORTABILITY else omh_skill_display_name(name)
