@@ -371,10 +371,14 @@ def _primer_already_in_api_history(conversation_history: object, primer: str) ->
 
 
 def _replayed_injections(conversation_history: object) -> list[str]:
-    """The host-injected suffix of every replayed ``api_content``, newest first.
+    """The host-injected suffix of every replayed user turn, newest first.
 
-    The clean message prefix is subtracted, so text a person typed (quoting an
-    `[OMH ...]` line, say) is never read as something OMH already injected.
+    A string turn carries its injection in the ``api_content`` sidecar; the
+    clean message prefix is subtracted. A multimodal turn has no sidecar:
+    Hermes appends the injection to its parts and stamps what the person typed
+    as ``display_metadata.typed_ask`` (`_typed_ask_injection`). Either way
+    text a person typed (quoting an `[OMH ...]` line, say) is never read as
+    something OMH already injected.
     """
     if not isinstance(conversation_history, (list, tuple)):
         return []
@@ -384,6 +388,9 @@ def _replayed_injections(conversation_history: object) -> list[str]:
             continue
         api_content = message.get("api_content")
         if not isinstance(api_content, str):
+            injected = _typed_ask_injection(message)
+            if injected:
+                injections.append(injected)
             continue
         clean_content = message.get("content")
         injected_content = api_content
@@ -391,6 +398,51 @@ def _replayed_injections(conversation_history: object) -> list[str]:
             injected_content = api_content[len(clean_content) :]
         injections.append(injected_content)
     return injections
+
+
+# `session_persistence._image_marker`: the line an image part becomes when
+# Hermes flattens a multimodal row into the session DB.
+_SCREENSHOT_MARKER = re.compile(r"\[screenshot(?: detail=(?:low|high|auto))?\]")
+
+
+def _typed_ask_injection(message: Mapping[str, object]) -> str:
+    """What Hermes appended after the person's ask on a multimodal turn, or ``""``.
+
+    A list-content turn takes no ``api_content`` sidecar: Hermes appends the
+    turn's injected context (memory, ``pre_llm_call``, gateway notes) as a
+    trailing text part and, whenever it does, stamps the ask itself -- the
+    turn's text parts joined by newlines -- as ``display_metadata.typed_ask``
+    (Hermes ``agent/turn_context.py`` `_append_multimodal_context`,
+    `_merge_gateway_notes`; ``agent/message_metadata.py`` ``TYPED_ASK``).
+    That stamp is the host's own boundary: the injection is what follows it.
+    A row rebuilt from the session DB is the same parts flattened to one
+    string with each image as a ``[screenshot]`` line, which the ask never
+    contains. No stamp, or text that does not begin with the stamped ask,
+    reads as no injection, so a person's quoted line is never counted.
+    """
+    metadata = message.get("display_metadata")
+    typed_ask = metadata.get("typed_ask") if isinstance(metadata, Mapping) else None
+    if not isinstance(typed_ask, str):
+        return ""
+    content = message.get("content")
+    if isinstance(content, list):
+        texts = (
+            part.get("text")
+            for part in content
+            if isinstance(part, Mapping) and part.get("type") == "text"
+        )
+        flattened = "\n".join(text for text in texts if isinstance(text, str) and text)
+    elif isinstance(content, str):
+        lines = content.split("\n")
+        flattened = "\n".join(line for line in lines if not _SCREENSHOT_MARKER.fullmatch(line))
+    else:
+        return ""
+    if not flattened.startswith(typed_ask):
+        return ""
+    injected = flattened[len(typed_ask) :]
+    if typed_ask and not injected.startswith("\n"):
+        return ""
+    return injected
 
 
 def _replayed_workflow_line(conversation_history: object) -> str:

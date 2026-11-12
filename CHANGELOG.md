@@ -10,8 +10,9 @@ All notable changes will be documented here.
   carried N copies. It is now sent only when the history Hermes replays does
   not already end on that exact line: after a compaction dropped it, or when
   the workflow changed. When the workflow ends, one line says the earlier
-  reminder no longer applies. The `omh_active_workflow` metadata still comes
-  with every call.
+  reminder no longer applies. Image turns count too: there the reminder is
+  read after the ask Hermes stamps on the turn, so a quoted reminder never
+  does. The `omh_active_workflow` metadata still comes with every call.
 
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home

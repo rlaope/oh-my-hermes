@@ -152,6 +152,61 @@ class ActiveWorkflowContextTests(unittest.TestCase):
         # A compaction that dropped both leaves nothing to retract.
         self.assertNotIn(ACTIVE_WORKFLOW_HEAD, self.hook(conversation_history=[]).get("context", ""))
 
+    @staticmethod
+    def image_turn(context: str, ask: str = "please inspect the image") -> list[dict[str, object]]:
+        """A multimodal turn as Hermes replays it: no sidecar, the injection is a trailing text
+        part, and the person's ask is stamped as `display_metadata.typed_ask` (the review's input)."""
+        return [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": ask},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
+                {"type": "text", "text": context},
+            ],
+            "display_metadata": {"typed_ask": ask},
+        }, {"role": "assistant", "content": "done"}]
+
+    def test_image_turn_replay_is_read_from_the_typed_ask_boundary(self) -> None:
+        self.fixture()
+        first = self.hook(conversation_history=[])
+        # The reminder rode an image turn: the next call does not add a second copy.
+        second = self.hook(conversation_history=self.image_turn(first["context"]))
+        self.assertEqual(second["omh_active_workflow"], first["omh_active_workflow"])
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, second.get("context", ""))
+        # Same row rebuilt from the session DB: parts flattened, the image a `[screenshot]` line.
+        rebuilt = [{"role": "user", "content": "please inspect the image\n[screenshot]\n" + first["context"],
+                    "display_metadata": {"typed_ask": "please inspect the image"}}]
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, self.hook(conversation_history=rebuilt).get("context", ""))
+
+    def test_end_line_once_after_an_image_turn(self) -> None:
+        self.fixture()
+        first = self.hook(conversation_history=[])
+        # The workflow ends right after an image turn: the end line once, then nothing.
+        self.assertEqual(self.cli("finish", "--workflow", "memory-sync", "--outcome", "finished",
+                                  "--session-ref", self.session)[0], 0)
+        ended = self.hook(conversation_history=self.image_turn(first["context"]))
+        self.assertIn(ACTIVE_WORKFLOW_ENDED_LINE, ended["context"])
+        self.assertEqual(ended["context"].count(ACTIVE_WORKFLOW_HEAD), 1)
+        after = self.hook(conversation_history=[*self.image_turn(first["context"]), *self.image_turn(ended["context"])])
+        self.assertNotIn(ACTIVE_WORKFLOW_HEAD, after.get("context", ""))
+
+    def test_person_quoting_the_reminder_in_an_image_turn_still_gets_it(self) -> None:
+        self.fixture()
+        reminder = render_active_workflow_context(self.hook(conversation_history=[])["omh_active_workflow"])
+        quoted_ask = "why does it say this?\n" + reminder
+        for history in (
+            # The quote is the person's own ask; nothing was appended after it.
+            [{"role": "user", "content": [{"type": "text", "text": quoted_ask},
+                                          {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}}],
+              "display_metadata": {"typed_ask": quoted_ask}}],
+            # Host appended an unrelated note after the quoted ask.
+            self.image_turn("<omh-context>x</omh-context>", ask=quoted_ask),
+            # No typed-ask stamp: no host boundary, so no part counts as injected.
+            [{"role": "user", "content": [{"type": "text", "text": "look"}, {"type": "text", "text": reminder}]}],
+        ):
+            with self.subTest(history=history):
+                self.assertIn(reminder, self.hook(conversation_history=history)["context"])
+
     def test_no_workflow_ever_injects_nothing(self) -> None:
         # No state, no replayed reminder: neither the reminder nor an end line.
         for history in ([], self.replayed("<omh-context>x</omh-context>"),
