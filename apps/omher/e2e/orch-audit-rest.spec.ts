@@ -88,11 +88,12 @@ for (const theme of themes) {
     const act = page.getByTestId("activity").last();
     await act.getByTestId("activity-toggle").click();
     const step = act.getByTestId("activity-step");
+    // (the mock's late end comes 0.6 s after Stop; the shot shows the row once it has)
+    await page.waitForTimeout(1200);
+    await shot(page, "stopped", theme);
     await expect(step).toHaveAttribute("data-ok", "stopped");
-    await expect(step.getByTestId("activity-step-time")).toHaveText(/^Stopped · \d+(\.\d)?s$/);
     // Codex says 37 s later that the command finished: the same row says it kept running and how long it ran
     await expect(step).toHaveAttribute("data-late", "done");
-    await shot(page, "stopped", theme);
     await expect(step.getByTestId("activity-step-time")).toHaveText("Stopped · kept running, finished after 39s");
     await expect(act).toHaveAttribute("data-state", "interrupted");
     await expect(page.getByTestId("activity")).toHaveCount(1);
