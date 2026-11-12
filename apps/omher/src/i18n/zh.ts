@@ -62,6 +62,7 @@ export const zh: Record<Key, string> = {
   "plans.none": "还没有计划。",
   "plans.noneHint": "这个机器人把工作分给子代理后，每个部分和进度都会实时显示在这里。",
   "plans.noneHow": "要开始，请让它把任务拆成并行部分，或连同任务发送 {cmd}。",
+  "plans.noneHowHermes": "机器人要把大任务分成几部分来计划，需要 oh-my-hermes，但这台电脑上没有。可在会话的 + 中添加。",
   "plans.stale": "{t}无更新",
   "plans.cli": "CLI 代理",
   "plans.cliAll": "CLI 代理（{n}）",
@@ -80,7 +81,7 @@ export const zh: Record<Key, string> = {
   // sidebar (the Needs-you list above BOTS)
   "needs.more": "+{n} 项",
 
-  // skills (the composer's ./ picker)
+  // skills (the composer's $ picker)
   "skills.label": "技能",
   "skills.none": "没有匹配的技能",
 
@@ -103,14 +104,12 @@ export const zh: Record<Key, string> = {
   "sessions.notInstalled": "未安装",
 
   // onboarding (the first-run cards and the empty sections' lines)
-  "onb.label": "omher 简介",
-  "onb.bots.title": "机器人",
-  "onb.bots.body": "可以交付工作的同事。它们会规划、执行并汇报结果。",
-  "onb.bots.action": "给机器人发消息",
-  "onb.sessions.title": "会话",
-  "onb.sessions.body": "编程代理（Claude Code、Codex、OmO、DSH、pi、omp）在一个文件夹中与你一起工作。",
-  "onb.sessions.action": "新建会话",
-  "onb.dismiss": "关闭",
+  "omh.add.line": "添加 oh-my-hermes",
+  "omh.add.tip": "运行与 omher 首次启动界面相同的安装程序。之后机器人会把大任务分成几部分来计划，并显示在 Plans 里。",
+  "omh.add.exit": "安装程序已停止（exit {code}）。",
+  "omh.icon": "未安装 oh-my-hermes",
+  "omh.pop.body": "装上后，机器人会把大任务分成几部分来计划并分派出去，计划的进展会显示在 Plans 里。",
+  "omh.pop.hide": "不再显示",
   "onb.botsHint": "每个机器人是一个 Hermes 配置档。用上方的 + 添加。",
   "onb.sessionsHint": "在文件夹中以聊天方式运行编程代理。",
 
@@ -630,7 +629,8 @@ export const zh: Record<Key, string> = {
   "head.panel": "面板（{key}）",
   "head.panelLive1": "计划 · 1 个子代理正在工作（{key}）",
   "head.panelLive": "计划 · {n} 个子代理正在工作（{key}）",
-  "cmp.skillHint": "输入技能名，例如 {example} — {bot} 会为这条消息加载它",
+  "cmp.skillHint": "{bot} 没有技能列表：请在开头输入完整名称，例如 {example}",
+  "cmp.skillSigil": "技能用 $ 输入，可写在消息的任意位置，例如 {example}。/ 命令会原样发给 {bot}。",
   "cmp.removeReply": "移除回复目标",
   "cmp.remove": "移除",
   "cmp.offline": "{bot} 已离线",

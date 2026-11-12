@@ -176,6 +176,17 @@
   background: none;
   padding: 0;
 }
+/* the + menu's one quiet line for a person with Hermes but not oh-my-hermes: a plain muted row, no border or fill */
+.ss-add-omh {
+  margin-top: 2px;
+}
+.ss-add-omh-b {
+  color: var(--muted);
+}
+.ss-add-omh-b:hover,
+.ss-add-omh-b:focus-visible {
+  color: var(--ink);
+}
 .ss-missing {
   font-size: 10.5px;
   color: var(--muted);

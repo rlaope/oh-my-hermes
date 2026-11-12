@@ -62,6 +62,7 @@ export const ko: Record<Key, string> = {
   "plans.none": "아직 계획이 없습니다.",
   "plans.noneHint": "이 봇이 일을 서브에이전트에게 나눠 맡기면, 각 부분과 진행 상황이 여기에 실시간으로 표시됩니다.",
   "plans.noneHow": "시작하려면 작업을 병렬로 나눠 달라고 하거나, 작업과 함께 {cmd}를 보내세요.",
+  "plans.noneHowHermes": "봇이 큰 일을 여러 부분으로 계획하려면 oh-my-hermes가 필요한데, 이 컴퓨터에는 없어요. 세션의 +에서 추가하세요.",
   "plans.stale": "{t} 동안 변경 없음",
   "plans.cli": "CLI 에이전트",
   "plans.cliAll": "CLI 에이전트 ({n})",
@@ -80,7 +81,7 @@ export const ko: Record<Key, string> = {
   // sidebar (the Needs-you list above BOTS)
   "needs.more": "+{n}개 더",
 
-  // skills (the composer's ./ picker)
+  // skills (the composer's $ picker)
   "skills.label": "스킬",
   "skills.none": "일치하는 스킬 없음",
 
@@ -103,14 +104,12 @@ export const ko: Record<Key, string> = {
   "sessions.notInstalled": "설치 안 됨",
 
   // onboarding (the first-run cards and the empty sections' lines)
-  "onb.label": "omher 소개",
-  "onb.bots.title": "봇",
-  "onb.bots.body": "일을 맡기는 동료예요. 계획하고 실행한 뒤 결과를 알려줘요.",
-  "onb.bots.action": "봇에게 메시지",
-  "onb.sessions.title": "세션",
-  "onb.sessions.body": "코딩 에이전트(Claude Code, Codex, OmO, DSH, pi, omp)가 한 폴더에서 함께 작업해요.",
-  "onb.sessions.action": "새 세션",
-  "onb.dismiss": "닫기",
+  "omh.add.line": "oh-my-hermes 추가",
+  "omh.add.tip": "omher 첫 실행 화면과 같은 설치 프로그램을 실행해요. 그다음부터 봇이 큰 일을 여러 부분으로 계획하고, Plans에 보여 줘요.",
+  "omh.add.exit": "설치 프로그램이 멈췄어요(exit {code}).",
+  "omh.icon": "oh-my-hermes가 설치되어 있지 않아요",
+  "omh.pop.body": "설치하면 봇이 큰 일을 여러 부분으로 계획해 나눠 맡기고, 그 계획이 진행되는 모습을 Plans에서 볼 수 있어요.",
+  "omh.pop.hide": "다시 보지 않기",
   "onb.botsHint": "봇 하나가 Hermes 프로필 하나예요. 위의 +로 추가해요.",
   "onb.sessionsHint": "폴더에서 코딩 에이전트를 채팅으로 실행해요.",
 
@@ -630,7 +629,8 @@ export const ko: Record<Key, string> = {
   "head.panel": "패널 ({key})",
   "head.panelLive1": "계획 · 서브에이전트 1개 작업 중 ({key})",
   "head.panelLive": "계획 · 서브에이전트 {n}개 작업 중 ({key})",
-  "cmp.skillHint": "스킬 이름을 입력하세요. 예: {example} — {bot}가 이 메시지에 불러와요",
+  "cmp.skillHint": "{bot}의 스킬 목록이 없어요. 맨 앞에 이름을 다 쓰세요. 예: {example}",
+  "cmp.skillSigil": "스킬은 메시지 어디에서든 $로 써요. 예: {example}. / 명령어는 {bot}에게 그대로 보내요.",
   "cmp.removeReply": "답장 대상 지우기",
   "cmp.remove": "지우기",
   "cmp.offline": "{bot} 오프라인",
