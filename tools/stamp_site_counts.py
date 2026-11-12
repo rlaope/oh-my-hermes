@@ -95,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         stars = fetch_stars(args.repo, token)
     except (urllib.error.URLError, OSError, ValueError) as exc:
+        close = getattr(exc, "close", None)
+        if callable(close):
+            close()
         reason = f"{type(exc).__name__}: {exc}"
         if token:
             reason = reason.replace(token, "***")
