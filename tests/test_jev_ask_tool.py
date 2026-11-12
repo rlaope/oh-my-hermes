@@ -1235,7 +1235,7 @@ class LocalEndpointTests(_ConsentedCase):
             openers.append(opener)
             return opener
 
-        proxies = {"http_proxy": "http://proxy.example:3128", "https_proxy": "http://proxy.example:3128"}
+        proxies = {"http_proxy": "http://proxy.example:3128", "https_proxy": "http://proxy.example:3128", "no_proxy": "", "NO_PROXY": ""}
         with patch.dict(os.environ, proxies), patch.object(client, "build_opener", recording_build_opener):
             for url in ("http://10.0.2.2:11434/v1/systemone", "https://api.typesafe.ai/v1/systemone"):
                 with self.assertRaises(client.URLError):
