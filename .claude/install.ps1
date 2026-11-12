@@ -15,7 +15,7 @@ if ($User) {
 } else {
     $target = Join-Path $base '.claude/skills'
 }
-$source = Join-Path (Split-Path -Parent $PSScriptRoot) 'agent-skills'
+$source = Join-Path $PSScriptRoot 'agent-skills'
 $inventory = Join-Path $source '.omh-agent-skills-manifest.json'
 if (-not (Test-Path -LiteralPath $inventory -PathType Leaf)) { throw 'Missing source inventory' }
 $inventoryPath = (Get-Item -Force -LiteralPath $inventory).FullName

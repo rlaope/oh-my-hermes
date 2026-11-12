@@ -1,0 +1,1 @@
+{"duration":4,"sample_rate":48000,"seed":17,"sections":[{"start":0,"end":2,"notes":[48,55,60],"energy":0.55,"bpm":90},{"start":2,"end":4,"notes":[53,57,60],"energy":0.7,"bpm":90}],"events":[{"kind":"tick","at":0.5,"align":"peak","gain_db":-15},{"kind":"whoosh","at":1.8,"duration":0.6,"align":"peak","gain_db":-12},{"kind":"boom","at":3.3,"align":"start","gain_db":-15}]}

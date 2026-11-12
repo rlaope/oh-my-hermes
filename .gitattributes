@@ -43,6 +43,8 @@ agent-skills/.omh-agent-skills-manifest.json text eol=lf
 .claude/install.sh text eol=lf
 .claude/install.ps1 text eol=lf
 .claude/manifest.json text eol=lf
+# Claude Code's own generated pack copy, byte-gated like agent-skills/.
+.claude/agent-skills/** text eol=lf
 .codex/install.sh text eol=lf
 .codex/install.ps1 text eol=lf
 .codex/manifest.json text eol=lf

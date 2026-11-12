@@ -1,0 +1,138 @@
+---
+name: "omh-plan"
+description: "[omh] Software feature or bugfix not yet planned: structured planning before execution."
+license: MIT
+metadata:
+  hermes:
+    tags: [workflow, oh-my-hermes, planning]
+    category: planning
+    phase: plan
+    role: planner
+    quality_tier: acceptance-gated
+---
+
+# Plan
+
+This is an OMH `plan` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+
+## Why This Exists
+
+`plan` exists so a feature or a fix gets its goals, non-goals, risks, acceptance criteria, and verification shape written down and accepted by the user before any code moves, with every step small enough to check and no implementation hidden inside the plan text.
+
+## Do Not Use When
+
+- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+- The change is risky or architectural and the user wants alternatives compared, a risk review and a recorded decision; use `ulw-plan`, and keep this skill for the ordinary plan.
+- Requirements are too vague to list non-goals or acceptance criteria; use `ulw-interview`.
+- The direction is decided and what is missing is the phase-by-phase refactor shape; use `omh-refactor-plan`.
+
+## Examples
+
+Good example:
+
+- Prompt: plan: add CSV export to the reports page; admins only, and it must stream 100k rows.
+- Expected behavior: Write goals, non-goals, risks, tasks with ids, dependencies and done checks, a closing gate, and the acceptance criteria; hand back for acceptance before any handoff.
+- Why: A feature with real acceptance questions needs a plan the user accepts before any code moves.
+
+Bad example:
+
+- Prompt: plan: fix the null check in parse_user (one line, the test already exists)
+- Expected behavior: Make the edit directly and run the test; a plan adds a round trip with nothing to decide.
+- Why: One bounded edit with a known check has no goals or tradeoffs to write down.
+
+## Completion Checklist
+
+- The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
+- Draft recommendations, accepted decisions, and executor handoffs are separate states.
+- Rejected options or unresolved tradeoffs are recorded before handoff.
+- When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.
+- When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.
+- When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `omh-refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
+- When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
+
+## Recovery Notes
+
+- If no acceptance answer comes, keep the draft unaccepted, hand back the question, prepare no handoff.
+- If a verification step has no outside judge, mark it unresolved and hand back the missing judge.
+
+
+
+## When to Use
+
+Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
+
+    Strong routing signals: `plan`, `$plan`, `implementation plan`, `make a plan`, `write a plan`, `write the plan`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `project template`, `github pr workflow`, `実装計画`, `タスク分解`, `安全に機能追加`, `機能追加の計画`, `답할 차례`, `준비할 차례`, `재현 계획`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `상태와 다음 행동`, `프로젝트별 운영`, `сделай план`, `составь план`, `напиши план`, `спланируй`, `план реализации`, `实现计划`, `任务拆解`, `安全地新增功能`, `新增功能计划`, `susun rencana implementasi`, `pecah fitur ini jadi langkah pengerjaan`, `bantu rencanakan penambahan fitur`, `tolong bikin rencana perbaikan bug`, `susun tahapan implementasi sebelum mulai coding`, `lập kế hoạch thực hiện`, `chia tính năng này thành các bước thực hiện`, `giúp lên kế hoạch thêm tính năng`, `hãy lập kế hoạch sửa lỗi`, `xác định các giai đoạn thực hiện trước khi code`
+
+## Catalog Metadata
+
+Category: `planning`
+Phase: `plan`
+Quality tier: `acceptance-gated`
+Reasoning demand: `standard`
+
+Quality bar:
+
+- Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.
+- Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.
+- Keep draft plans unapproved until the user accepts; a wrapper must carry their answer.
+- Only prepare coding handoff guidance after the plan is accepted.
+- When a planning stage dispatches a planner or critic child, run it on the host's deepest reasoning tier.
+- When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.
+- When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.
+- When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above; for a code task, a command with the result that counts as passing - the test's run command, a gate, or a grep for the signature - while a task that is not code may keep an observable check); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count.
+- When the plan describes code changes, cut the code tasks as vertical slices: each delivers one behavior through every layer it needs, and its done check drives that behavior through the surface a user or caller reaches, so an integration failure shows in the task that caused it rather than first in the closing gate. Do not split by layer to keep write scopes apart: slices that write the same file are ordered, each later slice listing every earlier slice that writes it directly among its dependencies, since an order through a slice between them does not count; a file every slice only appends to (a changelog, a generated index) may instead be written by one task after the slices; when that file is generated and drift-gated (a generated index), each slice's done check excludes that file's gate and the later task runs it. A layer-only task is either a prefactor that makes the later slices easy and comes before them, or a wide mechanical change across many callers, handed to `omh-refactor-plan` (the new form beside the old, callers moved in groups while both stay green, the old form deleted last) instead of a split by layer.
+- When the plan describes code changes, its last task is the closing gate, named as the verification task: it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.
+- When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.
+- When the plan describes code changes, name the goal beyond the request before splitting tasks: one sentence on what should happen once the requested result exists, and whether the plan aims at that outcome or at the request as asked; when the two are the same, say so in one line. A plan aimed at the outcome adds, as its own tasks, the access the executor needs to work at that level unattended - failure logs, a reproduction environment, the raw data, the mapping from a released version to its commit.
+- When the plan describes code changes, name the raw material the work starts from instead of a digest of it - the failing log, trace, or data rather than the issue summary - and the methods and tools a leading practitioner of the field would use on it. Every verification step names an outside judge - a test, CI, a measurement, a human reviewer, or an external tool - never the planning model's or the executor's own reading of the result; a step with no outside judge is recorded as an evidence gap.
+- When the plan describes code changes, restate the deliverable once as the verbs it must accomplish rather than the noun it produces; when that brings in another field, write what a practitioner of that field does as a task (fuzz the parser, audit each completion claim against its evidence), never an instruction to write or speak like one.
+- Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance.
+- Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `ulw-work` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ulw-work` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ulw-work` single-owner persistence for one already-scoped task with a single owner, `ulw-work` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
+
+Required inputs:
+
+- requirements
+- constraints
+- known facts
+- non-goals
+
+Expected outputs:
+
+- plan
+- acceptance criteria
+- verification strategy
+
+Artifact expectations:
+
+- plan artifact when durable execution will follow
+
+Safety rules:
+
+- Do not imply hidden Hermes runtime behavior.
+- Use the smallest verification that can prove the claim.
+
+## Runtime Evidence
+
+Use the current host's own tools and subagent/task mechanism when available;
+otherwise run the same lanes sequentially or name the unavailable capability.
+A prepared plan, handoff, checklist, or skill installation is not execution,
+review, CI, merge-readiness, or merge evidence. Record actual tool results, or
+`not_observed` / `not_available`, in the record; never invent dispatch or host
+accounting.
+Treat supplied context as advisory, not proof of hidden memory reads or writes.
+State scope, constraints, verification, and the stop condition before work.
+Reply in the user's own words and the host's own voice: the host's persona owns
+reply language, tone, speech level, and sentence endings, progress updates
+included (where it sets no language, use the one the user wrote in), and OMH
+shapes structure and content only; OMH's record terms
+(surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in
+records and tool calls, never in the sentence the user reads unless they ask
+about one; and when a real unresolved user decision or a useful briefing discussion
+remains, offer one specific, content-linked question. Completed work needs no question;
+omit unrelated non-action footers and generic offers to continue.
+Supporting paths are relative to this skill directory; sibling skill paths are
+relative to its parent. Resolve them from the host-provided skill base directory
+(`{baseDir}` on hosts that provide it), never a hardcoded install location.
+A named workflow not installed here is unavailable, not permission to emulate
+its host-specific capabilities. Verify through the real surface before done.
