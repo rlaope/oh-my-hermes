@@ -4,13 +4,21 @@
 // only where there is no conversation yet (the empty main area, a chat with no messages), never above a chat's
 // history; one × closes both. A Language row under the cards shows the language picked from the system (or
 // English) and changes it on the spot, the same control as Settings › General › Language.
-import { useSyncExternalStore } from "react";
+// A person who has Hermes but not oh-my-hermes gets a third card, marked recommended: what oh-my-hermes adds, and an
+// Install button that runs the first-run screen's fixed installer (the shell's one command) with its output shown
+// the same way. When it ends well the card goes (the + row then reads "oh-my-hermes"); when it fails the card keeps
+// the last line and offers Install again. The + menu keeps one quiet "Add oh-my-hermes" line after the × too.
+import { useEffect, useSyncExternalStore } from "react";
 import "./firstrun.css";
 import { LANG_NAMES, LANGS, t, type Lang } from "../i18n";
 import { Seg } from "../chat/model/Seg";
 import { selectSidebarBots, useStore } from "../state/store";
 import { openNewSessionMenu } from "../sessions/SessionsSection";
-import { CloseIcon, IconButton } from "../ui";
+import { hermesOnly } from "../sessions/agents";
+import { getSessions, useSessions } from "../sessions/sessions";
+import { getAddOmh, useAddOmh } from "../sessions/addOmh";
+import { InstallLog } from "../app/BridgeGate";
+import { CloseIcon, IconButton, Spinner } from "../ui";
 
 export const ONBOARDED_KEY = "omher.onboarded";
 
@@ -50,6 +58,12 @@ export function dismissOnboarding(): void {
 export function FirstRun() {
   const s = useStore();
   const onboarded = useOnboarded();
+  const ss = useSessions();
+  // which agents are here decides the third card; read once, as the SESSIONS section does
+  useEffect(() => {
+    if (!onboarded && ss.agents === null) void getSessions().loadAgents();
+  }, [onboarded, ss.agents]);
+  const offer = hermesOnly(ss.agents);
   if (onboarded) return null;
   // the bot whose empty chat holds the cards, else the first bot in the sidebar
   const first = s.bots.find((b) => b.name === s.selectedBot) ?? selectSidebarBots(s)[0];
@@ -60,7 +74,7 @@ export function FirstRun() {
     requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(`[data-pane="${CSS.escape(first.name)}"] [data-testid=composer]`)?.focus());
   };
   return (
-    <section className="onb" aria-label={t("onb.label")} data-testid="onboarding">
+    <section className={`onb${offer ? " onb-3" : ""}`} aria-label={t("onb.label")} data-testid="onboarding">
       <div className="onb-card" data-testid="onb-bots">
         <b className="onb-t">{t("onb.bots.title")}</b>
         <p className="onb-p">{t("onb.bots.body")}</p>
@@ -75,6 +89,7 @@ export function FirstRun() {
           {t("onb.sessions.action")}
         </button>
       </div>
+      {offer && <OmhCard />}
       <div className="onb-lang" data-testid="onb-lang">
         <span className="onb-lang-t">{t("lang.title")}</span>
         <Seg
@@ -90,6 +105,41 @@ export function FirstRun() {
         <CloseIcon />
       </IconButton>
     </section>
+  );
+}
+
+/** The third card for a person with Hermes but not oh-my-hermes: what it adds, recommended, and Install. */
+function OmhCard() {
+  const add = useAddOmh();
+  const running = add.phase === "running";
+  const failed = add.phase === "failed";
+  return (
+    <div className="onb-card onb-omh" data-testid="onb-omh" data-phase={add.phase}>
+      <b className="onb-t">
+        oh-my-hermes
+        <span className="onb-rec" data-testid="onb-omh-rec">
+          {t("onb.omh.rec")}
+        </span>
+      </b>
+      <p className="onb-p">{running ? t("omh.add.running") : t("onb.omh.body")}</p>
+      {running && <InstallLog lines={add.lines} compact testId="onb-omh-log" />}
+      {failed && add.error && (
+        <p className="onb-err" role="status" title={add.error} data-testid="onb-omh-error">
+          {add.error}
+        </p>
+      )}
+      <button
+        type="button"
+        className="onb-btn"
+        disabled={running}
+        onClick={() => void getAddOmh().run()}
+        title={t("omh.add.tip")}
+        data-testid="onb-omh-install"
+      >
+        {running && <Spinner size={11} label={t("gate.installing")} />}
+        {running ? t("gate.installing") : failed ? t("gate.again") : t("gate.install")}
+      </button>
+    </div>
   );
 }
 

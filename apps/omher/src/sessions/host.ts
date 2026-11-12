@@ -2,7 +2,7 @@
 // in a pseudo-terminal (src-tauri/src/sessions.rs) or in its structured chat mode on pipes
 // (src-tauri/src/agent_chat.rs). In a plain browser (dev, e2e against the mock bridge) there is no shell,
 // so a mock host echoes terminal typing and a mock agent answers chats with the same events.
-import { AGENTS, agentDef, type AgentId, type AgentInfo } from "./agents";
+import { AGENTS, agentDef, HERMES_LABEL, type AgentId, type AgentInfo } from "./agents";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 
@@ -186,6 +186,8 @@ type MockGlobals = {
   __omherPickFolder?: string | null;
   __omherSessionCalls?: MockCall[];
   __omherMockAgents?: AgentId[];
+  /** e2e: Hermes is here and `omh` is not (the oh-my-hermes row reads "Hermes" and opens a Hermes chat) */
+  __omherMockNoOmh?: boolean;
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
   /** e2e: the branch of each folder (none = not a repository) */
@@ -214,7 +216,12 @@ export class MockHost implements SessionHost {
   }
   async agents(): Promise<AgentInfo[]> {
     const installed = this.g.__omherMockAgents ?? ["claude", "codex", "omh"];
-    return AGENTS.map((a) => ({ id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null }));
+    const noOmh = !!this.g.__omherMockNoOmh;
+    return AGENTS.map((a) =>
+      a.id === "omh" && noOmh
+        ? { id: a.id, label: HERMES_LABEL, mode: a.mode, path: "/Users/you/.hermes/hermes-agent/venv/bin/python", via: "hermes" as const }
+        : { id: a.id, label: a.label, mode: a.mode, path: installed.includes(a.id) ? `/usr/local/bin/${a.program}` : null },
+    );
   }
   async home() {
     return "/Users/you";
