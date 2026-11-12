@@ -128,6 +128,32 @@ class RefixReportTests(unittest.TestCase):
         self.merge_branch("fix-add", 1)
         self.assertEqual(self.report().counts[refix_report.CLASS_NONE], 1)
 
+    def test_unusual_filenames_are_kept(self) -> None:
+        # git C-quotes or tab-pads these in a plain diff header; each must classify like a plain name.
+        for name in ("normal.py", "a b.py", "café.py", 'a"b.py', "star*[x].py"):
+            with self.subTest(name=name):
+                self.setUp()
+                self.seed()
+                self.land("feature", [(name, "old\n", "feat: add source")], hours_later=1)
+                self.land("repair", [(name, "new\n", "fix: repair source")], hours_later=1)
+                report = self.report()
+                self.assertEqual(report.counts[refix_report.CLASS_ANOTHER], 1)
+                self.assertEqual([pair.files for pair in report.pairs], [((name, 1),)])
+                self.assertEqual(report.blame_failed, 0)
+
+    def test_failed_blame_is_counted(self) -> None:
+        self.seed()
+        self.land("feature", [("a.txt", "x\n", "add a")], hours_later=1)
+        self.land("fix-it", [("a.txt", "y\n", "fix: a")], hours_later=1)
+        real = refix_report._blame
+        refix_report._blame = lambda *args: None
+        self.addCleanup(setattr, refix_report, "_blame", real)
+        report = self.report()
+        self.assertEqual(report.blame_failed, 1)
+        self.assertEqual(report.counts[refix_report.CLASS_NONE], 1)
+        self.assertIn("blame failed: 1 file(s)", refix_report.render_text(report))
+        self.assertEqual(json.loads(refix_report.render_json(report))["totals"]["blame_failed"], 1)
+
     def test_classifier_unit(self) -> None:
         mine = refix_report.Commit("a" * 40, "x", 0, "m1")
         other = refix_report.Commit("b" * 40, "y", 0, "m2")

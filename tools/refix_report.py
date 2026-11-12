@@ -88,6 +88,7 @@ class Report:
     counts: dict[str, int] = field(
         default_factory=lambda: {CLASS_NONE: 0, CLASS_SAME: 0, CLASS_ANOTHER: 0}
     )
+    blame_failed: int = 0  # (fix commit, file) pairs git could not blame: not "no lines", counted
     pairs: list[Pair] = field(default_factory=list)
 
 
@@ -141,30 +142,39 @@ def _subjects(repo: Path, shas: list[str]) -> dict[str, str]:
 
 
 def _removed_ranges(repo: Path, fix: str) -> dict[str, list[tuple[int, int]]]:
-    """Old-side line ranges per file that `fix` removes or replaces."""
-    diff = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{fix}^", fix)
+    """Old-side line ranges per file that `fix` removes or replaces.
+
+    Paths come from `git diff -z --name-only`, which prints them raw: the
+    `---` header of a plain diff C-quotes a name with a space-tab, quote or
+    non-ASCII byte, and a parser of that header drops the file. Hunks are then
+    read one path at a time, where only the `@@` lines matter. A path is a
+    literal one (no glob), so a name holding `*` or `[` matches itself.
+    """
+    names = _git(repo, "diff", "-z", "--name-only", "--no-renames", "--no-ext-diff", f"{fix}^", fix)
     ranges: dict[str, list[tuple[int, int]]] = {}
-    current: str | None = None
-    for line in diff.splitlines():
-        if line.startswith("--- "):
-            current = line[6:] if line.startswith("--- a/") else None
-        elif current and (match := _HUNK.match(line)):
-            start = int(match.group(1))
-            count = 1 if match.group(2) is None else int(match.group(2))
-            if count:
-                ranges.setdefault(current, []).append((start, start + count - 1))
+    for path in filter(None, names.split("\0")):
+        diff = _git(
+            repo, "--literal-pathspecs", "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames",
+            f"{fix}^", fix, "--", path,
+        )
+        for line in diff.splitlines():
+            if match := _HUNK.match(line):
+                start = int(match.group(1))
+                count = 1 if match.group(2) is None else int(match.group(2))
+                if count:
+                    ranges.setdefault(path, []).append((start, start + count - 1))
     return ranges
 
 
-def _blame(repo: Path, parent: str, path: str, spans: list[tuple[int, int]]) -> list[str]:
-    """Commit sha for every non-blank line of `spans` in `path` at `parent`."""
+def _blame(repo: Path, parent: str, path: str, spans: list[tuple[int, int]]) -> list[str] | None:
+    """Commit sha for every non-blank line of `spans` in `path` at `parent`; None when git cannot blame it."""
     args = ["blame", "--line-porcelain", "-w"]
     for first, last in spans:
         args += ["-L", f"{first},{last}"]
     try:
         out = _git(repo, *args, parent, "--", path)
     except subprocess.CalledProcessError:
-        return []  # binary or unreadable at the parent: nothing to blame
+        return None
     shas: list[str] = []
     current = ""
     for line in out.splitlines():
@@ -193,7 +203,11 @@ def build_report(repo: Path, revision: str, days: int = 7, window_hours: float =
         young: list[Commit] = []
         found: dict[str, dict[str, int]] = {}
         for path, spans in _removed_ranges(repo, fix.sha).items():
-            for sha in _blame(repo, f"{fix.sha}^", path, spans):
+            blamed = _blame(repo, f"{fix.sha}^", path, spans)
+            if blamed is None:
+                report.blame_failed += 1
+                continue
+            for sha in blamed:
                 earlier = landed.get(sha)
                 if earlier is None or fix.landed - earlier.landed > window:
                     continue  # landed before the map starts, or outside the window
@@ -233,6 +247,7 @@ def render_text(report: Report) -> str:
         f"  same pull request:               {report.counts[CLASS_SAME]}",
         f"  another pull request:            {report.counts[CLASS_ANOTHER]}",
         f"pairs listed (fix commit, earlier commit): {len(report.pairs)} across {pair_fixes} fix commits",
+        f"blame failed: {report.blame_failed} file(s)",
         "",
         UPPER_BOUND_NOTE,
     ]
@@ -252,6 +267,7 @@ def render_json(report: Report) -> str:
                 "same_pull_request": report.counts[CLASS_SAME],
                 "another_pull_request": report.counts[CLASS_ANOTHER],
                 "pairs": len(report.pairs),
+                "blame_failed": report.blame_failed,
             },
             "pairs": [
                 {

@@ -44,6 +44,9 @@ bar.
 
 Revision `65796e68ff3ff5daad7852e98a29f5352814d7e0`, last 7 days, window 48 h,
 run on 2026-11-12 with `uv run python tools/refix_report.py 65796e68f --days 7`.
+Re-run after the file-name fix (paths read with `git diff -z --name-only`, so
+names with a space, a quote or non-ASCII letters are no longer dropped): the same
+totals, and 0 files failed to blame.
 
 | | Count |
 | --- | --- |
@@ -53,6 +56,7 @@ run on 2026-11-12 with `uv run python tools/refix_report.py 65796e68f --days 7`.
 | Young lines only from the fix's own pull request | 75 |
 | Young lines from another pull request | 80 |
 | Pairs listed (fix commit, earlier commit) | 217 |
+| Files git could not blame (`blame failed`) | 0 |
 | Pairs kept | 8 |
 | Pairs dropped | 209 |
 

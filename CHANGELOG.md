@@ -599,7 +599,10 @@ All notable changes will be documented here.
   [--window-hours 48] [--json]` blames the lines each `fix`/`hotfix` commit
   replaces and prints the pairs from a different pull request; its count is an
   upper bound, since a replaced young line does not say why. Run on `65796e68f`
-  for 7 days it found 179 fix commits, 80 of them in that class, 217 pairs; 8 were
+  for 7 days it found 179 fix commits, 80 of them in that class, 217 pairs, 0 files that
+  could not be blamed (the script reads paths with `git diff -z`, so names with
+  a space, a quote or non-ASCII letters are kept, and a failed blame is counted
+  and printed); 8 were
   kept after reading them and give three lessons in `docs/LESSONS.md`. One met
   the three-separate-days bar and is now in `REVIEW.md`. Nothing runs the script
   on a schedule. `docs/REVIEW-SWEEP.md` gains a step for pull requests from forks
