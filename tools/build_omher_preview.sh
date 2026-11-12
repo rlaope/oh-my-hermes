@@ -9,7 +9,7 @@
 # into a temporary folder next to apps/omher's node_modules (pnpm install there first). Nothing in the repo is
 # changed except site/app-preview/.
 set -eu
-OMHER_PREVIEW_APP=d7faa3bc24819d0321bee87c5d894900c8b2a585   # main after omher v0.2 (#2737): Plans, box view, ./ skills, sessions QA, updater
+OMHER_PREVIEW_APP=e5d7828e12298cdb8c132f19fba184649e30f77d   # main after omher v0.2.5 (#2786): panel button, subagent cards, Automations, Plugins
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=${1:-$OMHER_PREVIEW_APP}
 NM=${OMHER_NODE_MODULES:-$ROOT/apps/omher/node_modules}
