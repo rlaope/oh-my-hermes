@@ -148,6 +148,15 @@ test("continue a Claude Code conversation made in its CLI: the list, then the se
   expect(await page.evaluate(() => (window as unknown as { __omherPastReads: unknown[] }).__omherPastReads)).toEqual([
     { op: "list", agent: "claude", cwds: ["/Users/you/code/omher", "/Users/you"] },
   ]);
+  // the back row is one line inside the menu: ‹, the agent's mark and its name side by side, nothing outside
+  const geo = await past.evaluate((el) => {
+    const pop = el.getBoundingClientRect();
+    const back = el.querySelector('[data-testid="session-past-back"]')!;
+    const kids = [...back.children].map((c) => c.getBoundingClientRect());
+    const b = back.getBoundingClientRect();
+    return { inside: kids.every((k) => k.left >= pop.left - 0.5 && k.right <= pop.right + 0.5 && k.top >= b.top - 0.5 && k.bottom <= b.bottom + 0.5), height: b.height, n: kids.length };
+  });
+  expect(geo).toEqual({ inside: true, height: 30, n: 3 });
   // ← goes back to the agents
   await page.keyboard.press("ArrowLeft");
   await expect(menu).toBeVisible();

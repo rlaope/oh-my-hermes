@@ -343,7 +343,7 @@ function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => v
         next?.scrollIntoView({ block: "nearest" });
       }}
     >
-      <button type="button" role="menuitem" className="ss-item ss-back" onClick={onBack} data-testid="session-past-back" aria-label={t("ss.past.back")}>
+      <button type="button" role="menuitem" className="ss-item ss-past-back" onClick={onBack} data-testid="session-past-back" aria-label={t("ss.past.back")}>
         <span className="ss-ic" aria-hidden="true">
           ‹
         </span>

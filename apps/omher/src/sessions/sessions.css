@@ -213,11 +213,11 @@
   font-size: 13px;
   flex: none;
 }
-.ss-back {
+.ss-past-back {
   color: var(--body);
   font-weight: 500;
 }
-.ss-back > .ss-ic:first-child {
+.ss-past-back > .ss-ic:first-child {
   width: 10px;
   color: var(--muted);
   font-size: 14px;
