@@ -1014,6 +1014,8 @@ class Plugins(BridgeCase):
             rows = (await s.req("plugins.list", bot="kami"))["result"]["plugins"]
             self.assertEqual([(r["name"], r["enabled"], r["tier"], r["needs_env"]) for r in rows],
                              [("homeassistant", True, "official", []), ("browserbase", False, "bundled", ["BROWSERBASE_API_KEY"])])
+            # live_tools: what the plugin registered in the running gateway (Hermes' loader record), never the catalog
+            self.assertEqual([r["live_tools"] for r in rows], [2, 0])
             self.assertTrue((await s.req("plugins.toggle", bot="kami", key="homeassistant", enable=False))["ok"])
             self.assertFalse((await s.req("plugins.toggle", bot="kami", key="homeassistant"))["ok"])
             self.assertTrue((await s.req("plugins.update", bot="kami", name="homeassistant"))["ok"])

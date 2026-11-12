@@ -197,7 +197,7 @@ const PLUGIN_SEED = [
     category: "platform", catalog_name: "homeassistant", tools: 4, hooks: 0, update_available: true, needs_env: [],
     description: "Home Assistant as a gateway platform: state changes come in as events, and the bot can switch devices and send notifications." },
   { name: "omh", key: "omh", title: "", version: "0.9.4", source: "user", enabled: true, tier: "user", category: "tools", catalog_name: null,
-    tools: 23, hooks: 6, update_available: false, needs_env: [], description: "oh-my-hermes for Hermes: dag runs, status and evidence gathering." },
+    tools: 23, hooks: 6, live_tools: 23, update_available: false, needs_env: [], description: "oh-my-hermes for Hermes: dag runs, status and evidence gathering." },
   { name: "elevenlabs-music", key: "elevenlabs-music", title: "ElevenLabs Music", version: "1.0.0", source: "user", enabled: false, tier: "official",
     category: "voice", catalog_name: "elevenlabs-music", tools: 8, hooks: 0, update_available: false, needs_env: ["ELEVENLABS_API_KEY"],
     description: "Describe a song or paste lyrics and the bot writes, generates and saves the track." },
@@ -1270,6 +1270,13 @@ const OPS = {
     return {};
   },
   // ---- test control (not part of the protocol)
+  // a bot whose gateway runs without oh-my-hermes' tools yet (installed while it ran): its omh row, enabled, 0 live
+  "mock.omhUnloaded": (p) => {
+    const b = needBot(p);
+    const omh = PLUGIN_SEED.find((x) => x.name === "omh");
+    plugins[b.name] = [...(plugins[b.name] ?? []).filter((x) => x.name !== "omh"), { ...structuredClone(omh), live_tools: 0 }];
+    return {};
+  },
   "mock.skills": (p) => {
     skillsLater = { add: Array.isArray(p.add) ? p.add : [], after: Number(p.after) || 0 };
     return {};

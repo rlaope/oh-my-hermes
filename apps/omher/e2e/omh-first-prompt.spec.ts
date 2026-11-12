@@ -164,6 +164,8 @@ for (const theme of ["dark", "light"]) {
     // the person went to Settings before installing: the chat comes back
     await page.getByTestId("nav-settings").click();
     await expect(page.getByTestId("settings")).toBeVisible();
+    // Friren's gateway was running during the install: it has the skills, not yet the plugin's tools
+    await mock("mock.omhUnloaded", { bot: "friren" });
     await installFromPopover(page);
     await page.waitForTimeout(400);
     await shot(page, "line", theme, "before");
@@ -174,6 +176,18 @@ for (const theme of ["dark", "light"]) {
     await shot(page, "line", theme, "after");
     await expect(line).toContainText(READY.en);
     await expect(page.getByTestId("omh-prompt-fill")).toHaveText("Put it in the message box");
+    const tools = page.getByTestId("omh-prompt-tools");
+    await expect(tools).toHaveText(
+      "The rest of oh-my-hermes (its tools and subagent plans) reaches Friren after a restart: hermes -p friren gateway restart",
+    );
+    await expect(tools.locator("code")).toHaveText("hermes -p friren gateway restart");
+    const sub = await tools.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const a = document.querySelector("[data-testid=omh-prompt]")!.getBoundingClientRect();
+      const c = document.querySelector("[data-testid=composer-box]")!.getBoundingClientRect();
+      return { size: parseFloat(getComputedStyle(el).fontSize), under: r.top >= a.bottom - 0.5, above: r.bottom <= c.top + 0.5 };
+    });
+    expect(sub).toEqual({ size: 12.5, under: true, above: true });
     const g = await geometry(page);
     expect(g.fontSize).toBeGreaterThanOrEqual(12);
     expect(g.fontSize).toBeLessThanOrEqual(13);
@@ -233,6 +247,38 @@ for (const theme of ["dark", "light"]) {
     expect((await sends()).length).toBe(0);
   });
 }
+
+test("a bot whose gateway loaded oh-my-hermes' plugin gets no restart line; one that did not keeps it after the action", async ({ page }) => {
+  await open(page);
+  await installFromPopover(page);
+  await expect(page.getByTestId("omh-prompt")).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId("omh-prompt-tools")).toHaveCount(0); // kami's mock plugin row has its tools
+
+  await mock("mock.reset");
+  await page.evaluate(() => sessionStorage.clear());
+  await mock("mock.omhUnloaded", { bot: "kami" });
+  await page.reload();
+  await expect(page.getByTestId("omh-notice")).toBeVisible();
+  await installFromPopover(page);
+  await expect(page.getByTestId("omh-prompt-tools")).toBeVisible();
+  await page.getByTestId("omh-prompt-fill").click();
+  await expect(page.getByTestId("composer")).toHaveValue(`/omh-model-setup ${ASK.en}`);
+  await expect(page.getByTestId("omh-prompt")).toHaveCount(0);
+  const rest = page.getByTestId("omh-prompt-restart");
+  await expect(rest).toContainText("hermes -p kami gateway restart");
+  await expect(rest).toContainText("The rest of oh-my-hermes");
+  expect((await sends()).length).toBe(0);
+  const ops = (await mock("mock.calls")).calls!.map((c) => c.op);
+  expect(ops).toContain("plugins.list"); // the running gateway's own record was asked
+  expect(ops.some((o) => /restart|gateway|setup|toggle|install/.test(o))).toBe(false);
+  await page.getByTestId("omh-prompt-close").click();
+  await expect(rest).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  await page.waitForTimeout(600);
+  await expect(page.locator("[data-testid^=omh-prompt]")).toHaveCount(0);
+});
 
 test("skills that arrive a little after the install still bring the line (asked again)", async ({ page }) => {
   await open(page);

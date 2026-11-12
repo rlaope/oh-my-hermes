@@ -5,11 +5,17 @@
 // only when the bot's skills really hold that command (asked again for about a minute); else it says the bot needs
 // a restart, with the exact command as text. omher restarts nothing and runs nothing for it.
 //
+// A gateway that was already running when oh-my-hermes was installed sees its skills at once (Hermes rescans skill
+// folders) but not its plugin: plugins load once per gateway process. The model-setup skill needs no `omh_*` tool
+// (it reads with the terminal and Hermes' own commands), so the ready line shows at once; when the bot's own gateway
+// lists the `omh` plugin as enabled with no tool of its own registered (`plugins.manage list`, the loader's record),
+// a second quiet line under it says the rest of oh-my-hermes arrives after a restart, with the command as text.
+//
 // Kept on this computer under PROMPT_KEY: "pending" from the install's success until the person presses the action
 // or the x, then "done" for good. A person who had oh-my-hermes all along, or installed it outside omher, never has
 // "pending", so never sees the line.
 import { useSyncExternalStore } from "react";
-import type { Bot, Skill } from "../lib/protocol";
+import type { Bot, PluginRow, Skill } from "../lib/protocol";
 import { getStore } from "../state/store";
 import { t } from "../i18n";
 
@@ -25,6 +31,8 @@ export interface PromptState {
   bot: string | null;
   /** The command exactly as `skills.list` names it, with its slash (`/omh-model-setup`). */
   command: string | null;
+  /** With `ready`: the bot's running gateway has not loaded the oh-my-hermes plugin yet (a restart loads it). */
+  restart: boolean;
 }
 
 /** Waits before each `skills.list` read: one at once, then again for about a minute. */
@@ -42,6 +50,14 @@ export function promptText(command: string): string {
   return `${command} ${t("omhp.ask")}`;
 }
 
+/** Whether a bot's running gateway has loaded oh-my-hermes' plugin: false only when its `omh` row is enabled and
+ *  lists no tool of its own in that process; null when it cannot be told (no row, an older bridge, offline). */
+export function omhPluginLoaded(rows: readonly PluginRow[] | null): boolean | null {
+  const omh = rows?.find((r) => r.name === "omh" || r.key === "omh");
+  if (!omh || !omh.enabled || typeof omh.live_tools !== "number") return null;
+  return omh.live_tools > 0;
+}
+
 /** The command a person runs to restart this bot's gateway (Hermes' own; omher never runs it). */
 export function restartCommand(bot: Pick<Bot, "name" | "is_default">): string {
   return bot.is_default ? "hermes gateway restart" : `hermes -p ${bot.name} gateway restart`;
@@ -52,6 +68,8 @@ type Kv = Pick<Storage, "getItem" | "setItem">;
 export interface PromptDeps {
   storage: Kv | null;
   skills: (bot: string) => Promise<Skill[]>;
+  /** The bot's plugins as its running gateway lists them (null when it cannot say). */
+  plugins: (bot: string) => Promise<PluginRow[] | null>;
   sleep: (ms: number) => Promise<void>;
   /** Show a bot's chat once the app's bots are known: the one in view, else the first. */
   showChat: () => void;
@@ -73,7 +91,7 @@ export function createOmhPrompt(deps: PromptDeps) {
       /* no storage: it holds for this run */
     }
   };
-  let state: PromptState = { phase: read() === "pending" ? "pending" : "off", bot: null, command: null };
+  let state: PromptState = { phase: read() === "pending" ? "pending" : "off", bot: null, command: null, restart: false };
   let run = 0;
   const fns = new Set<() => void>();
   const set = (p: Partial<PromptState>) => {
@@ -86,7 +104,7 @@ export function createOmhPrompt(deps: PromptDeps) {
     if (read() === "done") return;
     write("pending");
     run += 1;
-    set({ phase: "pending", bot: null, command: null });
+    set({ phase: "pending", bot: null, command: null, restart: false });
     deps.showChat();
   };
 
@@ -100,16 +118,29 @@ export function createOmhPrompt(deps: PromptDeps) {
       if (run !== mine) return;
       const command = modelSetupCommand(await deps.skills(bot).catch(() => []));
       if (run !== mine) return;
-      if (command) return set({ phase: "ready", command });
+      if (command) {
+        const loaded = omhPluginLoaded(await deps.plugins(bot).catch(() => null));
+        if (run !== mine) return;
+        return set({ phase: "ready", command, restart: loaded === false });
+      }
     }
     set({ phase: "restart" });
   };
 
-  /** The action or the x: the line goes and never comes back on this computer. */
+  /** The x: the line goes and never comes back on this computer. */
   const finish = () => {
     write("done");
     run += 1;
     set({ phase: "off" });
+  };
+
+  /** The action: the ready line goes for good; a restart line under it stays until its x (this run only). */
+  const used = () => {
+    if (state.phase === "ready" && state.restart) {
+      write("done");
+      run += 1;
+      set({ phase: "restart" });
+    } else finish();
   };
 
   return {
@@ -123,6 +154,7 @@ export function createOmhPrompt(deps: PromptDeps) {
     installed,
     check,
     finish,
+    used,
   };
 }
 
@@ -134,6 +166,7 @@ export function getOmhPrompt(): OmhPrompt {
     single = createOmhPrompt({
       storage: typeof localStorage === "undefined" ? null : localStorage,
       skills: (bot) => getStore().actions.skills(bot, true),
+      plugins: (bot) => getStore().actions.pluginsList(bot),
       sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
       // e2e shortens the minute of re-reads (`__omherPromptDelays`); the app uses CHECK_DELAYS
       delays: typeof window === "undefined" ? undefined : (window as unknown as { __omherPromptDelays?: number[] }).__omherPromptDelays,

@@ -20,6 +20,15 @@
   line-height: 1.45;
   color: var(--muted);
 }
+.omhp-wrap {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+.omhp-wrap > .omhp-sub {
+  margin-top: -4px;
+  color: var(--quiet);
+}
 .omhp-t {
   min-width: 0;
 }

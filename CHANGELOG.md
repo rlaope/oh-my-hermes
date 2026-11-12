@@ -207,11 +207,17 @@ All notable changes will be documented here.
   quiet line above the composer: "oh-my-hermes is ready. Set up your models?"
   Its action puts the bot's own model-setup command and one sentence in your
   language into the message box; nothing is sent until you press Enter. The
-  action or the x ends it for good. If the bot does not list the command
-  within about a minute, the line says it needs a restart and shows Hermes'
-  own command for it; omher restarts nothing. The `./` skill picker now also
-  lists the skills a bot gets through `skills.external_dirs`, which is where
-  oh-my-hermes registers its own.
+  action or the x ends it for good. A bot whose gateway was already running
+  gets oh-my-hermes' skills at once but its tools only after a restart: omher
+  asks that gateway which tools the plugin registered, and when there are none
+  a second quiet line shows Hermes' own restart command for that bot. If the
+  bot does not list the command within about a minute, only the restart line
+  shows. omher restarts nothing.
+- **A bot chat's skill picker lists oh-my-hermes' skills.** oh-my-hermes
+  registers its skills through each profile's `skills.external_dirs`, and the
+  picker read only the profile's own `skills` folder, so no OMH skill showed
+  for anyone. It now reads the folders the profile's own config names too, in
+  Hermes' order, and nothing else.
 
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus

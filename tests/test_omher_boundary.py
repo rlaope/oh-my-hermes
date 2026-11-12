@@ -104,6 +104,7 @@ RULES = (
     "then the folders the profile's `config.yaml` names in `skills.external_dirs`, where oh-my-hermes registers its skills",
     "pressing it puts the model-setup skill's `/command` and one sentence into the composer, and nothing is sent;",
     "omher restarts nothing and runs nothing for it.",
+    "omher asks that gateway's own `plugins.manage` `list` (rule 25) and reads only whether the `omh` row is enabled",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
@@ -502,6 +503,10 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         # the command comes from skills.list, never written as a literal
         self.assertNotIn('"/omh-model-setup"', logic)
         self.assertIn("getStore().actions.skills(bot, true)", logic)
+        # the plugin check reads the running gateway's list only (rule 25's `list`), never a toggle or an install
+        self.assertIn("getStore().actions.pluginsList(bot)", logic)
+        for banned in ("togglePlugin", "installPlugin", "plugins.toggle", "plugins.install", "updatePlugin", "removePlugin"):
+            self.assertNotIn(banned, logic, banned)
 
     def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
         """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""

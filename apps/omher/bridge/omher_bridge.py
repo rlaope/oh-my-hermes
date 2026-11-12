@@ -1222,6 +1222,9 @@ def plugin_row(row: dict, catalog: dict[str, dict]) -> dict:
             "tier": str(row.get("catalog_tier") or cat.get("tier") or ("bundled" if source == "bundled" else "user")),
             "category": str(cat.get("category") or ""), "catalog_name": str(row.get("catalog_name") or "") or None,
             "tools": len(tools) or len(cat.get("tools") or []), "hooks": len(cat.get("hooks") or []),
+            # the tools this plugin's own code registered in the RUNNING gateway (Hermes' loader record, never the
+            # catalog): 0 for an enabled plugin means the gateway has not loaded it yet (a restart loads it)
+            "live_tools": len(tools),
             "update_available": bool(row.get("update_available")), "needs_env": needs[:8]}
 
 
