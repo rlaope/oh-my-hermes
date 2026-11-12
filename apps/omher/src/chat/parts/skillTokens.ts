@@ -1,19 +1,21 @@
-// Skill tokens in the composer: `./name`, where `name` is one of the bot's skills. A token stands after the start
+// Skill tokens in the composer: `/name`, where `name` is one of the bot's skills. A token stands after the start
 // of the text or whitespace and before the end, whitespace or closing punctuation, anywhere in the message, and
-// never inside inline code or a fenced block. The person sees what they typed; the wire carries each token
-// hoisted to the front as `/name` (OMH's router and Hermes read a skill sigil at the start of the message).
+// never inside inline code or a fenced block. `./name` is plain text: a `/` after any other character (`./`,
+// `and/or`, a URL, `src/plan`) never starts a token, so `./name` is how a person writes a skill's name without
+// calling it. The person sees what they typed; the wire carries each token hoisted to the front as `/name`
+// (OMH's router and Hermes read a skill sigil at the start of the message).
 
 import type { Skill } from "../../lib/protocol";
 
 export interface SkillToken {
   name: string;
-  /** `text.slice(start, end)` is `./name`. */
+  /** `text.slice(start, end)` is `/name`. */
   start: number;
   end: number;
 }
 
 /** Whether the character at `at` ends a token: the end of the text, whitespace, closing punctuation, or a full
- * stop that does not start a file extension ("./plan." ends a sentence; "./plan.md" is a path, not a skill). */
+ * stop that does not start a file extension ("/plan." ends a sentence; "/plan.md" is a path, not a skill). */
 const closes = (text: string, at: number) => at >= text.length || /[\s,;:!?)]/.test(text[at]) || (text[at] === "." && !/[\w/]/.test(text[at + 1] ?? ""));
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
@@ -52,26 +54,29 @@ export function codeRanges(text: string): [number, number][] {
 
 const inside = (ranges: [number, number][], i: number) => ranges.some(([s, e]) => i >= s && i < e);
 
-/** Every skill token in `text`, in order. Longer names win (`./plan-x` is `plan-x` when both exist). */
+/** Every skill token in `text`, in order. Longer names win (`/plan-x` is `plan-x` when both exist). */
 export function findTokens(text: string, names: readonly string[]): SkillToken[] {
-  if (!names.length || !text.includes("./")) return [];
+  if (!names.length || !text.includes("/")) return [];
   const byLength = [...names].filter(Boolean).sort((a, b) => b.length - a.length);
   const code = codeRanges(text);
   const out: SkillToken[] = [];
-  for (let i = text.indexOf("./"); i >= 0; i = text.indexOf("./", i + 1)) {
+  for (let i = text.indexOf("/"); i >= 0; i = text.indexOf("/", i + 1)) {
     if ((i > 0 && !/\s/.test(text[i - 1])) || inside(code, i)) continue;
-    const name = byLength.find((n) => text.startsWith(n, i + 2) && closes(text, i + 2 + n.length));
+    const name = byLength.find((n) => text.startsWith(n, i + 1) && closes(text, i + 1 + n.length));
     if (!name) continue;
-    out.push({ name, start: i, end: i + 2 + name.length });
-    i += 1 + name.length;
+    out.push({ name, start: i, end: i + 1 + name.length });
+    i += name.length;
   }
   return out;
 }
 
 /** The text to send: each token taken out and put in front as `/name` (in order, once each). Where a token was,
- * the whitespace around it becomes one run (a line break wins). Text without a token comes back unchanged. */
+ * the whitespace around it becomes one run (a line break wins). The slash words a message starts with (Hermes
+ * commands, skills) stay first, as typed, and the hoisted skills follow them. Text with no token after those
+ * words comes back unchanged. */
 export function toWire(text: string, names: readonly string[]): string {
-  const tokens = findTokens(text, names);
+  const typed = /^\s*\/[\w-]+(?:[ \t]+\/[\w-]+)*(?=\s|$)/.exec(text)?.[0] ?? "";
+  const tokens = findTokens(text, names).filter((t) => t.start >= typed.length);
   if (!tokens.length) return text;
   let rest = text;
   for (const t of [...tokens].reverse()) {
@@ -83,28 +88,25 @@ export function toWire(text: string, names: readonly string[]): string {
     const gap = !left || !right || !rws ? "" : /\n/.test(rws) && !/\n/.test(lws) ? rws : lws;
     rest = left + gap + right;
   }
-  // a message that already starts with slash commands keeps them first, as typed: the hoisted skills follow them
-  const typed = /^\s*\/[\w-]+(?:[ \t]+\/[\w-]+)*(?=\s|$)/.exec(rest)?.[0] ?? "";
   const had = new Set(typed.split(/\s+/).filter(Boolean));
   const lead = [...new Set(tokens.map((t) => `/${t.name}`))].filter((n) => !had.has(n)).join(" ");
   const tail = rest.slice(typed.length).replace(/^[ \t]+/, "");
   return [typed.trim(), lead, tail].filter(Boolean).join(" ");
 }
 
-/** The tokens of a sent message `text`, given the `sent` wire text: the names hoisted to its front. */
-export function sentTokens(text: string, sent: string | undefined): SkillToken[] {
-  const lead = sent?.match(/^(?:\/\S+(?:\s+|$))+/)?.[0] ?? "";
-  return lead ? findTokens(text, lead.trim().split(/\s+/).map((w) => w.slice(1))) : [];
+/** The tokens of a sent message `text`, given the skills it was sent with (a typed `/new` is not one). */
+export function sentTokens(text: string, skills: readonly string[] | undefined): SkillToken[] {
+  return skills?.length ? findTokens(text, skills) : [];
 }
 
-/** The `./query` the caret is typing, or null: `./` after the start or whitespace, outside code, and the caret
+/** The `/query` the caret is typing, or null: `/` after the start or whitespace, outside code, and the caret
  * at the end of a run with no whitespace, slash or backtick. */
 export function fragmentAt(text: string, caret: number): { start: number; query: string } | null {
   let k = Math.min(caret, text.length);
   const end = k;
   while (k > 0 && !/[\s/`]/.test(text[k - 1])) k -= 1;
-  const start = k - 2;
-  if (start < 0 || text.slice(start, k) !== "./" || (start > 0 && !/\s/.test(text[start - 1]))) return null;
+  const start = k - 1;
+  if (start < 0 || text[start] !== "/" || (start > 0 && !/\s/.test(text[start - 1]))) return null;
   if (inside(codeRanges(text), start)) return null;
   return { start, query: text.slice(k, end) };
 }

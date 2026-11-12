@@ -630,7 +630,7 @@ export const ko: Record<Key, string> = {
   "head.panel": "패널 ({key})",
   "head.panelLive1": "계획 · 서브에이전트 1개 작업 중 ({key})",
   "head.panelLive": "계획 · 서브에이전트 {n}개 작업 중 ({key})",
-  "cmp.skillHint": "스킬 이름을 입력하세요. 예: {example} — {bot}가 이 메시지에 불러와요",
+  "cmp.skillHint": "{bot}의 스킬 목록이 없어요. 맨 앞에 이름을 다 쓰세요. 예: {example}",
   "cmp.removeReply": "답장 대상 지우기",
   "cmp.remove": "지우기",
   "cmp.offline": "{bot} 오프라인",

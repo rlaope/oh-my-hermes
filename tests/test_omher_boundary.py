@@ -90,7 +90,7 @@ RULES = (
     "a Claude Code, Codex, OmO or DSH chat that was running starts again by itself in the same folder, continuing its own conversation,",
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
-    "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
+    "For the composer's `/` skill picker omher reads, never writes, the bot's own skill files",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",

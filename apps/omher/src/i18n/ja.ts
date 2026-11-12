@@ -630,7 +630,7 @@ export const ja: Record<Key, string> = {
   "head.panel": "パネル（{key}）",
   "head.panelLive1": "計画 · サブエージェント1件が作業中（{key}）",
   "head.panelLive": "計画 · サブエージェント{n}件が作業中（{key}）",
-  "cmp.skillHint": "スキル名を入力します。例: {example} — {bot} がこのメッセージで読み込みます",
+  "cmp.skillHint": "{bot} のスキル一覧がありません。先頭に名前をすべて入力します。例: {example}",
   "cmp.removeReply": "返信先を外す",
   "cmp.remove": "外す",
   "cmp.offline": "{bot} はオフラインです",

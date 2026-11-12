@@ -282,6 +282,19 @@ All notable changes will be documented here.
     after the bot's own turn ends, and the card's run name opens that run in
     Plans. The word is "subagent", not "helper", in all four languages; omher
     still never assigns, steers or stops one. (#2796)
+
+- **In an omher bot chat a skill is `/name` anywhere in the message, and
+  `./name` is plain text.** A `/` at the start of the message or after a
+  space, at the start, in the middle or at the end, lists the bot's skills;
+  typing narrows the list, and Enter, Tab or a click puts in `/name`. A
+  `/name` typed by hand counts too. When no skill matches what you typed
+  (`/tmp`), no list opens and one Enter sends. On send the skills move to the
+  front, as before; a message with none, Hermes' own commands such as `/new`
+  or `/model x` among them, goes out exactly as typed. `./name` is how you
+  write a skill's name without calling it: no list, no pill, sent as typed.
+  Messages sent earlier with `./name` now show as plain text. SESSIONS chats
+  keep their agent's own `/` menu.
+
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the

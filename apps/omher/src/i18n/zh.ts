@@ -630,7 +630,7 @@ export const zh: Record<Key, string> = {
   "head.panel": "面板（{key}）",
   "head.panelLive1": "计划 · 1 个子代理正在工作（{key}）",
   "head.panelLive": "计划 · {n} 个子代理正在工作（{key}）",
-  "cmp.skillHint": "输入技能名，例如 {example} — {bot} 会为这条消息加载它",
+  "cmp.skillHint": "{bot} 没有技能列表：请在开头输入完整名称，例如 {example}",
   "cmp.removeReply": "移除回复目标",
   "cmp.remove": "移除",
   "cmp.offline": "{bot} 已离线",

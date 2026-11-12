@@ -121,7 +121,8 @@ test("Stop interrupts the running turn", async ({ page }) => {
   expect(ops).toContain("chat.interrupt");
 });
 
-test("slash shows the skill hint", async ({ page }) => {
+test("slash shows the skill hint when the bot has no skill list", async ({ page }) => {
+  await mock("mock.noSkills", { bot: "kami" });
   await open(page);
   await page.getByTestId("composer").fill("/pl");
   await expect(page.getByTestId("skill-hint")).toBeVisible();
