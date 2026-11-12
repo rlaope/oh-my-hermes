@@ -20,8 +20,11 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, menuOrder, missingNote, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
+import { pickTitle } from "./titles";
+import { onOpenNewSessionMenu } from "./newMenu";
 import { getAddOmh } from "./addOmh";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
@@ -43,22 +46,12 @@ export function sessionAccountSuffix(groups: AccountGroup[] | null, agent: Agent
   return `as ${name}`;
 }
 
-const openers = new Set<() => void>();
-/** Open the SESSIONS + menu from elsewhere (the first-run card's "New session"). */
-export function openNewSessionMenu(): void {
-  for (const f of [...openers]) f();
-}
+export { openNewSessionMenu } from "./newMenu";
 
 export function SessionsHeader() {
   const [open, setOpen] = useState(false);
   const plus = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const f = () => setOpen(true);
-    openers.add(f);
-    return () => {
-      openers.delete(f);
-    };
-  }, []);
+  useEffect(() => onOpenNewSessionMenu(() => setOpen(true)), []);
   return (
     <div className="side-sh side-sh-row">
       <span>{t("nav.sessions")}</span>
@@ -202,6 +195,15 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     close("pick");
     getSessions().draft(id);
   };
+  // the second step: one agent's past conversations
+  const [past, setPast] = useState<PastAgent | null>(null);
+  const keeps = (agents ?? []).filter((a) => a.path && PAST_AGENTS.includes(a.id as PastAgent)).map((a) => a.id as PastAgent);
+  if (past)
+    return (
+      <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("ss.past.title", { agent: agentLabel(past, ss.agents) })} className="ss-pop">
+        <PastList agent={past} onBack={() => setPast(null)} onPick={() => close("pick")} />
+      </Popover>
+    );
   return (
     <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("sessions.new")} className={`ss-pop${ready && !fit ? " ss-pop-measuring" : ""}`}>
       <div
@@ -255,10 +257,134 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
             </button>
           );
         })}
+        {keeps.length > 0 && (
+          <>
+            <div className="ss-sep" />
+            <div className="ss-h">{t("ss.past.head")}</div>
+            {keeps.map((id) => (
+              <button key={id} type="button" role="menuitem" className="ss-item" onClick={() => setPast(id)} data-testid={`session-past-${id}`}>
+                <span className="ss-ic">
+                  <AgentMark agent={id} />
+                </span>
+                <span className="ss-n">{agentLabel(id, ss.agents)}</span>
+                <span className="ss-chev" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            ))}
+          </>
+        )}
         </div>
         {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
+  );
+}
+
+/** The agents whose conversations can be continued here: they keep them in files omher can read. */
+const PAST_AGENTS = ["claude", "codex"] as const;
+type PastAgent = (typeof PAST_AGENTS)[number];
+
+/** How long ago `at` (seconds since the epoch) was: \"now\", \"5m\", \"3h\", \"2d\". */
+export function ageOf(at: number, nowMs = Date.now()): string {
+  const s = Math.max(0, Math.floor(nowMs / 1000 - at));
+  if (s < 60) return t("time.nowShort");
+  if (s < 3600) return t("unit.m", { n: Math.floor(s / 60) });
+  if (s < 86_400) return t("unit.h", { n: Math.floor(s / 3600) });
+  return t("unit.d", { n: Math.floor(s / 86_400) });
+}
+
+/** The + menu's second step: `agent`'s recent conversations for the folders the menu offers (the recent ones and
+ *  home), newest first. Each row is its title or first words over its folder and age; picking one continues it as
+ *  a session. ← (or Esc on the first row's left) goes back to the agents. */
+function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => void; onPick: () => void }) {
+  const ss = useSessions();
+  const box = useRef<HTMLDivElement>(null);
+  const [rows, setRows] = useState<PastChat[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { recent, home } = folderChoices(ss.recent, ss.home);
+  const cwds = [...recent, ...(home ? [home] : [])];
+  const key = cwds.join("\n");
+  useEffect(() => {
+    let live = true;
+    getHost()
+      .pastChats(agent, cwds)
+      .then((r) => live && setRows(r))
+      .catch((e: unknown) => live && (setRows([]), setError(e instanceof Error ? e.message : String(e))));
+    return () => {
+      live = false;
+    };
+    // the folders, not the array's identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent, key]);
+  useEffect(() => {
+    box.current?.querySelector<HTMLButtonElement>(rows?.length ? ".ss-past [role=menuitem]" : "[role=menuitem]")?.focus({ preventScroll: true });
+  }, [rows]);
+  const label = agentLabel(agent, ss.agents);
+  return (
+    <div
+      ref={box}
+      role="menu"
+      aria-label={t("ss.past.title", { agent: label })}
+      data-testid="session-past-menu"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          onBack();
+          return;
+        }
+        const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+        const i = items.indexOf(document.activeElement as HTMLButtonElement);
+        const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
+        if (to === null || !items.length) return;
+        e.preventDefault();
+        const next = items[(to + items.length) % items.length];
+        next?.focus({ preventScroll: true });
+        next?.scrollIntoView({ block: "nearest" });
+      }}
+    >
+      <button type="button" role="menuitem" className="ss-item ss-back" onClick={onBack} data-testid="session-past-back" aria-label={t("ss.past.back")}>
+        <span className="ss-ic" aria-hidden="true">
+          ‹
+        </span>
+        <span className="ss-ic">
+          <AgentMark agent={agent} />
+        </span>
+        <span className="ss-n">{label}</span>
+      </button>
+      <div className="ss-h">{t("ss.past.head")}</div>
+      {rows === null && <div className="ss-empty">{t("ss.past.looking")}</div>}
+      {rows !== null && rows.length === 0 && (
+        <div className="ss-empty" data-testid="session-past-none" title={error ?? undefined}>
+          {t("ss.past.none", { agent: label })}
+        </div>
+      )}
+      {rows !== null && rows.length > 0 && (
+        <div className="ss-scroll ss-past" data-testid="session-past-list">
+          {rows.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="menuitem"
+              className="ss-item ss-past-row"
+              title={`${c.title}\n${c.cwd}`}
+              onClick={() => {
+                onPick();
+                void getSessions().continuePast(c);
+              }}
+              data-testid={`session-past-row-${c.id}`}
+            >
+              <span className="ss-n ss-n-as">
+                <span className="ss-l">{c.title}</span>
+                <span className="ss-as">
+                  {tildePath(c.cwd, ss.home)} · {ageOf(c.at)}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -326,7 +452,15 @@ function SessionStart() {
   );
 }
 
-export function SessionList() {
+/** Whether session `rec` matches the sidebar search `needle` (lower case): by its name, as its row shows it, or its
+ *  folder. */
+export function sessionMatches(rec: SessionRec, needle: string): boolean {
+  if (!needle) return true;
+  const name = rec.status === "draft" ? t("ss.newTitle") : pickTitle(rec, folderName(rec.cwd)).title;
+  return [name, rec.cwd].some((v) => v.toLowerCase().includes(needle));
+}
+
+export function SessionList({ needle = "", query = "" }: { needle?: string; query?: string }) {
   const s = useStore();
   const ss = useSessions();
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -347,11 +481,17 @@ export function SessionList() {
     else getSessions().close(rec.id);
   };
   if (ss.list.length === 0) return <SessionStart />;
+  const shown = ss.list.filter((r) => sessionMatches(r, needle));
   // a draft's folder is not settled yet: it never makes another row show its parent
   const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home, agents: ss.agents };
   return (
     <nav className="bot-list ss-list" aria-label={t("nav.sessions")} data-testid="session-list">
-      {ss.list.map((rec) =>
+      {needle && shown.length === 0 && (
+        <div className="bot-empty" data-testid="session-none-match">
+          {t("side.noSession", { q: query })}
+        </div>
+      )}
+      {shown.map((rec) =>
         confirm === rec.id ? (
           <div
             key={rec.id}
@@ -408,8 +548,39 @@ function chatLive(s: AppState, key: string | null): ChatLive | undefined {
   return { turn: !!c.turn, needsYou: selectAsks(s).some((a) => a.bot === key), failed: !c.turn && c.lastTurn?.outcome === "error" };
 }
 
-/** Right-click menu of a session row: Rename, Close session. Placed at the pointer, inside the window. */
-function SessionMenu({ at, name, onRename, onClose, onDismiss }: { at: { x: number; y: number }; name: string; onRename: () => void; onClose: () => void; onDismiss: () => void }) {
+/** What a session row's menu offers, in order: Rename, Reveal the folder, Open the folder in the system terminal,
+ *  Copy the conversation id (only when the agent reported one), New session here, Close session. */
+export function rowMenuItems(rec: Pick<SessionRec, "cwd" | "agentSession">): RowAction[] {
+  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.agentSession ? (["copy"] as const) : []), "here", "close"];
+}
+export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "here" | "close";
+
+/** \"Show in Finder\" on macOS, \"Show in Explorer\" on Windows, \"Show in file manager\" elsewhere. */
+const revealWord = () => {
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  return t(/Windows/i.test(ua) ? "md.explorer" : /Mac/i.test(ua) ? "md.finder" : "ss.menu.files");
+};
+
+const ROW_ACTION_LABEL: Record<RowAction, () => string> = {
+  rename: () => t("ss.rename"),
+  reveal: revealWord,
+  terminal: () => t("ss.menu.terminal"),
+  copy: () => t("ss.menu.copyId"),
+  here: () => t("ss.menu.here"),
+  close: () => t("ss.close"),
+};
+const ROW_ACTION_ID: Record<RowAction, string> = {
+  rename: "session-rename",
+  reveal: "session-reveal",
+  terminal: "session-system-terminal",
+  copy: "session-copy-id",
+  here: "session-new-here",
+  close: "session-menu-close",
+};
+
+/** Right-click menu of a session row (rowMenuItems). Placed at the pointer, inside the window. Arrow keys move,
+ *  Home / End jump, Enter picks, Esc closes. */
+function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -419,10 +590,6 @@ function SessionMenu({ at, name, onRename, onClose, onDismiss }: { at: { x: numb
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [onDismiss]);
-  const items: [string, string, () => void][] = [
-    [t("ss.rename"), "session-rename", onRename],
-    [t("ss.close"), "session-menu-close", onClose],
-  ];
   return (
     <div
       ref={ref}
@@ -438,33 +605,36 @@ function SessionMenu({ at, name, onRename, onClose, onDismiss }: { at: { x: numb
           onDismiss();
           return;
         }
-        if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-        e.preventDefault();
         const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
         const i = btns.indexOf(document.activeElement as HTMLButtonElement);
-        btns[(i + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length]?.focus();
+        const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 + btns.length : e.key === "Home" ? 0 : e.key === "End" ? btns.length - 1 : null;
+        if (to === null) return;
+        e.preventDefault();
+        btns[to % btns.length]?.focus();
       }}
     >
-      {items.map(([label, id, fn]) => (
+      {actions.map((a) => (
         <button
-          key={id}
+          key={a}
           type="button"
           role="menuitem"
-          className="row-mi"
-          data-testid={id}
+          className={`row-mi${a === "close" ? " sep" : ""}`}
+          data-testid={ROW_ACTION_ID[a]}
           onClick={() => {
             onDismiss();
-            fn();
+            onPick(a);
           }}
         >
-          {label}
+          {ROW_ACTION_LABEL[a]()}
         </button>
       ))}
     </div>
   );
 }
 
-const MENU_SIZE = { w: 168, h: 70 };
+/** The row menu's size, to keep it inside the window: 168 wide, 26 per row plus its padding and separator. */
+const MENU_W_PX = 168;
+const menuHeight = (rows: number) => rows * 26 + 14;
 
 /** The name field of a row being renamed: Enter or leaving it saves, Esc cancels, an empty name goes back to the
  *  automatic one. */
@@ -568,6 +738,15 @@ function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx
   const dot = rec.view !== "chat" && m.live;
   const busySince = ring && key ? (s.chats[key]?.turn?.startedAt ?? null) : null;
   const now = useNow(busySince !== null, 1_000);
+  const pick = (a: RowAction) => {
+    const ss = getSessions();
+    if (a === "rename") setEditing(true);
+    else if (a === "reveal") void ss.revealFolder(rec.id);
+    else if (a === "terminal") void ss.openTerminal(rec.id);
+    else if (a === "copy" && rec.agentSession) void navigator.clipboard?.writeText(rec.agentSession).catch(() => undefined);
+    else if (a === "here") ss.draftHere(rec.id);
+    else if (a === "close") onClose();
+  };
   const endEdit = (title: string | null | undefined) => {
     setEditing(false);
     if (title !== undefined) getSessions().rename(rec.id, title);
@@ -663,7 +842,8 @@ function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx
         if (rec.status === "draft") return onClose();
         const side = wrap.current?.closest(".side")?.getBoundingClientRect();
         const right = (side?.right ?? window.innerWidth) - 6;
-        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_SIZE.w)), y: Math.min(e.clientY, window.innerHeight - MENU_SIZE.h - 6) });
+        const h = menuHeight(rowMenuItems(rec).length);
+        setMenu({ x: Math.max(6, Math.min(e.clientX, right - MENU_W_PX)), y: Math.max(6, Math.min(e.clientY, window.innerHeight - h - 6)) });
       }}
     >
       {editing ? (
@@ -687,7 +867,7 @@ function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx
           <CloseIcon />
         </button>
       )}
-      {menu && <SessionMenu at={menu} name={m.title} onRename={() => setEditing(true)} onClose={onClose} onDismiss={() => setMenu(null)} />}
+      {menu && <SessionMenu at={menu} name={m.title} actions={rowMenuItems(rec)} onPick={pick} onDismiss={() => setMenu(null)} />}
     </div>
   );
 }

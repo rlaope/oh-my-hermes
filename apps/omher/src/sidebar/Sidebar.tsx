@@ -98,7 +98,7 @@ export function Sidebar() {
       </section>
       <section className="side-sec" data-testid="side-sessions">
         <SessionsHeader />
-        <SessionList />
+        <SessionList needle={needle} query={q.trim()} />
       </section>
       <div className="side-foot">
         <button

@@ -207,6 +207,28 @@
   background: var(--line);
   margin: 6px 0 4px;
 }
+/* the + menu's "Continue a conversation" rows end with a quiet chevron; the list they open starts with ‹ back */
+.ss-chev {
+  color: var(--muted);
+  font-size: 13px;
+  flex: none;
+}
+.ss-back {
+  color: var(--body);
+  font-weight: 500;
+}
+.ss-back > .ss-ic:first-child {
+  width: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+/* a past conversation: its title over its folder and age, each one line */
+.ss-past {
+  max-height: 260px;
+}
+.ss-past-row {
+  height: 40px;
+}
 /* step 2 of the menu: ← and the agent picked, over its folder choices */
 .ss-agent {
   display: flex;
