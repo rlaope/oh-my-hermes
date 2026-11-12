@@ -105,7 +105,6 @@ export const ja: Record<Key, string> = {
 
   // onboarding (the first-run cards and the empty sections' lines)
   "omh.add.line": "oh-my-hermes を追加",
-  "omh.add.running": "oh-my-hermes を追加しています…",
   "omh.add.tip": "omher の初回画面と同じインストーラーを実行します。その後、ボットが大きな仕事を部分に分けて計画し、Plans に表示します。",
   "omh.add.exit": "インストーラーが停止しました（exit {code}）。",
   "omh.icon": "oh-my-hermes がインストールされていません",

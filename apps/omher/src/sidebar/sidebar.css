@@ -25,71 +25,99 @@
   align-items: center;
   gap: 2px;
 }
-/* the "!" (oh-my-hermes is not installed): the + button's size and quiet colour, no fill until hovered */
+/* the "!" (oh-my-hermes is not installed): the + button's size and quiet colour, no fill at rest; open, the gray
+   pressed look the SESSIONS + has while its menu is open */
 .omh-note {
   position: relative;
 }
+.omh-note-b[aria-expanded="true"] {
+  background: var(--raise2);
+  color: var(--ink);
+}
+/* right under the top row, as wide as the sidebar's rows plus the live ring a row draws past its edge (OmhNotice
+   measures both), so a row it lies over is covered whole and nothing of it shows beside it; its height is set so the bottom edge lands on a row boundary, the text
+   scrolling inside when the window is short. The same padding above the title and below the actions. */
 .omh-note .ui-pop.omh-pop {
-  /* opens under the "!", toward the sidebar's left edge and over the chat if it must; never past the window */
-  left: auto;
-  right: -30px;
-  max-height: calc(100vh - 64px);
-  overflow: auto;
-  padding: 10px 12px 10px;
+  top: var(--omh-pop-t, calc(100% + 6px));
+  left: var(--omh-pop-l, auto);
+  right: auto;
+  padding: 12px;
   border-radius: var(--r);
   cursor: default;
   -webkit-app-region: no-drag;
+}
+.omh-pop-in {
+  display: flex;
+  flex-direction: column;
+}
+.omh-pop-c {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 10px;
 }
 .omh-pop-t {
   display: block;
   font-size: 13px;
   font-weight: 600;
+  line-height: 18px;
   color: var(--ink);
 }
 .omh-pop-p {
-  margin: 4px 0 8px;
+  margin: 4px 0 0;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 18px;
   color: var(--body);
 }
-.omh-pop-st {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
+/* the output takes the popover's whole inner width, so a line wraps only when it is longer than that */
 .omh-pop .gate-log {
-  margin-bottom: 8px;
+  width: 100%;
+  margin: 8px 0 0;
 }
 .omh-pop-err {
-  margin: 0 0 8px;
+  margin: 8px 0 0;
   font: 12px/18px var(--mono);
   color: var(--danger);
   overflow-wrap: anywhere;
 }
+/* the actions wrap under each other when the popover is too narrow for both (Install again + Don't show again) */
 .omh-pop-a {
+  flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
+  /* room the row-boundary rule adds goes here, between the sentence and the actions, never under them */
+  margin-top: auto;
 }
-/* one plain action and one quiet one, as the app's other card actions (neutral ink fill, never the accent) */
+/* the app's quiet outlined action (transparent at rest, a thin border, 12px), never the brightest thing here */
 .omh-pop-go {
+  display: inline-flex;
+  align-items: center;
   height: 26px;
-  padding: 0 12px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--quiet) 90%, var(--pop));
   border-radius: var(--r-sm);
-  background: var(--ink);
-  color: var(--bg);
+  background: transparent;
+  color: var(--ink);
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s;
 }
+.omh-pop-go:hover:not(:disabled) {
+  background: var(--raise);
+}
+/* running: the same outlined box in the same place, only lower contrast */
 .omh-pop-go:disabled {
-  opacity: 0.5;
+  color: var(--muted);
+  border-color: color-mix(in srgb, var(--quiet) 55%, var(--pop));
+  cursor: default;
 }
 .omh-pop-hide {
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .omh-pop-hide:hover:not(:disabled) {
   color: var(--ink);

@@ -105,7 +105,6 @@ export const ko: Record<Key, string> = {
 
   // onboarding (the first-run cards and the empty sections' lines)
   "omh.add.line": "oh-my-hermes 추가",
-  "omh.add.running": "oh-my-hermes를 추가하는 중…",
   "omh.add.tip": "omher 첫 실행 화면과 같은 설치 프로그램을 실행해요. 그다음부터 봇이 큰 일을 여러 부분으로 계획하고, Plans에 보여 줘요.",
   "omh.add.exit": "설치 프로그램이 멈췄어요(exit {code}).",
   "omh.icon": "oh-my-hermes가 설치되어 있지 않아요",

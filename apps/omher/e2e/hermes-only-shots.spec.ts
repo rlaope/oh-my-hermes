@@ -48,8 +48,8 @@ async function open(page: Page, theme: string, o: { run?: Run; fresh?: boolean }
       w.__omherMockNoOmh = true;
       const lines =
         run === "failed"
-          ? ["[ok] Hermes Agent found", "Installing oh-my-hermes 4.9.2", "[failed] could not reach github.com (curl: (6))"]
-          : ["[ok] Hermes Agent found", "Installing oh-my-hermes 4.9.2", "Downloading the release wheel"];
+          ? ["[hermes] Install Hermes Agent with its official installer (non-interactive)", "      [ok] Hermes Agent", "      [failed] could not reach github.com (curl: (6))"]
+          : ["[hermes] Install Hermes Agent with its official installer (non-interactive)", "      [ok] Hermes Agent", "[1/4] Create isolated Python environment at ~/.local/share/omh/venv"];
       w.__OMHER_GATE__ = {
         status: async () => ({ state: "ready" }),
         retry: async () => {},
@@ -111,7 +111,7 @@ for (const theme of ["dark", "light"] as const) {
       await open(page, theme, { run });
       if (await openNotice(page)) {
         await page.getByTestId("omh-pop-install").click();
-        if (run === "hold") await expect(page.getByTestId("omh-pop-log")).toContainText("Downloading");
+        if (run === "hold") await expect(page.getByTestId("omh-pop-log")).toContainText("Create isolated");
         if (run === "done") {
           await expect(page.getByTestId("omh-notice")).toHaveCount(0);
           // the + menu's row now reads oh-my-hermes and the offer line is gone

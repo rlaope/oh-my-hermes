@@ -105,7 +105,6 @@ export const zh: Record<Key, string> = {
 
   // onboarding (the first-run cards and the empty sections' lines)
   "omh.add.line": "添加 oh-my-hermes",
-  "omh.add.running": "正在添加 oh-my-hermes…",
   "omh.add.tip": "运行与 omher 首次启动界面相同的安装程序。之后机器人会把大任务分成几部分来计划，并显示在 Plans 里。",
   "omh.add.exit": "安装程序已停止（exit {code}）。",
   "omh.icon": "未安装 oh-my-hermes",
