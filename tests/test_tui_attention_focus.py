@@ -11,6 +11,7 @@ from __future__ import annotations
 import unittest
 
 from omh.tui.app import BELL, TURN_ALERT_SECONDS
+from omh.tui.bot_board import ON_POSIX
 from omh.tui.gateway import ServerRequest
 from omh.tui.panels import HudSnapshot
 from omh.tui.keys import KeyDecoder
@@ -139,6 +140,7 @@ class QuestionTests(unittest.TestCase):
                 self.assertFalse(has_osc(out))
 
 
+@unittest.skipUnless(ON_POSIX, "a finished host process is only noticed on POSIX (`background.askable`)")
 class BackgroundEndTests(unittest.TestCase):
     def written(self, environ: dict, report: bytes) -> str:
         clock, wall = Clock(), Clock()
