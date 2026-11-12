@@ -449,15 +449,15 @@ describe("store", () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });
     await store.actions.init();
-    await store.actions.send("before the list ./plan"); // names not read yet: sent as typed
+    await store.actions.send("before the list $plan"); // names not read yet: sent as typed
     expect(await store.actions.skills("kami")).toHaveLength(2);
     await store.actions.skills("kami");
     expect(f.calls.filter((c) => c.op === "skills.list")).toHaveLength(1); // read once per bot
-    await store.actions.send(" fix ./review this ./plan now ");
+    await store.actions.send(" fix $review this $plan now ");
     const sends = f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.text);
-    expect(sends).toEqual(["before the list ./plan", "/review /plan fix this now"]);
+    expect(sends).toEqual(["before the list $plan", "/review /plan fix this now"]);
     const row = () => store.getState().chats.kami.items.filter((i) => i.kind === "user").at(-1)!;
-    expect(row()).toMatchObject({ text: "fix ./review this ./plan now", sent: "/review /plan fix this now" });
+    expect(row()).toMatchObject({ text: "fix $review this $plan now", sent: "/review /plan fix this now", skills: ["review", "plan"] });
 
     f.setHistory([{ id: "h9", role: "user", text: "/review /plan fix this now", ts: T0 / 1000 }]);
     f.status("closed");
@@ -465,7 +465,14 @@ describe("store", () => {
     await new Promise((r) => setTimeout(r, 0));
     const users = store.getState().chats.kami.items.filter((i) => i.kind === "user");
     expect(users.filter((i) => "sent" in i && i.sent === "/review /plan fix this now")).toHaveLength(1);
-    expect(users.find((i) => i.id === "h9")).toMatchObject({ text: "fix ./review this ./plan now" });
+    expect(users.find((i) => i.id === "h9")).toMatchObject({ text: "fix $review this $plan now", skills: ["review", "plan"] });
+
+    // /name anywhere, ./name and Hermes' own commands go out byte for byte, with no pill
+    for (const t of ["say ./plan out loud", "fix /plan now", "/plan fix it", "/new"]) {
+      await store.actions.send(t);
+      expect(row()).not.toHaveProperty("skills");
+    }
+    expect(f.calls.filter((c) => c.op === "chat.send").map((c) => c.params.text).slice(-4)).toEqual(["say ./plan out loud", "fix /plan now", "/plan fix it", "/new"]);
 
     // a bridge without the op: an empty list, no error, asked again next time
     expect(await store.actions.skills("friren")).toEqual([]);

@@ -35,8 +35,8 @@
   color: var(--ink);
 }
 /* right under the top row, as wide as the sidebar's rows plus the live ring a row draws past its edge (OmhNotice
-   measures both), so a row it lies over is covered whole and nothing of it shows beside it; its height is set so the bottom edge lands on a row boundary, the text
-   scrolling inside when the window is short. The same padding above the title and below the actions. */
+   measures both), so nothing of a row shows beside it. Its own height (it has a border, so it may end partway down a
+   row), the text scrolling inside when the window is short. The same 12px all round and 10px between its parts. */
 .omh-note .ui-pop.omh-pop {
   top: var(--omh-pop-t, calc(100% + 6px));
   left: var(--omh-pop-l, auto);
@@ -52,6 +52,9 @@
 }
 .omh-pop-c {
   flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-height: 0;
   overflow-y: auto;
   padding-bottom: 10px;
@@ -64,18 +67,19 @@
   color: var(--ink);
 }
 .omh-pop-p {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 12px;
   line-height: 18px;
   color: var(--body);
 }
 /* the output takes the popover's whole inner width, so a line wraps only when it is longer than that */
 .omh-pop .gate-log {
+  flex: none;
   width: 100%;
-  margin: 8px 0 0;
+  margin: 0;
 }
 .omh-pop-err {
-  margin: 8px 0 0;
+  margin: 0;
   font: 12px/18px var(--mono);
   color: var(--danger);
   overflow-wrap: anywhere;
@@ -87,8 +91,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  /* room the row-boundary rule adds goes here, between the sentence and the actions, never under them */
-  margin-top: auto;
 }
 /* the app's quiet outlined action (transparent at rest, a thin border, 12px), never the brightest thing here */
 .omh-pop-go {

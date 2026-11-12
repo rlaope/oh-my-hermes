@@ -23,7 +23,7 @@ export const Bubble = memo(function Bubble({
   onEdit,
   editKeepsFiles,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "sent" | "wait">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -42,7 +42,7 @@ export const Bubble = memo(function Bubble({
       <div className={`msg u${item.wait ? ` ${item.wait}` : ""}`} data-testid="bubble-user" data-wait={item.wait}>
         {(item.text || !item.files?.length) && (
           <div className="b">
-            <SkillText text={item.text} sent={item.sent} />
+            <SkillText text={item.text} skills={item.skills} />
           </div>
         )}
         {item.files?.length ? <SentFiles files={item.files} /> : null}

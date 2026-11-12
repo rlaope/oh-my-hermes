@@ -755,7 +755,7 @@ def read_bot_facts(profile_dir: Path) -> dict:
             "last_active": last, "skills": skills, "routines": len(read_routines(profile_dir))}
 
 
-# ---------------------------------------------------------------- skills (read-only, the composer's ./ picker)
+# ---------------------------------------------------------------- skills (read-only, the composer's $ picker)
 
 SKILL_HEAD_MAX = 8 * 1024     # bytes read from the top of a SKILL.md: its frontmatter, nothing past it
 SKILL_DESC_MAX = 120
