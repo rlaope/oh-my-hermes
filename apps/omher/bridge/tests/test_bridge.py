@@ -3018,6 +3018,61 @@ class CliRunsOmo(unittest.TestCase):
             self.assertEqual((n["state"], n["attempts"][0]["reason"]), ("failed", "no result"))
 
 
+class CliRunsOmoFolder(unittest.TestCase):
+    """O15: OmO keeps a folder's subagent records in that folder (`<folder>/.omo/senpi-task/tasks/`) when they are
+    already there, and OmO 5.0 always does. Real records (redacted: OmO 5.0.0-beta.65, two subagents that failed on
+    their first model and the two retries that answered), stored as `dot-omo/` because the repo ignores `.omo/`."""
+
+    SID = "01a1ce7e-2a44-78c8-9e51-05926dd01556"
+
+    def setUp(self):
+        import shutil
+        self._d = tempfile.TemporaryDirectory()
+        root = Path(self._d.name)
+        self.homes = _cli_home(root)
+        self.homes["omo"] = root / "omo-home"
+        (self.homes["omo"] / "agent" / "projects").mkdir(parents=True)
+        self.folder = root / "omo-folder"
+        shutil.copytree(CLI_FIX / "omo-folder" / "dot-omo", self.folder / ".omo")
+        for p in (self.folder / ".omo" / "senpi-task" / "tasks").glob("*.json"):
+            r = json.loads(p.read_text(encoding="utf-8"))
+            r["spawn_spec"] = {"cwd": str(self.folder)}
+            p.write_text(json.dumps(r), encoding="utf-8")
+
+    def tearDown(self):
+        self._d.cleanup()
+
+    def test_the_sessions_folder_records_are_its_run_with_each_answer(self):
+        before = _mtimes(self.folder)
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        listed = cli.list("omo", str(self.folder), 0.0)["runs"]
+        self.assertEqual([r["id"] for r in listed], [f"omo:{self.SID}"])
+        self.assertEqual(listed[0]["counts"], {"nodes": 4, "done": 2, "running": 0, "failed": 2})
+        run = cli.get(f"omo:{self.SID}")["run"]
+        self.assertEqual([(n["label"], n["state"]) for n in run["nodes"]],
+                         [("Report the first line of a.txt", "failed"), ("Report how many lines b.txt has", "failed"),
+                          ("Report the first line of a.txt", "done"), ("Report how many lines b.txt has", "done")])
+        self.assertIn("alpha line", run["nodes"][2]["summary"])
+        self.assertIn("3 lines", run["nodes"][3]["summary"])
+        self.assertEqual(_mtimes(self.folder), before, "reading OmO's records changed a file")
+
+    def test_another_folders_records_and_links_are_not_read(self):
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        # asked for another folder (or for none), the records inside this one are not read
+        self.assertEqual(cli.list("omo", str(Path(self._d.name) / "elsewhere"), 0.0)["runs"], [])
+        self.assertEqual(cli.list("omo", None, 0.0)["runs"], [])
+        # a linked .omo, or a linked senpi-task inside it, is skipped
+        for link in (".omo", "senpi-task"):
+            other = Path(self._d.name) / f"linked-{link.strip('.')}"
+            other.mkdir()
+            if link == ".omo":
+                (other / ".omo").symlink_to(self.folder / ".omo", target_is_directory=True)
+            else:
+                (other / ".omo").mkdir()
+                (other / ".omo" / "senpi-task").symlink_to(self.folder / ".omo" / "senpi-task", target_is_directory=True)
+            self.assertEqual(ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).list("omo", str(other), 0.0)["runs"], [], link)
+
+
 class ClaudeAnswer(unittest.TestCase):
     def test_a_subagents_answer_is_its_own_words_not_claude_codes_frame(self):
         # Claude Code 2.1.322: the tool result wraps the subagent's words; toolUseResult.content has them alone
