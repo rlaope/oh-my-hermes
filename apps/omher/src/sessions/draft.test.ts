@@ -31,14 +31,17 @@ describe("draft defaults", () => {
   it("the + menu: installed agents first with the last one used on top, then the missing ones, in list order", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
     const all = info(["claude", "codex", "omo", "dsh"]);
-    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"]);
-    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("dsh", "/b", 3)]))).toEqual(["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok"]);
+    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
+    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("dsh", "/b", 3)]))).toEqual(["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode"]);
     // the last one used is no longer installed: it stays with the missing ones
-    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp"]);
+    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode"]);
     // the install lines of the two new harnesses
     expect(INSTALL.omo).toBe("npm i -g omo-ai");
     expect(missingNote("omo")).toBe("omo was not found on this computer · install: npm i -g omo-ai");
-    expect(missingNote("dsh")).toMatch(/^dsh was not found on this computer · install: curl -fsSL https:\/\/raw\.githubusercontent\.com\/rlaope\/deepseek-bot\//);
+    // DSH is DeepSeek Harness: its own npm package or its app, never deepseek-bot's install script
+    expect(INSTALL.dsh).toBe("npm i -g @deepseek-ai/dsh");
+    expect(missingNote("dsh")).toBe("DeepSeek Harness (dsh) was not found on this computer · install: npm i -g @deepseek-ai/dsh (or the DeepSeek Harness app, which carries it)");
+    expect(missingNote("dsh")).not.toMatch(/deepseek-bot/);
   });
 
   it("the folder: the last folder used, else home, else nothing yet", () => {
@@ -121,20 +124,26 @@ describe("a New session chat", () => {
     expect(calls().filter((c) => c.op !== "reset")).toEqual([]);
   });
 
-  it("a DSH session starts in its terminal with a conversation id of its own, which its terminal continues", async () => {
-    const { ss } = setup(["dsh"]);
+  it("a DSH session is a DeepSeek Harness chat: no terminal, the harness's own session id, continued by Restart", async () => {
+    const { ss, store, calls } = setup(["dsh"]);
     await ss.loadAgents();
     const id = ss.draft("dsh");
     ss.setDraft(id, { cwd: "/w/bot" });
-    await ss.start(id);
+    await ss.start(id, "Remember PLUM-42.");
+    await wait(1000);
     const r = ss.getState().list[0];
-    expect(r).toMatchObject({ status: "starting", view: "terminal", cwd: "/w/bot" });
-    expect(r.agentSession).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    // a second DSH session gets another conversation
-    const next = ss.draft("dsh");
-    ss.setDraft(next, { cwd: "/w/bot" });
-    await ss.start(next);
-    expect(ss.getState().list[0].agentSession).not.toBe(r.agentSession);
+    expect(r).toMatchObject({ status: "running", view: "chat", cwd: "/w/bot", agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
+    expect(calls().filter((c) => c.op === "start")).toEqual([]);
+    expect(calls().find((c) => c.op === "chat.start")).toMatchObject({ agent: "dsh", cwd: "/w/bot" });
+    expect(store.getState().chats[`agent:${id}`].messages.map((m) => m.text)).toEqual(["Remember PLUM-42.", "(mock DSH) You said: Remember PLUM-42."]);
+    // another DSH session starts a harness session of its own (no id carried over)
+    await ss.close(id);
+    const again = ss.draft("dsh");
+    ss.setDraft(again, { cwd: "/w/bot" });
+    await ss.start(again);
+    await wait(60);
+    const live = calls().filter((c) => c.op === "chat.start").at(-1)!;
+    expect(live.resume).toBeUndefined();
   });
 
   it("with no recents it opens in home once home is known; a folder the person picked stays", async () => {
@@ -159,7 +168,8 @@ describe("a New session chat", () => {
     const start = calls().find((c) => c.op === "chat.start")!;
     expect(start).toMatchObject({ agent: "codex", cwd: "/w/api" });
     const send = calls().find((c) => c.op === "chat.input")!;
-    expect(send.input).toEqual({ kind: "send", text: "run the tests" });
+    // with the bubble's id, so a message sent while a turn runs can be shown waiting
+    expect(send.input).toEqual({ kind: "send", text: "run the tests", id: expect.stringMatching(/^local-/) });
     expect(calls().indexOf(start)).toBeLessThan(calls().indexOf(send));
     const key = ss.chatKey(id)!;
     expect(store.getState().chats[key].items.find((i) => i.kind === "user")).toMatchObject({ text: "run the tests" });
@@ -196,7 +206,8 @@ describe("a New session chat", () => {
     await wait(10);
     expect(ss.getState().list).toEqual([]);
     expect(store.getState().ui.view).not.toBe("session");
-    expect(calls().filter((c) => c.op !== "reset")).toEqual([]);
+    // nothing started; only the draft's (empty) attachment folder is let go
+    expect(calls().filter((c) => c.op !== "reset")).toEqual([{ op: "file.remove", session: id }]);
     expect(await ss.start(id, "late")).toBe(false);
   });
 

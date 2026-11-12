@@ -10,13 +10,14 @@ import { getStore, useStore } from "../state/store";
 import { CloseIcon, ExpandIcon, IconButton, ModelIcon, Spinner } from "../ui";
 import { isMac } from "../app/shortcuts";
 import { useNow } from "../elsewhere/useNow";
-import { t } from "../i18n";
+import { t, tx } from "../i18n";
 import { frontiers } from "./boxView";
 import { RunGraph } from "./RunGraph";
 import { NodeDrawer } from "./NodeDrawer";
 import { PlanHeader } from "./PlanHeader";
 import { runName } from "./format";
 import { withPrs } from "./pr";
+import { isLive, refreshRuns, useBotRuns } from "./live";
 import "./runs.css";
 
 const act = () => getStore().actions;
@@ -33,9 +34,12 @@ export function shownRuns<T extends { id: string }>(sorted: T[], all: boolean, s
   return sel && !head.includes(sel) ? [...head, sel] : head;
 }
 
-/** The run a `ui.runId` names: a full id, or a dag run's short name from a chat line. */
-export function pickRun<T extends { id: string }>(runs: T[], runId: string | null): T | null {
-  return runs.find((r) => r.id === runId) ?? runs.find((r) => runId !== null && runName(r.id) === runId) ?? runs[0] ?? null;
+/** The run a `ui.runId` names (a full id, or a dag run's short name from a chat line) among the bot's own runs and
+ *  the CLI agents' runs; with none named, the bot's first own run. A CLI agent's run is never picked unasked: a bot
+ *  with no runs of its own opens on its empty state, not on someone's CLI session as if it were its plan. */
+export function pickRun<T extends { id: string }>(own: T[], cli: T[], runId: string | null): T | null {
+  const all = [...own, ...cli];
+  return all.find((r) => r.id === runId) ?? all.find((r) => runId !== null && runName(r.id) === runId) ?? own[0] ?? null;
 }
 
 function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -52,40 +56,41 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, w];
 }
 
+/** The bot's own runs come from the shared reader (live.ts), which re-reads them while one is live; the CLI
+ *  agents' runs (`runs.cli`, seconds on a cold read) are read when the tab opens and on Refresh only. */
 function useRuns(bot: string, n = 0) {
-  const [list, setList] = useState<{ bot: string; runs: AgentRunSummary[]; cli: AgentRunSummary[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const own = useBotRuns(bot);
+  const [cli, setCli] = useState<{ bot: string; runs: AgentRunSummary[] } | null>(null);
   useEffect(() => {
     let live = true;
-    setError(null);
+    if (n > 0) void refreshRuns(bot);
     // the CLI list is extra: a bridge without `runs.cli` (or a failed read) leaves the bot's own runs showing
-    const cli = act()
+    act()
       .runsCli()
       .then((r) => sortRuns(r.runs))
-      .catch(() => [] as AgentRunSummary[]);
-    act()
-      .runsList(bot)
-      .then(async (r) => live && setList({ bot, runs: sortRuns(r.runs), cli: await cli }))
-      .catch((e) => live && setError(String(e?.message ?? e)));
+      .catch(() => [] as AgentRunSummary[])
+      .then((runs) => live && setCli({ bot, runs }));
     return () => {
       live = false;
     };
   }, [bot, n]);
-  const mine = list?.bot === bot ? list : null;
-  return { runs: mine?.runs ?? null, cli: mine?.cli ?? [], error };
+  const ready = own.runs !== null && cli?.bot === bot;
+  return { runs: ready ? own.runs : null, cli: ready ? cli!.runs : [], error: own.runs ? null : own.error };
 }
 
 /** One plan in the list, as plain text: a small state dot, its goal (its title when it has none), then "3/7 · 12m".
  *  No pills. A CLI agent's row names the agent before the text. */
 function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummary; on: boolean; nowS: number; onPick: () => void; testId?: string }) {
   const s = useStore();
+  const live = isLive(r);
   return (
     <li>
       <button
         type="button"
-        className={`rn-row${on ? " on" : ""}`}
+        className={`rn-row${on ? " on" : ""}${r.stale ? " stale" : ""}`}
         data-testid={testId}
         data-state={r.state}
+        data-stale={r.stale ? "true" : undefined}
         data-kind={r.kind}
         data-agent={r.agent}
         aria-current={on ? "true" : undefined}
@@ -95,7 +100,7 @@ function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummar
         }}
         title={[r.title, r.goal, r.cwd].filter(Boolean).join(" · ")}
       >
-        <i className={r.state === "running" ? "rn-live" : `rn-dot ${r.state}${r.state === "done" && r.counts.failed > 0 ? " mixed" : ""}`} aria-label={r.state} />
+        <i className={live ? "rn-live" : `rn-dot ${r.stale ? "stale" : r.state}${r.state === "done" && r.counts.failed > 0 ? " mixed" : ""}`} aria-label={r.state} />
         {r.agent && (
           <span className="rn-agent" data-testid="run-agent">
             <ModelIcon model={r.agent} size={11} />
@@ -106,7 +111,13 @@ function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummar
           {r.goal || r.title}
         </span>
         <span className="rn-n">
-          {r.counts.done}/{r.counts.nodes} · {span((r.ended ?? nowS) - r.started)}
+          {r.stale ? (
+            <span data-testid="run-row-stale">{t("plans.stale", { t: span(nowS - r.updated) })}</span>
+          ) : (
+            <>
+              {r.counts.done}/{r.counts.nodes} · {span((r.ended ?? nowS) - r.started)}
+            </>
+          )}
         </span>
       </button>
     </li>
@@ -128,8 +139,9 @@ function useDetail(bot: string, summary: AgentRunSummary | null) {
     return () => {
       live = false;
     };
-    // re-read when the list shows the run changed
-  }, [bot, summary?.id, summary?.updated]);
+    // re-read when the list shows the run changed: its time, or its counts (a fan-out's task that finishes moves
+    // no time of the run)
+  }, [bot, summary?.id, summary?.updated, summary && JSON.stringify(summary.counts)]);
   // the PRs' GitHub states come apart from the run (the bridge asks `gh`, cached, 3 s at most): the graph is drawn
   // with the numbers first and takes their state marks when they come; a bridge that cannot say leaves them plain
   const [prs, setPrs] = useState<{ run: string; prs: Record<string, NodePr> } | null>(null);
@@ -176,9 +188,9 @@ export function RunsTab({ bot }: { bot: Bot }) {
   // with a run selected the lists fold into the run's header ("All runs ▾"), so its graph starts high in the panel
   const [listOpen, setListOpen] = useState(false);
   const { runs, cli, error } = useRuns(bot.name, n);
-  const nowMs = useNow(!!runs?.some((r) => r.state === "running") || cli.some((r) => r.state === "running"));
+  const nowMs = useNow(!!runs?.some(isLive) || cli.some(isLive));
   if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>;
-  const selected = pickRun([...runs, ...cli], s.ui.runId);
+  const selected = pickRun(runs, cli, s.ui.runId);
   const nowS = nowMs / 1000;
   const lists = !selected || listOpen;
   const picked = () => setListOpen(false);
@@ -188,7 +200,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
         {t("plans.of", { bot: bot.display_name })}
         {selected ? (
           <button type="button" className="rn-toggle" data-testid="run-list-toggle" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)}>
-            {t("plans.all", { n: runs.length + cli.length })}
+            {runs.length ? t("plans.all", { n: runs.length + cli.length }) : t("plans.cliAll", { n: cli.length })}
             <Chevron up={listOpen} />
           </button>
         ) : (
@@ -200,11 +212,11 @@ export function RunsTab({ bot }: { bot: Bot }) {
           </svg>
         </button>
       </div>
-      {runs.length === 0 && (
-        <div className="pn-empty">
-          {t("plans.none")}
-          <br />
-          {t("plans.noneHint", { bot: bot.display_name })}
+      {runs.length === 0 && !selected && (
+        <div className="pn-empty rn-empty" data-testid="plans-empty">
+          <div>{t("plans.none")}</div>
+          <div>{t("plans.noneHint")}</div>
+          <div>{tx("plans.noneHow", { cmd: <code>dag ulw</code> })}</div>
         </div>
       )}
       {lists && runs.length > 0 && (
@@ -305,9 +317,9 @@ function PanelRun({ bot, summary, nowS }: { bot: Bot; summary: AgentRunSummary; 
 export function RunsFull({ bot }: { bot: Bot }) {
   const s = useStore();
   const { runs, cli, error } = useRuns(bot.name);
-  const selected = runs ? pickRun([...runs, ...cli], s.ui.runId) : null;
+  const selected = runs ? pickRun(runs, cli, s.ui.runId) : null;
   const { detail } = useDetail(bot.name, selected);
-  const nowMs = useNow(selected?.state === "running");
+  const nowMs = useNow(!!selected && isLive(selected));
   const [open, setOpen] = useState<string | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   useEffect(() => setOpen(null), [selected?.id]);

@@ -56,7 +56,9 @@ export function PlanHeader({
     : bot.model
       ? [modelName(bot.model), effort && effort !== "none" ? t("graph.effort", { e: effort }) : "", t("graph.main")].filter(Boolean).join(" · ")
       : "";
-  const dot = started ? summary.state : "waiting";
+  // a run its record calls running, quiet for a day: no live dot or word, a muted "no update for 9d"
+  const stale = !!summary.stale && summary.state === "running";
+  const dot = stale ? "stale" : started ? summary.state : "waiting";
   return (
     <div className="ph" data-testid="run-plan" data-state={summary.state}>
       <div className="ph-top">
@@ -68,13 +70,13 @@ export function PlanHeader({
       <div className="ph-meta" data-testid="run-plan-counts">
         <span className={`ph-dot ${dot}`} aria-hidden="true" data-testid="run-dot" />
         <span className={`ph-w ${dot}`} data-testid="run-state">
-          {word}
+          {stale ? t("plans.stale", { t: span(nowS - summary.updated) }) : word}
         </span>
         <span data-testid="run-progress"> · {t("graph.done", { done: c.done, total: c.nodes })}</span>
         {c.failed > 0 && <span className="ph-w failed"> · {t("graph.nfailed", { n: c.failed })}</span>}
         {repaired > 0 && <span className="ph-w repaired"> · {t("graph.nrepaired", { n: repaired })}</span>}
-        {summary.state === "running" && waiting > 0 && <span> · {t("graph.nwaiting", { n: waiting })}</span>}
-        {started && <span data-testid="run-plan-time"> · {span((summary.ended ?? nowS) - summary.started)}</span>}
+        {summary.state === "running" && !stale && waiting > 0 && <span> · {t("graph.nwaiting", { n: waiting })}</span>}
+        {started && !stale && <span data-testid="run-plan-time"> · {span((summary.ended ?? nowS) - summary.started)}</span>}
         {newest && (
           <span>
             {" · "}

@@ -3,9 +3,9 @@
 // Codex, OmO, pi and oh-my-pi run in their structured mode in the desktop shell (src-tauri/src/agent_chat.rs),
 // oh-my-hermes opens a Hermes chat in that folder through the bridge (`folder.open`). Their events land in
 // the app store under the session's own chat key, so the bot chat's timeline, activity line, cards and
-// composer draw them. Grok and DSH have no chat mode here, so they stay a terminal (xterm on a pseudo-terminal);
-// DSH gets a conversation id when it starts (`--resume <id>`), so its Resume continues that conversation.
-// Every chat can switch to its agent's terminal view.
+// composer draw them. DSH (DeepSeek Harness) is a chat too, one headless run per message continuing the harness's
+// own session (`--session-id`); it has no terminal view. Grok has no chat mode here, so it stays a terminal (xterm on
+// a pseudo-terminal). Every other chat can switch to its agent's terminal view.
 //
 // SESSIONS + opens a small menu of the agents; picking one opens a New session chat on it at once (a draft), its
 // folder in the chip under the composer (the last folder used, else home). Nothing starts until the first message, which becomes the
@@ -16,17 +16,26 @@
 // it): a Claude Code or Codex chat that was running continues its conversation in the same folder and account,
 // the others come back paused with a Resume button, ended ones stay ended, and a draft comes back as a draft
 // (never started). The last few folders (with the agent that used each) are remembered on this computer.
+//
+// Files the person attaches (paste, the + menu, a drop) are saved by the shell under omher's own folder, one per
+// session (`~/.omher/session-files/<id>/`, removed when the session is closed). A picture goes to the agent as its
+// own image input (Claude Code and OmO / pi inline, Codex by the saved path); any other file is named in the
+// message by its saved copy's path. An oh-my-hermes session takes no files: the bridge attaches files to a bot's
+// main chat only.
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, CONTINUES, draftAgent, draftFolder, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { agentDef, CONTINUES, draftAgent, draftFolder, INSTALL, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
-import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, onBridgeEvent, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
+import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
 import { accountGroups } from "../settings/accounts/useAccounts";
+import { modesOf } from "./controls";
+import { parseCommands, type AgentCommand } from "../chat/parts/commands";
 import { t as tr } from "../i18n";
 
 /** The Accounts CLI a session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
@@ -58,6 +67,24 @@ export interface SessionsState {
   models: Record<string, ModelOption[]>;
   /** last problem a chat reported that is not a turn's own error (model refused, …), by session id */
   notes: Record<string, string>;
+  /** what each chat's agent reported about itself, by session id */
+  live: Record<string, AgentLive>;
+}
+
+/** What a chat's agent said about its controls (agent_chat.rs events). Nothing here is estimated. */
+export interface AgentLive {
+  /** the permission mode in force ("" = one omher does not offer, the agent's own) */
+  mode?: string;
+  /** the reasoning effort in force */
+  effort?: string;
+  /** the reasoning levels it takes; none = it has no effort control */
+  efforts?: string[];
+  /** its own commands and skills, for the `/` menu */
+  commands?: AgentCommand[];
+  /** context tokens in use and its window, as it counted them */
+  usage?: { used: number; max: number };
+  /** the git branch of its folder ("" = not a repository) */
+  branch?: string;
 }
 
 interface Term {
@@ -88,6 +115,8 @@ interface ChatProc {
   bot?: string;
   /** set when omher itself stopped it (close, Terminal toggle), so its exit is not an end of the session */
   stopping?: boolean;
+  /** the program never spoke its chat protocol (an old version, a hung start): the reason its turn and exit carry */
+  noChat?: string;
 }
 
 const readRecent = () => {
@@ -99,6 +128,15 @@ const readRecent = () => {
 };
 
 /** The names the person gave sessions, kept on this computer by the agent's own conversation id. */
+/** Files sent in session chats (saved paths), so their bubbles show them again after a restart. */
+const readSentFiles = (): SentFilesBook => {
+  try {
+    return parseSentFiles(typeof localStorage !== "undefined" ? localStorage.getItem(SENT_FILES_KEY) : null);
+  } catch {
+    return {};
+  }
+};
+
 const readTitles = () => {
   try {
     return parseTitles(typeof localStorage !== "undefined" ? localStorage.getItem(TITLES_KEY) : null);
@@ -110,6 +148,9 @@ const titleKey = (r: SessionRec) => (r.agentSession ? `${r.agent}:${r.agentSessi
 
 /** Agents whose own session files carry a conversation title the bridge can read (`cli.title`). */
 const TITLED: readonly AgentId[] = ["claude", "codex"];
+
+/** The shell's own words when it will not start OpenCode (`NO_RULES` in acp_chat.rs, kept equal by a test). */
+export const NO_RULES = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
 
 const errText = (e: unknown) =>
   typeof e === "string"
@@ -124,7 +165,7 @@ const errText = (e: unknown) =>
 const modeOf = (agents: AgentInfo[] | null, id: AgentId) => agents?.find((a) => a.id === id)?.mode ?? agentDef(id).mode;
 
 export function createSessions(host: SessionHost, store: () => Store = getStore, accounts: () => AccountGroup[] | null = () => null) {
-  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {} };
+  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {}, live: {} };
   const listeners = new Set<() => void>();
   const terms = new Map<string, Term>();
   const procs = new Map<string, ChatProc>();
@@ -178,6 +219,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       /* an older bridge, or no file yet */
     }
   };
+  const patchLive = (id: string, p: Partial<AgentLive>) => set({ live: { ...state.live, [id]: { ...state.live[id], ...p } } });
+  /** The folder's branch, read again when a turn ends (the agent may have switched it). */
+  const readBranch = async (id: string) => {
+    const r = rec(id);
+    if (!r?.cwd) return;
+    try {
+      const b = await host.branch(r.cwd);
+      if (rec(id) && state.live[id]?.branch !== b) patchLive(id, { branch: b });
+    } catch {
+      /* an older shell */
+    }
+  };
   const note = (id: string, text: string | null) => {
     const notes = { ...state.notes };
     if (text) notes[id] = text;
@@ -226,6 +279,15 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     notify?.(full);
   };
 
+  /** The chat's program is gone (it exited, or omher stopped it): a turn the chat still shows ends with it. The
+   *  shell sends the turn's end before the exit when its adapter knew of the turn; this covers the rest (omher
+   *  stopped it, so its last events are dropped). */
+  const endLiveTurn = (id: string, outcome: "interrupted" | "ended") => {
+    const key = keys.get(id);
+    if (!key || !store().getState().chats[key]?.turn) return;
+    store().dispatch({ type: "event", ev: { event: "turn.end", bot: key, outcome } as BridgeEvent, now: Date.now() });
+  };
+
   const onAgentEvent = (id: string, proc: ChatProc) => (ev: ChatEvent) => {
     if (procs.get(id) !== proc && ev.event !== "exit") return; // an old process of this session (Terminal toggle)
     switch (ev.event) {
@@ -234,9 +296,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         const fresh = typeof ev.agent_session === "string" && !!ev.agent_session && ev.agent_session !== rec(id)?.agentSession;
         if (typeof ev.agent_session === "string" && ev.agent_session) p.agentSession = ev.agent_session;
         if (typeof ev.model === "string" && ev.model) p.model = ev.model;
+        // a model picked mid-turn waits for the next turn ("" = it has taken effect, or was taken back)
+        if (typeof ev.model_next === "string") p.modelNext = ev.model_next || undefined;
         // the agent named the conversation (Claude Code's session title, a Codex thread name)
         if (typeof ev.title === "string" && ev.title.trim()) p.agentTitle = ev.title.trim();
+        if (typeof ev.background === "number") p.background = ev.background;
         patchRec(id, p);
+        const l: Partial<AgentLive> = {};
+        if (typeof ev.mode === "string") l.mode = ev.mode;
+        if (typeof ev.effort === "string" && ev.effort) l.effort = ev.effort;
+        if (Object.keys(l).length) patchLive(id, l);
         if (fresh) {
           onAgentSession(id);
           void readAgentTitle(id);
@@ -246,21 +315,55 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       case "session.models":
         set({ models: { ...state.models, [id]: Array.isArray(ev.options) ? (ev.options as ModelOption[]) : [] } });
         return;
+      case "session.efforts":
+        patchLive(id, { efforts: Array.isArray(ev.levels) ? ev.levels.filter((x): x is string => typeof x === "string" && !!x) : [] });
+        return;
+      case "session.commands": {
+        // an agent may send its list in parts (Codex: skills after start-up): keep each entry once
+        const next = parseCommands(ev.commands);
+        const had = state.live[id]?.commands ?? [];
+        const key = (c: AgentCommand) => c.prefix + c.name;
+        const seen = new Set(next.map(key));
+        patchLive(id, { commands: [...had.filter((c) => !seen.has(key(c))), ...next] });
+        return;
+      }
+      case "session.usage":
+        if (typeof ev.used === "number" && typeof ev.max === "number" && ev.max > 0) patchLive(id, { usage: { used: ev.used, max: ev.max } });
+        return;
       case "session.error":
+        if (ev.kind === "no_chat_mode") {
+          // the shell ends this session: say why in the person's words, with the line that updates the agent
+          const agent = rec(id)?.agent ?? "claude";
+          proc.noChat = tr("ss.noChatMode", { agent: agentDef(agent).label, install: INSTALL[agent] });
+          return;
+        }
         note(id, String(ev.message ?? ""));
+        return;
+      case "session.note":
+        // something the agent's side did on its own that the person should know (Codex: a new conversation in place
+        // of one that is gone)
+        if (ev.kind === "new_conversation") {
+          const key = keys.get(id);
+          if (key) store().dispatch({ type: "system.note", bot: key, text: tr("ss.newConversation"), now: Date.now() });
+        }
         return;
       case "exit": {
         if (procs.get(id) === proc) procs.delete(id);
         if (proc.stopping) return;
+        endLiveTurn(id, "ended");
         const code = typeof ev.code === "number" ? ev.code : null;
-        const error = typeof ev.error === "string" ? ev.error.trim() : "";
+        const error = proc.noChat ?? (typeof ev.error === "string" ? ev.error.trim() : "");
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
         return;
       }
       default:
+        if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
         // the agent may have titled the conversation during the turn
-        if (ev.event === "turn.end") void readAgentTitle(id);
+        if (ev.event === "turn.end") {
+          void readAgentTitle(id);
+          void readBranch(id);
+        }
     }
   };
 
@@ -289,9 +392,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         return;
       }
       patchRec(id, { status: "running" });
+      // the mode and effort the person picked before (a restart, a Restart) are set again
+      const again = rec(id);
+      if (again?.mode && modesOf(again.agent).includes(again.mode)) await host.chatInput(proc.hostId, { kind: "mode", mode: again.mode }).catch(() => undefined);
+      if (again?.effort) await host.chatInput(proc.hostId, { kind: "effort", effort: again.effort }).catch(() => undefined);
+      void readBranch(id);
     } catch (e) {
       if (procs.get(id) === proc) procs.delete(id);
-      patchRec(id, { status: "failed", error: errText(e) });
+      // the shell's refusal to start an agent whose ask rules it could not prove (acp_chat.rs NO_RULES), translated
+      const why = errText(e);
+      patchRec(id, { status: "failed", error: why === NO_RULES ? tr("ss.noRules") : why });
     }
   };
 
@@ -362,10 +472,112 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (pt) patchRec(id, { promptTitle: pt });
     }
     try {
-      await input(id, { kind: "send", text: t });
+      await input(id, { kind: "send", text: t, id: lid });
     } catch (e) {
       st.dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
     }
+  };
+
+  // ---- files --------------------------------------------------------------------------------
+
+  let sentFiles = readSentFiles();
+  const saveSentFiles = (next: SentFilesBook) => {
+    sentFiles = next;
+    try {
+      localStorage.setItem(SENT_FILES_KEY, JSON.stringify(next));
+    } catch {
+      /* no storage */
+    }
+  };
+  const forgetSentFiles = (id: string) => {
+    if (!sentFiles[id]) return;
+    const next = { ...sentFiles };
+    delete next[id];
+    saveSentFiles(next);
+  };
+
+  /** The bubble's own preview of a file (the composer lets go of its chips' copies when it goes). */
+  const preview = (name: string, kind: SentFile["kind"], bytes: Uint8Array) =>
+    kind === "file" ? null : URL.createObjectURL(new Blob([bytes as BlobPart], { type: blobType(name) }));
+
+  /** A message with files, ready for the agent: each file saved under the session's own folder (pictures the agent
+   *  reads itself listed apart), the text naming the others. Throws on the first file that cannot be saved; then
+   *  nothing is sent. */
+  const prepare = async (id: string, text: string, files: OutFile[]) => {
+    const images: string[] = [];
+    const named: string[] = [];
+    const saved: SavedFile[] = [];
+    const shown: SentFile[] = [];
+    for (const f of files) {
+      let path: string;
+      let bytes: Uint8Array;
+      try {
+        bytes = bytesOf(await f.read());
+        path = await host.saveFile(id, f.name, bytes);
+      } catch (e) {
+        throw new Error(tr("att.failed", { name: f.name, error: errText(e) }));
+      }
+      (inlinePicture(f.name, f.size) ? images : named).push(path);
+      saved.push({ name: f.name, size: f.size, kind: f.kind, path });
+      shown.push({ name: f.name, size: f.size, kind: f.kind, url: preview(f.name, f.kind, bytes) });
+    }
+    return { input: { kind: "send" as const, text: wireText(text, named), ...(images.length ? { images } : {}) }, saved, shown };
+  };
+
+  /** The bubble for a message with files, kept on this computer so it shows them again after a restart. */
+  const showWithFiles = (id: string, key: string, text: string, p: Awaited<ReturnType<typeof prepare>>) => {
+    const t = text.trim();
+    const now = Date.now();
+    const lid = `local-s${++localSeq}`;
+    store().dispatch({ type: "local.user", bot: key, id: lid, text: t, now, files: p.shown });
+    saveSentFiles(putSentFiles(sentFiles, id, String(now), { ts: now / 1000, text: t, files: p.saved }));
+    const r = rec(id);
+    const pt = t ? promptTitle(t) : "";
+    if (r && !r.promptTitle && pt) patchRec(id, { promptTitle: pt });
+    return lid;
+  };
+
+  /**
+   * Send a message with files from a running chat. The files are saved first; if one cannot be, nothing is sent
+   * and the error goes back to the composer (its chips stay).
+   */
+  const sendFiles = async (id: string, text: string, files: OutFile[]) => {
+    if (!files.length) return send(id, text);
+    const key = keys.get(id);
+    if (!key) return;
+    if (procs.get(id)?.kind !== "agent") throw new Error(tr("ss.agentNotRunning", { agent: agentDef(rec(id)?.agent ?? "claude").label }));
+    const p = await prepare(id, text, files);
+    const lid = showWithFiles(id, key, text, p);
+    try {
+      await input(id, { ...p.input, id: lid });
+    } catch (e) {
+      store().dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
+    }
+  };
+
+  /** Open a restored chat with its sent files back in their bubbles: each sent message's bubble is put down first
+   *  with the files (read back from the saved copies), and the restored message with the same text and time takes
+   *  them over; one sent with files and no text stays as it is. */
+  const openWithFiles = async (id: string, model: string, msgs: Msg[]) => {
+    const key = keys.get(id)!;
+    const entries = Object.entries(sentFiles[id] ?? {});
+    const oldest = msgs.length ? msgs[0].ts : -Infinity;
+    for (const [mid, e] of entries) {
+      if (e.ts < oldest - 1) continue; // older than what the chat kept
+      const shown: SentFile[] = await Promise.all(
+        e.files.map(async (f) => {
+          if (f.kind === "file") return { name: f.name, size: f.size, kind: f.kind, url: null };
+          try {
+            return { name: f.name, size: f.size, kind: f.kind, url: preview(f.name, f.kind, await host.readFile(f.path)) };
+          } catch {
+            return { name: f.name, size: f.size, kind: "file" as const, url: null };
+          }
+        }),
+      );
+      if (store().getState().chats[key]?.loaded) return;
+      store().dispatch({ type: "local.user", bot: key, id: `local-f${mid}`, text: e.text, now: e.ts * 1000, files: shown });
+    }
+    openChat(id, model, msgs);
   };
 
   const registerRoute = (id: string) => {
@@ -453,14 +665,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * Start a draft: its agent in its folder, `first` as the agent's first prompt (a chat agent; the bubble shows at
    * once). A terminal agent starts in the folder and is sent nothing. From here the agent and folder are fixed.
    */
-  const start = async (id: string, first?: string, startedAs?: string): Promise<boolean> => {
+  const start = async (id: string, first?: string, startedAs?: string, files: OutFile[] = []): Promise<boolean> => {
     const r0 = rec(id);
     if (!r0 || r0.status !== "draft" || !r0.cwd) return false;
     await ready();
     const r = rec(id);
     if (!r || r.status !== "draft") return false; // closed or started meanwhile
-    picked.delete(id);
     const mode = modeOf(state.agents, r.agent);
+    const text = first?.trim() ?? "";
+    // the first message's files are saved before anything starts: one that cannot be leaves the draft as it was
+    // (its chips stay)
+    let withFiles: Awaited<ReturnType<typeof prepare>> | null = null;
+    if (files.length && mode === "chat") {
+      try {
+        withFiles = await prepare(id, text, files);
+      } catch (e) {
+        void host.removeFiles(id).catch(() => undefined);
+        throw e;
+      }
+      if (rec(id)?.status !== "draft") return false; // closed meanwhile
+    }
+    picked.delete(id);
     const app = store().getState();
     const startedAt = Date.now();
     // the account it runs as is the one picked for new sessions now (recorded so a restart continues as it)
@@ -478,15 +703,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       view: mode === "terminal" ? "terminal" : "chat",
       ...(account ? { account } : {}),
       ...(startedAs ? { startedAs } : {}),
-      // DSH names its conversation by the id it is started with (`--resume <id>`): one id per session, so Resume
-      // after a restart continues it
-      ...(r.agent === "dsh" ? { agentSession: crypto.randomUUID() } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     });
-    const text = first?.trim() ?? "";
     // the message is sent: the draft view goes before its composer clears its own unsent text, so clear it here
-    if (text) setUnsent(`agent:${id}`, "");
+    if (text || files.length) setUnsent(`agent:${id}`, "");
     // the first message names the session (as a later one would in send) until the agent or the person does
     const pt = text ? promptTitle(text) : "";
     if (pt) patchRec(id, { promptTitle: pt });
@@ -494,18 +715,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       keys.set(id, `agent:${id}`);
       registerRoute(id);
       openChat(id);
-      if (!text) {
+      if (!text && !withFiles) {
         await startAgentChat(id);
         return true;
       }
-      // the first prompt shows at once and goes to the agent as soon as it runs
+      // the first prompt shows at once (with its files) and goes to the agent as soon as it runs
       const st = store();
       const key = keys.get(id)!;
-      const lid = `local-s${++localSeq}`;
-      st.dispatch({ type: "local.user", bot: key, id: lid, text, now: Date.now() });
+      const lid = withFiles ? showWithFiles(id, key, text, withFiles) : `local-s${++localSeq}`;
+      if (!withFiles) st.dispatch({ type: "local.user", bot: key, id: lid, text, now: Date.now() });
       await startAgentChat(id);
       try {
-        await input(id, { kind: "send", text });
+        await input(id, withFiles ? { ...withFiles.input, id: lid } : { kind: "send", text, id: lid });
       } catch (e) {
         st.dispatch({ type: "send.failed", bot: key, id: lid, error: errText(e) });
       }
@@ -516,13 +737,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return true;
   };
 
+  /** How many times session `id`'s terminal was started again (Restart): the view keys its terminal on it. */
+  const termRuns = new Map<string, number>();
+
   const startTerm = async (id: string, t: Term) => {
     const r = rec(id);
     if (!r) return;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = modeOf(state.agents, r.agent) !== "terminal";
-    // Claude Code's terminal continues the chat's conversation; DSH (a terminal agent) its own
-    const resume = r.agentSession && ((ofChat && r.agent === "claude") || (!ofChat && r.agent === "dsh")) ? r.agentSession : undefined;
+    // Claude Code's terminal continues the chat's conversation
+    const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     try {
       const hostId = await host.start(
         r.agent,
@@ -630,11 +854,36 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
+  /** Type text at session `id`'s terminal prompt, as if the person had (a dropped file's path). */
+  const typeAt = async (id: string, text: string) => {
+    const t = terms.get(id);
+    if (!t || t.hostId === null || t.closed) return;
+    await host.write(t.hostId, text);
+    t.term.focus();
+  };
+
+  /** Files dropped or pasted on session `id`'s terminal: each saved under the session's own folder (the page
+   *  never sees a dropped file's own path), then the saved paths typed at the prompt, shell-quoted. */
+  const dropOnTerminal = async (id: string, files: { name: string; read: () => Promise<Uint8Array> }[], windows: boolean) => {
+    const t = terms.get(id);
+    const paths: string[] = [];
+    for (const f of files) {
+      try {
+        paths.push(shellQuote(await host.saveFile(id, f.name, await f.read()), windows));
+      } catch (e) {
+        t?.term.write(`\r\n\x1b[31m${tr("att.failed", { name: f.name, error: errText(e) })}\x1b[0m\r\n`);
+        return;
+      }
+    }
+    if (paths.length) await typeAt(id, `${paths.join(" ")} `);
+  };
+
   const stopChat = async (id: string) => {
     const p = procs.get(id);
     if (!p) return;
     p.stopping = true;
     procs.delete(id);
+    endLiveTurn(id, "interrupted");
     if (p.kind === "agent" && p.hostId !== undefined) await host.chatClose(p.hostId).catch(() => undefined);
     if (p.kind === "folder" && p.bot && p.fid) await store().actions.folderClose(p.bot, p.fid).catch(() => undefined);
   };
@@ -665,12 +914,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   };
 
   /**
-   * Start an ended chat session's agent again in the same chat. Claude Code, Codex and OmO continue their
-   * conversation (Claude Code `--resume`, Codex `thread/resume`, OmO `--session`); pi and oh-my-pi start a new one.
+   * Start an ended session's agent again: a chat agent in the same chat, a terminal agent in a fresh terminal, in
+   * the same folder and account. Agents in `CONTINUES` continue their conversation (Claude Code `--resume`, Codex
+   * `thread/resume`, OmO `--session`, DSH `--session-id`); the others (pi, oh-my-pi, Grok's terminal) start a new one.
    */
   const restart = async (id: string) => {
     const r = rec(id);
-    if (!r || procs.has(id) || modeOf(state.agents, r.agent) !== "chat" || (r.status !== "exited" && r.status !== "failed")) return;
+    if (!r || (r.status !== "exited" && r.status !== "failed")) return;
+    if (modeOf(state.agents, r.agent) === "terminal") {
+      // a fresh terminal: the view mounts it and starts the program (continuing the conversation, as startTerm says)
+      const t = terms.get(id);
+      if (t && !t.closed) return;
+      disposeTerm(id);
+      termRuns.set(id, (termRuns.get(id) ?? 0) + 1);
+      patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined });
+      return;
+    }
+    if (procs.has(id) || modeOf(state.agents, r.agent) !== "chat") return;
     const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
     note(id, null);
@@ -704,13 +964,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
 
   /**
    * Put back the sessions saved before omher restarted (once per page load; a second call does nothing, so no
-   * program starts twice). Each keeps its id, folder, account and chat. A Claude Code or Codex chat that was
-   * running continues its conversation; any other running one comes back paused; ended ones stay ended.
+   * program starts twice). Each keeps its id, folder, account and chat. A chat that was running and continues a
+   * conversation (Claude Code, Codex, OmO) continues it; any other running one comes back paused; ended ones stay
+   * ended (with Restart).
    */
   const restore = (saved: SavedSession[]) => {
     if (restored || state.list.length > 0) return;
     restored = true;
-    if (!saved.length) return;
+    if (!saved.length) {
+      void ready().then(() => host.pruneFiles([]).catch(() => undefined));
+      saveSentFiles({});
+      return;
+    }
     const list: SessionRec[] = [];
     const again: { id: string; resume: string }[] = [];
     for (const s of saved) {
@@ -722,6 +987,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         continue;
       }
       const mode = modeOf(state.agents, s.agent);
+      if (s.agent === "dsh" && s.view === "terminal") {
+        // omher 0.2.4's DSH ran deepseek-bot's terminal (its id is a deepseek-bot conversation): it comes back ended
+        // with a plain line and never starts deepseek-bot; Restart starts DeepSeek Harness in the folder
+        list.push({ id: s.id, agent: s.agent, cwd: s.cwd, startedAt: s.startedAt, view: "chat", status: "exited", exitCode: null, error: tr("ss.dshOld"), ...(s.title ? { title: s.title } : {}) });
+        fromBefore.add(s.id);
+        seq = Math.max(seq, Number(s.id.slice(1)) || 0);
+        keys.set(s.id, `agent:${s.id}`);
+        openChat(s.id);
+        continue;
+      }
       const auto = s.running && mode === "chat" && continuesItself(s);
       const r: SessionRec = {
         id: s.id,
@@ -741,6 +1016,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         ...(s.title ? { title: s.title } : {}),
         ...(s.agentTitle ? { agentTitle: s.agentTitle } : {}),
         ...(s.promptTitle ? { promptTitle: s.promptTitle } : {}),
+        ...(s.mode ? { mode: s.mode } : {}),
+        ...(s.effort ? { effort: s.effort } : {}),
         ...(s.running && !auto ? { paused: true } : {}),
       };
       list.push(r);
@@ -750,12 +1027,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         keys.set(s.id, `agent:${s.id}`);
         // fresh ids: the agent's own message ids start over in its new process
         const msgs: Msg[] = (s.messages ?? []).map((m) => ({ id: `r-${m.id}`, role: m.role, text: m.text, ts: m.ts }));
-        openChat(s.id, s.model ?? "", msgs);
+        if (sentFiles[s.id]) void openWithFiles(s.id, s.model ?? "", msgs);
+        else openChat(s.id, s.model ?? "", msgs);
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
     }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
+    // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
+    const ids = list.map((r) => r.id);
+    void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
+    saveSentFiles(Object.fromEntries(Object.entries(sentFiles).filter(([sid]) => ids.includes(sid))));
+
     // the home folder (for `~/…` paths) and each agent's mode, as a first launch would read them
     void loadAgents();
     if (again.length) void ready().then(() => Promise.all(again.map(({ id, resume: rid }) => (procs.has(id) ? undefined : startAgentChat(id, rid)))));
@@ -765,7 +1048,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const close = (id: string) => {
     picked.delete(id);
     disposeTerm(id);
-    void stopChat(id);
+    void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));
+    forgetSentFiles(id);
     const key = keys.get(id);
     if (key) {
       setChatRoute(key, null);
@@ -778,7 +1062,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     delete models[id];
     const notes = { ...state.notes };
     delete notes[id];
-    set({ list, models, notes });
+    const live = { ...state.live };
+    delete live[id];
+    set({ list, models, notes, live });
     const ui = store().getState().ui;
     if (ui.view === "session" && ui.session === id) {
       const next = list[Math.min(idx, list.length - 1)];
@@ -814,6 +1100,33 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
+  /** Change a chat session's permission mode (Claude Code's own switch; Codex from its next turn). Kept with the
+   *  session, so a restart sets it again. Only the modes controls.ts offers for the agent. */
+  const setMode = async (id: string, mode: string) => {
+    const r = rec(id);
+    if (!r || !modesOf(r.agent).includes(mode)) return;
+    note(id, null);
+    try {
+      await input(id, { kind: "mode", mode });
+      patchRec(id, { mode });
+    } catch (e) {
+      note(id, tr("ss.modelNotChanged", { error: errText(e) }));
+    }
+  };
+
+  /** Change a chat session's reasoning effort, one of the levels its agent reported. */
+  const setEffort = async (id: string, effort: string) => {
+    const r = rec(id);
+    if (!r || !(state.live[id]?.efforts ?? []).includes(effort)) return;
+    note(id, null);
+    try {
+      await input(id, { kind: "effort", effort });
+      patchRec(id, { effort });
+    } catch (e) {
+      note(id, tr("ss.modelNotChanged", { error: errText(e) }));
+    }
+  };
+
   const setTheme = (theme: ITheme) => {
     for (const t of terms.values()) t.term.options.theme = theme;
   };
@@ -836,15 +1149,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setTheme,
     setView,
     setModel,
+    setMode,
+    setEffort,
     rename,
     restart,
     resume,
     restore,
     send,
+    sendFiles,
+    dropOnTerminal,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
     hasTerm: (id: string) => terms.has(id),
+    /** Changes each time Restart starts session `id`'s terminal program again. */
+    termRun: (id: string) => termRuns.get(id) ?? 0,
     /** The session whose chat has app-store key `key`. */
     byKey: (key: string) => {
       for (const [id, k] of keys) if (k === key) return rec(id) ?? null;

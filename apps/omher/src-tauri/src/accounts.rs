@@ -346,6 +346,7 @@ fn command(program: &Path, args: &[&str], env: &[(String, OsString)]) -> Command
         cmd.env(k, v);
     }
     crate::bridge::no_console_window(&mut cmd);
+    crate::appimage::host_env(&mut cmd);
     cmd
 }
 

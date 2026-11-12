@@ -1,0 +1,8 @@
+{"type":"session","sessionId":"session-dcd0ad77-fd70-4faa-993c-d05080d6c666","cwd":"/w/proj"}
+{"type":"status","phase":"turn_start","turn":1}
+{"type":"status","phase":"step_start","turn":1,"step":1}
+{"type":"thinking","text":"The user wants a random fruit and a number. Just reply with the two, nothing else.\n\nLet me pick: persimmon 64. Or something common. \"mango 37\" was example, so pick different. Let's say \"papaya 58\".\n\nJust reply with only those two."}
+{"type":"text","text":"papaya 58"}
+{"type":"status","phase":"step_end","turn":1,"step":1,"usage":{"inputTokens":28231,"outputTokens":68,"totalTokens":28299}}
+{"type":"status","phase":"turn_end","turn":1,"reason":{"kind":"completed"}}
+{"type":"final","text":"papaya 58"}

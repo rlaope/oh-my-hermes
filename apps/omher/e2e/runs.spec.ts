@@ -146,12 +146,12 @@ test.beforeEach(async () => {
 
 // ---- the tab and the list ----
 
-test("Plans is the sixth tab; the header still holds one control; the panel is 460px, up to 560px beyond a 480px chat", async ({ page }) => {
+test("Plans is the sixth tab; the header holds the model control and the panel button; the panel is 460px, up to 560px beyond a 480px chat", async ({ page }) => {
   await openRuns(page);
   const tabs = page.getByRole("tablist", { name: "Panel" }).getByRole("tab");
   expect(await tabs.evaluateAll((els) => els.map((e) => e.getAttribute("title")))).toEqual(["Details", "Terminal", "Schedule", "Worktrees", "Diff", "Plans"]);
   await expect(page.getByTestId("panel-tab-runs")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);
+  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(2);
   // what the window has beyond the 248px sidebar and a 480px chat, between 460 and 560
   const width = async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0);
   await expect.poll(width).toBe(552);
@@ -375,7 +375,23 @@ test("the run's header is plain text in the app's font: the title leads, a statu
   const expand = head.getByTestId("graph-expand");
   await expect(expand).toHaveAttribute("title", /^Full view (⌘⇧G|Ctrl\+Shift\+G)$/);
   await expect(expand).toHaveText("");
-  const [eb, tb, pb] = await Promise.all([expand.boundingBox(), head.getByTestId("run-plan-title").boundingBox(), page.getByTestId("panel-runs").boundingBox()]);
+  // read the three boxes in one frame once the panel has stopped sliding in (three boundingBox() calls are three
+  // round trips, so on a slow runner they came from different frames of the slide: 2.7 px apart on Windows CI)
+  const boxes = () =>
+    page.evaluate(() =>
+      ["graph-expand", "run-plan-title", "panel-runs"].map((id) => {
+        const b = document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        return { x: b.x, y: b.y, width: b.width, height: b.height };
+      }),
+    );
+  await expect
+    .poll(async () => {
+      const a = (await boxes())[2].x;
+      await page.waitForTimeout(80);
+      return Math.abs(a - (await boxes())[2].x) < 0.5;
+    })
+    .toBe(true);
+  const [eb, tb, pb] = await boxes();
   expect([eb!.width, eb!.height]).toEqual([24, 24]);
   expect(Math.abs(eb!.y + eb!.height / 2 - (tb!.y + tb!.height / 2))).toBeLessThanOrEqual(1);
   expect(eb!.x + eb!.width).toBeLessThanOrEqual(pb!.x + pb!.width);
@@ -1271,7 +1287,7 @@ test("⌘⇧G and 'Full view' open the full view over the chat; Esc and × close
   const side = await page.locator(".pane").evaluate((e) => e.getBoundingClientRect().x);
   expect(Math.round((await full(page).boundingBox())!.x)).toBe(Math.round(side));
   await expect(page.getByTestId("details")).toBeHidden();
-  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(1);
+  await expect(page.getByTestId("head-right").locator(":scope > *")).toHaveCount(2);
   await expect(full(page).getByTestId("run-node")).toHaveCount(6);
   // the same plain header, and the drawing at the text's own size from the top
   await expect(full(page).getByTestId("run-plan-title")).toHaveText("Codex coexistence (live)");
@@ -1484,7 +1500,7 @@ test("a delegate_task in chat: one plain sentence per dag part, a read-only stat
   await act.getByTestId("activity-toggle").click();
   const rows = act.getByTestId("activity-dag");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText("Assigned t3-doctor to a helper");
+  await expect(rows.nth(0)).toContainText("Assigned t3-doctor to a subagent");
   await expect(rows.nth(0).getByTestId("activity-dag-status")).toHaveText("working");
   expect(await act.getByRole("button", { name: /reassign/i }).count()).toBe(0);
   await rows.nth(0).getByTestId("activity-dag-open").click();

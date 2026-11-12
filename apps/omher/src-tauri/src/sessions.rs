@@ -1,5 +1,5 @@
 //! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omo`, `dsh`, `omh`,
-//! `pi`, `omp`, `grok`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
+//! `pi`, `omp`, `grok`, `opencode`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
 //! the app quits.
 //!
 //! The UI only ever names an agent id. The program, its path and its arguments are decided here: an id that
@@ -48,27 +48,31 @@ pub enum Mode {
 }
 
 /// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
-pub const AGENTS: [Agent; 8] = [
+pub const AGENTS: [Agent; 9] = [
     Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
     Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },
     // OmO (`omo-ai`, oh-my-openagent on the senpi engine) speaks pi's RPC: `omo --mode rpc`, checked against omo
     // 5.0.0-beta.65 (get_state, prompt, agent_end; `--session <id>` continues a conversation).
     Agent { id: "omo", program: "omo", label: "OmO", mode: Mode::Chat },
-    // DSH (deepseek-bot's `dsh`) is a terminal client of a running gateway and refuses to run without a TTY;
-    // its headless mode is the DeepSeek Harness's one-shot runner, not this conversation, so it opens in its
-    // terminal. `--resume <id>` names (or continues) the conversation.
-    Agent { id: "dsh", program: "dsh", label: "DSH", mode: Mode::Terminal },
+    // DSH is DeepSeek Harness (deepseek-ai/deepseek-harness), found only where the harness installs its CLI
+    // ([`dsh_harness`]), never another `dsh` on PATH. It ships no terminal profile, so its chat runs one
+    // `dsh --profile headless --json` per message ([`dsh_turn_args`], crate::dsh_chat), continued by `--session-id`.
+    Agent { id: "dsh", program: "dsh", label: "DSH", mode: Mode::Chat },
     Agent { id: "omh", program: "omh", label: "oh-my-hermes", mode: Mode::Hermes },
     Agent { id: "pi", program: "pi", label: "pi", mode: Mode::Chat },
     Agent { id: "omp", program: "omp", label: "oh-my-pi", mode: Mode::Chat },
     // Grok's headless stream is read-only (approvals need ACP, `grok agent stdio`), and grok is not on this
     // machine to verify against, so it keeps the terminal view.
     Agent { id: "grok", program: "grok", label: "Grok", mode: Mode::Terminal },
+    // OpenCode (`opencode-ai`) speaks the Agent Client Protocol (`opencode acp`, crate::acp_chat), checked against 1.19.5.
+    Agent { id: "opencode", program: "opencode", label: "OpenCode", mode: Mode::Chat },
 ];
 
 /// Claude Code's structured mode: one long-lived `-p` process reading and writing stream-json, with tool
-/// approvals sent to us over the same stream (`--permission-prompt-tool stdio`) instead of a TUI prompt.
-pub const CLAUDE_CHAT_ARGS: [&str; 9] = [
+/// approvals sent to us over the same stream (`--permission-prompt-tool stdio`) instead of a TUI prompt, and each
+/// message the person sent echoed back when Claude Code takes it (`--replay-user-messages`), so a message sent
+/// while a turn runs shows as waiting until then.
+pub const CLAUDE_CHAT_ARGS: [&str; 10] = [
     "-p",
     "--input-format",
     "stream-json",
@@ -78,6 +82,7 @@ pub const CLAUDE_CHAT_ARGS: [&str; 9] = [
     "--include-partial-messages",
     "--permission-prompt-tool",
     "stdio",
+    "--replay-user-messages",
 ];
 
 /// The fixed arguments that start agent `id` in its structured mode, or `None` when it has none here. These
@@ -88,6 +93,7 @@ pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
             "claude" => &CLAUDE_CHAT_ARGS[..],
             "codex" => &["app-server"][..],
             "pi" | "omp" | "omo" => &["--mode", "rpc"][..],
+            "opencode" => &["acp"][..],
             _ => return None,
         }),
         _ => None,
@@ -95,19 +101,44 @@ pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
 }
 
 /// The argument that continues a conversation: `--resume <id>` for Claude Code (so its terminal view and its
-/// chat continue one conversation) and for DSH (the conversation id omher gave it when it started), `--session
-/// <id>` for OmO (the session id it reported). The id must be a UUID; every other agent and any other text is
-/// refused.
+/// chat continue one conversation), `--session <id>` for OmO (the session id it reported), `--session-id <id>`
+/// for DSH (the `session-<uuid>` DeepSeek Harness reported). The id must be a UUID (DSH: `session-` and a UUID);
+/// every other agent and any other text is refused.
 pub fn resume_args(id: &str, session: &str) -> Result<Vec<OsString>, String> {
     let flag = match id {
-        "claude" | "dsh" => "--resume",
+        "claude" => "--resume",
         "omo" => "--session",
+        "dsh" => "--session-id",
         _ => return Err(format!("{id} sessions cannot be resumed")),
     };
-    if !is_uuid(session) {
+    let ok = if id == "dsh" { session.strip_prefix("session-").is_some_and(is_uuid) } else { is_uuid(session) };
+    if !ok {
         return Err("not a conversation id".into());
     }
     Ok(vec![flag.into(), session.into()])
+}
+
+/// The overlay DSH's chat passes with `--patch`: DeepSeek Harness's shipped headless profile turns off its own
+/// saved-credentials store, and these three rows (upstream dsh-headless README, "Credentials") turn it back on
+/// for that one run, so the harness uses the keys and sign-in saved in its own app. omher writes this fixed text
+/// to [`dsh_patch_path`] and never reads a key; the person's `~/.dsh` is not changed.
+pub const DSH_HEADLESS_PATCH: &str = "# omher: DeepSeek Harness's headless runs use the harness's own saved credentials\n\
+- id: credentials\n  disabled: false\n- id: authorization\n  disabled: false\n- id: deepseek-account\n  disabled: false\n";
+
+/// `<home>/.omher/dsh/headless.patch.yml`, the one file omher writes for DSH.
+pub fn dsh_patch_path(home: &Path) -> PathBuf {
+    home.join(".omher").join("dsh").join("headless.patch.yml")
+}
+
+/// The arguments of one DSH chat turn, all fixed apart from the overlay path and a checked session id:
+/// `--profile headless --patch <overlay> --json [--session-id session-<uuid>] -` (the message goes on stdin).
+pub fn dsh_turn_args(patch: &Path, session: Option<&str>) -> Result<Vec<OsString>, String> {
+    let mut a: Vec<OsString> = vec!["--profile".into(), "headless".into(), "--patch".into(), patch.as_os_str().to_owned(), "--json".into()];
+    if let Some(s) = session {
+        a.extend(resume_args("dsh", s)?);
+    }
+    a.push("-".into());
+    Ok(a)
 }
 
 /// `8-4-4-4-12` hex digits, nothing else.
@@ -163,6 +194,10 @@ pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBu
                     &[".volta", "bin"],
                     &["Library", "pnpm"],
                     &[".local", "share", "pnpm"],
+                    // the official installers' own folders, which only a shell's rc file puts on PATH: Grok
+                    // (x.ai/cli/install.sh, `~/.grok/bin`) and pi's managed install (pi.dev/install.sh, `~/.pi/agent/bin`)
+                    &[".grok", "bin"],
+                    &[".pi", "agent", "bin"],
                 ] {
                     dirs.push(join(&home, parts));
                 }
@@ -179,7 +214,7 @@ pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBu
                 dirs.push(join(&appdata, &["npm"]));
             }
             if let Some(profile) = set("USERPROFILE") {
-                for parts in [&[".local", "bin"][..], &[".bun", "bin"], &[".cargo", "bin"], &[".volta", "bin"]] {
+                for parts in [&[".local", "bin"][..], &[".bun", "bin"], &[".cargo", "bin"], &[".volta", "bin"], &[".grok", "bin"], &[".pi", "agent", "bin"]] {
                     dirs.push(join(&profile, parts));
                 }
             }
@@ -209,6 +244,206 @@ pub fn file_names(program: &str, os: Os) -> Vec<String> {
 pub fn resolve<X: Fn(&Path) -> bool>(program: &str, dirs: &[PathBuf], is_program: X, os: Os) -> Option<PathBuf> {
     let names = file_names(program, os);
     dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| is_program(p))
+}
+
+/// Where DeepSeek Harness puts its CLI, in order: inside the macOS app (`/Applications`, then `~/Applications`),
+/// inside the Windows app (its per-user NSIS install, `%LOCALAPPDATA%\\Programs\\DeepSeek Harness`). Linux has no
+/// fixed place: the npm package `@deepseek-ai/dsh` on PATH ([`is_dsh_harness`]) is how it is found there.
+pub fn dsh_app_clis<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBuf> {
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    let cli = |root: PathBuf, name: &str| ["Resources", "runtime", "cli", "bin", name].iter().fold(root, |p, c| p.join(c));
+    match os {
+        Os::Unix => {
+            let mut roots = vec![PathBuf::from("/Applications")];
+            roots.extend(set("HOME").map(|h| Path::new(&h).join("Applications")));
+            roots.into_iter().map(|r| cli(r.join("DeepSeek Harness.app").join("Contents"), "dsh")).collect()
+        }
+        Os::Windows => set("LOCALAPPDATA")
+            .map(|l| {
+                let app = Path::new(&l).join("Programs").join("DeepSeek Harness");
+                ["resources", "runtime", "cli", "bin", "dsh.cmd"].iter().fold(app, |p, c| p.join(c))
+            })
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// Whether a `dsh` found on PATH is DeepSeek Harness: its real path (links followed) is inside the harness app
+/// (`DeepSeek Harness.app`, or `DeepSeek Harness/resources/runtime/cli` on Windows, which is what the app's
+/// "Manage dsh Command" installs) or inside the npm package `@deepseek-ai/dsh`; an npm `.cmd` shim counts when
+/// that package sits next to it (`node_modules/@deepseek-ai/dsh`). Any other `dsh` (deepseek-bot's launcher in
+/// `~/.local/bin` is one) is not.
+pub fn is_dsh_harness<X: Fn(&Path) -> bool>(found: &Path, real: &Path, exists: X) -> bool {
+    let parts: Vec<String> = real.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
+    let has = |i: usize, s: &str| parts.get(i).is_some_and(|p| p.eq_ignore_ascii_case(s));
+    let inside_app = parts.iter().any(|p| p == "DeepSeek Harness.app")
+        || (0..parts.len()).any(|i| has(i, "DeepSeek Harness") && has(i + 1, "resources") && has(i + 2, "runtime") && has(i + 3, "cli"));
+    let npm = parts.windows(2).any(|w| w[0] == "@deepseek-ai" && w[1] == "dsh");
+    let shim = found.parent().is_some_and(|d| exists(&d.join("node_modules").join("@deepseek-ai").join("dsh").join("package.json")));
+    inside_app || npm || shim
+}
+
+/// The DeepSeek Harness CLI on this machine: the app's own CLI first, then a `dsh` in `dirs` that
+/// [`is_dsh_harness`] accepts. `real` resolves links. Never the first `dsh` on PATH just because it is first.
+pub fn dsh_harness<E, X, R>(env: &E, dirs: &[PathBuf], is_program: X, real: R, os: Os) -> Option<PathBuf>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+    R: Fn(&Path) -> PathBuf,
+{
+    if let Some(p) = dsh_app_clis(env, os).into_iter().find(|p| is_program(p)) {
+        return Some(p);
+    }
+    let names = file_names("dsh", os);
+    dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| is_program(p) && is_dsh_harness(p, &real(p), |q| is_program(q) || q.is_file()))
+}
+
+/// Where an agent's official installs put its program, so a same-named other program earlier on PATH (Homebrew's
+/// `grok` regex tool, a `pi` or `codex` of some other project) is not started as the agent. A found program
+/// matches when its real path (links followed) holds one of these. DSH has its own check ([`is_dsh_harness`]);
+/// oh-my-hermes has no row and is found as before.
+pub struct Layout {
+    pub id: &'static str,
+    /// npm (or bun) packages: `node_modules/<package>` in the real path, or on Windows an npm `.cmd` shim with
+    /// `node_modules/<package>/package.json` beside it.
+    pub packages: &'static [&'static str],
+    /// Folder names that follow each other anywhere in the real path (an app bundle, a Homebrew keg, an
+    /// installer's own folder).
+    pub inside: &'static [&'static [&'static str]],
+    /// Folders a standalone installer copies the program itself into, under the home folder (`~`) or
+    /// `%LOCALAPPDATA%`: the real path's folder must be one of them.
+    pub folders: &'static [(&'static str, &'static [&'static str])],
+    /// The install line omher shows for it (the same text as `INSTALL` in src/sessions/agents.ts).
+    pub install: &'static str,
+}
+
+pub const LAYOUTS: [Layout; 6] = [
+    Layout {
+        id: "claude",
+        packages: &["@anthropic-ai/claude-code"],
+        // the native installer (`~/.local/bin/claude` -> `~/.local/share/claude/versions/<v>`), Homebrew's cask
+        inside: &[&[".local", "share", "claude", "versions"], &["Caskroom", "claude-code"]],
+        // Windows: the native installer's own `claude.exe`
+        folders: &[("~", &[".local", "bin"])],
+        install: "npm i -g @anthropic-ai/claude-code",
+    },
+    Layout {
+        id: "codex",
+        packages: &["@openai/codex"],
+        // the CLI inside the ChatGPT or Codex app (APP_BUNDLE_CLI_DIRS), Homebrew's cask
+        inside: &[&["ChatGPT.app", "Contents", "Resources", "codex-cli"], &["Codex.app", "Contents", "Resources", "codex-cli"], &["Caskroom", "codex"]],
+        folders: &[],
+        install: "npm i -g @openai/codex",
+    },
+    Layout {
+        id: "omo",
+        packages: &["omo-ai"],
+        inside: &[],
+        // get.omo.dev/install.sh and install.ps1 copy the binary into ~/.local/bin
+        folders: &[("~", &[".local", "bin"])],
+        install: "npm i -g omo-ai",
+    },
+    Layout {
+        id: "pi",
+        packages: &["@earendil-works/pi-coding-agent", "@mariozechner/pi-coding-agent"],
+        // pi.dev/install.sh's managed install (its launcher `~/.pi/agent/bin/pi`, which a link in ~/.local/bin
+        // or Homebrew's bin may lead to), Homebrew's formula
+        inside: &[&[".pi", "agent", "bin"], &["Cellar", "pi-coding-agent"]],
+        folders: &[],
+        install: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+    },
+    Layout {
+        id: "omp",
+        packages: &["@oh-my-pi/pi-coding-agent"],
+        // Homebrew's tap (can1357/tap/omp)
+        inside: &[&["Cellar", "omp"]],
+        // omp.sh/install's binary (~/.local/bin/omp; %LOCALAPPDATA%\\omp\\omp.exe on Windows)
+        folders: &[("~", &[".local", "bin"]), ("LOCALAPPDATA", &["omp"])],
+        install: "curl -fsSL https://omp.sh/install | sh",
+    },
+    Layout {
+        id: "grok",
+        packages: &["@xai-official/grok"],
+        // x.ai/cli/install.sh: `~/.grok/bin/grok` -> `grok-<version>` (or into ~/.grok/downloads)
+        inside: &[&[".grok", "bin"], &[".grok", "downloads"]],
+        folders: &[],
+        install: "curl -fsSL https://x.ai/cli/install.sh | bash",
+    },
+];
+
+/// The [`LAYOUTS`] row of agent `id`.
+pub fn layout(id: &str) -> Option<&'static Layout> {
+    LAYOUTS.iter().find(|l| l.id == id)
+}
+
+/// A path's folder names, split on both separators so a Windows path reads the same on any host.
+fn parts_of(p: &Path) -> Vec<String> {
+    // (the `?` of a Windows `\\?\` canonical path is no folder)
+    p.to_string_lossy().split(['/', '\\']).filter(|c| !c.is_empty() && *c != "?").map(str::to_string).collect()
+}
+
+fn holds(parts: &[String], seq: &[&str]) -> bool {
+    !seq.is_empty() && parts.windows(seq.len()).any(|w| w.iter().zip(seq).all(|(a, b)| a.eq_ignore_ascii_case(b)))
+}
+
+/// Whether program `found` (real path `real`, links followed) sits where an official install of agent `id` puts it
+/// ([`LAYOUTS`]). `exists` checks a file (the npm package beside a Windows shim). An agent without a row: false.
+pub fn in_install_layout<E, X>(id: &str, found: &Path, real: &Path, env: &E, exists: X) -> bool
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+{
+    let Some(l) = layout(id) else { return false };
+    let parts = parts_of(real);
+    let package = |pkg: &str| {
+        let seq: Vec<&str> = std::iter::once("node_modules").chain(pkg.split('/')).collect();
+        holds(&parts, &seq) || found.parent().is_some_and(|d| exists(&pkg.split('/').fold(d.join("node_modules"), |p, c| p.join(c)).join("package.json")))
+    };
+    let set = |k: &str| env(k).filter(|v| !v.trim().is_empty());
+    let folder = |(base, rel): &(&str, &[&str])| {
+        let root = if *base == "~" { set("HOME").or_else(|| set("USERPROFILE")) } else { set(base) };
+        let Some(root) = root else { return false };
+        let want: Vec<String> = parts_of(Path::new(&root)).into_iter().chain(rel.iter().map(|s| s.to_string())).collect();
+        // the real path's folder (by both separators: `Path::parent` would not split a Windows path elsewhere)
+        let have = &parts[..parts.len().saturating_sub(1)];
+        have.len() == want.len() && have.iter().zip(&want).all(|(a, b)| a.eq_ignore_ascii_case(b))
+    };
+    l.packages.iter().any(|p| package(p)) || l.inside.iter().any(|seq| holds(&parts, seq)) || l.folders.iter().any(folder)
+}
+
+/// Program `program` of agent `id` in `dirs`: the first candidate that [`in_install_layout`] accepts, else (no row, or
+/// no candidate in a known layout) the first candidate, as [`resolve`] finds it. A real install in a layout this
+/// table does not know is therefore still found, never "Not installed".
+pub fn find_in_layouts<E, X, R>(id: &str, program: &str, dirs: &[PathBuf], env: &E, is_program: X, real: R, os: Os) -> Option<PathBuf>
+where
+    E: Fn(&str) -> Option<String>,
+    X: Fn(&Path) -> bool,
+    R: Fn(&Path) -> PathBuf,
+{
+    let names = file_names(program, os);
+    let found: Vec<PathBuf> = dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).filter(|p| is_program(p)).collect();
+    found.iter().find(|p| in_install_layout(id, p, &real(p), env, |q| is_program(q) || q.is_file())).or(found.first()).cloned()
+}
+
+fn real_path(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
+/// Where allow-listed agent `a` is on this machine: [`find_in_layouts`] over `dirs`, except DSH ([`dsh_harness`]).
+fn find_agent(a: &Agent, dirs: &[PathBuf]) -> Option<PathBuf> {
+    if a.id == "dsh" {
+        return dsh_harness(&host_env, dirs, is_program_file, real_path, Os::current());
+    }
+    find_in_layouts(a.id, a.program, dirs, &host_env, is_program_file, real_path, Os::current())
+}
+
+/// The program omher would start for agent `id` when it lies in none of that agent's install layouts ([`LAYOUTS`]),
+/// so it may be another program with the same name; `None` when it is in one, or the agent has no row.
+pub fn unrecognized_program(id: &str) -> Option<PathBuf> {
+    let a = agent(id)?;
+    layout(id)?;
+    let path = find_agent(a, &host_dirs())?;
+    (!in_install_layout(id, &path, &real_path(&path), &host_env, |q| is_program_file(q) || q.is_file())).then_some(path)
 }
 
 /// argv for a resolved program. A Windows `.cmd`/`.bat` shim runs through `cmd.exe /c`, because
@@ -301,7 +536,7 @@ pub fn agents_on_this_machine() -> Vec<AgentInfo> {
             id: a.id,
             label: a.label,
             mode: a.mode,
-            path: resolve(a.program, &dirs, is_program_file, Os::current()).map(|p| p.to_string_lossy().into_owned()),
+            path: find_agent(a, &dirs).map(|p| p.to_string_lossy().into_owned()),
         })
         .collect()
 }
@@ -312,8 +547,10 @@ pub fn agents_on_this_machine() -> Vec<AgentInfo> {
 pub fn launch_for(id: &str) -> Result<(Vec<OsString>, OsString), String> {
     let a = agent(id).ok_or_else(|| format!("unknown agent \"{id}\""))?;
     let dirs = host_dirs();
-    let path = resolve(a.program, &dirs, is_program_file, Os::current())
-        .ok_or_else(|| format!("{} is not installed (no `{}` found)", a.label, a.program))?;
+    let path = find_agent(a, &dirs).ok_or_else(|| match a.id {
+        "dsh" => "DeepSeek Harness is not installed (no DeepSeek Harness `dsh` found)".to_string(),
+        _ => format!("{} is not installed (no `{}` found)", a.label, a.program),
+    })?;
     let mut child_dirs: Vec<PathBuf> = path.parent().map(|p| vec![p.to_path_buf()]).unwrap_or_default();
     child_dirs.extend(dirs);
     let joined = std::env::join_paths(child_dirs.iter().filter(|d| d.is_dir())).map_err(|e| e.to_string())?;
@@ -436,7 +673,7 @@ impl Sessions {
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
-    /// or nothing. `resume` (Claude Code, DSH) continues that conversation in the agent's own terminal UI.
+    /// or nothing. `resume` (Claude Code) continues that conversation in the agent's own terminal UI.
     pub fn start_agent<F>(
         &self,
         agent_id: &str,
@@ -450,6 +687,10 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
+        // DeepSeek Harness ships no terminal profile: DSH runs only as a chat
+        if agent_id == "dsh" {
+            return Err("DeepSeek Harness has no terminal view here".into());
+        }
         let (mut argv, path_env) = launch_for(agent_id)?;
         if let Some(r) = resume {
             argv.extend(resume_args(agent_id, r)?);
@@ -516,6 +757,7 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
     for (k, v) in account_env {
         cmd.env(k, v);
     }
+    crate::appimage::host_env(&mut cmd);
     cmd
 }
 
@@ -614,6 +856,119 @@ pub(crate) fn signal_group(pid: Option<u32>, hard: bool) {
 #[cfg(not(unix))]
 pub(crate) fn signal_group(_pid: Option<u32>, _hard: bool) {}
 
+/// Every process a chat's program started, so closing the chat (or the start deadline) stops all of them, not only
+/// the program itself. Unix: the program leads its own process group (`process_group(0)` in the chat's command), so
+/// the group is killed. Windows has no process groups, and an npm agent runs as `cmd.exe /c <shim>.cmd`, which starts
+/// `node.exe`: killing `cmd.exe` leaves node running. There the program goes into a Job Object that kills every
+/// process in it when [`ProcessTree::kill`] ends it or the last handle closes (also when omher itself ends);
+/// processes it starts later join the job on their own.
+pub(crate) struct ProcessTree {
+    #[cfg(unix)]
+    pid: u32,
+    #[cfg(windows)]
+    job: job::Handle,
+}
+
+#[cfg(windows)]
+unsafe impl Send for ProcessTree {}
+#[cfg(windows)]
+unsafe impl Sync for ProcessTree {}
+
+impl ProcessTree {
+    /// The tree of `child`, or `None` when the system refuses one (the caller then kills `child` alone).
+    #[cfg(unix)]
+    pub(crate) fn adopt(child: &std::process::Child) -> Option<ProcessTree> {
+        Some(ProcessTree { pid: child.id() }).filter(|t| t.pid > 1)
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn adopt(child: &std::process::Child) -> Option<ProcessTree> {
+        use std::os::windows::io::AsRawHandle;
+        unsafe {
+            let h = job::CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
+            if h.is_null() {
+                return None;
+            }
+            let tree = ProcessTree { job: h };
+            let mut info: job::ExtendedLimits = std::mem::zeroed();
+            info.basic.limit_flags = job::KILL_ON_JOB_CLOSE;
+            let size = std::mem::size_of::<job::ExtendedLimits>() as u32;
+            if job::SetInformationJobObject(h, job::EXTENDED_LIMIT_INFORMATION, &mut info as *mut _ as *mut _, size) == 0 {
+                return None;
+            }
+            if job::AssignProcessToJobObject(h, child.as_raw_handle() as job::Handle) == 0 {
+                return None;
+            }
+            Some(tree)
+        }
+    }
+
+    /// End every process in the tree now. Unix: SIGKILL to the group only, so it is safe after the program itself has
+    /// ended and been reaped (the group id stays taken while any member lives; an empty group is ESRCH).
+    pub(crate) fn kill(&self) {
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(-(self.pid as i32), libc::SIGKILL);
+        }
+        #[cfg(windows)]
+        unsafe {
+            job::TerminateJobObject(self.job, 1);
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ProcessTree {
+    fn drop(&mut self) {
+        // kill-on-close: whatever is still in the job ends here
+        unsafe {
+            job::CloseHandle(self.job);
+        }
+    }
+}
+
+/// The kernel32 calls and structures [`ProcessTree`] uses (winnt.h layout, 64-bit).
+#[cfg(windows)]
+mod job {
+    use std::ffi::c_void;
+
+    pub type Handle = *mut c_void;
+    pub const EXTENDED_LIMIT_INFORMATION: i32 = 9; // JobObjectExtendedLimitInformation
+    pub const KILL_ON_JOB_CLOSE: u32 = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+
+    #[repr(C)]
+    pub struct BasicLimits {
+        pub per_process_user_time_limit: i64,
+        pub per_job_user_time_limit: i64,
+        pub limit_flags: u32,
+        pub minimum_working_set_size: usize,
+        pub maximum_working_set_size: usize,
+        pub active_process_limit: u32,
+        pub affinity: usize,
+        pub priority_class: u32,
+        pub scheduling_class: u32,
+    }
+
+    #[repr(C)]
+    pub struct ExtendedLimits {
+        pub basic: BasicLimits,
+        pub io: [u64; 6],
+        pub process_memory_limit: usize,
+        pub job_memory_limit: usize,
+        pub peak_process_memory_used: usize,
+        pub peak_job_memory_used: usize,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        pub fn CreateJobObjectW(attributes: *mut c_void, name: *const u16) -> Handle;
+        pub fn SetInformationJobObject(job: Handle, class: i32, info: *mut c_void, length: u32) -> i32;
+        pub fn AssignProcessToJobObject(job: Handle, process: Handle) -> i32;
+        pub fn TerminateJobObject(job: Handle, exit_code: u32) -> i32;
+        pub fn CloseHandle(handle: Handle) -> i32;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------------------------
@@ -634,9 +989,9 @@ mod tests {
     }
 
     #[test]
-    fn allow_list_is_exactly_the_eight_agents() {
+    fn allow_list_is_exactly_the_nine_agents() {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
-        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"]);
+        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
         for a in &AGENTS {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
         }
@@ -651,23 +1006,41 @@ mod tests {
                 ("claude", Mode::Chat),
                 ("codex", Mode::Chat),
                 ("omo", Mode::Chat),
-                ("dsh", Mode::Terminal),
+                ("dsh", Mode::Chat),
                 ("omh", Mode::Hermes),
                 ("pi", Mode::Chat),
                 ("omp", Mode::Chat),
-                ("grok", Mode::Terminal)
+                ("grok", Mode::Terminal),
+                ("opencode", Mode::Chat)
             ]
         );
         assert_eq!(
             chat_args("claude").unwrap(),
-            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"]
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages"]
         );
         assert_eq!(chat_args("codex").unwrap(), ["app-server"]);
         assert_eq!(chat_args("pi").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
+        assert_eq!(chat_args("opencode").unwrap(), ["acp"]);
+        // DSH's chat takes its arguments per message (dsh_turn_args), not here
         for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
             assert!(chat_args(none).is_none(), "{none}");
+        }
+        let p = Path::new("/h/.omher/dsh/headless.patch.yml");
+        assert_eq!(dsh_turn_args(p, None).unwrap(), ["--profile", "headless", "--patch", "/h/.omher/dsh/headless.patch.yml", "--json", "-"].map(OsString::from));
+        let sid = "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8";
+        assert_eq!(
+            dsh_turn_args(p, Some(sid)).unwrap(),
+            ["--profile", "headless", "--patch", "/h/.omher/dsh/headless.patch.yml", "--json", "--session-id", sid, "-"].map(OsString::from)
+        );
+        for bad in ["", "8c11e2bc-9f55-4bcb-a597-19ea472184e8", "session-x", "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8 --approval-policy", "--from-default-profile"] {
+            assert!(dsh_turn_args(p, Some(bad)).is_err(), "{bad:?}");
+        }
+        // no turn argument widens permissions, names another profile or touches the harness's own setup
+        for a in dsh_turn_args(p, Some(sid)).unwrap() {
+            let a = a.to_string_lossy();
+            assert!(!a.contains("permission") && !a.contains("approval") && !a.contains("plugin") && !a.contains("default-profile"), "{a}");
         }
         // no allow-listed argument can run a shell, skip permissions or load extra config
         for a in AGENTS.iter().filter_map(|a| chat_args(a.id)).flatten() {
@@ -683,19 +1056,81 @@ mod tests {
             assert!(resume_args("claude", bad).is_err(), "{bad:?}");
         }
         assert!(resume_args("codex", id).is_err());
-        // OmO continues with --session, DSH with --resume, each only with a UUID
+        // OmO continues with --session, only with a UUID
         assert_eq!(resume_args("omo", id).unwrap(), [OsString::from("--session"), OsString::from(id)]);
-        assert_eq!(resume_args("dsh", id).unwrap(), [OsString::from("--resume"), OsString::from(id)]);
+        // DSH continues DeepSeek Harness's own `session-<uuid>` with --session-id; a bare UUID (a 0.2.4 deepseek-bot
+        // conversation id) is refused
+        let sid = format!("session-{id}");
+        assert_eq!(resume_args("dsh", &sid).unwrap(), [OsString::from("--session-id"), OsString::from(&sid)]);
+        assert!(resume_args("dsh", id).is_err());
         for agent in ["omo", "dsh"] {
             for bad in ["", "default", "--yolo", "eee5079a-c52e-4526-b633-f3d8cb7d6394 --x", "../x"] {
                 assert!(resume_args(agent, bad).is_err(), "{agent} {bad:?}");
             }
         }
-        for agent in ["pi", "omp", "grok", "omh"] {
+        // OpenCode continues over its protocol (session/resume), never by an argument
+        for agent in ["pi", "omp", "grok", "omh", "opencode"] {
             assert!(resume_args(agent, id).is_err(), "{agent}");
         }
         let s = Sessions::default();
         assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--yolo"), &[], 80, 24, |_| {}).is_err());
+        assert_eq!(s.count(), 0);
+    }
+
+    /// The DeepSeek Harness CLI is found where the harness installs it, never as "the first `dsh` on PATH":
+    /// deepseek-bot's launcher in ~/.local/bin, first on PATH, is skipped.
+    #[test]
+    fn dsh_is_deepseek_harness_not_the_first_dsh_on_path() {
+        let env = env_of(&[("PATH", "/Users/k/.local/bin:/usr/bin"), ("HOME", "/Users/k")]);
+        let dirs = search_dirs(&env, Os::Unix);
+        let bot = PathBuf::from("/Users/k/.local/bin/dsh");
+        let app = PathBuf::from("/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh");
+        let user_app = PathBuf::from("/Users/k/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh");
+        let same = |p: &Path| p.to_path_buf();
+        // the plain lookup would start deepseek-bot
+        assert_eq!(resolve("dsh", &dirs, fs_of(&[&bot, &app]), Os::Unix), Some(bot.clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &app]), same, Os::Unix), Some(app.clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &user_app]), same, Os::Unix), Some(user_app));
+        // deepseek-bot alone: DSH is not installed
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot]), same, Os::Unix), None);
+        // the app's "Manage dsh Command" link in /usr/local/bin and the npm package count, by where they lead
+        let link = PathBuf::from("/usr/local/bin/dsh");
+        let to_app = |p: &Path| if p == link { app.clone() } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &link]), to_app, Os::Unix), Some(link.clone()));
+        let npm = PathBuf::from("/opt/homebrew/bin/dsh");
+        let to_npm = |p: &Path| if p == npm { PathBuf::from("/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/lib/bin.js") } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &npm]), to_npm, Os::Unix), Some(npm));
+        // a `dsh` that leads anywhere else is not the harness
+        let other = |p: &Path| if p == link { PathBuf::from("/Users/k/Desktop/deepseek-bot/dist/tui/main.js") } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &link]), other, Os::Unix), None);
+        // Linux: npm only (no app folder)
+        let lin = env_of(&[("PATH", "/home/k/.local/bin:/home/k/.npm-global/bin"), ("HOME", "/home/k")]);
+        let ldirs = search_dirs(&lin, Os::Unix);
+        let lnpm = PathBuf::from("/home/k/.npm-global/bin/dsh");
+        let lbot = PathBuf::from("/home/k/.local/bin/dsh");
+        let to_lnpm = |p: &Path| if p == lnpm { PathBuf::from("/home/k/.npm-global/lib/node_modules/@deepseek-ai/dsh/lib/bin.js") } else { p.to_path_buf() };
+        assert_eq!(dsh_harness(&lin, &ldirs, fs_of(&[&lbot, &lnpm]), to_lnpm, Os::Unix), Some(lnpm));
+    }
+
+    #[test]
+    fn dsh_on_windows_is_the_app_cli_or_the_npm_shim() {
+        let env = env_of(&[("PATH", r"C:\Users\k\.local\bin;C:\Users\k\AppData\Roaming\npm"), ("LOCALAPPDATA", r"C:\Users\k\AppData\Local"), ("APPDATA", r"C:\Users\k\AppData\Roaming"), ("USERPROFILE", r"C:\Users\k")]);
+        let dirs = search_dirs(&env, Os::Windows);
+        let app = dsh_app_clis(&env, Os::Windows);
+        assert_eq!(app, [Path::new(r"C:\Users\k\AppData\Local").join("Programs").join("DeepSeek Harness").join("resources").join("runtime").join("cli").join("bin").join("dsh.cmd")]);
+        let same = |p: &Path| p.to_path_buf();
+        let bot = Path::new(r"C:\Users\k\.local\bin").join("dsh.cmd");
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &app[0]]), same, Os::Windows), Some(app[0].clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot]), same, Os::Windows), None);
+        // the npm shim counts when @deepseek-ai/dsh sits next to it
+        let npm_dir = Path::new(r"C:\Users\k\AppData\Roaming\npm");
+        let shim = npm_dir.join("dsh.cmd");
+        let pkg = npm_dir.join("node_modules").join("@deepseek-ai").join("dsh").join("package.json");
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &shim, &pkg]), same, Os::Windows), Some(shim.clone()));
+        assert_eq!(dsh_harness(&env, &dirs, fs_of(&[&bot, &shim]), same, Os::Windows), None);
+        // and DeepSeek Harness never opens in a terminal session
+        let s = Sessions::default();
+        assert!(s.start_agent("dsh", &std::env::temp_dir(), None, &[], 80, 24, |_| {}).is_err());
         assert_eq!(s.count(), 0);
     }
 
@@ -725,6 +1160,106 @@ mod tests {
         assert!(dirs.contains(&PathBuf::from("/Users/k/.local/bin")));
         assert!(dirs.contains(&PathBuf::from("/usr/local/bin")));
         assert_eq!(dirs.iter().filter(|d| **d == PathBuf::from("/opt/homebrew/bin")).count(), 1);
+        // the folders Grok's and pi's official installers use, which only a shell rc file puts on PATH
+        assert!(dirs.contains(&PathBuf::from("/Users/k/.grok/bin")));
+        assert!(dirs.contains(&PathBuf::from("/Users/k/.pi/agent/bin")));
+        let grok = PathBuf::from("/Users/k/.grok/bin/grok");
+        let pi = PathBuf::from("/Users/k/.pi/agent/bin/pi");
+        let short = env_of(&[("PATH", "/usr/bin:/bin"), ("HOME", "/Users/k")]);
+        let sdirs = search_dirs(&short, Os::Unix);
+        assert_eq!(resolve("grok", &sdirs, fs_of(&[&grok]), Os::Unix), Some(grok));
+        assert_eq!(resolve("pi", &sdirs, fs_of(&[&pi]), Os::Unix), Some(pi));
+        let win = env_of(&[("USERPROFILE", r"C:\Users\k")]);
+        let wdirs = search_dirs(&win, Os::Windows);
+        assert!(wdirs.contains(&Path::new(r"C:\Users\k").join(".grok").join("bin")));
+        assert!(wdirs.contains(&Path::new(r"C:\Users\k").join(".pi").join("agent").join("bin")));
+    }
+
+    /// H1: a same-named other program earlier on PATH (the QA report's shadow stubs; Homebrew's `grok` regex tool)
+    /// is passed over for the agent's own install; with no install in a known layout, the first one is still found.
+    #[test]
+    fn agents_are_found_in_their_install_layout_not_as_the_first_same_name_on_path() {
+        let env = env_of(&[("PATH", "/Users/k/shadow:/opt/homebrew/bin:/usr/bin"), ("HOME", "/Users/k")]);
+        let dirs = search_dirs(&env, Os::Unix);
+        // (agent, its real install as found on PATH or in an install folder, where that leads)
+        let real_installs: [(&str, &str, &str); 12] = [
+            ("claude", "/Users/k/.local/bin/claude", "/Users/k/.local/share/claude/versions/2.1.322"),
+            ("claude", "/opt/homebrew/bin/claude", "/opt/homebrew/Caskroom/claude-code/2.1.311/claude"),
+            ("codex", "/Users/k/.local/bin/codex", "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"),
+            ("codex", "/opt/homebrew/bin/codex", "/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js"),
+            ("omo", "/Users/k/.local/bin/omo", "/Users/k/.local/bin/omo"),
+            ("omo", "/opt/homebrew/bin/omo", "/opt/homebrew/lib/node_modules/omo-ai/bin/omo.js"),
+            ("pi", "/opt/homebrew/bin/pi", "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"),
+            ("pi", "/Users/k/.local/bin/pi", "/Users/k/.pi/agent/bin/pi"),
+            ("omp", "/Users/k/.bun/bin/omp", "/Users/k/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js"),
+            ("omp", "/Users/k/.local/bin/omp", "/Users/k/.local/bin/omp"),
+            ("grok", "/Users/k/.grok/bin/grok", "/Users/k/.grok/bin/grok-1.0.77"),
+            ("grok", "/usr/local/bin/grok", "/Users/k/.grok/downloads/grok-1.0.77"),
+        ];
+        for (id, found, leads_to) in real_installs {
+            let shadow = PathBuf::from(format!("/Users/k/shadow/{id}"));
+            let found = PathBuf::from(found);
+            let real = |p: &Path| if p == found { PathBuf::from(leads_to) } else { p.to_path_buf() };
+            // the plain lookup starts the shadow, the layout check the agent
+            assert_eq!(resolve(id, &dirs, fs_of(&[&shadow, &found]), Os::Unix), Some(shadow.clone()), "{id}");
+            assert_eq!(find_in_layouts(id, id, &dirs, &env, fs_of(&[&shadow, &found]), real, Os::Unix), Some(found.clone()), "{id} {leads_to}");
+            assert!(in_install_layout(id, &found, Path::new(leads_to), &env, |_| false), "{id} {leads_to}");
+            assert!(!in_install_layout(id, &shadow, &shadow, &env, |_| false), "{id}");
+            // only the shadow: still found (a real install in a layout the table does not know never reads "Not installed")
+            assert_eq!(find_in_layouts(id, id, &dirs, &env, fs_of(&[&shadow]), real, Os::Unix), Some(shadow.clone()), "{id}");
+        }
+        // Homebrew's `grok` (jordansissel/grok, a regex tool) is not Grok
+        let brew = PathBuf::from("/opt/homebrew/bin/grok");
+        assert!(!in_install_layout("grok", &brew, Path::new("/opt/homebrew/Cellar/grok/0.9.2/bin/grok"), &env, |_| false));
+        // another agent's package is not this one: oh-my-pi's npm package is not pi
+        assert!(!in_install_layout("pi", &brew, Path::new("/x/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js"), &env, |_| false));
+        // a standalone installer's folder counts only for the program itself, not for anything below it
+        assert!(!in_install_layout("omo", &brew, Path::new("/Users/k/.local/bin/x/omo"), &env, |_| false));
+        // oh-my-hermes has no row: found as before
+        let omh = PathBuf::from("/Users/k/shadow/omh");
+        assert_eq!(find_in_layouts("omh", "omh", &dirs, &env, fs_of(&[&omh]), |p: &Path| p.to_path_buf(), Os::Unix), Some(omh));
+    }
+
+    #[test]
+    fn windows_agents_are_found_in_their_install_layout() {
+        let env = env_of(&[
+            ("PATH", r"C:\tools;C:\Users\k\AppData\Roaming\npm"),
+            ("APPDATA", r"C:\Users\k\AppData\Roaming"),
+            ("USERPROFILE", r"C:\Users\k"),
+            ("LOCALAPPDATA", r"C:\Users\k\AppData\Local"),
+        ]);
+        let same = |p: &Path| p.to_path_buf();
+        let npm = Path::new(r"C:\Users\k\AppData\Roaming\npm");
+        // an npm shim counts when its package sits beside it
+        let shim = npm.join("codex.cmd");
+        let pkg = npm.join("node_modules").join("@openai").join("codex").join("package.json");
+        assert!(in_install_layout("codex", &shim, &shim, &env, fs_of(&[&pkg])));
+        assert!(!in_install_layout("codex", &shim, &shim, &env, fs_of(&[])));
+        // the official installers' own folders
+        for (id, path) in [
+            ("grok", r"C:\Users\k\.grok\bin\grok.exe"),
+            ("pi", r"C:\Users\k\.pi\agent\bin\pi.cmd"),
+            ("omp", r"C:\Users\k\AppData\Local\omp\omp.exe"),
+            ("omo", r"C:\Users\k\.local\bin\omo.exe"),
+            ("claude", r"C:\Users\k\.local\bin\claude.exe"),
+        ] {
+            assert!(in_install_layout(id, Path::new(path), Path::new(path), &env, fs_of(&[])), "{path}");
+        }
+        let dirs = search_dirs(&env, Os::Windows);
+        let shadow = Path::new(r"C:\tools").join("grok.exe");
+        let grok = Path::new(r"C:\Users\k").join(".grok").join("bin").join("grok.exe");
+        assert_eq!(find_in_layouts("grok", "grok", &dirs, &env, fs_of(&[&shadow, &grok]), same, Os::Windows), Some(grok));
+    }
+
+    /// The install line omher names when a program does not look like the agent is the one the menu shows.
+    #[test]
+    fn layout_install_lines_are_the_menus() {
+        let ts = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/sessions/agents.ts")).unwrap();
+        for l in &LAYOUTS {
+            assert!(ts.contains(&format!("  {}: \"{}\",", l.id, l.install)), "{} {}", l.id, l.install);
+            assert!(agent(l.id).is_some_and(|a| a.mode == Mode::Chat || a.mode == Mode::Terminal), "{}", l.id);
+        }
+        assert!(layout("dsh").is_none() && layout("omh").is_none());
     }
 
     #[test]

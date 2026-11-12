@@ -137,9 +137,9 @@ test("the + menu lists the agent CLIs with their marks; missing ones are dimmed 
   const menu = page.getByTestId("session-menu");
   await expect(menu).toBeVisible();
   const rows = menu.locator("[data-testid^=session-agent-]");
-  await expect(rows).toHaveCount(8);
+  await expect(rows).toHaveCount(9);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok", "opencode"].map((a) => `session-agent-${a}`),
   );
   await expect(menu.getByTestId("session-agent-claude")).toContainText("Claude Code");
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
@@ -319,7 +319,7 @@ for (const theme of ["dark", "light"] as const) {
     for (const opener of [start, plus]) {
       await opener.click();
       const menu = page.getByTestId("session-menu");
-      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(8);
+      await expect(menu.locator("[data-testid^=session-agent-]")).toHaveCount(9);
       await expect(page.getByTestId("session-chat")).toHaveCount(0);
       const popBg = await menu.locator("..").evaluate((e) => getComputedStyle(e).backgroundColor);
       const sec = await contrast(page, [".ss-pop .ss-missing", ".ss-pop .ss-item.off .ss-n"], popBg);
@@ -430,14 +430,15 @@ test("a second session, recent folders, and exit ends a session", async ({ page 
 
 test("loading the page stops sessions an earlier load left running, before anything starts", async ({ page }) => {
   await open(page);
-  await expect.poll(async () => (await calls(page)).map((c) => c.op)).toEqual(["reset"]);
+  // (the startup prune of saved attachments is housekeeping, not a start)
+  await expect.poll(async () => (await calls(page)).map((c) => c.op).filter((o) => !o.startsWith("file."))).toEqual(["reset"]);
   await startSession(page, "grok");
   const ops = (await calls(page)).map((c) => c.op);
   expect(ops.filter((o) => o === "reset")).toHaveLength(1);
   expect(ops.indexOf("reset")).toBeLessThan(ops.indexOf("start"));
   // a reload is a new page load: it resets again
   await page.reload();
-  await expect.poll(async () => (await calls(page)).map((c) => c.op)).toEqual(["reset"]);
+  await expect.poll(async () => (await calls(page)).map((c) => c.op).filter((o) => !o.startsWith("file."))).toEqual(["reset"]);
 });
 
 test("xterm loads only when a session opens", async ({ page }) => {

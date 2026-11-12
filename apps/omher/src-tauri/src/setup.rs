@@ -126,6 +126,7 @@ pub fn run_install<F: FnMut(InstallEvent)>(cmd: &InstallCommand, mut emit: F) ->
         command.env(k, v);
     }
     crate::bridge::no_console_window(&mut command);
+    crate::appimage::host_env(&mut command);
     let mut child = command.spawn().map_err(|e| format!("could not start the installer ({}): {e}", cmd.program))?;
     let (tx, rx) = mpsc::channel::<String>();
     let readers: Vec<_> = [

@@ -132,16 +132,18 @@ test("U14: a missing agent's Not installed tooltip carries its install line, as 
   const lines: Record<string, string> = {
     codex: "npm i -g @openai/codex",
     omo: "npm i -g omo-ai",
-    dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
-    pi: "npm i -g @mariozechner/pi-coding-agent",
-    omp: "npm i -g @oh-my-pi/pi-coding-agent",
-    grok: "see grok docs",
+    dsh: "npm i -g @deepseek-ai/dsh",
+    pi: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+    omp: "curl -fsSL https://omp.sh/install | sh",
+    grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
+    opencode: "npm install -g opencode-ai",
   };
   for (const [agent, line] of Object.entries(lines)) {
     const row = page.getByTestId(`session-agent-${agent}`);
     await expect(row).toHaveAttribute("aria-disabled", "true");
     await expect(row).toContainText("Not installed");
-    await expect(row).toHaveAttribute("title", new RegExp(`${agent} was not found on this computer · .*${line.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`));
+    const program = agent === "dsh" ? "DeepSeek Harness \\(dsh\\)" : agent;
+    await expect(row).toHaveAttribute("title", new RegExp(`${program} was not found on this computer · .*${line.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`));
   }
   // an installed agent keeps its path as the tooltip
   await expect(page.getByTestId("session-agent-claude")).toHaveAttribute("title", "/usr/local/bin/claude");

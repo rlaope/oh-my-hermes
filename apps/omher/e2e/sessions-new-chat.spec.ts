@@ -35,7 +35,7 @@ const RECENT = [
   { agent: "claude", cwd: "/Users/you/code/older", at: 1 },
 ];
 
-type Call = { op: string; agent?: string; cwd?: string; input?: { kind: string; text?: string } };
+type Call = { op: string; id?: number; agent?: string; cwd?: string; input?: { kind: string; text?: string } };
 
 async function open(page: Page, { theme = "dark", recent = RECENT as unknown[], installed = ["claude", "codex", "omh"] } = {}) {
   await page.addInitScript(
@@ -151,7 +151,7 @@ for (const theme of ["dark", "light"] as const) {
     const st = all.find((x) => x.op === "chat.start")!;
     expect(st).toMatchObject({ agent: "claude", cwd: "/Users/you/work/api-server" });
     const first = all.find((x) => x.op === "chat.input")!;
-    expect(first.input).toEqual({ kind: "send", text: "run the tests" });
+    expect(first.input).toEqual({ kind: "send", text: "run the tests", id: expect.stringMatching(/^local-/) });
     expect(all.indexOf(st)).toBeLessThan(all.indexOf(first));
     // fixed now: the folder and the agent are read-only, in the same places, the path in the tooltip
     await expect(page.getByTestId("session-folder")).toHaveText("api-server");
@@ -223,7 +223,9 @@ test("closing a draft starts nothing; + while a draft is open reuses it", async 
   await expect(page.getByTestId("session-none")).toBeVisible();
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
   await page.waitForTimeout(200);
-  expect((await calls(page)).filter((c) => c.op !== "reset")).toEqual([]);
+  // nothing started; closing only removes the draft's (empty) attachment folder
+  expect((await calls(page)).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
+  expect((await calls(page)).filter((c) => c.op === "file.remove")).toEqual([expect.objectContaining({ session: "s1" })]);
 });
 
 test("the + menu: installed agents first (the last one used on top), missing ones dimmed with their install line; keys work", async ({ page }) => {
@@ -239,11 +241,13 @@ test("the + menu: installed agents first (the last one used on top), missing one
   // the first row has the focus, so Enter picks the agent on top
   await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
   expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok"].map((a) => `session-agent-${a}`),
+    ["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode"].map((a) => `session-agent-${a}`),
   );
-  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok"]);
+  expect(await items.locator(".ss-l").allTextContents()).toEqual(["DSH", "Claude Code", "Codex", "OmO", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode"]);
   // each with its official mark, never a letter
-  for (const a of ["dsh", "omo", "omp", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`).locator(`img[data-mark="${a}"]`)).toHaveCount(1);
+  for (const a of ["omo", "omp", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`).locator(`img[data-mark="${a}"]`)).toHaveCount(1);
+  // DeepSeek Harness's own mark (its whale), drawn in the text colour
+  await expect(menu.getByTestId("session-agent-dsh").locator('svg[data-mark="dsh"] path')).toHaveCount(1);
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
   // missing: dimmed, marked, with the install line in the tooltip; picking one does nothing
   for (const a of ["omh", "pi", "omp", "grok"]) {
@@ -252,7 +256,7 @@ test("the + menu: installed agents first (the last one used on top), missing one
     await expect(row).toHaveClass(/\boff\b/);
     await expect(row).toContainText("Not installed");
   }
-  await expect(menu.getByTestId("session-agent-pi")).toHaveAttribute("title", "pi was not found on this computer · install: npm i -g @mariozechner/pi-coding-agent");
+  await expect(menu.getByTestId("session-agent-pi")).toHaveAttribute("title", "pi was not found on this computer · install: npm i -g --ignore-scripts @earendil-works/pi-coding-agent");
   const dim = await menu.getByTestId("session-agent-pi").evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e.querySelector(".ss-ic")!).opacity]);
   const lit = await menu.getByTestId("session-agent-claude").evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e.querySelector(".ss-ic")!).opacity]);
   expect(dim[0]).not.toBe(lit[0]);
@@ -261,12 +265,16 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await menu.getByTestId("session-agent-pi").click({ force: true });
   await expect(menu).toBeVisible();
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
-  // anchored to the +: it opens right under it, inside the sidebar
+  // anchored to the +: it opens right under it, or right over its row when there is more room there (nine agents
+  // in an 820px window), inside the sidebar (sessions-menu-fit.spec.ts measures the fit)
+  await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
   const pb = (await plus.boundingBox())!;
   const pop = (await menu.locator("..").boundingBox())!;
   const side = (await page.getByTestId("sidebar").boundingBox())!;
-  expect(pop.y).toBeGreaterThanOrEqual(pb.y + pb.height - 1);
-  expect(pop.y - (pb.y + pb.height)).toBeLessThan(12);
+  const under = pop.y - (pb.y + pb.height);
+  // over the row: the + sits 2px proud of its 24px row, so the menu ends up to 2px below the +'s top
+  const over = pb.y - (pop.y + pop.height);
+  expect([under, over].some((d) => d >= -3 && d < 12), `under ${under}, over ${over}`).toBe(true);
   expect(pop.x).toBeGreaterThanOrEqual(side.x);
   expect(pop.x + pop.width).toBeLessThanOrEqual(side.x + side.width);
   // keys: Home goes to the top, arrows move (and wrap), Esc closes and gives the focus back to +
@@ -276,7 +284,7 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
-  await expect(menu.getByTestId("session-agent-grok")).toBeFocused();
+  await expect(menu.getByTestId("session-agent-opencode")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(plus).toBeFocused();
@@ -294,7 +302,7 @@ test("the + menu: installed agents first (the last one used on top), missing one
   expect(await started(page)).toEqual([]);
 });
 
-test("OmO opens as a chat that answers; DSH opens in its terminal with a conversation id of its own", async ({ page }) => {
+test("OmO opens as a chat that answers; DSH opens DeepSeek Harness as a chat with no terminal view", async ({ page }) => {
   await open(page, { installed: ["omo", "dsh"], recent: [] });
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-omo").click();
@@ -308,13 +316,25 @@ test("OmO opens as a chat that answers; DSH opens in its terminal with a convers
   await page.getByTestId("session-new").click();
   await page.getByTestId("session-agent-dsh").click();
   await expect(page.getByTestId("session-agent-fixed")).toHaveText("DSH");
-  await expect(page.getByTestId("composer")).toBeDisabled();
-  await page.getByTestId("session-go").click();
-  await expect(page.getByTestId("terminal")).toBeVisible();
-  await expect.poll(async () => (await calls(page)).filter((c) => c.op === "start")).toHaveLength(1);
-  const st = (await calls(page)).find((c) => c.op === "start")! as Call & { resume?: string };
-  expect(st).toMatchObject({ agent: "dsh", cwd: "/Users/you" });
-  expect(st.resume).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  await expect(page.getByTestId("draft-note")).toHaveText("DSH starts in you with your first message");
+  await page.getByTestId("composer").fill("Remember PLUM-42.");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("bubble-bot").last()).toHaveText("(mock DSH) You said: Remember PLUM-42.");
+  await expect(page.getByTestId("session-status")).toHaveText("Ready");
+  await page.getByTestId("composer").fill("What was the codeword?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("bubble-bot").last()).toHaveText("(mock DSH) You said: What was the codeword?");
+  // a chat, never a terminal: no Terminal toggle, no PTY start, and one chat that the second message continued
+  await expect(page.getByTestId("session-terminal-toggle")).toHaveCount(0);
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
+  // its model lives in DeepSeek Harness's own app: no "pick a model" note for a menu it does not have
+  await expect(page.getByTestId("chat-no-model")).toHaveCount(0);
+  const all = await calls(page);
+  expect(all.filter((c) => c.op === "start")).toHaveLength(0);
+  const dsh = all.filter((c) => c.op === "chat.start" && c.agent === "dsh");
+  expect(dsh).toHaveLength(1);
+  expect(dsh[0]).toMatchObject({ cwd: "/Users/you" });
+  expect(all.filter((c) => c.op === "chat.input" && c.id === dsh[0].id)).toHaveLength(2);
 });
 
 test("the last agent used is no longer installed: the first installed one takes its place", async ({ page }) => {

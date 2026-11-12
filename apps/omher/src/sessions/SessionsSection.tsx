@@ -6,7 +6,7 @@
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -78,6 +78,67 @@ export function SessionsHeader() {
 /** The menu spans the section, 8px inside both sidebar edges. */
 const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
 
+/** Space kept between the menu and what it must not cover. */
+const MENU_GAP = 6;
+/** Space kept between the menu's edge and a sidebar row it stops at. */
+const ROW_CLEAR = 2;
+
+/** Where the + menu goes and how tall it may be in all (`max`). It opens under its row when the whole list fits above the sidebar's
+ *  bottom rows (Automations, Plugins, Settings, You), else on the side with more room, scrolling inside. The edge
+ *  that lies over the sidebar stops on a row boundary, so no row shows half under it. */
+export function fitMenu(
+  anchor: { top: number; bottom: number },
+  natural: number,
+  gap: number,
+  limits: { top: number; bottom: number },
+  rows: { top: number; bottom: number }[],
+): { side: "top" | "bottom"; max: number } {
+  const below = limits.bottom - (anchor.bottom + gap);
+  const above = anchor.top - gap - limits.top;
+  if (natural <= below || below >= above) {
+    let end = Math.min(anchor.bottom + gap + natural, limits.bottom);
+    // pull the edge back past every row it would cross (moving it can reach the row before)
+    for (let cut; (cut = rows.find((r) => r.top < end + ROW_CLEAR && r.bottom > end && r.top >= anchor.bottom)); ) end = cut.top - ROW_CLEAR;
+    return { side: "bottom", max: Math.max(0, end - anchor.bottom - gap) };
+  }
+  let start = Math.max(anchor.top - gap - natural, limits.top);
+  for (let cut; (cut = rows.find((r) => r.top < start && r.bottom > start - ROW_CLEAR && r.bottom <= anchor.top)); ) start = cut.bottom + ROW_CLEAR;
+  return { side: "top", max: Math.max(0, anchor.top - gap - start) };
+}
+
+/** Measure the open menu `box` (its list scrolls in `.ss-scroll`) against the sidebar, and again on resize. */
+function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
+  const [fit, setFit] = useState<{ side: "top" | "bottom"; max: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!ready) return;
+    const measure = () => {
+      const menu = box.current;
+      const pop = menu?.closest<HTMLElement>(".ss-pop");
+      const list = menu?.querySelector<HTMLElement>(".ss-scroll");
+      // the row the menu is placed against (its positioned container)
+      const anchor = pop?.offsetParent;
+      if (!menu || !pop || !list || !(anchor instanceof HTMLElement)) return;
+      const side = anchor.closest(".side");
+      const a = anchor.getBoundingClientRect();
+      const top = side?.querySelector(".side-top")?.getBoundingClientRect().bottom ?? 0;
+      const foot = side?.querySelector(".side-foot")?.getBoundingClientRect().top ?? innerHeight;
+      // the menu's own header, padding and border around the list, and the list's full height
+      const chrome = pop.offsetHeight - list.clientHeight;
+      const natural = chrome + list.scrollHeight;
+      // the gap between the row and the menu, the same on both sides (offsets ignore the pop-in transform)
+      const gap = Math.max(0, pop.classList.contains("ui-pop-bottom") ? pop.offsetTop - anchor.offsetHeight : -pop.offsetTop - pop.offsetHeight);
+      const rows = [...(side?.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])].map((r) => r.getBoundingClientRect());
+      const f = fitMenu(a, natural, gap, { top: Math.max(top, 0) + MENU_GAP, bottom: Math.min(foot, innerHeight) - MENU_GAP }, rows);
+      setFit({ side: f.side, max: Math.max(0, f.max - chrome) });
+    };
+    measure();
+    addEventListener("resize", measure);
+    return () => removeEventListener("resize", measure);
+    // measured again once placed on its side: the gap to the row differs above and below
+  }, [box, ready, fit?.side]);
+  return fit;
+}
+
 /** The SESSIONS + menu: every agent with its mark and name, the installed ones first (the last one used on top),
  *  the missing ones dimmed with their install line in the tooltip. Picking one opens its New session chat at once
  *  (the folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
@@ -91,9 +152,12 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const agents = ss.agents ? menuOrder(ss.agents, ss.recent) : null;
   // the first row takes the focus once the list is there (installed first, so it is the one Enter should pick)
   const ready = agents !== null;
+  const fit = useMenuFit(box, ready);
+  // once placed (a hidden menu cannot take focus)
+  const placed = fit !== null;
   useEffect(() => {
-    if (ready) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
-  }, [ready]);
+    if (placed) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
+  }, [placed]);
   const close = (why: "escape" | "outside" | "pick") => {
     onClose();
     if (why === "escape") trigger.current?.focus();
@@ -103,7 +167,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
     getSessions().draft(id);
   };
   return (
-    <Popover open onClose={close} align="left" width={MENU_W} label={t("sessions.new")} className="ss-pop">
+    <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("sessions.new")} className={`ss-pop${ready && !fit ? " ss-pop-measuring" : ""}`}>
       <div
         ref={box}
         role="menu"
@@ -115,11 +179,14 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
           if (to === null || !items.length) return;
           e.preventDefault();
-          items[(to + items.length) % items.length]?.focus();
+          const next = items[(to + items.length) % items.length];
+          next?.focus({ preventScroll: true });
+          next?.scrollIntoView({ block: "nearest" });
         }}
       >
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
+        <div className="ss-scroll" style={fit ? { maxHeight: fit.max } : undefined}>
         {(agents ?? []).map((a) => {
           const def = agentDef(a.id);
           const account = sessionAccountSuffix(accounts.groups, a.id);
@@ -152,13 +219,14 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
             </button>
           );
         })}
+        </div>
       </div>
     </Popover>
   );
 }
 
 /** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
-const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok"];
+const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode"];
 
 /** The empty section: one "New session" row built like the sidebar's nav rows, opening the same + menu under it.
  *  What it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */

@@ -11,7 +11,9 @@
 // mock.demo (Kami's live "Docs dark mode" plan on top of his list, its nodes' PRs in mixed states; `--demo` seeds it
 // at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
 // plugin from its chat: the bridge's poll would emit routines.update + routine.added, or plugin.added + plugins.update),
-// mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes).
+// mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
+// mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
+// drives it with mock.emit).
 import http from "node:http";
 import crypto from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
@@ -435,6 +437,34 @@ function cliSeed() {
   return [live, ...runs];
 }
 
+// The mock SESSIONS Claude chat's own run (the MockHost's Claude session id, in the e2e folder): the agent's record
+// of the two subagents of "/subagents", as CliRuns reads it from the session's transcript. Its title is the agent's
+// ("Claude Code session"): the session panel shows the session row's name instead.
+// The session's own record as the bridge reads it from the transcript of the run the chat shows ("/subagents"),
+// the message sent `ago` seconds back: each subagent starts at its call and the first ends when its hand-back
+// reached the chat, after the time the chat's row says (3.7s, by Claude Code's own count, as the transcript's
+// stamps do); the second starts when its call reached the chat and takes 9.4s. With `hold` it is still out, as in
+// "/subagents hold". The same moments as host.ts's MockChat "/subagents" (0.6s and 0.17s after the send).
+function sessionRun({ ago = 30, hold = false } = {}) {
+  const sent = now() - ago;
+  const node = (id, label, summary, started, ended) => ({
+    id, label, deps: [], layer: 0, state: ended === undefined ? "running" : "done", model: "claude-fable-5-2", executor: "claude",
+    lane: "general-purpose", started, attempts: [{ n: 1, outcome: ended === undefined ? "open" : "completed", started, ...(ended === undefined ? {} : { ended }) }],
+    ...(ended === undefined ? {} : { summary, ended }),
+  });
+  const back = sent + 0.6;
+  const second = sent + 0.17;
+  const nodes = [node("sa-1", "Read a.txt first line", "alpha line", back - 3.7, back), node("sa-2", "Count lines of b.txt", "3", second, hold ? undefined : second + 9.4)];
+  const t = back - 3.7;
+  const end = second + 9.4;
+  return {
+    id: "claude:11111111-2222-4333-8444-555555555555", kind: "claude-task", agent: "claude",
+    owner: { type: "session", id: "11111111-2222-4333-8444-555555555555" }, title: "Claude Code session",
+    cwd: "/Users/you/code/omher", state: hold ? "running" : "done", started: t, updated: hold ? now() : end,
+    ...(hold ? {} : { ended: end }), nodes,
+  };
+}
+
 // the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
 const runCounts = (r) => {
   const fixed = r.nodes.filter(
@@ -475,6 +505,10 @@ let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs
 let automations, plugins, inspected, offlineWrites;
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
+/** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
+const subTimers = new Set();
+// Bots whose turns the test drives by hand (mock.manual).
+let manual;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -592,6 +626,8 @@ function reset() {
   acctLimited = {};
   acctLabels = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
+  for (const h of subTimers) clearTimeout(h);
+  subTimers.clear();
   bots = Object.fromEntries(BOT_SEED.map((b) => [b.name, { ...b }]));
   history = Object.fromEntries(
     Object.entries(HISTORY_SEED).map(([bot, rows]) => [
@@ -615,6 +651,7 @@ function reset() {
   offlineWrites = new Set();
   pending = new Map();
   asked = new Map();
+  manual = new Set();
   idSeq = 0;
   calls = [];
   submits = [];
@@ -1022,7 +1059,7 @@ const OPS = {
       .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
   }),
   "runs.cli": (p) => {
-    const AGENTS = ["claude", "codex", "pi", "omp", "grok"];
+    const AGENTS = ["claude", "codex", "omo", "pi", "omp", "grok"];
     if (p.agent !== undefined && !AGENTS.includes(p.agent)) throw new OpError("bad_request", `agent must be one of ${AGENTS.join(", ")}`);
     if (p.cwd !== undefined && (typeof p.cwd !== "string" || !p.cwd)) throw new OpError("bad_request", "cwd must be a folder path");
     if (p.since !== undefined && typeof p.since !== "number") throw new OpError("bad_request", "since must be epoch seconds");
@@ -1057,10 +1094,10 @@ const OPS = {
     return { title: cliTitles.get(`${p.agent}:${p.session}`) ?? "" };
   },
   "runs.get": (p) => {
-    const b = needBot(p);
     const id = needStr(p, "run");
     const cli = cliRuns.find((r) => r.id === id);
     if (cli) return { run: cli, handoffs: {} };
+    const b = needBot(p);
     const run = (runs[b.name] ?? []).find((r) => r.id === id);
     if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
     return { run, handoffs: HANDOFFS[id] ?? {} };
@@ -1275,6 +1312,12 @@ const OPS = {
     else offlineWrites.add(p.bot);
     return {};
   },
+  "mock.manual": (p) => {
+    needStr(p, "bot");
+    if (p.on === false) manual.delete(p.bot);
+    else manual.add(p.bot);
+    return {};
+  },
   "mock.cliTitle": (p) => {
     cliTitles.set(`${p.agent}:${p.session}`, String(p.title ?? ""));
     return {};
@@ -1286,8 +1329,24 @@ const OPS = {
     for (const ev of p.events) broadcast(ev);
     return { count: p.events.length };
   },
+  // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
+  "mock.sessionRun": (p) => {
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), sessionRun({ ago: typeof p.ago === "number" ? p.ago : undefined, hold: p.hold === true })];
+    return { ok: true };
+  },
   "mock.reset": () => {
     reset();
+    return {};
+  },
+  // a node of a run changes (a helper returned): its state, and the run's `updated`, as the next runs.list reads it
+  "mock.runNode": (p) => {
+    const run = (runs[needBot(p).name] ?? []).find((r) => r.id === needStr(p, "run"));
+    if (!run) throw new OpError("not_found", "no such run");
+    const node = run.nodes.find((n) => n.id === needStr(p, "node"));
+    if (!node) throw new OpError("not_found", "no such node");
+    node.state = needStr(p, "state");
+    if (node.state !== "running" && node.state !== "waiting") node.ended = now();
+    run.updated = now();
     return {};
   },
   "mock.demo": () => {
@@ -1393,6 +1452,7 @@ function startTurn(bot, text, folder) {
   ev(bot, "bot.status", { status: bots[bot]?.status, running: true });
   if (folder) {
     ev(bot, "turn.start");
+    if (manual.has(bot.split("\u0000")[0])) return;
     if (text.startsWith("/approve")) return scriptApproval(bot);
     return schedule(bot, [
       ...tool(bot, "f-tool-1", "terminal", `ls ${folder.cwd}`, 80, 300),
@@ -1401,6 +1461,7 @@ function startTurn(bot, text, folder) {
     ]);
   }
   ev(bot, "turn.start");
+  if (manual.has(bot)) return;
   if (text.startsWith("/approve")) return scriptApproval(bot);
   if (text.startsWith("/clarify")) return scriptClarify(bot);
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
@@ -1430,18 +1491,43 @@ function scriptNormal(bot, text) {
   ]);
 }
 
-// A delegate_task that hands out two parts of the codex-coexist dag run (one returns, one keeps working).
+// A delegate_task that hands out two parts of the codex-coexist dag run, with Hermes' subagent events in the order a
+// real turn sent them (bridge/tests/fixtures/real-subagent-turn.json): spawn, start, thinking, a tool, then complete.
+// Like the real background fan-out, the children outlive the turn: the turn ends at 600 ms, the first child returns
+// at 1.6 s, the second at 2.6 s (`/delegate fail` makes it fail). The UI events are the bridge's `subagent` shape.
 function scriptDelegate(bot) {
   const dag = [
     { run: "codex-coexist-live", node: "t3-doctor" },
     { run: "codex-coexist-live", node: "t5-verify" },
   ];
+  const fail = /\bfail\b/.test(turns[bot]?.text ?? "");
+  const deleg = `deleg_${Math.random().toString(16).slice(2, 10)}`;
+  const kids = [
+    { id: "sa-0-7c1f2a90", goal: "Doctor check for the Codex pack", model: "gpt-6.1-sol", dag: dag[0], cmd: "omh doctor --codex", out: "The Codex pack is current (12 skills)." },
+    { id: "sa-1-3e9b44d1", goal: "Independent verify vs base + live probes", model: "claude-opus-5-5", dag: dag[1], cmd: "pnpm test --run", out: fail ? "Two probes timed out." : "All 6 probes pass on the branch." },
+  ];
+  const sub = (k, i, state, extra = {}) =>
+    ev(bot, "subagent", { id: k.id, index: i, count: kids.length, goal: k.goal, model: k.model, dag: k.dag, state, ...(state === "queued" ? {} : { delegation: deleg }), ...extra });
   schedule(bot, [
     [80, () => ev(bot, "tool.start", { tool_id: "d1", name: "delegate_task", detail: "Doctor check for the Codex pack (+1 more)", dag })],
-    [400, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 320 })],
-    [500, () => say(bot, "Both helpers are on it.")],
+    [120, () => kids.forEach((k, i) => sub(k, i, "queued"))],
+    [160, () => kids.forEach((k, i) => sub(k, i, "running"))],
+    [220, () => ev(bot, "tool.end", { tool_id: "d1", name: "delegate_task", ok: true, ms: 140 })],
+    [300, () => kids.forEach((k, i) => sub(k, i, "thinking"))],
+    [420, () => kids.forEach((k, i) => sub(k, i, "running", { tool: "terminal", step: k.cmd }))],
+    [500, () => say(bot, "Both subagents are on it.")],
     [600, () => endTurn(bot, "done")],
   ]);
+  // after the turn: the children report back on their own
+  const later = (ms, fn) => {
+    const h = setTimeout(() => {
+      subTimers.delete(h);
+      fn();
+    }, ms);
+    subTimers.add(h);
+  };
+  later(1600, () => sub(kids[0], 0, "done", { summary: kids[0].out, seconds: 1.4 }));
+  later(2600, () => sub(kids[1], 1, fail ? "failed" : "done", { summary: kids[1].out, seconds: 2.4 }));
 }
 
 function scriptApproval(bot) {

@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from "react";
 import { t } from "../../i18n";
 import { useMentions, withMentions } from "./Mention";
 import type { Skill } from "../../lib/protocol";
+import type { AgentCommand } from "./commands";
 import { sentTokens, type SkillToken } from "./skillTokens";
 import { withLinks } from "./LinkChip";
 import "./skills.css";
@@ -44,6 +45,64 @@ export function SkillPicker({
       ) : (
         <div className="sk-none" data-testid="skill-none">
           {t("skills.none")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The `/` menu of a SESSIONS chat: the commands and skills its agent reported, in the skill picker's look (name as a
+ * monospace pill with its prefix, what it takes, one-line description); a skill carries a quiet "skill" tag. At most
+ * MENU_MAX rows; the last line says how many more match. Keys stay in the textarea, as for skills. */
+export function CommandPicker({
+  items,
+  more,
+  active,
+  onPick,
+  onHover,
+  popRef,
+}: {
+  items: AgentCommand[];
+  more: number;
+  active: number;
+  onPick: (c: AgentCommand) => void;
+  onHover: (i: number) => void;
+  popRef: Ref<HTMLDivElement>;
+}) {
+  return (
+    <div className="sk-pop" ref={popRef} role="listbox" aria-label={t("ctl.commands")} data-testid="command-picker">
+      {items.length ? (
+        items.map((c, i) => (
+          <div
+            key={`${c.prefix}${c.name}`}
+            role="option"
+            aria-selected={i === active}
+            className={`sk-row${i === active ? " on" : ""}`}
+            data-testid="command-option"
+            data-name={c.name}
+            data-kind={c.kind}
+            title={c.description || c.name}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseMove={() => i !== active && onHover(i)}
+            onClick={() => onPick(c)}
+          >
+            <code className="sk-pill">
+              {c.prefix}
+              {c.name}
+            </code>
+            {c.hint && <span className="sk-hint">{c.hint}</span>}
+            {c.description && <span className="sk-d">{c.description}</span>}
+            {c.kind === "skill" && <span className="sk-kind">{t("ctl.skill")}</span>}
+          </div>
+        ))
+      ) : (
+        <div className="sk-none" data-testid="command-none">
+          {t("ctl.noCommand")}
+        </div>
+      )}
+      {more > 0 && (
+        <div className="sk-none" data-testid="command-more">
+          {t("ctl.more", { n: more })}
         </div>
       )}
     </div>

@@ -36,8 +36,9 @@ class GatewayClientError(ValueError):
 class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
-    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None):
+    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=()):
         self.name = name
+        self.lacks = set(lacks)  # methods this gateway does not have: they fail as Hermes' do, `unknown_method`
         self.caps = caps if caps is not None else {}  # client.capabilities answer, or an exception to raise
         self.events: asyncio.Queue = asyncio.Queue()
         self.calls: list[tuple[str, dict]] = []
@@ -53,6 +54,8 @@ class FakeClient:
 
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
+        if method in self.lacks:
+            raise GatewayRPCError("unknown_method")
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
                 rows = [{"id": MAIN_STORED, "title": ob.BOT_CHAT_TITLE, "source": "tui"}] if self.bot_chat else []
@@ -80,6 +83,7 @@ class FakeClient:
             if params.get("cwd"):  # a folder chat (SESSIONS > oh-my-hermes)
                 n = len(self.find("session.create")) - 1
                 return {"session_id": f"rt-folder-{n}", "stored_session_id": f"stored-folder-{n}", "messages": [],
+                        "subscription_id": f"sub-folder-{n}",
                         "info": {**self.model_info, "cwd": params["cwd"]}, "revision": 0, "execution_generation": 0}
             return {"session_id": MAIN_RUNTIME, "stored_session_id": MAIN_STORED, "messages": [],
                     "info": dict(self.model_info), "revision": 0, "execution_generation": 0}
@@ -443,6 +447,83 @@ class EventMapping(BridgeCase):
             self.assertNotIn("skill", kinds)
             running = [(e["status"], e["running"]) for e in s.events if e["event"] == "bot.status"]
             self.assertEqual(running[-2:], [("online", True), ("online", False)])
+
+    async def test_a_real_fan_out_becomes_subagent_events_clipped_with_no_thinking_text(self):
+        """kami's Bot Chat, one real turn asking two subagents for `date +%F` and `uname -s` (gateway frames as
+        recorded; the two `subagent.complete` frames came after the parent's turn ended and are rebuilt from the
+        children's own task logs, `rebuilt_from_task_log`)."""
+        frames = json.loads((HERE / "fixtures" / "real-subagent-turn.json").read_text(encoding="utf-8"))
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            for f in frames:
+                c.push(f["type"], f["payload"], execution_generation=1)
+            await s.until(lambda ev: sum(e["event"] == "subagent" and e.get("state") == "done" for e in ev) == 2)
+            ev = [e for e in s.events if e["event"] != "bot.status"]
+            sub = [e for e in ev if e["event"] == "subagent"]
+            # every subagent.* frame but none dropped: 2 spawn, 2 start, 3 thinking, 1 tool, 2 complete
+            self.assertEqual([e["state"] for e in sub], ["queued", "queued", "running", "running", "thinking", "thinking",
+                                                        "running", "thinking", "done", "done"])
+            self.assertEqual({e["id"] for e in sub}, {"sa-0-ab7aca17", "sa-1-0a3ce8a1"})
+            self.assertEqual({(e["index"], e["count"]) for e in sub}, {(0, 2), (1, 2)})
+            self.assertTrue(all(e["bot"] == "kami" and "session" not in e for e in sub))
+            first = sub[0]
+            self.assertEqual(set(first), {"event", "bot", "id", "index", "count", "goal", "model", "state"})
+            self.assertEqual(first["model"], "claude-fable-5-2")
+            started = [e for e in sub if e["state"] == "running" and "step" not in e]
+            self.assertEqual({e["delegation"] for e in started}, {"deleg_40dc82e8"})
+            # the goal, clipped: no frame's text runs past the caps
+            self.assertTrue(all(len(e["goal"]) <= ob.SUBAGENT_GOAL for e in sub))
+            self.assertTrue(first["goal"].startswith("Run the shell command `date +%F` in the terminal"))
+            tool = next(e for e in sub if e.get("tool"))
+            self.assertEqual((tool["id"], tool["tool"], tool["step"]), ("sa-1-0a3ce8a1", "terminal", "uname -s"))
+            # thinking: the state only, never a text field
+            self.assertTrue(all(set(e) & {"text", "step", "summary"} == set() for e in sub if e["state"] == "thinking"))
+            done = {e["id"]: e for e in sub if e["state"] == "done"}
+            self.assertEqual((done["sa-0-ab7aca17"]["summary"], done["sa-0-ab7aca17"]["seconds"]), ("2026-11-11", 8.8))
+            self.assertEqual((done["sa-1-0a3ce8a1"]["summary"], done["sa-1-0a3ce8a1"]["seconds"]), ("Darwin", 6.1))
+            # the parent's turn: one start, one end; the late subagent frames open no second turn
+            kinds = [e["event"] for e in ev]
+            self.assertEqual((kinds.count("turn.start"), kinds.count("turn.end")), (1, 1))
+            self.assertLess(kinds.index("turn.end"), max(i for i, k in enumerate(kinds) if k == "subagent"))
+            ts = next(e for e in ev if e["event"] == "tool.start")
+            self.assertEqual(ts["name"], "delegate_task")
+            self.assertLess(kinds.index("tool.start"), kinds.index("subagent"))
+
+    def test_subagent_fields_clip_every_text_and_take_the_dag_mark_off_the_goal(self):
+        long = "x" * 900
+        f = ob.subagent_fields("subagent.start", {"subagent_id": "sa-0", "task_index": 0, "task_count": 3,
+                                                  "goal": "[dag:docs-dark/contrast] Check the contrast " + long,
+                                                  "delegation_id": "deleg_1", "model": "m" * 300})
+        self.assertEqual(f["dag"], {"run": "docs-dark", "node": "contrast"})
+        self.assertTrue(f["goal"].startswith("Check the contrast"))
+        self.assertEqual((len(f["goal"]), len(f["model"])), (ob.SUBAGENT_GOAL, 80))
+        t = ob.subagent_fields("subagent.tool", {"subagent_id": "sa-0", "tool_name": "terminal", "text": long})
+        self.assertEqual(len(t["step"]), ob.SUBAGENT_STEP)
+        c = ob.subagent_fields("subagent.complete", {"subagent_id": "sa-0", "status": "failed", "summary": long,
+                                                     "duration_seconds": 12.345, "output_tail": [long]})
+        self.assertEqual((c["state"], len(c["summary"]), c["seconds"]), ("failed", ob.SUBAGENT_SUMMARY, 12.3))
+        self.assertNotIn("output_tail", c)
+        th = ob.subagent_fields("subagent.thinking", {"subagent_id": "sa-0", "text": "my secret chain of thought"})
+        self.assertNotIn("my secret", json.dumps(th))
+        pr = ob.subagent_fields("subagent.progress", {"subagent_id": "sa-0", "text": "🔀 [1] read_file, terminal"})
+        self.assertEqual(pr["step"], "[1] read_file, terminal")
+        self.assertIsNone(ob.subagent_fields("subagent.text", {"subagent_id": "sa-0", "text": "tok"}))
+        self.assertIsNone(ob.subagent_fields("subagent.start", {"goal": "no id"}))
+        self.assertEqual(ob.subagent_fields("subagent.complete", {"subagent_id": "s", "status": "interrupted"})["state"],
+                         "cancelled")
+
+    async def test_subagent_events_of_another_session_are_not_forwarded(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("subagent.start", {"subagent_id": "sa-x", "goal": "elsewhere"}, sid="someone-else")
+            c.push("subagent.start", {"subagent_id": "sa-y", "goal": "mine"})
+            await s.until(lambda ev: any(e["event"] == "subagent" for e in ev))
+            await asyncio.sleep(0.05)
+            self.assertEqual([e["id"] for e in s.events if e["event"] == "subagent"], ["sa-y"])
 
     async def test_skill_view_also_emits_skill(self):
         async with Env() as env:
@@ -1071,10 +1152,52 @@ class FolderChats(BridgeCase):
                 self.assertEqual((msg["session"], msg["text"]), (fid, "two files"))
 
                 self.assertTrue((await s.req("folder.close", bot="kami", session=fid))["ok"])
-                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+                self.assertEqual(c.find("session.detach"), [{"session_id": "rt-folder-0", "subscription_id": "sub-folder-0",
+                                                             "end_reason": "omher_close"}])
+                self.assertEqual(c.find("session.close"), [])
                 r = await s.req("chat.send", bot="kami", session=fid, text="again")
                 self.assertEqual(r["error"]["code"], "not_found")
                 self.assertEqual(len(c.find("prompt.submit")), 1)
+
+    async def test_close_ends_the_hermes_conversation_on_a_gateway_without_session_close(self):
+        """Hermes 0.23's gateway has `session.detach` and no `session.close`: closing the folder chat detaches the
+        subscription `session.create` gave, as a close (`end_reason`), so Hermes ends the conversation, and the
+        close reports no error. A gateway that has no `session.detach` gets `session.close`, as before."""
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env(lacks={"session.close"}) as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                r = await s.req("folder.close", bot="kami", session=fid)
+                self.assertTrue(r["ok"], r)
+                self.assertEqual([m for m, _ in c.calls if m in ("session.detach", "session.close")], ["session.detach"])
+                self.assertEqual(c.find("session.detach")[0], {"session_id": "rt-folder-0", "subscription_id": "sub-folder-0",
+                                                               "end_reason": "omher_close"})
+            async with Env(lacks={"session.detach"}) as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                r = await s.req("folder.close", bot="kami", session=fid)
+                self.assertTrue(r["ok"], r)
+                self.assertEqual([m for m, _ in c.calls if m in ("session.detach", "session.close")], ["session.detach", "session.close"])
+                self.assertEqual(c.find("session.close"), [{"session_id": "rt-folder-0"}])
+            # any other refusal of the detach is the close's error, and nothing else is tried
+            async with Env() as env:
+                s = await self.open(env)
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                c = env.clients["kami"]
+                real_rpc = c.rpc
+
+                async def refuse(method, **params):
+                    if method == "session.detach":
+                        c.calls.append((method, params))
+                        raise GatewayRPCError("invalid_params")
+                    return await real_rpc(method, **params)
+
+                c.rpc = refuse
+                r = await s.req("folder.close", bot="kami", session=fid)
+                self.assertEqual(r["error"]["code"], "invalid_params")
+                self.assertEqual(c.find("session.close"), [])
 
     async def test_hermes_titles_reach_the_folder_chat_and_the_create_name_does_not(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -2317,6 +2440,51 @@ class Runs(unittest.TestCase):
             self.assertEqual(got["handoffs"], {})
             self.assertFalse(any("outside the dag dir" in t for t in got["handoffs"].values()))
 
+    def test_a_running_run_quiet_for_a_day_with_no_helper_reporting_is_stale_not_live(self):
+        from datetime import datetime, timezone
+        v02 = "dag:20261108_213859_c9a97486/omher-v02"
+        with tempfile.TemporaryDirectory() as d:
+            prof, dag = _runs_profile(Path(d), ["20261108_213859_c9a97486"])
+            rec = next(dag.glob("*/omher-v02.json"))
+            updated = json.loads(rec.read_text(encoding="utf-8"))["updated_at"]
+            os.utime(rec, (updated, updated))  # the file changed when the record says it did
+            reader = ob.DagRuns(ob.Delegations(tz=timezone.utc))
+            one = lambda now: next(r for r in reader.list("kami", prof, now=now) if r["id"] == v02)
+            # ten minutes after its last change it is live
+            self.assertEqual((one(updated + 600)["state"], one(updated + 600).get("stale")), ("running", None))
+            # a day and a bit with no change: still "running" as the record says, but stale, and listed after
+            # every live run (a run settled since sorts by its own time as before)
+            quiet = one(updated + ob.QUIET_RUN + 60)
+            self.assertEqual((quiet["state"], quiet["stale"]), ("running", True))
+            self.assertEqual(quiet["counts"]["running"], 3)
+            # runs.get marks it the same way runs.list does
+            self.assertEqual(reader.get("kami", prof, v02)["run"].get("stale"), one(time.time()).get("stale"))
+            # the file itself changed since (a newer write than its updated_at): live again
+            os.utime(rec, (updated + ob.QUIET_RUN, updated + ob.QUIET_RUN))
+            self.assertNotIn("stale", one(updated + ob.QUIET_RUN + 60))
+            os.utime(rec, (updated, updated))
+            # a helper of one of its nodes still writing its log: live, however old the record
+            folder = prof / "cache" / "delegation" / "live" / "deleg_00aa11cc"
+            folder.mkdir(parents=True)
+            now = updated + 3 * ob.QUIET_RUN
+            started = datetime.fromtimestamp(now - 7200, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            (folder / "manifest.json").write_text(json.dumps({"started": started, "tasks": [
+                {"index": 0, "goal": "[dag:omher-v02/t2-attach] attach", "status": "running"}]}), encoding="utf-8")
+            (folder / "task-0.log").write_text(f"goal: attach\nstarted: {started}\n", encoding="utf-8")
+            for f in folder.iterdir():
+                os.utime(f, (now - 120, now - 120))
+            self.assertNotIn("stale", one(now))
+            # the same helper silent for over an hour (stalled): stale
+            for f in folder.iterdir():
+                os.utime(f, (now - ob.STALE_AFTER - 60, now - ob.STALE_AFTER - 60))
+            self.assertTrue(one(now)["stale"])
+
+    def test_only_running_dag_runs_can_be_stale(self):
+        run = {"id": "dag:s/x", "state": "done", "updated": 0.0, "nodes": []}
+        self.assertNotIn("stale", ob.mark_stale(dict(run), None, [], 10 * ob.QUIET_RUN))
+        self.assertTrue(ob.mark_stale(dict(run, state="running"), None, [], 10 * ob.QUIET_RUN)["stale"])
+        self.assertNotIn("stale", ob.mark_stale(dict(run, state="running"), None, [], ob.QUIET_RUN - 1))
+
     def test_no_dag_dir_or_no_state_db_means_no_runs(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(ob.DagRuns().list("kami", Path(d)), [])
@@ -2347,8 +2515,8 @@ class Runs(unittest.TestCase):
             prof, dag = _runs_profile(Path(d), sorted(sids), dag_src=real)
             runs = ob.DagRuns().list("kami", prof)
             self.assertGreaterEqual(len(runs), 1)
-            states = [r["state"] for r in runs]
-            self.assertEqual(states, sorted(states, key=lambda s: s != "running"))  # running first
+            live = [r["state"] == "running" and not r.get("stale") for r in runs]
+            self.assertEqual(live, sorted(live, reverse=True))  # live runs first (a stale one sorts by its time)
             got = ob.DagRuns().get("kami", prof, runs[0]["id"])
             self.assertEqual(len(got["run"]["nodes"]), runs[0]["counts"]["nodes"])
 
@@ -2582,11 +2750,11 @@ FIXED_NOW = 1793700000.0  # 2026-11-03, after both fixture sessions; `since=0` k
 
 
 def _cli_home(root: Path) -> dict[str, Path]:
-    """A copy of the redacted CLI fixtures as Claude Code and Codex homes; pi/omp/grok absent."""
+    """A copy of the redacted CLI fixtures as Claude Code and Codex homes; OmO (fixture at cli/omo), pi, omp, grok absent."""
     import shutil
     shutil.copytree(CLI_FIX, root / "cli")
     return {"claude": root / "cli" / "claude-home", "codex": root / "cli" / "codex",
-            "pi": root / "none-pi", "omp": root / "none-omp", "grok": root / "none-grok"}
+            "omo": root / "none-omo", "pi": root / "none-pi", "omp": root / "none-omp", "grok": root / "none-grok"}
 
 
 def _claude_layout(root: Path) -> Path:
@@ -2814,6 +2982,53 @@ class CliRunsCodex(unittest.TestCase):
         self.assertEqual(ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).list("codex", None, 0.0)["runs"], [])
 
 
+class CliRunsOmo(unittest.TestCase):
+    """OmO's subagents from its own task records (real, redacted: OmO 5.1.56, two background subagents)."""
+
+    def test_the_real_records_are_one_session_run_with_each_subagents_answer_and_model(self):
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            before = _mtimes(Path(d) / "cli")
+            cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            self.assertEqual(cli.agents()["omo"], "found")
+            listed = cli.list("omo", "/w/omo-proj", 0.0)["runs"]
+            self.assertEqual([r["id"] for r in listed], ["omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50"])
+            self.assertEqual((listed[0]["owner"], listed[0]["counts"]),
+                             ({"type": "session", "id": "01a1ca26-77fa-7eeb-a2ba-d23056b97a50"},
+                              {"nodes": 2, "done": 2, "running": 0, "failed": 0}))
+            run = cli.get(listed[0]["id"])["run"]
+            self.assertEqual([(n["label"], n["state"], n["summary"], n["model"], n["lane"]) for n in run["nodes"]],
+                             [("Report the first line of a.txt", "done", "alpha line", "claude-haiku-5-5", "explore"),
+                              (run["nodes"][1]["label"], "done", "2", "claude-haiku-5-5", run["nodes"][1]["lane"])])
+            self.assertTrue(all(n["started"] < n["ended"] for n in run["nodes"]))
+            self.assertEqual(cli.list("omo", "/w/elsewhere", 0.0)["runs"], [])
+            self.assertEqual(_mtimes(Path(d) / "cli"), before, "reading OmO's records changed a file")
+
+    def test_a_running_record_quiet_for_over_10_minutes_failed_no_result(self):
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            p = next((homes["omo"] / "agent" / "projects").glob("*/senpi-task/tasks/st_01a1ca28.json"))
+            r = json.loads(p.read_text())
+            r.update(status="running", terminal_at=None, final_response=None, updated_at="2026-01-01T00:00:00Z")
+            p.write_text(json.dumps(r))
+            run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
+            n = next(x for x in run["nodes"] if x["id"] == "st_01a1ca28")
+            self.assertEqual((n["state"], n["attempts"][0]["reason"]), ("failed", "no result"))
+
+
+class ClaudeAnswer(unittest.TestCase):
+    def test_a_subagents_answer_is_its_own_words_not_claude_codes_frame(self):
+        # Claude Code 2.1.322: the tool result wraps the subagent's words; toolUseResult.content has them alone
+        frame = ("[Subagent hand-back] The subagent finished. The report follows:\n```\nalpha line\n```\n"
+                 "agentId: a1 (use SendMessage to continue)")
+        self.assertEqual(ob._claude_answer({"content": [{"type": "text", "text": "alpha line"}]}, {"content": frame}), "alpha line")
+        self.assertEqual(ob._claude_answer({}, {"content": frame}), "alpha line")
+        used = "<tools-used-before-summary>Read a.txt</tools-used-before-summary>\n3 lines"
+        self.assertEqual(ob._claude_answer({"content": [{"type": "text", "text": used}]}, {}), "3 lines")
+
+
 class CliRunsAgents(unittest.TestCase):
     def test_pi_omp_and_grok_have_no_runs_and_say_why(self):
         with tempfile.TemporaryDirectory() as d:
@@ -2859,6 +3074,9 @@ class CliRunsOps(BridgeCase):
             for bad in ({"agent": "cursor"}, {"cwd": ""}, {"since": "yesterday"}, {"since": True}):
                 self.assertEqual((await s.req("runs.cli", **bad))["error"]["code"], "bad_request", bad)
             self.assertEqual((await s.req("runs.get", bot="kami", run="codex:nope"))["error"]["code"], "not_found")
+            # a SESSIONS chat asks for its own run with no bot: a CLI run is found by its id alone
+            r = await s.req("runs.get", run=f"claude:{CLAUDE_SID}")
+            self.assertEqual(len(r["result"]["run"]["nodes"]), 3)
 
 
 class CliTitle(unittest.TestCase):

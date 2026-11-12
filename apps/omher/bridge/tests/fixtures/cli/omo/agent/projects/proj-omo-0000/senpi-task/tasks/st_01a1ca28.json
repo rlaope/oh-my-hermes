@@ -1,0 +1,27 @@
+{
+ "task_id": "st_01a1ca28",
+ "status": "completed",
+ "parent_session_id": "01a1ca26-77fa-7eeb-a2ba-d23056b97a50",
+ "root_session_id": "01a1ca26-77fa-7eeb-a2ba-d23056b97a50",
+ "depth": 1,
+ "model": "anthropic/claude-haiku-5-5",
+ "created_at": "2026-11-11T10:28:41.204Z",
+ "updated_at": "2026-11-11T10:29:04.022Z",
+ "started_at": "2026-11-11T10:28:41.205Z",
+ "terminal_at": "2026-11-11T10:28:56.701Z",
+ "name": "line-count",
+ "task_summary": "Report the line count of a.txt",
+ "description": "Line count of a.txt",
+ "agent_type": "explore",
+ "effective_model": {
+  "provider": "anthropic",
+  "model_id": "claude-haiku-5-5",
+  "display": "anthropic/claude-haiku-5-5",
+  "source": "agent"
+ },
+ "spawn_spec": {
+  "cwd": "/w/omo-proj"
+ },
+ "final_response": "2",
+ "background_mode": "background"
+}

@@ -155,10 +155,6 @@ class Pager:
     def _scroll(self, step: int, rows: int) -> None:
         self.top = min(max(self.top + step, 0), self._last_top(rows))
 
-    def at_end(self, rows: int) -> bool:
-        """Whether the last page is showing."""
-        return self.top >= self._last_top(rows)
-
     def _scroll_to_end(self, bottom: bool, rows: int) -> None:
         self.top = self._last_top(rows) if bottom else 0
 
@@ -488,14 +484,6 @@ class HistoryPager(Pager):
     def _scroll_to_end(self, bottom: bool, rows: int) -> None:
         self._step, self._to_end = 0, bottom
         self._settle_if_drawn(rows)
-
-    def at_end(self, rows: int) -> bool:
-        """Whether the last page is showing; never before the first frame, which places the page."""
-        if self._drawn is None:
-            return False
-        cols, theme = self._drawn
-        self._settle(cols, self.body_rows(rows), theme)
-        return (self.item, self.offset) >= self._last_page_top(self.body_rows(rows), cols, theme)
 
     def _settle_if_drawn(self, rows: int) -> None:
         if self._drawn is not None:
