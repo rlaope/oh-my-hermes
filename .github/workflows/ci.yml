@@ -400,6 +400,22 @@ jobs:
         if: matrix.shard == 0
         shell: powershell
         run: ./tests/powershell/Test-OmhOmherBeta.ps1 -InjectRegression
+      - name: Windows installer --uninstall (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhUninstall.ps1
+      - name: Windows installer --uninstall mutation (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhUninstall.ps1 -InjectRegression
+      - name: Windows installer --uninstall (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhUninstall.ps1
+      - name: Windows installer --uninstall mutation (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhUninstall.ps1 -InjectRegression
       - name: Windows short install wrapper (PowerShell 7)
         if: matrix.shard == 0
         shell: pwsh

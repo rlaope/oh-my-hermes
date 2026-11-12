@@ -1059,6 +1059,24 @@ button.upd:hover {
   color: var(--ink);
   outline: 0;
 }
+/* Restart on a bot that shares its gateway: the second, dim line names who restarts with it */
+.row-mi.two {
+  height: auto;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 16px;
+}
+.row-mi-sub {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .row-mi.sep {
   margin-top: 4px;
   position: relative;
@@ -1112,4 +1130,106 @@ button.upd:hover {
 .bot-unhide {
   text-align: left;
   text-decoration: underline;
+}
+
+/* ---- restart one bot (restart.ts): 12px lines, Cancel first and quiet, the press that goes ahead outlined ----- */
+.rs-line {
+  margin: 0 8px 6px 52px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--body);
+}
+.rs-t,
+.rs-why {
+  margin: 0;
+}
+.rs-why {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+}
+.rs-work {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+/* one line per unit, never broken mid-word: an ellipsis when it does not fit (the full line is its title) */
+.rs-work li {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.rs-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rs-for {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.rs-acts {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+.rs-act {
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  border-radius: var(--r-sm);
+  background: none;
+  border: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+  cursor: pointer;
+}
+.rs-act:hover {
+  text-decoration-color: currentColor;
+}
+/* the press that goes ahead: the app's quiet outlined button, never filled or coloured */
+.rs-act.go {
+  text-decoration: none;
+  border: 1px solid var(--line-strong);
+  padding: 0 7px;
+  margin: 0;
+  line-height: 18px;
+}
+.rs-act.go:hover {
+  background: var(--raise2);
+}
+/* under a bot row: the menu's own surface, at the row's width, so it belongs to that bot */
+.rs-line.rs-pop {
+  margin: 2px 6px 6px;
+  padding: 8px 10px;
+  background: var(--pop);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.14s ease both;
+}
+.rs-act:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: 1px;
+}
+.rs-wait {
+  font-size: 12px;
+  color: var(--muted);
+}
+.rs-note .rs-line,
+.pl-load .rs-line {
+  margin: 6px 0 0;
+  text-align: left;
+}
+.pl-load {
+  font-size: 12px;
+  color: var(--body);
 }

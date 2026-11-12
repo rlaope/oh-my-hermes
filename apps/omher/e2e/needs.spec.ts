@@ -311,7 +311,8 @@ test("row menu: pin moves a bot to the top (and ⌘1 follows), hide removes it, 
   // right-click opens the menu; it offers no New thread, Duplicate or Delete
   await page.getByTestId("bot-default").click({ button: "right" });
   const menu = page.getByTestId("row-menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", "Hide from sidebar"]);
+  // Restart (slot 14) restarts the gateway that serves the bot, and names the bots that share it
+  await expect(menu.getByRole("menuitem")).toHaveText(["Pin to top", "Edit bot", /^Restart/, "Hide from sidebar"]);
   await page.screenshot({ path: join(SHOTS, "T12-menu-dark.png"), animations: "disabled" });
   await menu.getByRole("menuitem", { name: "Pin to top" }).click();
   expect(await order()).toEqual(["bot-default", "bot-kami", "bot-friren", "bot-omh-tui"]);

@@ -8,6 +8,7 @@ import { t, type Key } from "../i18n";
 import { Avatar, Popover, SearchIcon } from "../ui";
 import { AskBox, BotChip, errorLine, PageHead, Toggle } from "./kit";
 import { CategoryIcon, DotsIcon } from "./icons";
+import { PluginLoad } from "./PluginLoad";
 
 type Tab = "installed" | "browse" | "builtin";
 const CATEGORIES = ["automation", "tools", "memory", "voice", "web", "desktop", "models", "platform", "general"] as const;
@@ -40,6 +41,8 @@ export function PluginsPage() {
   const [category, setCategory] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // after an enable or update: when it takes effect, from Hermes' own answer (PluginLoad), until the next action
+  const [loaded, setLoaded] = useState<{ plugin: string; load: "live" | "reload" | "restart"; restartBot?: string; n: number } | null>(null);
   const [sheet, setSheet] = useState<CatalogEntry | null>(null);
   const askTo = bots.find((b) => b.name === askBot) ?? scope;
   const scopeName = scope?.name;
@@ -104,6 +107,7 @@ export function PluginsPage() {
   const run = async (fn: () => Promise<string | null>) => {
     setErr(null);
     setNote(null);
+    setLoaded(null);
     try {
       setNote(await fn());
     } catch (e) {
@@ -163,6 +167,11 @@ export function PluginsPage() {
               {note}
             </p>
           )}
+          {loaded && scope && (
+            <p className="pg-note" role="status">
+              <PluginLoad key={loaded.n} bot={scope} plugin={loaded.plugin} load={loaded.load} restartBot={loaded.restartBot} testId="page-load" />
+            </p>
+          )}
           {tab === "browse" ? (
             <Browse
               bot={scope}
@@ -190,13 +199,17 @@ export function PluginsPage() {
                   bot={scope!}
                   onToggle={(on) =>
                     void run(async () => {
-                      await s.pluginsToggle(scope!.name, r.key, on);
+                      const res = await s.pluginsToggle(scope!.name, r.key, on);
+                      if (on && res.load && res.load !== "live")
+                        setLoaded({ plugin: r.name, load: res.load, restartBot: res.restart_bot, n: Date.now() });
                       return null;
                     })
                   }
                   onUpdate={() =>
                     void run(async () => {
                       const u = await s.pluginsUpdate(scope!.name, r.name);
+                      if (!u.unchanged && u.load && u.load !== "live")
+                        setLoaded({ plugin: r.name, load: u.load, restartBot: u.restart_bot, n: Date.now() });
                       return u.unchanged ? t("plug.upToDate", { name: r.title || r.name }) : t("plug.updated", { name: r.title || r.name });
                     })
                   }
@@ -455,7 +468,7 @@ type SheetState =
   | { step: "checking" }
   | { step: "ready"; ins: InspectResult }
   | { step: "installing"; ins: InspectResult }
-  | { step: "done"; line: string; more: string }
+  | { step: "done"; off: string | null; load: "live" | "reload" | "restart"; restartBot?: string }
   | { step: "refused"; line: string; recheck: boolean }
   | { step: "failed"; line: string };
 
@@ -488,8 +501,11 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
       const env = r.missing_env.join(", ");
       setSt({
         step: "done",
-        line: r.enabled ? t("plug.sheet.doneOn", { name: label }) : t("plug.sheet.doneOff", { name: label, env }),
-        more: r.restart_required ? t("plug.sheet.restart", { bot: bot.display_name }) : t("plug.sheet.live", { bot: bot.display_name }),
+        // the title says it is installed; the body says only what is new: off until a value is set, or when it loads
+        off: r.enabled ? null : t("plug.sheet.doneOff", { env }),
+        // when it takes effect, from Hermes' own answer; an older bridge without `load` falls back to restart_required
+        load: !r.enabled ? "live" : (r.load ?? (r.restart_required ? "reload" : "live")),
+        restartBot: r.restart_bot,
       });
       onInstalled();
     } catch (e) {
@@ -511,7 +527,7 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
             <CategoryIcon category={e.category} />
           </span>
           <div>
-            <h2>{t("plug.sheet.title", { name: label })}</h2>
+            <h2 data-testid="sheet-title">{st.step === "done" ? t("plug.sheet.titleDone", { name: label }) : t("plug.sheet.title", { name: label })}</h2>
             <p className="pl-ds">{e.description}</p>
           </div>
         </div>
@@ -521,8 +537,11 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
           </p>
         ) : st.step === "done" ? (
           <div className="pl-sheet-res" data-testid="sheet-done">
-            <b>{st.line}</b>
-            <span>{st.more}</span>
+            {st.off ? (
+              <span data-testid="sheet-off">{st.off}</span>
+            ) : (
+              <PluginLoad bot={bot} plugin={entry.name} load={st.load} restartBot={st.restartBot} testId="sheet-load" />
+            )}
           </div>
         ) : st.step === "refused" || st.step === "failed" ? (
           <p className="pg-err" role="alert" data-testid="sheet-error">

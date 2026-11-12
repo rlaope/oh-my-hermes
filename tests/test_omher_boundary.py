@@ -50,6 +50,8 @@ RULES = (
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
+    "so for a session's own folder omher also reads `<that folder>/.omo/senpi-task/tasks/st_*.json`, the same records"
+    " and nothing else in `.omo`, never a symlinked `.omo` or `senpi-task`, and never another folder's.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -101,6 +103,10 @@ RULES = (
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
     "For the composer's `$` skill picker omher reads, never writes, the bot's own skill files",
+    "then the folders the profile's `config.yaml` names in `skills.external_dirs`, where oh-my-hermes registers its skills",
+    "pressing it puts the model-setup skill's `/command` and one sentence into the composer, and nothing is sent;",
+    "omher restarts and reloads nothing and runs nothing for it.",
+    "omher asks that gateway's own `plugins.manage` `list` (rule 25) and reads only whether the `omh` row is enabled",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
@@ -141,6 +147,10 @@ RULES = (
     "A session's folder is removed when the session is closed, and the folders of sessions that are no longer in the list"
     " are removed when omher starts.",
     "An oh-my-hermes session takes no files: rule 3 keeps files to a bot's main chat.",
+    "what it restarts is the gateway process that serves that bot, through Hermes' own command:",
+    "never one profile's unserve and serve inside the host. The profile is always named, never left to Hermes'",
+    "It adds `--yes` only when the person presses \"Restart anyway\" right after Hermes refused because something was running,",
+    "omher never stops a bot, never restarts every gateway at once, never restarts anything by itself",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -190,6 +200,22 @@ class SubagentEvents(unittest.TestCase):
         self.assertNotIn("children", body.split('"""', 2)[2])
         self.assertRegex(src, r'_OMO_TASK = re\.compile\(r"\^st_')
 
+    def test_omo_records_in_a_folder_are_read_only_for_the_sessions_own_folder(self) -> None:
+        # O15: OmO 5.0 (and 5.1 once a folder holds them) keeps its records in `<folder>/.omo/senpi-task/tasks/`;
+        # omher reads them only for the folder the session runs in, never through a link, and nothing else in .omo
+        src = BRIDGE.read_text(encoding="utf-8")
+        body = src[src.index("    def omo(self"):src.index("    # ---- ops")]
+        code = body.split('"""', 2)[2]
+        self.assertIn('dot = Path(cwd) / ".omo"', code)
+        self.assertIn("if cwd:", code)
+        self.assertIn("not dot.is_symlink()", code)
+        self.assertIn('not (dot / "senpi-task").is_symlink()', code)
+        self.assertEqual(code.count('".omo"'), 1)
+        self.assertEqual(re.findall(r'dot / "([a-z-]+)"', code), ["senpi-task", "senpi-task"])
+        rule = next(r for r in re.split(r"\n(?=\d+\. )", DOC.read_text(encoding="utf-8")) if "OmO's subagent records" in r)
+        self.assertIn("`<that folder>/.omo/senpi-task/tasks/st_*.json`", rule)
+        self.assertIn("never a symlinked `.omo` or `senpi-task`, and never another folder's", rule)
+
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
         rust = (SHELL / "agent_chat.rs").read_text(encoding="utf-8")
@@ -214,10 +240,13 @@ class DocPins(unittest.TestCase):
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
         # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
         # boundary on purpose; 26: rule 26 (SESSIONS attachments saved under ~/.omher/session-files) did too; 27:
-        # rule 27 (a session's mode, effort and branch read: only the agent's own switches, never a bypass) as well.
+        # rule 27 (a session's mode, effort and branch read: only the agent's own switches, never a bypass) as well;
+        # 28: rule 28 (a session shows the agent's own diff, todo list and thinking; edit and resend only through
+        # the agent's own rewind); 29: rule 29 (Restart one bot through Hermes' own `gateway restart`, `--yes` only
+        # after a refusal; plugin loads through its `reload-plugins`).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 27, len(rules))
+        self.assertTrue(6 <= len(rules) <= 29, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -465,7 +494,13 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         op = ast.unparse(fns["op_skills_list"])
         self.assertIn("asyncio.to_thread(read_skills, bot['path'])", op)
         self.assertNotIn("conn", op)  # no gateway call: a file read
-        reader = "\n".join(ast.unparse(fns[n]) for n in ("read_skills", "read_skill_head", "_frontmatter_value"))
+        names = ("read_skills", "skill_roots", "_scan_skills", "read_skill_head", "_frontmatter_value")
+        reader = "\n".join(ast.unparse(fns[n]) for n in names)
+        # the profile's own folder first, then the config's skills.external_dirs (parsed, never written)
+        roots = ast.unparse(fns["skill_roots"])
+        self.assertIn("roots = [profile_dir / 'skills']", roots)
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('skills')", roots)
+        self.assertIn("cfg.get('external_dirs')", roots)
         self.assertIn("os.walk(root, followlinks=True)", reader)
         self.assertIn("real = os.path.realpath(dirpath)", reader)
         self.assertIn("if real in seen:", reader)
@@ -474,11 +509,29 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("read_skill_head(skill)", reader)
         self.assertIn("fh.read(SKILL_HEAD_MAX)", reader)
         self.assertIn("SKILL_HEAD_MAX = 8 * 1024", self.source)
-        opens = [c for n in ("read_skills", "read_skill_head", "_frontmatter_value") for c in ast.walk(fns[n])
+        opens = [c for n in names for c in ast.walk(fns[n])
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
         self.assertEqual([ast.unparse(c) for c in opens], ["open(path, 'rb')"])
         for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self."):
             self.assertNotIn(banned, reader, banned)
+
+    def test_the_model_setup_line_only_fills_the_composer(self) -> None:
+        """Rule 19: the one-time line after omher's own install writes into the composer on the person's press
+        (`actions.prefill`) and sends nothing; it runs no program, restarts nothing and asks the shell for nothing."""
+        app = ROOT / "apps" / "omher" / "src" / "onboarding"
+        line = (app / "OmhPromptLine.tsx").read_text(encoding="utf-8")
+        logic = (app / "omhPrompt.ts").read_text(encoding="utf-8")
+        self.assertIn("getStore().actions.prefill(promptText(p.command!))", line)
+        for text in (line, logic):
+            for banned in (".send(", "sendWithFiles", "chat.send", "invoke(", "@tauri-apps", "gateShell", "install("):
+                self.assertNotIn(banned, text, banned)
+        # the command comes from skills.list, never written as a literal
+        self.assertNotIn('"/omh-model-setup"', logic)
+        self.assertIn("getStore().actions.skills(bot, true)", logic)
+        # the plugin check reads the running gateway's list only (rule 25's `list`), never a toggle or an install
+        self.assertIn("getStore().actions.pluginsList(bot)", logic)
+        for banned in ("togglePlugin", "installPlugin", "plugins.toggle", "plugins.install", "updatePlugin", "removePlugin"):
+            self.assertNotIn(banned, logic, banned)
 
     def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
         """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""
@@ -509,7 +562,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
-        self.assertEqual(sorted(name for name, _ in calls), ["_git", "gh_pr_view"])
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
         self.assertIn("timeout=timeout", body)
@@ -529,8 +582,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         """Rule 2: a reply target is text handed to the bot. The bridge imports no sender (Hermes'
         send_message tool, its platform adapters, a Slack or Discord client), names no messenger API and
         runs no `hermes send`; the command appears only inside the block the bot reads."""
-        # subprocess is imported for rule 10's git reads and rule 21's one `gh pr view` (checked below and in
-        # test_the_only_gh_call_is_the_fixed_pr_view).
+        # subprocess is imported for rule 10's git reads, rule 21's one `gh pr view` (checked below and in
+        # test_the_only_gh_call_is_the_fixed_pr_view) and rule 29's one Hermes restart (RestartOneBotOnAPress).
         banned_roots = {"slack_sdk", "slack_bolt", "discord", "telegram"}
         banned_parts = ("send_message", "gateway.platforms", "plugins.platforms", "gateway.delivery")
         imported = []
@@ -543,7 +596,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertEqual(offenders, [])
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
-                         ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']"])
+                         ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']",
+                          "argv"])  # argv: rule 29's restart_argv, checked in RestartOneBotOnAPress
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
@@ -869,7 +923,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertNotIn(".spawn(", body)
         # what the person does in a chat is one of five inputs, never a command line
         inputs = re.search(r"pub enum Input \{(.*?)\n\}", self.chat, re.S).group(1)
-        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort"])
+        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort", "Rewind"])
         # Send carries text, the paths of saved pictures (rule 26) and the bubble's id only: never bytes or a type
         self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },", inputs)
         self.assertIn('#[serde(from = "String")]\npub struct Picture', self.chat)
@@ -1159,6 +1213,19 @@ class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
             self.assertNotIn(banned, self.ui, banned)
         self.assertNotIn('"never"', self.chat.split("fn codex_mode(", 1)[1].split("\n}\n", 1)[0])
 
+    def test_an_agents_own_unguarded_setting_is_only_said_never_offered(self) -> None:
+        # O13: ownSetting.ts recognises the agent's reported values to name them; it sends, offers and writes nothing
+        own = (UI_SRC / "sessions" / "ownSetting.ts").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'^import .*$', own, re.M), ['import { t } from "../i18n";', 'import { MODES } from "./controls";'])
+        for banned in ("setMode", "getSessions", "invoke(", "input(", "export const MODES", "localStorage"):
+            self.assertNotIn(banned, own, banned)
+        self.assertIn("export function ownSetting(", own)
+        view = (UI_SRC / "sessions" / "SessionView.tsx").read_text(encoding="utf-8")
+        # the menu still lists only omher's modes
+        self.assertIn("{modesOf(rec.agent).map((m) => {", view)
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("the session only says so where the mode is shown, naming the agent's own config as where it comes from", text)
+
     def test_mode_and_effort_go_through_the_agents_own_messages_only(self) -> None:
         self.assertIn('json!({"subtype": "set_permission_mode", "mode": mode})', self.chat)
         self.assertIn('json!({"subtype": "apply_flag_settings", "settings": {"effortLevel": effort}})', self.chat)
@@ -1180,3 +1247,115 @@ class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
         self.assertIsNotNone(sig)
         self.assertEqual(sig.group(1).strip(), "cwd: String")
         self.assertIn("git_branch::branch(std::path::Path::new(&cwd))", self.lib)
+
+
+class SessionTranscriptComesFromTheAgentsOwnStream(unittest.TestCase):
+    """Rule 28: a session's diffs, todo list and thinking come from the agent's own stream (no project file read,
+    nothing kept on disk); edit and resend goes only through the agent's own rewind, between turns."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        cls.acp = (SHELL / "acp_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.dsh = (SHELL / "dsh_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+
+    def test_diff_plan_and_thinking_read_no_file(self) -> None:
+        for fn in ("fn input_diff(", "fn claude_result_diff(", "fn codex_diff(", "fn plan_event(", "fn thinking_event("):
+            body = self.chat.split(fn, 1)[1].split("\n}\n", 1)[0]
+            for banned in ("fs::", "File::", "read_to_string", "Command::new"):
+                self.assertNotIn(banned, body, f"{fn} {banned}")
+
+    def test_rewind_is_the_agents_own_and_only_between_turns(self) -> None:
+        self.assertIn('json!({"subtype": "rewind_conversation", "target_message_uuid": uuid})', self.chat)
+        self.assertIn('self.call(&mut st, "thread/revert", json!({"threadId": thread, "beforeTurnId": turn}));', self.chat)
+        # both refuse while a turn runs
+        self.assertEqual(self.chat.count('Input::Rewind => {\n                if self.turn {\n                    return Err("wait until the turn ends".into());'), 2)
+        # the others offer none
+        self.assertIn('Input::Rewind => return Err(format!("{} cannot take a message back here", self.label)),', self.chat)
+        self.assertIn("Input::Rewind => return Err(", self.acp)
+        self.assertIn("Input::Rewind => Err(", self.dsh)
+        # no rewind of files: never Claude Code's rewind_files, never a fork that copies the conversation
+        for banned in ("rewind_files", "fork_conversation", "thread/fork", "--resume-session-at", "--rewind-files"):
+            self.assertNotIn(banned, self.chat, banned)
+
+
+class RestartOneBotOnAPress(unittest.TestCase):
+    """Rule 29: one fixed Hermes argv per press, for the gateway process that serves the bot (always a named profile),
+    `--yes` only after a refusal, no stop, no restart-all, no automatic restart, no signal or service manager; plugins
+    load through Hermes' `reload-plugins`, never a restart."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def test_the_argv_is_hermes_restart_with_the_checked_id_and_yes_only_when_asked(self) -> None:
+        body = self._body("restart_argv")
+        self.assertIn("PROFILE_ID.fullmatch(bot)", body)
+        self.assertIn("return [hermes, '-p', bot, 'gateway', 'restart', '--detach', *(['--yes'] if interrupt is True else [])]", body)
+        pattern = ast.literal_eval(next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                                        and any(getattr(t, "id", "") == "PROFILE_ID" for t in n.targets)).args[0])
+        self.assertEqual(pattern, "[a-z0-9][a-z0-9_-]{0,63}")  # Hermes' hermes_constants.PROFILE_ID_RE
+        for bad in ("--all", "-p", "Kami", "a b", "x;y", "../x", ""):
+            self.assertIsNone(re.fullmatch(pattern, bad), bad)
+
+    def test_one_run_with_no_shell_and_nothing_on_stdin(self) -> None:
+        body = self._body("run_hermes_restart")
+        self.assertIn("argv = restart_argv(hermes, bot, interrupt)", body)
+        self.assertIn("subprocess.run(argv, stdin=subprocess.DEVNULL", body)
+        self.assertNotIn("shell=True", self.src)
+        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything
+        for word in ("Popen", "os.kill", "send_signal", "killpg", "launchctl", "systemctl", "schtasks", "os.system"):
+            self.assertNotIn(word, self.src, word)
+        callers = [n for n, f in self.fns.items() if n != "run_hermes_restart"
+                   and any(isinstance(c, ast.Name) and c.id == "run_hermes_restart" for c in ast.walk(f))]
+        self.assertEqual(callers, ["op_bots_restart"])
+
+    def test_yes_needs_a_refusal_first_and_the_bot_comes_from_the_bot_list(self) -> None:
+        body = self._body("op_bots_restart")
+        self.assertIn("bot = self._bot(p.get('bot'))", body)
+        self.assertIn("interrupt = p.get('interrupt') is True", body)
+        # the process that serves the bot, as Hermes decides it; the refusal window belongs to that gateway
+        self.assertIn("gw = await asyncio.to_thread(gateway_of, self.home, name)", body)
+        self.assertIn("if interrupt and self.clock() - self._refused.get(gw, -1000000000.0) > RESTART_ANYWAY_WINDOW:", body)
+        self.assertIn("run_hermes_restart, hermes, gw, self.home, interrupt", body)
+
+    def test_the_gateway_is_the_host_or_the_bots_own_never_a_served_profile(self):
+        body = self._body("gateway_of")
+        self.assertIn("if b['is_default']:\n            return 'default'", body)
+        self.assertIn("return bot if _standalone(b['path']) or _hermes_gateway_pid(b['path']) is not None else 'default'", body)
+        self.assertIn("from gateway.status import live_gateway_pid_for_home", self._body("_hermes_gateway_pid"))
+
+    def test_no_stop_no_restart_all_and_nothing_restarts_by_itself(self) -> None:
+        # the one Hermes verb omher sends is `gateway restart`, from one function: never stop, start or --all
+        gateway = {n for n, f in self.fns.items() for lst in ast.walk(f) if isinstance(lst, ast.List)
+                   and any(isinstance(c, ast.Constant) and c.value == "gateway" for c in lst.elts)}
+        self.assertEqual(gateway, {"restart_argv"})
+        argv_consts = [c.value for c in ast.walk(self.fns["restart_argv"]) if isinstance(c, ast.Constant) and isinstance(c.value, str)]
+        for verb in ("stop", "start", "--all", "--force", "uninstall"):
+            self.assertNotIn(verb, argv_consts)
+        callers = [n for n, f in self.fns.items()
+                   if any(isinstance(c, ast.Attribute) and c.attr == "op_bots_restart" for c in ast.walk(f))]
+        self.assertEqual(callers, ["__init__"])  # only the op table: a press from the UI
+        # the UI: one store action sends it; only restart.ts calls that action, from press / confirm / anyway
+        files = {p.relative_to(UI_SRC).as_posix(): p.read_text(encoding="utf-8") for p in UI_SRC.rglob("*.ts*") if ".test." not in p.name}
+        senders = sorted(f for f, src in files.items() if re.search(r'request\("bots\.restart"', src))
+        self.assertEqual(senders, ["state/store.ts"])
+        callers = sorted(f for f, src in files.items() if re.search(r"\.restartBot\(", src))
+        self.assertEqual(callers, ["sidebar/restart.ts"])
+        restart = files["sidebar/restart.ts"]
+        self.assertEqual(len(re.findall(r"deps\.restart\(", restart)), 1)
+        self.assertEqual(sorted(re.findall(r"run\(bot, (true|false)\)", restart)), ["false", "true"])
+        self.assertIn('anyway: (bot: string) => (get(bot).step === "refused" ? run(bot, true)', restart)
+
+    def test_plugins_load_through_reload_plugins_never_a_restart(self) -> None:
+        body = self._body("reload_plugins")
+        self.assertIn("from gateway.control_socket import reload_gateway_plugins", body)
+        owners = {n for n, f in self.fns.items() if any(isinstance(c, ast.Name) and c.id == "reload_plugins" for c in ast.walk(f))}
+        self.assertEqual(owners, {"op_plugins_reload"})
+        self.assertNotIn("restart", self._body("op_plugins_reload").replace("restart_bot", "").replace("'restart' if", ""))

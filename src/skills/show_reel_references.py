@@ -121,11 +121,20 @@ Fill `show_reel_brief/v1`:
 
 - objective, audience/channel, requested action and success evidence;
 - duration, aspect_ratio, dimensions, fps, filesize_cap, deadline, revision_budget;
+- motion_limits: how long this genre may stay still and hold one composition;
 - source/brand boundaries, available tools, missing facts and stop conditions;
 - reply_language, audience_locales, content_locale and decision_basis;
 - onscreen_text, subtitle_text, narration_script, pronunciation_text;
 - typography_policy, font_policy, direction_policy, voice_policy, translation_policy;
 - literal_tokens with original bytes, locale version, reviewer and approval state.
+
+`motion_limits` is a labeled assumption unless the user set it, written per
+genre before any scene is authored: which `motion_check.py` profile measures the
+film, each hold the genre needs with its reason (these become the `--holds`
+entries), and how long one composition may stay on screen, which the draft
+contact sheet is read against. An explainer that needs reading time and a teaser
+that must not rest set different limits. A limit written after a check failed
+only relabels the failure.
 
 These are authored artifact fields, not executable schemas or new OMH RPCs.
 Keep media and copy in the approved project directory; metadata records contain
@@ -235,6 +244,25 @@ legibility, feasibility and budget. Record selection, tradeoffs and rejected
 alternatives. Set a finite iteration count/time budget, a weakest-scene allocation,
 review owner and stop rule before production. Do not equate subjective scores
 with measured audience response.
+
+## Decisions every segment shares
+
+Write these two beside the selected concept, before the worksheet:
+
+- The motion theme: one sentence with a verb, taken from how this content
+  arrives on screen (for example "each answer is typed, then replaced by the
+  next"), and under it what breaks it: the entrances, transitions and effects
+  that would read as another film. Adjectives such as "clean" or "dynamic" give
+  a frame nothing to be checked against; a verb does. A film that reads as one
+  work has one theme; a compilation of separate works states one per segment.
+  A segment that needs a listed break records its reason in the movement field.
+- The entity legend: each thing that appears in more than one segment (a
+  product part, an actor in a diagram, a data series) with its name, shape and
+  colour values. Every renderer and medium the film uses draws it from this
+  legend, so a viewer does not have to learn it again after a cut. A deliberate
+  change of form is a transition recorded in the continuity field. The legend
+  fixes the entity only; the segments around it still differ from each other
+  (`references/motion-techniques.md`, Concept first).
 
 ## Segment worksheet: show_reel_storyboard/v1
 
@@ -546,6 +574,37 @@ cleanup visible; never relabel them successful. Re-encode oversized or unsupport
 files and rerun final-file checks. Explicitly name which locale samples were
 rendered and which remain contract-only; do not claim five-language fluency or
 font/TTS/render support from fixtures.
+
+Hand each tool report on as it was emitted. The JSON that `qa_check.py`,
+`motion_check.py` and `mix.py` print and the table `finish.py` prints are saved
+with the project and go to the next reader, another agent or the person, word
+for word, with every check row and every `limitations` line. A summary may sit
+beside a report, never in its place: a summary keeps the verdict and drops
+rows, and a dropped row can be the one that failed.
+
+## From a failed check to an edit
+
+Each name below is printed by the kit's own checkers. Find its row, make the
+edit, export again and run the same check on the new file. A policy value
+changes only when the brief's delivery target changed; moving a limit to clear
+a row leaves the same file. A printed name that is not below is a policy key
+outside the set `toolkit/README.md` lists: correct the key.
+
+| Printed name | What it found | The edit |
+| --- | --- | --- |
+| `muted mode contains undeclared audio` | The declared mode is muted and the file has an audio stream. | Export without the audio track, or declare the mode the brief asks for. |
+| `required audio stream missing` | The declared mode needs sound and the file has none. | Mux the mix into the master with `finish.py --audio`; a muted brief declares `muted` instead. |
+| `lufs outside +/-1` | Integrated loudness is more than 1 LU from the policy `lufs`, or was not measured. | Master the mix to the target again, encode and measure the encoded file. |
+| `true_peak ceiling` | True peak is above the policy `true_peak`, or was not measured. | Lower the master, leaving room for the encoder to raise peaks, and measure the encoded file. |
+| `max_bytes` | The file is larger than the size cap. | Encode the share copy at a lower rate and repeat every final-file check on it. |
+| `max_h264_level` | Defined under Measured export above. | Encode as H.264 at a level the delivery target plays. |
+| `hardware_decode` | Defined under Measured export above; a REVISE lists the decoder's lines in `hardware_decode_errors`. | Read those lines and encode with settings that decoder accepts. For HOLD, run the check on a macOS host or record playback on the target. |
+| `duration`, `fps`, `frames`, `width`, `height` | The measured value differs from the policy value, `duration` by more than one frame. | Compare `project.json`, `REEL.config` and the policy with the brief, correct the one that is wrong and render again. |
+| `probe_decode_measure` | HOLD: the file could not be probed, decoded or measured, and `reason` says why. | Fix the tool path or the export that `reason` names. Nothing counts as measured until it runs clean. |
+| `unannotated_stillness` | Defined under Measure motion above; `at` and `duration` place it. | Add an event there or shorten the stretch (`references/craft-workflow.md`, Common problems, lists the kinds). A hold the brief's `motion_limits` planned goes in `--holds` with its reason. |
+| `still_share_exceeded` | Defined under Measure motion above, for the kinetic profile; holds do not lower it. | Cut or shorten the rests before the end card, and pass the end card's measured length to `--endcard`. |
+| `FAIL` on a `finish.py` row | That output is not yuv420p in tv range, or its loudness or peak is outside the target `finish.py` prints beside the flag. | Colour: encode through `render.mjs` and `finish.py` only. Loudness or peak: master again as in the `lufs` and `true_peak` rows. |
+| `flash_review_required` | Defined under Measure motion above; the report gives the count, not the time. | Find the second on `contact_sheet.py --around` strips of the cuts, split the area that changes at once or soften the flip into a wipe (`references/craft-techniques-2.md`, T20), render that range with the final `--sub` setting and measure again. |
 
 ## Delivery: show_reel_delivery_manifest/v1
 
@@ -861,6 +920,32 @@ a Latin stagger: animate intact runs or `split(el, 'word')`, with per-run
 weight and arrival; they must not make essential text unreadable. Measure reading
 time from delivery-size moving samples, not a character formula.
 
+## Numbers, narrated items and camera moves
+
+- `references/craft-design.md` (Motion principles) stamps a small value in at
+  once because its intermediate values read as real values. The same reason
+  decides which larger numbers may count: only one whose every intermediate
+  value was true, such as a counted quantity, a clock, or a series moving
+  through values it recorded. A measured or computed result, a price, a ratio
+  or a multiplier appears at its final value on the cue where it is said or
+  shown, because the values in between were never measured. When the earlier
+  value is itself a fact, show it, strike it and set the new value in its
+  place. A bar or gauge may grow; its numeric label appears when the growth
+  ends.
+- A value one scene ended on enters the next scene at that value. Counting it
+  again from zero shows numbers below one the film already stated.
+- In a narrated scene each listed item enters on the cue of the word that names
+  it (`references/audio-production.md` gives where a narration cue comes from),
+  not all at scene start: a list shown whole is read ahead of the voice. With
+  no narration, items take beat or reading-time cues.
+- A phrase (a narration line or a musical phrase) takes at most one camera move
+  by default, so each move can be named by the phrase it serves. A second move
+  inside it needs its own reason in the storyboard's movement field, where the
+  first already has its intention.
+- Compose a layout that will be pushed into at its end pose first, so that
+  everything the viewer still needs is inside the safe area after the move,
+  then pull back to the start pose.
+
 ## Concept first, techniques second
 
 The technique catalog is verified code, not a menu: a film assembled only from it
@@ -986,6 +1071,13 @@ that reads as template or cheap, with the change that fixes it:
   own art or a deliberate material, and on-screen product UI reads as a
   shipped app rather than bare boxes.
 
+When the first frame is the thumbnail, a value it shows is already at its final
+state there: a counter caught at zero or mid-roll puts the wrong number on the
+film's preview still. A film whose concept opens another way on purpose
+(`references/craft-workflow.md` has that intent written in `concept.md`) names
+the frame that serves as the still instead and passes its time to
+`finish.py --poster`.
+
 ## Frame checks before the first style frame
 
 Run these on the storyboard, then again on the rendered style frame. Each is a
@@ -1023,6 +1115,16 @@ measurement with a stated number, not an impression.
   family beyond the product or brand palette, or misses contrast, is REVISE
   before render.
 
+In an authored 9:16 frame, run these checks on a layout composed for that
+frame: content stacked down the height between the top and bottom zones that
+`references/craft-design.md` (Layout and safe areas) keeps clear. With
+`frame_fill`, record the y of the highest and the lowest content edge. A shrunk
+landscape layout, the 16:9 arrangement scaled to the narrow width with unused
+height under it that the storyboard does not name as intended space, is REVISE:
+recompose it for the tall frame. Captured footage that cannot be recomposed
+keeps its lane's framing (`references/game-capture.md`) or takes a virtual
+camera that follows the subject.
+
 ## Anti-slide evidence, not keyword approval
 
 Record `anti_slide_review` from actual segment and transition evidence. Compare
@@ -1030,7 +1132,10 @@ adjacent shots' hierarchy, focal geometry, media, pose and rhythm. Reject repeat
 headline/card/rail grammar when every shot is a centered title plus the same
 boxes/rail with only text/color swapped. Do not repair it by sprinkling particles
 or changing a palette. Recompose the narrative around the evidence/semantic object,
-change medium/focal scale/camera purpose, or remove an unnecessary card. A coherent
+change medium/focal scale/camera purpose, or remove an unnecessary card. Rhythm
+includes the arc a scene runs: two adjacent scenes that both build one value and
+then rest repeat one template even when their layouts differ, so give the second
+another arc, such as opening on its result. A coherent
 recurring motif is valid when it develops meaning; justify that from the output,
 not a checklist keyword or numeric quality score.
 
@@ -1044,6 +1149,28 @@ glow, palette or camera moves to hide it.
 moving strips and both entry/exit cut boundaries from real renders. Re-render and
 review the final encoded revision; approval of the earlier draft is not approval
 of the new file. Budget exhaustion with unresolved defects means REVISE/HOLD.
+
+## The no-context judge
+
+`references/craft-qa.md` (Critique) has a subagent with no context of the
+making judge the sheets, the frame strips and its question table. Three
+additions bind that pass to the record:
+
+- The record names who judged. Each keep/fix/rebuild row carries `judged_by`,
+  `maker` or `no_context`, and `artistic_verdict` says which of the two it
+  rests on. Where the host can start no fresh session the value stays `maker`
+  and the delivery says the no-context pass was not observed.
+- Ask one question before the table's own: what does each scene say, read from
+  the frames alone, and is anything misspelled, cut off or at odds with another
+  scene? The judge has no script, so the maker compares that reading with the
+  segment's `message`; a scene read differently from its message is fix or
+  rebuild.
+- The judge runs two rounds by default, a number the brief's revision budget
+  may change. Each round is a new session, so the second judge also has only
+  the frames and the questions. A rebuild still open after the last round goes
+  to the person with the judge's rows and the frames: they choose another
+  round, cutting the scene, or accepting the film with the defect named in the
+  delivery. Until they do, `artistic_verdict` stays REVISE.
 
 ## Four independent verdicts
 

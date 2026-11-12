@@ -5906,6 +5906,15 @@ CREDENTIAL_ROTATION_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; replacing a live credential needs an overlap window, a cutover order, and a check that the old credential stopped working.",
     activation_status="active",
 )
+FRONTEND_DESIGN_GUARD = RoutingGuardRule(
+    id="frontend_design_before_generic_picker",
+    rule="A request that is, as a whole, a redesign of a named UI surface or a visual fault on a phone viewport reaches frontend before generic matches.",
+    matched_label="guard:frontend_design",
+    preferred_skills=("frontend",),
+    score_boost=30,
+    why="The whole request matched a closed redesign or phone-viewport fault shape; a request with any other word keeps its own route.",
+    activation_status="active",
+)
 GAME_BUILD_GUARD = RoutingGuardRule(
     id="game_build_before_greenfield_interview",
     rule="Building or polishing a browser game should route to frontend, which owns the rendered-scene craft bar and the screenshot loop, before the greenfield interview or the browser and live-score lanes.",
@@ -6046,6 +6055,7 @@ ROUTING_GUARD_RULES = (
     NAMED_CODING_AGENT_DELIVERY_GUARD,
     CODING_HANDOFF_STATUS_GUARD,
     GAME_BUILD_GUARD,
+    FRONTEND_DESIGN_GUARD,
 )
 
 
@@ -6104,6 +6114,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "gateway_intent_before_feedback_triage": (GUARD_TRUSTED, "messenger thread or delivery policy named as the task; measured 2 right / 0 wrong"),
     "generated_artifact_provenance_before_deliverable_package": (GUARD_TRUSTED, "asks whether a change touches a generated file; no measured record as a winner, keeps its shape label"),
     "github_event_ops_before_generic_planning": (GUARD_TRUSTED, "an explicit PR, CI, or issue-to-PR event; measured 0 right / 1 wrong; kept trusted: demoting it removes no measured wrong dispatch and moves canonical pins"),
+    "frontend_design_before_generic_picker": (GUARD_TRUSTED, "the whole request is a closed redesign or phone-viewport fault shape; no measured record as a winner, keeps its shape label"),
     "game_build_before_greenfield_interview": (GUARD_TRUSTED, "a build or look-and-feel cue on a browser game, native engines and topic uses excluded; no measured record as a winner, keeps its shape label"),
     "github_issue_intake_before_event_ops_or_feedback": (GUARD_TRUSTED, "an imperative to file a new issue; no measured record as a winner, keeps its shape label"),
     "greenfield_build_before_generic_picker": (GUARD_CONTEXT_ONLY, "fires on build plus the absence of a named existing surface; no measured record as a winner, keeps its shape label"),
@@ -6708,6 +6719,8 @@ def _active_routing_guard_rules_cached(
         rules.append(CONTRACT_REDLINE_GUARD)
     if credential_rotation_guard_applies(normalized_query):
         rules.append(CREDENTIAL_ROTATION_GUARD)
+    if frontend_design_guard_applies(normalized_query):
+        rules.append(FRONTEND_DESIGN_GUARD)
     if not direct_coding_task_applies and game_build_guard_applies(normalized_query):
         rules.append(GAME_BUILD_GUARD)
     if dependency_upgrade_guard_applies(normalized_query):
@@ -10452,6 +10465,126 @@ def contract_redline_guard_applies(normalized_query: str) -> bool:
     return _contains_phrase(normalized_query, _CONTRACT_MARKUP_CUES) and _contains_phrase(
         normalized_query, _CONTRACT_DOCUMENT_NOUNS
     )
+
+
+# Two earlier shapes of this guard (a surface word with a repair verb, then a
+# surface word with a symptom word) looked for cue words anywhere in the
+# message, and every such word has an everyday reading outside UI work: a
+# cracked phone screen, broken text encoding in an export, calendar events that
+# overlap, a database that is redesigned. So this guard reads the whole message
+# instead of words in it. It fires only when the entire request is one of the
+# closed sentence shapes below, with every slot filled from these tuples and
+# joined only by particles and the function words written in the shapes. A word
+# from outside them ("자동차 대시보드", "dashboard database schema", "엑셀
+# 열면"), a trailing clause or a question mark stands it down, and the request
+# keeps the verdict it has without this guard. Nothing outside the shapes can
+# match, which is why there is no blocker tuple. The cost is reach: a visual
+# fault named by an ambiguous word (겹쳐, 잘려, overlap, cut off) is not read.
+_FRONTEND_GUARD_DETERMINERS = ("이", "우리")
+# The surface is named bare. "페이지" and "page" are not surfaces here: a page
+# is also a page of a document.
+_FRONTEND_GUARD_SURFACES = ("대시보드", "랜딩 페이지", "랜딩페이지", "홈페이지")
+# A bare "화면" is also the glass of a phone, so only a pointed-at one counts.
+_FRONTEND_GUARD_POINTED_SURFACES = ("이 화면",)
+_FRONTEND_GUARD_SOFTENERS = ("좀",)
+_FRONTEND_GUARD_REDESIGN_VERBS = ("다시 디자인해", "리디자인해")
+_FRONTEND_GUARD_REPAIR_VERBS = ("고쳐", "수정해")
+_FRONTEND_GUARD_REQUEST_ENDINGS = ("줘", "주세요")
+# Where the fault shows. A visual fault counts only when it is tied to one.
+_FRONTEND_GUARD_VIEWPORTS = ("모바일", "폰")
+_FRONTEND_GUARD_SCROLL_FAULTS = ("가로 스크롤",)
+_FRONTEND_GUARD_APPEAR_FORMS = ("생기는데", "생겨서", "생겨")
+_FRONTEND_GUARD_BREAK_FORMS = ("깨지는데", "깨져서", "깨져")
+# The repair may restate what it fixes as "<viewport> 화면".
+_FRONTEND_GUARD_RESTATED_OBJECTS = ("화면",)
+_FRONTEND_GUARD_EN_POLITE = ("please",)
+_FRONTEND_GUARD_EN_DETERMINERS = ("the", "our")
+_FRONTEND_GUARD_EN_SURFACES = ("dashboard", "landing page", "homepage")
+# Plural surfaces appear only in the sameness shape, whose object is "the design".
+_FRONTEND_GUARD_EN_PLURAL_SURFACES = ("pages", "screens")
+_FRONTEND_GUARD_EN_REDESIGN_VERBS = ("redesign",)
+_FRONTEND_GUARD_EN_SAMENESS = ("all look the same",)
+_FRONTEND_GUARD_EN_DESIGN_ASKS = ("make the design less generic",)
+_FRONTEND_GUARD_EN_REPAIR_VERBS = ("fix",)
+_FRONTEND_GUARD_EN_SCROLL_FAULTS = ("horizontal scroll", "horizontal scrollbar")
+_FRONTEND_GUARD_EN_VIEWPORTS = ("mobile", "phones")
+
+
+def _frontend_guard_slot(*phrases: str) -> str:
+    # Cues and particles are folded like the query, so they match its decomposed text.
+    return "(?:" + "|".join(re.escape(normalized_phrase(phrase)) for phrase in phrases) + ")"
+
+
+def _frontend_guard_shapes() -> tuple[tuple[str, re.Pattern[str]], ...]:
+    slot = _frontend_guard_slot
+    surface = (
+        f"(?:(?:{slot(*_FRONTEND_GUARD_DETERMINERS)} )?{slot(*_FRONTEND_GUARD_SURFACES)}"
+        f"|{slot(*_FRONTEND_GUARD_POINTED_SURFACES)})"
+    )
+    softener = f"(?: {slot(*_FRONTEND_GUARD_SOFTENERS)})?"
+    ending = f" ?{slot(*_FRONTEND_GUARD_REQUEST_ENDINGS)}"
+    repair = f"{softener} {slot(*_FRONTEND_GUARD_REPAIR_VERBS)}{ending}"
+    viewport = slot(*_FRONTEND_GUARD_VIEWPORTS)
+    on_viewport = f"{viewport}{slot('에서')}{slot('만')}?"
+    subject = f"{surface}{slot('이', '가')}?"
+    broken = slot(*_FRONTEND_GUARD_BREAK_FORMS)
+    polite = slot(*_FRONTEND_GUARD_EN_POLITE)
+    en_determiner = slot(*_FRONTEND_GUARD_EN_DETERMINERS)
+    shapes = (
+        # Design intent: the redesign verb's only object is the surface.
+        (
+            "design_intent",
+            f"{surface}{slot('를', '을')}?{softener} {slot(*_FRONTEND_GUARD_REDESIGN_VERBS)}{ending}",
+        ),
+        (
+            "design_intent",
+            f"(?:{polite} )?{slot(*_FRONTEND_GUARD_EN_REDESIGN_VERBS)} {en_determiner} "
+            f"{slot(*_FRONTEND_GUARD_EN_SURFACES)}(?: {polite})?",
+        ),
+        (
+            "design_intent",
+            f"{en_determiner} {slot(*_FRONTEND_GUARD_EN_PLURAL_SURFACES)} {slot(*_FRONTEND_GUARD_EN_SAMENESS)} "
+            f"(?:{polite} )?{slot(*_FRONTEND_GUARD_EN_DESIGN_ASKS)}",
+        ),
+        # A sideways scroll that appears on a phone viewport, and nothing else said.
+        (
+            "viewport_scroll_fault",
+            f"(?:{surface}{slot('이', '가', '에', '에서')}? )?{on_viewport} "
+            f"{slot(*_FRONTEND_GUARD_SCROLL_FAULTS)}{slot('이', '가')}? {slot(*_FRONTEND_GUARD_APPEAR_FORMS)}{repair}",
+        ),
+        (
+            "viewport_scroll_fault",
+            f"(?:{polite} )?{slot(*_FRONTEND_GUARD_EN_REPAIR_VERBS)} the {slot(*_FRONTEND_GUARD_EN_SCROLL_FAULTS)} "
+            f"on {slot(*_FRONTEND_GUARD_EN_VIEWPORTS)}(?: {polite})?",
+        ),
+        # "깨져" alone is also a cracked screen or broken text encoding. It
+        # counts only with the surface as its subject and the viewport as the
+        # place where it breaks.
+        (
+            "viewport_break_fault",
+            f"{subject} {on_viewport} {broken}"
+            f"(?: {viewport} {slot(*_FRONTEND_GUARD_RESTATED_OBJECTS)})?{repair}",
+        ),
+        ("viewport_break_fault", f"{on_viewport} {subject} {broken}{repair}"),
+    )
+    return tuple((tier, re.compile(pattern)) for tier, pattern in shapes)
+
+
+_FRONTEND_GUARD_SHAPES = _frontend_guard_shapes()
+
+
+def frontend_design_guard_tier(normalized_query: str) -> str:
+    """Name the closed shape the whole request matches, or "" when it matches none."""
+    request = " ".join(normalized_query.replace(",", " ").split()).rstrip(" .!~")
+    for tier, shape in _FRONTEND_GUARD_SHAPES:
+        if shape.fullmatch(request):
+            return tier
+    return ""
+
+
+def frontend_design_guard_applies(normalized_query: str) -> bool:
+    """The whole request is a redesign of a named UI surface or a phone-viewport visual fault with a repair ask."""
+    return bool(frontend_design_guard_tier(normalized_query))
 
 
 def game_build_guard_applies(normalized_query: str) -> bool:
