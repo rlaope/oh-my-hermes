@@ -121,9 +121,17 @@ class PackageStepBoundTests(unittest.TestCase):
     def test_the_override_takes_a_positive_whole_number_and_anything_else_is_the_default(self) -> None:
         self.assertEqual(setup.PACKAGE_UPDATE_TIMEOUT_ENV, TIMEOUT_ENV)
         self.assertEqual(setup._package_update_timeout_seconds(), 900)
-        for raw, expected in (("120", 120), ("", 900), ("abc", 900), ("0", 900), ("-5", 900)):
+        for raw, expected in (("120", 120), ("", 900), ("abc", 900), ("0", 900), ("-5", 900),
+                              ("86400", 86400), ("86401", 86400), ("99999999", 86400), ("9" * 30, 86400)):
             with self.subTest(raw=raw), patch.dict(os.environ, {TIMEOUT_ENV: raw}):
                 self.assertEqual(setup._package_update_timeout_seconds(), expected)
+
+    def test_an_override_too_large_to_wait_on_still_runs_the_step(self) -> None:
+        # 99999999 seconds passed straight to the wait raises OverflowError ("timeout is too large").
+        with patch.dict(os.environ, {TIMEOUT_ENV: "99999999"}):
+            code, _stdout = run_step("pass")
+
+        self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":

@@ -406,6 +406,8 @@ SELF_UPDATE_SKIP_ENV = "OMH_SKIP_COMMAND_PACKAGE_UPDATE"
 # whole number of seconds, overrides it. A line says the step is still running every STILL_RUNNING seconds.
 PACKAGE_UPDATE_TIMEOUT_ENV = "OMH_UPDATE_PACKAGE_TIMEOUT"
 PACKAGE_UPDATE_TIMEOUT_SECONDS: float = 900
+# One day. Above about 2.1 million seconds the wait itself raises OverflowError, so a larger override is held here.
+PACKAGE_UPDATE_TIMEOUT_MAX_SECONDS = 86_400
 PACKAGE_UPDATE_STILL_RUNNING_SECONDS: float = 30
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
@@ -1918,7 +1920,9 @@ def _package_update_timeout_seconds() -> float:
         seconds = int(os.environ.get(PACKAGE_UPDATE_TIMEOUT_ENV, ""))
     except ValueError:
         return PACKAGE_UPDATE_TIMEOUT_SECONDS
-    return seconds if seconds > 0 else PACKAGE_UPDATE_TIMEOUT_SECONDS
+    if seconds <= 0:
+        return PACKAGE_UPDATE_TIMEOUT_SECONDS
+    return min(seconds, PACKAGE_UPDATE_TIMEOUT_MAX_SECONDS)
 
 
 def _report_still_running(progress: _HumanProgress, finished: threading.Event) -> None:

@@ -537,7 +537,7 @@ All notable changes will be documented here.
   running` line with the seconds passed about every 30 seconds, and after 900
   seconds it stops the package manager and names the command to run yourself
   before rerunning `omh update`. `OMH_UPDATE_PACKAGE_TIMEOUT` sets another
-  limit in whole seconds; `--json` output is unchanged.
+  limit in whole seconds, up to one day; `--json` output is unchanged.
 
 - **omher finds Hermes installed by its package manager.** Hermes installs
   made with the unified package manager have no `venv`, so omher said Hermes
