@@ -104,20 +104,13 @@ export const ja: Record<Key, string> = {
   "sessions.notInstalled": "未インストール",
 
   // onboarding (the first-run cards and the empty sections' lines)
-  "onb.label": "omher について",
-  "onb.bots.title": "ボット",
-  "onb.bots.body": "仕事を任せる同僚です。計画して実行し、結果を報告します。",
-  "onb.bots.action": "ボットにメッセージ",
-  "onb.sessions.title": "セッション",
-  "onb.sessions.body": "コーディングエージェント（Claude Code、Codex、OmO、DSH、pi、omp）が一つのフォルダであなたと作業します。",
-  "onb.sessions.action": "新しいセッション",
-  "onb.omh.rec": "おすすめ",
-  "onb.omh.body": "今あるボットに加わります。大きな仕事を部分に分けて計画して割り振り、その計画が進む様子を Plans で見られます。",
   "omh.add.line": "oh-my-hermes を追加",
   "omh.add.running": "oh-my-hermes を追加しています…",
   "omh.add.tip": "omher の初回画面と同じインストーラーを実行します。その後、ボットが大きな仕事を部分に分けて計画し、Plans に表示します。",
   "omh.add.exit": "インストーラーが停止しました（exit {code}）。",
-  "onb.dismiss": "閉じる",
+  "omh.icon": "oh-my-hermes がインストールされていません",
+  "omh.pop.body": "入れると、ボットが大きな仕事を部分に分けて計画して割り振り、その計画が進む様子を Plans で見られます。",
+  "omh.pop.hide": "今後表示しない",
   "onb.botsHint": "ボットは Hermes プロファイルです。上の + で追加します。",
   "onb.sessionsHint": "フォルダでコーディングエージェントをチャットとして実行します。",
 
