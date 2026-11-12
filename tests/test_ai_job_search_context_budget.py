@@ -496,7 +496,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # in the node it follows; only dag-ulw moves, and the pin before it was 1f3c01fa...fbf4.
         # model-setup's chain sentence then names Fable 5.2 ahead of Opus 5.5 in visual-engineering; only
         # model-setup moves, and the pin before it was 5518142e...68d0.
-        self.assertEqual(_digest(legacy_hashes), '3a23f50656c683878e5b27ebcffeeafa71d8edbc43a5ae8e9446a7a3fc0127cf')
+        # instinct-ledger's checklist then names the re-fixed-commits reference and code-review's quality bar
+        # gains two rules (same shape everywhere; a failed read is unknown); only those two bodies move, and
+        # the pin before it was 3a23f506...27cf.
+        self.assertEqual(_digest(legacy_hashes), '9363e04b001444250845a09ff255d3f2f84ae05b070e399fa64eae814ba35ef7')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
