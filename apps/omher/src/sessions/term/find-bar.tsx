@@ -43,7 +43,21 @@ export function FindBar({ req, onClose }: { req: FindRequest; onClose: () => voi
   const go = (dir: "next" | "previous") => text && finder.search(text, dir, false);
 
   return (
-    <div className="tfind" role="search" aria-label={t("find.label")} data-testid="term-find" onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      className="tfind"
+      role="search"
+      aria-label={t("find.label")}
+      data-testid="term-find"
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        // Esc closes from the field and from a button the person clicked last
+        if (e.key === "Escape" && !composing(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+        }
+      }}
+    >
       <input
         ref={input}
         type="text"
@@ -60,11 +74,7 @@ export function FindBar({ req, onClose }: { req: FindRequest; onClose: () => voi
           finder.search(e.target.value, "next", true);
         }}
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            close();
-          } else if (e.key === "Enter") {
+          if (e.key === "Enter") {
             e.preventDefault();
             if (!composing(e)) go(e.shiftKey ? "previous" : "next");
           } else if (isFindKey(e.nativeEvent, isMacPlatform(), false)) {
