@@ -286,6 +286,20 @@ All notable changes will be documented here.
   px from the row above, and a session's / menu is as wide as the composer,
   with plain command names and skills marked in the accent colour.
 
+- **omher session chats say what the agent really did: a retry, a Stop, its own
+  permissions and its subagents.** An OmO message that OmO retried by itself is
+  one turn: its line says "Retrying 1 of 5" while OmO tries again, and a retry
+  that fails ends the turn once with OmO's own reason, not two failed turns with
+  a raw `400 {"type":"error",…}` reply. A step still running when you press Stop
+  reads "Stopped", in a session and in a bot's chat, and when Codex reports
+  later that the command ran on, the same row says it kept running and when it
+  finished. A Codex session whose own config asks for no approvals and reaches
+  the whole disk says "No approvals · full disk access" where the mode is shown,
+  from its first message, naming Codex's own config; omher still offers no such
+  mode. An OmO session whose subagent records sit in the project folder
+  (`.omo/senpi-task/tasks/`, where OmO 5.0 and a folder that already has them
+  keep them) shows its run in Plans.
+
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
   nothing new), and the verify node marks each one met, not met or not

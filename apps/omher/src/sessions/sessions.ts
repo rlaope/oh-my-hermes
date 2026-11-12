@@ -75,6 +75,10 @@ export interface SessionsState {
 export interface AgentLive {
   /** the permission mode in force ("" = one omher does not offer, the agent's own) */
   mode?: string;
+  /** what the agent itself reported it runs with: its approval policy and sandbox (Codex `never`,
+   *  `dangerFullAccess`; Claude Code's permission mode), shown when it means no approvals or full disk access */
+  approval?: string;
+  sandbox?: string;
   /** the reasoning effort in force */
   effort?: string;
   /** the reasoning levels it takes; none = it has no effort control */
@@ -307,6 +311,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         const l: Partial<AgentLive> = {};
         if (typeof ev.rewind === "boolean") l.rewind = ev.rewind;
         if (typeof ev.mode === "string") l.mode = ev.mode;
+        if (typeof ev.approval === "string") l.approval = ev.approval;
+        if (typeof ev.sandbox === "string") l.sandbox = ev.sandbox;
         if (typeof ev.effort === "string" && ev.effort) l.effort = ev.effort;
         if (Object.keys(l).length) patchLive(id, l);
         if (fresh) {

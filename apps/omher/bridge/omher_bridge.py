@@ -2709,17 +2709,26 @@ class CliRuns:
     def omo(self, cwd: str | None, since: float, now: float) -> list[dict]:
         """OmO's subagents: one record per subagent in `<omo>/agent/projects/<proj>/senpi-task/tasks/st_*.json`
         (name, task summary, model, status, times, final response), keyed by the session that started them
-        (`root_session_id`, the id omher's OmO session reports). One run per session. Only these records are read,
-        never the subagents' own transcripts (`children/`)."""
+        (`root_session_id`, the id omher's OmO session reports). One run per session. OmO keeps a folder's records in
+        that folder instead (`<cwd>/.omo/senpi-task/tasks/st_*.json`) when they are already there, and OmO 5.0 always
+        does; for a session's own folder (`cwd`) those are read as well. Only these records are read, never the
+        subagents' own transcripts (`children/`)."""
         home = self.homes.get("omo")
         root = home / "agent" / "projects" if home else None
-        if root is None or not root.is_dir() or root.is_symlink():
+        stores: list[Path] = []
+        try:
+            if root is not None and root.is_dir() and not root.is_symlink():
+                stores += [Path(p.path) / "senpi-task" / "tasks" for p in os.scandir(root) if p.is_dir(follow_symlinks=False)]
+            if cwd:
+                dot = Path(cwd) / ".omo"
+                if dot.is_dir() and not dot.is_symlink() and not (dot / "senpi-task").is_symlink():
+                    stores.append(dot / "senpi-task" / "tasks")
+        except OSError:
             return []
         files: list[tuple[float, Path]] = []
         try:
-            for proj in os.scandir(root):
-                tasks = Path(proj.path) / "senpi-task" / "tasks"
-                if not proj.is_dir(follow_symlinks=False) or not tasks.is_dir() or tasks.is_symlink():
+            for tasks in stores:
+                if not tasks.is_dir() or tasks.is_symlink():
                     continue
                 for e in os.scandir(tasks):
                     if _OMO_TASK.match(e.name) and e.is_file(follow_symlinks=False):

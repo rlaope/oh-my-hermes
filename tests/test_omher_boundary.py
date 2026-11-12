@@ -50,6 +50,8 @@ RULES = (
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
+    "so for a session's own folder omher also reads `<that folder>/.omo/senpi-task/tasks/st_*.json`, the same records"
+    " and nothing else in `.omo`, never a symlinked `.omo` or `senpi-task`, and never another folder's.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -193,6 +195,22 @@ class SubagentEvents(unittest.TestCase):
         self.assertIn("_OMO_TASK.match(e.name)", body)
         self.assertNotIn("children", body.split('"""', 2)[2])
         self.assertRegex(src, r'_OMO_TASK = re\.compile\(r"\^st_')
+
+    def test_omo_records_in_a_folder_are_read_only_for_the_sessions_own_folder(self) -> None:
+        # O15: OmO 5.0 (and 5.1 once a folder holds them) keeps its records in `<folder>/.omo/senpi-task/tasks/`;
+        # omher reads them only for the folder the session runs in, never through a link, and nothing else in .omo
+        src = BRIDGE.read_text(encoding="utf-8")
+        body = src[src.index("    def omo(self"):src.index("    # ---- ops")]
+        code = body.split('"""', 2)[2]
+        self.assertIn('dot = Path(cwd) / ".omo"', code)
+        self.assertIn("if cwd:", code)
+        self.assertIn("not dot.is_symlink()", code)
+        self.assertIn('not (dot / "senpi-task").is_symlink()', code)
+        self.assertEqual(code.count('".omo"'), 1)
+        self.assertEqual(re.findall(r'dot / "([a-z-]+)"', code), ["senpi-task", "senpi-task"])
+        rule = next(r for r in re.split(r"\n(?=\d+\. )", DOC.read_text(encoding="utf-8")) if "OmO's subagent records" in r)
+        self.assertIn("`<that folder>/.omo/senpi-task/tasks/st_*.json`", rule)
+        self.assertIn("never a symlinked `.omo` or `senpi-task`, and never another folder's", rule)
 
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
@@ -1188,6 +1206,19 @@ class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
             self.assertNotIn(f'"{banned}"', self.chat, banned)
             self.assertNotIn(banned, self.ui, banned)
         self.assertNotIn('"never"', self.chat.split("fn codex_mode(", 1)[1].split("\n}\n", 1)[0])
+
+    def test_an_agents_own_unguarded_setting_is_only_said_never_offered(self) -> None:
+        # O13: ownSetting.ts recognises the agent's reported values to name them; it sends, offers and writes nothing
+        own = (UI_SRC / "sessions" / "ownSetting.ts").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'^import .*$', own, re.M), ['import { t } from "../i18n";', 'import { MODES } from "./controls";'])
+        for banned in ("setMode", "getSessions", "invoke(", "input(", "export const MODES", "localStorage"):
+            self.assertNotIn(banned, own, banned)
+        self.assertIn("export function ownSetting(", own)
+        view = (UI_SRC / "sessions" / "SessionView.tsx").read_text(encoding="utf-8")
+        # the menu still lists only omher's modes
+        self.assertIn("{modesOf(rec.agent).map((m) => {", view)
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("the session only says so where the mode is shown, naming the agent's own config as where it comes from", text)
 
     def test_mode_and_effort_go_through_the_agents_own_messages_only(self) -> None:
         self.assertIn('json!({"subtype": "set_permission_mode", "mode": mode})', self.chat)
