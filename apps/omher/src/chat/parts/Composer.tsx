@@ -197,6 +197,9 @@ export function Composer({
   useLayoutEffect(() => {
     if (!draft || draft.bot !== bot.name) return;
     setText(draft.text);
+    // text the app put here (Edit's old message too) does not open the command menu; typing in it does
+    const q = commandQuery(draft.text);
+    setCmdDismissed(q ? `${q.prefix}${q.query}` : null);
     requestAnimationFrame(() => {
       const el = ref.current;
       if (!el) return;
