@@ -120,12 +120,20 @@
   text-align: left;
   white-space: normal;
 }
-/* the same output, small, where an offer to add oh-my-hermes runs it (the + menu, the first-run card) */
+/* the same output, small, where an offer to add oh-my-hermes runs it (the + menu, the first-run card): on the app's
+   raised surface (not the setup screen's page black), as tall as its lines up to five whole ones, then it scrolls */
 .gate-log.gate-log-sm {
-  /* whole lines only, so the newest five read in full and none is cut at the top */
-  height: calc(5 * 1.5em + 12px);
-  padding: 5px 7px;
-  font-size: 11px;
+  /* no padding above or below the lines: scrolled to its newest line, the top edge then falls on a line boundary and
+     no sliver of the line before shows (the 18px line holds the 12px text with air of its own) */
+  height: auto;
+  max-height: calc(5 * 18px + 2px);
+  padding: 0 6px;
+  overflow: auto;
+  border-color: var(--line);
+  border-radius: var(--r);
+  background: var(--raise);
+  color: var(--body);
+  font: 12px/18px var(--mono, ui-monospace, monospace);
 }
 .gate-line {
   display: block;
@@ -136,6 +144,12 @@
   overflow-wrap: anywhere;
 }
 /* the installer's own markers: failures in the danger colour, done steps quiet */
+/* the small log wraps only at spaces and at the break chances after "/" (slashBreaks); a single token longer than
+   the box stays whole on its row and the box scrolls sideways */
+.gate-log-sm .gate-line {
+  overflow-wrap: normal;
+  word-break: normal;
+}
 .gate-line--bad {
   color: var(--danger, #f08a8a);
 }

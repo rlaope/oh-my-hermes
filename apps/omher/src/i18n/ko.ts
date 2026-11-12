@@ -104,20 +104,12 @@ export const ko: Record<Key, string> = {
   "sessions.notInstalled": "설치 안 됨",
 
   // onboarding (the first-run cards and the empty sections' lines)
-  "onb.label": "omher 소개",
-  "onb.bots.title": "봇",
-  "onb.bots.body": "일을 맡기는 동료예요. 계획하고 실행한 뒤 결과를 알려줘요.",
-  "onb.bots.action": "봇에게 메시지",
-  "onb.sessions.title": "세션",
-  "onb.sessions.body": "코딩 에이전트(Claude Code, Codex, OmO, DSH, pi, omp)가 한 폴더에서 함께 작업해요.",
-  "onb.sessions.action": "새 세션",
-  "onb.omh.rec": "추천",
-  "onb.omh.body": "지금 있는 봇에 더해져요. 큰 일을 여러 부분으로 계획해 나눠 맡기고, 그 계획이 진행되는 모습을 Plans에서 볼 수 있어요.",
   "omh.add.line": "oh-my-hermes 추가",
-  "omh.add.running": "oh-my-hermes를 추가하는 중…",
   "omh.add.tip": "omher 첫 실행 화면과 같은 설치 프로그램을 실행해요. 그다음부터 봇이 큰 일을 여러 부분으로 계획하고, Plans에 보여 줘요.",
   "omh.add.exit": "설치 프로그램이 멈췄어요(exit {code}).",
-  "onb.dismiss": "닫기",
+  "omh.icon": "oh-my-hermes가 설치되어 있지 않아요",
+  "omh.pop.body": "설치하면 봇이 큰 일을 여러 부분으로 계획해 나눠 맡기고, 그 계획이 진행되는 모습을 Plans에서 볼 수 있어요.",
+  "omh.pop.hide": "다시 보지 않기",
   "onb.botsHint": "봇 하나가 Hermes 프로필 하나예요. 위의 +로 추가해요.",
   "onb.sessionsHint": "폴더에서 코딩 에이전트를 채팅으로 실행해요.",
 
