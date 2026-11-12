@@ -565,21 +565,18 @@
 .ss-row:hover .ss-view {
   visibility: hidden;
 }
-.ss-row .needs-dot {
-  margin-left: 6px;
+/* a session's state stands in the time's place as a sign and a word, in one colour: a yellow warning triangle (it
+   waits for you), a red exclamation mark (it stopped on an error), a green check (it finished). No dots. */
+.ss-row .ss-sign {
+  display: inline-block;
+  margin-right: 4px;
+  line-height: 0;
+  vertical-align: -1.5px;
 }
-/* the state dot shares the amber dot's place and size. Amber stays "it waits for you"; red is "it stopped on an
-   error"; green is "it finished and you have not looked yet". */
-.ss-row .ss-mark.error {
-  background: var(--danger);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent);
+/* the triangle is the yellow of a warning sign in both themes; its word keeps the amber that reads at 11px */
+.ss-row .ss-sign.needs {
+  color: #e9a23b;
 }
-/* a finished session does not call for anything: its dot has no halo */
-.ss-row .ss-mark.done {
-  background: var(--ok);
-  box-shadow: none;
-}
-/* the dot's word in the time's place, in the dot's colour ("waiting" is the bot row's amber) */
 .ss-row .bot-t.err {
   color: var(--danger);
 }
@@ -589,6 +586,13 @@
 /* 11px green on the light sidebar: a deeper shade, as the amber has */
 [data-theme="light"] .ss-row .bot-t.ok {
   color: #17693f;
+}
+/* the close button takes the time's place on hover, but a state stays: it moves left of the button */
+.ss-row:hover .bot-t.wait,
+.ss-row:hover .bot-t.err,
+.ss-row:hover .bot-t.ok {
+  visibility: visible;
+  margin-right: 22px;
 }
 /* a session nothing runs in steps back: its agent mark fades and its name is muted, so the running ones lead */
 .ss-row.over .ss-av > * {

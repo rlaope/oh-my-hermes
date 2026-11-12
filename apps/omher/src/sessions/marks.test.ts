@@ -1,4 +1,4 @@
-// The state dot of a session row and the notification for what a session did outside its chat: it waits for the
+// The state a session row shows and the notification for what a session did outside its chat: it waits for the
 // person, it stopped on an error, or it finished something they have not opened yet.
 import { describe, expect, it } from "vitest";
 import { rowModel, type SessionRec } from "./agents";
@@ -11,8 +11,8 @@ import type { SessionNote } from "../lib/notify";
 const base: SessionRec = { id: "s1", agent: "claude", cwd: "/Users/k/web-app", startedAt: 1_700_000_000_000, status: "running", view: "chat" };
 const idle = { turn: false, needsYou: false };
 
-describe("a session row's state dot", () => {
-  it("is amber while it waits for the person: an open ask, or its terminal rang", () => {
+describe("a session row's state", () => {
+  it("is waiting while it waits for the person: an open ask, or its terminal rang", () => {
     expect(rowModel(base, { turn: true, needsYou: true })).toMatchObject({ mark: "needs", needsYou: true, sub: "Claude Code" });
     const term: SessionRec = { ...base, view: "terminal", open: "terminal" };
     expect(rowModel(term, undefined, undefined, "bell")).toMatchObject({ mark: "needs", needsYou: false, sub: "Claude Code", over: false });
@@ -20,7 +20,7 @@ describe("a session row's state dot", () => {
     expect(rowModel({ ...term, status: "exited", exitCode: 0 }, undefined, undefined, "bell").mark).toBeNull();
   });
 
-  it("is red when it stopped on an error: could not start, a non-zero exit, an ended-with-reason, a failed turn", () => {
+  it("is an error when it stopped on an error: could not start, a non-zero exit, an ended-with-reason, a failed turn", () => {
     expect(rowModel({ ...base, status: "failed", error: "no such program" })).toMatchObject({ mark: "error", sub: "Claude Code · Could not start", over: true });
     expect(rowModel({ ...base, status: "exited", exitCode: 2 })).toMatchObject({ mark: "error", sub: "Claude Code · Ended · exit 2" });
     expect(rowModel({ ...base, status: "exited", exitCode: null, error: "Hermes closed this chat" })).toMatchObject({ mark: "error", sub: "Claude Code · Ended" });
@@ -30,7 +30,7 @@ describe("a session row's state dot", () => {
     expect(rowModel(base, { turn: true, needsYou: true, failed: true }, undefined, "end").mark).toBe("needs");
   });
 
-  it("is green when it finished unseen, and gone once seen; a clean end the person watched has no dot", () => {
+  it("is done when it finished unseen, and gone once seen; a clean end the person watched shows none", () => {
     expect(rowModel(base, idle, undefined, "end")).toMatchObject({ mark: "done", sub: "Claude Code", over: false });
     expect(rowModel({ ...base, status: "exited", exitCode: 0 }, undefined, undefined, "end")).toMatchObject({ mark: "done", sub: "Claude Code · Ended", over: true });
     expect(rowModel({ ...base, status: "exited", exitCode: 0 })).toMatchObject({ mark: null, sub: "Claude Code · Ended", over: true });
