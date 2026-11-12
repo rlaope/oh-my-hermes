@@ -21,6 +21,22 @@ All notable changes will be documented here.
   HUD now reads the home `HERMES_HOME` names; the bot board alone keeps the
   bots' home.
 
+- **A session in omher shows the subagents its agent starts, and opens Plans
+  for that session.** Claude Code's subagent messages were dropped and a Task
+  was one clipped "Asked a helper" step; Codex and OmO subagents were not shown
+  at all; and the right panel opened only on a bot's chat. Now each fan-out is
+  one card with one row per subagent (its name and task, state and time),
+  live while it works; a row opens to its own steps and its answer, which is
+  the subagent's own words, not Claude Code's hand-back frame. An approval or
+  question asked inside a subagent names it on the card. The session header
+  has the panel button, with a dot while a subagent works, and opens Plans for
+  that session's own run (the agent's record of its subagents; OmO's are read
+  from its task records too). Work the agent leaves running in the background
+  after a turn is said in the header until it ends. omher only shows
+  subagents: it never starts, steers or stops one. Tested on real runs of
+  Claude Code 2.1.322 (two subagents in parallel, then one whose command needs
+  approval) and OmO 5.1.56.
+
 - **A Codex session in omher stays on your turn while Codex's subagents work.**
   Codex streams its subagents' threads on the same connection, and omher
   took their events as its own: when the first subagent finished, the chat

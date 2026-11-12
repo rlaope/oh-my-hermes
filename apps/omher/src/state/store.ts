@@ -32,6 +32,7 @@ import type {
   WorktreeDiff,
   MediaFile,
   SubagentState,
+  AskSubagent,
   AttachKind,
   AttachResult,
   AccountCli,
@@ -81,6 +82,11 @@ export interface SubagentRow {
   id: string;
   index: number;
   goal: string;
+  /** Which agent reported it (a session's CLI) and its name or type, when the agent gives them. */
+  agent?: string;
+  name?: string;
+  /** Its recent steps, oldest first (at most SUB_STEPS): what the row shows when opened. */
+  steps?: { tool?: string; text: string }[];
   model?: string;
   dag?: { run: string; node: string };
   state: SubagentState;
@@ -151,6 +157,8 @@ export type ApprovalItem = {
   choices: ApprovalChoice[];
   /** The folder the command runs in, when the agent says. */
   cwd?: string;
+  /** Asked inside a subagent: which one. */
+  subagent?: AskSubagent;
   resolved?: ApprovalChoice;
   expired?: AskExpiry;
 };
@@ -165,6 +173,7 @@ export type ClarifyItem = {
   multi?: boolean;
   /** An interview: every question of the ask (2-5), answered in one card. */
   questions?: ClarifyQuestion[];
+  subagent?: AskSubagent;
   answer?: string;
   /** Interview answers per question id (null = skipped). */
   answers?: ClarifyAnswers;
@@ -494,6 +503,8 @@ function patchTurnById(chat: Chat, id: string, fn: (t: Turn) => Turn): Chat {
 }
 
 const SUB_DONE: SubagentState[] = ["done", "failed", "cancelled"];
+/** How many of a subagent's own steps its row keeps. */
+export const SUB_STEPS = 8;
 export const subagentEnded = (s: Pick<SubagentRow, "state">) => SUB_DONE.includes(s.state);
 
 /** A subagent event into its fan-out. A fan-out is named by its delegation id once Hermes gives one; the turn that
@@ -531,6 +542,9 @@ function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
       goal: ev.goal || old?.goal || "",
       state: old && subagentEnded(old) && !ended ? old.state : ev.state,
       ...(ev.model ? { model: ev.model } : {}),
+      ...(ev.agent ? { agent: ev.agent } : {}),
+      ...(ev.name ? { name: ev.name } : {}),
+      ...(ev.step && ev.step !== old?.steps?.at(-1)?.text ? { steps: [...(old?.steps ?? []), { tool: ev.tool, text: ev.step }].slice(-SUB_STEPS) } : {}),
       ...(ev.dag ? { dag: ev.dag } : {}),
       // the step line is the current tool's; it goes when the child ends (its result line takes its place)
       ...(ev.step !== undefined ? { step: ev.step, tool: ev.tool } : {}),
@@ -792,6 +806,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           command: ev.command,
           choices: ev.choices,
           ...(ev.cwd ? { cwd: ev.cwd } : {}),
+          ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
         };
         return withItems(base, [...base.items, item]);
       });
@@ -809,6 +824,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           choices: ev.choices,
           ...(ev.multi_select ? { multi: true } : {}),
           ...(qs.length > 1 ? { questions: qs } : {}),
+          ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
         };
         return withItems(base, [...base.items, item]);
       });

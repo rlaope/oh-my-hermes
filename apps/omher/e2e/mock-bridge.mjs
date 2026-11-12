@@ -437,6 +437,34 @@ function cliSeed() {
   return [live, ...runs];
 }
 
+// The mock SESSIONS Claude chat's own run (the MockHost's Claude session id, in the e2e folder): the agent's record
+// of the two subagents of "/subagents", as CliRuns reads it from the session's transcript. Its title is the agent's
+// ("Claude Code session"): the session panel shows the session row's name instead.
+// The session's own record as the bridge reads it from the transcript of the run the chat shows ("/subagents"),
+// the message sent `ago` seconds back: each subagent starts at its call and the first ends when its hand-back
+// reached the chat, after the time the chat's row says (3.7s, by Claude Code's own count, as the transcript's
+// stamps do); the second starts when its call reached the chat and takes 9.4s. With `hold` it is still out, as in
+// "/subagents hold". The same moments as host.ts's MockChat "/subagents" (0.6s and 0.17s after the send).
+function sessionRun({ ago = 30, hold = false } = {}) {
+  const sent = now() - ago;
+  const node = (id, label, summary, started, ended) => ({
+    id, label, deps: [], layer: 0, state: ended === undefined ? "running" : "done", model: "claude-fable-5-2", executor: "claude",
+    lane: "general-purpose", started, attempts: [{ n: 1, outcome: ended === undefined ? "open" : "completed", started, ...(ended === undefined ? {} : { ended }) }],
+    ...(ended === undefined ? {} : { summary, ended }),
+  });
+  const back = sent + 0.6;
+  const second = sent + 0.17;
+  const nodes = [node("sa-1", "Read a.txt first line", "alpha line", back - 3.7, back), node("sa-2", "Count lines of b.txt", "3", second, hold ? undefined : second + 9.4)];
+  const t = back - 3.7;
+  const end = second + 9.4;
+  return {
+    id: "claude:11111111-2222-4333-8444-555555555555", kind: "claude-task", agent: "claude",
+    owner: { type: "session", id: "11111111-2222-4333-8444-555555555555" }, title: "Claude Code session",
+    cwd: "/Users/you/code/omher", state: hold ? "running" : "done", started: t, updated: hold ? now() : end,
+    ...(hold ? {} : { ended: end }), nodes,
+  };
+}
+
 // the bridge's run_summary: `failed` = open failures; a failure its repairs all fixed counts as `repaired`
 const runCounts = (r) => {
   const fixed = r.nodes.filter(
@@ -1031,7 +1059,7 @@ const OPS = {
       .sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated),
   }),
   "runs.cli": (p) => {
-    const AGENTS = ["claude", "codex", "pi", "omp", "grok"];
+    const AGENTS = ["claude", "codex", "omo", "pi", "omp", "grok"];
     if (p.agent !== undefined && !AGENTS.includes(p.agent)) throw new OpError("bad_request", `agent must be one of ${AGENTS.join(", ")}`);
     if (p.cwd !== undefined && (typeof p.cwd !== "string" || !p.cwd)) throw new OpError("bad_request", "cwd must be a folder path");
     if (p.since !== undefined && typeof p.since !== "number") throw new OpError("bad_request", "since must be epoch seconds");
@@ -1066,10 +1094,10 @@ const OPS = {
     return { title: cliTitles.get(`${p.agent}:${p.session}`) ?? "" };
   },
   "runs.get": (p) => {
-    const b = needBot(p);
     const id = needStr(p, "run");
     const cli = cliRuns.find((r) => r.id === id);
     if (cli) return { run: cli, handoffs: {} };
+    const b = needBot(p);
     const run = (runs[b.name] ?? []).find((r) => r.id === id);
     if (!run) throw new OpError("not_found", `no run ${id} for ${b.name}`);
     return { run, handoffs: HANDOFFS[id] ?? {} };
@@ -1300,6 +1328,11 @@ const OPS = {
     if (!Array.isArray(p.events)) throw new OpError("bad_request", "events must be an array");
     for (const ev of p.events) broadcast(ev);
     return { count: p.events.length };
+  },
+  // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
+  "mock.sessionRun": (p) => {
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), sessionRun({ ago: typeof p.ago === "number" ? p.ago : undefined, hold: p.hold === true })];
+    return { ok: true };
   },
   "mock.reset": () => {
     reset();
