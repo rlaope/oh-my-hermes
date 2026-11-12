@@ -1342,7 +1342,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   count in columns of their own. Type to filter (what you type shows on
   the list's last row, where the composer was, with the caret, and only the
   headings with a match stay), Up/Down or PageUp/PageDown to move from
-  session to session, Enter to switch, Esc to close. Each alias runs
+  session to session, Enter to switch, Esc to close. Ctrl+R renames the
+  highlighted session (the last row becomes its title: Enter renames, Esc
+  cancels) and Ctrl+D deletes it once a second Ctrl+D confirms; the session
+  you are in is not deleted from there. Hermes' own terminal entry renames
+  only a session it has open, so there a stored session's rename may be
+  refused, and the row says Hermes' reason. Each alias runs
   exactly as `/sessions` does, and the `/` menu offers `/resume` under its
   own name once what you type starts it: `/res` and `/resu` complete to
   `/resume`.
@@ -1401,6 +1406,7 @@ Esc closes it):
 | Space | On a clarify question that takes several choices, ticks or unticks the highlighted one; Enter sends the ticked ones, or the highlighted one when none is ticked, and a digit ticks its choice |
 | Esc, Ctrl+C | On a question Hermes asked, decline it (an approval is denied and the running turn stops); Ctrl+C first clears an answer being typed |
 | ↑ / ↓, PageUp / PageDown, Enter, Esc | In the `/sessions`, `/rewind` or `/model` list, move, take the highlighted row (switch to that session, put that prompt in the composer to send again, or switch this session to that model), or close it; typing filters the list |
+| Ctrl+R, Ctrl+D | In the `/sessions` list, rename or delete the highlighted session: Ctrl+R makes the list's last row its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not deleted, and what Hermes refuses is said on the row |
 | ↑ / ↓, Enter, Esc, ←, q, Ctrl+C | In the agent list, move, open the highlighted agent's log (on main, only leave), or go back; any other key does nothing there |
 | x, s | In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send (Esc cancels) |
 | ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember, kanagawa-wave) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |

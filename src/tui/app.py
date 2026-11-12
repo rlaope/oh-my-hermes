@@ -269,8 +269,8 @@ from .screen import (
     LiveRegion,
     cursor_up,
 )
-from .session_picker import KEYS as SESSION_PICKER_KEYS
-from .session_picker import PICK, SessionPicker, SessionRow, pointer, session_rows
+from .session_picker import DELETE as SESSION_DELETE
+from .session_picker import PICK, RENAME, PickerAction, SessionPicker, SessionRow, pointer, session_rows
 from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
@@ -1155,6 +1155,13 @@ SESSIONS_EMPTY_NOTICE = (
     "sessions."
 )
 SESSIONS_REFUSED_NOTICE = "Hermes did not list the stored sessions: {reason}."
+# A rename or delete from the session picker answered once the picker had closed: said beside what runs.
+SESSION_RENAMED_NOTICE = "Renamed session {session} to {title}."
+SESSION_DELETED_NOTICE = "Deleted session {session}."
+# On the picker's row when Hermes answered a rename or delete with nothing that says it was done.
+SESSION_EDIT_UNCONFIRMED = "Hermes did not say it was done"
+SESSION_EDIT_UNANSWERED = "Hermes did not answer in {seconds:g} s"
+SESSION_EDIT_NOT_SENT = "the OMH TUI did not send it"
 SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
 # While a switch (`/sessions <id>`, a pick, `/new`) waits on Hermes, under the queued prompts: a prompt sent then
 # waits for the session it goes to (`App.switch_held`) and is sent there once it is live.
@@ -1276,6 +1283,8 @@ CALL_FAILED_PHRASES = {
     "slash.exec": "run the command",
     "command.dispatch": "run the command",
     "session.list": "list the stored sessions",
+    "session.title": "rename the session",
+    "session.delete": "delete the session",
 }
 
 
@@ -7713,10 +7722,59 @@ class App(ModesMixin, AgentViewMixin):
         action = self.picker.handle_key(event)
         if action is None:
             return
+        if action.kind in (RENAME, SESSION_DELETE):  # the picker stays open, its row saying how the call went
+            self._edit_session(self.picker, action)
+            return
         rows, self.picker = self.picker.rows, None
         if action.kind == PICK:
             label = next((row.label for row in rows if row.id == action.session_id), "")
             self._switch_session(action.session_id, label=label)
+
+    def _edit_session(self, picker: SessionPicker, action: PickerAction) -> None:
+        """A rename (`session.title`) or a delete (`session.delete`) the person asked for in the session picker, on
+        their keys only. The session this TUI is in is renamed by its live id, which Hermes' stdio entry needs; any
+        other by its stored id, which that entry refuses for a session not open there, and the refusal is said on
+        the row: the TUI does not open a session to rename it. Attached to a shared gateway, the gateway child sends
+        either as the owner's revision-fenced `session.mutate`. The answer updates the row, removes it, or says
+        Hermes' refusal on it; with the picker closed meanwhile, a notice says it instead."""
+        target = action.session_id
+        renaming = action.kind == RENAME
+        sent = self.sid if target == self.stored_id and self.sid else target
+        method, params = (("session.title", {"session_id": sent, "title": action.title}) if renaming
+                          else ("session.delete", {"session_id": sent}))
+
+        def done(result: dict[str, Any]) -> None:
+            title = " ".join(clean_text(as_text(result.get("title"))).split())
+            confirmed = bool(title) if renaming else as_text(result.get("deleted")) == sent  # as Ink reads `deleted`
+            if not confirmed:
+                if not self._edit_refused(picker, target, SESSION_EDIT_UNCONFIRMED):
+                    self.transcript.add_aside(NoticeBlock(
+                        f"Hermes did not {CALL_FAILED_PHRASES[method]}: {SESSION_EDIT_UNCONFIRMED}.", NOTICE_WARN))
+                return
+            if renaming and target == self.stored_id:
+                self.session_title = title
+            shown = picker is self.picker and (picker.renamed(target, title) if renaming else picker.deleted(target))
+            if not shown:
+                said = (SESSION_RENAMED_NOTICE.format(session=target, title=title) if renaming
+                        else SESSION_DELETED_NOTICE.format(session=target))
+                self.transcript.add_aside(NoticeBlock(said))
+
+        def refused(error: dict[str, Any]) -> bool:
+            message = (refusal_sentence(error) or plain_sentence(as_text(error.get("message")))).rstrip(".")
+            return self._edit_refused(picker, target, message)
+
+        def unanswered(seconds: float) -> None:
+            if not self._edit_refused(picker, target, SESSION_EDIT_UNANSWERED.format(seconds=seconds)):
+                self._say_unanswered(None, method, seconds)
+
+        if self._request(method, params, done, refused, unanswered) is not None:
+            picker.asked(action)
+        else:
+            picker.refused(target, SESSION_EDIT_NOT_SENT)
+
+    def _edit_refused(self, picker: SessionPicker, target: str, message: str) -> bool:
+        """`message` on `target`'s row while that picker is open; False when it closed (the caller says it)."""
+        return picker is self.picker and picker.refused(target, message)
 
     def _switch_session(
         self, target: str, notice: str = "", by_title: bool = False, label: str = "", seq: int | None = None,
@@ -9518,7 +9576,7 @@ class App(ModesMixin, AgentViewMixin):
         if picker is self.launch_picker:
             return LAUNCH_PICKER_KEYS
         if picker is self.picker:
-            return SESSION_PICKER_KEYS
+            return self.picker.keys()
         if picker is self.search:
             return SEARCH_HINTS
         return REWIND_PICKER_KEYS if picker is self.rewind_picker else MODEL_PICKER_KEYS

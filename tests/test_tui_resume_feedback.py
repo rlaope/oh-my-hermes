@@ -22,7 +22,7 @@ from omh.tui.app import (
     App,
 )
 from omh.tui.gateway import Response
-from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, Key
+from omh.tui.keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, Key
 from omh.tui.launch import PICK_SESSION_ENV
 from omh.tui.session_picker import SessionPicker, SessionRow
 from omh.tui.theme import DEFAULT_THEME
@@ -587,3 +587,130 @@ class PickAtStartTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PickerEditTests(unittest.TestCase):
+    """Ctrl+R and Ctrl+D in the open session picker: one `session.title` or `session.delete` call each, on the
+    person's keys, its answer said on the row."""
+
+    def opened(self, stored: str = "stored-1") -> tuple[App, RecordingClient]:
+        app, client = make_app()
+        app.stored_id = stored
+        resume(app)
+        reply(app, client, LISTED)
+        assert app.picker is not None
+        drawn(app)  # the day groups order the rows
+        return app, client
+
+    def last(self, client: RecordingClient) -> int:
+        return len(client.calls)
+
+    def rename(self, app: App, title: str) -> None:
+        app._on_input(Key(CHAR, "r", ctrl=True))
+        assert app.picker is not None
+        for _ in app.picker.title:
+            app._on_input(Key(BACKSPACE))
+        type_text(app, title)
+        app._on_input(Key(ENTER))
+
+    def test_rename_sends_session_title_and_the_answer_updates_the_row(self) -> None:
+        app, client = self.opened()
+        self.rename(app, "Release prep")
+        self.assertEqual(client.calls[-1], ("session.title", {"session_id": "stored-2", "title": "Release prep"}))
+        self.assertIsNotNone(app.picker)  # it stays open
+        self.assertTrue(any("renaming…" in line for line in drawn(app)))
+        app._on_response(Response(self.last(client), {"pending": False, "title": "Release prep"}, None))
+        assert app.picker is not None
+        self.assertEqual(app.picker.rows[0].title, "Release prep")
+        screen = drawn(app)
+        self.assertTrue(any("Release prep" in line for line in screen))
+        self.assertFalse(any("an earlier session" in line for line in screen))
+        self.assertEqual(notices(app), [])
+
+    def test_a_refused_rename_says_hermes_words_on_the_row_and_changes_nothing(self) -> None:
+        app, client = self.opened()
+        self.rename(app, "Release prep")
+        app._on_response(Response(self.last(client), None, {"code": 4001, "message": "session not found"}))
+        assert app.picker is not None
+        self.assertEqual(app.picker.rows[0].title, "an earlier session")
+        self.assertTrue(any("Session not found" in line for line in drawn(app)))
+        self.assertEqual(notices(app), [])  # said on the row, not in the transcript
+        app._on_input(Key(DOWN))
+        self.assertFalse(any("Session not found" in line for line in drawn(app)))
+
+    def test_an_empty_title_and_esc_send_nothing(self) -> None:
+        app, client = self.opened()
+        sent = len(client.calls)
+        self.rename(app, "  ")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(len(client.calls), sent)
+        self.assertIsNotNone(app.picker)  # Esc left the field, not the picker
+        app._on_input(Key(ESCAPE))
+        self.assertIsNone(app.picker)
+        self.assertEqual(len(client.calls), sent)
+
+    def test_the_current_session_is_renamed_by_its_live_id_and_its_title_shows(self) -> None:
+        app, client = self.opened(stored="stored-2")  # the TUI is in stored-2: it heads the list
+        self.rename(app, "Mine")
+        self.assertEqual(client.calls[-1], ("session.title", {"session_id": SID, "title": "Mine"}))
+        app._on_response(Response(self.last(client), {"pending": False, "title": "Mine"}, None))
+        self.assertEqual(app.session_title, "Mine")
+
+    def test_ctrl_d_twice_sends_session_delete_and_the_answer_removes_the_row(self) -> None:
+        app, client = self.opened()
+        sent = len(client.calls)
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        self.assertEqual(len(client.calls), sent)  # the first press only asks
+        self.assertTrue(any("press ctrl+d again to delete" in line for line in drawn(app)))
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        self.assertEqual(client.calls[-1], ("session.delete", {"session_id": "stored-2"}))
+        app._on_response(Response(self.last(client), {"deleted": "stored-2"}, None))
+        assert app.picker is not None
+        self.assertEqual([row.id for row in app.picker.rows], ["stored-3"])
+        self.assertTrue(any("Sessions (1)" in line for line in drawn(app)))
+
+    def test_ctrl_d_then_down_sends_nothing_and_the_current_session_is_refused_here(self) -> None:
+        app, client = self.opened()
+        sent = len(client.calls)
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(DOWN))
+        self.assertEqual(len(client.calls), sent)
+        self.assertFalse(any("press ctrl+d again" in line for line in drawn(app)))
+        app, client = self.opened(stored="stored-2")
+        sent = len(client.calls)
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        self.assertEqual(len(client.calls), sent)
+        self.assertTrue(any("not deleted from here" in line for line in drawn(app)))
+
+    def test_a_refused_delete_keeps_the_row_and_says_why(self) -> None:
+        app, client = self.opened()
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_response(Response(self.last(client), None, {"code": 4023, "message": "cannot delete an active session"}))
+        assert app.picker is not None
+        self.assertEqual([row.id for row in app.picker.rows], ["stored-2", "stored-3"])
+        self.assertTrue(any("Cannot delete an active session" in line for line in drawn(app)))
+
+    def test_an_answer_naming_another_session_is_not_taken_as_done(self) -> None:
+        app, client = self.opened()
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_response(Response(self.last(client), {"deleted": "stored-9"}, None))
+        assert app.picker is not None
+        self.assertEqual(len(app.picker.rows), 2)
+        self.assertTrue(any("Hermes did not say it was done" in line for line in drawn(app)))
+
+    def test_an_answer_after_the_picker_closed_is_a_notice(self) -> None:
+        app, client = self.opened()
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(CHAR, "d", ctrl=True))
+        app._on_input(Key(ESCAPE))
+        self.assertIsNone(app.picker)
+        app._on_response(Response(self.last(client), {"deleted": "stored-2"}, None))
+        self.assertEqual(notices(app), ["Deleted session stored-2."])
+        app, client = self.opened()
+        self.rename(app, "x")
+        app._on_input(Key(ESCAPE))
+        app._on_response(Response(self.last(client), None, {"code": 4001, "message": "session not found"}))
+        self.assertEqual(notices(app), ["Hermes did not rename the session: session not found."])
