@@ -315,9 +315,12 @@ All notable changes will be documented here.
   space, at the start, in the middle or at the end, lists the bot's skills;
   typing narrows the list, and Enter, Tab or a click puts in `/name`. A
   `/name` typed by hand counts too. When no skill matches what you typed
-  (`/tmp`), no list opens and one Enter sends. On send the skills move to the
-  front, as before; a message with none, Hermes' own commands such as `/new`
-  or `/model x` among them, goes out exactly as typed. `./name` is how you
+  (`/tmp`), no list opens and one Enter sends; when a skill's name only
+  contains it (`/new` in `competitor-news-monitor`), the list shows with no
+  row chosen, so Enter still sends and an arrow or Tab picks. On send the
+  skills move to the front, as before; a message with none, Hermes' own
+  commands such as `/new` or `/model x` among them, goes out exactly as
+  typed. `./name` is how you
   write a skill's name without calling it: no list, no pill, sent as typed.
   Messages sent earlier with `./name` now show as plain text. SESSIONS chats
   keep their agent's own `/` menu.

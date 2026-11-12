@@ -5,7 +5,7 @@ import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
 import { AttachButton, Chips, chipsFor, useDropZone, type Chip } from "./Attach";
 import "./attach.css";
 import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
-import { findTokens, fragmentAt, matchSkills } from "./skillTokens";
+import { findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
 import { commandQuery, matchCommands, pickText, type AgentCommand } from "./commands";
 import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
@@ -81,7 +81,7 @@ export function Composer({
   const [caret, setCaret] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState<number | null>(null);
   const placeCaret = useRef<number | null>(null);
   const wantSkills = skillsOn && /(^|\s)\//.test(text);
   const loadSkills = store.skills;
@@ -98,8 +98,10 @@ export function Composer({
   const frag = skills && caret !== null ? fragmentAt(text, caret) : null;
   const fragKey = frag ? `${frag.start}:${frag.query}` : null;
   const items = useMemo(() => (frag && skills ? matchSkills(skills, frag.query) : []), [skills, fragKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const at = Math.min(active, Math.max(items.length - 1, 0));
-  useEffect(() => setActive(0), [fragKey]);
+  // a row is chosen from the start only when what is typed begins a skill's name. A name that merely contains it
+  // (`/new` in `competitor-news-monitor`) is listed with no row chosen, so Enter still sends Hermes' own command.
+  const at = active === null ? leadRow(items, frag?.query ?? "") : Math.min(active, items.length - 1);
+  useEffect(() => setActive(null), [fragKey]);
 
   // an agent's own commands: `/` or `$` at the start of the box opens them; typing narrows the list
   const cq = commands?.length ? commandQuery(text) : null;
@@ -348,12 +350,14 @@ export function Composer({
                   const n = items.length;
                   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
                     e.preventDefault();
-                    setActive((at + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+                    setActive(e.key === "ArrowDown" ? (at + 1) % n : at <= 0 ? n - 1 : at - 1);
                     return;
                   }
-                  if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+                  // with no row chosen Enter is not for the list (it sends); Tab still completes to the first row
+                  const row = at >= 0 ? at : e.key === "Tab" ? 0 : -1;
+                  if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && row >= 0 && items[row]) {
                     e.preventDefault();
-                    pick(items[at]);
+                    pick(items[row]);
                     return;
                   }
                   if (e.key === "Escape") {

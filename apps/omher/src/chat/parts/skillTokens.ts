@@ -117,3 +117,10 @@ export function matchSkills(skills: readonly Skill[], query: string): Skill[] {
   const head = skills.filter((s) => s.name.toLowerCase().startsWith(q));
   return [...head, ...skills.filter((s) => !s.name.toLowerCase().startsWith(q) && s.name.toLowerCase().includes(q))];
 }
+
+/** The row the picker opens on for `items = matchSkills(skills, query)`: the first when `query` begins its name,
+ * none (-1) when the matches only contain it. Hermes' own commands are not skills, and a short one sits inside many
+ * skill names (`/new` in `competitor-news-monitor`): Enter must send it, not put that skill in its place. */
+export function leadRow(items: readonly Skill[], query: string): number {
+  return items.length && items[0].name.toLowerCase().startsWith(query.toLowerCase()) ? 0 : -1;
+}

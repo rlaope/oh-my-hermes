@@ -166,6 +166,45 @@ test("Esc closes until the fragment changes; with no match there is no popup and
   await expect.poll(sends).toEqual(["clean /tmp", "/zz"]);
 });
 
+test("a name that only contains what is typed is listed with no row chosen: Enter sends, arrows or Tab pick", async ({ page }) => {
+  // Hermes' own commands are not skills, and a short one sits inside skill names (`/new` in `competitor-news-monitor`)
+  await openFriren(page);
+  const box = page.getByTestId("composer");
+  await box.pressSequentially("/code");
+  await expect(page.getByTestId("skill-picker")).toBeVisible();
+  expect(await options(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-name")))).toEqual(["explain-code"]);
+  await expect(page.locator('[data-testid="skill-option"][aria-selected="true"]')).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect.poll(sends).toEqual(["/code"]); // one Enter, as typed
+  await expect(box).toHaveValue("");
+
+  // an arrow chooses a row, and then Enter puts it in
+  await box.pressSequentially("run /code");
+  await expect(page.locator('[data-testid="skill-option"][aria-selected="true"]')).toHaveCount(0);
+  await page.keyboard.press("ArrowDown");
+  await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(box).toHaveValue("run /explain-code ");
+  expect(await sends()).toEqual(["/code"]);
+
+  // Tab completes to the first row without an arrow; ArrowUp from no row goes to the last
+  await box.fill("");
+  await box.pressSequentially("/view");
+  expect(await options(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-name")))).toEqual(["deep-interview", "review"]);
+  await page.keyboard.press("ArrowUp");
+  await expect(options(page).last()).toHaveAttribute("aria-selected", "true");
+  await box.fill("");
+  await box.pressSequentially("/view");
+  await page.keyboard.press("Tab");
+  await expect(box).toHaveValue("/deep-interview ");
+
+  // what begins a name still opens on its row
+  await box.fill("");
+  await box.pressSequentially("/rev");
+  await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
+  await expect(options(page).first()).toHaveAttribute("data-name", "review");
+});
+
 test("the /skill hint shows only where there is no skill list to pick from", async ({ page }) => {
   await openFriren(page);
   const box = page.getByTestId("composer");

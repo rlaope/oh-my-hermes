@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { codeRanges, findTokens, fragmentAt, matchSkills, sentTokens, toWire } from "./skillTokens";
+import { codeRanges, findTokens, fragmentAt, leadRow, matchSkills, sentTokens, toWire } from "./skillTokens";
 
 const NAMES = ["plan", "review", "plan-x"];
 const names = (text: string) => findTokens(text, NAMES).map((t) => t.name);
@@ -151,5 +151,22 @@ describe("matchSkills", () => {
     expect(matchSkills(skills, "").map((s) => s.name)).toEqual(["deploy", "plan", "review", "unplanned"]);
     expect(matchSkills(skills, "PL").map((s) => s.name)).toEqual(["plan", "deploy", "unplanned"]);
     expect(matchSkills(skills, "zz")).toEqual([]);
+  });
+});
+
+describe("leadRow", () => {
+  const skills = ["competitor-news-monitor", "plan", "review", "github-code-review"].map((name) => ({ name, description: "" }));
+  const lead = (q: string) => leadRow(matchSkills(skills, q), q);
+  it("opens on the first row only when what is typed begins a skill's name", () => {
+    expect(lead("pl")).toBe(0);
+    expect(lead("PLAN")).toBe(0);
+    expect(lead("")).toBe(0); // a bare `/` lists every skill
+    expect(lead("rev")).toBe(0); // `review` begins with it, `github-code-review` only contains it
+  });
+  it("chooses no row when the matches only contain it, so Enter sends a command such as /new", () => {
+    expect(matchSkills(skills, "new").map((s) => s.name)).toEqual(["competitor-news-monitor"]);
+    expect(lead("new")).toBe(-1);
+    expect(lead("code")).toBe(-1);
+    expect(lead("zz")).toBe(-1); // nothing matches
   });
 });
