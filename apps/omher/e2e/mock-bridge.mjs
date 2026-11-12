@@ -509,6 +509,8 @@ let asked;
 const subTimers = new Set();
 // Bots whose turns the test drives by hand (mock.manual).
 let manual;
+// Bots whose skills.list is empty (mock.noSkills).
+let noSkills;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -656,6 +658,7 @@ function reset() {
   pending = new Map();
   asked = new Map();
   manual = new Set();
+  noSkills = new Set();
   idSeq = 0;
   calls = [];
   submits = [];
@@ -1014,6 +1017,7 @@ const OPS = {
   },
   "skills.list": (p) => {
     needBot(p);
+    if (noSkills.has(p.bot)) return { skills: [] };
     const late = skillsLater.after-- <= 0 ? skillsLater.add : [];
     return { skills: [...SKILL_SEED, ...late].sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...x })) };
   },
@@ -1335,6 +1339,10 @@ const OPS = {
     needStr(p, "bot");
     if (p.on === false) manual.delete(p.bot);
     else manual.add(p.bot);
+    return {};
+  },
+  "mock.noSkills": (p) => {
+    noSkills.add(needStr(p, "bot"));
     return {};
   },
   "mock.cliTitle": (p) => {

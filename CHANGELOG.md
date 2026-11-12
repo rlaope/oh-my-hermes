@@ -396,6 +396,21 @@ All notable changes will be documented here.
     after the bot's own turn ends, and the card's run name opens that run in
     Plans. The word is "subagent", not "helper", in all four languages; omher
     still never assigns, steers or stops one. (#2796)
+
+- **In an omher bot chat a skill is `$name` anywhere in the message, and
+  `/` stays a command.** A `$` at the start of the message or after a space
+  lists the bot's skills; typing narrows the list, and Enter, Tab or a click
+  puts in `$name`. A `$name` typed by hand counts too. On send the skills
+  move to the front as `/name`, the form Hermes reads. Anything with a `/`
+  goes out exactly as typed: Hermes' own commands (`/new`, `/model x`), a
+  skill typed the Hermes way at the start (`/plan fix it`), a path, and
+  `./name`. A single `/word` in the box shows one line saying skills take
+  `$`. `$20` and `$HOME` are not skills: with no match no list opens, and
+  when a name only contains what you typed or matches only in other letter
+  case, the list shows with no row chosen, so Enter still sends and an arrow
+  or Tab picks. Messages sent earlier with `./name` now show as plain text.
+  SESSIONS chats keep their agent's own `/` and `$` menu.
+
 - **omher 0.2.4.** omher runs on Linux, starts OmO and DSH sessions, and
   shows every Claude login you have.
   - **Linux.** An x86_64 AppImage (and a `.deb`) ships with each release; the
@@ -711,6 +726,15 @@ All notable changes will be documented here.
   `enabled` field keeps the fingerprint it had, so a conversation already
   routed under an identity keeps its fallback chain across the update.
   Contributed by @yqm-307 (#2799).
+
+- **The omher first-launch steps for macOS match macOS 15 and later.** The
+  omher README and the release notes told people to right-click the app and
+  choose Open. Since macOS 15 that no longer gets past the warning for an
+  app that is not notarized, so a `.dmg` downloaded in a browser looked as if
+  it could not be run at all. Both now give the step that works there
+  (System Settings › Privacy & Security › Open Anyway), keep right-click ›
+  Open for macOS 14 and earlier, and say that the one-line installer needs
+  neither. The builds themselves are unchanged.
 
 ## 4.0.7 - 2026-11-09
 

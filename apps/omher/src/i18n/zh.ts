@@ -81,7 +81,7 @@ export const zh: Record<Key, string> = {
   // sidebar (the Needs-you list above BOTS)
   "needs.more": "+{n} 项",
 
-  // skills (the composer's ./ picker)
+  // skills (the composer's $ picker)
   "skills.label": "技能",
   "skills.none": "没有匹配的技能",
 
@@ -634,7 +634,8 @@ export const zh: Record<Key, string> = {
   "head.panel": "面板（{key}）",
   "head.panelLive1": "计划 · 1 个子代理正在工作（{key}）",
   "head.panelLive": "计划 · {n} 个子代理正在工作（{key}）",
-  "cmp.skillHint": "输入技能名，例如 {example} — {bot} 会为这条消息加载它",
+  "cmp.skillHint": "{bot} 没有技能列表：请在开头输入完整名称，例如 {example}",
+  "cmp.skillSigil": "技能用 $ 输入，可写在消息的任意位置，例如 {example}。/ 命令会原样发给 {bot}。",
   "cmp.removeReply": "移除回复目标",
   "cmp.remove": "移除",
   "cmp.offline": "{bot} 已离线",
