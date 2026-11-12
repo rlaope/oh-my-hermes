@@ -1,0 +1,60 @@
+{
+  "files": {
+    "LICENSE.upstream": {
+      "license": "MIT",
+      "local_sha256": "accbf0accb87b7b905dd7ee0c7013075f0453637acf354ddae6fc0e4d8282e8e",
+      "origin": "notice"
+    },
+    "README.md": {
+      "license": "MIT",
+      "local_sha256": "72bf64a190cefe089455d2fd44e0586c56b642b7f8b6765e69ff51fbb2a2e22c",
+      "origin": "original"
+    },
+    "examples/synthetic-captures.json": {
+      "license": "MIT",
+      "local_sha256": "34a730f3487d32d5acba6148ac13604751835466bd36660f713407f7d3c18aa3",
+      "origin": "original"
+    },
+    "scripts/job_state.py": {
+      "license": "MIT",
+      "local_sha256": "dc4344420ec9f4b4c1c3582b5ec0dcf58dc241ce7d3648f1926cec7d94dc0e4b",
+      "origin": "original"
+    }
+  },
+  "schema": "omh_ai_job_search_provenance/v1",
+  "upstream": [
+    {
+      "paths": [
+        "LICENSE",
+        "tools/job_key.py",
+        "tools/scrape_state.py",
+        "tools/rank_state.py",
+        "tools/posting_guard.py",
+        ".claude/skills/job-scraper/SKILL.md",
+        ".claude/skills/job-application-assistant/04-job-evaluation.md",
+        ".claude/commands/setup.md",
+        ".claude/commands/outcome.md"
+      ],
+      "relationship": "Conceptual adaptation of shared-contract inspected identity, bounded-state and explicit-outcome methods; original implementation, no executable code port. MIT notice retained. Crawler, numeric ranking, HTML sanitizer, Claude/Bun/LaTeX assets omitted under accepted narrower scope. Upstream execution/parity unobserved.",
+      "repository": "https://github.com/ai-job-search-dev/ai-job-search",
+      "revision": "e16acee3abdaae57f8026789338a3c6eebf4608b"
+    },
+    {
+      "paths": [
+        "skills/job-search/SKILL.md",
+        "skills/evaluate-job-fit/SKILL.md"
+      ],
+      "relationship": "Shared-contract inspected source-aware discovery and qualitative-fit concepts inform the host workflow; no plugin/provider code copied or executed, no dependency.",
+      "repository": "https://github.com/agent-data/job-search",
+      "revision": "dba0c0992e9d7fc6533dd1be3003df7a311168f0"
+    },
+    {
+      "paths": [
+        "plugin-catalog/job-search.yaml"
+      ],
+      "relationship": "Inspected community catalog pointer only; no copied runtime code, installation, mandatory provider or plugin integration claim.",
+      "repository": "https://github.com/NousResearch/hermes-agent",
+      "revision": "bf0203a794a07aac3ff764972ab9087baa4e4f4e"
+    }
+  ]
+}

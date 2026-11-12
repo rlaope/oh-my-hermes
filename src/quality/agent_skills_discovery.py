@@ -12,8 +12,9 @@ details against the disk.
 
 OMH observes ``installed`` itself, with no subprocess: it reads the host's
 scan path under the project root (repo scope) or under the home it is given
-(user scope) and compares every file with the pack inventory
-(``agent-skills/.omh-agent-skills-manifest.json``). OMH writes nothing. OMH
+(user scope) and compares every file with its host's pack inventory
+(``agent-skills/.omh-agent-skills-manifest.json``, or Claude Code's own
+``.claude/agent-skills/.omh-agent-skills-manifest.json``). OMH writes nothing. OMH
 has verified no credential-free, non-interactive command in any supported host
 that lists the skills the host discovered, and it makes no model call, so the
 four later stages are ``not_observed`` and the receipt carries the host's
@@ -43,7 +44,9 @@ from typing import Final
 
 from ..install.agent_skills_projection import _checked_path, agent_skill_files, agent_skills_manifest
 from ..plugin_bundle.omh._governance_safety import contains_credential_like_material
-from ..skills.host_adapters import HOST_ADAPTERS, host_adapter_manifest, source_digest as pack_source_digest
+from ..skills.host_adapters import (
+    HOST_ADAPTERS, host_adapter_manifest, host_pack_files, source_digest as pack_source_digest,
+)
 from ..system.hashutil import sha256_file
 
 
@@ -735,11 +738,17 @@ def build_agent_skills_evidence(
 
         version_probe = agent_cli_version
     files = agent_skill_files()
-    # One inventory for every host: all six copy the same pack, so the digest a
-    # receipt binds is the pack's, not a per-host adapter's.
+    # One inventory per pack: the five `.agents` hosts copy the portable pack,
+    # Claude Code its own copy (`host_pack_files`), so the digest a receipt
+    # binds is its host's pack's. `catalog_revision` stays the portable
+    # pack's, the one catalog both copies are generated from.
     receipt = agent_skills_manifest(files)
-    inventory = {**receipt, "source_digest": pack_source_digest(receipt["files"])}
     catalog_revision = receipt["catalog_revision"]
+    host_files = {host: agent_skills_manifest(host_pack_files(host, files))["files"] for host in HOSTS}
+    inventories = {
+        host: {**receipt, "files": host_files[host], "source_digest": pack_source_digest(host_files[host])}
+        for host in HOSTS
+    }
     manifests = {host: host_adapter_manifest(host, files) for host in HOSTS}
     all_descriptors = probe_descriptors()
     probed = {descriptor.host for descriptor in all_descriptors if descriptor.version_command}
@@ -747,7 +756,7 @@ def build_agent_skills_evidence(
     descriptors = tuple(descriptor for descriptor in all_descriptors if descriptor.scope in wanted)
     current = CurrentPack(
         catalog_revision=catalog_revision,
-        source_digests={host: inventory["source_digest"] for host in HOSTS},
+        source_digests={host: inventories[host]["source_digest"] for host in HOSTS},
         target_paths={(descriptor.host, descriptor.scope): descriptor.target_path for descriptor in descriptors},
         os=_os_name(),
         host_versions={host: version for host, (_status, version) in versions.items()},
@@ -759,15 +768,15 @@ def build_agent_skills_evidence(
         receipts_list = []
         for descriptor in descriptors:
             root = project_root if descriptor.scope == "repo" else user_home
-            key = (descriptor.scope, descriptor.target_path)
+            key = (descriptor.scope, descriptor.target_path, inventories[descriptor.host]["source_digest"])
             if key not in reads:
-                reads[key] = read_installed(root, descriptor.target_path, receipt["files"], clock)
+                reads[key] = read_installed(root, descriptor.target_path, host_files[descriptor.host], clock)
             receipts_list.append(
                 observe_receipt(
                     descriptor,
                     root=root,
                     adapter_manifest=manifests[descriptor.host],
-                    inventory=inventory,
+                    inventory=inventories[descriptor.host],
                     host_version=versions[descriptor.host],
                     read=reads[key],
                 )
@@ -785,7 +794,7 @@ def build_agent_skills_evidence(
             "os": current.os,
             "hosts": {
                 host: {
-                    "source_digest": inventory["source_digest"],
+                    "source_digest": inventories[host]["source_digest"],
                     "host_version": versions[host][1],
                     "host_version_status": versions[host][0],
                 }
