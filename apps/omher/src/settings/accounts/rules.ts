@@ -1,5 +1,7 @@
 // Accounts rules, pure so vitest pins them: row names, plan words, the usage line, the in-use account, and the
-// fill-first auto-switch.
+// fill-first auto-switch with its reset-first choice, and the notice before unused quota lapses.
+// The reset-first choice follows the idea of spending the quota that resets soonest first from yetone/magpie
+// (commit 5e933e153a87c4017a19502e1d2e87aa714572b9, MIT): concept only, reimplemented here against omher's own code.
 import type { Account, AccountCli, AccountGroup, UsageProvider } from "../../lib/protocol";
 import { clock, limitName } from "../../sidebar/usageFormat";
 import type { LoginStatus } from "./native";
@@ -135,28 +137,116 @@ function limited(a: Account, usage: Record<string, UsageProvider | null | undefi
   return a.state === "limited" || usage[a.id]?.state === "limited";
 }
 
+/** How long a usage window is, from its label (\"5 hours\", \"Weekly\", \"2d\", \"3h\"); Infinity for a label we cannot size. */
+function windowSeconds(label: string): number {
+  if (label === "Weekly") return 7 * 86400;
+  const m = /^(\d+)\s*(hours?|h|days?|d)$/i.exec(label.trim());
+  if (!m) return Infinity;
+  return Number(m[1]) * (m[2].toLowerCase().startsWith("h") ? 3600 : 86400);
+}
+
+/** The live resets of an account's usage windows by label: not stale, with a reset time still ahead. */
+function liveResets(u: UsageProvider | null | undefined, now: number): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const w of u?.windows ?? []) {
+    if (w.stale || typeof w.resets_at !== "number" || w.resets_at <= now || out.has(w.label)) continue;
+    out.set(w.label, w.resets_at);
+  }
+  return out;
+}
+
+export interface NextOptions {
+  /** Reset-first: among the accounts fill-first would accept, the one whose limit resets soonest goes first. */
+  resetFirst?: boolean;
+  /** Seconds since epoch; defaults to the clock. Only reset-first reads it. */
+  now?: number;
+}
+
 /**
  * Fill-first: when the in-use account is limited, the first signed-in account that is not limited takes over,
  * in list order. Returns null when the in-use one is fine or no other account is ready.
+ *
+ * With `resetFirst`, the same candidates are ordered by when their limit resets, compared like with like: the
+ * shortest window any candidate reports (the 5-hour one for Codex), and only a window that is not stale and
+ * resets in the future. A candidate with no such reset keeps its list position after those that have one, so
+ * when nothing is comparable the answer is the fill-first one. `soonest` (its reset time) is set only when this
+ * picked a different account than list order would.
  */
 export function nextAccount(
   accounts: Account[],
   usage: Record<string, UsageProvider | null | undefined> = {},
   activeId?: string | null,
-): { from: number; to: number } | null {
+  opts: NextOptions = {},
+): { from: number; to: number; soonest?: number } | null {
   const from = accounts.findIndex((a) => (activeId ? a.id === activeId : a.state === "active"));
   if (from < 0) return null;
   if (!limited(accounts[from], usage)) return null;
-  const to = accounts.findIndex((a, i) => i !== from && a.state === "ready" && !isCpa(a) && !limited(a, usage));
-  return to < 0 ? null : { from, to };
+  const ready: number[] = [];
+  accounts.forEach((a, i) => {
+    if (i !== from && a.state === "ready" && !isCpa(a) && !limited(a, usage)) ready.push(i);
+  });
+  if (ready.length === 0) return null;
+  if (!opts.resetFirst) return { from, to: ready[0] };
+  const now = opts.now ?? Date.now() / 1000;
+  const resets = ready.map((i) => liveResets(usage[accounts[i].id] ?? accounts[i].usage, now));
+  let label: string | null = null;
+  for (const m of resets) {
+    for (const l of m.keys()) if (label === null || windowSeconds(l) < windowSeconds(label)) label = l;
+  }
+  let best = -1;
+  let bestAt = Infinity;
+  if (label !== null) {
+    resets.forEach((m, k) => {
+      const at = m.get(label as string);
+      if (at !== undefined && at < bestAt) {
+        best = k;
+        bestAt = at;
+      }
+    });
+  }
+  if (best <= 0) return { from, to: ready[0] };
+  return { from, to: ready[best], soonest: bestAt };
+}
+
+/** One account's quota about to lapse unused: `key` is the account and the reset time, so it is told once. */
+export interface LapseNotice {
+  key: string;
+  index: number;
+  percent: number;
+  resets_at: number;
+}
+
+export const LAPSE_WITHIN_S = 60 * 60;
+export const LAPSE_UNDER_PERCENT = 50;
+
+/**
+ * Windows that reset within the hour with under half used, for signed-in accounts of `cli` that are not in
+ * `seen`. Only a window that reports both a percentage and a reset time counts (Codex today; Claude Code gives
+ * no percentage), and not a stale one. One notice per account (its soonest such window).
+ */
+export function lapseNotices(cli: AccountCli, accounts: Account[], now: number, seen: ReadonlySet<string>): LapseNotice[] {
+  const out: LapseNotice[] = [];
+  accounts.forEach((a, index) => {
+    if (isCpa(a) || a.state === "login") return;
+    let best: LapseNotice | null = null;
+    for (const w of a.usage?.windows ?? []) {
+      if (w.stale || typeof w.used_percent !== "number" || typeof w.resets_at !== "number") continue;
+      if (w.resets_at <= now || w.resets_at - now > LAPSE_WITHIN_S || w.used_percent >= LAPSE_UNDER_PERCENT) continue;
+      if (!best || w.resets_at < best.resets_at) best = { key: `${cli}:${a.id}:${w.resets_at}`, index, percent: w.used_percent, resets_at: w.resets_at };
+    }
+    if (best && !seen.has(best.key)) out.push(best);
+  });
+  return out;
 }
 
 /** "Switched Codex to Work (limit on This computer, resets 14:00)": the one quiet line in the bot chat. */
-export function switchNote(g: AccountGroup, from: number, to: number, now: number): string {
+export function switchNote(g: AccountGroup, from: number, to: number, now: number, soonest?: number): string {
   const a = g.accounts[from];
   const b = g.accounts[to];
   const reset = typeof a.resets_at === "number" && a.resets_at > now ? t("acc.resetsAt", { when: clock(a.resets_at, now) }) : "";
-  return t("acc.switched", { cli: CLI_NAME[g.cli], to: accountName(b, to), from: accountName(a, from), reset });
+  const args = { cli: CLI_NAME[g.cli], to: accountName(b, to), from: accountName(a, from), reset };
+  // reset-first picked it over an earlier account in the list: say why
+  return typeof soonest === "number" ? t("acc.switchedByReset", { ...args, when: clock(soonest, now) }) : t("acc.switched", args);
 }
 
 /** Per-CLI auto-switch, on unless turned off (saved on this computer). */
@@ -175,6 +265,27 @@ export function setAutoSwitch(cli: AccountCli, on: boolean): void {
     const raw = localStorage.getItem("omher.autoswitch");
     const cur = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
     localStorage.setItem("omher.autoswitch", JSON.stringify({ ...cur, [cli]: on }));
+  } catch {
+    /* no storage */
+  }
+}
+
+/** Per-CLI reset-first choice, off unless turned on (saved on this computer, beside `omher.autoswitch`). */
+export function resetFirstOn(cli: AccountCli, store: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): boolean {
+  try {
+    const raw = store?.getItem("omher.resetfirst");
+    const on = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    return on[cli] === true;
+  } catch {
+    return false;
+  }
+}
+
+export function setResetFirst(cli: AccountCli, on: boolean): void {
+  try {
+    const raw = localStorage.getItem("omher.resetfirst");
+    const cur = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    localStorage.setItem("omher.resetfirst", JSON.stringify({ ...cur, [cli]: on }));
   } catch {
     /* no storage */
   }

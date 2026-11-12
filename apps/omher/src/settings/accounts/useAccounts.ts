@@ -5,9 +5,12 @@
 // Running sessions are never touched.
 import { useEffect, useSyncExternalStore } from "react";
 import type { AccountCli, AccountGroup } from "../../lib/protocol";
-import { getStore, useStore } from "../../state/store";
+import { getStore, notifyEnabled, useStore } from "../../state/store";
+import { showNote } from "../../lib/notify";
+import { t } from "../../i18n";
+import { clock, limitName } from "../../sidebar/usageFormat";
 import { accountHost, type LoginStatus } from "./native";
-import { autoSwitchOn, isCpa, nextAccount, switchNote } from "./rules";
+import { accountName, autoSwitchOn, isCpa, lapseNotices, nextAccount, resetFirstOn, switchNote, CLI_NAME } from "./rules";
 
 const REFRESH_MS = 60_000;
 const ASKS_STATUS: AccountCli[] = ["claude", "codex"];
@@ -19,9 +22,11 @@ type Snap = {
   onComputer: Partial<Record<AccountCli, boolean>> | null;
   /** `${cli}:${account}` -> the CLI's own status. */
   status: Record<string, LoginStatus>;
+  /** cli -> the CLI's version token, for the CLIs that have a fixed `--version` and printed one. */
+  versions: Partial<Record<AccountCli, string>>;
   note: { cli: string; text: string; at: number } | null;
 };
-let snap: Snap = { groups: null, error: null, onComputer: null, status: {}, note: null };
+let snap: Snap = { groups: null, error: null, onComputer: null, status: {}, versions: {}, note: null };
 const fns = new Set<() => void>();
 const set = (next: Partial<Snap>) => {
   snap = { ...snap, ...next };
@@ -53,13 +58,36 @@ async function readStatuses(groups: AccountGroup[]): Promise<Record<string, Logi
   return out;
 }
 
+async function readVersions(groups: AccountGroup[]): Promise<Partial<Record<AccountCli, string>>> {
+  const host = accountHost();
+  const out: Partial<Record<AccountCli, string>> = { ...snap.versions };
+  await Promise.all(
+    groups
+      .filter((g) => ASKS_STATUS.includes(g.cli) && !out[g.cli])
+      .map((g) =>
+        Promise.resolve()
+          .then(() => host.version(g.cli))
+          .then(
+          (v) => {
+            if (v) out[g.cli] = v;
+          },
+          () => {},
+        ),
+      ),
+  );
+  return out;
+}
+
 export function reloadAccounts(): Promise<void> {
   inflight ??= (async () => {
     try {
       const [r, onComputer] = await Promise.all([getStore().actions.accounts(), accountHost().clis().catch(() => null)]);
       set({ groups: r.groups, error: null, onComputer });
-      set({ status: await readStatuses(r.groups.filter((g) => onComputer?.[g.cli] ?? g.installed)) });
+      const here = r.groups.filter((g) => onComputer?.[g.cli] ?? g.installed);
+      set({ status: await readStatuses(here) });
+      set({ versions: await readVersions(here) });
       await autoSwitch(r.groups);
+      await lapseNotice(r.groups);
     } catch (e) {
       set({ error: errText(e) });
     } finally {
@@ -73,9 +101,9 @@ async function autoSwitch(groups: AccountGroup[]): Promise<void> {
   const now = Date.now() / 1000;
   for (const g of groups) {
     if (!autoSwitchOn(g.cli)) continue;
-    const move = nextAccount(g.accounts, {}, g.active);
+    const move = nextAccount(g.accounts, {}, g.active, { resetFirst: resetFirstOn(g.cli), now });
     if (!move) continue;
-    const text = switchNote(g, move.from, move.to, now);
+    const text = switchNote(g, move.from, move.to, now, move.soonest);
     try {
       await getStore().actions.setActiveAccount(g.cli, g.accounts[move.to].id);
     } catch {
@@ -83,6 +111,45 @@ async function autoSwitch(groups: AccountGroup[]): Promise<void> {
     }
     getStore().actions.systemNote(text);
     set({ note: { cli: g.cli, text, at: Date.now() } });
+  }
+}
+
+const SEEN_KEY = "omher.lapsenoted";
+const SEEN_MAX = 100;
+
+function loadSeen(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** One system notification per account and reset time when a window that is about to reset has barely been used.
+ *  The pairs told are kept on this computer, so a reload or a restart does not tell the same one twice. */
+async function lapseNotice(groups: AccountGroup[]): Promise<void> {
+  const now = Date.now() / 1000;
+  const seen = loadSeen();
+  const told = new Set(seen);
+  for (const g of groups) {
+    for (const n of lapseNotices(g.cli, g.accounts, now, told)) {
+      told.add(n.key);
+      seen.push(n.key);
+      if (!notifyEnabled()) continue;
+      const name = limitName(g.accounts[n.index].usage?.windows.find((w) => w.resets_at === n.resets_at)?.label ?? "");
+      void showNote({
+        title: t("acc.lapseTitle", { cli: CLI_NAME[g.cli], name: accountName(g.accounts[n.index], n.index) }),
+        body: t("acc.lapseBody", { pct: Math.round(n.percent), name, when: clock(n.resets_at, now) }),
+        bot: "",
+        tag: n.key,
+      });
+    }
+  }
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(seen.slice(-SEEN_MAX)));
+  } catch {
+    /* no storage */
   }
 }
 

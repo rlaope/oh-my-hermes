@@ -5,7 +5,7 @@
 //!   GEMINI_CLI_HOME). `default` is the CLI's own home on this computer: no env.
 //! * The only programs run here are the CLIs' own status and login commands, as FIXED argv from
 //!   [`fixed_args`] (`claude auth status --json`, `claude auth login`, `codex --help`, `codex login status`,
-//!   `codex login`), resolved in the PATH and install folders. Nothing the page sends reaches a command line:
+//!   `codex login`, and `claude --version` / `codex --version` for the version beside the CLI's name), resolved in the PATH and install folders. Nothing the page sends reaches a command line:
 //!   the page names a CLI and an account id, both checked against fixed lists.
 //! * The browser sign-in happens inside the CLI. omher never sees, asks for or accepts a token or key; from a
 //!   status it keeps only [`LoginStatus`] (signed in, email, plan, method), never the CLI's text.
@@ -131,6 +131,8 @@ pub enum Step {
     Help,
     Status,
     Login,
+    /// `--version`: the CLI's version, shown beside its name (only [`parse_version`]'s token is kept).
+    Version,
 }
 
 /// The whole allow-list of what Accounts runs: program = the CLI id, arguments = these. `'static`, so no
@@ -139,9 +141,11 @@ pub fn fixed_args(cli: &str, step: Step) -> Option<&'static [&'static str]> {
     match (cli, step) {
         ("claude", Step::Status) => Some(&["auth", "status", "--json"]),
         ("claude", Step::Login) => Some(&["auth", "login"]),
+        ("claude", Step::Version) => Some(&["--version"]),
         ("codex", Step::Help) => Some(&["--help"]),
         ("codex", Step::Status) => Some(&["login", "status"]),
         ("codex", Step::Login) => Some(&["login"]),
+        ("codex", Step::Version) => Some(&["--version"]),
         _ => None,
     }
 }
@@ -230,6 +234,56 @@ pub fn codex_status_from_file(path: &Path) -> LoginStatus {
         }
         Err(_) => LoginStatus::default(),
     }
+}
+
+/// The version token of `--version` output: the first run of `digits.digits.digits` with its suffix
+/// (`2.1.322 (Claude Code)` -> `2.1.322`, `codex-cli 0.167.0-alpha.4.1` -> `0.167.0-alpha.4.1`). Nothing else
+/// of the text is kept; output with no such run gives `None`.
+pub fn parse_version(stdout: &str) -> Option<String> {
+    let b = stdout.as_bytes();
+    let digits = |from: usize| b[from..].iter().take_while(|c| c.is_ascii_digit()).count();
+    for start in 0..b.len() {
+        if !b[start].is_ascii_digit() || (start > 0 && b[start - 1].is_ascii_digit()) {
+            continue;
+        }
+        let mut end = start;
+        let mut parts = 0;
+        loop {
+            let n = digits(end);
+            if n == 0 {
+                break;
+            }
+            end += n;
+            parts += 1;
+            if parts == 3 || b.get(end) != Some(&b'.') || digits(end + 1) == 0 {
+                break;
+            }
+            end += 1;
+        }
+        if parts < 3 {
+            continue;
+        }
+        // the suffix is one `-pre.release.1` run (letters, digits, dots), nothing after it
+        let tail = if b.get(end) == Some(&b'-') {
+            1 + b[end + 1..].iter().take_while(|c| c.is_ascii_alphanumeric() || **c == b'.').count()
+        } else {
+            0
+        };
+        let token = stdout[start..end + tail].trim_end_matches(['.', '-']);
+        return Some(token.chars().take(40).collect());
+    }
+    None
+}
+
+/// The version of `cli` through its fixed `--version`; `None` for CLIs without one here or output with no
+/// version in it. Runs in the CLI's own home (`default`), the same for every account of a CLI.
+pub fn version(home: &Path, cli: &str) -> Result<Option<String>, String> {
+    if fixed_args(cli, Step::Version).is_none() {
+        return Ok(None);
+    }
+    let (program, args, env) = command_for(home, cli, "default", Step::Version)?;
+    let (_, out, _) = run_to_end(&program, args, &env)?;
+    Ok(parse_version(&out))
 }
 
 /// Whether `codex --help` lists the `login` command (older builds lack `login status`).
@@ -650,14 +704,28 @@ mod tests {
         assert_eq!(fixed_args("codex", Step::Help), Some(&["--help"][..]));
         assert_eq!(fixed_args("codex", Step::Status), Some(&["login", "status"][..]));
         assert_eq!(fixed_args("codex", Step::Login), Some(&["login"][..]));
+        assert_eq!(fixed_args("claude", Step::Version), Some(&["--version"][..]));
+        assert_eq!(fixed_args("codex", Step::Version), Some(&["--version"][..]));
         let mut n = 0;
         for cli in ACCOUNT_CLIS.iter().chain(["bash", "sh", "claude --x"].iter()) {
-            for step in [Step::Help, Step::Status, Step::Login] {
+            for step in [Step::Help, Step::Status, Step::Login, Step::Version] {
                 n += usize::from(fixed_args(cli, step).is_some());
             }
         }
-        assert_eq!(n, 5, "only the five commands above");
+        assert_eq!(n, 7, "only the seven commands above");
         assert!(fixed_args("pi", Step::Login).is_none() && fixed_args("omp", Step::Login).is_none());
+    }
+
+    #[test]
+    fn version_keeps_only_the_version_token() {
+        assert_eq!(parse_version("2.1.322 (Claude Code)\n").as_deref(), Some("2.1.322"));
+        assert_eq!(parse_version("codex-cli 0.167.0-alpha.4.1\n").as_deref(), Some("0.167.0-alpha.4.1"));
+        assert_eq!(parse_version("v1.2.3.").as_deref(), Some("1.2.3"));
+        assert_eq!(parse_version("tool 12.34 build 7"), None);
+        assert_eq!(parse_version(""), None);
+        assert_eq!(parse_version("x 1.2.3-beta.1-rest of the text").as_deref(), Some("1.2.3-beta.1"));
+        assert_eq!(version(Path::new("/h"), "pi"), Ok(None));
+        assert!(fixed_args("pi", Step::Version).is_none() && fixed_args("bash", Step::Version).is_none());
     }
 
     #[test]

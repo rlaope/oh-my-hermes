@@ -66,6 +66,16 @@
   color: var(--body);
   margin-right: 2px;
 }
+.acc-auto.off {
+  opacity: 0.55;
+}
+.acc-ver {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.acc-switch:disabled {
+  cursor: default;
+}
 .acc-signin {
   grid-template-columns: 26px minmax(0, 1fr) auto;
 }

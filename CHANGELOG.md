@@ -477,6 +477,14 @@ All notable changes will be documented here.
     folder. "Not installed" says how to install that CLI.
   - **Needs you.** The collapsed strip names who is asking and their first
     words.
+- **omher can send the next session to the account whose limit resets soonest, and says when quota is about to lapse unused.**
+  Settings › Accounts has a new switch under Auto-switch, off by default and usable only while Auto-switch is on. With it
+  on, when the account in use hits its limit the account whose shortest window resets soonest takes over, and the chat
+  line says so; an account with no known reset time keeps its list position after those that have one, and an account
+  that is not limited is never moved off. Codex, which reports a percentage, also gets one system notification per
+  account and reset time when a window under 50% used resets within the hour (it follows "Notify me"); Claude Code
+  reports no percentage, so it never triggers it. Each CLI's version now shows beside its name, read from its own
+  `--version` (Claude Code and Codex), keeping only the version number.
 - **omher 0.2.0.** Your bots, coding sessions and plans in one window.
   - **Plans.** A dag-ulw run and a coding agent's sub-runs open as a plan. Its
     graph shows each part with the model, effort and category it ran on, the

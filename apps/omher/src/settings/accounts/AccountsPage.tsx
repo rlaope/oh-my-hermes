@@ -19,7 +19,9 @@ import {
   pill,
   rowSub,
   rowTitle,
+  resetFirstOn,
   setAutoSwitch,
+  setResetFirst as saveResetFirst,
   splitGroups,
   usageLines,
   type Row,
@@ -32,7 +34,7 @@ const errText = (e: unknown) => (typeof e === "object" && e && "message" in e ? 
 const NOTE_MS = 8000;
 
 export function AccountsPage() {
-  const { groups, error, note, onComputer, status } = useAccounts();
+  const { groups, error, note, onComputer, status, versions } = useAccounts();
   const [, tick] = useState(0);
   useEffect(() => {
     void reloadAccounts();
@@ -61,7 +63,7 @@ export function AccountsPage() {
       {groups === null && !error && <p className="st-note">{t("acc.loading")}</p>}
       {split?.shown.length === 0 && <p className="st-note">{t("acc.noCli")}</p>}
       {split?.shown.map((g) => (
-        <CliGroup key={g.cli} g={g} status={status} note={fresh && note.cli === g.cli ? note.text : null} />
+        <CliGroup key={g.cli} g={g} status={status} version={versions[g.cli]} note={fresh && note.cli === g.cli ? note.text : null} />
       ))}
       {split && split.missing.length > 0 && (
         <p className="acc-missing" data-testid="accounts-missing">
@@ -124,10 +126,11 @@ function RowMenu({ items, label }: { items: { label: string; on: () => void; dis
 
 type SignIn = { id: string; login: number | null; lines: string[]; ending: boolean };
 
-function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string, LoginStatus>; note: string | null }) {
+function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Record<string, LoginStatus>; version?: string; note: string | null }) {
   const s = getStore().actions;
   const host = accountHost();
   const [auto, setAuto] = useState(() => autoSwitchOn(g.cli));
+  const [resetFirst, setResetFirst] = useState(() => resetFirstOn(g.cli));
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
   const [signIn, setSignIn] = useState<SignIn | null>(null);
@@ -208,6 +211,11 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
           <AgentIcon id={g.cli} size={16} />
         </span>
         <b>{CLI_NAME[g.cli]}</b>
+        {version && (
+          <span className="acc-ver" data-testid={`cli-version-${g.cli}`}>
+            {version}
+          </span>
+        )}
       </div>
       {note && (
         <div className="acc-toast" role="status" data-testid="accounts-toast">
@@ -302,6 +310,29 @@ function CliGroup({ g, status, note }: { g: AccountGroup; status: Record<string,
           </button>
           <span>
             <b>{t("acc.autoSwitch")}</b> {t("acc.autoSwitchLine")}
+          </span>
+        </div>
+      )}
+      {signedIn > 1 && (
+        <div className={`acc-auto${auto ? "" : " off"}`} data-testid={`resetfirst-row-${g.cli}`}>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={auto && resetFirst}
+            aria-disabled={!auto}
+            disabled={!auto}
+            aria-label={t("acc.resetFirstOf", { cli: CLI_NAME[g.cli] })}
+            className="acc-switch"
+            data-testid={`resetfirst-${g.cli}`}
+            onClick={() => {
+              saveResetFirst(g.cli, !resetFirst);
+              setResetFirst(!resetFirst);
+            }}
+          >
+            <span />
+          </button>
+          <span>
+            <b>{t("acc.resetFirst")}</b> {t("acc.resetFirstLine")}
           </span>
         </div>
       )}
