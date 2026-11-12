@@ -19,7 +19,7 @@ const ok = (file: string, tests: number, ms: number) => ` ${c("32", "✓")} ${c(
 /** What a person sees after a look at the history and a test run: plain program output, coloured as git and a test
  *  runner colour it. The screen and its scrollback are cleared first, so the mock program's banner is gone. */
 const OUTPUT = [
-  `${E}2J${E}3J${E}H${PROMPT}git log --oneline --graph -8`,
+  `${E}2J${E}3J${E}H${PROMPT}git log --oneline --graph -7`,
   `${c("31", "*")} ${hash("a1b2c3d")} ${refs(c("1;36", "HEAD -> ") + c("1;32", "main"), c("1;31", "origin/main"))} fix(api): retry a dropped upstream connection once`,
   `${c("31", "*")} ${hash("9f8e7d6")} feat(web): keyboard shortcuts for the session list`,
   `${c("31", "*")}   ${hash("5c4b3a2")} Merge branch 'feat/session-export'`,
