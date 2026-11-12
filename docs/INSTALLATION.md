@@ -1046,7 +1046,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   timeout, 300 s by default), and a turn that ran 10 s or more ends with the
   terminal's own notification: OSC 9 in iTerm2, WezTerm and Ghostty, OSC 777
   in foot and rxvt, the bell elsewhere (tmux among them, which flags the
-  window); `OMH_TUI_BELL=0` keeps all of it quiet.
+  window); `OMH_TUI_BELL=0` keeps all of it quiet. The notification waits
+  for a window that is not in front: once the terminal has reported focus
+  (it answers the TUI's focus reporting) and has it, only the bell rings;
+  a terminal that never reports focus gets both, as before.
 - Each launch look has a living wallpaper: the TUI sets the terminal's
   background to the look's own colour (OSC 11) while it runs and keeps a
   scene moving in the screen's blank cells, drawn as pixel art in the
@@ -1343,7 +1346,12 @@ run and approval decision stays Hermes'; the screen is OMH's.
   count in columns of their own. Type to filter (what you type shows on
   the list's last row, where the composer was, with the caret, and only the
   headings with a match stay), Up/Down or PageUp/PageDown to move from
-  session to session, Enter to switch, Esc to close. Each alias runs
+  session to session, Enter to switch, Esc to close. Ctrl+R renames the
+  highlighted session (the last row becomes its title: Enter renames, Esc
+  cancels) and Ctrl+D deletes it once a second Ctrl+D confirms; the session
+  you are in is not deleted from there. Hermes' own terminal entry renames
+  only a session it has open, so there a stored session's rename may be
+  refused, and the row says Hermes' reason. Each alias runs
   exactly as `/sessions` does, and the `/` menu offers `/resume` under its
   own name once what you type starts it: `/res` and `/resu` complete to
   `/resume`.
@@ -1402,6 +1410,7 @@ Esc closes it):
 | Space | On a clarify question that takes several choices, ticks or unticks the highlighted one; Enter sends the ticked ones, or the highlighted one when none is ticked, and a digit ticks its choice |
 | Esc, Ctrl+C | On a question Hermes asked, decline it (an approval is denied and the running turn stops); Ctrl+C first clears an answer being typed |
 | ↑ / ↓, PageUp / PageDown, Enter, Esc | In the `/sessions`, `/rewind` or `/model` list, move, take the highlighted row (switch to that session, put that prompt in the composer to send again, or switch this session to that model), or close it; typing filters the list |
+| Ctrl+R, Ctrl+D | In the `/sessions` list, rename or delete the highlighted session: Ctrl+R makes the list's last row its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not deleted, and what Hermes refuses is said on the row |
 | ↑ / ↓, Enter, Esc, ←, q, Ctrl+C | In the agent list, move, open the highlighted agent's log (on main, only leave), or go back; any other key does nothing there |
 | x, s | In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send (Esc cancels) |
 | ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember, kanagawa-wave) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |
@@ -1766,7 +1775,9 @@ image), `/theme`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's
 plan), `/whats-new` (this version's What's new, also `/whatsnew`), `/model` (alone, a picker of the models Hermes offers this session,
 from Hermes' `model.options`, opened on the session's model, marked `●`, which
 comes first when no provider lists it, and with the highlight's place in the
-header, `Model (12/162)`, once the list scrolls; the one you pick is sent as Hermes' own
+header, `Model (12/162)`, once the list scrolls; with nothing typed, the last five models
+Hermes switched to (kept in `~/.omh/tui/recent-models.json`) head the list under
+`Recent`, the whole list following under `All models`; the one you pick is sent as Hermes' own
 `/model <name> --provider <slug> --session`, so it lasts for this session;
 `/model <name>` goes to Hermes as typed), `/export` (Hermes' export writes a
 profile archive, not the transcript, so the first `/export` says so and the
@@ -1809,6 +1820,10 @@ prints the help of Hermes' skills command here instead of opening the skills
 hub. The command list is read again for each session
 the TUI opens, so a project's own skills are listed in its workspace, and
 completion also matches a part of a name: `/uml` finds `/omh-codebase-uml`.
+Names whose letters only appear in order come last, so `/rld` offers
+`/reload-skills` after every name that starts with or contains `rld`. The
+`/model`, `/sessions` and `/rewind` filters rank the same way: rows that
+contain what you type first, then rows holding its letters in order.
 
 The bot board (Ctrl+S or `/bots`) shows this machine's Hermes bots, full
 screen, and changes nothing. Every region on it is a rounded box, in the

@@ -15,28 +15,55 @@ Keys: Up/Down move one session, PageUp/PageDown one page, past the headings;
 printable text filters (by title, first prompt or id, ignoring case), keeping
 the headings of the groups with a match, and Backspace takes a filter
 character back; Enter picks the highlighted row; Esc or Ctrl+C closes.
+
+Ctrl+R renames the highlighted session: the filter row becomes its title,
+prefilled with the one it has, Enter asks for the rename (`RENAME`, an empty
+title is refused here) and Esc or Ctrl+C puts the filter back. Ctrl+D deletes
+it: the first press says on the row that a second deletes, the second asks for
+the delete (`DELETE`), and any other key takes the first back. The session
+this TUI is in is never deleted from here, and its row says so. The app sends
+the call and tells the picker how it went (`renamed`, `deleted`, `refused`):
+a refusal stays on the row until the next key, as opencode's session list
+does (`packages/tui/src/component/dialog-session-list.tsx`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date
 import math
 
 from .composer import PROMPT
 from .frame import RULE
+from .fuzzy import subsequence_tail
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
 from .prompts import CHOICE_MARK
-from .style import Line, Span
+from .style import Line, Span, Style
 from .theme import Theme
 from .width import cell_width, truncate, truncate_line
 
 PICK = "pick"
 CLOSE = "close"
+RENAME = "rename"  # with the session's stored id and the title typed for it
+DELETE = "delete"  # with the session's stored id, once a second Ctrl+D confirmed it
 CURRENT_MARK = "●"
 # Its keys, longest first: on the info line while it is open.
-KEYS = ("↑↓ move · enter switches · esc closes", "↑↓ enter switches · esc closes", "esc closes")
+KEYS = (
+    "↑↓ move · enter switches · ctrl+r renames · ctrl+d deletes · esc closes",
+    "↑↓ move · enter switches · esc closes", "↑↓ enter switches · esc closes", "esc closes",
+)
+# Its keys while the filter row is a session's title (Ctrl+R).
+RENAME_KEYS = ("enter renames · esc cancels", "esc cancels")
+RENAME_PLACEHOLDER = "type the session's new title"
+# What a row says in place of its age and message count.
+DELETE_CONFIRM = "press ctrl+d again to delete"
+CURRENT_NOT_DELETED = "the session you are in is not deleted from here"
+EMPTY_TITLE = "a title cannot be empty"
+RENAMING = "renaming…"
+DELETING = "deleting…"
+# A row's note never takes more than this share of the row, so its name keeps some room.
+NOTE_SHARE = 0.6
 FILTER_PROMPT = PROMPT  # the composer's mark, on the row that stands where the composer was
 FILTER_PLACEHOLDER = "type to filter"
 # The filter row while the picker waits for typing to stop before it takes keys (`SessionPicker.waiting`).
@@ -75,8 +102,9 @@ class SessionRow:
 
 @dataclass(frozen=True)
 class PickerAction:
-    kind: str  # PICK or CLOSE
+    kind: str  # PICK, CLOSE, RENAME or DELETE
     session_id: str = ""
+    title: str = ""  # RENAME's new title
 
 
 def _number(value: object) -> float:
@@ -153,12 +181,14 @@ def pointer(highlighted: bool, theme: Theme) -> Span:
     return Span(CHOICE_MARK if highlighted else " " * len(CHOICE_MARK), theme.menu_current)
 
 
-def picker_row(highlighted: bool, lead: str, label: str, meta: str, width: int, theme: Theme) -> Line:
+def picker_row(
+    highlighted: bool, lead: str, label: str, meta: str, width: int, theme: Theme, meta_style: Style | None = None,
+) -> Line:
     """One picker row, with no fill (`theme.menu`): the pointer, `lead` (a mark or a number) and `label`, then `meta`
     set right. The highlighted row's name is bold in the accent and its meta in the text colour; every other row's
-    meta is muted."""
+    meta is muted. `meta_style`, when given, is the meta's on every row (a note the row says)."""
     name = theme.menu_current if highlighted else theme.menu
-    words = theme.text if highlighted else theme.muted
+    words = meta_style or (theme.text if highlighted else theme.muted)
     head = pointer(highlighted, theme)
     meta = f" {meta} " if meta else " "
     room = width - cell_width(head.text) - cell_width(lead) - cell_width(meta)
@@ -229,6 +259,11 @@ def picker_frame(
     return PickerFrame(lines, (len(lines) - 1, caret), body)
 
 
+def _ctrl(event: Key | Paste, char: str) -> bool:
+    """Whether `event` is Ctrl+`char`, with no Alt."""
+    return isinstance(event, Key) and event.name == CHAR and event.ctrl and not event.alt and event.char == char
+
+
 def _messages(count: int, digits: int) -> str:
     """`12 messages`, the count right-aligned in `digits` cells and `1 message ` padded to the plural's width."""
     return f"{count:>{digits}} message{' ' if count == 1 else 's'}"
@@ -245,12 +280,16 @@ class SessionPicker:
     now: float = 0.0  # the last render's clock, which the day groups count from; 0 keeps the list order
     # Opened while the person was typing: keys go on to the composer until typing stops (`App._picker_takes`).
     waiting: bool = False
+    renaming: str = ""  # the id whose title the filter row holds (Ctrl+R); "" while it filters
+    title: str = ""  # the title typed for `renaming`
+    arming: str = ""  # the id a first Ctrl+D asked about; a second deletes it
+    notes: dict[str, str] = field(default_factory=dict)  # id -> what its row says until the next key
+    out: dict[str, str] = field(default_factory=dict)  # id -> RENAMING or DELETING while its call is out
 
     def visible(self) -> list[SessionRow]:
         """The rows the filter keeps: the current session first, then a day group after another (`day_group`), in
         list order inside each."""
-        needle = self.query.casefold()
-        kept = [row for row in self.rows if not needle or needle in f"{row.title}\n{row.preview}\n{row.id}".casefold()]
+        kept = subsequence_tail(self.rows, self.query, lambda row: (row.title, row.preview, row.id))
         return sorted(kept, key=self._rank) if self.now > 0 else kept
 
     def _rank(self, row: SessionRow) -> int:
@@ -260,13 +299,23 @@ class SessionPicker:
         return CURRENT_GROUP if row.id == self.current else DAY_GROUPS[day_group(row.started_at, self.now)]
 
     def handle_key(self, event: Key | Paste) -> PickerAction | None:
-        """Apply one key; a `PickerAction` when the person picked a row or closed the picker."""
+        """Apply one key; a `PickerAction` when the person picked a row, closed the picker, or asked for a rename or
+        a delete (the picker stays open for those)."""
+        self.notes.clear()  # what a row said lasts until the next key
+        if self.renaming:
+            return self._title_key(event)
+        if self.arming:  # any key but a second Ctrl+D takes the first back, and does nothing more
+            armed, self.arming = self.arming, ""
+            return PickerAction(DELETE, armed) if _ctrl(event, "d") else None
         if isinstance(event, Paste):
             self._filter(self.query + event.text.split("\n", 1)[0])
             return None
-        if event.name == ESCAPE or (event.name == CHAR and event.ctrl and event.char == "c"):
+        if event.name == ESCAPE or _ctrl(event, "c"):
             return PickerAction(CLOSE)
         shown = self.visible()
+        if (_ctrl(event, "r") or _ctrl(event, "d")) and shown:
+            self._edit(shown[min(self.index, len(shown) - 1)], rename=_ctrl(event, "r"))
+            return None
         if event.name == ENTER:
             return PickerAction(PICK, shown[min(self.index, len(shown) - 1)].id) if shown else None
         steps = {UP: -1, DOWN: 1, PAGE_UP: -self.page, PAGE_DOWN: self.page}
@@ -285,6 +334,74 @@ class SessionPicker:
         self.query = query
         self.index = 0
 
+    def _edit(self, row: SessionRow, rename: bool) -> None:
+        """Ctrl+R or Ctrl+D on `row`: the title field, or the delete's first press. A row whose call is still out
+        takes neither, and the current session is not deleted."""
+        if row.id in self.out:
+            self.notes[row.id] = self.out[row.id]
+        elif rename:
+            self.renaming, self.title = row.id, row.title
+        elif row.id == self.current:
+            self.notes[row.id] = CURRENT_NOT_DELETED
+        else:
+            self.arming = row.id
+
+    def _title_key(self, event: Key | Paste) -> PickerAction | None:
+        """A key while the filter row is `renaming`'s title: typing edits it, Enter asks for the rename, Esc or
+        Ctrl+C puts the filter back."""
+        if isinstance(event, Paste):
+            self.title += event.text.split("\n", 1)[0]
+        elif event.name == ESCAPE or _ctrl(event, "c"):
+            self.renaming = self.title = ""
+        elif event.name == ENTER:
+            title = " ".join(self.title.split())
+            if not title:
+                self.notes[self.renaming] = EMPTY_TITLE
+                return None
+            target, self.renaming, self.title = self.renaming, "", ""
+            self.out[target] = RENAMING
+            return PickerAction(RENAME, target, title)
+        elif event.name == BACKSPACE:
+            self.title = self.title[:-1]
+        elif event.name == CHAR and not event.ctrl and not event.alt:
+            self.title += event.char
+        return None
+
+    def keys(self) -> tuple[str, ...]:
+        """What the info line says its keys are: `RENAME_KEYS` while the filter row is a title, else `KEYS`."""
+        return RENAME_KEYS if self.renaming else KEYS
+
+    def asked(self, action: PickerAction) -> None:
+        """`action`'s call went out: its row says so until the answer (`renamed`, `deleted`, `refused`)."""
+        self.out[action.session_id] = RENAMING if action.kind == RENAME else DELETING
+
+    def renamed(self, session_id: str, title: str) -> bool:
+        """Hermes renamed `session_id` to `title`: its row says the new title. False when no row has that id."""
+        self.out.pop(session_id, None)
+        found = False
+        for number, row in enumerate(self.rows):
+            if row.id == session_id:
+                self.rows[number], found = replace(row, title=title), True
+        return found
+
+    def deleted(self, session_id: str) -> bool:
+        """Hermes deleted `session_id`: its row goes. False when no row had that id."""
+        self.out.pop(session_id, None)
+        kept = [row for row in self.rows if row.id != session_id]
+        found, self.rows = len(kept) != len(self.rows), kept
+        if self.arming == session_id:
+            self.arming = ""
+        return found
+
+    def refused(self, session_id: str, message: str) -> bool:
+        """Hermes refused the call for `session_id`: its row says `message` until the next key. False when no row
+        has that id."""
+        self.out.pop(session_id, None)
+        if not any(row.id == session_id for row in self.rows):
+            return False
+        self.notes[session_id] = message
+        return True
+
     def lines(self, width: int, theme: Theme, max_rows: int, now: float) -> list[Line]:
         """A header row, the filtered rows under their day groups' headings scrolled so the highlighted one shows,
         then the filter row (`picker_frame`)."""
@@ -300,14 +417,18 @@ class SessionPicker:
         ages = max((cell_width(age_text(row.started_at, now)) for row in shown), default=0)
         digits = max((len(str(row.message_count)) for row in shown), default=1)
         title = f" Sessions ({len(shown)}/{len(self.rows)})" if self.query else f" Sessions ({len(self.rows)})"
+        renamed = next((row for row in self.rows if row.id == self.renaming), None)
+        if renamed is not None:
+            title = f" Rename {renamed.label if renamed.title or renamed.id != self.current else CURRENT_LABEL}"
+        placeholder = WAITING_PLACEHOLDER if self.waiting else FILTER_PLACEHOLDER
         highlighted = entries.index(shown[self.index]) if shown else 0
         frame = picker_frame(
             (Span(title, theme.heading),), len(entries), highlighted,
             lambda number: self._entry(entries[number], number == highlighted, width, theme, now, ages, digits),
-            " no session matches the filter" if self.rows else " Hermes listed no stored sessions", self.query, width,
-            theme, max_rows,
+            " no session matches the filter" if self.rows else " Hermes listed no stored sessions",
+            self.title if renamed is not None else self.query, width, theme, max_rows,
             lambda number: isinstance(entries[number], str),
-            WAITING_PLACEHOLDER if self.waiting else FILTER_PLACEHOLDER,
+            RENAME_PLACEHOLDER if renamed is not None else placeholder,
         )
         self.page, self.caret = frame.page, frame.caret
         return frame.lines
@@ -322,6 +443,12 @@ class SessionPicker:
             return (Span(" " * inset, theme.muted), Span(entry, theme.muted))
         current = entry.id == self.current
         label = CURRENT_LABEL if current and not entry.title.strip() else entry.label
+        lead = f"{CURRENT_MARK if current else ' '} "
+        note = self.notes.get(entry.id) or (DELETE_CONFIRM if entry.id == self.arming else self.out.get(entry.id, ""))
+        if note:
+            note = truncate(note, max(int(width * NOTE_SHARE), 1))
+            style = theme.warn if entry.id == self.arming or entry.id not in self.out else theme.muted
+            return picker_row(highlighted, lead, label, note, width, theme, style)
         age = f"{age_text(entry.started_at, now):>{ages}}{COLUMN_GAP}" if ages else ""
         meta = age + _messages(entry.message_count, digits)
-        return picker_row(highlighted, f"{CURRENT_MARK if current else ' '} ", label, meta, width, theme)
+        return picker_row(highlighted, lead, label, meta, width, theme)

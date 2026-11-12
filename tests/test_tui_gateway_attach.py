@@ -505,6 +505,15 @@ class ModelSwitchTests(AdapterCase):
         self.assertEqual(adapter.sessions[SID].generation, 6)
         self.assertFalse(adapter.waiting())
 
+    def test_the_answer_names_the_provider_the_owner_committed(self) -> None:
+        adapter, mutate = self.switch("sonnet --session")
+        [(_, answer)] = adapter.from_owner(_answer(mutate["id"], {
+            "session_id": SID, "operation": "model", "model": "claude-sonnet-4-6", "provider": "anthropic",
+            "execution_generation": 6}))
+        self.assertEqual(answer["result"], {
+            "key": "model", "value": "claude-sonnet-4-6", "provider": "anthropic", "scope": "session",
+            "deferred": False})
+
     def test_a_pick_while_a_turn_runs_is_deferred_and_a_guarded_one_is_not_made(self) -> None:
         adapter, mutate = self.switch("claude-opus-5-5 --session")
         self.assertEqual(mutate["params"]["payload"], {"model": "claude-opus-5-5"})
@@ -554,6 +563,121 @@ class ModelSwitchTests(AdapterCase):
     def test_any_other_config_set_passes_through(self) -> None:
         adapter = self.adapter()
         frame = _call(23, "config.set", {"key": "yolo", "value": "on", "session_id": SID})
+        self.assertEqual(adapter.from_client(frame), [(TO_OWNER, frame)])
+        self.assertFalse(adapter.waiting())
+
+
+class PickerEditTests(AdapterCase):
+    """The session picker's `session.title` and `session.delete`: the owner's revision-fenced `session.mutate rename`
+    and `delete`, read and sent as Ink's `mutateCanonical` and `useSessionDelete.ts` send them."""
+
+    STORED = "20261012_090000_aaaaaa"
+
+    def read(self, adapter: Adapter, method: str, params: dict) -> dict:
+        read = self.own_call(adapter.from_client(_call(31, method, params)), "session.resume")
+        self.assertEqual(read["params"], {"session_id": self.STORED})
+        return read
+
+    def test_a_rename_reads_the_revision_and_mutates_at_it_with_no_generation(self) -> None:
+        adapter = self.adapter()
+        read = self.read(adapter, "session.title", {"session_id": self.STORED, "title": "Router split"})
+        mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+            "session_id": self.STORED, "subscription_id": "sub-9", "revision": 4, "execution_generation": 2})),
+            "session.mutate")
+        self.assertEqual(mutate["params"], {"session_id": self.STORED, "request_id": "id-1", "expected_revision": 4,
+                                            "operation": "rename", "payload": {"title": "Router split"}})
+        actions = adapter.from_owner(_answer(mutate["id"], {"title": "Router split", "revision": 5}))
+        [(_, detach), (target, answer)] = actions
+        # The read attached this connection: the view goes back, plainly, with no end reason.
+        self.assertEqual((detach["method"], detach["params"]),
+                         ("session.detach", {"session_id": self.STORED, "subscription_id": "sub-9"}))
+        self.assertEqual((target, answer), (TO_CLIENT, _answer(31, {"pending": False, "title": "Router split"})))
+        adapter.from_owner(_answer(detach["id"], {"detached": True}))
+        self.assertFalse(adapter.waiting())
+
+    def test_a_delete_reads_then_mutates_at_the_revision_and_generation(self) -> None:
+        adapter = self.adapter()
+        read = self.read(adapter, "session.delete", {"session_id": self.STORED})
+        mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+            "session_id": self.STORED, "subscription_id": "sub-9", "revision": 4, "execution_generation": 2})),
+            "session.mutate")
+        self.assertEqual(mutate["params"], {"session_id": self.STORED, "request_id": "id-1", "expected_revision": 4,
+                                            "expected_generation": 2, "operation": "delete", "payload": {}})
+        [(target, answer)] = adapter.from_owner(_answer(mutate["id"], {"deleted": True}))
+        self.assertEqual((target, answer), (TO_CLIENT, _answer(31, {"deleted": self.STORED})))  # stdio's shape
+        self.assertNotIn(self.STORED, adapter.sessions)
+        self.assertFalse(adapter.waiting())
+
+    def test_a_refused_delete_is_the_owners_refusal_and_hands_the_read_view_back(self) -> None:
+        adapter = self.adapter()
+        read = self.read(adapter, "session.delete", {"session_id": self.STORED})
+        mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+            "session_id": self.STORED, "subscription_id": "sub-9", "revision": 4, "execution_generation": 2})),
+            "session.mutate")
+        [(_, detach), (target, refusal)] = adapter.from_owner(_error(mutate["id"], "stale_revision"))
+        self.assertEqual(detach["params"], {"session_id": self.STORED, "subscription_id": "sub-9"})
+        self.assertEqual((target, refusal["id"], refusal["error"]["data"]["reason"]), (TO_CLIENT, 31, "stale_revision"))
+
+    def test_a_session_this_connection_already_views_keeps_its_view(self) -> None:
+        adapter = self.adapter()
+        self.opened(adapter)
+        read = self.own_call(adapter.from_client(_call(32, "session.title", {"session_id": SID, "title": "Mine"})),
+                             "session.resume")
+        mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+            "session_id": SID, "subscription_id": "sub-1", "revision": 8, "execution_generation": 3})), "session.mutate")
+        [(target, answer)] = adapter.from_owner(_answer(mutate["id"], {"title": "Mine"}))  # no detach
+        self.assertEqual((target, answer), (TO_CLIENT, _answer(32, {"pending": False, "title": "Mine"})))
+        self.assertEqual(adapter.sessions[SID].subscription_id, "sub-1")
+
+    def test_an_edit_answered_after_the_session_was_opened_does_not_detach_the_opened_view(self) -> None:
+        # The person opens the row while its edit waits: the owner reuses the read's subscription for the resume, so
+        # handing that subscription back would cut the opened session's events. A refused edit hands back nothing too.
+        # The review's input: viewing SID, rename stored B, Enter opens B, then the rename is answered.
+        for method, params, answered in (
+            ("session.title", {"session_id": self.STORED, "title": "Renamed"},
+             _answer("", {"title": "Renamed", "revision": 5})),
+            ("session.title", {"session_id": self.STORED, "title": "Renamed"}, _error("", "stale_revision")),
+            ("session.delete", {"session_id": self.STORED}, _error("", "stale_revision")),
+        ):
+            with self.subTest(method=method, refused="error" in answered):
+                adapter = self.adapter()
+                self.opened(adapter)
+                read = self.read(adapter, method, params)
+                mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+                    "session_id": self.STORED, "subscription_id": "sub-B", "revision": 4, "execution_generation": 2})),
+                    "session.mutate")
+                [(_, opened)] = adapter.from_client(_call(32, "session.resume", {"session_id": self.STORED}))
+                adapter.from_owner(_answer(opened["id"], {"session_id": self.STORED, "subscription_id": "sub-B",
+                                                          "revision": 4, "execution_generation": 2, "messages": []}))
+                actions = adapter.from_owner({**answered, "id": mutate["id"]})
+                self.assertEqual([target for target, _frame in actions], [TO_CLIENT])  # no detach
+                self.assertEqual((adapter.current, adapter.sessions[self.STORED].subscription_id),
+                                 (self.STORED, "sub-B"))
+                self.assertFalse(adapter.waiting())
+
+    def test_an_edit_answered_after_another_session_was_opened_still_hands_the_read_view_back(self) -> None:
+        # Negative: the intervening open is of a different session, so the read's subscription is still disposable.
+        adapter = self.adapter()
+        read = self.read(adapter, "session.title", {"session_id": self.STORED, "title": "Renamed"})
+        mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+            "session_id": self.STORED, "subscription_id": "sub-B", "revision": 4, "execution_generation": 2})),
+            "session.mutate")
+        self.opened(adapter)
+        [(_, detach), (target, _answer_frame)] = adapter.from_owner(_answer(mutate["id"], {"title": "Renamed"}))
+        self.assertEqual((detach["method"], detach["params"], target),
+                         ("session.detach", {"session_id": self.STORED, "subscription_id": "sub-B"}, TO_CLIENT))
+        self.assertEqual((adapter.current, adapter.sessions[SID].subscription_id), (SID, "sub-1"))
+
+    def test_a_failed_read_is_answered_as_the_owner_refused_it_and_nothing_is_mutated(self) -> None:
+        adapter = self.adapter()
+        read = self.read(adapter, "session.delete", {"session_id": self.STORED})
+        [(target, refusal)] = adapter.from_owner(_error(read["id"], "session_not_found"))
+        self.assertEqual((target, refusal["id"], refusal["error"]["data"]["reason"]), (TO_CLIENT, 31, "session_not_found"))
+        self.assertFalse(adapter.waiting())
+
+    def test_a_title_read_passes_through_unchanged(self) -> None:
+        adapter = self.adapter()
+        frame = _call(33, "session.title", {"session_id": SID})
         self.assertEqual(adapter.from_client(frame), [(TO_OWNER, frame)])
         self.assertFalse(adapter.waiting())
 
@@ -1233,11 +1357,17 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(ready.payload, {"stdio": True})
         self.assertEqual(client.call("session.create", {"cols": 80}), {"stdio": "session.create"})
         self.assertEqual(client.call("session.interrupt", {"session_id": "s1"}), {"stdio": "session.interrupt"})
+        self.assertEqual(client.call("session.title", {"session_id": "s1", "title": "T"}), {"stdio": "session.title"})
+        self.assertEqual(client.call("session.delete", {"session_id": "s2"}), {"stdio": "session.delete"})
         self.assertEqual(client.close(grace=5), 7)  # the entry's own exit code
-        # Over stdio nothing is translated: the stop goes as the TUI sent it, with no generation and no read.
+        # Over stdio nothing is translated: the stop, the rename and the delete go as the TUI sent them, with no
+        # generation, no read and no `session.mutate`.
         log = [json.loads(line) for line in (home / "stdio.jsonl").read_text().splitlines()]
-        self.assertEqual([frame["params"] for frame in log if frame["method"] in ("session.interrupt", "session.resume")],
-                         [{"session_id": "s1"}])
+        sent = ("session.interrupt", "session.resume", "session.title", "session.delete", "session.mutate")
+        self.assertEqual([(frame["method"], frame["params"]) for frame in log if frame["method"] in sent],
+                         [("session.interrupt", {"session_id": "s1"}),
+                          ("session.title", {"session_id": "s1", "title": "T"}),
+                          ("session.delete", {"session_id": "s2"})])
 
     def test_a_hermes_cli_without_the_attach_api_still_runs_the_stdio_entry(self) -> None:
         _home, environ = self.hermes({"hermes_cli/__init__.py": "", "hermes_cli/gateway_client.py": FAKE_CLIENT,

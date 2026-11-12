@@ -748,6 +748,9 @@ class KeyDecoder:
         # When the terminal window lost focus (its focus-out report), on the decoder's clock; None while it has
         # focus or never said otherwise. Any read sets it back to None: input comes from a focused window.
         self.unfocused_at: float | None = None
+        # True from the first focus report of either kind: the terminal does report focus, so `unfocused_at` None
+        # means focused. Before that None means unknown (reporting is asked for, not proof it is answered).
+        self.focus_seen = False
 
     @property
     def holding(self) -> bool:
@@ -759,6 +762,7 @@ class KeyDecoder:
         now = self._clock()
         data, focus = _without_focus_reports(data)
         self.unfocused_at = now if focus is _FOCUS_OUT else None
+        self.focus_seen = self.focus_seen or focus is not None
         if not data:  # only focus reports: no input, but a lone ESC held from before is Esc, as at any other read
             if self._pending == bytes((ESC_BYTE,)):
                 self._pending.clear()
@@ -940,6 +944,7 @@ class KeyDecoder:
                     self.protocol_reported = self.protocol_reported or key is _KEYBOARD_FLAGS_ON
                 elif key is _FOCUS_IN or key is _FOCUS_OUT:
                     self.unfocused_at = None if key is _FOCUS_IN else self._fed_at
+                    self.focus_seen = True
                 elif late and data[start] == CARRIAGE_RETURN:
                     if data[index : index + 1] == bytes((LINE_FEED,)):
                         index += 1  # CR LF is one newline, as in a paste

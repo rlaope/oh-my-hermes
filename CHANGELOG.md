@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI sends its desktop notification only while the terminal window is not in front.** A turn that ran 10 s
+  or more, a question and a finished background process each rang the bell and, in iTerm2, WezTerm, Ghostty, foot
+  and rxvt, raised a notification (OSC 9 or 777) even with the window focused, where the person already sees it.
+  Once the terminal has reported focus and has it, only the bell rings; with focus gone, or from a terminal that
+  never reports it, both go as before. `OMH_TUI_BELL=0` still keeps everything quiet.
 - **The mouse never opens the OMH TUI's history view.** A drag that started
   on a row the OMH TUI did not print (the shell's output above the session,
   the rows from before a Ctrl+Z) still opened the full-screen transcript
@@ -44,6 +49,53 @@ All notable changes will be documented here.
   its own scrollback as in any shell; the next key or paste takes it back, so
   a drag copies without the rail again. Ctrl+O still opens the transcript
   view.
+
+- **Bare `/model` in the OMH TUI lists the models you last switched to first.**
+  Each switch Hermes confirmed puts the model and provider Hermes confirmed
+  (an alias you typed is kept as the model it resolved to, and a `/model`
+  without `--provider` as the provider Hermes switched on) at the front of
+  `~/.omh/tui/recent-models.json` (at most five, no repeats); a switch Hermes
+  deferred or asked to confirm records nothing. With an empty filter the picker
+  opens with those still on offer under `Recent`, then the whole list under
+  `All models`; typing filters as before, with no group.
+- **The slash menu and the pickers match letters typed in order.** `/rld` now
+  offers `/reload-skills`, and `snt` finds a `claude-sonnet-…` row in `/model`.
+  Names and rows that start with or contain what you typed keep their place and
+  order; the in-order matches follow, best fit first (word starts and runs of
+  neighbouring letters rank higher). `/sessions` and `/rewind` filter the same
+  way, and an empty filter is unchanged. After opencode's fuzzy dialog-select.
+- **The OMH TUI renames and deletes sessions from `/sessions`.** In the
+  session picker, Ctrl+R turns the list's last row into the highlighted
+  session's title (Enter renames, Esc cancels) and Ctrl+D asks on the row,
+  then deletes on a second press; the session you are in is never deleted
+  from there. Hermes' stdio entry gets `session.title` / `session.delete`;
+  attached to a shared gateway, the gateway child sends them as the owner's
+  revision-fenced `session.mutate rename` / `delete`, as Hermes' Ink TUI does.
+  A refusal is said on the row.
+- **A dag-ulw node can be read-only.** `omh_dag` define, repair and extend take
+  `read_only: true` on a node; its child's `write_file` and `patch` inside the
+  run's workspace are blocked, except its own handoff report, with a message
+  telling it to put its findings there. Before, a review, verify or explore
+  node with no write scope could change any file. A read-only node that also
+  declares a `write_scope` is refused (`read_only_with_write_scope`); a node
+  without the field keeps today's rule, and shell writes stay unjudged.
+- **An active workflow's reminder rides a session once, not on every turn.**
+  `[OMH Active Workflow]` was appended to every turn's message while a
+  workflow was active, and Hermes replays each turn's injection, so N turns
+  carried N copies. It is now sent only when the history Hermes replays does
+  not already end on that exact line: after a compaction dropped it, or when
+  the workflow changed. When the workflow ends, one line says the earlier
+  reminder no longer applies. Image turns count too: there the reminder is
+  read after the ask Hermes stamps on the turn, so a quoted reminder never
+  does. The `omh_active_workflow` metadata still comes with every call.
+- **A toolcall rule can ask you instead of blocking.** With `"effect": "ask"`,
+  a matching call goes to Hermes' approval prompt with the rule's message,
+  keyed `omh-toolcall-rule:<name>` so `[a]lways` covers that one rule. Where
+  nobody can answer (a delegated child, `hermes chat -q`, a webhook or API
+  platform) the rule blocks as before. An ask never overrides OMH's own
+  refusals (evidence-store writes, edits to OMH-installed skills, a dag-ulw
+  child writing outside its scope, and the rest). `omh ops toolcall-rules-validate`
+  refuses any other `effect`. See `docs/TOOLCALL-RULES.md`.
 
 - **The OMH TUI shows a background wait on its own runtime again.** With
   `omh theme runtime own` (the default), the HUD read the bots' Hermes home

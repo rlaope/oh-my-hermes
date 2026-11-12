@@ -140,8 +140,11 @@ class ClientMethodTests(unittest.TestCase):
         self.assertEqual(contract.undeclared_params("voice.toggle", {"on": True}), ["on"])
 
     def test_only_the_calls_a_session_does_without_are_optional(self) -> None:
-        optional = {"commands.catalog", "config.get", "image.render", "model.options", "session.list", "skills.reload"}
+        optional = {"commands.catalog", "config.get", "image.render", "model.options", "session.list", "skills.reload",
+                    "session.title", "session.delete"}  # the last two only rename or delete a picker row
         self.assertEqual(contract.OPTIONAL_METHODS, optional)
+        self.assertEqual(contract.CLIENT_METHODS["session.title"], {"session_id", "title"})
+        self.assertEqual(contract.CLIENT_METHODS["session.delete"], {"session_id"})
         self.assertLessEqual(contract.OPTIONAL_METHODS, set(contract.CLIENT_METHODS))
 
     def test_image_render_is_declared_with_its_five_keys_and_is_optional(self) -> None:
