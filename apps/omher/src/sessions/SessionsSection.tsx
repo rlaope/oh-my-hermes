@@ -13,7 +13,7 @@
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
-import { CloseIcon, LiveRing, PlusIcon, Popover, Spinner, TypingDots } from "../ui";
+import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
@@ -21,8 +21,7 @@ import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftOpen, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec, type Unseen } from "./agents";
 import { getSessions, useSessions } from "./sessions";
-import { getAddOmh, useAddOmh } from "./addOmh";
-import { InstallLog } from "../app/BridgeGate";
+import { getAddOmh } from "./addOmh";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { accountForNewSessions } from "../settings/accounts/rules";
@@ -256,17 +255,15 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           );
         })}
         </div>
-        {hermesOnly(ss.agents) && <AddOmhLine />}
+        {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
   );
 }
 
-/** The + menu's one quiet line for a person who has Hermes but not oh-my-hermes: "Add oh-my-hermes", which runs the
- *  first-run screen's fixed installer and shows its output the same way, under the line. Gone once `omh` is found. */
-function AddOmhLine() {
-  const add = useAddOmh();
-  const running = add.phase === "running";
+/** The + menu's one quiet line for a person who has Hermes but not oh-my-hermes: "Add oh-my-hermes" closes the menu
+ *  and opens the sidebar's "!" popover (shown again if it was hidden), the one place its installer runs. */
+function AddOmhLine({ onPick }: { onPick: () => void }) {
   return (
     <div className="ss-add-omh" data-testid="session-add-omh-wrap">
       <button
@@ -274,23 +271,17 @@ function AddOmhLine() {
         role="menuitem"
         className="ss-item ss-add-omh-b"
         title={t("omh.add.tip")}
-        aria-busy={running || undefined}
         onClick={() => {
-          if (!running) void getAddOmh().run();
+          onPick();
+          getAddOmh().offer();
         }}
         data-testid="session-add-omh"
       >
         <span className="ss-ic">
-          {running ? <Spinner size={12} label={t("gate.installing")} /> : <PlusIcon size={12} />}
+          <PlusIcon size={12} />
         </span>
-        <span className="ss-n">{running ? t("omh.add.running") : add.phase === "failed" ? t("gate.again") : t("omh.add.line")}</span>
+        <span className="ss-n">{t("omh.add.line")}</span>
       </button>
-      {add.phase === "failed" && add.error && (
-        <div className="ss-add-omh-err" role="status" title={add.error} data-testid="session-add-omh-error">
-          {add.error}
-        </div>
-      )}
-      {running && <InstallLog lines={add.lines} compact testId="session-add-omh-log" />}
     </div>
   );
 }

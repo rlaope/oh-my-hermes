@@ -166,13 +166,11 @@ test("a first run takes the language from the system; an install that already ra
   expect(await p1.evaluate(() => document.documentElement.lang)).toBe("zh-CN");
   await expect(p1.getByTestId("nav-settings")).toContainText("设置");
   expect(await p1.evaluate(() => localStorage.getItem("omher.lang"))).toBe("zh");
-  // the first-run card shows the Language row and switches on the spot
+  // there is no first-run panel: the language stays as picked, changed in Settings
   await mock("mock.clearHistory", { bot: "kami" });
   await p1.reload();
-  await expect(p1.getByTestId("onb-lang")).toBeVisible();
-  await expect(p1.getByTestId("onb-language").getByRole("radio", { name: "中文" })).toHaveAttribute("aria-checked", "true");
-  await p1.getByTestId("onb-language").getByRole("radio", { name: "English" }).click();
-  await expect(p1.getByTestId("nav-settings")).toContainText("Settings");
+  await expect(p1.getByTestId("nav-settings")).toContainText("设置");
+  await expect(p1.getByTestId("onb-lang")).toHaveCount(0);
   await fresh.close();
 
   // onboarded before this version and never chose: English, whatever the system says

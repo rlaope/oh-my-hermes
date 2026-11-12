@@ -105,20 +105,12 @@ export const en = {
   "sessions.notInstalled": "Not installed",
 
   // onboarding (the first-run cards and the empty sections' lines)
-  "onb.label": "What omher does",
-  "onb.bots.title": "Bots",
-  "onb.bots.body": "Coworkers you hand work to. They plan it, run it and report back.",
-  "onb.bots.action": "Message a bot",
-  "onb.sessions.title": "Sessions",
-  "onb.sessions.body": "A coding agent (Claude Code, Codex, OmO, DSH, pi, omp) working with you in one folder.",
-  "onb.sessions.action": "New session",
-  "onb.omh.rec": "Recommended",
-  "onb.omh.body": "Adds to the bots you have: they plan big jobs in parts, hand the parts out, and the plan shows in Plans as it runs.",
   "omh.add.line": "Add oh-my-hermes",
-  "omh.add.running": "Adding oh-my-hermes…",
   "omh.add.tip": "Runs the same installer as omher's first-run screen. Your bots then plan big jobs in parts, shown in Plans.",
   "omh.add.exit": "The installer stopped (exit {code}).",
-  "onb.dismiss": "Dismiss",
+  "omh.icon": "oh-my-hermes is not installed",
+  "omh.pop.body": "With it your bots plan big jobs in parts, hand the parts out, and the plan shows in Plans as it runs.",
+  "omh.pop.hide": "Don't show again",
   "onb.botsHint": "Each bot is a Hermes profile. Add one with + above.",
   "onb.sessionsHint": "Run a coding agent in a folder, as a chat.",
 

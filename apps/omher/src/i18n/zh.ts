@@ -104,20 +104,12 @@ export const zh: Record<Key, string> = {
   "sessions.notInstalled": "未安装",
 
   // onboarding (the first-run cards and the empty sections' lines)
-  "onb.label": "omher 简介",
-  "onb.bots.title": "机器人",
-  "onb.bots.body": "可以交付工作的同事。它们会规划、执行并汇报结果。",
-  "onb.bots.action": "给机器人发消息",
-  "onb.sessions.title": "会话",
-  "onb.sessions.body": "编程代理（Claude Code、Codex、OmO、DSH、pi、omp）在一个文件夹中与你一起工作。",
-  "onb.sessions.action": "新建会话",
-  "onb.omh.rec": "推荐",
-  "onb.omh.body": "加在你已有的机器人上：它们把大任务分成几部分来计划并分派出去，计划的进展会显示在 Plans 里。",
   "omh.add.line": "添加 oh-my-hermes",
-  "omh.add.running": "正在添加 oh-my-hermes…",
   "omh.add.tip": "运行与 omher 首次启动界面相同的安装程序。之后机器人会把大任务分成几部分来计划，并显示在 Plans 里。",
   "omh.add.exit": "安装程序已停止（exit {code}）。",
-  "onb.dismiss": "关闭",
+  "omh.icon": "未安装 oh-my-hermes",
+  "omh.pop.body": "装上后，机器人会把大任务分成几部分来计划并分派出去，计划的进展会显示在 Plans 里。",
+  "omh.pop.hide": "不再显示",
   "onb.botsHint": "每个机器人是一个 Hermes 配置档。用上方的 + 添加。",
   "onb.sessionsHint": "在文件夹中以聊天方式运行编程代理。",
 
