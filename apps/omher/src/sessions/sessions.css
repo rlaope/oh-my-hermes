@@ -821,6 +821,26 @@
 .ss-mode.set {
   color: var(--ink);
 }
+/* the agent's own setting asks for nothing or reaches the whole disk: said in the warning text colour, no box */
+.ss-mode.own,
+.ss-mode-own {
+  color: var(--needs);
+}
+/* the sentence is the point: it is never cut to "full disk a…"; the message field gives way */
+.ss-mode.own {
+  max-width: none;
+  flex-shrink: 0;
+}
+.ss-pick-w:has(> .ss-mode.own) {
+  flex-shrink: 0;
+}
+.ss-mode.own .ss-pick-n {
+  overflow: visible;
+}
+.ss-mode-own {
+  padding: 2px 6px 6px;
+  font-size: 12px;
+}
 .ss-dpop .ss-h.ss-h-plain {
   padding-left: 6px;
 }
