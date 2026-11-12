@@ -698,7 +698,10 @@ export type Action =
   /** After a restart: the panel, Plans view and open session as they were (resume.ts). */
   | { type: "ui.restore"; ui: Pick<Ui, "panelOpen" | "panelTab" | "runsFull" | "runId"> & { session: string | null } }
   /** Drop a chat that is gone for good (a closed SESSIONS chat): its open asks go with it. */
-  | { type: "chat.forget"; bot: string };
+  | { type: "chat.forget"; bot: string }
+  /** A SESSIONS chat ended with `error`: its last turn, failed with that same reason, no longer repeats it (the
+   *  Ended line above the composer says it once, beside Restart). */
+  | { type: "turn.reasonMoved"; bot: string; error: string };
 
 // ---- chats that are not a bot's main chat ------------------------------------------------------
 //
@@ -1090,6 +1093,12 @@ export function reduce(state: AppState, a: Action): AppState {
     }
     case "ui.focusAsk":
       return { ...state, ui: { ...state.ui, focusAsk: { bot: a.bot, id: a.id, seq: (state.ui.focusAsk?.seq ?? 0) + 1 } } };
+    case "turn.reasonMoved": {
+      const c = state.chats[a.bot];
+      const last = c?.lastTurn;
+      if (!c || !last || last.outcome !== "error" || last.error?.trim() !== a.error.trim()) return state;
+      return { ...state, chats: { ...state.chats, [a.bot]: patchTurnById(c, last.id, ({ error: _, ...t }) => t) } };
+    }
     case "chat.forget": {
       if (!state.chats[a.bot]) return state;
       const chats = { ...state.chats };

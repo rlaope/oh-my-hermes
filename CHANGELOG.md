@@ -205,6 +205,17 @@ All notable changes will be documented here.
   baseline, review and verify steps no longer gets it, nor does a chain of three
   builds beside one other build (3 of 4).
 
+- **omher's session and chat screens say what is happening, once and in full.**
+  A subagent card that is still running counts the way Plans does ("Running ·
+  1 of 2 done"), and a subagent waiting on your approval reads "waiting" in
+  the sidebar's amber until you answer. The activity line and the subagent it
+  names show the same seconds. A session whose agent never answered says why
+  once, beside Restart. A bot's chat header keeps the model name whole from
+  900px up with Plans open, in every language; the places chip drops to its
+  marks first. The SESSIONS + menu fades where its list is cut and keeps a few
+  px from the row above, and a session's / menu is as wide as the composer,
+  with plain command names and skills marked in the accent colour.
+
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
   nothing new), and the verify node marks each one met, not met or not

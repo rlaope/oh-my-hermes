@@ -13,6 +13,17 @@
   white-space: nowrap;
   flex: none;
 }
+/* A narrow chat header (the Plans panel open at 1100 to 1240px; a long name in Korean or Japanese) cannot hold the
+   bot, the chip's words, the model name and the panel button: the chip gives way first and shows only its app marks
+   (its tooltip still says where the bot is), so the model name stays whole. A wider header shows the words again. */
+.head[data-testid="header"] {
+  container: chathead / inline-size;
+}
+@container chathead (max-width: 470px) {
+  .ew-places > [data-testid="places-label"] {
+    display: none;
+  }
+}
 .ew-places:hover,
 .ew-places.on {
   background: var(--raise);
