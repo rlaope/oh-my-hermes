@@ -8,7 +8,7 @@ rows the live region printed, the transcript's above it and its own, is
 shown reversed and copied without gutter cells, as the pager copies; a double
 click copies a word and a triple click a row. The wheel up opens no view: it
 turns reports off so the terminal scrolls, until the next key. A row the region did not print selects
-nothing: moving the held button from it opens the transcript view instead. A
+nothing and opens nothing: the mouse never opens a view. A
 selection that would no longer hold what the screen showed (the live rows
 moved under it) is dropped and copies nothing. A resize drops the selection
 without painting at rows the terminal reflowed. The highlight is painted back
@@ -332,7 +332,7 @@ class AgentListTests(unittest.TestCase):
 
 
 class UncertainRowTests(unittest.TestCase):
-    def test_a_press_on_a_row_the_region_did_not_print_copies_nothing_and_a_drag_from_it_opens_the_transcript_view(self) -> None:
+    def test_a_press_on_a_row_the_region_did_not_print_copies_nothing_and_a_drag_from_it_opens_nothing(self) -> None:
         app, _client = make_app(rows=14, cols=60, environ=MOUSE)
         app.terminal.write("shell output\r\nmore shell output\r\n")  # type: ignore[attr-defined]
         app.adopt_cursor_row(3)  # the region starts under the shell's rows, which it never printed
@@ -346,8 +346,9 @@ class UncertainRowTests(unittest.TestCase):
         self.assertEqual((osc52(app), app.pager), ([], None))
         press(app, 3, 1)
         move(app, 9, 2)
-        self.assertIsInstance(app.pager, HistoryPager)
+        self.assertIsNone(app.pager)  # the owner's decision of 2026-11-12: the mouse never opens the history pager
         release(app, 9, 2)
+        self.assertEqual(osc52(app), [])
         self.assertEqual(osc52(app), [])
 
     def test_a_resize_drops_the_selection_writes_nothing_at_the_reflowed_rows_and_turns_reports_off(self) -> None:
