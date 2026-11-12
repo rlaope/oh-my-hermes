@@ -433,8 +433,7 @@ def _typed_ask_injection(message: Mapping[str, object]) -> str:
         )
         flattened = "\n".join(text for text in texts if isinstance(text, str) and text)
     elif isinstance(content, str):
-        lines = content.split("\n")
-        flattened = "\n".join(line for line in lines if not _SCREENSHOT_MARKER.fullmatch(line))
+        return _flattened_row_injection(content, typed_ask)
     else:
         return ""
     if not flattened.startswith(typed_ask):
@@ -443,6 +442,43 @@ def _typed_ask_injection(message: Mapping[str, object]) -> str:
     if typed_ask and not injected.startswith("\n"):
         return ""
     return injected
+
+
+# `gateway/run.py` timestamp prefix (`[Wed 2026-11-11 21:26:40 KST] `) a gateway with
+# message timestamps on puts before a replayed user row's first line.
+_REPLAY_STAMP = re.compile(r"\[[^\]\n]{1,80}\] ")
+
+
+def _flattened_row_injection(content: str, typed_ask: str) -> str:
+    """What follows the stamped ask in a session-DB row, or ``""``.
+
+    The row is the turn's parts flattened one per line, each image a
+    ``[screenshot]`` line, then the injected suffix (Hermes
+    ``session_persistence._durable_content``). The ask's own lines are found
+    in order: an image line or an empty part's blank line may sit before or
+    between them, a line the person typed is matched as typed (a literal
+    ``[screenshot]`` too), and the first may carry the gateway's timestamp
+    prefix. Image lines right after the ask belong to the turn; the rest is
+    the injection. An ask that is not all there reads as no injection.
+    """
+    lines = content.split("\n")
+    at = 0
+    for index, wanted in enumerate(typed_ask.split("\n") if typed_ask else []):
+        while at < len(lines):
+            line = lines[at]
+            if index == 0 and (stamp := _REPLAY_STAMP.match(line)) and line[stamp.end():] == wanted:
+                line = wanted
+            if line == wanted:
+                break
+            if not (_SCREENSHOT_MARKER.fullmatch(line) or (wanted and not line)):
+                return ""
+            at += 1
+        else:
+            return ""
+        at += 1
+    while at < len(lines) and (_SCREENSHOT_MARKER.fullmatch(lines[at]) or not lines[at]):
+        at += 1
+    return "\n" + "\n".join(lines[at:]) if at < len(lines) else ""
 
 
 def _replayed_workflow_line(conversation_history: object) -> str:

@@ -178,6 +178,37 @@ class ActiveWorkflowContextTests(unittest.TestCase):
                     "display_metadata": {"typed_ask": "please inspect the image"}}]
         self.assertNotIn(ACTIVE_WORKFLOW_HEAD, self.hook(conversation_history=rebuilt).get("context", ""))
 
+    def test_session_db_image_rows_in_every_host_shape_are_read(self) -> None:
+        # Review round 2: a gateway timestamp prefix, a typed literal `[screenshot]` line, an empty text part.
+        self.fixture()
+        reminder = self.hook(conversation_history=[])["context"]
+        for content, ask in (
+            ("[Wed 2026-11-11 21:26:40 KST] please inspect the image\n[screenshot]\n" + reminder,
+             "please inspect the image"),
+            ("Explain this label:\n[screenshot]\n[screenshot]\n" + reminder, "Explain this label:\n[screenshot]"),
+            ("\n[screenshot]\ninspect\n" + reminder, "inspect"),
+            ("[screenshot]\n" + reminder, ""),
+        ):
+            row = [{"role": "user", "content": content, "display_metadata": {"typed_ask": ask}}]
+            with self.subTest(ask=ask):
+                self.assertNotIn(ACTIVE_WORKFLOW_HEAD, self.hook(conversation_history=row).get("context", ""))
+        self.assertEqual(self.cli("finish", "--workflow", "memory-sync", "--outcome", "finished",
+                                  "--session-ref", self.session)[0], 0)
+        stamped = [{"role": "user", "content": "[Wed 2026-11-11 21:26:40 KST] look\n[screenshot]\n" + reminder,
+                    "display_metadata": {"typed_ask": "look"}}]
+        self.assertIn(ACTIVE_WORKFLOW_ENDED_LINE, self.hook(conversation_history=stamped)["context"])
+
+    def test_a_db_row_whose_ask_is_not_all_there_counts_as_no_injection(self) -> None:
+        self.fixture()
+        reminder = self.hook(conversation_history=[])["context"]
+        for content, ask in (
+            ("something else\n[screenshot]\n" + reminder, "please inspect"),  # the stamped ask is missing
+            ("why does it say this?\n" + reminder, "why does it say this?\n" + reminder),  # the person quoted it
+        ):
+            row = [{"role": "user", "content": content, "display_metadata": {"typed_ask": ask}}]
+            with self.subTest(ask=ask[:20]):
+                self.assertIn(ACTIVE_WORKFLOW_HEAD, self.hook(conversation_history=row)["context"])
+
     def test_end_line_once_after_an_image_turn(self) -> None:
         self.fixture()
         first = self.hook(conversation_history=[])
