@@ -108,7 +108,7 @@ test("an agent without a way shows it dimmed with a reason: DSH has no terminal,
   await expect(term).toHaveAttribute("aria-disabled", "true");
   await expect(term).toHaveAttribute("title", /no terminal here/);
   await expect(page.getByTestId("session-way-chat")).toHaveAttribute("aria-checked", "true");
-  await term.click(); // dimmed, so nothing changes
+  await term.click({ force: true }); // dimmed (Playwright waits on aria-disabled), so nothing changes
   await expect(page.getByTestId("session-way-chat")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("composer")).toBeEnabled();
 
