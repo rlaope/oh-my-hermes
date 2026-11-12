@@ -1,0 +1,23 @@
+{
+  "task_id": "st_01a1d07c",
+  "name": "helper-single",
+  "task_summary": "Read a.txt and report its first line verbatim",
+  "status": "completed",
+  "root_session_id": "01a1d07c-12df-7a33-8493-8a12a1dc09c0",
+  "parent_session_id": "01a1d07c-12df-7a33-8493-8a12a1dc09c0",
+  "model": "anthropic/claude-haiku-5-5",
+  "effective_model": {
+    "provider": "anthropic",
+    "model_id": "claude-haiku-5-5",
+    "display": "anthropic/claude-haiku-5-5",
+    "source": "category"
+  },
+  "created_at": "2026-11-12T15:59:42.408Z",
+  "started_at": "2026-11-12T15:59:42.411Z",
+  "terminal_at": "2026-11-12T16:00:05.421Z",
+  "updated_at": "2026-11-12T16:00:05.421Z",
+  "final_response": "FIRST_LINE: alpha line",
+  "spawn_spec": {
+    "cwd": "/w/proj"
+  }
+}

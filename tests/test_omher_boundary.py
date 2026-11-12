@@ -54,6 +54,9 @@ RULES = (
     " transcripts under `children/`).",
     "so for a session's own folder omher also reads `<that folder>/.omo/senpi-task/tasks/st_*.json`, the same records"
     " and nothing else in `.omo`, never a symlinked `.omo` or `senpi-task`, and never another folder's.",
+    "An OmO session chat reads the same records for one more thing: when OmO's `task` result names a subagent's"
+    " task id but not its answer, it reads that one record (`st_<task id>.json`, from the same folders and under the"
+    " same rules, read-only, and only a record of that session)",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -217,6 +220,24 @@ class SubagentEvents(unittest.TestCase):
         rule = next(r for r in re.split(r"\n(?=\d+\. )", DOC.read_text(encoding="utf-8")) if "OmO's subagent records" in r)
         self.assertIn("`<that folder>/.omo/senpi-task/tasks/st_*.json`", rule)
         self.assertIn("never a symlinked `.omo` or `senpi-task`, and never another folder's", rule)
+
+    def test_an_omo_chat_reads_only_its_subagents_own_task_records(self) -> None:
+        # the chat's answer for a foreground OmO subagent comes from the record Plans reads (rule 16): one
+        # `st_<id>.json` by task id, in `senpi-task/tasks` under `<omo>/agent/projects/*` or the session's own
+        # `.omo`, never a link, never another session's record, and nothing is written there
+        rust = (SHELL / "agent_chat.rs").read_text(encoding="utf-8")
+        code = rust[: rust.index("#[cfg(test)]\nmod tests")]
+        body = code[code.index("    fn omo_record(&self"):]
+        body = body[: body.index("\n    }\n") + 6]
+        self.assertIn('strip_prefix("st_")', body)
+        self.assertIn('join("senpi-task").join("tasks")', body)
+        self.assertIn('Path::new(&self.cwd).join(".omo")', body)
+        self.assertIn("symlink_metadata", body)
+        self.assertIn('s(&rec, "root_session_id") == self.session', body)
+        self.assertEqual(re.findall(r'join\("([a-z.-]+)"\)', body), [".omo", "senpi-task", "senpi-task", "tasks", "agent", "projects", "senpi-task", "tasks"])
+        for w in ("fs::write", "create_dir", "remove_file", "OpenOptions", "children"):
+            self.assertNotIn(w, body, w)
+        self.assertEqual(code.count("omo_record("), 2)
 
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
