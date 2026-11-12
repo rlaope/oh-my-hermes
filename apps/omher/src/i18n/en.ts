@@ -81,7 +81,7 @@ export const en = {
   // sidebar (the Needs-you list above BOTS)
   "needs.more": "+{n} more",
 
-  // skills (the composer's ./ picker)
+  // skills (the composer's $ picker)
   "skills.label": "Skills",
   "skills.none": "No skill matches",
 
@@ -632,7 +632,8 @@ export const en = {
   "head.panel": "Panel ({key})",
   "head.panelLive1": "Plans · 1 subagent working ({key})",
   "head.panelLive": "Plans · {n} subagents working ({key})",
-  "cmp.skillHint": "Type a skill name, e.g. {example} — {bot} loads it for this message",
+  "cmp.skillHint": "No skill list from {bot}: type the whole name at the start, e.g. {example}",
+  "cmp.skillSigil": "Skills are typed with $ anywhere in the message, e.g. {example}. A / command goes to {bot} as typed.",
   "cmp.removeReply": "Remove reply target",
   "cmp.remove": "Remove",
   "cmp.offline": "{bot} is offline",

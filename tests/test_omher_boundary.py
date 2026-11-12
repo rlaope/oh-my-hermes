@@ -96,7 +96,7 @@ RULES = (
     "a Claude Code, Codex, OmO or DSH chat that was running starts again by itself in the same folder, continuing its own conversation,",
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
-    "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
+    "For the composer's `$` skill picker omher reads, never writes, the bot's own skill files",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
@@ -204,7 +204,7 @@ class DocPins(unittest.TestCase):
         # 22: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
-        # (skills.list for the ./ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
+        # (skills.list for the $ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
         # through the person's own `gh`), rule 22 (link chips: channel names read, web links opened on a
         # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
