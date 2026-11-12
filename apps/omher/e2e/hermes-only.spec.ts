@@ -216,12 +216,75 @@ test("C. the popover: title, one sentence, Install and Don't show again; 12-13px
   for (const b of [m.icon!, m.plus!]) expect(m.pop!.top >= b.bottom || m.pop!.bottom <= b.top).toBe(true);
 });
 
+test("C. the popover hangs under the !, right-aligned to it, narrower than the sidebar, and cuts no sidebar row in half", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("omh-notice").click();
+  await expect(page.getByTestId("omh-pop")).toBeVisible();
+  await page.waitForFunction(() => document.querySelector(".omh-pop")!.getAnimations().every((a) => a.playState !== "running"));
+  const m = await page.evaluate(() => {
+    const r = (e: Element) => e.getBoundingClientRect();
+    const pop = r(document.querySelector(".omh-pop")!);
+    const icon = r(document.querySelector("[data-testid=omh-notice]")!);
+    const side = r(document.querySelector(".side")!);
+    const rows = [...document.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec):not(.side-top)")]
+      .map((e) => ({ top: r(e).top, bottom: r(e).bottom, name: (e.textContent ?? "").slice(0, 20) }))
+      .filter((x) => x.bottom > x.top);
+    return { pop: { top: pop.top, bottom: pop.bottom, left: pop.left, right: pop.right }, icon: { bottom: icon.bottom, right: icon.right }, side: { left: side.left, right: side.right }, rows };
+  });
+  expect(Math.abs(m.pop.right - m.icon.right)).toBeLessThanOrEqual(0.5);
+  expect(m.pop.top).toBeGreaterThanOrEqual(m.icon.bottom);
+  expect(m.pop.top - m.icon.bottom).toBeLessThanOrEqual(8);
+  expect(m.pop.right - m.pop.left).toBeLessThan(m.side.right - m.side.left - 30);
+  expect(m.pop.left).toBeGreaterThanOrEqual(m.side.left + 4);
+  // every sidebar row is wholly under it, wholly below it, or wholly above it: none shows half
+  for (const row of m.rows) {
+    const clear = row.bottom <= m.pop.top + 0.5 || row.top >= m.pop.bottom - 0.5 || (row.top >= m.pop.top - 0.5 && row.bottom <= m.pop.bottom + 0.5);
+    expect(clear, `${row.name} ${row.top}-${row.bottom} vs ${m.pop.top}-${m.pop.bottom}`).toBe(true);
+  }
+});
+
+test("C. the ! has the + menu's pressed look while its popover is open, and none at rest", async ({ page }) => {
+  await open(page);
+  const icon = page.getByTestId("omh-notice");
+  const bg = () => icon.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await page.mouse.move(700, 500);
+  expect(await bg()).toBe("rgba(0, 0, 0, 0)");
+  await icon.click();
+  await expect(icon).toHaveAttribute("aria-expanded", "true");
+  await page.mouse.move(700, 500);
+  const pressed = await bg();
+  // the SESSIONS +, its menu open
+  await page.keyboard.press("Escape");
+  await page.getByTestId("session-new").click();
+  await page.mouse.move(700, 500);
+  const plus = await page.getByTestId("session-new").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(pressed).not.toBe("rgba(0, 0, 0, 0)");
+  expect(pressed).toBe(plus);
+});
+
+test("C. Install is the quiet outlined action: transparent, a thin border, 12px, never the brightest thing in the popover", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("omh-notice").click();
+  const look = await page.getByTestId("omh-pop-install").evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const pop = getComputedStyle(el.closest(".omh-pop")!);
+    return { bg: cs.backgroundColor, border: cs.borderTopWidth, style: cs.borderTopStyle, size: cs.fontSize, popBg: pop.backgroundColor };
+  });
+  expect(look.bg).toBe("rgba(0, 0, 0, 0)");
+  expect(look.border).toBe("1px");
+  expect(look.style).toBe("solid");
+  expect(look.size).toBe("12px");
+});
+
 test("C. running: the installer's output in the house style, as tall as its lines, then it scrolls; one run only", async ({ page }) => {
   await open(page, { plan: { exit: 0, lines: ["Installing oh-my-hermes 4.9.2"], hold: true } });
   await page.getByTestId("omh-notice").click();
   await page.getByTestId("omh-pop-install").click();
-  await expect(page.getByTestId("omh-pop-running")).toContainText("Adding oh-my-hermes");
+  await expect(page.getByTestId("omh-pop-install")).toHaveText("Installing…");
   await expect(page.getByTestId("omh-pop-install")).toBeDisabled();
+  // one spinner only: the "!" turns into it; the popover has none of its own
+  await expect(page.getByTestId("omh-notice").locator(".ui-spin")).toHaveCount(1);
+  await expect(page.locator(".omh-pop .ui-spin")).toHaveCount(0);
   const log = page.getByTestId("omh-pop-log");
   await expect(log).toContainText("Installing oh-my-hermes");
   const look = await log.evaluate((el) => {
@@ -231,7 +294,10 @@ test("C. running: the installer's output in the house style, as tall as its line
     document.body.appendChild(probe);
     const raise = getComputedStyle(probe).backgroundColor;
     probe.remove();
-    return { bg: cs.backgroundColor, raise, radius: parseFloat(cs.borderTopLeftRadius), size: cs.fontSize, family: cs.fontFamily, sh: el.scrollHeight, ch: el.clientHeight };
+    const kids = [...el.children].map((c) => c.getBoundingClientRect());
+    const text = kids.length ? kids[kids.length - 1].bottom - kids[0].top : 0;
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    return { bg: cs.backgroundColor, raise, radius: parseFloat(cs.borderTopLeftRadius), size: cs.fontSize, family: cs.fontFamily, sh: el.scrollHeight, ch: el.clientHeight, text, pad };
   });
   expect(look.bg).not.toBe("rgb(0, 0, 0)");
   expect(look.bg).toBe(look.raise);
@@ -239,10 +305,27 @@ test("C. running: the installer's output in the house style, as tall as its line
   expect(look.radius).toBeLessThanOrEqual(6);
   expect(look.size).toBe("12px");
   expect(look.family).toMatch(/mono|Menlo/i);
-  // one line, no dead space under it
+  // as tall as its line (wrapped or not), no dead space under it, nothing to scroll
   expect(look.sh).toBe(look.ch);
-  expect(look.ch).toBeLessThanOrEqual(18 + 12);
+  expect(look.text).toBeGreaterThan(0);
+  expect(Math.abs(look.ch - look.pad - look.text)).toBeLessThanOrEqual(1);
   expect(await installs(page)).toBe(1);
+});
+
+test("C. the output takes the popover's whole inner width; a short line stays one line, a long one wraps", async ({ page }) => {
+  await open(page, { plan: { exit: 0, lines: ["[ok] Hermes Agent", "x".repeat(60)], hold: true } });
+  await page.getByTestId("omh-notice").click();
+  await page.getByTestId("omh-pop-install").click();
+  const log = page.getByTestId("omh-pop-log");
+  await expect(log).toContainText("xxxx");
+  const m = await log.evaluate((el) => {
+    const c = el.closest(".omh-pop-c")!;
+    const lines = [...el.querySelectorAll(".gate-line")].map((l) => l.getBoundingClientRect().height);
+    return { log: el.getBoundingClientRect().width, inner: c.clientWidth, lines };
+  });
+  expect(Math.abs(m.log - m.inner)).toBeLessThanOrEqual(1);
+  expect(m.lines[0]).toBeLessThanOrEqual(18.5);
+  expect(m.lines[1]).toBeGreaterThan(18.5);
 });
 
 test("C. a long output stops at five lines and scrolls, the newest line in view", async ({ page }) => {
@@ -252,9 +335,11 @@ test("C. a long output stops at five lines and scrolls, the newest line in view"
   const log = page.getByTestId("omh-pop-log");
   await expect(log).toContainText("step 12");
   const m = await log.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight, top: el.scrollTop }));
-  expect(m.ch).toBeLessThanOrEqual(5 * 18 + 12);
+  expect(m.ch).toBe(5 * 18);
   expect(m.sh).toBeGreaterThan(m.ch);
   expect(m.top + m.ch).toBeGreaterThanOrEqual(m.sh - 1);
+  // whole rows only: scrolled to its end, the top edge falls on the 18px row grid, so no row shows cut
+  expect(m.top % 18).toBe(0);
 });
 
 test("C. done: the ! and its popover go, the + row reads oh-my-hermes and its Add line is gone", async ({ page }) => {
@@ -276,6 +361,15 @@ test("C. failed: the last line and Install again, which runs the same installer 
   await expect(page.getByTestId("omh-pop-error")).toHaveText("[failed] could not reach github.com");
   await expect(page.getByTestId("omh-pop-install")).toHaveText("Install again");
   await expect(page.getByTestId("omh-notice")).toBeVisible();
+  // nothing in the popover runs past its edges (Install again and Don't show again wrap if they must)
+  const over = await page.locator(".omh-pop").evaluate((pop) => {
+    const p = pop.getBoundingClientRect();
+    return [...pop.querySelectorAll("button, p, b, pre")].filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.left < p.left || r.right > p.right - 1;
+    }).length;
+  });
+  expect(over).toBe(0);
   await page.getByTestId("omh-pop-install").click();
   await expect.poll(() => installs(page)).toBe(2);
 });
@@ -329,16 +423,28 @@ test("D. the + menu's line is a quiet borderless row and never runs the installe
 for (const height of [600, 720, 820]) {
   test(`C. the popover with a long output stays inside a ${height}px window with air at both ends`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height });
-    await open(page, { plan: { exit: 1, lines: [...LINES, "[failed] could not reach github.com (curl: (6)) after three tries"] } });
+    await open(page, { plan: { exit: 0, lines: LINES, hold: true } });
     await page.getByTestId("omh-notice").click();
     await page.getByTestId("omh-pop-install").click();
-    await expect(page.getByTestId("omh-pop-install")).toHaveText("Install again");
+    await expect(page.getByTestId("omh-pop-log")).toContainText("step 12");
     await page.waitForTimeout(250);
     const m = await rects(page);
     expect(m.pop!.top).toBeGreaterThanOrEqual(4);
     expect(m.pop!.bottom).toBeLessThanOrEqual(m.h - 4);
     expect(m.pop!.left).toBeGreaterThanOrEqual(4);
     expect(m.pop!.right).toBeLessThanOrEqual(m.w - 4);
+    // and no sidebar row shows half under it
+    const cut = await page.evaluate(
+      ([top, bottom]) =>
+        [...document.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec):not(.side-top)")]
+          .map((e) => e.getBoundingClientRect())
+          .filter((r) => r.bottom > r.top)
+          .filter((r) => !(r.bottom <= top + 0.5 || r.top >= bottom - 0.5 || (r.top >= top - 0.5 && r.bottom <= bottom + 0.5))).length,
+      [m.pop!.top, m.pop!.bottom],
+    );
+    expect(cut).toBe(0);
+    // Install again's buttons are in view: the actions never scroll away
+    await expect(page.getByTestId("omh-pop-install")).toBeInViewport();
   });
 }
 

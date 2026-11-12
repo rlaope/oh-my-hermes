@@ -106,7 +106,6 @@ export const en = {
 
   // onboarding (the first-run cards and the empty sections' lines)
   "omh.add.line": "Add oh-my-hermes",
-  "omh.add.running": "Adding oh-my-hermes…",
   "omh.add.tip": "Runs the same installer as omher's first-run screen. Your bots then plan big jobs in parts, shown in Plans.",
   "omh.add.exit": "The installer stopped (exit {code}).",
   "omh.icon": "oh-my-hermes is not installed",

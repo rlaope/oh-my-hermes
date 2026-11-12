@@ -123,9 +123,11 @@
 /* the same output, small, where an offer to add oh-my-hermes runs it (the + menu, the first-run card): on the app's
    raised surface (not the setup screen's page black), as tall as its lines up to five whole ones, then it scrolls */
 .gate-log.gate-log-sm {
+  /* no padding above or below the lines: scrolled to its newest line, the top edge then falls on a line boundary and
+     no sliver of the line before shows (the 18px line holds the 12px text with air of its own) */
   height: auto;
-  max-height: calc(5 * 18px + 10px);
-  padding: 5px 8px;
+  max-height: calc(5 * 18px + 2px);
+  padding: 0 6px;
   border-color: var(--line);
   border-radius: var(--r);
   background: var(--raise);
