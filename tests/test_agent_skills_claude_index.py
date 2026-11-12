@@ -76,6 +76,11 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
                 self.assertGreaterEqual(len(text), 40)
                 self.assertTrue(text.endswith("."), text)
                 self.assertNotIn("Use when the user says", text)
+                lead = description(self.portable[relative]).partition(" Use when the user says:")[0].strip()
+                if len(lead) <= CLAUDE_DESCRIPTION_CAP:
+                    # Nothing was cut, so nothing is reworded: a lead that ends "act on." keeps its last word.
+                    self.assertEqual(text, lead.rstrip(" .,;:-") + ".")
+                    continue
                 words = text[:-1].rstrip(" ,;:-").split()
                 self.assertNotIn(words[-1].lower(), FUNCTION_WORDS, text)
                 self.assertNotIn(" ".join(words[-2:]).lower(), FUNCTION_WORDS, text)
@@ -91,6 +96,10 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
 
         self.assertEqual(shorten_description("[omh] Short lead. Use when the user says: a, b."), "[omh] Short lead.")
         self.assertEqual(shorten_description("No marker at all"), "No marker at all.")
+        self.assertEqual(
+            shorten_description("[omh] A decision note you can act on. Use when the user says: decide."),
+            "[omh] A decision note you can act on.",
+        )
         long = "[omh] " + "Check the build output and report every failure, " + "then fix the cause of it for the team and the rest of us"
         cut = shorten_description(long, 80)
         self.assertLessEqual(len(cut), 80)
