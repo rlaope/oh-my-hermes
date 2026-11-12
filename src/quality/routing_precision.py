@@ -10574,6 +10574,20 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
 # Positive-intervention corpus. These are real OMH-shaped turns where the router
 # should still step in after the direct-answer fallback was added.
 ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
+    RoutingInterventionCase('frontend-design-case-1', 'UI design or neighbouring request keeps its route', '대시보드 다시 디자인해줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
+    RoutingInterventionCase('frontend-design-case-2', 'UI design or neighbouring request keeps its route', '이 화면 모바일에서 깨지는데 폰 화면 고쳐줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
+    RoutingInterventionCase('frontend-design-case-3', 'UI design or neighbouring request keeps its route', '폰에서 가로 스크롤 생기는데 고쳐줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
+    RoutingInterventionCase('frontend-design-case-4', 'UI design or neighbouring request keeps its route', '관리자 화면 레이아웃 다시 잡아줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
+    RoutingInterventionCase('frontend-design-case-5', 'UI design or neighbouring request keeps its route', 'our pages all look the same, make the design less generic', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
+    RoutingInterventionCase('frontend-design-case-6', 'UI design or neighbouring request keeps its route', '랜딩 페이지 다시 디자인해줘', 'dispatch', 'frontend', 'prepare_frontend_handoff', 'frontend_handoff', ''),
+    RoutingInterventionCase('frontend-design-case-7', 'UI design or neighbouring request keeps its route', '스킬 대시보드 보여줘', 'dispatch', 'skill-health', 'prepare_skill_health', 'skill_health', ''),
+    RoutingInterventionCase('frontend-design-case-8', 'UI design or neighbouring request keeps its route', '대시보드 지표 분석해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'skill-health'),
+    RoutingInterventionCase('frontend-design-case-9', 'UI design or neighbouring request keeps its route', '모바일 앱 스토어 출시 준비해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'cto-loop'),
+    RoutingInterventionCase('frontend-design-case-10', 'UI design or neighbouring request keeps its route', 'iOS 앱 화면 디자인 리뷰해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'code-review'),
+    RoutingInterventionCase('frontend-design-case-11', 'UI design or neighbouring request keeps its route', '랜딩 페이지 소개 영상 만들어줘', 'dispatch', 'deep-interview', 'answer_clarification', 'clarification', ''),
+    RoutingInterventionCase('frontend-design-case-12', 'UI design or neighbouring request keeps its route', '폰 화면 녹화한 영상 편집해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'visual-qa'),
+    RoutingInterventionCase('frontend-design-case-13', 'UI design or neighbouring request keeps its route', '대시보드가 뭐야?', 'fallback', 'oh-my-hermes', 'answer_directly', 'clarification', ''),
+    RoutingInterventionCase('frontend-design-case-14', 'UI design or neighbouring request keeps its route', '디자인 규칙을 빌드에서 검사하게 해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'award-bar-score'),
     RoutingInterventionCase("career-discovery", "Career discovery reaches the installed method", "Help with my job search for library coordinator roles in Boston.", "dispatch", "ai-job-search", "prepare_ai_job_search", "ai_job_search"),
     RoutingInterventionCase("career-recruiter-candidate", "A recruiter can search for their own next role", "I am a recruiter; help with my job search for my next role.", "dispatch", "ai-job-search", "prepare_ai_job_search", "ai_job_search"),
     RoutingInterventionCase("career-employer-target", "An employer recruiting team can be the candidate's target", "Help with my job search for a role on an employer recruiting team.", "dispatch", "ai-job-search", "prepare_ai_job_search", "ai_job_search"),

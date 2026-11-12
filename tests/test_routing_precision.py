@@ -271,7 +271,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its review round adds eight requests that missed: GGUF and 4-bit Korean
         # quantization, distillation by parameter count, a llama model slimmed.
         # Its second review round drops the Korean 4-bit case, which falls back to main.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1299)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1313)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )
