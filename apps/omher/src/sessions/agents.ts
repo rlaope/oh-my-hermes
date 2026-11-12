@@ -124,6 +124,52 @@ export function tildePath(path: string, home: string | null): string {
   return path;
 }
 
+/** How a session opens: as omher's chat, or as the agent's own terminal. The person picks it in a New session. */
+export type OpenAs = "chat" | "terminal";
+
+/** What the person picked per agent last time (`omher.sessions.open`). */
+export type Opens = Partial<Record<AgentId, OpenAs>>;
+
+export const OPEN_KEY = "omher.sessions.open";
+
+/** Saved picks, defensively: anything malformed is dropped. */
+export function parseOpens(raw: string | null): Opens {
+  try {
+    const v = raw ? JSON.parse(raw) : {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    const out: Opens = {};
+    for (const [k, w] of Object.entries(v)) if (isAgentId(k) && (w === "chat" || w === "terminal")) out[k] = w;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Which ways `agent` can open: omher's chat and/or its own terminal. oh-my-hermes has a terminal (`omh`) but, for a
+ *  person who has Hermes and no `omh`, only the Hermes chat; DSH has no terminal here; Grok has no chat here. */
+export function opensAs(agent: AgentId, agents?: AgentInfo[] | null): Record<OpenAs, boolean> {
+  if (agent === "dsh") return { chat: true, terminal: false };
+  if (agent === "grok") return { chat: false, terminal: true };
+  if (agent === "omh" && hermesOnly(agents)) return { chat: true, terminal: false };
+  return { chat: true, terminal: true };
+}
+
+/** The way a New session opens: the one remembered for the agent if it still has it, else Chat, else the terminal
+ *  (an agent with only one way). */
+export function draftOpen(agent: AgentId, agents: AgentInfo[] | null | undefined, remembered?: Opens): OpenAs {
+  const has = opensAs(agent, agents);
+  const w = remembered?.[agent];
+  if (w && has[w]) return w;
+  return has.chat ? "chat" : "terminal";
+}
+
+/** Whether a session runs as a chat, a Hermes chat or a terminal: a session opened as a terminal is one whatever
+ *  its agent usually does; any other is as its agent opens (the shell's list, else this app's). */
+export function sessionMode(agents: AgentInfo[] | null | undefined, rec: Pick<SessionRec, "agent" | "open">): AgentMode {
+  if (rec.open === "terminal") return "terminal";
+  return agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode;
+}
+
 /** `draft` = a New session chat whose agent and folder can still change: nothing runs until its first message
  *  (or Start, for an agent that opens in its terminal). */
 export type SessionStatus = "draft" | "starting" | "running" | "exited" | "failed";
@@ -140,6 +186,9 @@ export interface SessionRec {
   error?: string;
   /** What the main column shows: the chat or the terminal. */
   view: "chat" | "terminal";
+  /** `terminal` = the person opened it as the agent's own terminal (it has no chat, whatever the agent usually
+   *  does). None = as the agent opens. */
+  open?: OpenAs;
   /** The chat's own session id (Claude Code session, Codex thread, pi session), when the agent said. */
   agentSession?: string;
   /** The chat's model, when known. */

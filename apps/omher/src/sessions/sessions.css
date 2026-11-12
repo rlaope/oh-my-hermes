@@ -630,6 +630,40 @@
   cursor: default;
   color: var(--quiet);
 }
+/* New session: Chat | Terminal beside the agent. Plain words; the picked one is gray, a way the agent lacks is dimmed */
+.ss-way {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.ss-way-o {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ss-way-o:hover {
+  color: var(--ink);
+}
+.ss-way-o.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.ss-way-o[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+.ss-way-o[aria-disabled="true"]:hover {
+  color: var(--muted);
+}
+.cmp-held {
+  padding: 6px 1px 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
 .ss-ctx {
   display: flex;
   align-items: center;

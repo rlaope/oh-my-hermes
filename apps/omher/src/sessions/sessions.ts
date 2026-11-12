@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, hermesOnly, INSTALL, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
@@ -63,6 +63,8 @@ export interface SessionsState {
   home: string | null;
   list: SessionRec[];
   recent: Recent[];
+  /** How the person last opened each agent (Chat or Terminal), kept on this computer. */
+  opens: Opens;
   /** models a chat session can switch to, by session id */
   models: Record<string, ModelOption[]>;
   /** last problem a chat reported that is not a turn's own error (model refused, …), by session id */
@@ -161,11 +163,16 @@ const errText = (e: unknown) =>
         ? String((e as { message: unknown }).message)
         : String(e);
 
-/** How an agent opens, from the shell's list (or the UI list for an older shell). */
-const modeOf = (agents: AgentInfo[] | null, id: AgentId) => agents?.find((a) => a.id === id)?.mode ?? agentDef(id).mode;
+const readOpens = () => {
+  try {
+    return parseOpens(typeof localStorage !== "undefined" ? localStorage.getItem(OPEN_KEY) : null);
+  } catch {
+    return {};
+  }
+};
 
 export function createSessions(host: SessionHost, store: () => Store = getStore, accounts: () => AccountGroup[] | null = () => null) {
-  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), models: {}, notes: {}, live: {} };
+  let state: SessionsState = { agents: null, home: null, list: [], recent: readRecent(), opens: readOpens(), models: {}, notes: {}, live: {} };
   const listeners = new Set<() => void>();
   const terms = new Map<string, Term>();
   const procs = new Map<string, ChatProc>();
@@ -661,9 +668,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return folder;
   };
 
+  /** Pick how a draft opens, Chat or Terminal (one the agent has; remembered for the agent on this computer). */
+  const setOpen = (id: string, way: OpenAs) => {
+    const r = rec(id);
+    if (!r || r.status !== "draft" || !opensAs(r.agent, state.agents)[way]) return;
+    const opens = { ...state.opens, [r.agent]: way };
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(opens));
+    } catch {
+      /* no storage */
+    }
+    set({ opens });
+  };
+
   /**
    * Start a draft: its agent in its folder, `first` as the agent's first prompt (a chat agent; the bubble shows at
-   * once). A terminal agent starts in the folder and is sent nothing. From here the agent and folder are fixed.
+   * once). A draft opened as a terminal (the agent's own, or the person's pick) starts the program in the folder and
+   * is sent nothing. From here the agent, folder and way of opening are fixed.
    */
   const start = async (id: string, first?: string, startedAs?: string, files: OutFile[] = []): Promise<boolean> => {
     const r0 = rec(id);
@@ -671,7 +692,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     await ready();
     const r = rec(id);
     if (!r || r.status !== "draft") return false; // closed or started meanwhile
-    const mode = modeOf(state.agents, r.agent);
+    const open = draftOpen(r.agent, state.agents, state.opens);
+    const mode = sessionMode(state.agents, { agent: r.agent, open });
     const text = first?.trim() ?? "";
     // the first message's files are saved before anything starts: one that cannot be leaves the draft as it was
     // (its chips stay)
@@ -701,13 +723,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       startedAt,
       status: "starting",
       view: mode === "terminal" ? "terminal" : "chat",
+      // only a way the agent does not open by itself is kept on the session
+      ...(open === "terminal" && sessionMode(state.agents, { agent: r.agent }) !== "terminal" ? { open } : {}),
       ...(account ? { account } : {}),
       ...(startedAs ? { startedAs } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
       ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
     });
     // the message is sent: the draft view goes before its composer clears its own unsent text, so clear it here
-    if (text || files.length) setUnsent(`agent:${id}`, "");
+    // (a terminal starts without the text and files the draft held)
+    if (text || files.length || mode === "terminal") setUnsent(`agent:${id}`, "");
     // the first message names the session (as a later one would in send) until the agent or the person does
     const pt = text ? promptTitle(text) : "";
     if (pt) patchRec(id, { promptTitle: pt });
@@ -744,7 +769,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     if (!r) return;
     // the terminal view of a chat session does not decide the session's status; the chat does
-    const ofChat = modeOf(state.agents, r.agent) !== "terminal";
+    const ofChat = sessionMode(state.agents, r) !== "terminal";
     // Claude Code's terminal continues the chat's conversation
     const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     try {
@@ -895,7 +920,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    */
   const setView = async (id: string, view: "chat" | "terminal") => {
     const r = rec(id);
-    if (!r || r.view === view || modeOf(state.agents, r.agent) === "terminal") return;
+    if (!r || r.view === view || sessionMode(state.agents, r) === "terminal") return;
     // a Hermes chat without oh-my-hermes has no terminal view: that view would start `omh`
     if (view === "terminal" && r.agent === "omh" && hermesOnly(state.agents)) return;
     if (r.agent === "claude" && r.agentSession) {
@@ -923,7 +948,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const restart = async (id: string) => {
     const r = rec(id);
     if (!r || (r.status !== "exited" && r.status !== "failed")) return;
-    if (modeOf(state.agents, r.agent) === "terminal") {
+    if (sessionMode(state.agents, r) === "terminal") {
       // a fresh terminal: the view mounts it and starts the program (continuing the conversation, as startTerm says)
       const t = terms.get(id);
       if (t && !t.closed) return;
@@ -932,7 +957,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "terminal", paused: undefined });
       return;
     }
-    if (procs.has(id) || modeOf(state.agents, r.agent) !== "chat") return;
+    if (procs.has(id) || sessionMode(state.agents, r) !== "chat") return;
     const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
     note(id, null);
@@ -946,7 +971,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const resume = async (id: string) => {
     const r = rec(id);
     if (!r?.paused || procs.has(id) || terms.has(id)) return;
-    const mode = modeOf(state.agents, r.agent);
+    const mode = sessionMode(state.agents, r);
     if (mode === "chat") return restart(id);
     if (mode === "terminal") {
       // the terminal view starts the program when it mounts
@@ -988,7 +1013,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         seq = Math.max(seq, Number(s.id.slice(1)) || 0);
         continue;
       }
-      const mode = modeOf(state.agents, s.agent);
+      const mode = sessionMode(state.agents, s);
       if (s.agent === "dsh" && s.view === "terminal") {
         // omher 0.2.4's DSH ran deepseek-bot's terminal (its id is a deepseek-bot conversation): it comes back ended
         // with a plain line and never starts deepseek-bot; Restart starts DeepSeek Harness in the folder
@@ -1007,6 +1032,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         startedAt: s.startedAt,
         // a chat agent comes back as its chat (its terminal view would start the program on sight)
         view: mode === "terminal" ? "terminal" : "chat",
+        ...(s.open === "terminal" ? { open: s.open } : {}),
         status: auto ? "starting" : s.failed ? "failed" : "exited",
         exitCode: s.running ? null : (s.exitCode ?? null),
         ...(s.error && !s.running ? { error: s.error } : {}),
@@ -1144,6 +1170,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     loadAgents,
     draft,
     setDraft,
+    setOpen,
     chooseFolder,
     start,
     attach,
