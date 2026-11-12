@@ -4,6 +4,8 @@
 // answer ring around the agent mark and the turn's elapsed time while a turn runs, and the amber dot with
 // "waiting" while one of its approvals or questions is open (the same asks the Needs-you strip lists). A
 // terminal row keeps a live dot while its program runs: a terminal has no turn to ring for.
+// Every row ends line 2 with a small mark for the view it opens to: an outlined speech bubble for omher's chat, a
+// solid little prompt window for the agent's terminal (a draft shows the way picked for it).
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
@@ -14,7 +16,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
 import { getAddOmh, useAddOmh } from "./addOmh";
 import { InstallLog } from "../app/BridgeGate";
@@ -359,7 +361,15 @@ export function SessionList() {
             </button>
           </div>
         ) : (
-          <Row key={rec.id} rec={rec} ctx={ctx} active={current === rec.id} onClose={() => ask(rec)} />
+          <Row
+            key={rec.id}
+            rec={rec}
+            ctx={ctx}
+            // a draft has no view yet: its mark is the way picked for it
+            view={rec.status === "draft" ? draftOpen(rec.agent, ss.agents, ss.opens) : rec.view}
+            active={current === rec.id}
+            onClose={() => ask(rec)}
+          />
         ),
       )}
     </nav>
@@ -472,7 +482,28 @@ function NameInput({ initial, auto, onDone }: { initial: string; auto: boolean; 
   );
 }
 
-function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; active: boolean; onClose: () => void }) {
+/** The row's view mark. The two must differ at a glance at 16 by 13: the terminal is a solid window with the prompt
+ *  cut out of it, the chat an outlined bubble. The header's line icons at this size both read as "a small box". */
+function ViewMark({ view }: { view: "chat" | "terminal" }) {
+  return view === "terminal" ? (
+    <svg width="16" height="13" viewBox="0 0 16 13" aria-hidden="true">
+      <rect width="16" height="13" rx="3" fill="currentColor" />
+      <path d="M4 4 6.5 6.5 4 9M8.3 9.2h3.9" fill="none" stroke="var(--ss-cut)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg width="16" height="13" viewBox="0 0 16 13" aria-hidden="true">
+      <path
+        d="M3 .8h10a2.2 2.2 0 0 1 2.2 2.2v4.2A2.2 2.2 0 0 1 13 9.4H7.6l-3.1 2.8V9.4H3A2.2 2.2 0 0 1 .8 7.2V3A2.2 2.2 0 0 1 3 .8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function Row({ rec, ctx, view, active, onClose }: { rec: SessionRec; ctx: RowContext; view: "chat" | "terminal"; active: boolean; onClose: () => void }) {
   const s = useStore();
   const key = getSessions().chatKey(rec.id);
   const chat = rec.view === "chat" ? chatLive(s, key) : undefined;
@@ -541,6 +572,16 @@ function Row({ rec, ctx, active, onClose }: { rec: SessionRec; ctx: RowContext; 
             {m.sub}
           </span>
           {ring && <TypingDots size={3} testId="bot-typing" />}
+          <span
+            className="ss-view"
+            role="img"
+            data-testid="session-view"
+            data-view={view}
+            aria-label={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
+            title={t(view === "terminal" ? "ss.open.terminal" : "ss.open.chat")}
+          >
+            <ViewMark view={view} />
+          </span>
           {m.needsYou && (
             // the bot row's plain amber dot: no number (the strip carries the count)
             <span className="needs-dot" data-testid="needs" role="status" aria-label={t("ss.needsAnswer")} title={t("ss.needsAnswer")} />

@@ -189,6 +189,8 @@ All notable changes will be documented here.
   nothing. A session opened as a terminal ends with its program (an ended line
   and Restart), has no Chat toggle or model control, shows the live dot in the
   list, and after omher restarts comes back not running, waiting for Resume.
+  Every session row ends with a small mark for its view, a speech bubble for a
+  chat and a prompt window for a terminal, so the list says which is which.
   OpenCode works both ways: its chat is as before, and as a terminal it is the
   person's own OpenCode with their own rules. DSH has no terminal, Grok has no
   chat, and Hermes alone (no `omh`) has only its chat; the choice shows those

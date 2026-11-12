@@ -536,6 +536,33 @@
 .ss-row .bot-p {
   color: var(--muted);
 }
+/* the mark for the view a row opens to (chat or terminal): at the end of line 2, under the time, in the colour of
+   the line it ends. The terminal's is solid with the prompt cut out in the row's own background, the chat's an
+   outline. The close button takes its place on hover, as it takes the time's. */
+.ss-view {
+  --ss-cut: var(--side);
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  display: grid;
+  place-items: center;
+  height: 17px;
+  color: var(--muted);
+}
+.ss-row.active .ss-view {
+  --ss-cut: var(--active-row);
+}
+/* a solid shape weighs more than an outline of the same colour: the terminal's takes the quieter gray, so a list of
+   terminals is not a column of chips beside the names */
+.ss-view[data-view="terminal"] {
+  color: var(--quiet);
+}
+.ss-row:hover .ss-view {
+  visibility: hidden;
+}
+.ss-row .needs-dot {
+  margin-left: 6px;
+}
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {
   flex: 0 1 auto;
