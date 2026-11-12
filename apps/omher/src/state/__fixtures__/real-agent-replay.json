@@ -7341,6 +7341,10 @@
         "event": "turn.start"
       },
       {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
         "event": "delta",
         "text": "I"
       },
