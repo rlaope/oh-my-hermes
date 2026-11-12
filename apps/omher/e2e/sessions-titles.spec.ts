@@ -208,7 +208,7 @@ test("rename inline: double-click or right-click › Rename; Enter saves, Esc ca
   // right-click › Rename; an empty name goes back to the automatic one (now the agent's title)
   await row.click({ button: "right" });
   const menu = page.getByTestId("session-row-menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Rename", "Close session"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Rename", /^Show in (Finder|Explorer|file manager)$/, "Open in Terminal", "Copy conversation id", "New session here", "Close session"]);
   await menu.getByTestId("session-rename").click();
   await expect(input).toBeFocused();
   await input.fill("   ");
