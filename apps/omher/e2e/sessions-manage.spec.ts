@@ -133,6 +133,24 @@ test("the sidebar search filters sessions by name and folder, and says when none
   await expect(rows(page)).toHaveCount(2);
 });
 
+for (const theme of ["dark", "light"] as const) {
+  test(`a search that matches no bot leaves BOTS at its one line and SESSIONS right under it (${theme})`, async ({ page }) => {
+    await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
+    await open(page);
+    await start(page, "/Users/you/code/web-app", "Fix the login redirect");
+    await page.getByTestId("bot-search").fill("web-app");
+    const empty = page.getByTestId("side-bots").locator(".bot-empty");
+    await expect(empty).toHaveText("No bot named “web-app”");
+    await expect(rows(page)).toHaveCount(1);
+    const gap = await page.evaluate(() => {
+      const line = document.querySelector("[data-testid=side-bots] .bot-empty")!.getBoundingClientRect();
+      const head = document.querySelector("[data-testid=side-sessions] .side-sh")!.getBoundingClientRect();
+      return head.top - line.bottom;
+    });
+    expect(gap).toBeLessThanOrEqual(24);
+  });
+}
+
 test("continue a Claude Code conversation made in its CLI: the list, then the session with its earlier messages", async ({ page }) => {
   await open(page, [{ agent: "claude", cwd: "/Users/you/code/omher", at: 2 }]);
   await page.getByTestId("session-new").click();
