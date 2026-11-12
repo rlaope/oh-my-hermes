@@ -9,11 +9,15 @@ import { t } from "../i18n";
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
  *  (`saveFile`) of attached pictures, for the agent's own image input. */
 export type ChatInput =
-  | { kind: "send"; text: string; images?: string[] }
+  | { kind: "send"; text: string; images?: string[]; /** the bubble's id: a queued message is reported by it */ id?: string }
   | { kind: "interrupt" }
   | { kind: "approve"; request_id: string; choice: ApprovalChoice }
   | { kind: "clarify"; request_id: string; answer: string | ClarifyAnswers }
-  | { kind: "model"; model: string };
+  | { kind: "model"; model: string }
+  /** the permission mode, one the shell offers for the agent (controls.ts MODES) */
+  | { kind: "mode"; mode: string }
+  /** reasoning effort, one of the levels the agent reported */
+  | { kind: "effort"; effort: string };
 
 /** An event from a chat agent: the bot chat's events (`turn.start`, `tool.start`, `delta`, `message`,
  *  `approval.request`, `turn.end`, …) plus `session.info`, `session.models`, `session.error` and, once,
@@ -59,6 +63,9 @@ export interface SessionHost {
   removeFiles(session: string): Promise<void>;
   /** Remove the saved files of every session not in `keep`. */
   pruneFiles(keep: string[]): Promise<void>;
+  /** The git branch checked out in `cwd` (read from its `.git/HEAD`; no program runs), "" when it is not a
+   *  repository, a short commit id when detached. */
+  branch(cwd: string): Promise<string>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -124,6 +131,10 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_files_prune", { keep });
   }
+  async branch(cwd: string) {
+    const { invoke } = await this.core();
+    return invoke<string>("session_branch", { cwd });
+  }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -177,6 +188,8 @@ type MockGlobals = {
   __omherMockAgents?: AgentId[];
   /** e2e: the next file saves fail with this message */
   __omherFileSaveError?: string;
+  /** e2e: the branch of each folder (none = not a repository) */
+  __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
   __omherMockNoChat?: AgentId[];
   /** e2e: the Codex thread a chat resumes is gone (deleted or archived): the shell starts a new one */
@@ -309,9 +322,13 @@ export class MockHost implements SessionHost {
   async pruneFiles(keep: string[]) {
     this.log({ op: "file.prune", keep });
   }
+  async branch(cwd: string) {
+    const b = this.g.__omherBranches ?? { "/Users/you/code/omher": "feat/session-controls" };
+    return b[cwd] ?? "";
+  }
 }
 
-const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
+const MOCK_MODELS: Record<string, { id: string; label: string; provider?: string }[]> = {
   claude: [
     { id: "opus", label: "Opus 5.5" },
     { id: "sonnet", label: "Sonnet 5.5" },
@@ -323,26 +340,77 @@ const MOCK_MODELS: Record<string, { id: string; label: string }[]> = {
   ],
   pi: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
   omp: [{ id: "anthropic/claude-sonnet-5-5", label: "Claude Sonnet 5.5" }],
-  omo: [{ id: "claude-fable-5-1", label: "Claude Fable 5.1" }],
+  // as real omo lists them on this Mac: many anthropic models, then two from another provider below the fold
+  omo: [
+    ...["Claude Fable 5.1", "Claude Opus 5", "Claude Opus 4.7", "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Claude Haiku 4.5", "Claude Opus 4.5", "Claude Sonnet 4.5", "Claude Opus 4.1", "Claude Sonnet 4", "Claude Opus 4", "Claude Haiku 4", "Claude 3.7 Sonnet"].map((label) => ({
+      id: `anthropic/${label.toLowerCase().replace(/ /g, "-").replace(/\./g, "-")}`,
+      label,
+      provider: "anthropic",
+    })),
+    { id: "opengateway/gpt-6", label: "GPT-6 (gateway)", provider: "opengateway" },
+    { id: "opengateway/gemini-4-carbon", label: "Gemini 4 Carbon (gateway)", provider: "opengateway" },
+  ],
   opencode: [
     { id: "opencode/big-pickle", label: "OpenCode/Big Pickle" },
     { id: "opencode/beam-free", label: "OpenCode/Beam Free" },
   ],
 };
 
+/** What each mock agent reports about its controls, as the real CLIs do (see agent_chat.rs). */
+const MOCK_CONTROLS: Partial<Record<AgentId, { mode?: string; efforts: string[]; effort: string; commands: { name: string; description: string; hint: string; kind: "command" | "skill"; prefix: "/" | "$" }[]; max: number }>> = {
+  claude: {
+    mode: "default",
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    effort: "high",
+    commands: [
+      { name: "compact", description: "Free up context by summarizing the conversation so far", hint: "<instructions>", kind: "command", prefix: "/" },
+      { name: "context", description: "Visualize current context usage", hint: "", kind: "command", prefix: "/" },
+      { name: "init", description: "Initialize a new CLAUDE.md file with codebase documentation", hint: "", kind: "command", prefix: "/" },
+      { name: "review", description: "Review a pull request", hint: "<pr>", kind: "command", prefix: "/" },
+      { name: "archify", description: "Architecture diagrams as standalone HTML (user)", hint: "", kind: "skill", prefix: "/" },
+      ...Array.from({ length: 60 }, (_, i) => ({ name: `skill-${String(i + 1).padStart(2, "0")}`, description: `Sample skill ${i + 1} (user)`, hint: "", kind: "skill" as const, prefix: "/" as const })),
+    ],
+    max: 1_000_000,
+  },
+  codex: {
+    mode: "",
+    efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+    effort: "medium",
+    commands: [{ name: "review", description: "Review a change", hint: "", kind: "skill", prefix: "$" }],
+    max: 258_400,
+  },
+  omo: {
+    efforts: ["minimal", "low", "medium", "high", "xhigh", "max"],
+    effort: "medium",
+    commands: [
+      { name: "todo", description: "Show or edit the todo list", hint: "", kind: "command", prefix: "/" },
+      { name: "skill:hyperframes", description: "Make or edit a video", hint: "", kind: "skill", prefix: "$" },
+    ],
+    max: 1_000_000,
+  },
+};
+const MOCK_MODES: Partial<Record<AgentId, string[]>> = { claude: ["default", "plan", "acceptEdits"], codex: ["read-only", "ask", "auto"] };
+
 /** One mock chat agent. `/approve` asks to run `rm -rf ./build`; `/slow` streams long enough to stop with
  *  Esc; `/exit` ends the program; `/title <name>` names the conversation as the agent; anything else gets a
- *  short answer after one tool step. `noChat`: an old version that never speaks its chat protocol, ended by the
+ *  short answer after one tool step. A message sent while a turn runs is queued and answered after it, as Claude
+ *  Code and OmO do; Stop drops it. `noChat`: an old version that never speaks its chat protocol, ended by the
  *  shell's start deadline (shortened here). `gone`: a Codex resume onto a thread that no longer exists. */
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
   private seq = 0;
   private waiting: string | null = null;
+  /** the open approval is a subagent's (/subask) */
+  private subWaiting = false;
+  /** "/subagents hold": the second subagent is still out */
+  private holding = false;
   private model: string;
   /** a model picked while a turn ran (Claude Code): the next turn's init confirms it */
   private next = "";
   private session: string;
+  private used = 18_400;
+  private queue: { text: string; id: string; images?: string[] }[] = [];
   private dead = false;
   constructor(
     private agent: AgentId,
@@ -382,8 +450,14 @@ class MockChat {
     }
     this.at(20, () => {
       if (this.how.gone) this.emit({ event: "session.note", kind: "new_conversation", text: "The earlier Codex conversation was not found; a new one started." });
-      this.emit({ event: "session.info", agent_session: this.session, ...(this.model ? { model: this.model } : {}) });
+      const c = MOCK_CONTROLS[this.agent];
+      this.emit({ event: "session.info", agent_session: this.session, ...(this.model ? { model: this.model } : {}), ...(c ? { effort: c.effort } : {}), ...(c?.mode !== undefined ? { mode: c.mode } : {}) });
       this.emit({ event: "session.models", options: (MOCK_MODELS[this.agent] ?? []).map((m) => ({ ...m, detail: "" })) });
+      if (c) {
+        this.emit({ event: "session.efforts", levels: c.efforts });
+        this.emit({ event: "session.commands", commands: c.commands });
+        this.emit({ event: "session.usage", used: this.used, max: c.max });
+      }
       // the agent's own commands and skills (ACP `available_commands_update`), as acp_chat.rs sends them
       if (this.agent === "opencode")
         this.emit({ event: "session.commands", commands: ["init", "review"].map((name) => ({ name, description: "", hint: "", kind: "command", prefix: "/" })) });
@@ -398,7 +472,25 @@ class MockChat {
     this.stop();
     this.turn = false;
     this.waiting = null;
+    const next = this.queue;
+    this.queue = [];
+    // Stop drops what waited (OmO clears its queue; Codex never recorded it)
+    if (outcome === "interrupted") for (const q of next) this.emit({ event: "message.dropped", id: q.id });
     this.emit({ event: "turn.end", outcome, ...(error ? { error } : {}) });
+    const c = MOCK_CONTROLS[this.agent];
+    if (c) {
+      this.used += 6_200;
+      this.emit({ event: "session.usage", used: this.used, max: c.max });
+    }
+    // a finished turn takes what was sent during it as the next turn
+    if (outcome === "done" && next.length) {
+      const [first, ...rest] = next;
+      this.queue = rest;
+      this.at(80, () => {
+        this.emit({ event: "message.taken", id: first.id });
+        this.input({ kind: "send", text: first.text, images: first.images });
+      });
+    }
   }
   private say(text: string, at: number) {
     const parts = [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))];
@@ -408,6 +500,22 @@ class MockChat {
   }
   input(i: ChatInput) {
     if (this.dead) throw new Error("the session has ended");
+    if (i.kind === "send" && this.turn && i.id) {
+      // sent while a turn runs: it waits until the agent takes it
+      this.queue.push({ text: i.text, id: i.id, images: i.images });
+      this.emit({ event: "message.queued", id: i.id });
+      return;
+    }
+    if (i.kind === "mode") {
+      if (!(MOCK_MODES[this.agent] ?? []).includes(i.mode)) throw new Error(`not a mode omher offers: ${i.mode}`);
+      this.at(20, () => this.emit({ event: "session.info", mode: i.mode }));
+      return;
+    }
+    if (i.kind === "effort") {
+      if (!(MOCK_CONTROLS[this.agent]?.efforts ?? []).includes(i.effort)) throw new Error(`unknown effort ${i.effort}`);
+      this.at(20, () => this.emit({ event: "session.info", effort: i.effort }));
+      return;
+    }
     if (i.kind === "send") {
       if (!this.turn) {
         this.turn = true;
@@ -488,6 +596,58 @@ class MockChat {
         });
         return;
       }
+      if (text.startsWith("/subagents")) {
+        // the events the Claude adapter emitted for a real run (claude-9-subagents.jsonl): two Agent calls in one
+        // message, each subagent's own step, then each one's own answer and time; the second one is slow enough to
+        // look at while it works. "/subagents hold" leaves the second one working until Stop or "/release".
+        const sub = (id: string, index: number, goal: string, extra: Record<string, unknown> = {}) =>
+          this.emit({ event: "subagent", id, agent: this.agent, name: "general-purpose", goal, delegation: "claude-msg_1", index, count: index + 1, state: "running", ...extra });
+        this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-1", name: "delegate_task", detail: "Read a.txt first line" }));
+        this.at(50, () => sub("sa-1", 0, "Read a.txt first line"));
+        this.at(120, () => sub("sa-1", 0, "Read a.txt first line", { tool: "read_file", step: "a.txt" }));
+        this.at(160, () => this.emit({ event: "tool.start", tool_id: "sa-2", name: "delegate_task", detail: "Count lines of b.txt" }));
+        this.at(170, () => sub("sa-2", 1, "Count lines of b.txt", { count: 2 }));
+        this.at(260, () => sub("sa-2", 1, "Count lines of b.txt", { count: 2, tool: "read_file", step: "b.txt" }));
+        this.at(600, () => {
+          this.emit({ event: "tool.end", tool_id: "sa-1", name: "", ok: true, ms: 0 });
+          sub("sa-1", 0, "Read a.txt first line", { count: 2, state: "done", summary: "alpha line", seconds: 3.7, model: "claude-fable-5-2" });
+        });
+        if (text.includes("hold")) {
+          this.holding = true;
+          return;
+        }
+        this.at(1400, () => {
+          this.emit({ event: "tool.end", tool_id: "sa-2", name: "", ok: true, ms: 0 });
+          sub("sa-2", 1, "Count lines of b.txt", { count: 2, state: "done", summary: "3", seconds: 9.4, model: "claude-fable-5-2" });
+        });
+        this.say("a.txt starts with alpha line; b.txt has 3 lines.", 1500);
+        this.at(1900, () => this.end("done"));
+        return;
+      }
+      if (text.startsWith("/subask")) {
+        // claude-9-subagent-ask.jsonl: a subagent's Bash needs approval; the card names the subagent
+        const rid = `req-${++this.seq}`;
+        this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-3", name: "delegate_task", detail: "Write c.txt via echo" }));
+        this.at(50, () => this.emit({ event: "subagent", id: "sa-3", agent: this.agent, name: "general-purpose", goal: "Write c.txt via echo", delegation: "claude-msg_2", index: 0, count: 1, state: "running" }));
+        this.at(120, () => this.emit({ event: "subagent", id: "sa-3", agent: this.agent, name: "general-purpose", goal: "Write c.txt via echo", delegation: "claude-msg_2", index: 0, count: 1, state: "running", tool: "terminal", step: "echo three > c.txt" }));
+        this.at(160, () => {
+          this.waiting = rid;
+          this.subWaiting = true;
+          this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "echo three > c.txt", cwd: this.cwd, choices: ["deny", "once", "session"], subagent: { id: "sa-3", name: "Write c.txt via echo" } });
+        });
+        return;
+      }
+      if (text.startsWith("/background")) {
+        // the turn ends with a command still running in the background (Claude background_tasks_changed, OmO
+        // waiting_background): the header says so until it ends
+        this.at(40, () => this.emit({ event: "session.info", background: 1 }));
+        this.say("started", 80);
+        this.at(400, () => {
+          this.end("done"); // clears the pending timers: the background's end is scheduled after it
+          this.at(1100, () => this.emit({ event: "session.info", background: 0 }));
+        });
+        return;
+      }
       if (text.startsWith("/slow")) {
         for (let k = 0; k < 40; k++) this.at(100 + k * 250, () => this.emit({ event: "delta", text: `line ${k + 1}\n` }));
         return;
@@ -499,11 +659,24 @@ class MockChat {
       this.at(800, () => this.end("done"));
     } else if (i.kind === "interrupt") {
       if (!this.turn) throw new Error("nothing is running");
-      this.at(20, () => this.end("interrupted"));
+      this.at(20, () => {
+        // as the Claude adapter does: a subagent still out when the turn stops is cancelled with it
+        if (this.holding) this.emit({ event: "subagent", id: "sa-2", agent: this.agent, name: "general-purpose", goal: "Count lines of b.txt", delegation: "claude-msg_1", index: 1, count: 2, state: "cancelled" });
+        this.holding = false;
+        this.end("interrupted");
+      });
     } else if (i.kind === "approve") {
       if (i.request_id !== this.waiting) throw new Error("no such request");
       this.waiting = null;
-      if (i.choice === "deny") {
+      if (i.request_id.startsWith("req-") && this.subWaiting) {
+        // the subagent's command ran (or was refused); the subagent hands back, then the agent answers
+        this.subWaiting = false;
+        const done = i.choice !== "deny";
+        this.at(60, () => this.emit({ event: "tool.end", tool_id: "sa-3", name: "", ok: true, ms: 0 }));
+        this.at(80, () => this.emit({ event: "subagent", id: "sa-3", agent: this.agent, name: "general-purpose", goal: "Write c.txt via echo", delegation: "claude-msg_2", index: 0, count: 1, state: "done", summary: done ? "done" : "The command was not allowed.", seconds: 4.2 }));
+        this.say(done ? "ok" : "The subagent could not write c.txt.", 120);
+        this.at(500, () => this.end("done"));
+      } else if (i.choice === "deny") {
         this.at(40, () => this.emit({ event: "tool.end", tool_id: "t-rm", name: "", ok: false, ms: 0 }));
         this.say("Okay, I left the build folder alone.", 80);
         this.at(500, () => this.end("done"));

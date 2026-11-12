@@ -20,7 +20,7 @@ export const Bubble = memo(function Bubble({
   faceEl,
   live,
 }: {
-  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "sent">;
+  item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "sent" | "wait">;
   streaming?: boolean;
   /** The bot whose face sits beside its bubble; `face` false keeps the indent without repeating it. */
   bot?: string;
@@ -32,7 +32,7 @@ export const Bubble = memo(function Bubble({
 }) {
   if (item.kind === "user") {
     return (
-      <div className="msg u" data-testid="bubble-user">
+      <div className={`msg u${item.wait ? ` ${item.wait}` : ""}`} data-testid="bubble-user" data-wait={item.wait}>
         {(item.text || !item.files?.length) && (
           <div className="b">
             <SkillText text={item.text} sent={item.sent} />
@@ -42,6 +42,16 @@ export const Bubble = memo(function Bubble({
         {item.reply && (
           <div className="msg-reply" data-testid="bubble-reply">
             {t("bub.replyTarget")} <SourceIcon source={item.reply.source} size={11} /> {item.reply.label}
+          </div>
+        )}
+        {item.wait === "queued" && (
+          <div className="msg-wait" data-testid="bubble-queued">
+            {t("ctl.queued")}
+          </div>
+        )}
+        {item.wait === "dropped" && (
+          <div className="msg-wait" data-testid="bubble-dropped">
+            {t("ctl.dropped")}
           </div>
         )}
         {item.error && <div className="msg-err">{t("bub.notSent", { error: item.error })}</div>}

@@ -2750,11 +2750,11 @@ FIXED_NOW = 1793700000.0  # 2026-11-03, after both fixture sessions; `since=0` k
 
 
 def _cli_home(root: Path) -> dict[str, Path]:
-    """A copy of the redacted CLI fixtures as Claude Code and Codex homes; pi/omp/grok absent."""
+    """A copy of the redacted CLI fixtures as Claude Code and Codex homes; OmO (fixture at cli/omo), pi, omp, grok absent."""
     import shutil
     shutil.copytree(CLI_FIX, root / "cli")
     return {"claude": root / "cli" / "claude-home", "codex": root / "cli" / "codex",
-            "pi": root / "none-pi", "omp": root / "none-omp", "grok": root / "none-grok"}
+            "omo": root / "none-omo", "pi": root / "none-pi", "omp": root / "none-omp", "grok": root / "none-grok"}
 
 
 def _claude_layout(root: Path) -> Path:
@@ -2982,6 +2982,53 @@ class CliRunsCodex(unittest.TestCase):
         self.assertEqual(ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).list("codex", None, 0.0)["runs"], [])
 
 
+class CliRunsOmo(unittest.TestCase):
+    """OmO's subagents from its own task records (real, redacted: OmO 5.1.56, two background subagents)."""
+
+    def test_the_real_records_are_one_session_run_with_each_subagents_answer_and_model(self):
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            before = _mtimes(Path(d) / "cli")
+            cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            self.assertEqual(cli.agents()["omo"], "found")
+            listed = cli.list("omo", "/w/omo-proj", 0.0)["runs"]
+            self.assertEqual([r["id"] for r in listed], ["omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50"])
+            self.assertEqual((listed[0]["owner"], listed[0]["counts"]),
+                             ({"type": "session", "id": "01a1ca26-77fa-7eeb-a2ba-d23056b97a50"},
+                              {"nodes": 2, "done": 2, "running": 0, "failed": 0}))
+            run = cli.get(listed[0]["id"])["run"]
+            self.assertEqual([(n["label"], n["state"], n["summary"], n["model"], n["lane"]) for n in run["nodes"]],
+                             [("Report the first line of a.txt", "done", "alpha line", "claude-haiku-5-5", "explore"),
+                              (run["nodes"][1]["label"], "done", "2", "claude-haiku-5-5", run["nodes"][1]["lane"])])
+            self.assertTrue(all(n["started"] < n["ended"] for n in run["nodes"]))
+            self.assertEqual(cli.list("omo", "/w/elsewhere", 0.0)["runs"], [])
+            self.assertEqual(_mtimes(Path(d) / "cli"), before, "reading OmO's records changed a file")
+
+    def test_a_running_record_quiet_for_over_10_minutes_failed_no_result(self):
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            p = next((homes["omo"] / "agent" / "projects").glob("*/senpi-task/tasks/st_01a1ca28.json"))
+            r = json.loads(p.read_text())
+            r.update(status="running", terminal_at=None, final_response=None, updated_at="2026-01-01T00:00:00Z")
+            p.write_text(json.dumps(r))
+            run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
+            n = next(x for x in run["nodes"] if x["id"] == "st_01a1ca28")
+            self.assertEqual((n["state"], n["attempts"][0]["reason"]), ("failed", "no result"))
+
+
+class ClaudeAnswer(unittest.TestCase):
+    def test_a_subagents_answer_is_its_own_words_not_claude_codes_frame(self):
+        # Claude Code 2.1.322: the tool result wraps the subagent's words; toolUseResult.content has them alone
+        frame = ("[Subagent hand-back] The subagent finished. The report follows:\n```\nalpha line\n```\n"
+                 "agentId: a1 (use SendMessage to continue)")
+        self.assertEqual(ob._claude_answer({"content": [{"type": "text", "text": "alpha line"}]}, {"content": frame}), "alpha line")
+        self.assertEqual(ob._claude_answer({}, {"content": frame}), "alpha line")
+        used = "<tools-used-before-summary>Read a.txt</tools-used-before-summary>\n3 lines"
+        self.assertEqual(ob._claude_answer({"content": [{"type": "text", "text": used}]}, {}), "3 lines")
+
+
 class CliRunsAgents(unittest.TestCase):
     def test_pi_omp_and_grok_have_no_runs_and_say_why(self):
         with tempfile.TemporaryDirectory() as d:
@@ -3027,6 +3074,9 @@ class CliRunsOps(BridgeCase):
             for bad in ({"agent": "cursor"}, {"cwd": ""}, {"since": "yesterday"}, {"since": True}):
                 self.assertEqual((await s.req("runs.cli", **bad))["error"]["code"], "bad_request", bad)
             self.assertEqual((await s.req("runs.get", bot="kami", run="codex:nope"))["error"]["code"], "not_found")
+            # a SESSIONS chat asks for its own run with no bot: a CLI run is found by its id alone
+            r = await s.req("runs.get", run=f"claude:{CLAUDE_SID}")
+            self.assertEqual(len(r["result"]["run"]["nodes"]), 3)
 
 
 class CliTitle(unittest.TestCase):

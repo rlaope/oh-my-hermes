@@ -372,11 +372,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* the path gives way first, then the name (to its ellipsis); the controls on the right stay whole */
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 10000 auto;
   max-width: 46%;
 }
 .ss-head-path {
+  flex: 0 1000000000 auto;
   font-size: 11.5px;
   color: var(--quiet);
   white-space: nowrap;
@@ -439,7 +441,11 @@
 }
 
 /* chat sessions */
+/* the controls give way last: only once the path and the name are down to their least does the model's label
+   ellipsize (as in the bot header); the toggle and the panel button never shrink. (A shrink factor under 1 would
+   leave part of the overflow unabsorbed: flex multiplies the free space by the sum of factors below 1.) */
 .ss-head-right {
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -640,6 +646,73 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* the rest of the line under a running chat: the folder's branch, then how full the context is */
+.ss-branch,
+.ss-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.ss-branch > svg {
+  flex: none;
+}
+.ss-branch-n {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.ss-usage {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+/* a small ring, filled to the share of the context in use */
+.ss-ring {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: conic-gradient(var(--muted) var(--p), color-mix(in srgb, var(--ink) 14%, transparent) 0);
+  -webkit-mask: radial-gradient(circle, transparent 3px, #000 3.5px);
+  mask: radial-gradient(circle, transparent 3px, #000 3.5px);
+}
+/* the permission mode in the composer row: a quiet label like the agent's, a menu on click */
+.ss-mode {
+  gap: 4px;
+}
+.ss-mode:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.ss-mode.set {
+  color: var(--ink);
+}
+.ss-dpop .ss-h.ss-h-plain {
+  padding-left: 6px;
+}
+.ss-mode-row {
+  align-items: flex-start;
+  height: auto;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.ss-mode-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.ss-mode-d {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: normal;
+}
 .ss-dpop {
   text-transform: none;
   letter-spacing: 0;
@@ -689,6 +762,19 @@
   filter: brightness(1.08);
 }
 
+/* "1 still running in the background": a quiet label after the status, never a button or a chip */
+.ss-head-bg {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ss-plans-rows {
+  padding: 4px 2px;
+}
 /* the model pill's "Next turn: X" after a pick made while a turn ran */
 .mp-next {
   color: var(--muted);

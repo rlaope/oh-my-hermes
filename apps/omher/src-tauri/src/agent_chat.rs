@@ -37,16 +37,108 @@ use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, r
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
 /// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
-/// file is already named in `text` by its saved copy's path.
+/// file is already named in `text` by its saved copy's path. `id` is omher's own id for the message's bubble: a
+/// message sent while a turn runs comes back as `message.queued`, then `message.taken` when the agent takes it (or
+/// `message.dropped` when Stop threw it away).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Input {
-    Send { text: String, #[serde(default)] images: Vec<Picture> },
+    Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },
     Interrupt,
     Approve { request_id: String, choice: String },
     /// A string, or per-question answers (`{qid: text|null}`) for several questions at once.
     Clarify { request_id: String, answer: Value },
     Model { model: String },
+    /// The session's permission mode, one of [`modes_for`] (never one that skips approvals or lifts the sandbox).
+    Mode { mode: String },
+    /// Reasoning effort, one of the levels the agent itself reported (`session.efforts`).
+    Effort { effort: String },
+}
+
+/// The permission modes a person can pick for agent `id`: Claude Code's own `default` (ask), `plan` and
+/// `acceptEdits`; Codex's read-only, ask and auto-in-the-workspace presets ([`codex_mode`]). No agent is offered a
+/// mode that skips every approval (`bypassPermissions`, `dontAsk`, `auto`) or lifts the sandbox
+/// (`danger-full-access`); the rpc agents have no mode here.
+pub fn modes_for(id: &str) -> &'static [&'static str] {
+    match id {
+        "claude" => &["default", "plan", "acceptEdits"],
+        "codex" => &["read-only", "ask", "auto"],
+        _ => &[],
+    }
+}
+
+/// A Codex mode as its per-turn approval policy and sandbox (`turn/start` `approvalPolicy`, `sandboxPolicy.type`).
+fn codex_mode(mode: &str) -> Option<(&'static str, &'static str)> {
+    match mode {
+        "read-only" => Some(("on-request", "readOnly")),
+        "ask" => Some(("untrusted", "workspaceWrite")),
+        "auto" => Some(("on-request", "workspaceWrite")),
+        _ => None,
+    }
+}
+
+/// The mode a Codex thread reports (approval policy and sandbox type), when it is one of ours.
+fn codex_mode_of(policy: &str, sandbox: &str) -> Option<&'static str> {
+    ["read-only", "ask", "auto"].into_iter().find(|m| codex_mode(m) == Some((policy, sandbox)))
+}
+
+/// One entry of `session.commands`: a command or skill the agent itself reported, typed after `prefix`.
+fn command_entry(name: &str, description: &str, hint: &str, kind: &str, prefix: &str) -> Value {
+    json!({"name": name, "description": clip(description, 160), "hint": hint, "kind": kind, "prefix": prefix})
+}
+
+/// Messages sent while a turn ran, in order, until the agent takes them. Shared by the adapters.
+#[derive(Default)]
+struct Waiting {
+    /// every message sent and not yet seen taken, oldest first: (id, sent while a turn ran)
+    sent: std::collections::VecDeque<(String, bool)>,
+}
+
+impl Waiting {
+    /// A message went out; `busy` = a turn was running. A queued one is said at once.
+    fn push(&mut self, st: &mut Step, id: String, busy: bool) {
+        if busy && !id.is_empty() {
+            st.emit(ev("message.queued", json!({"id": id})));
+        }
+        self.sent.push_back((id, busy));
+    }
+    /// The agent took its oldest message.
+    fn take(&mut self, st: &mut Step) {
+        if let Some((id, true)) = self.sent.pop_front() {
+            if !id.is_empty() {
+                st.emit(ev("message.taken", json!({"id": id})));
+            }
+        }
+    }
+    /// The agent took a message by id (Codex's `clientId`); older ones were taken before it.
+    fn take_id(&mut self, st: &mut Step, id: &str) {
+        if self.sent.iter().any(|(i, _)| i == id) {
+            while let Some((i, _)) = self.sent.front().cloned() {
+                self.take(st);
+                if i == id {
+                    break;
+                }
+            }
+        }
+    }
+    /// The turn is over and took everything sent during it.
+    fn all_taken(&mut self, st: &mut Step) {
+        while !self.sent.is_empty() {
+            self.take(st);
+        }
+    }
+    /// What still waits was thrown away (Stop cleared the agent's queue).
+    fn all_dropped(&mut self, st: &mut Step) {
+        for (id, busy) in std::mem::take(&mut self.sent) {
+            if busy && !id.is_empty() {
+                st.emit(ev("message.dropped", json!({"id": id})));
+            }
+        }
+    }
+    /// Only the queued ones still wait (the agent runs them next).
+    fn keep_queued(&mut self) {
+        self.sent.retain(|(_, busy)| *busy);
+    }
 }
 
 impl Input {
@@ -216,6 +308,110 @@ pub(crate) fn clip(t: &str, n: usize) -> String {
         one
     } else {
         format!("{}…", one.chars().take(n - 1).collect::<String>())
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Subagents: one agent-neutral event for every agent
+// ---------------------------------------------------------------------------------------------
+
+/// The subagents a session's agent started, as ONE event shape whatever the agent (Claude Code's Agent/Task tool,
+/// Codex sub-agent threads, OmO's `task`; later any ACP agent): `{"event": "subagent", id, agent, name, goal,
+/// delegation, index, count, state, model?, tool?, step?, summary?, seconds?}`. `id` is stable for the subagent
+/// (a later event with the same id updates its row); `delegation` groups the subagents started together (one fan-out);
+/// `state` is queued | running | thinking | done | failed | cancelled. omher only shows these: it never assigns,
+/// steers or stops a subagent.
+#[derive(Default)]
+struct Subagents {
+    agent: &'static str,
+    subs: HashMap<String, Sub>,
+    /// the fan-out filling now: its key and how many it has
+    fanout: (String, usize),
+}
+
+struct Sub {
+    name: String,
+    goal: String,
+    model: String,
+    delegation: String,
+    index: usize,
+    /// its last message so far: its answer when it ends without one of its own
+    text: String,
+    ended: bool,
+}
+
+impl Subagents {
+    fn new(agent: &'static str) -> Subagents {
+        Subagents { agent, ..Subagents::default() }
+    }
+    fn has(&self, id: &str) -> bool {
+        self.subs.contains_key(id)
+    }
+    /// Registers `id` in fan-out `delegation` (a new key starts a new fan-out), or returns it as it is.
+    fn add(&mut self, id: &str, delegation: &str, name: &str, goal: &str, model: &str) -> &mut Sub {
+        if !self.subs.contains_key(id) {
+            if self.fanout.0 != delegation {
+                self.fanout = (delegation.to_string(), 0);
+            }
+            let index = self.fanout.1;
+            self.fanout.1 += 1;
+            self.subs.insert(id.to_string(), Sub { name: clip(name, 80), goal: clip(goal, 160), model: String::new(), delegation: delegation.to_string(), index, text: String::new(), ended: false });
+        }
+        let s = self.subs.get_mut(id).unwrap();
+        if !model.is_empty() {
+            s.model = model.to_string();
+        }
+        if s.goal.is_empty() && !goal.is_empty() {
+            s.goal = clip(goal, 160);
+        }
+        s
+    }
+    /// The event for `id` in `state`, with `extra` fields (tool, step, summary, seconds). Unknown ids give none.
+    fn event(&self, id: &str, state: &str, extra: Value) -> Option<Event> {
+        let s = self.subs.get(id)?;
+        let count = if self.fanout.0 == s.delegation { self.fanout.1 } else { s.index + 1 };
+        let mut f = json!({"id": id, "agent": self.agent, "name": s.name, "goal": s.goal, "delegation": s.delegation, "index": s.index, "count": count, "state": state});
+        if !s.model.is_empty() {
+            f["model"] = Value::String(s.model.clone());
+        }
+        if let (Value::Object(m), Value::Object(x)) = (&mut f, extra) {
+            m.extend(x.into_iter().filter(|(_, v)| !v.is_null() && v.as_str() != Some("")));
+        }
+        Some(ev("subagent", f))
+    }
+    /// The subagents not yet ended, in the order they started.
+    fn open(&self) -> Vec<String> {
+        let mut v: Vec<(&String, &Sub)> = self.subs.iter().filter(|(_, s)| !s.ended).collect();
+        v.sort_by(|a, b| (&a.1.delegation, a.1.index).cmp(&(&b.1.delegation, b.1.index)));
+        v.into_iter().map(|(k, _)| k.clone()).collect()
+    }
+    /// A step the subagent runs now.
+    fn step(&self, st: &mut Step, id: &str, tool: &str, step: &str) {
+        st.events.extend(self.event(id, "running", json!({"tool": tool, "step": clip(step, 120)})));
+    }
+    /// Ends `id` once: done (its answer, else its last message), failed (the error) or cancelled.
+    fn end(&mut self, st: &mut Step, id: &str, state: &str, answer: &str, secs: Option<f64>) {
+        let Some(s) = self.subs.get_mut(id) else { return };
+        if s.ended {
+            return;
+        }
+        s.ended = true;
+        let text = if answer.trim().is_empty() { s.text.clone() } else { answer.to_string() };
+        // one plain line: a fenced answer ("```\nalpha line\n```") reads as its text
+        let mut f = json!({"summary": clip(&text.replace("```", " "), 200)});
+        if let Some(x) = secs {
+            f["seconds"] = json!((x * 10.0).round() / 10.0);
+        }
+        st.events.extend(self.event(id, state, f));
+    }
+}
+
+/// The ask (approval or question) events in `st` from index `from` on carry who asked: `subagent: {id, name}`.
+fn tag_asks(st: &mut Step, from: usize, id: &str, name: &str) {
+    for e in &mut st.events[from..] {
+        if matches!(s(e, "event").as_str(), "approval.request" | "clarify.request") {
+            e["subagent"] = json!({"id": id, "name": name});
+        }
     }
 }
 
@@ -556,11 +752,65 @@ pub struct Claude {
     labels: HashMap<String, String>,
     /// the last assistant message carried an error kind (`authentication_failed`, …)
     error_kind: String,
+    /// messages sent and not yet echoed back taken (`--replay-user-messages`)
+    waiting: Waiting,
+    /// its subagents (Agent/Task calls) by tool_use id
+    subs: Subagents,
+    /// Claude Code's agent / task id -> the tool_use id of its Agent call (asks and task events name the agent id)
+    agent_ids: HashMap<String, String>,
+    /// background tasks Claude Code says are still running (`background_tasks_changed`)
+    background: usize,
+    /// subagents that run in the background: their task notification ends them (a foreground one ends with its
+    /// tool result, which carries its own words and model)
+    bg_subs: std::collections::HashSet<String>,
 }
 
 impl Claude {
     pub fn new(cwd: &str) -> Claude {
-        Claude { cwd: cwd.into(), ..Claude::default() }
+        Claude { cwd: cwd.into(), subs: Subagents::new("claude"), ..Claude::default() }
+    }
+    /// The tool_use id of the subagent a line or request names (`parent_tool_use_id`, `tool_use_id`, an agent id).
+    fn sub_of(&self, v: &Value) -> Option<String> {
+        for k in ["parent_tool_use_id", "tool_use_id"] {
+            let id = s(v, k);
+            if self.subs.has(&id) {
+                return Some(id);
+            }
+        }
+        for k in ["agent_id", "task_id"] {
+            if let Some(id) = self.agent_ids.get(&s(v, k)) {
+                return Some(id.clone());
+            }
+        }
+        None
+    }
+    /// A line of a subagent's own conversation: its steps; its text is held as its answer, never shown as Claude's.
+    fn on_sub_line(&mut self, st: &mut Step, id: &str, v: &Value) {
+        let aid = s(v, "agent_id");
+        if !aid.is_empty() {
+            self.agent_ids.insert(aid, id.to_string());
+        }
+        if s(v, "type") != "assistant" {
+            return;
+        }
+        for b in v["message"].get("content").and_then(Value::as_array).into_iter().flatten() {
+            match s(b, "type").as_str() {
+                "tool_use" => {
+                    let name = s(b, "name");
+                    let input = b.get("input").cloned().unwrap_or(Value::Null);
+                    self.subs.step(st, id, tool_kind(&name), &call_detail(&name, &input, &self.cwd));
+                }
+                "text" => {
+                    let t = s(b, "text");
+                    if !t.trim().is_empty() {
+                        if let Some(sub) = self.subs.subs.get_mut(id) {
+                            sub.text = t;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
     fn next_id(&mut self, p: &str) -> String {
         self.seq += 1;
@@ -585,6 +835,20 @@ impl Claude {
             self.turn = false;
             self.auto_turn = false;
             self.pending.clear();
+            // a foreground subagent lives inside the turn: a turn that ends without its hand-back ended it too
+            // (Stop, an error); one in the background goes on and ends by its own task notification
+            if outcome != "done" {
+                let open: Vec<String> = self.subs.open().into_iter().filter(|id| !self.bg_subs.contains(id)).collect();
+                for id in open {
+                    self.subs.end(step, &id, "cancelled", "", None);
+                }
+            }
+            // a turn that finished took what was sent during it; one that was stopped runs its queued messages next
+            if outcome == "interrupted" {
+                self.waiting.keep_queued();
+            } else {
+                self.waiting.all_taken(step);
+            }
             self.next_due = !self.model_next.is_empty();
             let mut f = json!({"outcome": outcome});
             if let Some(e) = error.filter(|e| !e.is_empty()) {
@@ -593,6 +857,27 @@ impl Claude {
             step.emit(ev("turn.end", f));
         }
     }
+}
+
+/// A subagent's answer from Claude Code's hand-back: the text blocks of `tool_use_result.content` without the
+/// `<tools-used-before-summary>` block; else the tool_result's own text after the frame's "The report follows:".
+fn claude_answer(tur: &Value, block: &Value) -> String {
+    let texts = |c: &Value| -> Vec<String> {
+        match c {
+            Value::String(t) => vec![t.clone()],
+            Value::Array(a) => a.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).collect(),
+            _ => vec![],
+        }
+    };
+    let own: Vec<String> = texts(&tur["content"]).into_iter().filter(|t| !t.trim_start().starts_with("<tools-used-before-summary>")).collect();
+    let text = if own.iter().any(|t| !t.trim().is_empty()) {
+        own.join("\n")
+    } else {
+        let all = texts(&block["content"]).join("\n");
+        let body = all.split("The report follows:").nth(1).unwrap_or(&all);
+        body.split("\nagentId:").next().unwrap_or(body).to_string()
+    };
+    text.replace("```", "").trim().to_string()
 }
 
 const CLAUDE_SIGNED_OUT: &str = "Claude Code is not signed in. Sign in from Settings › Accounts (or open Terminal and run /login), then Restart.";
@@ -628,9 +913,44 @@ impl Adapter for Claude {
                 self.next_due = false;
                 let mode = s(&v, "permissionMode");
                 if !mode.is_empty() {
-                    f["approval"] = Value::String(mode);
+                    f["approval"] = Value::String(mode.clone());
+                    f["mode"] = Value::String(mode);
                 }
                 st.emit(ev("session.info", f));
+            }
+            // a subagent (Agent/Task) or a background command started or ended; what still runs in the background
+            "system" if s(&v, "subtype") == "task_started" => {
+                if let Some(id) = self.sub_of(&v) {
+                    self.agent_ids.insert(s(&v, "task_id"), id);
+                }
+            }
+            "system" if s(&v, "subtype") == "task_notification" => {
+                if let Some(id) = self.sub_of(&v).filter(|id| self.bg_subs.contains(id)) {
+                    let state = match s(&v, "status").as_str() {
+                        "failed" | "error" => "failed",
+                        "stopped" | "killed" | "cancelled" | "interrupted" => "cancelled",
+                        _ => "done",
+                    };
+                    let secs = v.get("usage").and_then(|u| u.get("duration_ms")).and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                    self.subs.end(&mut st, &id, state, &s(&v, "summary"), secs);
+                }
+            }
+            "system" if s(&v, "subtype") == "background_tasks_changed" => {
+                let n = v.get("tasks").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+                if n != self.background {
+                    self.background = n;
+                    st.emit(ev("session.info", json!({"background": n})));
+                }
+            }
+            // a subagent's own conversation
+            _ if sub => {
+                if let Some(id) = self.sub_of(&v) {
+                    self.on_sub_line(&mut st, &id, &v);
+                }
+            }
+            // the permission mode changed (ours, or Claude Code's own ExitPlanMode)
+            "system" if s(&v, "subtype") == "status" && !s(&v, "permissionMode").is_empty() => {
+                st.emit(ev("session.info", json!({"mode": s(&v, "permissionMode")})));
             }
             // the conversation's name changed (a rename in Claude Code); Claude Code says it on its own
             "system" if s(&v, "subtype") == "session_title_changed" => {
@@ -644,6 +964,39 @@ impl Adapter for Claude {
                 let id = s(r, "request_id");
                 let body = &r["response"];
                 if id.starts_with("omher-init-") {
+                    // its own slash commands and skills (a skill's description ends with where it lives)
+                    let commands: Vec<Value> = body
+                        .get("commands")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter(|c| !s(c, "name").is_empty())
+                        .map(|c| {
+                            let d = s(c, "description");
+                            let skill = d.ends_with("(user)") || d.ends_with("(project)");
+                            command_entry(&s(c, "name"), &d, &s(c, "argumentHint"), if skill { "skill" } else { "command" }, "/")
+                        })
+                        .collect();
+                    if !commands.is_empty() {
+                        st.emit(ev("session.commands", json!({"commands": commands})));
+                    }
+                    let mode = s(body, "current_permission_mode");
+                    if !mode.is_empty() {
+                        st.emit(ev("session.info", json!({"mode": mode})));
+                    }
+                    // the effort levels of the model it runs (the `default` entry until it names one)
+                    let levels = body
+                        .get("models")
+                        .and_then(Value::as_array)
+                        .and_then(|ms| ms.iter().find(|m| s(m, "value") == "default").or(ms.first()))
+                        .filter(|m| m.get("supportsEffort").and_then(Value::as_bool).unwrap_or(false))
+                        .and_then(|m| m.get("supportedEffortLevels").cloned())
+                        .unwrap_or(json!([]));
+                    if levels.as_array().is_some_and(|l| !l.is_empty()) {
+                        st.emit(ev("session.efforts", json!({"levels": levels})));
+                        self.control(&mut st, "settings", json!({"subtype": "get_settings"}));
+                    }
+                    self.control(&mut st, "context", json!({"subtype": "get_context_usage"}));
                     if let Some(models) = body.get("models").and_then(Value::as_array) {
                         // the `default` entry first, so a named entry for the same model wins the label
                         let mut sorted: Vec<&Value> = models.iter().collect();
@@ -671,6 +1024,26 @@ impl Adapter for Claude {
                         if !self.model.is_empty() {
                             st.emit(ev("session.info", json!({"model": self.label(&self.model)})));
                         }
+                    }
+                } else if id.starts_with("omher-settings-") {
+                    let effort = s(&body["applied"], "effort");
+                    if !effort.is_empty() {
+                        st.emit(ev("session.info", json!({"effort": effort})));
+                    }
+                } else if id.starts_with("omher-context-") {
+                    // the CLI's own count of the context in use and its size
+                    let (used, max) = (body.get("totalTokens").and_then(Value::as_u64), body.get("maxTokens").and_then(Value::as_u64));
+                    if let (Some(used), Some(max)) = (used, max.filter(|m| *m > 0)) {
+                        st.emit(ev("session.usage", json!({"used": used, "max": max})));
+                    }
+                } else if id.starts_with("omher-mode-") || id.starts_with("omher-effort-") {
+                    if s(r, "subtype") == "success" {
+                        if id.starts_with("omher-effort-") {
+                            self.control(&mut st, "settings", json!({"subtype": "get_settings"}));
+                        }
+                    } else {
+                        let what = if id.starts_with("omher-mode-") { "Mode" } else { "Effort" };
+                        st.emit(ev("session.error", json!({"message": format!("{what} not changed: {}", s(r, "error"))})));
                     }
                 } else if id.starts_with("omher-model-") {
                     if s(r, "subtype") == "success" {
@@ -716,6 +1089,11 @@ impl Adapter for Claude {
                         if !qs.is_empty() {
                             self.pending.insert(rid.clone(), ClaudeAsk::Question(input, ids));
                             st.emit(clarify_event(&rid, &qs));
+                            if let Some(id) = self.sub_of(req) {
+                                let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
+                                let n = st.events.len() - 1;
+                                tag_asks(&mut st, n, &id, &name);
+                            }
                             return st;
                         }
                     }
@@ -730,6 +1108,12 @@ impl Adapter for Claude {
                     };
                     self.pending.insert(rid.clone(), ClaudeAsk::Tool(name, input, req.get("permission_suggestions").cloned().unwrap_or(Value::Null)));
                     st.emit(ev("approval.request", with_cwd(json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES}), &self.cwd)));
+                    // asked inside a subagent (`agent_id`): the card says which one
+                    if let Some(id) = self.sub_of(req) {
+                        let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
+                        let n = st.events.len() - 1;
+                        tag_asks(&mut st, n, &id, &name);
+                    }
                 } else {
                     // hooks, MCP messages …: omher registers none of them
                     st.out(json!({"type": "control_response", "response": {"subtype": "error", "request_id": rid, "error": "not supported by omher"}}));
@@ -788,6 +1172,17 @@ impl Adapter for Claude {
                             }
                             self.begin(&mut st, true);
                             st.emit(ev("tool.start", json!({"tool_id": s(b, "id"), "name": tool_kind(&name), "detail": call_detail(&name, &input, &self.cwd)})));
+                            // a subagent: one Agent/Task call; the calls of one message start together (one fan-out)
+                            if tool_kind(&name) == "delegate_task" {
+                                let id = s(b, "id");
+                                let kind = s(&input, "subagent_type");
+                                let goal = if s(&input, "description").is_empty() { s(&input, "prompt") } else { s(&input, "description") };
+                                self.subs.add(&id, &format!("claude-{mid}"), if kind.is_empty() { "subagent" } else { &kind }, &goal, &s(&input, "model"));
+                                if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
+                                    self.bg_subs.insert(id.clone());
+                                }
+                                st.events.extend(self.subs.event(&id, "running", json!({})));
+                            }
                             if name == "Skill" {
                                 let sk = s(&input, "skill");
                                 if !sk.is_empty() {
@@ -799,11 +1194,34 @@ impl Adapter for Claude {
                     }
                 }
             }
+            // Claude Code took a message the person sent (`--replay-user-messages`): a queued one is not waiting now
+            "user" if !sub && v.get("isReplay").and_then(Value::as_bool) == Some(true) => {
+                self.waiting.take(&mut st);
+                // a message queued behind a stopped turn starts its own
+                self.begin(&mut st, false);
+            }
             "user" if !sub => {
+                let tur = v.get("tool_use_result").or_else(|| v.get("toolUseResult")).cloned().unwrap_or(Value::Null);
                 for b in v["message"].get("content").and_then(Value::as_array).into_iter().flatten() {
                     if s(b, "type") == "tool_result" {
                         let ok = !b.get("is_error").and_then(Value::as_bool).unwrap_or(false);
-                        st.emit(ev("tool.end", json!({"tool_id": s(b, "tool_use_id"), "name": "", "ok": ok, "ms": 0})));
+                        let tid = s(b, "tool_use_id");
+                        st.emit(ev("tool.end", json!({"tool_id": tid, "name": "", "ok": ok, "ms": 0})));
+                        // a subagent's hand-back: its own words (`tool_use_result.content`), not the frame around them;
+                        // a background one only launched here and ends with its task notification
+                        if self.subs.has(&tid) && matches!(s(&tur, "status").as_str(), "async_launched" | "teammate_spawned") {
+                            self.bg_subs.insert(tid.clone());
+                        } else if self.subs.has(&tid) {
+                            let answer = claude_answer(&tur, b);
+                            let secs = tur.get("totalDurationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                            let model = s(&tur, "resolvedModel");
+                            if !model.is_empty() {
+                                if let Some(x) = self.subs.subs.get_mut(&tid) {
+                                    x.model = model;
+                                }
+                            }
+                            self.subs.end(&mut st, &tid, if ok { "done" } else { "failed" }, &answer, secs);
+                        }
                     }
                 }
             }
@@ -834,6 +1252,8 @@ impl Adapter for Claude {
                     self.end(&mut st, "done", None);
                 }
                 self.error_kind.clear();
+                // how full the context is now, as Claude Code counts it
+                self.control(&mut st, "context", json!({"subtype": "get_context_usage"}));
             }
             _ => {}
         }
@@ -843,7 +1263,10 @@ impl Adapter for Claude {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text, images } => {
+            Input::Send { text, images, id } => {
+                // a message sent while the person's own turn runs waits until Claude Code takes it
+                let busy = self.turn && !self.auto_turn;
+                self.waiting.push(&mut st, id, busy);
                 self.begin(&mut st, false);
                 // the person's message joins a turn Claude Code started itself: it is theirs now
                 self.auto_turn = false;
@@ -905,6 +1328,20 @@ impl Adapter for Claude {
                 st.out(json!({"type": "control_response", "response": {"subtype": "success", "request_id": request_id, "response": response}}));
             }
             Input::Model { model } => self.control(&mut st, "model", json!({"subtype": "set_model", "model": model})),
+            // Claude Code's own switch; it answers with a status line carrying the new mode
+            Input::Mode { mode } => {
+                if !modes_for("claude").contains(&mode.as_str()) {
+                    return Err(format!("not a mode omher offers: {mode}"));
+                }
+                self.control(&mut st, "mode", json!({"subtype": "set_permission_mode", "mode": mode}));
+            }
+            // for this process only (`apply_flag_settings`, never the settings file); omher sets it again on restart
+            Input::Effort { effort } => {
+                if !["low", "medium", "high", "xhigh", "max"].contains(&effort.as_str()) {
+                    return Err(format!("unknown effort {effort}"));
+                }
+                self.control(&mut st, "effort", json!({"subtype": "apply_flag_settings", "settings": {"effortLevel": effort}}));
+            }
         }
         Ok(st)
     }
@@ -935,7 +1372,7 @@ pub struct Codex {
     model: Option<String>,
     model_id: String,
     labels: HashMap<String, String>,
-    queued: Vec<(String, Vec<Picture>)>,
+    queued: Vec<(String, Vec<Picture>, String)>,
     /// open approvals and questions by our request id
     pending: HashMap<String, CodexAsk>,
     /// diff summaries of fileChange items, shown on their approval card
@@ -944,22 +1381,17 @@ pub struct Codex {
     unauthorized: bool,
     /// Stop was pressed before Codex named the turn: interrupt it as soon as it does
     stop_asked: bool,
+    /// the person's mode (approval policy, sandbox) and effort, sent with every turn from the next one on
+    mode: Option<(&'static str, &'static str)>,
+    effort: Option<String>,
+    /// effort levels per model, from model/list
+    efforts: HashMap<String, Value>,
+    /// skill name -> its SKILL.md path (skills/list), for `$name` in a message
+    skills: HashMap<String, String>,
+    waiting: Waiting,
     /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
-    /// events become `subagent` lines and never touch the person's turn, its answer or its Stop.
-    helpers: HashMap<String, CodexHelper>,
-    /// the fan-out the latest helpers belong to (the person's turn that started them) and how many it has
-    fanout: (String, usize),
-}
-
-/// One sub-agent thread, as its latest events left it.
-struct CodexHelper {
-    name: String,
-    model: String,
-    index: usize,
-    delegation: String,
-    /// its latest message: its answer once its turn completes
-    text: String,
-    ended: bool,
+    /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
+    helpers: Subagents,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -982,8 +1414,12 @@ impl Codex {
             changes: HashMap::new(),
             unauthorized: false,
             stop_asked: false,
-            helpers: HashMap::new(),
-            fanout: (String::new(), 0),
+            mode: None,
+            effort: None,
+            efforts: HashMap::new(),
+            skills: HashMap::new(),
+            waiting: Waiting::default(),
+            helpers: Subagents::new("codex"),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -991,18 +1427,38 @@ impl Codex {
         self.calls.insert(self.seq, method);
         st.out(json!({"id": self.seq, "method": method, "params": params}));
     }
-    fn turn_start(&mut self, st: &mut Step, text: String, images: &[Picture]) {
+    fn turn_start(&mut self, st: &mut Step, text: String, images: &[Picture], id: &str) {
         let thread = self.thread.clone().unwrap_or_default();
         // pictures as app-server `localImage` items: Codex reads the saved copy itself
         let mut input: Vec<Value> = images.iter().map(|p| json!({"type": "localImage", "path": p.path})).collect();
         if !text.is_empty() || input.is_empty() {
             input.push(json!({"type": "text", "text": text}));
         }
+        // a skill named as `$name` goes with it as Codex's own skill input, as its TUI sends it
+        for w in text.split_whitespace() {
+            if let Some(path) = w.strip_prefix('$').and_then(|n| self.skills.get(n).map(|p| (n, p))) {
+                input.push(json!({"type": "skill", "name": path.0, "path": path.1}));
+            }
+        }
         let mut p = json!({"threadId": thread, "input": input});
         if let Some(m) = &self.model {
             p["model"] = Value::String(m.clone());
         }
+        if let Some((policy, sandbox)) = self.mode {
+            p["approvalPolicy"] = Value::String(policy.into());
+            p["sandboxPolicy"] = json!({"type": sandbox});
+        }
+        if let Some(e) = &self.effort {
+            p["effort"] = Value::String(e.clone());
+        }
+        if !id.is_empty() {
+            p["clientUserMessageId"] = Value::String(id.into());
+        }
         self.call(st, "turn/start", p);
+    }
+    /// The effort levels of `model`, as model/list gave them.
+    fn efforts_event(&self, model: &str) -> Option<Event> {
+        self.efforts.get(model).filter(|l| l.as_array().is_some_and(|a| !a.is_empty())).map(|l| ev("session.efforts", json!({"levels": l})))
     }
     fn label(&self, model: &str) -> String {
         self.labels.get(model).cloned().unwrap_or_else(|| model.to_string())
@@ -1026,6 +1482,12 @@ impl Codex {
             if let Some(e) = error.filter(|e| !e.is_empty()) {
                 f["error"] = Value::String(e);
             }
+            // a stopped turn's messages that Codex never recorded were not sent; a finished one took them
+            if outcome == "interrupted" {
+                self.waiting.all_dropped(st);
+            } else {
+                self.waiting.all_taken(st);
+            }
             st.emit(ev("turn.end", f));
         }
     }
@@ -1047,10 +1509,10 @@ impl Codex {
     /// A sub-agent's thread: one Codex named as a sub-agent (`subAgentActivity`), or one whose turn belongs to
     /// another turn (`rootTurnId`). Any other thread id is the session's own.
     fn is_helper(&self, thread: &str) -> bool {
-        self.helpers.contains_key(thread)
+        self.helpers.has(thread)
     }
     /// A turn of another thread that belongs to a running turn (a sub-agent of a sub-agent, or one Codex did not
-    /// announce): registered as a helper.
+    /// announce): registered as a sub-agent.
     fn adopt(&mut self, thread: &str, method: &str, p: &Value) {
         if thread.is_empty() || self.is_helper(thread) || self.thread.as_deref() == Some(thread) || !method.starts_with("turn/") {
             return;
@@ -1061,61 +1523,28 @@ impl Codex {
             self.helper(thread, "", "");
         }
     }
-    /// The helper of `thread`, registered on first sight (`subAgentActivity` names it; a thread first seen
-    /// elsewhere, such as a helper of a resumed turn, starts unnamed).
-    fn helper(&mut self, thread: &str, path: &str, model: &str) -> &mut CodexHelper {
-        if !self.helpers.contains_key(thread) {
-            let delegation = format!("codex-{}", self.turn_id.clone().unwrap_or_default());
-            if self.fanout.0 != delegation {
-                self.fanout = (delegation.clone(), 0);
-            }
-            let index = self.fanout.1;
-            self.fanout.1 += 1;
-            // "/root/read_first_line" -> "read first line"
-            let name = path.rsplit('/').next().unwrap_or("").replace('_', " ");
-            self.helpers.insert(thread.to_string(), CodexHelper { name: clip(&name, 120), model: String::new(), index, delegation, text: String::new(), ended: false });
-        }
-        let h = self.helpers.get_mut(thread).unwrap();
-        if !model.is_empty() {
-            h.model = model.to_string();
-        }
-        h
+    /// The sub-agent of `thread`, registered on first sight in the fan-out of the person's running turn
+    /// ("/root/read_first_line" -> "read first line"). Codex streams no task text for it: its goal stays empty.
+    fn helper(&mut self, thread: &str, path: &str, model: &str) -> &mut Sub {
+        let delegation = format!("codex-{}", self.turn_id.clone().unwrap_or_default());
+        let name = path.rsplit('/').next().unwrap_or("").replace('_', " ");
+        self.helpers.add(thread, &delegation, &name, "", model)
     }
-    /// The `subagent` event of a helper (the bot chat's shape: id, fan-out, index of count, goal, state).
-    fn helper_event(&self, thread: &str, state: &str, extra: Value) -> Event {
-        let h = &self.helpers[thread];
-        let count = if self.fanout.0 == h.delegation { self.fanout.1 } else { h.index + 1 };
-        // the agent-neutral subagent shape every session adapter emits: Codex names a sub-agent (its agentPath) but
-        // streams no task text, so `goal` stays empty
-        let mut f = json!({"id": thread, "agent": "codex", "name": h.name, "goal": "", "delegation": h.delegation, "index": h.index, "count": count, "state": state});
-        if !h.model.is_empty() {
-            f["model"] = Value::String(h.model.clone());
-        }
-        if let (Value::Object(m), Value::Object(x)) = (&mut f, extra) {
-            m.extend(x);
-        }
-        ev("subagent", f)
-    }
-    /// `subAgentActivity` (on the session's thread, or a helper's for a nested one): a helper started or ended.
+    /// `subAgentActivity` (on the session's thread, or a sub-agent's for a nested one): one started or ended.
     fn helper_activity(&mut self, st: &mut Step, item: &Value, done: bool) {
         let thread = s(item, "agentThreadId");
         if thread.is_empty() || self.thread.as_deref() == Some(thread.as_str()) {
             return;
         }
-        let model = s(item, "model");
-        let h = self.helper(&thread, &s(item, "agentPath"), &model);
-        let (ended, summary) = (h.ended, clip(&h.text, 200));
+        self.helper(&thread, &s(item, "agentPath"), &s(item, "model"));
         match (s(item, "kind").as_str(), done) {
-            ("started", false) => st.emit(self.helper_event(&thread, "running", json!({}))),
+            ("started", false) => st.events.extend(self.helpers.event(&thread, "running", json!({}))),
             // its thread's own turn/completed normally says so first, with its time
-            ("completed", true) if !ended => {
-                self.helper(&thread, "", "").ended = true;
-                st.emit(self.helper_event(&thread, "done", if summary.is_empty() { json!({}) } else { json!({"summary": summary}) }));
-            }
+            ("completed", true) => self.helpers.end(st, &thread, "done", "", None),
             _ => {}
         }
     }
-    /// A line of a helper's own thread: its steps and its end. Its text is held as its answer, never shown as
+    /// A line of a sub-agent's own thread: its steps and its end. Its text is held as its answer, never shown as
     /// Codex's; its deltas, reasoning and warnings are dropped.
     fn on_helper_line(&mut self, st: &mut Step, thread: &str, method: &str, p: &Value) {
         let item = p.get("item").cloned().unwrap_or(Value::Null);
@@ -1125,8 +1554,7 @@ impl Codex {
                     return self.helper_activity(st, &item, false);
                 }
                 if let Some((tool, step)) = self.item_step(&item) {
-                    self.helper(thread, "", "");
-                    st.emit(self.helper_event(thread, "running", json!({"tool": tool, "step": clip(&step, 120)})));
+                    self.helpers.step(st, thread, &tool, &step);
                 }
             }
             "item/completed" => match s(&item, "type").as_str() {
@@ -1141,25 +1569,15 @@ impl Codex {
             },
             "turn/completed" => {
                 let t = &p["turn"];
-                let h = self.helper(thread, "", "");
-                if h.ended {
-                    return;
+                let secs = t.get("durationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                match s(t, "status").as_str() {
+                    "interrupted" => self.helpers.end(st, thread, "cancelled", "", secs),
+                    "failed" => {
+                        let e = t.get("error").map(|e| s(e, "message")).unwrap_or_default();
+                        self.helpers.end(st, thread, "failed", if e.is_empty() { "failed" } else { &e }, secs)
+                    }
+                    _ => self.helpers.end(st, thread, "done", "", secs),
                 }
-                h.ended = true;
-                let (state, text) = match s(t, "status").as_str() {
-                    "interrupted" => ("cancelled", h.text.clone()),
-                    "failed" => ("failed", t.get("error").map(|e| s(e, "message")).unwrap_or_default()),
-                    _ => ("done", h.text.clone()),
-                };
-                let mut f = json!({});
-                let summary = clip(&text, 200);
-                if !summary.is_empty() {
-                    f["summary"] = Value::String(summary);
-                }
-                if let Some(ms) = t.get("durationMs").and_then(Value::as_u64) {
-                    f["seconds"] = json!((ms as f64 / 100.0).round() / 10.0);
-                }
-                st.emit(self.helper_event(thread, state, f));
             }
             _ => {}
         }
@@ -1271,17 +1689,26 @@ impl Adapter for Codex {
                         }
                     }
                     self.call(&mut st, "model/list", json!({}));
+                    let cwd = self.cwd.clone();
+                    self.call(&mut st, "skills/list", json!({"cwds": [cwd]}));
                 }
                 "thread/start" | "thread/resume" => {
                     self.thread = r["thread"].get("id").and_then(Value::as_str).map(String::from);
                     self.model_id = s(r, "model");
                     let mut f = json!({"agent_session": self.thread.clone().unwrap_or_default(), "model": self.label(&self.model_id)});
                     let policy = s(r, "approvalPolicy");
+                    let sandbox = r.get("sandbox").map(|x| s(x, "type")).unwrap_or_default();
+                    // the thread's own mode when it is one of ours; any other (Codex's config) shows as the agent's
+                    f["mode"] = Value::String(codex_mode_of(&policy, &sandbox).unwrap_or("").into());
                     if !policy.is_empty() {
                         f["approval"] = Value::String(policy);
                     }
-                    if let Some(sb) = r.get("sandbox").map(|x| s(x, "type")).filter(|x| !x.is_empty()) {
-                        f["sandbox"] = Value::String(sb);
+                    if !sandbox.is_empty() {
+                        f["sandbox"] = Value::String(sandbox);
+                    }
+                    let effort = s(r, "reasoningEffort");
+                    if !effort.is_empty() {
+                        f["effort"] = Value::String(effort);
                     }
                     // a resumed thread carries the name Codex (or the person) gave it
                     let name = title_of(&s(&r["thread"], "name"));
@@ -1289,8 +1716,11 @@ impl Adapter for Codex {
                         f["title"] = Value::String(name);
                     }
                     st.emit(ev("session.info", f));
-                    for (text, images) in std::mem::take(&mut self.queued) {
-                        self.turn_start(&mut st, text, &images);
+                    if let Some(e) = self.efforts_event(&self.model_id) {
+                        st.emit(e);
+                    }
+                    for (text, images, id) in std::mem::take(&mut self.queued) {
+                        self.turn_start(&mut st, text, &images, &id);
                     }
                 }
                 "turn/start" => {
@@ -1306,10 +1736,33 @@ impl Adapter for Codex {
                             self.labels.insert(s(m, "model"), label);
                         }
                     }
+                    for m in &list {
+                        let levels: Vec<Value> = m.get("supportedReasoningEfforts").and_then(Value::as_array).into_iter().flatten().map(|e| Value::String(s(e, "reasoningEffort"))).filter(|e| e != "").collect();
+                        self.efforts.insert(s(m, "model"), Value::Array(levels));
+                    }
                     let options: Vec<Value> = list.iter().map(|m| json!({"id": s(m, "model"), "label": s(m, "displayName"), "detail": s(m, "description")})).collect();
                     st.emit(ev("session.models", json!({"options": options})));
+                    if let Some(e) = self.efforts_event(&self.model_id) {
+                        st.emit(e);
+                    }
                     if !self.model_id.is_empty() {
                         st.emit(ev("session.info", json!({"model": self.label(&self.model_id)})));
+                    }
+                }
+                "skills/list" => {
+                    // Codex's skills, typed as `$name`
+                    let mut commands = Vec::new();
+                    for sk in r.get("data").and_then(Value::as_array).into_iter().flatten().flat_map(|d| d.get("skills").and_then(Value::as_array).into_iter().flatten()) {
+                        let name = s(sk, "name");
+                        if name.is_empty() || sk.get("enabled").and_then(Value::as_bool) == Some(false) || self.skills.contains_key(&name) {
+                            continue;
+                        }
+                        self.skills.insert(name.clone(), s(sk, "path"));
+                        let d = if s(sk, "shortDescription").is_empty() { s(sk, "description") } else { s(sk, "shortDescription") };
+                        commands.push(command_entry(&name, &d, "", "skill", "$"));
+                    }
+                    if !commands.is_empty() {
+                        st.emit(ev("session.commands", json!({"commands": commands})));
                     }
                 }
                 _ => {}
@@ -1354,13 +1807,10 @@ impl Adapter for Codex {
                 }
                 _ => st.out(json!({"id": rpc_id, "error": {"code": -32601, "message": "not supported by omher"}})),
             }
-            // asked inside a helper: the card says which one
-            if self.is_helper(&thread) && st.events.len() > n {
-                let h = self.helper(&thread, "", "");
-                let who = json!({"id": thread, "name": h.name});
-                for e in &mut st.events[n..] {
-                    e["subagent"] = who.clone();
-                }
+            // asked inside a sub-agent: the card says which one
+            if self.is_helper(&thread) {
+                let name = self.helper(&thread, "", "").name.clone();
+                tag_asks(&mut st, n, &thread, &name);
             }
             return st;
         }
@@ -1387,6 +1837,13 @@ impl Adapter for Codex {
                     self.named(&mut st, t);
                 }
             }
+            // how full the context is, as Codex counts it (the last request's tokens against the model's window)
+            "thread/tokenUsage/updated" => {
+                let u = &p["tokenUsage"];
+                if let (Some(used), Some(max)) = (u["last"].get("totalTokens").and_then(Value::as_u64), u.get("modelContextWindow").and_then(Value::as_u64).filter(|m| *m > 0)) {
+                    st.emit(ev("session.usage", json!({"used": used, "max": max})));
+                }
+            }
             "item/agentMessage/delta" => {
                 let t = s(&p, "delta");
                 if !t.is_empty() {
@@ -1395,10 +1852,20 @@ impl Adapter for Codex {
             }
             "item/reasoning/textDelta" | "item/reasoning/summaryTextDelta" => st.emit(ev("thinking", json!({}))),
             "item/started" => {
-                if s(&item, "type") == "subAgentActivity" {
-                    self.helper_activity(&mut st, &item, false);
-                } else if let Some((name, detail)) = self.item_step(&item) {
-                    st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
+                match s(&item, "type").as_str() {
+                    // Codex recorded a message the person sent (our id as its clientId)
+                    "userMessage" => {
+                        let cid = s(&item, "clientId");
+                        if !cid.is_empty() {
+                            self.waiting.take_id(&mut st, &cid);
+                        }
+                    }
+                    "subAgentActivity" => self.helper_activity(&mut st, &item, false),
+                    _ => {
+                        if let Some((name, detail)) = self.item_step(&item) {
+                            st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
+                        }
+                    }
                 }
             }
             "item/completed" => {
@@ -1482,15 +1949,17 @@ impl Adapter for Codex {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text, images } => {
+            Input::Send { text, images, id } => {
+                // a message sent while a turn runs joins it once Codex records it
+                self.waiting.push(&mut st, id.clone(), self.turn);
                 if !self.turn {
                     self.turn = true;
                     st.emit(ev("turn.start", json!({})));
                 }
                 if self.thread.is_none() {
-                    self.queued.push((text, images));
+                    self.queued.push((text, images, id));
                 } else {
-                    self.turn_start(&mut st, text, &images);
+                    self.turn_start(&mut st, text, &images, &id);
                 }
             }
             Input::Interrupt => match (self.thread.clone(), self.turn_id.clone()) {
@@ -1499,6 +1968,7 @@ impl Adapter for Codex {
                 // the message still waits for the thread: it is never sent
                 (None, _) => {
                     self.queued.clear();
+                    self.waiting.all_dropped(&mut st);
                     self.end(&mut st, "interrupted", None);
                 }
                 // sent, but Codex has not named the turn yet
@@ -1541,7 +2011,7 @@ impl Adapter for Codex {
                                 self.turn = true;
                                 st.emit(ev("turn.start", json!({})));
                             }
-                            self.turn_start(&mut st, text, &[]);
+                            self.turn_start(&mut st, text, &[], "");
                         }
                     }
                 }
@@ -1555,6 +2025,24 @@ impl Adapter for Codex {
                 // app-server takes the model per turn; the next turn uses it
                 self.model = Some(model.clone());
                 st.emit(ev("session.info", json!({"model": self.label(&model)})));
+                if let Some(e) = self.efforts_event(&model) {
+                    st.emit(e);
+                }
+            }
+            // per turn as well: approval policy and sandbox go with the next turn/start (and Codex keeps them)
+            Input::Mode { mode } => {
+                let m = codex_mode(&mode).ok_or_else(|| format!("not a mode omher offers: {mode}"))?;
+                self.mode = Some(m);
+                st.emit(ev("session.info", json!({"mode": mode})));
+            }
+            Input::Effort { effort } => {
+                let model = self.model.clone().unwrap_or_else(|| self.model_id.clone());
+                let known = self.efforts.get(&model).and_then(Value::as_array).is_some_and(|l| l.iter().any(|e| e == effort.as_str()));
+                if !known {
+                    return Err(format!("{model} has no effort {effort}"));
+                }
+                self.effort = Some(effort.clone());
+                st.emit(ev("session.info", json!({"effort": effort})));
             }
         }
         Ok(st)
@@ -1586,6 +2074,17 @@ pub struct Pi {
     last_stop: String,
     last_error: String,
     pending: HashMap<String, PiAsk>,
+    /// thinking levels it offers (`get_available_thinking_levels`)
+    levels: Vec<String>,
+    reads: u64,
+    waiting: Waiting,
+    /// OmO's subagents (`task` tool), by task id once OmO names them (`st_…`), else `<call id>:<n>`
+    subs: Subagents,
+    /// OmO's task id -> our subagent id; a `task` call id -> its subagents in order
+    task_ids: HashMap<String, String>,
+    calls_subs: HashMap<String, Vec<String>>,
+    /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
+    background: usize,
 }
 
 /// oh-my-pi's tool approval as a select (`Allow tool: bash\nCommand: ls -la` with Approve / Approve bash for this
@@ -1611,11 +2110,97 @@ fn pi_approval(title: &str, options: &[String]) -> Option<(String, String, PiAsk
 
 impl Pi {
     pub fn new(cwd: &str, label: &str) -> Pi {
-        Pi { cwd: cwd.into(), label: label.into(), ..Pi::default() }
+        let agent = match label {
+            "OmO" => "omo",
+            "oh-my-pi" => "omp",
+            _ => "pi",
+        };
+        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), ..Pi::default() }
     }
-    fn cmd(&mut self, st: &mut Step, kind: &'static str, mut fields: Value) {
+    /// A `task` call: one subagent per entry of `tasks` (or the call itself with one task), one fan-out per call.
+    fn task_start(&mut self, st: &mut Step, call: &str, args: &Value) {
+        let one = [args.clone()];
+        let tasks: &[Value] = args.get("tasks").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&one);
+        let kind = s(args, "subagent_type");
+        let mut ids = vec![];
+        for (i, t) in tasks.iter().enumerate() {
+            let id = format!("{call}:{i}");
+            let name = [s(t, "name"), s(t, "subagent_type"), kind.clone()].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
+            let goal = [s(t, "task_summary"), s(t, "description"), s(t, "prompt")].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
+            self.subs.add(&id, &format!("pi-{call}"), &name, &goal, "");
+            st.events.extend(self.subs.event(&id, "queued", json!({})));
+            ids.push(id);
+        }
+        self.calls_subs.insert(call.to_string(), ids);
+    }
+    /// The `task` call's result names each subagent's task id, model and state (a background one runs on).
+    fn task_end(&mut self, st: &mut Step, call: &str, v: &Value) {
+        let Some(ids) = self.calls_subs.remove(call) else { return };
+        let d = &v["result"]["details"];
+        let one = [d.clone()];
+        let items: &[Value] = d.get("items").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&one);
+        let failed = v.get("isError").and_then(Value::as_bool).unwrap_or(false);
+        for (i, id) in ids.iter().enumerate() {
+            let it = items.get(i).cloned().unwrap_or(Value::Null);
+            let tid = s(&it, "task_id");
+            if !tid.is_empty() {
+                self.task_ids.insert(tid, id.clone());
+            }
+            let model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            if let Some(x) = self.subs.subs.get_mut(id) {
+                if !model.is_empty() {
+                    x.model = model;
+                }
+            }
+            match s(&it, "status").as_str() {
+                _ if failed => {
+                    let e = v["result"]["content"].as_array().and_then(|a| a.first()).map(|b| s(b, "text")).unwrap_or_default();
+                    self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, None)
+                }
+                "completed" => self.subs.end(st, id, "done", &s(&it, "final_response"), None),
+                "failed" | "error" => self.subs.end(st, id, "failed", &s(&it, "error"), None),
+                "cancelled" | "aborted" => self.subs.end(st, id, "cancelled", "", None),
+                _ => st.events.extend(self.subs.event(id, "running", json!({}))),
+            }
+        }
+    }
+    /// OmO's notice that a background subagent finished (`senpi-task.completion` in a wake message's details).
+    fn task_done(&mut self, st: &mut Step, m: &Value) {
+        for p in m["details"].get("producerDetails").and_then(Value::as_array).into_iter().flatten() {
+            if s(p, "customType") != "senpi-task.completion" {
+                continue;
+            }
+            for d in p.get("details").and_then(Value::as_array).into_iter().flatten() {
+                let Some(id) = self.task_ids.get(&s(d, "task_id")).cloned() else { continue };
+                let model = s(d, "model");
+                if let Some(x) = self.subs.subs.get_mut(&id) {
+                    if !model.is_empty() {
+                        x.model = model.rsplit('/').next().unwrap_or(&model).to_string();
+                    }
+                }
+                let secs = d.get("duration_ms").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                let state = match s(d, "status").as_str() {
+                    "completed" => "done",
+                    "cancelled" | "aborted" => "cancelled",
+                    _ => "failed",
+                };
+                let answer = if state == "failed" { s(d, "error") } else { s(d, "final_response") };
+                self.subs.end(st, &id, state, if state == "failed" && answer.is_empty() { "failed" } else { &answer }, secs);
+            }
+        }
+    }
+    fn cmd(&mut self, st: &mut Step, kind: &'static str, fields: Value) {
         self.seq += 1;
         let id = format!("omher-{}", self.seq);
+        self.send_cmd(st, kind, id, fields);
+    }
+    /// A read on the side (levels, commands, usage): its own ids, so the person's commands keep theirs.
+    fn read(&mut self, st: &mut Step, kind: &'static str) {
+        self.reads += 1;
+        let id = format!("omher-r{}", self.reads);
+        self.send_cmd(st, kind, id, json!({}));
+    }
+    fn send_cmd(&mut self, st: &mut Step, kind: &'static str, id: String, mut fields: Value) {
         self.calls.insert(id.clone(), kind);
         fields["id"] = Value::String(id);
         fields["type"] = Value::String(kind.into());
@@ -1626,6 +2211,10 @@ impl Pi {
             self.turn = false;
             self.streaming = false;
             self.pending.clear();
+            // a run takes its follow-ups before it ends; what is left was cleared by Stop
+            self.waiting.all_dropped(st);
+            // how full the context is now
+            self.read(st, "get_session_stats");
             let (outcome, err) = match self.last_stop.as_str() {
                 "aborted" => ("interrupted", String::new()),
                 "error" => ("error", self.last_error.clone()),
@@ -1648,6 +2237,30 @@ impl Pi {
         }
         clip(err.lines().find(|l| !l.trim().is_empty()).unwrap_or(err), 200)
     }
+}
+
+/// `session.usage` from an rpc `contextUsage` (`{tokens, contextWindow}`), when it has both.
+fn pi_usage(u: &Value) -> Option<Event> {
+    let used = u.get("tokens").and_then(Value::as_u64)?;
+    let max = u.get("contextWindow").and_then(Value::as_u64).filter(|m| *m > 0)?;
+    Some(ev("session.usage", json!({"used": used, "max": max})))
+}
+
+/// `session.commands` from an rpc command list: slash commands and prompts as `/name`, skills as `$skill:name`.
+fn pi_commands(d: &Value) -> Event {
+    let commands: Vec<Value> = d
+        .get("commands")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| !s(c, "name").is_empty())
+        .map(|c| {
+            let skill = s(c, "source") == "skill";
+            let prefix = if s(c, "syntax") == "dollar" { "$" } else { "/" };
+            command_entry(&s(c, "name"), &s(c, "description"), "", if skill { "skill" } else { "command" }, prefix)
+        })
+        .collect();
+    ev("session.commands", json!({"commands": commands}))
 }
 
 fn pi_model(m: &Value) -> Value {
@@ -1674,6 +2287,8 @@ impl Adapter for Pi {
         let mut st = Step::default();
         self.cmd(&mut st, "get_state", json!({}));
         self.cmd(&mut st, "get_available_models", json!({}));
+        self.read(&mut st, "get_available_thinking_levels");
+        self.read(&mut st, "get_commands");
         st
     }
 
@@ -1695,7 +2310,8 @@ impl Adapter for Pi {
                         self.last_stop = "error".into();
                         self.last_error = e;
                         self.end(&mut st);
-                    } else if !what.is_empty() {
+                    } else if !what.is_empty() && !matches!(what, "get_available_thinking_levels" | "get_commands" | "get_session_stats") {
+                        // (an agent without those reads simply has no levels, commands or usage)
                         st.emit(ev("session.error", json!({"message": format!("{}: {}", s(&v, "command"), self.friendly(&e))})));
                     }
                     return st;
@@ -1703,7 +2319,27 @@ impl Adapter for Pi {
                 match what {
                     "get_state" => {
                         let model = d.get("model").map(|m| s(m, "name")).filter(|n| !n.is_empty() && n != "unknown").or_else(|| d.get("model").map(|m| s(m, "id")).filter(|n| n != "unknown")).unwrap_or_default();
-                        st.emit(ev("session.info", json!({"agent_session": s(d, "sessionId"), "model": model})));
+                        let mut f = json!({"agent_session": s(d, "sessionId"), "model": model});
+                        let level = s(d, "thinkingLevel");
+                        if !level.is_empty() {
+                            f["effort"] = Value::String(level);
+                        }
+                        st.emit(ev("session.info", f));
+                        if let Some(u) = pi_usage(&d["contextUsage"]) {
+                            st.emit(u);
+                        }
+                    }
+                    "get_available_thinking_levels" => {
+                        self.levels = d.get("levels").and_then(Value::as_array).into_iter().flatten().filter_map(|l| l.as_str().map(String::from)).collect();
+                        if !self.levels.is_empty() {
+                            st.emit(ev("session.efforts", json!({"levels": self.levels})));
+                        }
+                    }
+                    "get_commands" => st.emit(pi_commands(d)),
+                    "get_session_stats" => {
+                        if let Some(u) = pi_usage(&d["contextUsage"]) {
+                            st.emit(u);
+                        }
                     }
                     "get_available_models" => {
                         let options: Vec<Value> = d.get("models").and_then(Value::as_array).into_iter().flatten().map(pi_model).collect();
@@ -1741,6 +2377,14 @@ impl Adapter for Pi {
                     _ => {}
                 }
             }
+            // the agent took the person's message (a follow-up leaves its queue here)
+            "message_end" if s(&v["message"], "role") == "user" => self.waiting.take(&mut st),
+            "thinking_level_changed" => st.emit(ev("session.info", json!({"effort": s(&v, "level")}))),
+            "commands_changed" => st.emit(pi_commands(&v)),
+            "message_start" if s(&v["message"], "role") == "custom" => {
+                let m = v["message"].clone();
+                self.task_done(&mut st, &m);
+            }
             "message_end" => {
                 let m = &v["message"];
                 if s(m, "role") == "assistant" {
@@ -1760,11 +2404,33 @@ impl Adapter for Pi {
             "tool_execution_start" => {
                 let name = s(&v, "toolName");
                 let args = v.get("args").cloned().unwrap_or(Value::Null);
-                st.emit(ev("tool.start", json!({"tool_id": s(&v, "toolCallId"), "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                let call = s(&v, "toolCallId");
+                if name == "task" {
+                    // the step names its subagents, never the call's raw JSON; each one gets its own row
+                    let names: Vec<String> = args.get("tasks").and_then(Value::as_array).into_iter().flatten().map(|t| s(t, "name")).filter(|n| !n.is_empty()).collect();
+                    let detail = if names.is_empty() { tool_detail(&args) } else { names.join(", ") };
+                    st.emit(ev("tool.start", json!({"tool_id": call, "name": "delegate_task", "detail": clip(&detail, 160)})));
+                    self.task_start(&mut st, &call, &args);
+                } else {
+                    st.emit(ev("tool.start", json!({"tool_id": call, "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                }
             }
             "tool_execution_end" => {
                 let ok = !v.get("isError").and_then(Value::as_bool).unwrap_or(false);
-                st.emit(ev("tool.end", json!({"tool_id": s(&v, "toolCallId"), "name": "", "ok": ok, "ms": 0})));
+                let call = s(&v, "toolCallId");
+                st.emit(ev("tool.end", json!({"tool_id": call, "name": "", "ok": ok, "ms": 0})));
+                self.task_end(&mut st, &call, &v);
+            }
+            // what still runs after the turn: background commands (subagents have their own rows)
+            "session_lifecycle" => {
+                let w = &v["lifecycle"]["waitingOn"];
+                let n: usize = w.get("background").and_then(Value::as_array).into_iter().flatten()
+                    .filter(|b| !s(b, "source").starts_with("delivery:"))
+                    .map(|b| b.get("activeCount").and_then(Value::as_u64).unwrap_or(1) as usize).sum();
+                if n != self.background {
+                    self.background = n;
+                    st.emit(ev("session.info", json!({"background": n})));
+                }
             }
             // Both end a run with agent_end. oh-my-pi then adds prompt_result and session_settled, which can arrive
             // after the person's next prompt was sent, so they never end a turn, except a prompt no agent ran for.
@@ -1828,7 +2494,8 @@ impl Adapter for Pi {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text, images } => {
+            Input::Send { text, images, id } => {
+                self.waiting.push(&mut st, id, self.streaming);
                 let mut f = json!({"message": text});
                 // pictures as the rpc prompt's own `images` (ImageContent: base64 data and its type)
                 if !images.is_empty() {
@@ -1877,6 +2544,14 @@ impl Adapter for Pi {
             Input::Model { model } => {
                 let (provider, id) = model.split_once('/').ok_or("model must be provider/id")?;
                 self.cmd(&mut st, "set_model", json!({"provider": provider, "modelId": id}));
+                self.read(&mut st, "get_available_thinking_levels");
+            }
+            Input::Mode { mode } => return Err(format!("{} has no permission mode here ({mode})", self.label)),
+            Input::Effort { effort } => {
+                if !self.levels.contains(&effort) {
+                    return Err(format!("unknown thinking level {effort}"));
+                }
+                self.cmd(&mut st, "set_thinking_level", json!({"level": effort}));
             }
         }
         Ok(st)
@@ -2414,7 +3089,7 @@ mod tests {
     impl Input {
         /// A message with text only.
         pub fn send(text: impl Into<String>) -> Input {
-            Input::Send { text: text.into(), images: vec![] }
+            Input::Send { text: text.into(), images: vec![], id: String::new() }
         }
     }
 
@@ -2472,7 +3147,9 @@ mod tests {
         let end = st.events.last().unwrap();
         assert_eq!((s(end, "event"), s(end, "outcome")), ("turn.end".into(), "done".into()));
         assert!(!c.in_turn());
-        assert!(st.write.is_empty(), "nothing to answer in a plain turn: {:?}", st.write);
+        // nothing to answer in a plain turn; only the context read after it
+        let w: Vec<Value> = st.write.iter().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(w.iter().map(|v| v["request"]["subtype"].clone()).collect::<Vec<_>>(), [json!("get_context_usage")], "{:?}", st.write);
     }
 
     #[test]
@@ -2588,9 +3265,10 @@ mod tests {
         assert_eq!(sent[1]["method"], "thread/start");
         assert_eq!(sent[1]["params"]["cwd"], "/w/proj");
         assert_eq!(sent[2]["method"], "model/list");
-        assert_eq!(sent[3]["method"], "turn/start");
-        assert_eq!(sent[3]["params"]["threadId"], "thr_1");
-        assert_eq!(sent[3]["params"]["input"][0]["text"], "run the tests");
+        assert_eq!(sent[3]["method"], "skills/list");
+        assert_eq!(sent[4]["method"], "turn/start");
+        assert_eq!(sent[4]["params"]["threadId"], "thr_1");
+        assert_eq!(sent[4]["params"]["input"][0]["text"], "run the tests");
         assert_eq!(s(&st.events[0], "agent_session"), "thr_1");
         assert_eq!(s(&st.events[0], "model"), "gpt-6.1-sol");
 
@@ -2969,7 +3647,7 @@ mod tests {
                 c.input(id, Input::Model { model: std::env::var("OMHER_REAL_OMO_MODEL").unwrap_or("anthropic/claude-fable-5-1".into()) }).unwrap();
                 thread::sleep(Duration::from_secs(1));
             }
-            c.input(id, Input::Send { text: "hi. reply with just the word ok".into(), images: vec![] }).unwrap();
+            c.input(id, Input::Send { text: "hi. reply with just the word ok".into(), images: vec![], id: String::new() }).unwrap();
             let deadline = Instant::now() + Duration::from_secs(150);
             while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
                 thread::sleep(Duration::from_millis(100));
@@ -3022,7 +3700,7 @@ mod tests {
             "1) What word is written in the attached picture? 2) What is the second line of the attached text file? Answer as: picture=<word>; line2=<line>\n\nAttached file (a copy omher saved; open it with your tools):\n- {}",
             txt.display()
         );
-        let mut input = Input::Send { text, images: vec![Picture::from(pic.to_string_lossy().into_owned())] };
+        let mut input = Input::Send { text, images: vec![Picture::from(pic.to_string_lossy().into_owned())], id: String::new() };
         input.resolve(&home).unwrap();
         let c = Arc::new(ChatSessions::default());
         let out = Arc::new(Mutex::new(Vec::<ChatOut>::new()));
@@ -3560,7 +4238,7 @@ mod tests {
         x.start();
         x.on_input(Input::send("hi")).unwrap();
         run(&mut x, &real("codex-11-resume-gone.jsonl")[..5]);
-        let st = x.on_line(r#"{"id":4,"error":{"code":-32600,"message":"not signed in"}}"#);
+        let st = x.on_line(r#"{"id":5,"error":{"code":-32600,"message":"not signed in"}}"#);
         assert_eq!(ends(&st.events), [("error".into(), "Codex could not start a conversation: not signed in".into())]);
         assert!(!x.in_turn());
     }
@@ -3573,12 +4251,12 @@ mod tests {
         let mut c = claude_up();
         let lines = real("claude-11-model-mid-turn.jsonl");
         let haiku = written(&c.on_input(Input::Model { model: "haiku".into() }).unwrap())[0].clone();
-        assert_eq!(s(&haiku, "request_id"), "omher-model-2");
+        assert_eq!(s(&haiku, "request_id"), "omher-model-3");
         let st = run(&mut c, &lines[..1]);
         assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).collect::<Vec<_>>(), ["Haiku 5.5"]);
         c.on_input(Input::send("Reply with exactly: ok")).unwrap();
         let sonnet = written(&c.on_input(Input::Model { model: "sonnet".into() }).unwrap())[0].clone();
-        assert_eq!(s(&sonnet, "request_id"), "omher-model-3");
+        assert_eq!(s(&sonnet, "request_id"), "omher-model-4");
         // everything until the turn's end, then the next turn
         let first_end = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();
         let st = run(&mut c, &lines[1..=first_end]);
@@ -3833,9 +4511,13 @@ mod tests {
         let mut p = Pi::new("/w/proj", "OmO");
         p.start();
         let st = run(&mut p, &real("omo-init.jsonl"));
+        // its startup thinking_level_changed says the effort first; get_state then names the session
         let info = of(&st.events, "session.info");
-        assert_eq!(s(info[0], "agent_session"), "01a1c85a-703a-72fe-ae88-c1f9ffb5c249");
-        assert_eq!(s(info[0], "model"), "Claude Fable 5.1");
+        assert_eq!(s(info[0], "effort"), "high");
+        let state = info.iter().find(|e| !s(e, "agent_session").is_empty()).unwrap();
+        assert_eq!(s(state, "agent_session"), "01a1c85a-703a-72fe-ae88-c1f9ffb5c249");
+        assert_eq!(s(state, "model"), "Claude Fable 5.1");
+        assert_eq!(s(state, "effort"), "high");
         assert_eq!(of(&st.events, "session.models")[0]["options"].as_array().unwrap().len(), 3);
         assert!(!p.in_turn());
         p.on_input(Input::send("hi. reply with just the word ok")).unwrap();
@@ -4011,6 +4693,257 @@ mod tests {
         assert!(p.on_input(Input::Clarify { request_id: "u9".into(), answer: json!("dev") }).is_err());
     }
 
+    // -- session controls: permission mode, effort, the agent's own commands, context use, queued messages --
+
+    fn sent_with(text: &str, id: &str) -> Input {
+        Input::Send { text: text.into(), images: vec![], id: id.into() }
+    }
+
+    #[test]
+    fn modes_never_include_one_that_skips_approvals_or_lifts_the_sandbox() {
+        assert_eq!(modes_for("claude"), ["default", "plan", "acceptEdits"]);
+        assert_eq!(modes_for("codex"), ["read-only", "ask", "auto"]);
+        for id in ["omo", "pi", "omp", "dsh", "grok", "omh", ""] {
+            assert!(modes_for(id).is_empty(), "{id}");
+        }
+        for m in ["bypassPermissions", "dontAsk", "auto", "danger-full-access", "dangerFullAccess", "never"] {
+            assert!(!modes_for("claude").contains(&m), "{m}");
+        }
+        // Codex's "auto" is omher's name for auto inside the workspace sandbox (checked below), not a bypass
+        for m in ["bypassPermissions", "danger-full-access", "dangerFullAccess", "never", "full-auto"] {
+            assert!(!modes_for("codex").contains(&m), "{m}");
+        }
+        let mut c = claude_up();
+        for bad in ["bypassPermissions", "dontAsk", "auto", "manual", "PLAN", ""] {
+            assert!(c.on_input(Input::Mode { mode: bad.into() }).is_err(), "{bad}");
+        }
+        let mut x = codex_up();
+        for bad in ["danger-full-access", "dangerFullAccess", "never", "full", ""] {
+            assert!(x.on_input(Input::Mode { mode: bad.into() }).is_err(), "{bad}");
+        }
+        // every Codex preset keeps a sandbox and an approval policy that can ask
+        for m in modes_for("codex") {
+            let (policy, sandbox) = codex_mode(m).unwrap();
+            assert_ne!(policy, "never");
+            assert_ne!(sandbox, "dangerFullAccess");
+        }
+        let mut p = pi_up("OmO", &[]);
+        assert!(p.on_input(Input::Mode { mode: "plan".into() }).is_err());
+    }
+
+    #[test]
+    fn real_claude_9_init_reports_commands_mode_efforts_and_context() {
+        // Claude Code 2.1.322: initialize (its commands trimmed), a `set_permission_mode plan` status
+        // line and a get_context_usage answer
+        let mut c = Claude::new("/w/proj");
+        c.start();
+        let lines = real("claude-9-controls.jsonl");
+        let st = run(&mut c, &lines[..1]);
+        let cmds = &of(&st.events, "session.commands")[0]["commands"];
+        // (trimmed to 8 of the 282 it reported)
+        let rows: Vec<(String, String, String)> = cmds.as_array().unwrap().iter().map(|c| (s(c, "name"), s(c, "kind"), s(c, "prefix"))).collect();
+        assert_eq!(rows.len(), 8);
+        assert!(rows.contains(&("compact".into(), "command".into(), "/".into())), "{rows:?}");
+        assert!(rows.iter().filter(|r| r.1 == "skill").count() >= 3, "a `(user)` skill is marked a skill: {rows:?}");
+        assert_eq!(s(&cmds[0], "hint"), "<optional custom summarization instructions>");
+        assert!(s(&cmds[0], "description").chars().count() <= 161);
+        assert_eq!(s(of(&st.events, "session.info")[0], "mode"), "default");
+        assert_eq!(of(&st.events, "session.efforts")[0]["levels"], json!(["low", "medium", "high", "xhigh", "max"]));
+        // it then asks for its settings (the effort in use) and how full the context is
+        let asked: Vec<String> = written(&st).iter().map(|w| s(&w["request"], "subtype")).collect();
+        assert_eq!(asked, ["get_settings", "get_context_usage"]);
+        // Claude Code says the new mode on its own status line
+        let st = run(&mut c, &lines[1..2]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "mode"), "plan");
+        // the context in use, as Claude Code counts it (never estimated)
+        let st = run(&mut c, &lines[2..3]);
+        assert_eq!(of(&st.events, "session.usage")[0], &json!({"event": "session.usage", "used": 23386, "max": 1000000}));
+        // the effort applied, from get_settings
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"success","request_id":"omher-settings-2","response":{"applied":{"model":"claude-fable-5-2","effort":"high"}}}}"#.into()]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "effort"), "high");
+    }
+
+    #[test]
+    fn claude_mode_and_effort_use_its_own_control_requests() {
+        let mut c = claude_up();
+        let w = written(&c.on_input(Input::Mode { mode: "plan".into() }).unwrap());
+        assert_eq!(w[0]["request"], json!({"subtype": "set_permission_mode", "mode": "plan"}));
+        let w = written(&c.on_input(Input::Effort { effort: "low".into() }).unwrap());
+        // for this process only: never Claude Code's settings file
+        assert_eq!(w[0]["request"], json!({"subtype": "apply_flag_settings", "settings": {"effortLevel": "low"}}));
+        assert!(c.on_input(Input::Effort { effort: "ultra".into() }).is_err());
+        // Claude Code refusing a mode is said under the chat
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"error","request_id":"omher-mode-9","error":"Cannot set permission mode"}}"#.into()]);
+        assert_eq!(s(of(&st.events, "session.error")[0], "message"), "Mode not changed: Cannot set permission mode");
+        // an effort that took is read back
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"success","request_id":"omher-effort-10","response":{}}}"#.into()]);
+        assert_eq!(s(&written(&st)[0]["request"], "subtype"), "get_settings");
+    }
+
+    #[test]
+    fn real_claude_9_a_message_sent_mid_turn_waits_until_claude_code_takes_it() {
+        // Claude Code 2.1.322 with --replay-user-messages: "sleep 8, then FIRST" and, 4 s in, "SECOND". The first
+        // is echoed at once; the second only after the running tool, when Claude Code reads it into the turn.
+        let mut c = claude_up();
+        let lines = real("claude-9-queued.jsonl");
+        let st = c.on_input(sent_with("sleep then FIRST", "local-s1")).unwrap();
+        assert_eq!(names(&st.events), ["turn.start"], "the first message is not queued");
+        let first_echo = lines.iter().position(|l| l.contains("\"isReplay\":true")).unwrap();
+        run(&mut c, &lines[..=first_echo]);
+        let st = c.on_input(sent_with("SECOND", "local-s2")).unwrap();
+        assert_eq!(st.events, [json!({"event": "message.queued", "id": "local-s2"})]);
+        let second_echo = lines.iter().rposition(|l| l.contains("\"isReplay\":true")).unwrap();
+        let st = run(&mut c, &lines[first_echo + 1..second_echo]);
+        assert!(of(&st.events, "message.taken").is_empty(), "still waiting while the tool runs");
+        let st = run(&mut c, &lines[second_echo..=second_echo]);
+        assert_eq!(of(&st.events, "message.taken")[0]["id"], "local-s2");
+        let st = run(&mut c, &lines[second_echo + 1..]);
+        assert_eq!(text_of(&st.events, "message"), ["FIRST\nSECOND"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+    }
+
+    #[test]
+    fn claude_stop_with_a_queued_message_runs_it_next_as_its_own_turn() {
+        // recorded: Stop while "SECOND" waited ends the turn aborted_tools, then Claude Code echoes SECOND and
+        // answers it in a new turn
+        let mut c = claude_up();
+        c.on_input(sent_with("sleep", "a")).unwrap();
+        c.on_input(sent_with("SECOND", "b")).unwrap();
+        c.on_input(Input::Interrupt).unwrap();
+        let st = run(&mut c, &[r#"{"type":"result","subtype":"error_during_execution","is_error":true,"terminal_reason":"aborted_tools"}"#.into()]);
+        assert_eq!(ends(&st.events), [("interrupted".into(), "".into())]);
+        assert!(of(&st.events, "message.taken").is_empty() && of(&st.events, "message.dropped").is_empty());
+        let st = run(&mut c, &[r#"{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"SECOND"}]},"parent_tool_use_id":null}"#.into()]);
+        assert_eq!(names(&st.events), ["message.taken", "turn.start"]);
+        assert_eq!(st.events[0]["id"], "b");
+    }
+
+    #[test]
+    fn codex_mode_and_effort_go_with_every_turn() {
+        let mut x = codex_up();
+        // model/list as Codex 0.167 sends it on this Mac (supportedReasoningEfforts per model)
+        x.call(&mut Step::default(), "model/list", json!({}));
+        let (n, mid) = (x.seq, x.model_id.clone());
+        run(&mut x, &[format!(r#"{{"id":{n},"result":{{"data":[{{"model":"{}","displayName":"GPT","description":"","hidden":false,"supportedReasoningEfforts":[{{"reasoningEffort":"low","description":""}},{{"reasoningEffort":"high","description":""}}]}}]}}}}"#, mid)]);
+        let st = x.on_input(Input::Mode { mode: "read-only".into() }).unwrap();
+        assert_eq!(s(of(&st.events, "session.info")[0], "mode"), "read-only");
+        // the recorded model/list offers these efforts for the thread's model
+        let model = x.model_id.clone();
+        let levels = x.efforts.get(&model).cloned().unwrap();
+        let level = levels.as_array().unwrap()[0].as_str().unwrap().to_string();
+        x.on_input(Input::Effort { effort: level.clone() }).unwrap();
+        assert!(x.on_input(Input::Effort { effort: "turbo".into() }).is_err());
+        let t = written(&x.on_input(sent_with("make a file", "local-s7")).unwrap())[0].clone();
+        assert_eq!(t["method"], "turn/start");
+        assert_eq!(t["params"]["approvalPolicy"], "on-request");
+        assert_eq!(t["params"]["sandboxPolicy"], json!({"type": "readOnly"}));
+        assert_eq!(t["params"]["effort"], level.as_str());
+        assert_eq!(t["params"]["clientUserMessageId"], "local-s7");
+        for (mode, policy, sandbox) in [("ask", "untrusted", "workspaceWrite"), ("auto", "on-request", "workspaceWrite")] {
+            x.on_input(Input::Mode { mode: mode.into() }).unwrap();
+            run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"t","status":"completed"}}}"#.into()]);
+            let t = written(&x.on_input(Input::send("next")).unwrap())[0].clone();
+            assert_eq!((s(&t["params"], "approvalPolicy"), s(&t["params"]["sandboxPolicy"], "type")), (policy.to_string(), sandbox.to_string()));
+        }
+    }
+
+    #[test]
+    fn codex_reports_its_threads_mode_effort_usage_and_skills() {
+        // the shapes Codex 0.167 sent on this Mac: thread/resume after a turn ran read-only, a token usage update,
+        // skills/list
+        let mut x = Codex::new("/w/proj", Some("01a1cad5-b3bb-7f52-9de5-0bfc4cd293f4"));
+        x.start();
+        let st = run(&mut x, &[
+            r#"{"id":1,"result":{}}"#.into(),
+            r#"{"id":2,"result":{"thread":{"id":"01a1cad5-b3bb-7f52-9de5-0bfc4cd293f4"},"model":"gpt-6.1-sol","approvalPolicy":"untrusted","sandbox":{"type":"readOnly","networkAccess":false},"reasoningEffort":"low"}}"#.into(),
+        ]);
+        let info = of(&st.events, "session.info")[0];
+        // untrusted + readOnly is none of omher's presets: the agent's own setting, shown as such
+        assert_eq!((s(info, "mode"), s(info, "effort")), ("".into(), "low".into()));
+        let st = run(&mut x, &[r#"{"id":2,"result":{"thread":{"id":"t"},"model":"m","approvalPolicy":"on-request","sandbox":{"type":"readOnly"}}}"#.into()]);
+        let _ = st;
+        assert_eq!(codex_mode_of("on-request", "readOnly"), Some("read-only"));
+        assert_eq!(codex_mode_of("never", "dangerFullAccess"), None);
+        let st = run(&mut x, &[r#"{"method":"thread/tokenUsage/updated","params":{"threadId":"t","turnId":"u","tokenUsage":{"last":{"totalTokens":41250,"inputTokens":41000,"cachedInputTokens":0,"outputTokens":250,"reasoningOutputTokens":0},"total":{"totalTokens":90000,"inputTokens":1,"cachedInputTokens":0,"outputTokens":1,"reasoningOutputTokens":0},"modelContextWindow":258400}}}"#.into()]);
+        assert_eq!(of(&st.events, "session.usage")[0], &json!({"event": "session.usage", "used": 41250, "max": 258400}));
+        let st = run(&mut x, &[r#"{"id":4,"result":{"data":[{"cwd":"/w/proj","skills":[{"name":"review","description":"Long text","shortDescription":"Review a change","enabled":true,"path":"/home/u/.codex/skills/review/SKILL.md","scope":"user"},{"name":"off","description":"x","enabled":false,"path":"/p","scope":"user"}],"errors":[]}]}}"#.into()]);
+        assert_eq!(of(&st.events, "session.commands")[0]["commands"], json!([{"name": "review", "description": "Review a change", "hint": "", "kind": "skill", "prefix": "$"}]));
+        // a `$name` in the message goes with it as Codex's own skill input
+        let t = written(&x.on_input(Input::send("please $review this")).unwrap())[0].clone();
+        assert_eq!(t["params"]["input"][1], json!({"type": "skill", "name": "review", "path": "/home/u/.codex/skills/review/SKILL.md"}));
+    }
+
+    #[test]
+    fn codex_a_message_sent_mid_turn_waits_until_codex_records_it() {
+        // recorded on Codex 0.167: a second turn/start while one runs becomes a userMessage item of the same turn,
+        // with our clientUserMessageId as its clientId
+        let mut x = codex_up();
+        x.on_input(sent_with("first", "local-s1")).unwrap();
+        run(&mut x, &[r#"{"method":"turn/started","params":{"turn":{"id":"T1","status":"inProgress","items":[]}}}"#.into()]);
+        let st = x.on_input(sent_with("second", "local-s2")).unwrap();
+        assert_eq!(names(&st.events), ["message.queued"]);
+        let st = run(&mut x, &[r#"{"method":"item/started","params":{"item":{"type":"userMessage","id":"u2","clientId":"local-s2","content":[]}}}"#.into()]);
+        assert_eq!(st.events, [json!({"event": "message.taken", "id": "local-s2"})]);
+        // Stop before Codex records one: it was never sent, and says so
+        x.on_input(sent_with("third", "local-s3")).unwrap();
+        x.on_input(Input::Interrupt).unwrap();
+        let st = run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"T1","status":"interrupted"}}}"#.into()]);
+        assert_eq!(names(&st.events), ["message.dropped", "turn.end"]);
+        assert_eq!(st.events[0]["id"], "local-s3");
+    }
+
+    #[test]
+    fn real_omo_9_reports_levels_commands_and_context() {
+        // omo 5.0.0-beta.65: get_available_thinking_levels, get_commands (trimmed), get_session_stats after a turn
+        let mut p = Pi::new("/w/proj", "OmO");
+        let w = written(&p.start());
+        assert_eq!(w.iter().map(|v| s(v, "type")).collect::<Vec<_>>(), ["get_state", "get_available_models", "get_available_thinking_levels", "get_commands"]);
+        // the session-stats read the recording answers is the one asked after a turn
+        p.read(&mut Step::default(), "get_session_stats");
+        let st = run(&mut p, &real("omo-9-controls.jsonl"));
+        assert_eq!(of(&st.events, "session.efforts")[0]["levels"], json!(["minimal", "low", "medium", "high", "xhigh", "max"]));
+        let cmds = of(&st.events, "session.commands")[0]["commands"].as_array().unwrap().clone();
+        assert_eq!(cmds.iter().map(|c| (s(c, "kind"), s(c, "prefix"))).collect::<Vec<_>>(), [("command", "/"), ("command", "/"), ("command", "/"), ("skill", "$"), ("skill", "$")].map(|(a, b)| (a.to_string(), b.to_string())));
+        assert!(s(&cmds[3], "name").starts_with("skill:"));
+        assert_eq!(of(&st.events, "session.usage")[0], &json!({"event": "session.usage", "used": 82335, "max": 1000000}));
+        // a level it offers goes as its own set_thinking_level; anything else is refused
+        let w = written(&p.on_input(Input::Effort { effort: "low".into() }).unwrap());
+        assert_eq!((s(&w[0], "type"), s(&w[0], "level")), ("set_thinking_level".into(), "low".into()));
+        assert!(p.on_input(Input::Effort { effort: "off".into() }).is_err());
+        let st = run(&mut p, &[r#"{"type":"thinking_level_changed","level":"low"}"#.into()]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "effort"), "low");
+    }
+
+    #[test]
+    fn real_omo_9_a_follow_up_waits_in_its_queue_until_omo_takes_it() {
+        // omo 5.0.0-beta.65: "numbers 1..80", then (3 s in) "SECOND" as a followUp: queue_update, then after the
+        // first answer a new turn_start, an empty queue and SECOND's own message_end
+        let mut p = pi_up("OmO", &[]);
+        let lines = real("omo-9-queued.jsonl");
+        p.on_input(sent_with("numbers", "a")).unwrap();
+        let start = lines.iter().position(|l| l.contains("\"agent_start\"")).unwrap();
+        let first_user = lines.iter().position(|l| l.contains("\"message_end\"") && l.contains("\"role\":\"user\"")).unwrap();
+        run(&mut p, &lines[..=first_user]);
+        assert!(start < first_user);
+        let st = p.on_input(sent_with("SECOND", "b")).unwrap();
+        assert_eq!(names(&st.events), ["message.queued"]);
+        assert_eq!(written(&st)[0]["streamingBehavior"], "followUp");
+        let second_user = lines.iter().rposition(|l| l.contains("\"message_end\"") && l.contains("\"role\":\"user\"")).unwrap();
+        let st = run(&mut p, &lines[first_user + 1..second_user]);
+        assert!(of(&st.events, "message.taken").is_empty());
+        let st = run(&mut p, &lines[second_user..]);
+        assert_eq!(of(&st.events, "message.taken")[0]["id"], "b");
+        assert_eq!(text_of(&st.events, "message"), ["SECOND"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        // Stop with a follow-up waiting: omo clears its queue, so the message is dropped
+        p.on_input(sent_with("long", "c")).unwrap();
+        run(&mut p, &[r#"{"type":"agent_start"}"#.into()]);
+        p.on_input(sent_with("later", "d")).unwrap();
+        let st = run(&mut p, &[r#"{"type":"agent_end","aborted":true}"#.into()]);
+        assert_eq!(names(&st.events)[..2], ["message.dropped", "turn.end"]);
+        assert_eq!(st.events[0]["id"], "d");
+    }
+
     // -- every recorded stream ends with the turn over --
 
     /// One step of a replay: a recorded file (or the part of it before / from its last `init`), or what the person
@@ -4053,6 +4986,10 @@ mod tests {
         out.push(("codex-8-resume.jsonl", "codex-resume", vec![File("codex-8-resume-init.jsonl"), File("codex-8-resume.jsonl"), Send, File("codex-8-resume-turn.jsonl")]));
         // reopened onto a thread that is gone, with a message waiting: a new thread takes it (QA H5)
         out.push(("codex-11-resume-gone.jsonl", "codex-resume-gone", vec![Send, File("codex-11-resume-gone.jsonl"), File("codex-1-plain.jsonl")]));
+        // two subagents in parallel (Claude Code 2.1.322, real run), then a subagent whose command needs approval
+        out.push(("claude-9-subagents.jsonl", "claude", vec![Send, File("claude-9-subagents.jsonl"), Send, File("claude-9-subagent-ask.jsonl")]));
+        // OmO 5.1.56: two background subagents (`task`), then the next turn during which their completions arrive
+        out.push(("omo-9-subagents.jsonl", "omo", vec![Send, File("omo-9-subagents.jsonl"), Send, File("omo-9-subagents-after.jsonl")]));
         // two sub-agents in parallel (their threads stream on the same connection), then Stop while one runs
         out.push(("codex-9-helpers.jsonl", "codex-helpers", vec![Send, File("codex-9-helpers.jsonl")]));
         out.push(("codex-10-helper-stop.jsonl", "codex-helper-stop", vec![Send, File("codex-10-helper-stop.jsonl"), Stop, File("codex-10-helper-stopped.jsonl")]));
@@ -4068,6 +5005,11 @@ mod tests {
         out.push(("pi-4-running.jsonl", "pi", vec![Send, File("pi-4-running.jsonl"), Stop, File("pi-4-stopped.jsonl")]));
         out.push(("pi-7-model.jsonl", "pi", vec![Model("stub/stub-b"), File("pi-7-model.jsonl"), Send, File("pi-7-after-model.jsonl")]));
         out.push(("pi-signed-out.jsonl", "pi-noauth", vec![File("pi-noauth-init.jsonl"), Send, File("pi-signed-out.jsonl"), File("pi-noauth-model.jsonl")]));
+        // the session controls' recordings: start-up reads, and a message sent while a turn ran
+        out.push(("claude-9-controls.jsonl", "claude", vec![File("claude-9-controls.jsonl")]));
+        out.push(("claude-9-queued.jsonl", "claude", turn("claude-9-queued.jsonl")));
+        out.push(("omo-9-controls.jsonl", "omo", vec![File("omo-9-controls.jsonl")]));
+        out.push(("omo-9-queued.jsonl", "omo", turn("omo-9-queued.jsonl")));
         out
     }
 
@@ -4107,7 +5049,7 @@ mod tests {
         for step in steps {
             let lines: Vec<String> = match step {
                 Do::Send => {
-                    events.extend(a.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap().events);
+                    events.extend(a.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap().events);
                     continue;
                 }
                 Do::Stop => {
@@ -4204,14 +5146,14 @@ mod tests {
     fn omo_status_after_its_turn_ended_is_not_shown() {
         // omo-1-plain.jsonl: agent_end, then setStatus "(😺 OmO Native)", agent_settled, agent_idle, more setStatus
         let mut p = pi_up("OmO", &["omo-init.jsonl"]);
-        p.on_input(Input::Send { text: "hi".into(), images: vec![] }).unwrap();
+        p.on_input(Input::Send { text: "hi".into(), images: vec![], id: String::new() }).unwrap();
         let lines = real("omo-1-plain.jsonl");
         let end = lines.iter().position(|l| l.contains("\"type\":\"agent_end\"")).unwrap();
         run(&mut p, &lines[..=end]);
         let late = run(&mut p, &lines[end + 1..]);
         assert!(late.events.is_empty(), "{:?}", late.events);
         // while a turn runs, its status shows as the agent wrote it
-        p.on_input(Input::Send { text: "again".into(), images: vec![] }).unwrap();
+        p.on_input(Input::Send { text: "again".into(), images: vec![], id: String::new() }).unwrap();
         let st = p.on_line(r#"{"type":"extension_ui_request","id":"s1","method":"setStatus","statusKey":"memory","statusText":"mem:khope-sionic-ai-d09472c9 9d ago (+1)"}"#);
         assert_eq!(st.events, [json!({"event": "status", "text": "mem:khope-sionic-ai-d09472c9 9d ago (+1)"})]);
     }
@@ -4225,10 +5167,121 @@ mod tests {
         x
     }
 
+    fn subs_of<'a>(events: &'a [Event], id: &str) -> Vec<&'a Event> {
+        events.iter().filter(|e| s(e, "event") == "subagent" && s(e, "id").ends_with(id)).collect()
+    }
+
+    #[test]
+    fn claude_subagents_come_out_as_one_row_each_with_their_own_answer() {
+        // claude-9-subagents: one message, two Agent calls in parallel (Claude Code 2.1.322, a real run)
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-9-subagents.jsonl"));
+        let a = subs_of(&st.events, "NdJyEL");
+        let b = subs_of(&st.events, "4hw1eo");
+        assert_eq!((s(a[0], "agent"), s(a[0], "name"), s(a[0], "goal")), ("claude".into(), "general-purpose".into(), "Read a.txt first line".into()));
+        assert_eq!(s(b[0], "goal"), "Count lines of b.txt");
+        // one fan-out of two (the same message), its steps, then done with its own words and time
+        assert_eq!(s(a[0], "delegation"), s(b[0], "delegation"));
+        assert_eq!((a[0]["index"].clone(), b[0]["index"].clone(), b[0]["count"].clone()), (json!(0), json!(1), json!(2)));
+        assert!(a.iter().any(|e| s(e, "tool") == "read_file" && s(e, "step").ends_with("a.txt")), "{a:?}");
+        let end = a.last().unwrap();
+        assert_eq!((s(end, "state"), s(end, "summary")), ("done".into(), "alpha line".into()));
+        assert_eq!(end["seconds"], json!(3.7));
+        assert_eq!(s(end, "model"), "claude-fable-5-2");
+        assert_eq!(s(b.last().unwrap(), "state"), "done");
+        // a subagent's own text and steps are never Claude's: one answer bubble, steps only of the main thread
+        assert_eq!(text_of(&st.events, "message").len(), 1);
+        assert!(st.events.iter().filter(|e| s(e, "event") == "tool.start").all(|e| s(e, "name") == "delegate_task"));
+        assert_eq!(names(&st.events).iter().filter(|n| *n == "turn.end").count(), 1);
+    }
+
+    #[test]
+    fn a_claude_turn_stopped_with_a_subagent_out_ends_that_subagent_cancelled() {
+        // claude-9-subagents up to the first hand-back, then Stop: Claude Code ends the turn with
+        // error_during_execution and the second subagent never hands back
+        let lines = real("claude-9-subagents.jsonl");
+        let cut = lines.iter().position(|l| l.contains("\"tool_use_id\":\"toolu_01ScWBRPwx9MFSuupGNdJyEL\"") && l.contains("tool_result")).unwrap();
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        run(&mut c, &lines[..=cut]);
+        let st = c.on_line(r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":""}"#);
+        let b = subs_of(&st.events, "4hw1eo");
+        assert_eq!(b.iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["cancelled"]);
+        assert!(subs_of(&st.events, "NdJyEL").is_empty(), "the subagent that handed back stays done");
+        assert_eq!(names(&st.events).last().map(String::as_str), Some("turn.end"));
+    }
+
+    #[test]
+    fn a_claude_subagents_approval_names_the_subagent() {
+        // claude-9-subagent-ask: the subagent's Bash needs permission; Claude Code sends `agent_id` on can_use_tool
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        run(&mut c, &real("claude-9-subagents.jsonl"));
+        c.on_input(Input::send("again")).unwrap();
+        let st = replay(&mut c, &["claude-9-subagent-ask.jsonl"], &[]);
+        let ask = st.events.iter().find(|e| s(e, "event") == "approval.request").unwrap();
+        assert_eq!(ask["subagent"], json!({"id": "toolu_016YS2cG1AUHFFq9nBfbkv9e", "name": "Write c.txt via echo"}));
+        assert!(s(ask, "command").starts_with("echo three"));
+        let sub = subs_of(&st.events, "fbkv9e");
+        assert_eq!(s(sub.last().unwrap(), "summary"), "done");
+    }
+
+    #[test]
+    fn claude_says_how_much_still_runs_in_the_background() {
+        // claude-4-background: background_tasks_changed with one task, then with none (audit O10)
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let mut st = run(&mut c, &real("claude-4-background.jsonl"));
+        // the same event when the task ended (claude-A in the audit's capture): its list is empty
+        st.events.extend(c.on_line(r#"{"type":"system","subtype":"background_tasks_changed","tasks":[]}"#).events);
+        let bg: Vec<Value> = st.events.iter().filter(|e| s(e, "event") == "session.info" && e.get("background").is_some()).map(|e| e["background"].clone()).collect();
+        assert_eq!(bg, [json!(1), json!(0)]);
+    }
+
+    #[test]
+    fn omo_subagents_come_out_as_rows_and_end_when_omo_says_they_finished() {
+        // omo-9: one `task` call with two background subagents (OmO 5.1.56, a real run); their completions arrive in
+        // OmO's next turn as `senpi-task.completion`
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::send("go")).unwrap();
+        let st = run(&mut p, &real("omo-9-subagents.jsonl"));
+        let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        assert_eq!((s(subs[0], "agent"), s(subs[0], "name"), s(subs[0], "goal"), s(subs[0], "state")), ("omo".into(), "first-line".into(), "Report the first line of a.txt".into(), "queued".into()));
+        assert_eq!(s(subs[1], "name"), "line-count");
+        // the call's result: both running in the background, on their resolved model
+        let running: Vec<&&Event> = subs.iter().filter(|e| s(e, "state") == "running").collect();
+        assert_eq!(running.len(), 2);
+        assert_eq!(s(running[0], "model"), "gpt-6-luna-fast");
+        // the `task` step names them, never the raw call JSON
+        let step = st.events.iter().find(|e| s(e, "event") == "tool.start" && s(e, "name") == "delegate_task").unwrap();
+        assert_eq!(s(step, "detail"), "first-line, line-count");
+        p.on_input(Input::send("next")).unwrap();
+        let st = replay(&mut p, &["omo-9-subagents-after.jsonl"], &[]);
+        let done: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        assert_eq!(done.iter().map(|e| (s(e, "name"), s(e, "state"), s(e, "summary"))).collect::<Vec<_>>(), [
+            ("first-line".into(), "done".into(), "alpha line".into()),
+            ("line-count".into(), "done".into(), "2".into()),
+        ]);
+        assert_eq!(done[0]["seconds"], json!(9.9));
+        assert_eq!(s(done[0], "model"), "claude-haiku-5-5");
+    }
+
+    #[test]
+    fn omo_says_what_still_runs_in_the_background() {
+        // omo-B: session_lifecycle waiting_background with one bash (audit O10); subagents are not counted here
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let st = p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"waiting_background","waitingOn":{"children":0,"background":[{"source":"terminal-background-sessions","activeCount":1,"items":[{"id":"bash_1","label":"sleep 20"}]}],"human":[]}}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "background": 1})]);
+        assert!(p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"waiting_background","waitingOn":{"children":0,"background":[{"source":"terminal-background-sessions","activeCount":1}],"human":[]}}}"#).events.is_empty());
+        let st = p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"done","waitingOn":{"children":0,"background":[{"source":"delivery:omo-senpi:wake:x","activeCount":1}],"human":[]}}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "background": 0})]);
+    }
+
     #[test]
     fn a_codex_helper_finishing_does_not_end_the_persons_turn() {
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let lines = real("codex-9-helpers.jsonl");
         // the first helper's own turn/completed: the person's turn is still running
         let child_end = lines.iter().position(|l| l.contains("\"turn/completed\"") && l.contains("01a1ca24-539f")).unwrap();
@@ -4244,7 +5297,7 @@ mod tests {
     #[test]
     fn a_codex_helpers_text_is_never_codexs_own_answer() {
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let st = run(&mut x, &real("codex-9-helpers.jsonl"));
         let said = text_of(&st.events, "message");
         assert!(!said.iter().any(|t| t == "done" || t == "alpha line"), "{said:?}");
@@ -4260,7 +5313,7 @@ mod tests {
     #[test]
     fn codex_helpers_come_out_as_subagent_lines() {
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let st = run(&mut x, &real("codex-9-helpers.jsonl"));
         let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
         let of = |id: &str| subs.iter().filter(|e| s(e, "id").ends_with(id)).map(|e| (*e).clone()).collect::<Vec<_>>();
@@ -4290,7 +5343,7 @@ mod tests {
         let mut x = Codex::new("/w/proj", None);
         x.start();
         run(&mut x, &real("codex-10-helper-stop-init.jsonl"));
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         run(&mut x, &real("codex-10-helper-stop.jsonl"));
         let st = x.on_input(Input::Interrupt).unwrap();
         let w = written(&st);
@@ -4315,7 +5368,7 @@ mod tests {
         // shape from codex-rs app-server-protocol (v2 CommandExecutionRequestApprovalParams); this Mac's Codex runs
         // with approval_policy = never, so no helper approval was recorded
         let mut x = codex_helpers_up();
-        x.on_input(Input::Send { text: "go".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
         let lines = real("codex-9-helpers.jsonl");
         let spawned = lines.iter().position(|l| l.contains("\"subAgentActivity\"") && l.contains("write_one")).unwrap();
         run(&mut x, &lines[..=spawned]);
@@ -4335,13 +5388,13 @@ mod tests {
         // before the thread exists the message only waits: Stop drops it and ends the turn
         let mut x = Codex::new("/w/proj", None);
         x.start();
-        x.on_input(Input::Send { text: "hi".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "hi".into(), images: vec![], id: String::new() }).unwrap();
         let st = x.on_input(Input::Interrupt).unwrap();
         assert_eq!(st.events, [json!({"event": "turn.end", "outcome": "interrupted"})]);
         assert!(!x.in_turn() && run(&mut x, &real("codex-init.jsonl")).write.iter().all(|w| !w.contains("turn/start")));
         // sent, but Codex has not named the turn yet: Stop waits for the name, then interrupts it
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "sleep".into(), images: vec![] }).unwrap();
+        x.on_input(Input::Send { text: "sleep".into(), images: vec![], id: String::new() }).unwrap();
         assert!(x.on_input(Input::Interrupt).unwrap().write.is_empty());
         let st = x.on_line(r#"{"method":"turn/started","params":{"threadId":"t","turn":{"id":"turn_7","status":"inProgress","items":[]}}}"#);
         assert_eq!(written(&st)[0]["method"], "turn/interrupt");
@@ -4463,13 +5516,13 @@ mod tests {
         // omo (audit O4): the abort hit the tool, so the last message ended with stopReason "toolUse"; agent_end
         // carries aborted: true
         let mut p = pi_up("OmO", &["omo-init.jsonl"]);
-        p.on_input(Input::Send { text: "sleep".into(), images: vec![] }).unwrap();
+        p.on_input(Input::Send { text: "sleep".into(), images: vec![], id: String::new() }).unwrap();
         p.on_line(r#"{"type":"agent_start"}"#);
         p.on_line(r#"{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"toolUse"}}"#);
         let st = p.on_line(r#"{"type":"agent_end","messages":[],"willRetry":false,"aborted":true,"abortSource":"user"}"#);
         assert_eq!(ends(&st.events), [("interrupted".into(), "".into())]);
         // an ordinary end stays done
-        p.on_input(Input::Send { text: "hi".into(), images: vec![] }).unwrap();
+        p.on_input(Input::Send { text: "hi".into(), images: vec![], id: String::new() }).unwrap();
         p.on_line(r#"{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}],"stopReason":"stop"}}"#);
         let st = p.on_line(r#"{"type":"agent_end","messages":[],"willRetry":false}"#);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -4493,7 +5546,7 @@ mod tests {
         Picture { path: "/h/.omher/session-files/s1/1-word.png".into(), mime: "image/png".into(), data: "iVBORw0KGgo=".into() }
     }
     fn with_pic(text: &str) -> Input {
-        Input::Send { text: text.into(), images: vec![pic()] }
+        Input::Send { text: text.into(), images: vec![pic()], id: String::new() }
     }
 
     #[test]
@@ -4560,7 +5613,7 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         let home = home.canonicalize().unwrap();
         let png = session_files::save(&home, "s1", "word.png", b"\x89PNG").unwrap();
-        let mut i = Input::Send { text: "x".into(), images: vec![Picture::from(png.to_string_lossy().into_owned())] };
+        let mut i = Input::Send { text: "x".into(), images: vec![Picture::from(png.to_string_lossy().into_owned())], id: String::new() };
         i.resolve(&home).unwrap();
         let Input::Send { images, .. } = &i else { panic!() };
         assert_eq!((images[0].mime.as_str(), images[0].data.as_str()), ("image/png", "iVBORw=="));
@@ -4568,7 +5621,7 @@ mod tests {
         let outside = home.join("secret.png");
         std::fs::write(&outside, b"x").unwrap();
         for bad in [txt.to_string_lossy().into_owned(), outside.to_string_lossy().into_owned(), "/etc/hosts".into(), "relative.png".into()] {
-            let mut i = Input::Send { text: "x".into(), images: vec![Picture::from(bad.clone())] };
+            let mut i = Input::Send { text: "x".into(), images: vec![Picture::from(bad.clone())], id: String::new() };
             assert!(i.resolve(&home).is_err(), "{bad}");
         }
         // other inputs carry no files

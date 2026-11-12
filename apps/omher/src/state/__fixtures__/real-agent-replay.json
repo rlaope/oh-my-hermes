@@ -44,6 +44,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Fable 5.2"
       },
       {
@@ -107,6 +108,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Fable 5.2"
       },
       {
@@ -295,6 +297,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Fable 5.2"
       },
       {
@@ -403,6 +406,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Fable 5.2"
       },
       {
@@ -429,6 +433,10 @@
         "event": "tool.start",
         "name": "terminal",
         "tool_id": "toolu_01S3Zisz6bNmbbNzvbQNR9sQ"
+      },
+      {
+        "background": 1,
+        "event": "session.info"
       },
       {
         "event": "tool.end",
@@ -550,6 +558,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Fable 5.2"
       },
       {
@@ -629,6 +638,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "acceptEdits",
         "event": "session.info",
+        "mode": "acceptEdits",
         "model": "Haiku 5.5"
       },
       {
@@ -721,6 +731,7 @@
         "agent_session": "bc03da85-b58e-4e10-81a0-6a7ee39a6d01",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Opus 5.5"
       },
       {
@@ -776,6 +787,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -851,6 +863,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -991,6 +1004,7 @@
         "agent_session": "8807e0e5-dd2a-4324-98d1-1949e74bd4b2",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -1013,6 +1027,7 @@
         "agent_session": "8807e0e5-dd2a-4324-98d1-1949e74bd4b2",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Sonnet 5.5",
         "model_next": ""
       },
@@ -1077,12 +1092,14 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -1199,6 +1216,7 @@
         "agent_session": "cc1528d7-7f0b-4bc2-b2fc-ec1e178e4f57",
         "approval": "default",
         "event": "session.info",
+        "mode": "default",
         "model": "Haiku 5.5"
       },
       {
@@ -1240,6 +1258,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1345,6 +1364,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1591,6 +1611,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1750,6 +1771,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -1889,6 +1911,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2060,6 +2083,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2165,6 +2189,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2308,6 +2333,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6.1-sol"
       },
       {
@@ -2393,6 +2419,7 @@
         "agent_session": "01a1c3b9-4b7f-7542-900c-c5f4dc80eefa",
         "approval": "untrusted",
         "event": "session.info",
+        "mode": "",
         "model": "gpt-6-astra"
       },
       {
@@ -2496,6 +2523,7 @@
         "agent_session": "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6",
         "approval": "never",
         "event": "session.info",
+        "mode": "",
         "model": "GPT-6.1-Sol",
         "sandbox": "dangerFullAccess"
       },
@@ -2542,6 +2570,780 @@
       }
     ],
     "name": "codex-11-resume-gone.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "b286b599-13d6-40c3-921b-aa4a1f374c62",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Fable 5.2"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "Read a.txt first line",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_01ScWBRPwx9MFSuupGNdJyEL"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgwJP9XMiYDY6bVmXCJCH",
+        "event": "subagent",
+        "goal": "Read a.txt first line",
+        "id": "toolu_01ScWBRPwx9MFSuupGNdJyEL",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgwJP9XMiYDY6bVmXCJCH",
+        "event": "subagent",
+        "goal": "Read a.txt first line",
+        "id": "toolu_01ScWBRPwx9MFSuupGNdJyEL",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running",
+        "step": "/w/proj/a.txt",
+        "tool": "read_file"
+      },
+      {
+        "detail": "Count lines of b.txt",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_011UMsuctqW4JsxY8B4hw1eo"
+      },
+      {
+        "agent": "claude",
+        "count": 2,
+        "delegation": "claude-msg_011CgwJP9XMiYDY6bVmXCJCH",
+        "event": "subagent",
+        "goal": "Count lines of b.txt",
+        "id": "toolu_011UMsuctqW4JsxY8B4hw1eo",
+        "index": 1,
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01ScWBRPwx9MFSuupGNdJyEL"
+      },
+      {
+        "agent": "claude",
+        "count": 2,
+        "delegation": "claude-msg_011CgwJP9XMiYDY6bVmXCJCH",
+        "event": "subagent",
+        "goal": "Read a.txt first line",
+        "id": "toolu_01ScWBRPwx9MFSuupGNdJyEL",
+        "index": 0,
+        "model": "claude-fable-5-2",
+        "name": "general-purpose",
+        "seconds": 3.7,
+        "state": "done",
+        "summary": "alpha line"
+      },
+      {
+        "agent": "claude",
+        "count": 2,
+        "delegation": "claude-msg_011CgwJP9XMiYDY6bVmXCJCH",
+        "event": "subagent",
+        "goal": "Count lines of b.txt",
+        "id": "toolu_011UMsuctqW4JsxY8B4hw1eo",
+        "index": 1,
+        "name": "general-purpose",
+        "state": "running",
+        "step": "/w/proj/b.txt",
+        "tool": "read_file"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_011UMsuctqW4JsxY8B4hw1eo"
+      },
+      {
+        "agent": "claude",
+        "count": 2,
+        "delegation": "claude-msg_011CgwJP9XMiYDY6bVmXCJCH",
+        "event": "subagent",
+        "goal": "Count lines of b.txt",
+        "id": "toolu_011UMsuctqW4JsxY8B4hw1eo",
+        "index": 1,
+        "model": "claude-fable-5-2",
+        "name": "general-purpose",
+        "seconds": 9.4,
+        "state": "done",
+        "summary": "4 Note: Read returned line numbers 1–4, but line 4 is empty (lines 1–3 are `one`, `two`, `three`). If that empty line is only the file's trailing newline, the content line count is 3; I did not check…"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "`a."
+      },
+      {
+        "event": "delta",
+        "text": "txt` first line is `al"
+      },
+      {
+        "event": "delta",
+        "text": "pha line`; `b."
+      },
+      {
+        "event": "delta",
+        "text": "txt` has 3"
+      },
+      {
+        "event": "delta",
+        "text": " content lines (`one`"
+      },
+      {
+        "event": "delta",
+        "text": ", `two`, `three`"
+      },
+      {
+        "event": "delta",
+        "text": ") — Read showed a"
+      },
+      {
+        "event": "delta",
+        "text": " 4th,"
+      },
+      {
+        "event": "delta",
+        "text": " empty line,"
+      },
+      {
+        "event": "delta",
+        "text": " which s"
+      },
+      {
+        "event": "delta",
+        "text": "ub-agent "
+      },
+      {
+        "event": "delta",
+        "text": "2 reported as "
+      },
+      {
+        "event": "delta",
+        "text": "4 and which"
+      },
+      {
+        "event": "delta",
+        "text": " is prob"
+      },
+      {
+        "event": "delta",
+        "text": "ably just"
+      },
+      {
+        "event": "delta",
+        "text": " the trailing newline ("
+      },
+      {
+        "event": "delta",
+        "text": "not checked with `wc`"
+      },
+      {
+        "event": "delta",
+        "text": ")."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgwJQR9VAH1uDoGKDfv17-0",
+        "text": "`a.txt` first line is `alpha line`; `b.txt` has 3 content lines (`one`, `two`, `three`) — Read showed a 4th, empty line, which sub-agent 2 reported as 4 and which is probably just the trailing newline (not checked with `wc`)."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "b286b599-13d6-40c3-921b-aa4a1f374c62",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Fable 5.2"
+      },
+      {
+        "detail": "Write c.txt via echo",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_016YS2cG1AUHFFq9nBfbkv9e"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgwJQp9Lc6NkJwqWYPoWN",
+        "event": "subagent",
+        "goal": "Write c.txt via echo",
+        "id": "toolu_016YS2cG1AUHFFq9nBfbkv9e",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgwJQp9Lc6NkJwqWYPoWN",
+        "event": "subagent",
+        "goal": "Write c.txt via echo",
+        "id": "toolu_016YS2cG1AUHFFq9nBfbkv9e",
+        "index": 0,
+        "name": "general-purpose",
+        "state": "running",
+        "step": "echo three > \"/w/proj/c.txt\"",
+        "tool": "terminal"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "echo three > \"/w/proj/c.txt\"",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "504999d3-7f7a-4d39-92b4-5296fbbed73a",
+        "subagent": {
+          "id": "toolu_016YS2cG1AUHFFq9nBfbkv9e",
+          "name": "Write c.txt via echo"
+        },
+        "title": "Run this command?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_016YS2cG1AUHFFq9nBfbkv9e"
+      },
+      {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgwJQp9Lc6NkJwqWYPoWN",
+        "event": "subagent",
+        "goal": "Write c.txt via echo",
+        "id": "toolu_016YS2cG1AUHFFq9nBfbkv9e",
+        "index": 0,
+        "model": "claude-fable-5-2",
+        "name": "general-purpose",
+        "seconds": 4.2,
+        "state": "done",
+        "summary": "done"
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgwJRPASoxBAQfDG5FXDE-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-9-subagents.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "I read this as a request"
+      },
+      {
+        "event": "delta",
+        "text": " to run two l"
+      },
+      {
+        "event": "delta",
+        "text": "ookups on a."
+      },
+      {
+        "event": "delta",
+        "text": "txt through"
+      },
+      {
+        "event": "delta",
+        "text": " two help"
+      },
+      {
+        "event": "delta",
+        "text": "ers at"
+      },
+      {
+        "event": "delta",
+        "text": " once and then s"
+      },
+      {
+        "event": "delta",
+        "text": "um them up. I'll st"
+      },
+      {
+        "event": "delta",
+        "text": "op when both helpers have re"
+      },
+      {
+        "event": "delta",
+        "text": "ported and"
+      },
+      {
+        "event": "delta",
+        "text": " I've written the one-line summ"
+      },
+      {
+        "event": "delta",
+        "text": "ary."
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "I read this as a request to run two lookups on a.txt through two helpers at once and then sum them up. I'll stop when both helpers have reported and I've written the one-line summary."
+      },
+      {
+        "detail": "first-line, line-count",
+        "event": "tool.start",
+        "name": "delegate_task",
+        "tool_id": "toolu_01STpuAfRfhN2hieZ7tGSynh"
+      },
+      {
+        "agent": "omo",
+        "count": 1,
+        "delegation": "pi-toolu_01STpuAfRfhN2hieZ7tGSynh",
+        "event": "subagent",
+        "goal": "Report the first line of a.txt",
+        "id": "toolu_01STpuAfRfhN2hieZ7tGSynh:0",
+        "index": 0,
+        "name": "first-line",
+        "state": "queued"
+      },
+      {
+        "agent": "omo",
+        "count": 2,
+        "delegation": "pi-toolu_01STpuAfRfhN2hieZ7tGSynh",
+        "event": "subagent",
+        "goal": "Report the line count of a.txt",
+        "id": "toolu_01STpuAfRfhN2hieZ7tGSynh:1",
+        "index": 1,
+        "name": "line-count",
+        "state": "queued"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01STpuAfRfhN2hieZ7tGSynh"
+      },
+      {
+        "agent": "omo",
+        "count": 2,
+        "delegation": "pi-toolu_01STpuAfRfhN2hieZ7tGSynh",
+        "event": "subagent",
+        "goal": "Report the first line of a.txt",
+        "id": "toolu_01STpuAfRfhN2hieZ7tGSynh:0",
+        "index": 0,
+        "model": "gpt-6-luna-fast",
+        "name": "first-line",
+        "state": "running"
+      },
+      {
+        "agent": "omo",
+        "count": 2,
+        "delegation": "pi-toolu_01STpuAfRfhN2hieZ7tGSynh",
+        "event": "subagent",
+        "goal": "Report the line count of a.txt",
+        "id": "toolu_01STpuAfRfhN2hieZ7tGSynh:1",
+        "index": 1,
+        "model": "gpt-6-luna-fast",
+        "name": "line-count",
+        "state": "running"
+      },
+      {
+        "event": "delta",
+        "text": "Both helpers are running."
+      },
+      {
+        "event": "delta",
+        "text": " I'll write"
+      },
+      {
+        "event": "delta",
+        "text": " the summary once their results come in"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "message",
+        "id": "pi-m2",
+        "text": "Both helpers are running. I'll write the summary once their results come in."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "{\"questions\":[{\"header\":\"Color\",\"multiSelect\":false,\"options\":[{\"label\":\"Red\"},{\"label\":\"Blue\"}],\"question\":\"Which color do you prefer?\"}],\"waitForAnswer\":true}",
+        "event": "tool.start",
+        "name": "ask_user_question",
+        "tool_id": "toolu_01LJA461vupSeQ9zhuvDnsNp"
+      },
+      {
+        "choices": [
+          "Red",
+          "Blue",
+          "Other (type an answer)"
+        ],
+        "event": "clarify.request",
+        "question": "Which color do you prefer?",
+        "request_id": "d257db63-509f-40f7-b277-6deba443d3dc"
+      },
+      {
+        "event": "clarify.request",
+        "question": "Which color do you prefer?",
+        "request_id": "faaf77a9-0102-46cc-b19b-4c4e0d4901ea"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01LJA461vupSeQ9zhuvDnsNp"
+      },
+      {
+        "agent": "omo",
+        "count": 2,
+        "delegation": "pi-toolu_01STpuAfRfhN2hieZ7tGSynh",
+        "event": "subagent",
+        "goal": "Report the first line of a.txt",
+        "id": "toolu_01STpuAfRfhN2hieZ7tGSynh:0",
+        "index": 0,
+        "model": "claude-haiku-5-5",
+        "name": "first-line",
+        "seconds": 9.9,
+        "state": "done",
+        "summary": "alpha line"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "Blue"
+      },
+      {
+        "event": "message",
+        "id": "pi-m3",
+        "text": "Blue"
+      },
+      {
+        "agent": "omo",
+        "count": 2,
+        "delegation": "pi-toolu_01STpuAfRfhN2hieZ7tGSynh",
+        "event": "subagent",
+        "goal": "Report the line count of a.txt",
+        "id": "toolu_01STpuAfRfhN2hieZ7tGSynh:1",
+        "index": 1,
+        "model": "claude-haiku-5-5",
+        "name": "line-count",
+        "seconds": 15.5,
+        "state": "done",
+        "summary": "2"
+      },
+      {
+        "event": "delta",
+        "text": "Both helpers are done"
+      },
+      {
+        "event": "delta",
+        "text": ": the first line of a.tx"
+      },
+      {
+        "event": "delta",
+        "text": "t is \"alpha line\","
+      },
+      {
+        "event": "delta",
+        "text": " and the file has 2 l"
+      },
+      {
+        "event": "delta",
+        "text": "ines."
+      },
+      {
+        "event": "message",
+        "id": "pi-m4",
+        "text": "Both helpers are done: the first line of a.txt is \"alpha line\", and the file has 2 lines."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omo-9-subagents.jsonl"
   },
   {
     "agent": "codex-helpers",
@@ -2594,9 +3396,22 @@
       {
         "agent_session": "01a1ca24-1047-7ee0-aac2-faf093d44dbe",
         "approval": "never",
+        "effort": "xhigh",
         "event": "session.info",
+        "mode": "",
         "model": "GPT-6.1-Sol",
         "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ]
       },
       {
         "event": "turn.start"
@@ -2671,6 +3486,11 @@
         "state": "running"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30769
+      },
+      {
         "agent": "codex",
         "count": 1,
         "delegation": "codex-01a1ca24-43f9-7ca2-9131-22dfa42687b7",
@@ -2697,6 +3517,11 @@
         "state": "running"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30860
+      },
+      {
         "agent": "codex",
         "count": 2,
         "delegation": "codex-01a1ca24-43f9-7ca2-9131-22dfa42687b7",
@@ -2709,6 +3534,11 @@
         "seconds": 4.8,
         "state": "done",
         "summary": "done"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30903
       },
       {
         "agent": "codex",
@@ -2737,6 +3567,11 @@
         "seconds": 4.6,
         "state": "done",
         "summary": "alpha line"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30984
       },
       {
         "event": "delta",
@@ -2824,6 +3659,11 @@
         "text": "Agent 1 wrote one.txt; Agent 2 reported a.txt’s first line: alpha line."
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 31071
+      },
+      {
         "event": "delta",
         "text": "Do"
       },
@@ -2855,6 +3695,11 @@
         "event": "message",
         "id": "msg_06e385cc77ea6e32016af442b3911487d09881ba72864c61b6",
         "text": "Do you prefer red or blue?"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 31238
       },
       {
         "event": "turn.end",
@@ -2914,9 +3759,22 @@
       {
         "agent_session": "01a1ca32-da48-7f42-adc1-3469420bbfa8",
         "approval": "never",
+        "effort": "xhigh",
         "event": "session.info",
+        "mode": "",
         "model": "GPT-6.1-Sol",
         "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ]
       },
       {
         "event": "turn.start"
@@ -3027,6 +3885,11 @@
         "state": "running"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30499
+      },
+      {
         "agent": "codex",
         "count": 1,
         "delegation": "codex-01a1ca32-e30e-7312-bc08-818ebbf0e1b3",
@@ -3056,7 +3919,12 @@
         "name": "delayed shell",
         "seconds": 50.4,
         "state": "done",
-        "summary": "Command completed successfully (exit code 0). Output: ```text child-late ```"
+        "summary": "Command completed successfully (exit code 0). Output: text child-late"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30543
       },
       {
         "event": "delta",
@@ -3140,6 +4008,11 @@
         "text": "The sub-agent completed successfully (exit code 0):\n\n```text\nchild-late\n```"
       },
       {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 30648
+      },
+      {
         "event": "turn.end",
         "outcome": "done"
       }
@@ -3150,7 +4023,12 @@
     "agent": "omo",
     "events": [
       {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
         "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
         "event": "session.info",
         "model": "Claude Fable 5.1"
       },
@@ -3706,6 +4584,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3756,6 +4635,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3837,6 +4717,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3905,6 +4786,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -3979,6 +4861,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -4054,6 +4937,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -4100,6 +4984,7 @@
     "events": [
       {
         "agent_session": "01a1c3bf-88eb-7657-9fbe-efcefaae00e1",
+        "effort": "off",
         "event": "session.info",
         "model": "Stub A"
       },
@@ -4154,6 +5039,7 @@
     "events": [
       {
         "agent_session": "01a1c3b9-9fa8-7324-a15c-615875b6d647",
+        "effort": "off",
         "event": "session.info",
         "model": ""
       },
@@ -4171,5 +5057,367 @@
       }
     ],
     "name": "pi-signed-out.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "commands": [
+          {
+            "description": "Free up context by summarizing the conversation so far",
+            "hint": "<optional custom summarization instructions>",
+            "kind": "command",
+            "name": "compact",
+            "prefix": "/"
+          },
+          {
+            "description": "Show current context usage",
+            "hint": "",
+            "kind": "command",
+            "name": "context",
+            "prefix": "/"
+          },
+          {
+            "description": "Initialize a new CLAUDE.md file with codebase documentation",
+            "hint": "",
+            "kind": "command",
+            "name": "init",
+            "prefix": "/"
+          },
+          {
+            "description": "Create polished, validated architecture, workflow, sequence, data-flow, and lifecycle/state diagrams as explorable standalone HTML with inline SVG, dark/light …",
+            "hint": "",
+            "kind": "skill",
+            "name": "archify",
+            "prefix": "/"
+          },
+          {
+            "description": "Review Archify issues, PRs, or code through value, cost, and impact to support evidence-based maintenance decisions. Use for issue triage, change reviews, and …",
+            "hint": "",
+            "kind": "skill",
+            "name": "archify-review",
+            "prefix": "/"
+          },
+          {
+            "description": "사이오닉 테크 블로그(sionic-ai-website public/blog) 본문에 넣는 인터랙션 블록을 만든다. 글의 표·코드 블록·수치를 읽어 전/후 토글 막대(toggle-bars), 탭으로 골라 보기(tabs), 기준값 슬라이더(threshold) 중 맞는 형식을 고르고, 본문…",
+            "hint": "",
+            "kind": "skill",
+            "name": "blog-interaction",
+            "prefix": "/"
+          },
+          {
+            "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+            "hint": "",
+            "kind": "command",
+            "name": "deep-research",
+            "prefix": "/"
+          },
+          {
+            "description": "Grant or revoke Claude agent access to your Design projects",
+            "hint": "consent | revoke",
+            "kind": "command",
+            "name": "design",
+            "prefix": "/"
+          }
+        ],
+        "event": "session.commands"
+      },
+      {
+        "event": "session.info",
+        "mode": "default"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "For complex work and everyday tasks",
+            "id": "opus",
+            "label": "Opus 5.5"
+          },
+          {
+            "detail": "For your toughest challenges",
+            "id": "fable",
+            "label": "Fable 5.2"
+          }
+        ]
+      },
+      {
+        "event": "session.info",
+        "mode": "plan"
+      },
+      {
+        "event": "session.usage",
+        "max": 1000000,
+        "used": 23386
+      }
+    ],
+    "name": "claude-9-controls.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "52299e78-5788-4651-b086-614d325a4d12",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Fable 5.2"
+      },
+      {
+        "detail": "sleep 8",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01PKUmj2w7zBnDLEvHYMB2sh"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01PKUmj2w7zBnDLEvHYMB2sh"
+      },
+      {
+        "event": "message",
+        "id": "msg_q9-0",
+        "text": "FIRST\nSECOND"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-9-queued.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      {
+        "commands": [
+          {
+            "description": "Inspect loaded builtin hook sources and diagnostics.",
+            "hint": "",
+            "kind": "command",
+            "name": "hooks",
+            "prefix": "/"
+          },
+          {
+            "description": "Open the pending question",
+            "hint": "",
+            "kind": "command",
+            "name": "answer",
+            "prefix": "/"
+          },
+          {
+            "description": "Show or edit the todo list (edit/copy/export/import/append/start/done/drop/rm)",
+            "hint": "",
+            "kind": "command",
+            "name": "todo",
+            "prefix": "/"
+          },
+          {
+            "description": "[omh] Company hiring or HR process to structure: turn hiring and people context into a fair, structured recruiting or people-operations brief. Use when the use…",
+            "hint": "",
+            "kind": "skill",
+            "name": "skill:omh-people-ops",
+            "prefix": "$"
+          },
+          {
+            "description": "Read first to make, edit, animate or render any video with HyperFrames (HTML rendered to video), including launch films, explainers, music videos, charts, maps…",
+            "hint": "",
+            "kind": "skill",
+            "name": "skill:hyperframes",
+            "prefix": "$"
+          }
+        ],
+        "event": "session.commands"
+      }
+    ],
+    "name": "omo-9-controls.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "effort": "low",
+        "event": "session.info"
+      },
+      {
+        "event": "message",
+        "id": "pi-m1",
+        "text": "I read this as a direct output request - print the numbers 1 to 80, one per line. I'll stop once the list is written.\n\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80"
+      },
+      {
+        "event": "message",
+        "id": "pi-m2",
+        "text": "SECOND"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "omo-9-queued.jsonl"
   }
 ]

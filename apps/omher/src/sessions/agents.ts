@@ -139,11 +139,18 @@ export interface SessionRec {
   title?: string;
   /** The title the agent gave its conversation (Claude Code's own title, a Codex thread name). */
   agentTitle?: string;
+  /** Work the agent says still runs in the background after its turn (commands; subagents have their own rows). */
+  background?: number;
   /** A short summary of the person's first real message, made here (no model is asked). */
   promptTitle?: string;
   /** How the account it started with reads (`as work@…`), when Settings › Accounts picked one other than This
    *  computer: shown under its composer. Display only; `account` is what the shell gets. */
   startedAs?: string;
+  /** The permission mode the person picked (controls.ts MODES); set again when the agent starts after a restart.
+   *  None = the agent's own. */
+  mode?: string;
+  /** The reasoning effort the person picked, likewise. */
+  effort?: string;
 }
 
 /** Live state of a session's chat that the row needs (from the store). */
