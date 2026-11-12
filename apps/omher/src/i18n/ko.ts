@@ -461,7 +461,7 @@ export const ko: Record<Key, string> = {
   "term.optionMeta": "Option을 Meta로",
   "term.optionMetaHint": "Option이 프로그램에 Meta로 전달돼서 Option+B, Option+F로 단어 단위로 움직여요. 끄면 그 키의 문자가 입력돼요.",
   "term.gpu": "GPU 렌더러",
-  "term.gpuHint": "자동은 그래픽 카드로 그릴 수 있으면 그렇게 하고, 안 되면 알아서 기본 방식으로 돌아가요",
+  "term.gpuHint": "자동은 지금은 기본 방식으로 그려요. GPU 방식이 더 빠르게 측정된 적이 아직 없어요. 켬은 GPU로 그려 보고, 안 되면 알아서 기본 방식으로 돌아가요.",
   "term.usingGpu": "지금 사용 중: GPU",
   "term.usingStandard": "지금 사용 중: 기본",
   "term.dec": "{what} 줄이기",

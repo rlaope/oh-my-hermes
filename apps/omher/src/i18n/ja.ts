@@ -461,7 +461,7 @@ export const ja: Record<Key, string> = {
   "term.optionMeta": "Option を Meta として使う",
   "term.optionMetaHint": "Option がプログラムに Meta として送られ、Option+B と Option+F で単語単位に移動できます。オフにすると、そのキーの文字が入力されます。",
   "term.gpu": "GPU レンダラー",
-  "term.gpuHint": "自動では、使える場合はグラフィックカードで描画し、使えない場合は自動で標準の描画に戻ります",
+  "term.gpuHint": "自動は今のところ標準の描画を使います。GPU のほうが速いという測定結果がまだありません。オンは GPU を試し、使えない場合は自動で標準に戻ります。",
   "term.usingGpu": "現在使用中: GPU",
   "term.usingStandard": "現在使用中: 標準",
   "term.dec": "{what}を下げる",

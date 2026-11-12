@@ -463,7 +463,7 @@ export const en = {
   "term.optionMeta": "Option as Meta",
   "term.optionMetaHint": "Option sends Meta to the program, so Option+B and Option+F move by word. Off types the key’s own character.",
   "term.gpu": "GPU renderer",
-  "term.gpuHint": "Auto draws with the graphics card where that works and falls back by itself",
+  "term.gpuHint": "Auto uses the standard renderer for now: the GPU one has not measured faster. On tries the GPU and falls back by itself.",
   "term.usingGpu": "In use now: GPU",
   "term.usingStandard": "In use now: standard",
   "term.dec": "Decrease {what}",
