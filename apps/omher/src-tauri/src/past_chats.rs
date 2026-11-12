@@ -723,4 +723,55 @@ mod tests {
         assert!(typed("hello") && !typed("<command-name>/x</command-name>") && !typed("  ") && !typed("# AGENTS.md instructions for /w"));
         assert_eq!(checked_cwds(&["/a".into(), "b".into(), "C:\\x".into()]).first().map(String::as_str), Some("/a"));
     }
+
+    /// A real conversation made in the Claude Code (or Codex) CLI outside omher: list it from the CLI's own files,
+    /// read its last messages, then continue it through omher's own chat path and ask about the first message.
+    /// `OMHER_REAL_AGENT` (claude | codex), `OMHER_REAL_DIR` (the scratch folder the CLI ran in). Prints what came
+    /// back; run with `cargo test real_past -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_past_conversation_continues_in_omher() {
+        use crate::agent_chat::{ChatOut, ChatSessions, Input};
+        use std::sync::{Arc, Mutex};
+        use std::time::{Duration, Instant};
+        let agent = std::env::var("OMHER_REAL_AGENT").unwrap_or_else(|_| "claude".into());
+        let dir = PathBuf::from(std::env::var("OMHER_REAL_DIR").expect("OMHER_REAL_DIR")).canonicalize().unwrap();
+        let cwd = dir.to_string_lossy().into_owned();
+        let home = PathBuf::from(std::env::var("HOME").unwrap());
+        let root = cli_home(&home, &agent, &[], &|k| std::env::var(k).ok()).unwrap();
+        let rows = list(&root, &agent, &[cwd.clone()]).unwrap();
+        println!("LIST {rows:?}");
+        let row = rows.first().expect("the CLI's conversation is listed");
+        let msgs = messages(&root, &agent, &row.id, &cwd).unwrap();
+        println!("MESSAGES {msgs:?}");
+        let c = Arc::new(ChatSessions::default());
+        let out = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
+        let o = out.clone();
+        let id = c
+            .start_agent(&agent, &dir, Some(&row.id), &[], None, move |x| {
+                if let ChatOut::Event(e) = x {
+                    o.lock().unwrap().push(e);
+                }
+            })
+            .unwrap();
+        let q = std::env::var("OMHER_REAL_ASK").unwrap_or_else(|_| "What word did I ask you to remember at the start of this conversation? Answer with the word only.".into());
+        c.input(id, Input::Send { text: q.clone(), images: vec![], id: "local-1".into() }).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(240);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|e| s(e, "event") == "turn.end") {
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        c.close(id);
+        let got = out.lock().unwrap().clone();
+        for e in &got {
+            if matches!(s(e, "event"), "message" | "turn.end" | "session.info" | "session.error" | "session.note") {
+                println!("EVENT {e}");
+            }
+        }
+        println!("ASKED {q}");
+        let answer: String = got.iter().filter(|e| s(e, "event") == "message").map(|e| s(e, "text").to_string()).collect::<Vec<_>>().join("\n");
+        println!("ANSWER {answer}");
+        let session = got.iter().filter(|e| s(e, "event") == "session.info").map(|e| s(e, "agent_session").to_string()).find(|x| !x.is_empty()).unwrap_or_default();
+        println!("SESSION {session} (listed {})", row.id);
+        assert!(!answer.trim().is_empty());
+    }
 }
