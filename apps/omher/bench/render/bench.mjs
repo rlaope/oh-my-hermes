@@ -7,6 +7,8 @@
 // Modes run round-robin inside one process (run 1 of each mode, then run 2 ...), so machine load hits them equally:
 //   seam  = the engine of the seam commit f9fab5d17 (no add-ons, standard renderer), served in place of engine.ts
 //   off|on|auto = the current engine with that `gpu` setting
+//   probe = `auto`, and the page makes and loses one throw-away WebGL2 context before the terminal opens (what
+//           `auto` did to learn the renderer's name before it was decided by platform); for scenario D
 // `chromium` is Playwright's headless shell: its WebGL is SwiftShader (software). `chromium-metal` is the full
 // Chromium build (channel chromium), whose WebGL is ANGLE on Metal (the GPU). `webkit` is Playwright WebKit.
 // Raw numbers go to raw/<label>-<engine>-<mode>.json. C2 is C run twice in the page, the second pass measured.
@@ -206,6 +208,9 @@ const pageBench = async ({ name, mb, rows120 }) => {
     bytes: chunks.reduce((n, c) => n + c.length, 0),
     bufferLines: term.buffer.active.length,
     echoN: echo.length,
+    // every sample, in the order typed: with a frame every 16.7 ms a sample is one frame or two, so the median of a
+    // dozen samples can sit on either
+    echo: echo.map((v) => Math.round(v * 10) / 10),
     echoP50: pick(0.5) === null ? null : Math.round(pick(0.5) * 10) / 10,
     echoP95: pick(0.95) === null ? null : Math.round(pick(0.95) * 10) / 10,
   };
@@ -226,7 +231,13 @@ const summary = (rs, key) => {
 
 async function openTerminal(page, mode) {
   await page.addInitScript(
-    ({ gpu }) => {
+    ({ gpu, probe }) => {
+      if (probe)
+        document.addEventListener("DOMContentLoaded", () => {
+          const gl = document.createElement("canvas").getContext("webgl2");
+          gl?.getExtension("WEBGL_debug_renderer_info");
+          gl?.getExtension("WEBGL_lose_context")?.loseContext();
+        });
       localStorage.setItem("omher.onboarded", "1");
       localStorage.removeItem("omher.sessions.recent");
       localStorage.removeItem("omher.sessions.open");
@@ -235,7 +246,7 @@ async function openTerminal(page, mode) {
       window.__omherPickFolder = "/Users/you/code/web-app";
       window.__omherMockAgents = ["claude", "codex", "omh"];
     },
-    { gpu: mode === "seam" ? "off" : mode },
+    { gpu: mode === "seam" ? "off" : mode === "probe" ? "auto" : mode, probe: mode === "probe" },
   );
   // the bench needs the xterm instance: record it where the session store makes it (same on every commit)
   await page.route("**/src/sessions/sessions.ts*", async (route) => {
