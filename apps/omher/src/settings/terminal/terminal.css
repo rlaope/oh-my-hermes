@@ -1,0 +1,191 @@
+/* Settings > Terminal: the preview, the theme list, and the small fields its rows use. Selection is gray. */
+.tm {
+  display: flex;
+  flex-direction: column;
+}
+/* the preview is a terminal's own box: term/look.ts sets the padding and the theme's background on it */
+.term-pv {
+  --term-pad: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  padding: calc(var(--term-pad) * 0.875) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.5) var(--term-pad);
+  background: var(--term-bg, var(--bg));
+  pointer-events: none;
+}
+.term-pv-host {
+  min-height: 150px;
+}
+.term-pv .xterm .xterm-viewport {
+  background-color: transparent;
+}
+.tm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  margin: 10px 0 8px;
+}
+.tm-slot .mseg.sm {
+  width: auto;
+}
+.tm-slot .mseg button {
+  flex: none;
+  padding: 0 10px;
+}
+.tm-q {
+  flex: 1;
+  min-width: 140px;
+  max-width: 220px;
+}
+.tm-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--grp-bg);
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 2px 4px 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.tm-gh {
+  font-size: 10.5px;
+  color: var(--quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 8px 8px 4px;
+}
+.tm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1px 4px;
+}
+.tm-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  color: var(--body);
+  text-align: left;
+}
+.tm-row:hover {
+  background: var(--hover);
+}
+.tm-row.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.tm-row svg {
+  flex: none;
+  color: var(--muted);
+}
+/* a theme's own colours: its background, "Aa" in its foreground, then its eight normal ANSI colours */
+.tm-sw {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+}
+.tm-sw::before {
+  content: "Aa";
+  margin-right: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+}
+.tm-sw i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+.tm-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-none {
+  padding: 14px 8px;
+  font-size: 12px;
+  color: var(--quiet);
+}
+/* the rows' fields: a font name, and a number with a step either side (the look of the segmented control) */
+.tm-font {
+  height: 28px;
+  width: 200px;
+  min-width: 0;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--raise);
+  color: var(--ink);
+  font-size: 12px;
+}
+.tm-font:focus {
+  outline: none;
+  border-color: var(--line-strong);
+}
+.tm-step {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--raise);
+}
+.tm-step button {
+  width: 24px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+}
+.tm-step button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--hover);
+}
+.tm-step button:disabled {
+  opacity: 0.4;
+}
+.tm-step input {
+  width: 44px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.tm-step input:focus {
+  outline: none;
+  background: var(--seg-on);
+}
+/* a row's words wrap beside its control instead of pushing it off the page */
+.tm .st-row {
+  align-items: center;
+}
+.tm .st-v {
+  max-width: none;
+}
+.tm .st-v .mseg.sm {
+  width: auto;
+}
+.tm .st-v .mseg button {
+  flex: 1 0 auto;
+  padding: 0 10px;
+}
