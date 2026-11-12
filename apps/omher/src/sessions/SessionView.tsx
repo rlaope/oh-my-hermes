@@ -17,6 +17,7 @@ import "../chat/model/model.css";
 import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
 import { composing } from "../lib/ime";
 import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, usageText } from "./controls";
+import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
@@ -341,6 +342,9 @@ function SessionMode({ rec }: { rec: SessionRec }) {
   const [open, setOpen] = useState(false);
   const live = rec.status === "running";
   const cur = ss.live[rec.id]?.mode ?? rec.mode;
+  // the agent's own setting, when it asks for nothing or reaches the whole disk: said where the mode is
+  const own = ownSetting({ ...ss.live[rec.id], mode: cur });
+  const from = t("ctl.own.from", { agent: agentDef(rec.agent).label });
   const pick = (m: string) => {
     setOpen(false);
     if (m !== cur) void getSessions().setMode(rec.id, m);
@@ -349,22 +353,28 @@ function SessionMode({ rec }: { rec: SessionRec }) {
     <span className="ss-pick-w">
       <button
         type="button"
-        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}`}
-        title={t("ctl.mode")}
-        aria-label={`${t("ctl.mode")}: ${modeLabel(cur)}`}
+        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}${own ? " own" : ""}`}
+        title={own ? `${own} · ${from}` : t("ctl.mode")}
+        aria-label={`${t("ctl.mode")}: ${own ? `${own} · ${from}` : modeLabel(cur)}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={!live}
         onClick={() => setOpen((v) => !v)}
         data-testid="session-mode"
         data-mode={cur ?? ""}
+        {...(own ? { "data-own": "unguarded" } : {})}
       >
-        <span className="ss-pick-n">{modeLabel(cur)}</span>
+        <span className="ss-pick-n">{own ?? modeLabel(cur)}</span>
         <ChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} side="top" align="right" width={264} label={t("ctl.mode")} className="ss-dpop">
         <div data-testid="session-mode-menu">
           <div className="ss-h ss-h-plain">{t("ctl.mode")}</div>
+          {own && (
+            <div className="ss-mode-own" data-testid="session-mode-own">
+              {own} · {from}
+            </div>
+          )}
           {modesOf(rec.agent).map((m) => {
             const on = m === cur;
             return (
