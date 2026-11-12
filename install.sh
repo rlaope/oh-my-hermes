@@ -59,16 +59,41 @@ OMH_WITH_HERMES="${OMH_WITH_HERMES:-1}"
 OMH_WITH_DESKTOP="${OMH_WITH_DESKTOP:-1}"
 OMH_APP_DIR="${OMH_APP_DIR:-}"
 OMH_OMHER_BETA=0
+# `sh -s -- --uninstall [--purge] [--dry-run]` removes OMH instead of installing
+# it: it finds the installed command and runs `omh uninstall`, and never
+# downloads or installs anything. --purge and --dry-run only mean something with
+# --uninstall.
+OMH_UNINSTALL=0
+OMH_UNINSTALL_PURGE=0
+OMH_UNINSTALL_DRY_RUN=0
+omh_usage() {
+  printf 'omh installer: %s\n' "$1" >&2
+  printf 'Usage:\n' >&2
+  printf '  install   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh\n' >&2
+  printf '  desktop   curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta\n' >&2
+  printf '  remove    curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- --uninstall [--purge] [--dry-run]\n' >&2
+  exit 2
+}
 for omh_arg in "$@"; do
   case "$omh_arg" in
     omher@beta) OMH_OMHER_BETA=1 ;;
+    --uninstall) OMH_UNINSTALL=1 ;;
+    --purge) OMH_UNINSTALL_PURGE=1 ;;
+    --dry-run) OMH_UNINSTALL_DRY_RUN=1 ;;
     *)
-      printf "omh installer: unknown argument '%s'. The only argument is omher@beta, which adds Hermes (when missing) and the omher desktop app:\n" "$omh_arg" >&2
-      printf '  curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh -s -- omher@beta\n' >&2
-      exit 2
+      omh_usage "unknown argument '$omh_arg'. The arguments are omher@beta (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH)."
       ;;
   esac
 done
+if [ "$OMH_UNINSTALL" = "1" ] && [ "$OMH_OMHER_BETA" = "1" ]; then
+  omh_usage "--uninstall cannot be combined with omher@beta."
+fi
+if [ "$OMH_UNINSTALL" = "0" ] && [ "$OMH_UNINSTALL_PURGE" = "1" ]; then
+  omh_usage "--purge only works together with --uninstall."
+fi
+if [ "$OMH_UNINSTALL" = "0" ] && [ "$OMH_UNINSTALL_DRY_RUN" = "1" ]; then
+  omh_usage "--dry-run only works together with --uninstall."
+fi
 OMH_HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 OMH_OMHER_RELEASES_URL="https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=10"
 OMH_OMHER_RELEASE_PAGES=5
@@ -247,6 +272,8 @@ msg() {
     ko:installed) printf 'oh-my-hermes 설치가 완료되었습니다.' ;;
     ko:next_path) printf '다음: '\''omh setup'\''으로 Hermes에 연결한 뒤, '\''omh doctor'\''로 확인하세요.' ;;
     ko:next_command_path) printf '다음: '\''%s setup'\''으로 Hermes에 연결한 뒤, '\''%s doctor'\''로 확인하세요. 또는 해당 디렉터리를 PATH에 추가하세요.' "$2" "$2" ;;
+    ko:uninstall_not_found) printf 'omh installer: 설치된 omh 명령어를 찾지 못해 아무것도 제거하지 않았습니다. 찾아본 곳: %s' "$2" ;;
+    ko:uninstall_left_over) printf 'OMH 홈과 Hermes 등록이 남아 있을 수 있습니다. 수동 제거 방법: docs/INSTALLATION.md#uninstall (https://github.com/rlaope/oh-my-hermes/blob/main/docs/INSTALLATION.md#uninstall)' ;;
     ja:installer_title) printf 'OMH インストーラー' ;;
     ja:installer_subtitle) printf 'システム Python パッケージを変更せずに oh-my-hermes をインストールします。' ;;
     ja:channel) printf 'チャンネル' ;;
@@ -261,6 +288,8 @@ msg() {
     ja:installed) printf 'oh-my-hermes のインストールが完了しました。' ;;
     ja:next_path) printf '次に '\''omh setup'\'' で Hermes に接続し、'\''omh doctor'\'' で確認してください。' ;;
     ja:next_command_path) printf '次に '\''%s setup'\'' で Hermes に接続し、'\''%s doctor'\'' で確認してください。または、そのディレクトリを PATH に追加してください。' "$2" "$2" ;;
+    ja:uninstall_not_found) printf 'omh installer: インストール済みの omh コマンドが見つからないため、何も削除していません。確認した場所: %s' "$2" ;;
+    ja:uninstall_left_over) printf 'OMH ホームと Hermes の登録が残っている可能性があります。手動での削除手順: docs/INSTALLATION.md#uninstall (https://github.com/rlaope/oh-my-hermes/blob/main/docs/INSTALLATION.md#uninstall)' ;;
     zh:installer_title) printf 'OMH 安装器' ;;
     zh:installer_subtitle) printf '在不改动系统 Python 包的情况下安装 oh-my-hermes。' ;;
     zh:channel) printf '频道' ;;
@@ -275,8 +304,12 @@ msg() {
     zh:installed) printf 'oh-my-hermes 已安装。' ;;
     zh:next_path) printf '下一步：运行 '\''omh setup'\'' 连接 Hermes，然后运行 '\''omh doctor'\'' 验证。' ;;
     zh:next_command_path) printf '下一步：运行 '\''%s setup'\'' 连接 Hermes，然后运行 '\''%s doctor'\'' 验证；也可以把该目录加入 PATH。' "$2" "$2" ;;
+    zh:uninstall_not_found) printf 'omh installer: 未找到已安装的 omh 命令，因此没有删除任何内容。已查找: %s' "$2" ;;
+    zh:uninstall_left_over) printf 'OMH 主目录和 Hermes 注册可能仍然保留。手动卸载步骤: docs/INSTALLATION.md#uninstall (https://github.com/rlaope/oh-my-hermes/blob/main/docs/INSTALLATION.md#uninstall)' ;;
     *)
       case "$1" in
+        uninstall_not_found) printf 'omh installer: no installed omh command was found, so nothing was removed. Looked in: %s' "$2" ;;
+        uninstall_left_over) printf 'The OMH home and the Hermes registration may still be there. Manual steps: docs/INSTALLATION.md#uninstall (https://github.com/rlaope/oh-my-hermes/blob/main/docs/INSTALLATION.md#uninstall)' ;;
         installer_title) printf 'OMH installer' ;;
         installer_subtitle) printf 'Install oh-my-hermes without touching system Python packages.' ;;
         channel) printf 'Channel' ;;
@@ -296,6 +329,68 @@ msg() {
       ;;
   esac
 }
+
+# --uninstall: hand over to `omh uninstall`, which owns every removal rule. This
+# runs before any step that downloads, builds a venv or picks a Python, so a
+# removal never installs anything. It finds the command without relying on PATH
+# alone: PATH, then where this installer puts it (OMH_BIN_DIR, the active
+# generation's venv under the managed root, the installer's own venv).
+omh_uninstall_probe() {
+  [ -n "$1" ] || return 1
+  OMH_UNINSTALL_PLACES="${OMH_UNINSTALL_PLACES:+$OMH_UNINSTALL_PLACES, }$1"
+  if [ -f "$1" ] && [ -x "$1" ]; then
+    OMH_UNINSTALL_COMMAND="$1"
+    return 0
+  fi
+  return 1
+}
+
+find_omh_for_uninstall() {
+  OMH_UNINSTALL_COMMAND=""
+  OMH_UNINSTALL_PLACES="PATH"
+  omh_on_path="$(command -v omh 2>/dev/null || true)"
+  case "$omh_on_path" in
+    /*) if [ -x "$omh_on_path" ]; then OMH_UNINSTALL_COMMAND="$omh_on_path"; return 0; fi ;;
+  esac
+  if [ -n "$OMH_BIN_DIR" ] && omh_uninstall_probe "$OMH_BIN_DIR/omh"; then return 0; fi
+  if [ -n "${XDG_DATA_HOME:-}" ]; then
+    omh_managed_root="$XDG_DATA_HOME/omh"
+  elif [ -n "$OMH_HOME_DIR" ]; then
+    omh_managed_root="$OMH_HOME_DIR/.local/share/omh"
+  else
+    omh_managed_root=""
+  fi
+  if [ -n "$omh_managed_root" ] && omh_uninstall_probe "$omh_managed_root/current/venv/bin/omh"; then return 0; fi
+  if [ -n "$OMH_VENV_DIR" ] && omh_uninstall_probe "$OMH_VENV_DIR/bin/omh"; then return 0; fi
+  return 1
+}
+
+run_uninstall() {
+  if ! find_omh_for_uninstall; then
+    printf '%s\n' "$(msg uninstall_not_found "$OMH_UNINSTALL_PLACES")" >&2
+    printf '%s\n' "$(msg uninstall_left_over)" >&2
+    exit 1
+  fi
+  set -- uninstall
+  if [ "$OMH_UNINSTALL_PURGE" = "1" ]; then
+    set -- "$@" --all
+  fi
+  if [ "$OMH_UNINSTALL_DRY_RUN" = "1" ]; then
+    set -- "$@" --dry-run
+  fi
+  if [ "$OMH_LANG_WAS_SET" = "1" ]; then
+    set -- "$@" --language "$OMH_LANG"
+  fi
+  if "$OMH_UNINSTALL_COMMAND" "$@"; then
+    exit 0
+  else
+    exit "$?"
+  fi
+}
+
+if [ "$OMH_UNINSTALL" = "1" ]; then
+  run_uninstall
+fi
 
 run_step() {
   OMH_STEP_PREFIX="$1"
