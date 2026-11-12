@@ -304,6 +304,19 @@ describe("chat.opened merging", () => {
     expect(s.chats.kami.turn).toBeNull();
     expect(s.chats.kami.lastTurn).not.toBeNull();
   });
+
+  it("a chat.open reply older than a live turn changes nothing about it (runs.spec flake: the reply ended a turn that started after it was asked)", () => {
+    const ev = (e: Record<string, unknown>, now: number) => ({ type: "event" as const, ev: { bot: "kami", ...e } as never, now });
+    // asked at T0; the turn starts at T0+50 and its step comes in; the reply (running:false, read at T0) lands at T0+300
+    let s = reduce(initialState(), ev({ event: "turn.start" }, T0 + 50));
+    s = reduce(s, ev({ event: "tool.start", tool_id: "d1", name: "delegate_task", detail: "x" }, T0 + 60));
+    s = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: false }), now: T0 + 300, since: T0 });
+    expect(s.chats.kami.turn?.steps.map((x) => x.endedAt)).toEqual([undefined]);
+    // and a reply that said running about a turn that ended after the ask does not start a ghost turn
+    s = reduce(s, ev({ event: "turn.end", outcome: "done" }, T0 + 400));
+    s = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: true }), now: T0 + 500, since: T0 + 350 });
+    expect(s.chats.kami.turn).toBeNull();
+  });
 });
 
 // ---- store (reducer + a fake bridge) ----------------------------------------------------------

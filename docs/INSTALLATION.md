@@ -864,9 +864,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   mouse to the terminal, and the next key or paste takes it back, so a drag
   copies clean again. The wheel down does nothing on the main screen while
   the OMH TUI holds the mouse. Ctrl+O still opens the transcript view. A row the OMH TUI did not print in this screen (the shell's
-  output above the session, the rows from before a Ctrl+Z) selects nothing:
-  dragging from there opens the transcript view instead (the open question,
-  while one is asked), and with nothing to show it opens nothing. While the
+  output above the session, the rows from before a Ctrl+Z) selects nothing,
+  and dragging from there opens nothing: the mouse never opens a view over
+  the screen, only Ctrl+O does. While the
   window is being resized the mouse is the terminal's, and a selection is
   dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
   rows reflowed into the scrollback with a selection on them can keep it
@@ -1139,7 +1139,11 @@ run and approval decision stays Hermes'; the screen is OMH's.
   `/resume`, a switch) are drawn the same way, two blank rows between two,
   with a grey `●` on a grey rail, since Hermes' record of them keeps no
   outcome, and an edit's diff under it where Hermes kept the one it showed.
-  Ctrl+O opens the whole transcript with every detail
+  A turn Hermes started on its own in that session (a background process or
+  a delegated agent finishing, its own notice, a turn it resumed after a
+  restart, a model switch) is one dim `↳` row with Hermes' title for it,
+  such as `↳ Subagent Tasks Completed: …`, never a `❯` prompt as if you had
+  sent it. Ctrl+O opens the whole transcript with every detail
   (thinking, tool output, whole diffs) in the pager, at its end.
 - While a turn runs, the working row reads as Claude Code's does,
   `✶ Synthesizing… (1m 24s · ↓4.2k tokens · thinking with high effort · esc

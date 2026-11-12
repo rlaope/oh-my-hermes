@@ -228,6 +228,9 @@ test("a run quiet for a day is not live: no live dot, a muted 'no update for', n
       if (msg.ok && ops.get(msg.id) === "runs.list")
         for (const r of msg.result.runs)
           if (r.state === "running") Object.assign(r, { stale: true, updated: Date.now() / 1000 - 9 * 86400 - 60 });
+          // the finished runs changed since (their fixture dates are fixed, and from 2026-11-12 they are older
+          // than nine days, which put the stale run first on every branch)
+          else r.updated = Date.now() / 1000 - 3600;
       ws.send(JSON.stringify(msg));
     });
   });
