@@ -36,7 +36,10 @@ class GateBodyTests(unittest.TestCase):
         self.assertTrue(raw.startswith("# Mobile Density Gate\n"))
         self.assertIn("## Boundary", raw)
         self.assertNotIn("## Attribution", raw)
-        self.assertTrue(90 <= len(raw.splitlines()) <= 135)
+        self.assertTrue(90 <= len(raw.splitlines()) <= 145)
+        # The gate names the measuring script and keeps an unrun measurement unobserved.
+        self.assertIn("`toolkit/scripts/phone_check.py`", raw)
+        self.assertIn("`not_observed`", raw)
 
     def test_two_axes_are_judged_separately(self) -> None:
         self.assertIn("Hygiene", self.body)

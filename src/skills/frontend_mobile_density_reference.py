@@ -71,7 +71,7 @@ a pass. Convert the layout instead:
   value pairs, or keeps only the identifying columns with the rest behind
   a row tap;
 - a wide board becomes tabs, one column per tab, or ranges the person steps
-  through;
+  through.
 
 A region that is meant to scroll sideways (a chart, a code block) is
 contained in its own box and named as such in the report.
@@ -90,6 +90,10 @@ contained in its own box and named as such in the report.
   fixed bar once at the end, or repeats it.
 - Capture after scrolling when judging scroll behaviour (a hiding bar, a
   sticky header, a floating button), at least once past the bar's trigger.
+- When the executor has a browser, `toolkit/scripts/phone_check.py` takes
+  these measurements in one run (sideways overflow, first-data y, small
+  targets, small inputs) and prints them as JSON; read `toolkit/README.md`
+  first. Without a run, each number is `not_observed`.
 
 ## Hygiene list
 
@@ -133,7 +137,8 @@ is a claim, `3 rows -> 1 row` is a result.
 
 ## Boundary
 
-OMH never launches a browser or measures a page. The viewport, the touch
+OMH itself never launches a browser or measures a page; the toolkit script
+runs only when the executor runs it. The viewport, the touch
 emulation setting and every pixel value here are executor-observed
 evidence; a density claim without a capture and a measured number at a
 named viewport is a prepared claim, not an observed one. PASS, REVISE or
