@@ -598,6 +598,15 @@ All notable changes will be documented here.
   routed under an identity keeps its fallback chain across the update.
   Contributed by @yqm-307 (#2799).
 
+- **The omher first-launch steps for macOS match macOS 15 and later.** The
+  omher README and the release notes told people to right-click the app and
+  choose Open. Since macOS 15 that no longer gets past the warning for an
+  app that is not notarized, so a `.dmg` downloaded in a browser looked as if
+  it could not be run at all. Both now give the step that works there
+  (System Settings › Privacy & Security › Open Anyway), keep right-click ›
+  Open for macOS 14 and earlier, and say that the one-line installer needs
+  neither. The builds themselves are unchanged.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

@@ -3,8 +3,9 @@ name: omher release
 # Open-source builds of the omher desktop app, attached to a GitHub Release. No App Store, no Apple
 # Developer certificate and no Windows code-signing certificate: macOS builds carry an ad-hoc signature
 # (`signingIdentity: "-"`), Windows installers are unsigned, Linux ships an AppImage (and a .deb). The README
-# tells people how to open them the first time (right-click > Open on macOS, "More info > Run anyway" on
-# Windows SmartScreen, `chmod +x` on Linux).
+# tells people how to open them the first time (System Settings > Privacy & Security > Open Anyway on
+# macOS 15 or later, right-click > Open before that, "More info > Run anyway" on Windows SmartScreen,
+# `chmod +x` on Linux).
 #
 # In-app updates: each build also makes the updater bundle (macOS `.app.tar.gz`, the Windows NSIS setup exe,
 # the Linux AppImage itself) and its `.sig`, signed with the TAURI_SIGNING_PRIVATE_KEY secret whose public half is pinned in
@@ -194,9 +195,11 @@ jobs:
           - **Windows:** \`omher-$v-windows-x64-setup.exe\` (or the \`.msi\`)
           - **Linux (x86_64):** \`omher-$v-linux-x64.AppImage\` (\`chmod +x\` it, then run it; or the \`.deb\`)
 
-          These builds are open source and not notarized. The first time on macOS, right-click omher in
-          Applications and choose **Open**. On Windows, if SmartScreen appears, choose **More info**, then
-          **Run anyway**. Checksums are in \`SHA256SUMS.txt\`.
+          These builds are open source and not notarized. The first time on macOS 15 or later, close the
+          warning, open **System Settings › Privacy & Security** and click **Open Anyway** next to omher
+          (macOS 14 or earlier: right-click omher in Applications and choose **Open**). Or run
+          \`xattr -dr com.apple.quarantine /Applications/omher.app\` once. On Windows, if SmartScreen
+          appears, choose **More info**, then **Run anyway**. Checksums are in \`SHA256SUMS.txt\`.
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
