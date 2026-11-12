@@ -44,4 +44,3 @@ for (const e of ENGINES) {
   out += `| heap after B | ${heap(b)} | ${heap(off)} | ${heap(auto)} | ${heap(on)} |\n`;
 }
 console.log(out);
-
