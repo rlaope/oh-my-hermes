@@ -8,7 +8,6 @@
 // it returns, so many open sessions never run into the browser's cap on live contexts.
 import type { Terminal } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
-import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
 import { onTermSettings, type TermSettings } from "./settings";
 
@@ -22,6 +21,10 @@ const loadWebgl = () =>
       throw e;
     },
   ));
+
+/** The Unicode 11 add-on loads with the first terminal (with xterm), not with the app. */
+let unicodeLoad: Promise<typeof import("@xterm/addon-unicode11").Unicode11Addon> | null = null;
+const loadUnicode = () => (unicodeLoad ??= import("@xterm/addon-unicode11").then((m) => m.Unicode11Addon));
 
 /** Pause before a terminal tries the GPU renderer again after losing its context. */
 const RETRY_AFTER_MS = 2000;
@@ -41,6 +44,8 @@ interface State {
   gone: boolean;
   /** drops the listeners of the attached add-on */
   unwatch: (() => void) | null;
+  /** output that came before the Unicode 11 widths were active, in order; null once they are */
+  held: (() => void)[] | null;
 }
 
 const states = new Map<Terminal, State>();
@@ -140,19 +145,33 @@ function reconsider(settings: TermSettings): void {
 
 /** Called once, right after `term.open(el)`. Returns what undoes it (called before the terminal is disposed). */
 export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSettings): () => void {
-  // CJK, emoji and box drawing take the widths agents' TUIs expect
-  try {
-    term.loadAddon(new Unicode11Addon());
-    term.unicode.activeVersion = "11";
-  } catch {
-    /* proposed API off: keep xterm's own widths */
-  }
-  const s: State = { term, gpu: settings.gpu, shown: el.isConnected, addon: null, loading: false, losses: [], gaveUp: false, retry: null, gone: false, unwatch: null };
+  const s: State = { term, gpu: settings.gpu, shown: el.isConnected, addon: null, loading: false, losses: [], gaveUp: false, retry: null, gone: false, unwatch: null, held: [] };
   states.set(term, s);
+  // CJK, emoji and box drawing take the widths agents' TUIs expect. Output waits (in order) until they are active.
+  const release = () => {
+    const q = s.held;
+    s.held = null;
+    for (const w of q ?? []) w();
+  };
+  void loadUnicode().then(
+    (Unicode11Addon) => {
+      if (!s.gone) {
+        try {
+          term.loadAddon(new Unicode11Addon());
+          term.unicode.activeVersion = "11";
+        } catch {
+          /* proposed API off: keep xterm's own widths */
+        }
+      }
+      release();
+    },
+    release, // the chunk would not load: xterm's own widths
+  );
   stopSettings ??= onTermSettings(reconsider);
   attach(s);
   return () => {
     s.gone = true;
+    s.held = null;
     if (s.retry) clearTimeout(s.retry);
     detach(s);
     states.delete(term);
@@ -165,7 +184,9 @@ export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSetting
 
 /** Output from the program into the terminal. `done` runs once the terminal has taken these bytes. */
 export function feed(term: Terminal, data: string | Uint8Array, done?: () => void): void {
-  term.write(data, done);
+  const s = states.get(term);
+  if (s?.held) s.held.push(() => term.write(data, done));
+  else term.write(data, done);
 }
 
 /** What draws the terminals now: the GPU renderer, the standard one, or null while no terminal is open.
