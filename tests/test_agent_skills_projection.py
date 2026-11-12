@@ -533,7 +533,8 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             install_agent_skills(target, mirror=mirror)
             manifest = json.loads((target / MANIFEST_NAME).read_text())
             self.assertEqual(manifest["target_dirs"], [str(target), str(mirror)])
-            self.assertEqual((target / MANIFEST_NAME).read_bytes(), (mirror / MANIFEST_NAME).read_bytes())
+            # One receipt per root, same target_dirs; the mirror lists the Claude copy's bytes.
+            self.assertEqual(json.loads((mirror / MANIFEST_NAME).read_text())["target_dirs"], manifest["target_dirs"])
             self.assertFalse((mirror / "ulw-work/SKILL.md").is_symlink())
             self.assertEqual((target / "ulw-work/SKILL.md").read_bytes(), (mirror / "ulw-work/SKILL.md").read_bytes())
             (mirror / "ulw-work/SKILL.md").write_bytes(b"local mirror edit")
@@ -613,7 +614,7 @@ class AgentSkillsProjectionTests(unittest.TestCase):
         from contextlib import chdir
         import subprocess
         from _cli_harness import run_cli
-        from omh.install.agent_skills_projection import MANIFEST_NAME, agent_skill_files, install_agent_skills
+        from omh.install.agent_skills_projection import MANIFEST_NAME, claude_skill_files, install_agent_skills
         from omh.converter import discover_skill_files
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp).resolve()
@@ -627,10 +628,10 @@ class AgentSkillsProjectionTests(unittest.TestCase):
                 self.assertEqual(status, 0, error)
                 self.assertEqual(json.loads(output)["target_dirs"], [str(target), str(mirror)])
                 self.assertEqual(json.loads(output)["projection"], "fresh")
-                manifest = json.loads((target / MANIFEST_NAME).read_text())
+                manifest = json.loads((mirror / MANIFEST_NAME).read_text())
                 self.assertEqual(manifest["schema_version"], "omh_agent_skills_projection/v1")
-                self.assertEqual((target / MANIFEST_NAME).read_bytes(), (mirror / MANIFEST_NAME).read_bytes())
-                for relative, content in agent_skill_files().items():
+                self.assertEqual(json.loads((target / MANIFEST_NAME).read_text())["target_dirs"], manifest["target_dirs"])
+                for relative, content in claude_skill_files().items():
                     self.assertEqual((mirror / relative).read_bytes(), content.encode("utf-8"))
                     self.assertFalse((mirror / relative).is_symlink())
                     self.assertEqual(manifest["files"][relative], hashlib.sha256(content.encode("utf-8")).hexdigest())
@@ -922,10 +923,12 @@ class AgentSkillsProjectionTests(unittest.TestCase):
                 self.assertEqual(run_cli(command)[0], 0)
                 self.assertEqual({p.name for p in (repo / ".agents/skills").iterdir() if p.is_dir()}, set(portable_skill_names()))
                 self.assertFalse((nested / ".agents").exists())
-                self.assertEqual((repo / ".agents/skills" / MANIFEST_NAME).read_bytes(), (repo / ".claude/skills" / MANIFEST_NAME).read_bytes())
+                self.assertEqual(json.loads((repo / ".agents/skills" / MANIFEST_NAME).read_bytes())["target_dirs"],
+                                 json.loads((repo / ".claude/skills" / MANIFEST_NAME).read_bytes())["target_dirs"])
                 user = ["install", "--target", "agents", "--scope", "user", "--json"]
                 self.assertEqual(run_cli(user)[0], 0)
-                self.assertEqual((home / ".agents/skills" / MANIFEST_NAME).read_bytes(), (home / ".claude/skills" / MANIFEST_NAME).read_bytes())
+                self.assertEqual(json.loads((home / ".agents/skills" / MANIFEST_NAME).read_bytes())["target_dirs"],
+                                 json.loads((home / ".claude/skills" / MANIFEST_NAME).read_bytes())["target_dirs"])
                 self.assertFalse((home / ".hermes").exists())
                 self.assertFalse((home / ".omh").exists())
             with chdir(home):
