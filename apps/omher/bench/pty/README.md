@@ -109,6 +109,12 @@ shared target folder). Whatever the machine does to timers at a given minute the
   sittings than between the two shells; a difference between two sets of runs taken minutes apart is not evidence.
   Why it sits so far above the 4 ms window (the lane's reading: the machine stretches a short wait) was not
   measured apart. p95 is the same in every run.
+- **The other rows marked "better" in the first table were not run alternately.** They rest on two sets of runs
+  taken one after the other, the kind of comparison that misread the echo. For the slow pages and Ctrl+C the
+  difference is 70 to 1,000 times, far outside anything the machine does between sittings. For a sink that returns
+  at once it is not: `cat` is +32.6% with the shell's CPU time per MB at 2.90 ms against 6.47, and `yes` is +5.0%.
+  The flow lane's own run, hours earlier, had the same direction (+23.1%, 3.02 against 6.24 ms, +5.1%), so two
+  sittings agree, but no alternated run backs these rows and no cause was isolated.
 - **Ctrl+C against the fast page** holds: 865 ms and 65.6 MB still to draw before, 13.6 ms and 1.00 MB after. The
   before figure depends on how far `yes` got ahead of the page in the two seconds before the key, and that varies
   with the machine: one of the three runs in the table above had almost no backlog.
