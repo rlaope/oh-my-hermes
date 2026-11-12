@@ -12,6 +12,7 @@ import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { HiddenList, NeedsStrip } from "./Needs";
 import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
+import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
 
 export function Sidebar() {
@@ -40,6 +41,7 @@ export function Sidebar() {
           <b>omher</b>
         </div>
         <div className="side-add">
+          <OmhNotice />
           <IconButton label={t("nav.addBot")} onClick={() => AddBot && setAdding((v) => !v)} aria-expanded={adding} disabled={!AddBot}>
             <PlusIcon />
           </IconButton>

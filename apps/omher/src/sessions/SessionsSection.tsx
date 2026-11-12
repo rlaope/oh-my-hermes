@@ -14,8 +14,9 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, folderName, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
+import { agentDef, agentLabel, folderName, hermesOnly, menuOrder, missingNote, rowModel, type AgentId, type ChatLive, type RowContext, type SessionRec } from "./agents";
 import { getSessions, useSessions } from "./sessions";
+import { getAddOmh } from "./addOmh";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { accountForNewSessions } from "../settings/accounts/rules";
@@ -217,7 +218,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
         <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
         {(agents ?? []).map((a) => {
-          const def = agentDef(a.id);
+          const label = agentLabel(a.id, ss.agents);
           const account = sessionAccountSuffix(accounts.groups, a.id);
           const missing = !a.path;
           return (
@@ -236,8 +237,8 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
               <span className="ss-ic">
                 <AgentMark agent={a.id} />
               </span>
-              <span className="ss-n ss-n-as" title={account ? `${def.label} ${account}` : def.label}>
-                <span className="ss-l">{def.label}</span>
+              <span className="ss-n ss-n-as" title={account ? `${label} ${account}` : label}>
+                <span className="ss-l">{label}</span>
                 {account && (
                   <span className="ss-as" data-testid={`session-account-${a.id}`}>
                     {account}
@@ -249,8 +250,34 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           );
         })}
         </div>
+        {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
+  );
+}
+
+/** The + menu's one quiet line for a person who has Hermes but not oh-my-hermes: "Add oh-my-hermes" closes the menu
+ *  and opens the sidebar's "!" popover (shown again if it was hidden), the one place its installer runs. */
+function AddOmhLine({ onPick }: { onPick: () => void }) {
+  return (
+    <div className="ss-add-omh" data-testid="session-add-omh-wrap">
+      <button
+        type="button"
+        role="menuitem"
+        className="ss-item ss-add-omh-b"
+        title={t("omh.add.tip")}
+        onClick={() => {
+          onPick();
+          getAddOmh().offer();
+        }}
+        data-testid="session-add-omh"
+      >
+        <span className="ss-ic">
+          <PlusIcon size={12} />
+        </span>
+        <span className="ss-n">{t("omh.add.line")}</span>
+      </button>
+    </div>
   );
 }
 
@@ -315,7 +342,7 @@ export function SessionList() {
   };
   if (ss.list.length === 0) return <SessionStart />;
   // a draft's folder is not settled yet: it never makes another row show its parent
-  const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home };
+  const ctx: RowContext = { cwds: ss.list.filter((r) => r.status !== "draft").map((r) => r.cwd), home: ss.home, agents: ss.agents };
   return (
     <nav className="bot-list ss-list" aria-label={t("nav.sessions")} data-testid="session-list">
       {ss.list.map((rec) =>

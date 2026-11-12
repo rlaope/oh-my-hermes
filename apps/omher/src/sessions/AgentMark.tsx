@@ -2,13 +2,17 @@
 // own mark for oh-my-hermes, the Grok mark, the official pi (pi.dev/favicon.svg) and oh-my-pi (omp.sh/favicon.svg)
 // marks, OmO's icon (oh-my-openagent `.github/assets/omo-icon-light.svg`, its viewBox trimmed to the tile) and
 // DeepSeek Harness's mark for DSH (deepseek-harness `apps/web/public/favicon.svg`, MIT, the file unchanged),
-// and OpenCode's mark (Lobe Icons) through AgentIcon.
+// and OpenCode's mark (Lobe Icons) through AgentIcon. For a person with Hermes but not oh-my-hermes, the oh-my-hermes
+// row is a plain Hermes chat and shows Hermes Agent's official mark (NousResearch/hermes-agent `assets/icon-master.svg`,
+// MIT, the repo's `assets/hermes-agent-icon.png` render, unchanged).
 import dshSvg from "../assets/agents/dsh.svg?raw";
 import omoMark from "../assets/agents/omo.svg";
 import ompMark from "../assets/agents/omp.svg";
 import logo from "../assets/omher-mark.png";
+import hermesMark from "../assets/agents/hermes-agent.png";
 import { AgentIcon, ModelIcon } from "../ui";
-import type { AgentId } from "./agents";
+import { hermesOnly, type AgentId } from "./agents";
+import { useSessions } from "./sessions";
 
 const IMG: Partial<Record<AgentId, string>> = { omp: ompMark, omo: omoMark };
 
@@ -17,6 +21,7 @@ const DSH_PATH = /\sd="([^"]+)"/.exec(dshSvg)?.[1] ?? "";
 
 export function AgentMark({ agent, size = 16 }: { agent: AgentId; size?: number }) {
   const box = { width: size, height: size };
+  const hermes = hermesOnly(useSessions().agents);
   if (agent === "claude") return <ModelIcon model="claude" size={size} className="ag-mark" />;
   if (agent === "codex") return <ModelIcon model="codex" size={size} className="ag-mark ag-codex" />;
   if (agent === "grok") return <ModelIcon model="grok" size={size} className="ag-mark" />;
@@ -36,5 +41,6 @@ export function AgentMark({ agent, size = 16 }: { agent: AgentId; size?: number 
     );
   const img = IMG[agent];
   if (img) return <img src={img} alt="" className="ag-mark ag-img" style={box} data-mark={agent} />;
+  if (hermes) return <img src={hermesMark} alt="" className="ag-mark ag-img ag-hermes" style={box} data-mark="hermes" />;
   return <img src={logo} alt="" className="ag-mark ag-img" style={box} data-mark="omh" />;
 }

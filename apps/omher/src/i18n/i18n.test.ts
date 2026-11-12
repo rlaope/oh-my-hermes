@@ -91,7 +91,7 @@ describe("i18n", () => {
 
   it("keeps brand, model and command names in Latin in every language", () => {
     for (const l of LANGS) {
-      for (const k of ["onb.sessions.body", "update.thenMixed", "acc.headerLine", "gate.text", "cmp.skillHint"] as Key[]) {
+      for (const k of ["omh.pop.body", "update.thenMixed", "acc.headerLine", "gate.text", "cmp.skillHint"] as Key[]) {
         for (const name of DICT.en[k].match(/Claude Code|Codex|Hermes|oh-my-hermes|omher|OmO|pi\b/g) ?? []) expect(DICT[l][k], `${l} ${k}`).toContain(name);
       }
     }
