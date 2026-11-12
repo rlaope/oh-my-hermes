@@ -807,6 +807,19 @@ All notable changes will be documented here.
   is `not_observed`. `visual-qa` records in the capture manifest whether
   emulation was on.
 
+- **`phone_check.py` measures a right-to-left page from the edge it starts
+  at.** On a page whose `<body>` is `direction: rtl`, or in a `-rl` vertical
+  writing mode, and that is too wide for the phone, the script skipped a
+  first control that sat in the left overflow and reported a later one; on
+  such a page in quirks mode it also reported a horizontal overflow of 0. It
+  now reads the start side from `<body>`, writing mode before direction,
+  counts a control when a scroll or a pan can put part of it on screen (a
+  skip link parked at `left: -9999px` inside a clipping box stays skipped),
+  takes the overflow from the scrolling element, and lists under
+  `elements_past_right_edge` the elements left of page x 0, each with
+  `left`. A left-to-right page gives the same output as before. Measured in
+  Chromium only.
+
 - **frontend names the layout before it builds a new page, and reviews
   what the page says about itself.** A new `references/editorial-layout.md`
   asks for one value and one reason per axis (skeleton, first screen,
