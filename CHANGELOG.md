@@ -558,6 +558,15 @@ All notable changes will be documented here.
   label at 120 columns (the context goes first), and the launch look's file
   is named as `~/…`.
 
+- **`omh update` no longer waits forever on a stalled package manager.** The
+  step that runs npm, bun or Homebrew had no time limit and printed nothing
+  while it ran, so a registry that never answered left `[1/2] Updating omh
+  command package...` on screen for good. The step now prints a `still
+  running` line with the seconds passed about every 30 seconds, and after 900
+  seconds it stops the package manager and names the command to run yourself
+  before rerunning `omh update`. `OMH_UPDATE_PACKAGE_TIMEOUT` sets another
+  limit in whole seconds, up to one day; `--json` output is unchanged.
+
 - **omher finds Hermes installed by its package manager.** Hermes installs
   made with the unified package manager have no `venv`, so omher said Hermes
   was not on the computer. omher now starts its bridge on the Python the
