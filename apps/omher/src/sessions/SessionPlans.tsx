@@ -15,7 +15,7 @@ import { RunGraph } from "../runs/RunGraph";
 import { NodeDrawer } from "../runs/NodeDrawer";
 import { PlanHeader } from "../runs/PlanHeader";
 import { LIVE_POLL_MS } from "../runs/live";
-import { SubagentLine } from "../chat/activity/Subagents";
+import { SubagentLine, waitingSubs } from "../chat/activity/Subagents";
 import { getSessions, useSessions } from "./sessions";
 import type { SessionRec } from "./agents";
 import { folderName } from "./agents";
@@ -110,6 +110,7 @@ function SessionGraph({ run, nowS }: { run: AgentRun; nowS: number }) {
 
 export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Chat | undefined; onClose: () => void }) {
   const subs = chatSubagents(chat);
+  const waiting = waitingSubs(chat?.items);
   const working = subs.filter((x) => !subagentEnded(x)).length;
   // a subagent that ended (or a new one) re-reads the record at once
   const moved = subs.map((x) => `${x.id}:${x.state}`).join(",");
@@ -144,7 +145,7 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
           // the agent has not written its record yet (or keeps none omher reads): the chat's own rows
           <div className="sa-rows ss-plans-rows" data-testid="session-plans-rows">
             {subs.map((x) => (
-              <SubagentLine key={x.id} sub={x} now={nowMs} live={!!chat?.turn || !subagentEnded(x)} />
+              <SubagentLine key={x.id} sub={x} now={nowMs} live={!!chat?.turn || !subagentEnded(x)} waiting={waiting.has(x.id)} />
             ))}
           </div>
         ) : (

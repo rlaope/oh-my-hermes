@@ -60,7 +60,8 @@ test("H4: an agent that never answers in chat mode ends the message and the sess
   expect(t.chat().turn).toBeNull();
   const why = "OmO did not answer in chat mode; it may be an old version: npm i -g omo-ai";
   expect(t.chat().lastTurn!.outcome).toBe("error");
-  expect(t.chat().lastTurn!.error).toBe(why);
+  // the reason is said once, by the Ended line beside Restart: the failed turn does not repeat it
+  expect(t.chat().lastTurn!.error).toBeUndefined();
   expect(t.rec().status).toBe("exited");
   expect(t.rec().error).toBe(why);
   // the reason is not a model-popover note

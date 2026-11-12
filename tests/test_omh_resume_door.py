@@ -83,6 +83,20 @@ _INSERT = (
 SECRET_TITLE = "renaming the production cluster"
 SECRET_CWD = "/private/somewhere/else"
 
+# An environment inherited from an earlier OMH frontend, not supplied by the runner.
+INHERITED_TUI_ENV = {
+    "HERMES_TUI_DIR": "/earlier/frontend",
+    "OMH_TUI_PYTHON": "/earlier/python",
+    "OMH_TUI_SITE": "/earlier/site",
+    "OMH_TUI_FALLBACK_SENTINEL": "/earlier/fallback",
+    "OMH_TUI_SESSION_FILE": "/earlier/session",
+    "OMH_TUI_PICK_SESSION": "1",
+    "OMH_TUI_RELAUNCH_FILE": "/earlier/relaunch",
+    "OMH_TUI_RUNTIME": "own",
+    "OMH_TUI_BOTS_HOME": "/earlier/bots",
+    "OMH_TUI_UPDATED": "plan",
+}
+
 
 def write_sessions(path: Path, rows: list[tuple]) -> None:
     """Create a real state database holding exactly *rows*.
@@ -687,12 +701,12 @@ class OmhTuiDoorTests(unittest.TestCase):
 
     def test_without_the_omh_tui_and_without_node_plain_hermes_runs(self) -> None:
         environments: list[dict[str, str] | None] = []
-        with TemporaryDirectory() as tmp:
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, INHERITED_TUI_ENV):
             with launched(Path(tmp), [], omh_tui=False, environments=environments) as (recorded, _o, _s):
                 pass
         self.assertEqual(recorded, [["/usr/local/bin/hermes"]])
         self.assertEqual(len(environments), 1)
-        self.assertNotIn("HERMES_TUI_DIR", environments[0])
+        self.assertNotIn("HERMES_TUI_DIR", environments[0].keys())
         self.assertIn("HERMES_HOME", environments[0])
 
 
@@ -726,13 +740,52 @@ class FallbackTargetTests(unittest.TestCase):
         with patch("omh.tui.terminal.termios", None):
             reason = terminal_blocker(_TtyStream(), _TtyStream(), {})
         self.assertIn("termios", reason)
-        recorded, environments, stderr, _status = self._fallback(blocker=reason, node=True)
+        recorded, environments, stderr, _status = self._fallback(INHERITED_TUI_ENV, blocker=reason, node=True)
         self.assertEqual(recorded, [[self.HERMES, "--tui"]])
         # Hermes' own TUI, not the OMH frontend; the selected home still reaches it.
         self.assertEqual(len(environments), 1)
-        self.assertNotIn("HERMES_TUI_DIR", environments[0])
+        self.assertNotIn("HERMES_TUI_DIR", environments[0].keys())
         self.assertIn("HERMES_HOME", environments[0])
         self.assertEqual(stderr, f"omh: {reason}; opening Hermes' own TUI (`hermes --tui`).\n")
+
+    def test_fallback_drops_frontend_environment_with_and_without_messaging_scrub(self) -> None:
+        from types import SimpleNamespace
+
+        from omh.commands.bare_launch import _run_hermes_fallback
+
+        inherited = {
+            **INHERITED_TUI_ENV,
+            "OMH_HOME": "/chosen/omh",
+            "HERMES_HOME": "/earlier/hermes",
+            "TERM": "xterm-256color",
+            "OMH_NO_TUI": "0",
+            "TELEGRAM_BOT_TOKEN": "test-messaging-token",
+            "PATH": "/chosen/bin",
+        }
+        paths = SimpleNamespace(hermes_home=Path("/resolved/hermes"))
+        chosen_hermes_home = Path("/chosen/hermes")
+        args = build_parser().parse_args([])
+        for scrub in (False, True):
+            for node in (False, True):
+                with self.subTest(scrub=scrub, node=node), patch.dict(os.environ, inherited), \
+                        patch("omh.commands.bare_launch._node_available", return_value=node), \
+                        patch("omh.commands.bare_launch.subprocess.run") as run, redirect_stderr(io.StringIO()):
+                    run.return_value.returncode = 3
+                    status = _run_hermes_fallback(
+                        self.HERMES, args, paths, "frontend unavailable",
+                        hermes_home=chosen_hermes_home, scrub=scrub,
+                    )
+                    env = run.call_args.kwargs["env"]
+                    for name in INHERITED_TUI_ENV:
+                        self.assertNotIn(name, env.keys(), name)
+                        self.assertEqual(os.environ[name], inherited[name])
+                    self.assertEqual(env["OMH_HOME"], inherited["OMH_HOME"])
+                    # The fallback passes str(Path), which is native: backslashes on Windows.
+                    self.assertEqual(env["HERMES_HOME"], str(chosen_hermes_home))
+                    self.assertEqual(env["PATH"], inherited["PATH"])
+                    self.assertEqual("TELEGRAM_BOT_TOKEN" in env, not scrub)
+                    self.assertEqual(run.call_args.args[0], [self.HERMES, *(["--tui"] if node else [])])
+                    self.assertEqual(status, 3)
 
     def test_a_dumb_terminal_opens_plain_hermes_even_with_node(self) -> None:
         # No TUI draws on TERM=dumb, Hermes' included.
@@ -787,7 +840,7 @@ class FallbackTargetTests(unittest.TestCase):
         recorded, environments, stderr, _status = self._fallback(blocker=reason, node=False)
         self.assertEqual(recorded, [[self.HERMES]])
         self.assertEqual(len(environments), 1)
-        self.assertNotIn("HERMES_TUI_DIR", environments[0])
+        self.assertNotIn("HERMES_TUI_DIR", environments[0].keys())
         self.assertIn("HERMES_HOME", environments[0])
         self.assertEqual(stderr, f"omh: {reason}; opening `hermes`.\n")
 
