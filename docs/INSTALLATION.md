@@ -6374,6 +6374,36 @@ Remove OMH-managed local state and Hermes integration files:
 omh uninstall
 ```
 
+### Removing with the installer, when `omh` is not on PATH
+
+The installer can run the removal for you. It looks for the installed command on
+PATH first, then where it puts the command itself (`OMH_BIN_DIR`, the `current`
+generation's venv under the managed root, the installer's venv), and runs
+`omh uninstall` with it:
+
+```sh
+curl -fsSL https://omher.app/install | sh -s -- --uninstall
+curl -fsSL https://omher.app/install | sh -s -- --uninstall --dry-run   # preview, writes nothing
+curl -fsSL https://omher.app/install | sh -s -- --uninstall --purge     # omh uninstall --all
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall
+```
+
+`--purge` and `--dry-run` are accepted only with `--uninstall`, and `--uninstall`
+cannot be combined with `omher@beta`; any other argument prints the usage and
+exits 2 without writing anything. `OMH_LANG` is passed on as `--language`.
+
+What it does not do: it downloads and installs nothing, deletes no file itself,
+and adds no removal rules of its own, so everything below (the manifest-owned
+files, the shared-store guards, the nonzero exit when a guard holds something
+back) is `omh uninstall` speaking, and its output and exit code are shown
+unchanged. It never passes `--force`. If no `omh` command is found it names the
+places it looked, says the OMH home and the Hermes registration may still be
+there, and exits nonzero; it does not reinstall to uninstall. Remove those by
+hand with the steps in this section.
+
 From the primary Hermes home this unregisters managed skill directories,
 reverses recorded config changes, and removes manifest-owned plugin, team and
 legacy display artifacts from that home and its bot profiles. A named-profile

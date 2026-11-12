@@ -1,0 +1,15 @@
+{
+  "schema": "molecular_docking_settings_example/v1",
+  "purpose": "Documentation only; pass CLI flags explicitly. Not a docking result or backend input file.",
+  "backend_candidate": "standalone-autodock-vina-python",
+  "runtime_status": "requires_explicit_optional_vina",
+  "center_angstrom": [15.190, 53.903, 16.917],
+  "box_size_angstrom": [20, 20, 20],
+  "cpu": 1,
+  "seed": 20261022,
+  "exhaustiveness": 1,
+  "n_poses": 1,
+  "host_timeout_seconds": 180,
+  "validate_only": false,
+  "example_box_scope": "Official 1IEP tutorial only; do not infer a box for another target"
+}

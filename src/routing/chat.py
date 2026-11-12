@@ -3886,6 +3886,33 @@ _MEMORY_RECALL_INCIDENT_CUES = (
     "forgot my preference",
     "memory was not used",
 )
+# Lessons taken from git history. A re-fix phrase alone also shows up when the
+# work is editing, reverting or reviewing such commits, so the fast path needs
+# BOTH a whole multi-word re-fix phrase and a lesson cue (`lesson`, `lessons`,
+# `교훈`). "fix", "commit", "merge" and "review" alone are never cues. English
+# phrases match as whole words: "fix of fix" must not read inside "fix of fixing
+# the build". Negation ("do not write lessons about the fixes of fixes") cannot
+# be told apart by phrases and is a known limit.
+_INSTINCT_LEDGER_HISTORY_PHRASES: tuple[str, ...] = (
+    "fix of fix",
+    "fixes of fixes",
+    "re-fixed commits",
+    "refixed commits",
+    "다시 고친 커밋",
+    "다시 고친 것들",
+)
+_INSTINCT_LEDGER_LESSON_CUE = re.compile(r"(?<![\w-])lessons?(?![\w-])|교훈")
+
+
+def _instinct_ledger_history_phrase_spoken(text: str, phrase: str) -> bool:
+    """A history phrase counts only as a whole word and next to a lesson cue."""
+    if phrase not in _INSTINCT_LEDGER_HISTORY_PHRASES:
+        return True
+    if phrase.isascii() and re.search(rf"(?<![\w-]){re.escape(phrase)}(?![\w-])", text) is None:
+        return False
+    return _INSTINCT_LEDGER_LESSON_CUE.search(text) is not None
+
+
 _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
     (
         "ralplan",
@@ -5047,6 +5074,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "전역 학습 승격",
             "학습 승격",
             "학습 패턴 승격",
+            *_INSTINCT_LEDGER_HISTORY_PHRASES,
         ),
         "operator_surface_fast_path:instinct_ledger",
         "Clear project/global instinct learning request; prepare scoped instinct candidates without automatic hooks, writes, or promotion.",
@@ -5422,6 +5450,8 @@ def _operator_surface_fast_path_match(
         if skill == "live-info-operator" and normalized_pattern == "time in" and not phrase_is_spoken(text, "time in"):
             continue
         if skill == "memory-new" and _memory_new_scope_overroutes_curation(text):
+            continue
+        if skill == "instinct-ledger" and not _instinct_ledger_history_phrase_spoken(text, phrase):
             continue
         if marker == "operator_surface_fast_path:memory_recall_incident":
             if contains_cue_phrase(message, (phrase,)):

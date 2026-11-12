@@ -1,0 +1,42 @@
+{
+  "schema": "ai_job_search_captures/v1",
+  "jobs": [
+    {
+      "source_namespace": "careers.example.invalid",
+      "posting_id": "REQ-101",
+      "original_url": "https://careers.example.invalid/jobs?req=REQ-101&utm_source=demo#details",
+      "canonical_url": "https://careers.example.invalid/jobs?req=REQ-101#details",
+      "title": "Synthetic Library Coordinator",
+      "company": "Synthetic Example Library",
+      "location": "Synthetic City",
+      "remote_scope": null,
+      "posted_at": null,
+      "deadline": null,
+      "application_url": null,
+      "availability": "unknown",
+      "receipt_ids": ["synthetic-posting-1"]
+    }
+  ],
+  "sources": [
+    {
+      "receipt_id": "synthetic-posting-1",
+      "kind": "user_provided",
+      "source_url": null,
+      "retrieved_at": "2026-10-23T02:00:00Z",
+      "status": "ok",
+      "freshness": "unverified",
+      "evidence_ref": "captures/synthetic-posting-1.md",
+      "error": null
+    },
+    {
+      "receipt_id": "synthetic-blocked-1",
+      "kind": "search",
+      "source_url": "https://search.example.invalid/",
+      "retrieved_at": "2026-10-23T02:01:00Z",
+      "status": "blocked",
+      "freshness": "unverified",
+      "evidence_ref": "captures/synthetic-blocked-1.md",
+      "error": "Synthetic access-denied fixture; no network request performed"
+    }
+  ]
+}

@@ -20,11 +20,15 @@ from .common import _paths, _print_json
 
 def cmd_docs_agent_skills(args: argparse.Namespace) -> int:
     from ..install.agent_skills_projection import MANIFEST_NAME, agent_skill_files, agent_skills_manifest
-    from ..skills.host_adapter_render import host_adapter_files
+    from ..skills.host_adapter_render import host_adapter_files, host_pack_tree
 
     root = Path(args.output or "agent-skills").expanduser().absolute()
     skill_files = agent_skill_files()
     adapters = host_adapter_files(skill_files)
+    # A host's own pack (the Claude copy under `.claude/agent-skills`), gated
+    # like the canonical tree: missing, stale and extra files all fail.
+    host_packs = host_pack_tree(skill_files)
+    pack_dirs = sorted({"/".join(relative.split("/")[:2]) for relative in host_packs})
     # The pack's one digest inventory: the exact receipt every installer copies.
     files = {**skill_files, MANIFEST_NAME: json.dumps(agent_skills_manifest(skill_files), indent=2, sort_keys=True) + "\n"}
     try:
@@ -44,11 +48,26 @@ def cmd_docs_agent_skills(args: argparse.Namespace) -> int:
                      or not (root.parent / path).is_file()
                      or (root.parent / path).read_bytes() != content.encode("utf-8"))
             )
-            payload = {"ok": not (missing or extra or stale or adapter_missing or adapter_stale),
+            pack_actual = {
+                path.relative_to(root.parent).as_posix()
+                for directory in pack_dirs for path in (root.parent / directory).rglob("*")
+                if path.is_file() or path.is_symlink()
+            }
+            pack_missing = sorted(host_packs.keys() - pack_actual)
+            pack_extra = sorted(pack_actual - host_packs.keys())
+            pack_stale = sorted(
+                relative for relative in host_packs.keys() & pack_actual
+                if (root.parent / relative).is_symlink()
+                or (root.parent / relative).read_bytes() != host_packs[relative].encode("utf-8")
+            )
+            payload = {"ok": not (missing or extra or stale or adapter_missing or adapter_stale
+                                  or pack_missing or pack_extra or pack_stale),
                        "checked": str(root), "missing": missing, "stale": stale,
                        "extra": extra, "file_count": len(files),
                        "adapter_file_count": len(adapters),
-                       "adapter_missing": adapter_missing, "adapter_stale": adapter_stale}
+                       "adapter_missing": adapter_missing, "adapter_stale": adapter_stale,
+                       "host_pack_file_count": len(host_packs), "host_pack_missing": pack_missing,
+                       "host_pack_stale": pack_stale, "host_pack_extra": pack_extra}
             _print_json(payload)
             return 0 if payload["ok"] else 1
         for relative, content in files.items():
@@ -58,9 +77,12 @@ def cmd_docs_agent_skills(args: argparse.Namespace) -> int:
             atomic_write_text(path, content)
             if path.suffix == ".sh":
                 path.chmod(0o755)
+        for relative, content in host_packs.items():
+            atomic_write_text(root.parent / relative, content)
     except OSError as exc:
         raise OmhError(f"Agent Skills docs projection failed: {exc}") from exc
-    _print_json({"written": str(root), "file_count": len(files), "adapter_file_count": len(adapters)})
+    _print_json({"written": str(root), "file_count": len(files), "adapter_file_count": len(adapters),
+                 "host_pack_file_count": len(host_packs)})
     return 0
 
 

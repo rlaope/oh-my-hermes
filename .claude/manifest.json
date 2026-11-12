@@ -129,7 +129,7 @@
     "ulw-research",
     "ulw-work"
   ],
-  "source": "agent-skills",
+  "source": ".claude/agent-skills",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

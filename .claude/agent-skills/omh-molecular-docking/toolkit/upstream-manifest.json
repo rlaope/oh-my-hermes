@@ -1,0 +1,129 @@
+{
+  "backend_candidate": "standalone-autodock-vina-python",
+  "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+  "files": {
+    "NOTICE.md": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_path": "NOTICE.md",
+      "local_sha256": "d11a59bb58a384ce4f2f70d0295107b98e8773e124b4b0e83b69fa8d609cbb26",
+      "modification_notice": "Original standalone direct Vina helper and guidance; no upstream code, molecular inputs or result files copied",
+      "source_path": "src/skills/molecular_docking_toolkit/NOTICE.md",
+      "source_sha256": "d11a59bb58a384ce4f2f70d0295107b98e8773e124b4b0e83b69fa8d609cbb26",
+      "upstream": []
+    },
+    "README.md": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_path": "README.md",
+      "local_sha256": "8741e1fc2c16c0d3dbb690b9669af84c4e04f177ad9248ae3cfe867b160ab71e",
+      "modification_notice": "Original standalone direct Vina helper and guidance; no upstream code, molecular inputs or result files copied",
+      "source_path": "src/skills/molecular_docking_toolkit/README.md",
+      "source_sha256": "8741e1fc2c16c0d3dbb690b9669af84c4e04f177ad9248ae3cfe867b160ab71e",
+      "upstream": []
+    },
+    "examples/settings.json": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_path": "examples/settings.json",
+      "local_sha256": "bc82519f57c91e9fb97f69029b2be1f54be5003700348aa074e9aacfe9c46cc5",
+      "modification_notice": "Original standalone direct Vina helper and guidance; no upstream code, molecular inputs or result files copied",
+      "source_path": "src/skills/molecular_docking_toolkit/examples/settings.json",
+      "source_sha256": "bc82519f57c91e9fb97f69029b2be1f54be5003700348aa074e9aacfe9c46cc5",
+      "upstream": []
+    },
+    "scripts/dock.py": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_path": "scripts/dock.py",
+      "local_sha256": "e27d15c921543849de47023bf21417efa73d94620d54cb158378fab998c65f41",
+      "modification_notice": "Original standalone direct Vina helper and guidance; no upstream code, molecular inputs or result files copied",
+      "source_path": "src/skills/molecular_docking_toolkit/scripts/dock.py",
+      "source_sha256": "e27d15c921543849de47023bf21417efa73d94620d54cb158378fab998c65f41",
+      "upstream": []
+    }
+  },
+  "inspected_sources": [
+    {
+      "classification": "inspected_not_copied",
+      "license": "Apache-2.0",
+      "path": "src/tooluniverse/tools/NvidiaNIM_diffdock.py",
+      "repository": "https://github.com/mims-harvard/ToolUniverse",
+      "revision": "53b4f8eb48d304f947bab85182b88d7c2a5c6794",
+      "sha256": "059e79a4aa1336f0570ffba2f1f6eaa3f43ec2fdc5e2db686c74d105996f83aa"
+    },
+    {
+      "classification": "inspected_not_copied",
+      "license": "Apache-2.0",
+      "path": "src/tooluniverse/tools/ClusPro_submit_peptide_docking.py",
+      "repository": "https://github.com/mims-harvard/ToolUniverse",
+      "revision": "53b4f8eb48d304f947bab85182b88d7c2a5c6794",
+      "sha256": "fae6f51dbaa1e540f14e85461c24e1bc1015c2b2a7e4682785d62ae5e9a381be"
+    },
+    {
+      "classification": "inspected_not_copied",
+      "license": "Apache-2.0",
+      "path": "src/tooluniverse/data/remote_tools/boltz_tools.json",
+      "repository": "https://github.com/mims-harvard/ToolUniverse",
+      "revision": "53b4f8eb48d304f947bab85182b88d7c2a5c6794",
+      "sha256": "6c8e652b611d6816c4873a804a6da4a93f2b6291e95c7e5afa28ad073389b74b"
+    },
+    {
+      "classification": "inspected_not_copied",
+      "license": "Apache-2.0",
+      "path": "docs/source/docking_python.rst",
+      "repository": "https://github.com/ccsb-scripps/AutoDock-Vina",
+      "revision": "bb64e5e26b520569a86360d69248069b5e665b3f",
+      "sha256": "b07bd00ae051bf2d54cb55725c760012006176fea0d9ca5289aea4a4fffa62fd"
+    },
+    {
+      "classification": "external_smoke_input_not_bundled",
+      "license": "Apache-2.0",
+      "path": "example/python_scripting/1iep_receptor.pdbqt",
+      "repository": "https://github.com/ccsb-scripps/AutoDock-Vina",
+      "revision": "bb64e5e26b520569a86360d69248069b5e665b3f",
+      "sha256": "761469710e3915b89b274483076dfe49754be7956661bc42f4cc36a182399d59"
+    },
+    {
+      "classification": "external_smoke_input_not_bundled",
+      "license": "Apache-2.0",
+      "path": "example/python_scripting/1iep_ligand.pdbqt",
+      "repository": "https://github.com/ccsb-scripps/AutoDock-Vina",
+      "revision": "bb64e5e26b520569a86360d69248069b5e665b3f",
+      "sha256": "37a20e58e77072c6b3ff07f285a345e647dd4e564af316a06e49518b15b7aa61"
+    },
+    {
+      "classification": "external_native_build_source_not_bundled",
+      "license": "Apache-2.0",
+      "path": "vina-1.2.7.tar.gz",
+      "repository": "PyPI/vina",
+      "revision": "1.2.7",
+      "setup_py_sha256": "bd9bc6a60c3ff03ad5fd395941898c76c18fdce3f0258a37aa65b4ffe57a8d41",
+      "sha256": "79e5288d10207b85f20adac3dd6f4708eac761c2d8070fbad76ff997cf48e4f9"
+    }
+  ],
+  "license": "MIT",
+  "native_smoke": {
+    "cpu": 1,
+    "exhaustiveness": 1,
+    "host_deadline_seconds": 180,
+    "n_poses": 1,
+    "numpy": "2.5.4",
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "pose_sha256": "121d02cca19d3d5ae9073fed722ae25524991abeab5887631f901b5249e8923d",
+    "python": "3.12.15",
+    "same_host_seeded_replay": "observed equal pose and score bytes; not a cross-platform guarantee",
+    "seed": 20261022,
+    "vina": "1.2.7"
+  },
+  "repository": "oh-my-hermes",
+  "revision": "original-uncommitted-producer; per-file hashes authoritative",
+  "runtime_status": "observed_native_smoke",
+  "schema": "molecular_docking_toolkit_provenance/v1",
+  "self_hash": "excluded; outer native/portable inventories hash this file",
+  "tooluniverse_execution": false
+}

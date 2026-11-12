@@ -1,0 +1,133 @@
+---
+name: "omh-legal-compliance-review"
+description: "[omh] Business contract, NDA, or policy with legal risk: surface contract and compliance risks, questions…"
+license: MIT
+metadata:
+  hermes:
+    tags: [workflow, oh-my-hermes, review]
+    category: review
+    phase: legal-compliance-review
+    role: reviewer
+    quality_tier: review-gated
+---
+
+# Legal Compliance Review
+
+This is an OMH `legal-compliance-review` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+
+## Why This Exists
+
+`legal-compliance-review` prepares scoped issues for human legal review without claiming counsel or filing authority.
+
+## Do Not Use When
+
+- The user needs a final jurisdiction-specific legal opinion, legal representation, or authoritative filing decision; prepare the issue and counsel brief instead.
+- The review is about code, secrets, permissions, prompt injection, dependencies, or unsafe tool behavior; use `omh-security-safety-review`.
+- The request is a plain-language rewrite without a legal-risk review objective; use `omh-content-operator`.
+- The user asks to sign, accept, submit, file, publish, or change a policy or contract in an external system; use `omh-apps` only after explicit authority.
+- Redact the PII in the file itself and scan it before sending it, once sharing it is cleared; use `omh-data-share-review`.
+
+## Examples
+
+Good example:
+
+- Prompt: Review this vendor DPA for data-processing obligations, risky clauses, and questions for counsel.
+- Expected behavior: Prepare an authority-bound issue matrix, ranked risks, and counsel questions.
+- Why: The request needs a prepared review and escalation aid before a legal decision.
+
+Bad example:
+
+- Prompt: Audit this OAuth integration for secret and permission risks.
+- Expected behavior: Route to `omh-security-safety-review`, not `legal-compliance-review`.
+- Why: The target is technical security risk rather than contract or compliance analysis.
+
+## Completion Checklist
+
+- Every authority-dependent statement has an exact locator and effective status or is marked unverified.
+- Every mandatory hold trigger is evaluated and each open one has a counsel owner and a question; the disposition is PASS, REVISE or HOLD.
+- The documents and versions that were not supplied are listed; no sign-off, filing or advice is claimed.
+
+## Recovery Notes
+
+- If an authority's pinpoint or effective status cannot be verified, retain the established document scope, mark authority-dependent issues unresolved, and hand back legal_scope_authority_record/v1 with the missing citations for counsel.
+- If a contested clause has an open counsel hold or no cited playbook position, retain its issue row, mark that redline row unresolved, and hand back the counsel question rather than proposed language.
+- If mandatory counsel triggers remain open at final review, retain the issue matrix and hold register, mark legal_review_disposition/v1 unresolved with HOLD, and hand back the exact triggers and counsel owner without a final determination.
+
+
+
+## When to Use
+
+Use when supplied contract, policy, product, process, or regulatory context needs a scoped issue matrix, assumptions, and counsel/escalation brief.
+
+    Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `contract redline`, `redline the contract`, `negotiation preparation`, `negotiation strategy`, `clause language`, `counterparty position`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
+
+## Catalog Metadata
+
+Category: `review`
+Phase: `legal-compliance-review`
+Quality tier: `review-gated`
+Reasoning demand: `standard`
+
+Quality bar:
+
+- Name jurisdiction, authority, document version, and unresolved questions.
+- Rank issues and preserve the counsel-escalation boundary.
+- For a redline objective, tie every proposed clause to the playbook position it came from and carry its fallback and walk-away, so the negotiator sees what is being traded; an open counsel hold on a clause blocks its row rather than producing a proposal — load `references/negotiation-preparation.md` for the row shape and the concession-order rules.
+
+Required inputs:
+
+- jurisdiction
+- document or process version
+- supplied authority
+- review objective
+
+Expert clarification questions:
+- `jurisdiction`
+  - English: Which parties, actor or data roles, operative facts, governing law and forum, and separately applicable regulatory jurisdictions are supplied?
+  - Korean: 어떤 당사자, 행위자 또는 데이터 역할, 주요 사실, 준거법과 관할, 별도 적용 규제 관할권이 제공되었나요?
+
+Expected outputs:
+
+- legal_scope_authority_record/v1
+- legal_issue_traceability_matrix/v1
+- legal_risk_counsel_hold_register/v1
+- legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
+- legal_review_disposition/v1
+
+Artifact expectations:
+
+- prepared legal and compliance issue matrix when a wrapper captures it
+- legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows
+
+Safety rules:
+
+- Distinguish supplied authority from legal interpretation and final advice.
+- Do not claim sign-off, certification, filing, execution, or regulator communication.
+- Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.
+
+Procedure: load `references/procedure.md`.
+
+## Runtime Evidence
+
+Use the current host's own tools and subagent/task mechanism when available;
+otherwise run the same lanes sequentially or name the unavailable capability.
+A prepared plan, handoff, checklist, or skill installation is not execution,
+review, CI, merge-readiness, or merge evidence. Record actual tool results, or
+`not_observed` / `not_available`, in the record; never invent dispatch or host
+accounting.
+Treat supplied context as advisory, not proof of hidden memory reads or writes.
+State scope, constraints, verification, and the stop condition before work.
+Reply in the user's own words and the host's own voice: the host's persona owns
+reply language, tone, speech level, and sentence endings, progress updates
+included (where it sets no language, use the one the user wrote in), and OMH
+shapes structure and content only; OMH's record terms
+(surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in
+records and tool calls, never in the sentence the user reads unless they ask
+about one; and when a real unresolved user decision or a useful briefing discussion
+remains, offer one specific, content-linked question. Completed work needs no question;
+omit unrelated non-action footers and generic offers to continue.
+Supporting paths are relative to this skill directory; sibling skill paths are
+relative to its parent. Resolve them from the host-provided skill base directory
+(`{baseDir}` on hosts that provide it), never a hardcoded install location.
+A named workflow not installed here is unavailable, not permission to emulate
+its host-specific capabilities. Verify through the real surface before done.

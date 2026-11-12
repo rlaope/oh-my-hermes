@@ -27,7 +27,7 @@ if [ "$$scope" = user ]; then
 else
     target="$$base/$repo_path"
 fi
-source="$$(dirname -- "$$0")/../agent-skills"
+source="$$(dirname -- "$$0")/$sh_source"
 [ ! -L "$$source" ] || fail 'Symlink source root'
 source=$$(CDPATH= cd -- "$$source" && pwd -P)
 if command -v sha256sum >/dev/null 2>&1; then
@@ -137,7 +137,7 @@ if ($$User) {
 } else {
     $$target = Join-Path $$base '$repo_path'
 }
-$$source = Join-Path (Split-Path -Parent $$PSScriptRoot) 'agent-skills'
+$$source = Join-Path $ps_source_parent '$ps_source_leaf'
 $$inventory = Join-Path $$source '$receipt_name'
 if (-not (Test-Path -LiteralPath $$inventory -PathType Leaf)) { throw 'Missing source inventory' }
 $$inventoryPath = (Get-Item -Force -LiteralPath $$inventory).FullName
@@ -254,6 +254,33 @@ $$skills
 ''')
 
 
+def _source_fields(host: str, source: str) -> dict[str, str]:
+    if source == "agent-skills":
+        return {"sh_source": "../agent-skills", "ps_source_parent": "(Split-Path -Parent $PSScriptRoot)",
+                "ps_source_leaf": "agent-skills"}
+    if source.count("/") != 1 or source.split("/")[0] != f".{host}":
+        raise ValueError(f"{host}: an adapter's own pack must sit beside its installers, not at {source}")
+    leaf = source.split("/")[1]
+    return {"sh_source": leaf, "ps_source_parent": "$PSScriptRoot", "ps_source_leaf": leaf}
+
+
+def host_pack_tree(files: dict[str, str]) -> dict[str, str]:
+    """Each host-owned pack (today the Claude copy) with its receipt, keyed from the checkout root."""
+    from ..install.agent_skills_projection import MANIFEST_NAME, agent_skills_manifest
+    from .host_adapters import host_pack_files
+
+    result: dict[str, str] = {}
+    for adapter in HOST_ADAPTERS:
+        if adapter.source == "agent-skills":
+            continue
+        pack = host_pack_files(adapter.host, files)
+        result.update({f"{adapter.source}/{relative}": content for relative, content in pack.items()})
+        result[f"{adapter.source}/{MANIFEST_NAME}"] = (
+            json.dumps(agent_skills_manifest(pack), indent=2, sort_keys=True) + "\n"
+        )
+    return result
+
+
 def host_adapter_files(files: dict[str, str]) -> dict[str, str]:
     """All 18 committed files derive from the host rows alone; none carries a file digest."""
     # The scripts accept only these paths; JSON would escape others, and a
@@ -272,6 +299,8 @@ def host_adapter_files(files: dict[str, str]) -> dict[str, str]:
             "repo_path": manifest["targets"]["repo"],
             "user_path": manifest["targets"]["user"],
             "sibling_path": sibling_pack_root(manifest["targets"]["repo"]),
+            # Script-relative source: `../agent-skills`, or a pack beside the script.
+            **_source_fields(adapter.host, manifest["source"]),
         }
         result[f".{adapter.host}/install.sh"] = _SH.substitute(fields)
         result[f".{adapter.host}/install.ps1"] = _PS1.substitute(fields)

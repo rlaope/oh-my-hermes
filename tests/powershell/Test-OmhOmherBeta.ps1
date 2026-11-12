@@ -19,6 +19,7 @@ $script:OmhFailures = @()
 function Write-OmhLine { param([string]$Text = '') $script:OmhLines += $Text }
 $script:OmhLines = @()
 $OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
+$OmhUninstallOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall [--purge] [--dry-run]'
 
 function Stop-OmhInstall {
     param([string[]]$Lines)

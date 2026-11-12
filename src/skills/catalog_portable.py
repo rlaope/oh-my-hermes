@@ -494,6 +494,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'data-share-review/references/data-share-method.md',
     'spend-gate/references/spend-rails.md',
     'release-cut/references/release-and-rollback-method.md',
+    'instinct-ledger/references/refixed-commits.md',
     'application-threat-model/references/threat-model-method.md',
     'live-incident-response/references/incident-command-method.md',
     'external-connector-readiness/references/memory-provider-trial.md',

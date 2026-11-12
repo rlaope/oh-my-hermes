@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { RestartAction, RestartLine } from "../../sidebar/RestartLine";
 import type { Bot } from "../../lib/protocol";
 import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
@@ -118,6 +119,12 @@ export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode
       {chat?.openError && (
         <div className="day note" data-testid="chat-error">
           {t("tl.unreachable", { bot: bot.display_name, error: chat.openError })}
+        </div>
+      )}
+      {bot.status === "offline" && (
+        <div className="day note rs-note" data-testid="chat-offline">
+          <span>{t("tl.offline", { bot: bot.display_name })}</span> <RestartAction bot={bot} start testId="chat-start" />
+          <RestartLine bot={bot} testId="chat-restart-line" />
         </div>
       )}
       {/* A Hermes installed from the setup screen has no model yet: the first chat screen says where to pick one,
