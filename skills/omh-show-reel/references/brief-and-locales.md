@@ -18,11 +18,20 @@ Fill `show_reel_brief/v1`:
 
 - objective, audience/channel, requested action and success evidence;
 - duration, aspect_ratio, dimensions, fps, filesize_cap, deadline, revision_budget;
+- motion_limits: how long this genre may stay still and hold one composition;
 - source/brand boundaries, available tools, missing facts and stop conditions;
 - reply_language, audience_locales, content_locale and decision_basis;
 - onscreen_text, subtitle_text, narration_script, pronunciation_text;
 - typography_policy, font_policy, direction_policy, voice_policy, translation_policy;
 - literal_tokens with original bytes, locale version, reviewer and approval state.
+
+`motion_limits` is a labeled assumption unless the user set it, written per
+genre before any scene is authored: which `motion_check.py` profile measures the
+film, each hold the genre needs with its reason (these become the `--holds`
+entries), and how long one composition may stay on screen, which the draft
+contact sheet is read against. An explainer that needs reading time and a teaser
+that must not rest set different limits. A limit written after a check failed
+only relabels the failure.
 
 These are authored artifact fields, not executable schemas or new OMH RPCs.
 Keep media and copy in the approved project directory; metadata records contain
