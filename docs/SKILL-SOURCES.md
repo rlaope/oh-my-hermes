@@ -343,7 +343,11 @@ reimplements the paste-query mechanism of MemPalace's `query_sanitizer.py`, and
 the origin pointer in `src/plugin_bundle/omh/memory_origin.py` takes its idea
 from MemPalace's closet-to-drawer pointers; both follow `MemPalace/mempalace`
 at `84582fb055a6429261f9c779da86c0561ec80adc` (MIT) and are reimplemented, not
-copied.
+copied. The lessons file `docs/LESSONS.md` with its three-separate-days promotion
+rule into `REVIEW.md`, and the stop list for fork pull requests in
+`docs/REVIEW-SWEEP.md`, take their idea from `yetone/magpie` at
+`5e933e153a87c4017a19502e1d2e87aa714572b9` (MIT): concept only, written fresh
+against this repository's own history, nothing copied or translated.
 
 ## Candidate rows (researched, not yet shipped)
 
