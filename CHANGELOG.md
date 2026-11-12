@@ -506,6 +506,15 @@ All notable changes will be documented here.
   `irm https://omher.app/install.ps1 | iex`. The README, its translations, the website and
   docs/INSTALLATION.md show the short form; the install guide keeps the long one as "same as".
 
+- **A pytest run no longer makes `omh update` skip the plugin refresh.** The
+  plugin bundle ships a module named `test_expectation_check.py`, which
+  pytest's assertion rewriting takes for a test file, so a pytest process
+  that imports the installed plugin leaves a
+  `<module>.<tag>-pytest-<version>.pyc` beside it. The refresh read that file
+  as something the person had added and left the plugin directory unchanged.
+  It is now recognised as bytecode of a shipped module, under the same
+  content check as any other cache. Reported by @junjuny0227 (#2791).
+
 - **OMH TUI settings changes say what they did, and do what they say.**
   `/yolo` and `/reasoning <level>` went to Hermes' `slash.exec`, which runs
   them in a worker apart from the live agent: `/reasoning high` said it was
