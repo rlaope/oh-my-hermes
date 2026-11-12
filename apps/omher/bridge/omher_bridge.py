@@ -66,6 +66,16 @@ JOB_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 PLUGIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")  # an installed plugin's name or key (`image_gen/fal`)
 # A curated catalog entry's name: no `/` or `:`, so neither a Git URL nor `owner/repo` can pass as one.
 CATALOG_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+# Hermes' own profile id grammar (`hermes_constants.PROFILE_ID_RE`); `default` passes it too.
+PROFILE_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+RESTART_TIMEOUT = 90.0   # seconds one `hermes -p <bot> gateway restart` may take (Hermes' own updater allows 90)
+RESTART_WAIT = 120.0     # seconds the bridge keeps trying to attach to a restarted bot
+RESTART_POLL = 2.0
+RESTART_ANYWAY_WINDOW = 600.0  # "Restart anyway" (`--yes`) is taken only this long after Hermes refused
+RESTART_LINES = 12
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+# Variables that make a child think it is the gateway itself (Hermes' update_restart_recovery drops the same three).
+_GATEWAY_MARKERS = ("_HERMES_GATEWAY", "HERMES_GATEWAY", "HERMES_GATEWAY_MODE")
 def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
     (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
@@ -1510,6 +1520,120 @@ def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float 
     except ValueError:
         return None
     return view if isinstance(view, dict) else None
+
+
+def hermes_path(which=None, root: Path | None = None) -> str | None:
+    """Hermes' own command: on PATH, else the launcher or venv script of the Hermes checkout running this bridge
+    (an app opened from the Dock has a short PATH)."""
+    import shutil
+    which = which or shutil.which
+    found = which("hermes")
+    if found:
+        return found
+    root = root or DEFAULT_HERMES_ROOT
+    if os.name == "nt":
+        rel = (("venv", "Scripts", "hermes.exe"), (".venv", "Scripts", "hermes.exe"))
+    else:
+        rel = ((".hermes", "bin", "hermes"), ("venv", "bin", "hermes"), (".venv", "bin", "hermes"))
+    for parts in rel:
+        p = Path(root, *parts)
+        if p.is_file() and os.access(p, os.X_OK):
+            return str(p)
+    return None
+
+
+def restart_argv(hermes: str, bot: str, interrupt: bool) -> list[str]:
+    """`hermes -p <bot> gateway restart --detach`, plus `--yes` only for "Restart anyway". `--detach`: with no
+    service manager Hermes starts the replacement in the background instead of becoming it (a child of omher).
+    The profile id is checked here as one argv element; nothing else varies."""
+    if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
+        raise ValueError(f"not a profile id: {bot!r}")
+    return [hermes, "-p", bot, "gateway", "restart", "--detach", *(["--yes"] if interrupt is True else [])]
+
+
+def restart_outcome(code: int | None, output: str) -> dict:
+    """What Hermes' restart said: ok, refused (live work, with the lines it named) or failed (one line).
+    Hermes refuses with exit 1 and `Refusing to restart the gateway: N live session(s)...` plus one `  • <unit>`
+    line per unit (hermes_cli/gateway_lifecycle_guards.py `_work_lines`); a served profile's restart that the host
+    did not confirm exits 0 with `... was not confirmed: <why>.` (gateway_profile_lifecycle.py)."""
+    lines = [ln.rstrip() for ln in _ANSI.sub("", output or "").splitlines()]
+    text = [ln.strip() for ln in lines if ln.strip()]
+    if code is None:
+        return {"outcome": "failed", "line": f"Hermes did not finish in {int(RESTART_TIMEOUT)} seconds."}
+    if any("Refusing to restart the gateway:" in ln for ln in text):
+        units = [ln.lstrip("•").strip() for ln in text if ln.startswith("•")]
+        head = next(ln for ln in text if "Refusing to restart the gateway:" in ln)
+        return {"outcome": "refused", "lines": [_clip(u, 200) for u in units][:RESTART_LINES] or [_clip(head.lstrip("✗ "), 200)]}
+    unconfirmed = next((ln for ln in text if "was not confirmed" in ln), None)
+    if code == 0 and unconfirmed is None:
+        return {"outcome": "ok"}
+    # the most telling line: Hermes' own error line (✗, Error:), else the last one it printed
+    pick = unconfirmed or next((ln for ln in text if ln.startswith(("✗", "Error:"))), None) or (text[-1] if text else "")
+    return {"outcome": "failed", "line": _clip(pick.lstrip("✗ ").strip(), 300) or f"Hermes exited with code {code}."}
+
+
+def run_hermes_restart(hermes: str, bot: str, home: Path, interrupt: bool, timeout: float = RESTART_TIMEOUT) -> dict:
+    """Run Hermes' own restart for one bot and read what it said. No shell, nothing on stdin (so Hermes refuses
+    rather than asks while work is live), the Hermes root as HERMES_HOME, and none of the gateway's own markers."""
+    argv = restart_argv(hermes, bot, interrupt)
+    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS}
+    env["HERMES_HOME"] = str(home)
+    kw = {}
+    if os.name == "nt":
+        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        r = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True, encoding="utf-8", errors="replace", timeout=timeout, env=env, **kw)
+    except subprocess.TimeoutExpired:
+        return restart_outcome(None, "")
+    except OSError as e:
+        return {"outcome": "failed", "line": _clip(f"Hermes could not be started: {e}", 300)}
+    return restart_outcome(r.returncode, r.stdout)
+
+
+def restart_takes_along(home: Path, bot: str) -> list[dict]:
+    """The other bots a restart of `bot` also restarts: for the default profile (the host gateway) every named
+    profile it serves, i.e. not opted out (`gateway.standalone`) and not parked (`gateway.parked`), the same tests
+    as Hermes' profiles.profile_is_standalone / profile_is_parked; a named bot takes none along."""
+    if bot != "default":
+        return []
+    out = []
+    for b in discover_bots(home):
+        if b["is_default"] or (b["path"] / "gateway.parked").exists():
+            continue
+        gw = _load_yaml(b["path"] / "config.yaml").get("gateway")
+        standalone = gw.get("standalone") if isinstance(gw, dict) else None
+        if standalone is True or (isinstance(standalone, str) and standalone.strip().lower() in ("1", "true", "yes", "on")):
+            continue
+        out.append({"name": b["name"], "display_name": b["display_name"]})
+    return out
+
+
+def plugin_load(res: dict) -> str:
+    """When a plugin change that Hermes' `plugins.manage` just made takes effect for the bot. Hermes reloads the
+    running gateway's plugins itself (plugins_activation.activate_plugin_now) and answers `restart_required` only
+    when no gateway answered that reload, or the gateway cannot import the plugin's dependencies.
+    live: from the bot's next conversation. reload: the gateway did not reload, one press asks it again.
+    restart: only a restart of the host gateway loads it (missing dependencies in the gateway process)."""
+    if not res.get("restart_required"):
+        return "live"
+    act = res.get("activation") if isinstance(res.get("activation"), dict) else {}
+    missing_in = act.get("missing_in") if isinstance(act.get("missing_in"), list) else []
+    if act.get("missing_dependencies") and ("gateway" in missing_in or not missing_in):
+        return "restart"
+    if not res.get("gateway_reloaded"):
+        return "reload"
+    return "live"  # only another process (Hermes' desktop backend) lacks it; the bot's gateway has it
+
+
+def reload_plugins(home: Path, root: Path):
+    """Hermes' own `reload-plugins` control verb, the way Hermes' plugins_activation.reload_running_gateway asks
+    it: the gateway serving this profile on its own socket, else the host gateway's for a served profile."""
+    from gateway.control_socket import reload_gateway_plugins
+    answer = reload_gateway_plugins(home)
+    if answer is None and Path(home).resolve() != Path(root).resolve():
+        answer = reload_gateway_plugins(root, profile_home=home)
+    return answer
 
 
 class PrStates:
@@ -3564,9 +3688,12 @@ class Bridge:
             "plugins.list": self.op_plugins_list, "plugins.catalog": self.op_plugins_catalog,
             "plugins.inspect": self.op_plugins_inspect, "plugins.install": self.op_plugins_install,
             "plugins.toggle": self.op_plugins_toggle, "plugins.update": self.op_plugins_update,
-            "plugins.remove": self.op_plugins_remove,
+            "plugins.remove": self.op_plugins_remove, "plugins.reload": self.op_plugins_reload,
+            "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
         }
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
+        self._restarting: set[str] = set()      # bots whose restart command runs now
+        self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self.runs = DagRuns()
         self.cli = CliRuns()
         self.prs = PrStates()
@@ -4354,6 +4481,66 @@ class Bridge:
         await self.emit("bots.update", bot["name"])
         return {"avatar_rev": avatar_rev(bot["path"])}
 
+    # ------------------------------------------------------------ restart one bot (BOUNDARY rule 29)
+    # Only on the person's press, only through Hermes' own `hermes -p <bot> gateway restart`. Never a signal, a
+    # service manager call, a stop or a "restart all"; `--yes` only right after Hermes refused for live work.
+
+    async def op_bots_restart_scope(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return {"others": await asyncio.to_thread(restart_takes_along, self.home, bot["name"])}
+
+    async def op_bots_restart(self, p) -> Reply:
+        bot = self._bot(p.get("bot"))
+        name = bot["name"]
+        if not PROFILE_ID.fullmatch(name):
+            raise BridgeError("bad_request", f"{name} is not a profile id Hermes accepts")
+        interrupt = p.get("interrupt") is True
+        if interrupt and self.clock() - self._refused.get(name, -1e9) > RESTART_ANYWAY_WINDOW:
+            raise BridgeError("bad_request", "Restart anyway follows a refusal for live work")
+        if name in self._restarting:
+            raise BridgeError("busy", f"{bot['display_name']} is already restarting")
+        hermes = hermes_path()
+        if not hermes:
+            return Reply({"outcome": "failed", "line": "Hermes is not on this computer."})
+        others = [o["name"] for o in await asyncio.to_thread(restart_takes_along, self.home, name)]
+        self._restarting.add(name)
+        try:
+            out = await asyncio.to_thread(run_hermes_restart, hermes, name, self.home, interrupt)
+        finally:
+            self._restarting.discard(name)
+        self._refused.pop(name, None)
+        if out["outcome"] == "refused":
+            self._refused[name] = self.clock()
+        if out["outcome"] != "ok":
+            return Reply(out)
+        async def reattach() -> None:
+            self._spawn(self._reattach([name, *others]))
+        return Reply(out, after=reattach)
+
+    async def _reattach(self, names: list[str]) -> None:
+        """After a restart: drop the old connections (their gateway is gone or replaced) and attach again, so the
+        open chats re-read themselves; `bot.restarted` says when each one is back (or that it did not come back)."""
+        for n in names:
+            conn = self.conns.get(n)
+            if conn is not None and conn.connected:
+                await self._drop(conn, reason=f"{conn.bot['display_name']} restarted")
+        pending = list(names)
+        deadline = self.clock() + RESTART_WAIT
+        while pending and self.clock() < deadline:
+            await asyncio.sleep(RESTART_POLL)
+            for n in list(pending):
+                conn = self.conns.get(n)
+                if conn is not None:
+                    conn.failed_at, conn.failed_msg = 0.0, ""
+                try:
+                    await self._conn(n)
+                except BridgeError:
+                    continue
+                pending.remove(n)
+                await self.emit("bot.restarted", n, ok=True)
+        for n in pending:
+            await self.emit("bot.restarted", n, ok=False)
+
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
@@ -4600,7 +4787,8 @@ class Bridge:
         installed = str(res.get("plugin_name") or res.get("name") or name)
         self._own_plugins.add((bot["name"], installed))
         return {"name": installed, "enabled": bool(res.get("enabled", True)),
-                "restart_required": bool(res.get("restart_required")), "warnings": _strs(res.get("warnings"), 6),
+                "restart_required": bool(res.get("restart_required")), "load": plugin_load(res),
+                "warnings": _strs(res.get("warnings"), 6),
                 "missing_env": _strs(res.get("missing_env"), 12)}
 
     async def op_plugins_toggle(self, p) -> dict:
@@ -4610,7 +4798,8 @@ class Bridge:
             raise BridgeError("bad_request", "enable is true or false")
         conn = await self._conn(bot["name"])
         res = await self._plugins(conn, "toggle", key=key, enable=p["enable"])
-        return {"name": str(res.get("name") or key), "restart_required": bool(res.get("restart_required"))}
+        return {"name": str(res.get("name") or key), "restart_required": bool(res.get("restart_required")),
+                "load": plugin_load(res) if p["enable"] else "live"}
 
     async def op_plugins_update(self, p) -> dict:
         bot = self._bot(p.get("bot"))
@@ -4620,7 +4809,30 @@ class Bridge:
         if res.get("consent_required") or res.get("scan_blocked"):
             raise BridgeError("needs_review", f"This update needs a closer look. Ask {bot['display_name']} in chat to update {name}.")
         return {"name": str(res.get("name") or name), "unchanged": bool(res.get("unchanged")),
-                "restart_required": bool(res.get("restart_required"))}
+                "restart_required": bool(res.get("restart_required")),
+                "load": "live" if res.get("unchanged") else plugin_load(res)}
+
+    async def op_plugins_reload(self, p) -> dict:
+        """Ask the bot's running gateway to load newly enabled plugins now (Hermes' `reload-plugins`): handlers go
+        live at once, tools and prompt sections from the bot's next conversation. Restarts nothing."""
+        bot = self._bot(p.get("bot"))
+        name = self._plugin_name(p) if p.get("name") is not None else ""
+        try:
+            answer = await asyncio.to_thread(reload_plugins, bot["path"], self.home)
+        except ImportError:
+            answer = None
+        if not isinstance(answer, dict):
+            return {"load": "failed", "line": f"{bot['display_name']}'s Hermes did not answer."}
+        if not answer.get("reloaded"):
+            return {"load": "failed", "line": _clip(str(answer.get("error") or "Hermes did not reload its plugins."), 300)}
+        act = None
+        for entry in answer.get("activations") or []:
+            key = str(entry.get("key") or "") if isinstance(entry, dict) else ""
+            if name and name in (entry.get("name"), key, key.rsplit("/", 1)[-1]):
+                act = entry
+                break
+        missing = (act or {}).get("missing_dependencies") or []
+        return {"load": "restart" if missing else "live", "missing": _strs(missing, 12)}
 
     async def op_plugins_remove(self, p) -> dict:
         bot = self._bot(p.get("bot"))

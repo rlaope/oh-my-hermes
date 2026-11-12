@@ -3587,3 +3587,160 @@ class VersionTest(unittest.TestCase):
         # hello's version is the app's: a release bump that misses the bridge fails here
         app = json.loads((HERE.parent.parent / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(ob.VERSION, app["version"])
+
+
+STUB_HERMES = r"""#!/bin/sh
+# omher test stub for `hermes`: records its argv, then answers like Hermes' restart does in $STUB_MODE.
+printf '%s\n' "$@" > "$STUB_LOG"
+printf 'HERMES_HOME=%s GW=%s\n' "$HERMES_HOME" "${_HERMES_GATEWAY:-}" >> "$STUB_LOG"
+case "$STUB_MODE" in
+  ok) echo "Profile '$2' restarted by the host gateway."; exit 0 ;;
+  refused)
+    for a in "$@"; do [ "$a" = "--yes" ] && { echo "⚠ --yes: restart proceeds: 2 live session(s) would be interrupted."; exit 0; }; done
+    echo "✗ Refusing to restart the gateway: 2 live session(s) would be interrupted."
+    echo "  • chat turn 20261112_1 pid 4242, running 3m [model claude-opus-5-5, tool terminal]"
+    echo "  • cron job a1b2 (PR digest) in-process, running 40s"
+    echo "  Let them finish, or interrupt them deliberately:"
+    echo "    hermes -p $2 gateway restart --yes   # interrupts 2 live session(s)"
+    exit 1 ;;
+  unconfirmed) echo "Profile '$2' restart was not confirmed: host control socket did not answer."; exit 0 ;;
+  *) echo "Starting gateway..."; echo "✗ Gateway service restart failed."; echo "  Fix the service, then retry"; exit 1 ;;
+esac
+"""
+
+
+class RestartArgv(unittest.TestCase):
+    """Rule 29: the restart is Hermes' own command with a fixed argv; the bot is one checked element."""
+
+    def test_fixed_argv_and_yes_only_when_asked(self):
+        self.assertEqual(ob.restart_argv("/h/hermes", "kami", False), ["/h/hermes", "-p", "kami", "gateway", "restart", "--detach"])
+        self.assertEqual(ob.restart_argv("/h/hermes", "kami", True)[-1], "--yes")
+        self.assertNotIn("--yes", ob.restart_argv("/h/hermes", "kami", "true"))  # only the boolean True
+        self.assertEqual(ob.restart_argv("/h/hermes", "default", False)[2], "default")
+
+    def test_names_hermes_would_refuse_are_refused_here(self):
+        for bad in ("Kami", "-p", "--all", "a b", "kami;rm -rf ~", "../x", "", "x" * 65, "kami\n", None, 3):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                ob.restart_argv("/h/hermes", bad, False)
+
+    def test_outcomes_read_from_hermes_text(self):
+        self.assertEqual(ob.restart_outcome(0, "Profile 'kami' restarted by the host gateway.\n"), {"outcome": "ok"})
+        r = ob.restart_outcome(1, "\x1b[31m✗ Refusing to restart the gateway: 1 live session(s) would be interrupted.\x1b[0m\n"
+                                  "  • chat turn s1 pid 9, running 2m\n  Let them finish, or interrupt them deliberately:\n")
+        self.assertEqual(r, {"outcome": "refused", "lines": ["chat turn s1 pid 9, running 2m"]})
+        r = ob.restart_outcome(0, "Profile 'kami' restart was not confirmed: host operation is still pending.\n")
+        self.assertEqual(r["outcome"], "failed")
+        self.assertIn("not confirmed", r["line"])
+        self.assertEqual(ob.restart_outcome(None, "")["outcome"], "failed")
+        self.assertEqual(ob.restart_outcome(78, "✗ The host gateway already serves profile 'kami'.\n  more\n")["line"],
+                         "The host gateway already serves profile 'kami'.")
+
+    def test_the_default_profile_names_the_bots_it_takes_along(self):
+        with tempfile.TemporaryDirectory() as t:
+            home = Path(t)
+            (home / "config.yaml").write_text("model: m\n")
+            for n, cfg in (("kami", ""), ("solo", "gateway:\n  standalone: true\n"), ("parked", ""), ("friren", "")):
+                (home / "profiles" / n).mkdir(parents=True)
+                (home / "profiles" / n / "config.yaml").write_text("model: m\n" + cfg)
+            (home / "profiles" / "parked" / "gateway.parked").write_text("")
+            self.assertEqual([o["name"] for o in ob.restart_takes_along(home, "default")], ["friren", "kami"])
+            self.assertEqual(ob.restart_takes_along(home, "kami"), [])
+
+    def test_plugin_load_follows_hermes_answer(self):
+        self.assertEqual(ob.plugin_load({"restart_required": False, "gateway_reloaded": True}), "live")
+        self.assertEqual(ob.plugin_load({"restart_required": True, "gateway_reloaded": False}), "reload")
+        self.assertEqual(ob.plugin_load({"restart_required": True, "gateway_reloaded": True,
+                                         "activation": {"missing_dependencies": ["numpy"], "missing_in": ["gateway"]}}), "restart")
+        self.assertEqual(ob.plugin_load({"restart_required": True, "gateway_reloaded": True,
+                                         "activation": {"missing_dependencies": ["numpy"], "missing_in": ["backend"]}}), "live")
+
+
+@unittest.skipIf(os.name == "nt", "the stub `hermes` is a POSIX shell script")
+class RestartThroughStubHermes(BridgeCase):
+    """The real `bots.restart` op against a stub `hermes` on a scratch PATH: ok, refused with live work (then
+    "Restart anyway"), failed. Never a real Hermes."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        d = Path(self.tmp.name)
+        stub = d / "hermes"
+        stub.write_text(STUB_HERMES)
+        stub.chmod(0o755)
+        self.log = d / "argv.txt"
+        self.env = {"PATH": f"{d}{os.pathsep}/usr/bin{os.pathsep}/bin", "STUB_LOG": str(self.log),
+                    "_HERMES_GATEWAY": "1"}
+
+    def argv(self) -> list[str]:
+        return self.log.read_text().splitlines()
+
+    async def restart(self, s, mode, **params):
+        with mock.patch.dict(os.environ, {**self.env, "STUB_MODE": mode}):
+            return await s.req("bots.restart", **params)
+
+    async def test_ok_restarts_one_bot_and_reattaches(self):
+        with mock.patch.object(ob, "RESTART_POLL", 0.01):
+            async with Env(("kami",)) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                r = await self.restart(s, "ok", bot="kami")
+                self.assertEqual(r["result"], {"outcome": "ok"})
+                argv = self.argv()
+                self.assertEqual(argv[:5], ["-p", "kami", "gateway", "restart", "--detach"])  # the stub logs "$@"
+                self.assertEqual(len(argv), 6)  # no --yes on the first press
+                self.assertEqual(argv[5], f"HERMES_HOME={env.home} GW=")  # Hermes root, no gateway marker
+                await s.until(lambda ev: any(e["event"] == "bot.restarted" and e["bot"] == "kami" for e in ev))
+                done = [e for e in s.events if e["event"] == "bot.restarted"]
+                self.assertEqual(done, [{"event": "bot.restarted", "bot": "kami", "ok": True}])
+                self.assertEqual(env.connects.count("kami"), 2)  # the old connection dropped, a new one attached
+
+    async def test_refused_names_the_live_work_then_restart_anyway_adds_yes(self):
+        async with Env(("kami",)) as env:
+            s = await self.open(env)
+            r = await s.req("bots.restart", bot="kami", interrupt=True)
+            self.assertEqual(r["error"]["code"], "bad_request")  # --yes never comes first
+            r = await self.restart(s, "refused", bot="kami")
+            self.assertEqual(r["result"]["outcome"], "refused")
+            self.assertEqual(r["result"]["lines"], [
+                "chat turn 20261112_1 pid 4242, running 3m [model claude-opus-5-5, tool terminal]",
+                "cron job a1b2 (PR digest) in-process, running 40s"])
+            self.assertNotIn("--yes", self.argv())
+            with mock.patch.object(ob, "RESTART_POLL", 0.01):
+                r = await self.restart(s, "refused", bot="kami", interrupt=True)
+            self.assertEqual(r["result"]["outcome"], "ok")
+            self.assertEqual(self.argv()[5], "--yes")
+            r = await s.req("bots.restart", bot="kami", interrupt=True)
+            self.assertEqual(r["error"]["code"], "bad_request")  # one refusal, one "anyway"
+
+    async def test_failed_shows_hermes_last_line(self):
+        async with Env(("kami",)) as env:
+            s = await self.open(env)
+            r = await self.restart(s, "broken", bot="kami")
+            self.assertEqual(r["result"], {"outcome": "failed", "line": "Gateway service restart failed."})
+            r = await self.restart(s, "unconfirmed", bot="kami")
+            self.assertEqual(r["result"]["outcome"], "failed")
+            self.assertEqual(env.connects, [])  # a failed restart attaches nothing
+
+    async def test_only_known_bots_and_the_default_names_who_goes_down(self):
+        async with Env(("kami", "friren")) as env:
+            s = await self.open(env)
+            self.assertEqual((await self.restart(s, "ok", bot="ghost"))["error"]["code"], "unknown_bot")
+            self.assertFalse(self.log.exists())
+            r = await s.req("bots.restart_scope", bot="default")
+            self.assertEqual([o["name"] for o in r["result"]["others"]], ["friren", "kami"])
+            self.assertEqual((await s.req("bots.restart_scope", bot="kami"))["result"]["others"], [])
+
+
+class PluginReload(BridgeCase):
+    async def test_reload_reports_live_restart_or_failed(self):
+        answers = {"live": {"reloaded": True, "activations": [{"name": "omh", "key": "omh"}]},
+                   "deps": {"reloaded": True, "activations": [{"name": "omh", "key": "omh", "missing_dependencies": ["numpy"]}]},
+                   "none": None, "refused": {"reloaded": False, "error": "home is not served by this gateway"}}
+        async with Env(("kami",)) as env:
+            s = await self.open(env)
+            for case, want in (("live", "live"), ("deps", "restart"), ("none", "failed"), ("refused", "failed")):
+                with mock.patch.object(ob, "reload_plugins", return_value=answers[case]) as rp:
+                    r = (await s.req("plugins.reload", bot="kami", name="omh"))["result"]
+                self.assertEqual(r["load"], want, case)
+                rp.assert_called_once_with(env.home / "profiles" / "kami", env.home)
+            self.assertEqual(env.connects, [])  # a reload never attaches or restarts
