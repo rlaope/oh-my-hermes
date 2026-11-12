@@ -862,8 +862,10 @@ class Adapter:
         handed back with a plain `session.detach` (no end reason: one would
         run the owner's viewer close) once the edit is answered, unless this
         connection viewed the session already, as Ink's `useSessionDelete.ts`
-        hands back a refused delete's. A deleted session leaves nothing to
-        hand back, and a view of it here is forgotten.
+        hands back a refused delete's, or a resume opened it while the edit
+        waited (the owner reuses one subscription per viewer, so handing it
+        back would cut the opened session's events). A deleted session leaves
+        nothing to hand back, and a view of it here is forgotten.
         """
 
         def on_read(snapshot: dict[str, Any]) -> list[Action]:
@@ -887,7 +889,10 @@ class Adapter:
                     if isinstance(resolved, str):
                         self.sessions.pop(resolved, None)
                     return [said]
-                return [said] if release is None else [self._call("session.detach", release, lambda _gone: []), said]
+                adopted = self.sessions.get(resolved) if isinstance(resolved, str) else None
+                if release is None or (adopted is not None and adopted.subscription_id == release["subscription_id"]):
+                    return [said]  # decided now, not at the read: a resume since adopted this subscription
+                return [self._call("session.detach", release, lambda _gone: []), said]
 
             return [self._call("session.mutate", mutate, on_mutated)]
 

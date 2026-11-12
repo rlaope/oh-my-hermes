@@ -620,6 +620,45 @@ class PickerEditTests(AdapterCase):
         self.assertEqual((target, answer), (TO_CLIENT, _answer(32, {"pending": False, "title": "Mine"})))
         self.assertEqual(adapter.sessions[SID].subscription_id, "sub-1")
 
+    def test_an_edit_answered_after_the_session_was_opened_does_not_detach_the_opened_view(self) -> None:
+        # The person opens the row while its edit waits: the owner reuses the read's subscription for the resume, so
+        # handing that subscription back would cut the opened session's events. A refused edit hands back nothing too.
+        # The review's input: viewing SID, rename stored B, Enter opens B, then the rename is answered.
+        for method, params, answered in (
+            ("session.title", {"session_id": self.STORED, "title": "Renamed"},
+             _answer("", {"title": "Renamed", "revision": 5})),
+            ("session.title", {"session_id": self.STORED, "title": "Renamed"}, _error("", "stale_revision")),
+            ("session.delete", {"session_id": self.STORED}, _error("", "stale_revision")),
+        ):
+            with self.subTest(method=method, refused="error" in answered):
+                adapter = self.adapter()
+                self.opened(adapter)
+                read = self.read(adapter, method, params)
+                mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+                    "session_id": self.STORED, "subscription_id": "sub-B", "revision": 4, "execution_generation": 2})),
+                    "session.mutate")
+                [(_, opened)] = adapter.from_client(_call(32, "session.resume", {"session_id": self.STORED}))
+                adapter.from_owner(_answer(opened["id"], {"session_id": self.STORED, "subscription_id": "sub-B",
+                                                          "revision": 4, "execution_generation": 2, "messages": []}))
+                actions = adapter.from_owner({**answered, "id": mutate["id"]})
+                self.assertEqual([target for target, _frame in actions], [TO_CLIENT])  # no detach
+                self.assertEqual((adapter.current, adapter.sessions[self.STORED].subscription_id),
+                                 (self.STORED, "sub-B"))
+                self.assertFalse(adapter.waiting())
+
+    def test_an_edit_answered_after_another_session_was_opened_still_hands_the_read_view_back(self) -> None:
+        # Negative: the intervening open is of a different session, so the read's subscription is still disposable.
+        adapter = self.adapter()
+        read = self.read(adapter, "session.title", {"session_id": self.STORED, "title": "Renamed"})
+        mutate = self.own_call(adapter.from_owner(_answer(read["id"], {
+            "session_id": self.STORED, "subscription_id": "sub-B", "revision": 4, "execution_generation": 2})),
+            "session.mutate")
+        self.opened(adapter)
+        [(_, detach), (target, _answer_frame)] = adapter.from_owner(_answer(mutate["id"], {"title": "Renamed"}))
+        self.assertEqual((detach["method"], detach["params"], target),
+                         ("session.detach", {"session_id": self.STORED, "subscription_id": "sub-B"}, TO_CLIENT))
+        self.assertEqual((adapter.current, adapter.sessions[SID].subscription_id), (SID, "sub-1"))
+
     def test_a_failed_read_is_answered_as_the_owner_refused_it_and_nothing_is_mutated(self) -> None:
         adapter = self.adapter()
         read = self.read(adapter, "session.delete", {"session_id": self.STORED})
