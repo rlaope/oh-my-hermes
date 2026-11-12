@@ -1,7 +1,6 @@
 ---
 name: "omh-reliability-review"
-description: "[omh] Postmortem for an outage or SLO miss: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence. Use when the user says: reliability-review, reliability review, incident review, incident postmortem, postmortem, post-mortem, slo review, slo."
-disable-model-invocation: true
+description: "[omh] Postmortem for an outage or SLO miss: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence."
 license: MIT
 metadata:
   hermes:

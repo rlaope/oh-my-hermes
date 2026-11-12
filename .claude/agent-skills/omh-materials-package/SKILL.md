@@ -1,7 +1,6 @@
 ---
 name: "omh-materials-package"
-description: "[omh] PPT, PDF, Excel, or HWP output to produce: decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary export handoffs. Use when the user says: materials-package, material package, materials package, document package, deck file, binary export, file export, render qa."
-disable-model-invocation: true
+description: "[omh] PPT, PDF, Excel, or HWP output to produce: decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary export handoffs."
 license: MIT
 metadata:
   hermes:

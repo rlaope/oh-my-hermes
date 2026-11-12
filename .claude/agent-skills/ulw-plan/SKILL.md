@@ -1,6 +1,6 @@
 ---
 name: "ulw-plan"
-description: "[omh] High-stakes technical proposal needing approval: consensus planning with review gates. Use when the user says: ralplan, consensus plan, reviewed plan, issue to PR, acceptance criteria, verification command, reviewable PR, risky planning."
+description: "[omh] High-stakes technical proposal needing approval: consensus planning with review gates."
 license: MIT
 metadata:
   hermes:

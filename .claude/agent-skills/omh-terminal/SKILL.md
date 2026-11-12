@@ -1,7 +1,6 @@
 ---
 name: "omh-terminal"
-description: "[omh] Shell command or test-suite execution: policy overlay for terminal commands - add cwd, environment, safety, and result-evidence gates after preferring native shell tools for ordinary CLI, package-manager, and test runs. Use when the user says: command-operator, command operator, terminal command, terminal task, shell command, shell task, cli command, command execution."
-disable-model-invocation: true
+description: "[omh] Shell command or test-suite execution: policy overlay for terminal commands - add cwd, environment, safety."
 license: MIT
 metadata:
   hermes:

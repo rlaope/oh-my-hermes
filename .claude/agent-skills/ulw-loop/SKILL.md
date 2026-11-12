@@ -1,6 +1,6 @@
 ---
 name: "ulw-loop"
-description: "[omh] Ambitious project goal needing many build cycles: agentic interviewer -> planner -> researcher -> builder -> reviewer cycles until a real gate. Use when the user says: loop, goal loop, long horizon goal, never stop, research plan goal feedback, token exhaustion resume, permission profile, star 10k."
+description: "[omh] Ambitious project goal needing many build cycles: agentic interviewer -> planner -> researcher -> builder -> reviewer cycles until a real gate."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

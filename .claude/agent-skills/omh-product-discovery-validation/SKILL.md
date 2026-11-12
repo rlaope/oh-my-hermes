@@ -1,7 +1,6 @@
 ---
 name: "omh-product-discovery-validation"
-description: "[omh] Unvalidated early product idea: test whether a customer problem, segment, and business hypothesis deserve product investment, ending in kill, pivot, persevere, or inconclusive before any PRD. Use when the user says: product-discovery-validation, product discovery validation, product discovery, customer discovery, customer discovery plan, zero to one validation, validate the problem before building, problem solution interview."
-disable-model-invocation: true
+description: "[omh] Unvalidated early product idea: test whether a customer problem, segment, and business hypothesis deserve product investment, ending in kill, pivot."
 license: MIT
 metadata:
   hermes:

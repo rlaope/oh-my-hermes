@@ -1,7 +1,6 @@
 ---
 name: "omh-ai-job-search"
-description: "[omh] Career search to interview: find verified opportunities, tailor evidence-grounded applications and track confirmed outcomes. Use when the user says: ai-job-search, job search, evaluate this job posting, tailor my resume, tailor my cv, prepare for my job interview, track my job applications, draft my cover letter."
-disable-model-invocation: true
+description: "[omh] Career search to interview: find verified opportunities, tailor evidence-grounded applications and track confirmed outcomes."
 license: MIT
 metadata:
   hermes:

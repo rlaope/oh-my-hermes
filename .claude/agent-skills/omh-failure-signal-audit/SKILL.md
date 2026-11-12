@@ -1,7 +1,6 @@
 ---
 name: "omh-failure-signal-audit"
-description: "[omh] Hidden or swallowed errors suspected: find swallowed errors, unsafe fallbacks, hidden UI/runtime failures, and missing propagation before they become false green status. Use when the user says: failure-signal-audit, failure signal audit, silent failure, silent failures, silent failure hunter, swallowed error, swallowed errors, empty catch."
-disable-model-invocation: true
+description: "[omh] Hidden or swallowed errors suspected: find swallowed errors, unsafe fallbacks, hidden UI/runtime failures."
 license: MIT
 metadata:
   hermes:

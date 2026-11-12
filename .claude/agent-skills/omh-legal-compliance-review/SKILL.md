@@ -1,7 +1,6 @@
 ---
 name: "omh-legal-compliance-review"
-description: "[omh] Business contract, NDA, or policy with legal risk: surface contract and compliance risks, questions, and escalation points before a legal decision or action. Use when the user says: contract review, contract liability clause, regulatory analysis, compliance review, contract redline, redline the contract, negotiation preparation, negotiation strategy."
-disable-model-invocation: true
+description: "[omh] Business contract, NDA, or policy with legal risk: surface contract and compliance risks, questions."
 license: MIT
 metadata:
   hermes:

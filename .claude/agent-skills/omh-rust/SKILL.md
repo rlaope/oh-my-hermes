@@ -1,7 +1,6 @@
 ---
 name: "omh-rust"
-description: "[omh] Rust ownership, lifetime, or unsafe trouble: prepare Rust changes with ownership, error, and API discipline, and escalate any unsafe, FFI, or lock-free change to the UB checklist. Use when the user says: rust, rust code, rust skill, rustlang, borrow checker, lifetime error, ownership error, trait bound."
-disable-model-invocation: true
+description: "[omh] Rust ownership, lifetime, or unsafe trouble: prepare Rust changes with ownership, error, and API discipline, and escalate any unsafe, FFI."
 license: MIT
 metadata:
   hermes:

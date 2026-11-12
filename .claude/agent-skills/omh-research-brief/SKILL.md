@@ -1,7 +1,6 @@
 ---
 name: "omh-research-brief"
-description: "[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing, or customer question into a structured evidence-vs-inference brief. Use when the user says: research-brief, business-research, business research, research brief, decision brief, pricing decision brief, decision-ready brief, source-backed business research."
-disable-model-invocation: true
+description: "[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-provider-profile-posture"
-description: "[omh] Provider credentials without exposure: prepare provider-profile metadata without reading secrets or calling providers. Use when the user says: provider-profile-posture, provider profile posture, provider profile readiness, secret presence confirmation, connector profile posture, 공급자 프로필 상태, 시크릿 존재 확인, 커넥터 준비 상태."
-disable-model-invocation: true
+description: "[omh] Provider credentials without exposure: prepare provider-profile metadata without reading secrets or calling providers."
 license: MIT
 metadata:
   hermes:

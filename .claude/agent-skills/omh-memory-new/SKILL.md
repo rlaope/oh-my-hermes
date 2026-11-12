@@ -1,7 +1,6 @@
 ---
 name: "omh-memory-new"
-description: "[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse, or defer review; for a past decision use omh memory recall or `omh-decision-recall`. Use when the user says: memory-new, new memory, project memory, product memory, remember this project, remember this product, do not save, do not save this token."
-disable-model-invocation: true
+description: "[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

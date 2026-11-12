@@ -1,7 +1,6 @@
 ---
 name: "omh-people-ops"
-description: "[omh] Company hiring or HR process to structure: turn hiring and people context into a fair, structured recruiting or people-operations brief. Use when the user says: recruiting plan, hiring scorecard, interview scorecard, candidate debrief, 채용 계획, 면접 평가표, 후보자 비교."
-disable-model-invocation: true
+description: "[omh] Company hiring or HR process to structure: turn hiring and people context into a fair, structured recruiting or people-operations brief."
 license: MIT
 metadata:
   hermes:

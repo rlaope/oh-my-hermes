@@ -2,7 +2,7 @@
 
 Host-selected installs have one portable receipt; unselected installs write a
 receipt at each root, sharing `target_dirs`, each listing that root's bytes (the
-`.claude/skills` copy carries the Claude listing change). Updates reuse an
+`.claude/skills` copy carries shortened descriptions). Updates reuse an
 installed user pack's receipt.
 A partial write cannot report fresh: status compares every destination's bytes.
 """
@@ -58,8 +58,15 @@ def agent_skill_files() -> dict[str, str]:
     return files
 
 
-CLAUDE_INDEX_SKILL = "omh-index"
-CLAUDE_FLAG_LINE = "disable-model-invocation: true"
+# Claude Code lists every skill's name and description inside a budget and drops
+# descriptions past it (docs/AGENT-SKILLS.md#claude-code-skill-listing). The
+# Claude copy therefore carries shortened descriptions; the cap is measured there.
+CLAUDE_DESCRIPTION_CAP = 160
+CLAUDE_TRIGGER_MARKER = " Use when the user says:"
+_CLAUSE_ENDS = (". ", ": ", "; ", ", ", " -- ")
+_FUNCTION_WORDS = frozenset(
+    "a an the and or of to for with in on instead of before after that which when".split()
+)
 
 
 def _frontmatter_description(content: str) -> str | None:
@@ -73,67 +80,47 @@ def _frontmatter_description(content: str) -> str | None:
     return None
 
 
+def _ends_on_function_word(text: str) -> bool:
+    words = text.rstrip(" .,;:-").split()
+    return bool(words) and words[-1].lower() in _FUNCTION_WORDS
+
+
+def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> str:
+    """The lead before the trigger list, cut at a clause or word boundary within `cap`."""
+    lead = description.partition(CLAUDE_TRIGGER_MARKER)[0].strip()
+    if len(lead) <= cap:
+        candidate = lead
+    else:
+        floor = int(cap * 0.6)
+        cuts = [position for position in (lead.rfind(end, 0, cap) for end in _CLAUSE_ENDS) if position >= floor - 1]
+        clause = max(cuts, default=-1)
+        candidate = lead[:clause] if clause >= 0 else lead[: cap - 1].rsplit(" ", 1)[0]
+    while _ends_on_function_word(candidate) and " " in candidate:
+        candidate = candidate.rsplit(" ", 1)[0]
+    return candidate.rstrip(" .,;:-") + "."
+
+
 def claude_skill_files(files: dict[str, str] | None = None) -> dict[str, str]:
-    """The Claude Code copy of the portable pack: same files, one listing change.
+    """The Claude Code copy of the portable pack: same files, shorter descriptions.
 
-    Claude Code lists every skill's name and description inside a budget and
-    drops descriptions past it, so the full pack lost about half of them. Here
-    every skill outside `CLAUDE_DIRECT_SKILLS` gets Claude Code's
-    `disable-model-invocation: true` (typing `/<name>` still runs it), and one
-    generated `omh-index` skill lists those skills with a path to each SKILL.md,
-    relative to the index file so repo and user scope both resolve. References
-    and toolkit files are unchanged. A SKILL.md without a generated
-    `description:` line is copied as is and not indexed.
-
-    The listed-skills index stands in for each skill's own listing, a concept
-    taken from yetone/magpie@5e933e153a87c4017a19502e1d2e87aa714572b9 (MIT);
-    concept only, reimplemented against this projection.
+    Only each SKILL.md's frontmatter `description:` value changes: the text
+    before the generated trigger list, cut to `CLAUDE_DESCRIPTION_CAP`. All
+    skills stay listed and model-invocable; references and toolkit files are
+    unchanged. A SKILL.md without a generated `description:` line is copied as is.
     """
-    from ..skills.catalog_portable import CLAUDE_DIRECT_SKILLS
-
     source = agent_skill_files() if files is None else files
     result = dict(source)
-    indexed: list[tuple[str, str]] = []
-    for relative, content in sorted(source.items()):
+    for relative, content in source.items():
         name, _, rest = relative.partition("/")
-        if rest != "SKILL.md" or name in CLAUDE_DIRECT_SKILLS:
-            continue
-        description = _frontmatter_description(content)
-        if description is None:
+        if rest != "SKILL.md" or _frontmatter_description(content) is None:
             continue
         head, separator, body = content.partition("\n---\n")
         lines = head.split("\n")
         at = next(index for index, line in enumerate(lines) if line.startswith("description: "))
-        lines.insert(at + 1, CLAUDE_FLAG_LINE)
+        text = shorten_description(_frontmatter_description(content) or "")
+        lines[at] = f"description: {json.dumps(text, ensure_ascii=False)}"
         result[relative] = "\n".join(lines) + separator + body
-        indexed.append((name, description))
-    if not indexed:
-        return result
-    index_path = f"{CLAUDE_INDEX_SKILL}/SKILL.md"
-    if index_path in source:
-        raise ValueError(f"Agent Skills pack already holds {index_path}")
-    result[index_path] = _claude_index(sorted(indexed))
     return result
-
-
-def _claude_index(indexed: list[tuple[str, str]]) -> str:
-    description = (
-        f"Index of {len(indexed)} more OMH workflows: debugging, security, data, documents, design, research "
-        "and operations. Read it when a task may fit one."
-    )
-    if not 100 <= len(description) <= 160:
-        raise ValueError(f"{CLAUDE_INDEX_SKILL} description must be 100-160 characters, not {len(description)}")
-    rows = "".join(f"- `{name}`: {text}\n  file: ../{name}/SKILL.md\n" for name, text in indexed)
-    return (
-        f"---\nname: {json.dumps(CLAUDE_INDEX_SKILL)}\ndescription: {json.dumps(description)}\nlicense: MIT\n---\n\n"
-        "# OMH workflow index\n\n"
-        "The OMH workflows below are installed beside this skill. Claude Code does not list them one by one, "
-        "so their descriptions do not crowd its skill listing. When one fits the task, read its SKILL.md with "
-        "the Read tool and follow it. Each `file:` path is relative to this file's directory; resolve the "
-        "`references/` paths inside a workflow from that workflow's own directory. A person can also run any "
-        "of them directly as `/<name>`.\n\n"
-        f"{rows}"
-    )
 
 
 def pack_files_for_root(root: Path) -> dict[str, str]:

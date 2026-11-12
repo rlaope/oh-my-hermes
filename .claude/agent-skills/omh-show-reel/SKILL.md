@@ -1,7 +1,6 @@
 ---
 name: "omh-show-reel"
-description: "[omh] Video to make from an idea or a product: an explainer, motion graphics, kinetic type, a logo intro, a 3D scene, a data-viz animation, a music visual, a short or a source-grounded product film, authored and rendered to a measured MP4 with locale/export QA and source delivery. Use when the user says: show-reel, show reel, showreel, product showcase video, animated product film, motion showcase, animated portfolio, launch film."
-disable-model-invocation: true
+description: "[omh] Video to make from an idea or a product: an explainer, motion graphics, kinetic type, a logo intro, a 3D scene, a data-viz animation, a music visual."
 license: MIT
 metadata:
   hermes:

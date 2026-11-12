@@ -1,7 +1,6 @@
 ---
 name: "omh-voice-input"
-description: "[omh] Dictated voice note about project work or status: terse voice and mobile-style requests - turn short spoken-style asks into clarify, plan, status, handoff, or confirmation actions. Use when the user says: voice-operator, voice operator, voice-first, voice command, mobile command, short command, dictated command, dictated request."
-disable-model-invocation: true
+description: "[omh] Dictated voice note about project work or status: terse voice and mobile-style requests - turn short spoken-style asks into clarify, plan, status."
 license: MIT
 metadata:
   hermes:

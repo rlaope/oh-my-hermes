@@ -1,7 +1,6 @@
 ---
 name: "omh-adversarial-consensus"
-description: "[omh] Technical proposal facing adversarial scrutiny: independent perspectives attack a proposal, then distill into a bundle a separate planner consumes. Use when the user says: adversarial-consensus, adversarial planning, adversarial plan review, red team this plan, red-team this plan, red team the proposal, multi-perspective review, multiple perspectives."
-disable-model-invocation: true
+description: "[omh] Technical proposal facing adversarial scrutiny: independent perspectives attack a proposal, then distill into a bundle a separate planner consumes."
 license: MIT
 metadata:
   hermes:

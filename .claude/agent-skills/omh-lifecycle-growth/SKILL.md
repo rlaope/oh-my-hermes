@@ -1,7 +1,6 @@
 ---
 name: "omh-lifecycle-growth"
-description: "[omh] Churn or weak activation among users: turn an observed onboarding, activation, retention, re-engagement, referral, or monetization problem into one consent-safe in-app journey or growth experiment plan with a bounded readout and an explicit decision. Use when the user says: lifecycle-growth, lifecycle growth, lifecycle marketing, lifecycle messaging, in-app journey, in-app message campaign, onboarding journey, onboarding nudge."
-disable-model-invocation: true
+description: "[omh] Churn or weak activation among users: turn an observed onboarding, activation, retention, re-engagement, referral."
 license: MIT
 metadata:
   hermes:

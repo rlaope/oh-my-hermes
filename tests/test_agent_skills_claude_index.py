@@ -1,4 +1,4 @@
-"""The Claude Code copy lists a few skills and indexes the rest; other packs keep their bytes."""
+"""The Claude Code copy shortens every description; other packs keep their bytes."""
 from __future__ import annotations
 
 from contextlib import chdir
@@ -32,66 +32,72 @@ def frontmatter(content: str) -> list[str]:
     return content.split("\n---\n", 1)[0].splitlines()
 
 
-class ClaudeIndexProducerTests(unittest.TestCase):
+FUNCTION_WORDS = {"a", "an", "the", "and", "or", "of", "to", "for", "with", "in", "on", "instead of",
+                  "before", "after", "that", "which", "when"}
+
+
+class ClaudeDescriptionProducerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         from omh.install.agent_skills_projection import agent_skill_files, claude_skill_files
 
         cls.portable = agent_skill_files()
         cls.claude = claude_skill_files(cls.portable)
+        cls.skills = sorted(path for path in cls.portable if path.endswith("/SKILL.md") and path.count("/") == 1)
 
-    def test_direct_set_is_portable_and_keeps_long_descriptions(self):
-        from omh.skills.catalog_portable import CLAUDE_DIRECT_SKILLS
+    def test_no_flag_and_no_index_anywhere_in_the_claude_pack(self):
+        for relative, content in self.claude.items():
+            self.assertNotIn("disable-model-invocation", content, relative)
+        self.assertNotIn("omh-index/SKILL.md", self.claude)
 
-        self.assertEqual(len(CLAUDE_DIRECT_SKILLS), 10)
-        for name in sorted(CLAUDE_DIRECT_SKILLS):
-            with self.subTest(name=name):
-                content = self.claude[f"{name}/SKILL.md"]
-                self.assertEqual(content, self.portable[f"{name}/SKILL.md"])
-                self.assertNotIn("disable-model-invocation: true", frontmatter(content))
-                # Over 60 characters, so a `< 20` row in /context can only mean dropped.
-                self.assertGreater(len(description(content)), 60)
-
-    def test_every_other_skill_is_flagged_and_indexed_once(self):
-        from omh.install.agent_skills_projection import CLAUDE_INDEX_SKILL
-        from omh.skills.catalog_portable import CLAUDE_DIRECT_SKILLS
-
-        index = self.claude[f"{CLAUDE_INDEX_SKILL}/SKILL.md"]
-        names = sorted({path.split("/")[0] for path in self.portable} - CLAUDE_DIRECT_SKILLS)
-        self.assertEqual(len(names), len({path.split("/")[0] for path in self.portable}) - 10)
-        rows = re.findall(r"^- `([^`]+)`: (.*)\n  file: \.\./([^/]+)/SKILL\.md$", index, re.M)
-        self.assertEqual([row[0] for row in rows], names)
-        for name, text, folder in rows:
-            with self.subTest(name=name):
-                lines = frontmatter(self.claude[f"{name}/SKILL.md"])
-                self.assertEqual(lines.count("disable-model-invocation: true"), 1)
-                # Only the flag line is added; the body and the rest of the frontmatter are untouched.
-                self.assertEqual(self.claude[f"{name}/SKILL.md"].replace("disable-model-invocation: true\n", "", 1),
-                                 self.portable[f"{name}/SKILL.md"])
-                self.assertEqual(text, description(self.portable[f"{name}/SKILL.md"]))
-                self.assertEqual(folder, name)
-        self.assertIn(f"Index of {len(names)} more OMH workflows", index)
-
-    def test_index_description_is_one_bounded_sentence(self):
-        text = description(self.claude["omh-index/SKILL.md"])
-        self.assertTrue(100 <= len(text) <= 160, len(text))
-        self.assertNotIn("disable-model-invocation", self.claude["omh-index/SKILL.md"])
-
-    def test_only_skill_bodies_differ_and_one_index_is_added(self):
-        self.assertEqual(self.claude.keys() - self.portable.keys(), {"omh-index/SKILL.md"})
-        self.assertEqual(self.portable.keys() - self.claude.keys(), set())
+    def test_no_skill_added_or_removed_and_only_skill_files_differ(self):
+        self.assertEqual(self.claude.keys(), self.portable.keys())
+        self.assertEqual(len(self.skills), 123)
         for relative, content in self.portable.items():
-            if not relative.endswith("/SKILL.md") or relative.count("/") != 1:
+            if relative not in self.skills:
                 self.assertEqual(self.claude[relative], content, relative)
 
-    def test_index_name_collision_and_frontmatterless_files_fail_or_pass_closed(self):
-        from omh.install.agent_skills_projection import claude_skill_files
+    def test_only_the_description_line_differs_and_the_prefix_stays(self):
+        for relative in self.skills:
+            with self.subTest(relative=relative):
+                before, after = self.portable[relative].split("\n"), self.claude[relative].split("\n")
+                self.assertEqual(len(before), len(after))
+                changed = [i for i, (x, y) in enumerate(zip(before, after)) if x != y]
+                self.assertEqual(len(changed), 1)
+                self.assertTrue(before[changed[0]].startswith("description: "))
+                self.assertTrue(description(self.claude[relative]).startswith("[omh] "))
 
-        with self.assertRaisesRegex(ValueError, "already holds omh-index"):
-            claude_skill_files({"omh-index/SKILL.md": '---\ndescription: "x"\n---\n',
-                                "omh-a/SKILL.md": '---\nname: "omh-a"\ndescription: "a"\n---\nbody\n'})
-        self.assertEqual(claude_skill_files({"omh-a/SKILL.md": "no frontmatter\n"}),
-                         {"omh-a/SKILL.md": "no frontmatter\n"})
+    def test_every_description_is_short_whole_and_ends_cleanly(self):
+        from omh.install.agent_skills_projection import CLAUDE_DESCRIPTION_CAP
+
+        for relative in self.skills:
+            text = description(self.claude[relative])
+            with self.subTest(relative=relative):
+                self.assertLessEqual(len(text), CLAUDE_DESCRIPTION_CAP)
+                self.assertGreaterEqual(len(text), 40)
+                self.assertTrue(text.endswith("."), text)
+                self.assertNotIn("Use when the user says", text)
+                words = text[:-1].rstrip(" ,;:-").split()
+                self.assertNotIn(words[-1].lower(), FUNCTION_WORDS, text)
+                self.assertNotIn(" ".join(words[-2:]).lower(), FUNCTION_WORDS, text)
+
+    def test_every_portable_description_has_the_trigger_marker(self):
+        from omh.install.agent_skills_projection import CLAUDE_TRIGGER_MARKER
+
+        for relative in self.skills:
+            self.assertIn(CLAUDE_TRIGGER_MARKER, description(self.portable[relative]), relative)
+
+    def test_shorten_description_rules(self):
+        from omh.install.agent_skills_projection import shorten_description
+
+        self.assertEqual(shorten_description("[omh] Short lead. Use when the user says: a, b."), "[omh] Short lead.")
+        self.assertEqual(shorten_description("No marker at all"), "No marker at all.")
+        long = "[omh] " + "Check the build output and report every failure, " + "then fix the cause of it for the team and the rest of us"
+        cut = shorten_description(long, 80)
+        self.assertLessEqual(len(cut), 80)
+        self.assertEqual(cut, "[omh] Check the build output and report every failure.")
+        tail = shorten_description("[omh] " + "word " * 12 + "and the", 40)
+        self.assertTrue(tail.endswith("word."), tail)
 
 
 class CommittedPackTests(unittest.TestCase):
@@ -107,7 +113,7 @@ class CommittedPackTests(unittest.TestCase):
             self.assertNotIn(b"disable-model-invocation", path.read_bytes(), path)
         manifest = json.loads((ROOT / ".claude/manifest.json").read_bytes())
         self.assertEqual(manifest["source"], ".claude/agent-skills")
-        self.assertIn("omh-index", manifest["skills"])
+        self.assertNotIn("omh-index", manifest["skills"])
         self.assertEqual(json.loads((ROOT / ".codex/manifest.json").read_bytes())["source"], "agent-skills")
 
     def test_gate_catches_a_stale_missing_or_extra_claude_pack_file(self):
@@ -118,19 +124,19 @@ class CommittedPackTests(unittest.TestCase):
             self.assertEqual(run_cli(command + ["--check"])[0], 0)
             pack = root / ".claude/agent-skills"
             (pack / "omh-ask/SKILL.md").write_bytes(b"stale")
-            (pack / "omh-index/SKILL.md").unlink()
+            (pack / "omh-plan/SKILL.md").unlink()
             (pack / "extra.md").write_bytes(b"extra")
             code, output, error = run_cli(command + ["--check"])
             self.assertEqual(code, 1, error)
             payload = json.loads(output)
             self.assertEqual(payload["host_pack_stale"], [".claude/agent-skills/omh-ask/SKILL.md"])
-            self.assertEqual(payload["host_pack_missing"], [".claude/agent-skills/omh-index/SKILL.md"])
+            self.assertEqual(payload["host_pack_missing"], [".claude/agent-skills/omh-plan/SKILL.md"])
             self.assertEqual(payload["host_pack_extra"], [".claude/agent-skills/extra.md"])
 
 
 @unittest.skipUnless(shutil.which("sh"), "POSIX shell unavailable")
 class InstallTests(unittest.TestCase):
-    def test_claude_installer_writes_the_index_and_codex_keeps_portable_bytes(self):
+    def test_claude_installer_writes_the_short_descriptions_and_codex_keeps_portable_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp).resolve()
             for host in ("claude", "codex"):
@@ -139,10 +145,6 @@ class InstallTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(tree(repo / ".claude/skills"), tree(ROOT / ".claude/agent-skills"))
             self.assertEqual(tree(repo / ".agents/skills"), tree(ROOT / "agent-skills"))
-            # The index's relative paths resolve inside the installed copy.
-            index = (repo / ".claude/skills/omh-index/SKILL.md").read_text(encoding="utf-8")
-            for relative in re.findall(r"^  file: (\S+)$", index, re.M):
-                self.assertTrue((repo / ".claude/skills/omh-index" / relative).resolve().is_file(), relative)
 
     def test_unselected_install_mirrors_the_claude_copy_and_status_stays_truthful(self):
         from omh.install.agent_skills_projection import (
@@ -171,9 +173,9 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(receipts[0]["target_dirs"], receipts[1]["target_dirs"])
             self.assertNotEqual(receipts[0]["files"], receipts[1]["files"])
             # Mirror drift is still named per file.
-            (mirror / "omh-index/SKILL.md").write_bytes(b"edited")
+            (mirror / "omh-plan/SKILL.md").write_bytes(b"edited")
             status = agent_skills_status(target, mirror=mirror)
-            self.assertEqual(status["locally_modified"], ["mirror:omh-index/SKILL.md"])
+            self.assertEqual(status["locally_modified"], ["mirror:omh-plan/SKILL.md"])
 
     def test_cli_host_install_and_clone_script_write_the_same_claude_tree(self):
         with tempfile.TemporaryDirectory() as tmp:

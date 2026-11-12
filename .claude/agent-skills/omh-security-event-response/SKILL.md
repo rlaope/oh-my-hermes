@@ -1,7 +1,6 @@
 ---
 name: "omh-security-event-response"
-description: "[omh] Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory: triage reachability and severity, contain in order, and never close a leaked secret before its rotation is observed. Use when the user says: security-event-response, security event response, exfiltrating customer data, suspected unauthorized access, account takeover, cve, triage this cve, cve in our dependency."
-disable-model-invocation: true
+description: "[omh] Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory."
 license: MIT
 metadata:
   hermes:

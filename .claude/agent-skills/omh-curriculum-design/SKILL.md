@@ -1,7 +1,6 @@
 ---
 name: "omh-curriculum-design"
-description: "[omh] Team training or course that needs a syllabus: turn a learning goal into a teachable curriculum, assessment plan, and learner-ready sequence. Use when the user says: curriculum design, learning objectives, assessment plan, 커리큘럼 설계, 학습 목표, 평가 계획."
-disable-model-invocation: true
+description: "[omh] Team training or course that needs a syllabus: turn a learning goal into a teachable curriculum, assessment plan, and learner-ready sequence."
 license: MIT
 metadata:
   hermes:

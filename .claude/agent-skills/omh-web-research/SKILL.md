@@ -1,7 +1,6 @@
 ---
 name: "omh-web-research"
-description: "[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates and source-quality notes; for pre-spec grounding across reference implementations use `ulw-research`. Use when the user says: web-research, web research, web search, search the web, internet search, look up, look up sources, latest sources."
-disable-model-invocation: true
+description: "[omh] Current technical or business fact to cite from web: web lookup lane - settle a current-facts question in one cited retrieval round with retrieval dates."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-run-efficiency"
-description: "[omh] Run efficiency and context usage report: report supplied local run efficiency while provider data stays unobserved. Use when the user says: run-efficiency, run efficiency report, local run efficiency, context utilization, tool duration report, 실행 효율 리포트, 컨텍스트 사용량, 도구 지연 시간."
-disable-model-invocation: true
+description: "[omh] Run efficiency and context usage report: report supplied local run efficiency while provider data stays unobserved."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

@@ -1,7 +1,6 @@
 ---
 name: "omh-data-share-review"
-description: "[omh] Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue, a model provider or a training corpus: classify every field, minimize first, pseudonymize with the mapping kept local, and call it redacted only after an observed residual scan. Use when the user says: data-share-review, data share review, pii redaction, redact pii, pseudonymize, de-identify, anonymize the dataset, residual pii."
-disable-model-invocation: true
+description: "[omh] Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-decision-recall"
-description: "[omh] Previously rejected options to revisit: recall scoped reviewed rejected decisions without elevating them to approved memory. Use when the user says: decision-recall, rejected decision recall, rejected decisions, why was this rejected, previously rejected alternative, 거절된 결정, 기각된 대안."
-disable-model-invocation: true
+description: "[omh] Previously rejected options to revisit: recall scoped reviewed rejected decisions without elevating them to approved memory."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

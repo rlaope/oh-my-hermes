@@ -1,7 +1,6 @@
 ---
 name: "omh-github-issue-intake"
-description: "[omh] Chat report that should become a GitHub issue: turn a public chat report into a confirmed, verified issue package. Use when the user says: github-issue-intake, github issue intake, issue intake, file this as an issue, file a github issue, open a github issue, create a github issue, submit a github issue."
-disable-model-invocation: true
+description: "[omh] Chat report that should become a GitHub issue: turn a public chat report into a confirmed, verified issue package."
 license: MIT
 metadata:
   hermes:

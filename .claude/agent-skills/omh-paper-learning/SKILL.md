@@ -1,7 +1,6 @@
 ---
 name: "omh-paper-learning"
-description: "[omh] Paper or paper PDF to understand: explain a supplied paper or paper/PDF at a selected level while preserving full section coverage and source evidence boundaries. Use when the user says: paper-learning, paper learning, paper-explainer, paper explainer, paper explanation, explain this paper, explain this arxiv paper, paper walkthrough."
-disable-model-invocation: true
+description: "[omh] Paper or paper PDF to understand: explain a supplied paper or paper/PDF at a selected level while preserving full section coverage and source evidence."
 license: MIT
 metadata:
   hermes:

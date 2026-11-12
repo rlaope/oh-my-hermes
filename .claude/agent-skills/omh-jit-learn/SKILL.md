@@ -1,7 +1,6 @@
 ---
 name: "omh-jit-learn"
-description: "[omh] Blocked on a project by a knowledge gap: just-in-time learning workflow: select and confirm an immediate learning target, research credible sources, and prepare an application-first brief without popularity ranking. Use when the user says: jit-learn, learn next, learn now, blocker-specific learning target, highest-leverage learning target, immediate learning payoff, immediately applicable learning brief, source-backed learning brief."
-disable-model-invocation: true
+description: "[omh] Blocked on a project by a knowledge gap: just-in-time learning workflow: select and confirm an immediate learning target, research credible sources."
 license: MIT
 metadata:
   hermes:

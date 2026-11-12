@@ -1,7 +1,6 @@
 ---
 name: "omh-inference-serving"
-description: "[omh] Self-hosted LLM serving on GPUs: choose the serving engine and quantization from decision tables, prepare deployment as an idempotent runbook with observed-only verification, and measure the endpoint with the standard TTFT/TPOT/goodput protocol. Use when the user says: inference-serving, inference serving, serve this model, serve the model, model serving, serving endpoint, vllm, llama.cpp."
-disable-model-invocation: true
+description: "[omh] Self-hosted LLM serving on GPUs: choose the serving engine and quantization from decision tables."
 license: MIT
 metadata:
   hermes:

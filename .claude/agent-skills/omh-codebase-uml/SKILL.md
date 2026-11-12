@@ -1,7 +1,6 @@
 ---
 name: "omh-codebase-uml"
-description: "[omh] Architecture picture of a codebase: turn a repository into one readable, interface-level PlantUML architecture picture - packages or modules, the public symbols other units actually import, bounded import edges - and get it rendered to a single PNG a chat surface can show. Use when the user says: codebase-uml, codebase uml, uml, plantuml, uml diagram, class diagram, package diagram, module diagram."
-disable-model-invocation: true
+description: "[omh] Architecture picture of a codebase: turn a repository into one readable, interface-level PlantUML architecture picture - packages or modules."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

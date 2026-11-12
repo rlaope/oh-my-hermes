@@ -1,7 +1,6 @@
 ---
 name: "omh-verification-gate"
-description: "[omh] Proof a change is done before merge: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge. Use when the user says: verification-gate, verification gate, quality gate, run the release gate, release gate check, test gate, build lint test, lint typecheck tests."
-disable-model-invocation: true
+description: "[omh] Proof a change is done before merge: define and record build, lint, typecheck, test, security, docs, generated-output."
 license: MIT
 metadata:
   hermes:

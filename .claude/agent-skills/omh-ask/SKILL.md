@@ -1,7 +1,6 @@
 ---
 name: "omh-ask"
-description: "[omh] Outside AI critique wanted: consulting an external advisor when configured. Use when the user says: ask, external advisor, ask claude, ask gemini, consult claude, consult gemini, opinion from claude, opinion from gemini."
-disable-model-invocation: true
+description: "[omh] Outside AI critique wanted: consulting an external advisor when configured."
 license: MIT
 metadata:
   hermes:

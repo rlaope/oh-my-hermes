@@ -1,7 +1,6 @@
 ---
 name: "omh-llm-app-dev"
-description: "[omh] LLM-powered feature to build: LLM app development: prepare a build handoff for an LLM-powered feature with a pinned provider boundary, schema-first outputs, versioned prompt files, grounded retrieval, and an eval suite as a shipped deliverable. Use when the user says: llm-app-dev, llm app development, llm application development, build an llm app, build an llm feature, llm feature development, build a rag pipeline, rag pipeline."
-disable-model-invocation: true
+description: "[omh] LLM-powered feature to build: LLM app development: prepare a build handoff for an LLM-powered feature with a pinned provider boundary."
 license: MIT
 metadata:
   hermes:

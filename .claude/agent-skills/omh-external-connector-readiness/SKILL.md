@@ -1,7 +1,6 @@
 ---
 name: "omh-external-connector-readiness"
-description: "[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable; use `omh-toolbelt-readiness` for missing capability inventory. Use when the user says: external-connector-readiness, external connector readiness, connector readiness matrix, plugin readiness matrix, provider readiness, api readiness, connector adoption, external plugin adoption."
-disable-model-invocation: true
+description: "[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-model-compression"
-description: "[omh] Making a model smaller or cheaper by changing its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning, or distillation into a smaller student, sized to the target hardware, calibrated on the task's own data, and kept only when it holds quality on the person's own eval. Use when the user says: model-compression, model compression, compress this model, compress the model, compress a model, compress our model, compress my model, quantize this model."
-disable-model-invocation: true
+description: "[omh] Making a model smaller or cheaper by changing its weights: quantization (GPTQ, AWQ, GGUF, bitsandbytes, FP8, quantization-aware training), pruning."
 license: MIT
 metadata:
   hermes:

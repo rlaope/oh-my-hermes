@@ -1,7 +1,6 @@
 ---
 name: "omh-operating-rhythm"
-description: "[omh] Team minutes, retros, and decision history to keep: meeting minutes, scrum/sprint records, retros, decisions, and follow-up history. Use when the user says: operating-rhythm, operating rhythm, meeting minutes, meeting history, scrum record, sprint planning, sprint review, sprint retrospective."
-disable-model-invocation: true
+description: "[omh] Team minutes, retros, and decision history to keep: meeting minutes, scrum/sprint records, retros, decisions, and follow-up history."
 license: MIT
 metadata:
   hermes:

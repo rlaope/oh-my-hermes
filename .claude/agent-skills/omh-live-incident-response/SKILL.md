@@ -1,7 +1,6 @@
 ---
 name: "omh-live-incident-response"
-description: "[omh] Production is down or an incident is open: command an incident that is still open -- severity as declared live state, commander and roles, an append-only timeline, a recorded temporary mitigation, verified recovery, and the customer notice. Use when the user says: live-incident-response, live incident response, incident response, active incident, ongoing incident, open incident, incident open, incident commander."
-disable-model-invocation: true
+description: "[omh] Production is down or an incident is open: command an incident that is still open -- severity as declared live state, commander and roles."
 license: MIT
 metadata:
   hermes:

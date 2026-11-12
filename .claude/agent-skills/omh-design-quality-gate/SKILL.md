@@ -1,7 +1,6 @@
 ---
 name: "omh-design-quality-gate"
-description: "[omh] Deliverable demands premium polish: enforce superior content, design, layout, publishing, and visual QA gates. Use when the user says: design-quality-gate, design quality gate, ui ux pro max, design pro max, frontend pro max, visual qa pro, premium design, high quality design."
-disable-model-invocation: true
+description: "[omh] Deliverable demands premium polish: enforce superior content, design, layout, publishing, and visual QA gates."
 license: MIT
 metadata:
   hermes:

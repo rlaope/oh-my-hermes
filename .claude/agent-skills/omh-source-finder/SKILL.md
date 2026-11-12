@@ -1,7 +1,6 @@
 ---
 name: "omh-source-finder"
-description: "[omh] Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream work; use ulw-research to fetch and cite them, or `omh-research-brief` to turn them into a decision-ready brief. Use when the user says: source-finder, source finder, source acquisition, source intake, find papers and datasets, find datasets and repos, find papers, find arxiv link."
-disable-model-invocation: true
+description: "[omh] Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream."
 license: MIT
 metadata:
   hermes:

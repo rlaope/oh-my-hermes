@@ -1,7 +1,6 @@
 ---
 name: "omh-spend-gate"
-description: "[omh] Spending money on the user's behalf -- a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint: show a pre-spend card (payee, total with fees, cap, refund terms, approver) first, and call it done only on an observed receipt. Use when the user says: spend-gate, spend gate, pre-spend, pre-spend card, spend cap, spending cap, spend limit, spending limit."
-disable-model-invocation: true
+description: "[omh] Spending money on the user's behalf -- a card checkout, an HTTP 402 or pay-per-request call, a wallet transfer, a booking, a paid data endpoint."
 license: MIT
 metadata:
   hermes:

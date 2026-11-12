@@ -1,6 +1,6 @@
 ---
 name: "ulw-interview"
-description: "[omh] Vague, underspecified request: one-question-at-a-time clarification. Use when the user says: deep-interview, interview me, clarify, feature shaping, ambiguous product request, one question, 要件を詰めて, 曖昧な要求."
+description: "[omh] Vague, underspecified request: one-question-at-a-time clarification."
 license: MIT
 metadata:
   hermes:

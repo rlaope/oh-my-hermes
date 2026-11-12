@@ -1,7 +1,6 @@
 ---
 name: "omh-ops-review"
-description: "[omh] Recurring operating status and blockers: status, risks, blockers, priorities, and follow-ups. Use when the user says: ops-review, ops review, weekly ops review, status review, operating review, release risks, risks and blockers, weekly status."
-disable-model-invocation: true
+description: "[omh] Recurring operating status and blockers: status, risks, blockers, priorities, and follow-ups."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-sales-development"
-description: "[omh] Prospect or account worth pursuing: turn an account or market opportunity into a focused discovery, qualification, and next-step brief. Use when the user says: sales discovery, account plan, outbound messaging, 영업 발굴, 고객사 계획, 아웃바운드 메시지."
-disable-model-invocation: true
+description: "[omh] Prospect or account worth pursuing: turn an account or market opportunity into a focused discovery, qualification, and next-step brief."
 license: MIT
 metadata:
   hermes:

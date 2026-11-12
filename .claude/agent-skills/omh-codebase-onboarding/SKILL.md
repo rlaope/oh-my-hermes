@@ -1,7 +1,6 @@
 ---
 name: "omh-codebase-onboarding"
-description: "[omh] Unfamiliar repository needing a guided tour: create a repo map, reading path, glossary, risk map, and first-task runway for unfamiliar codebases. Use when the user says: codebase-onboarding, codebase onboarding, repo onboarding, repository onboarding, codebase tour, code tour, new repo orientation, understand this repo."
-disable-model-invocation: true
+description: "[omh] Unfamiliar repository needing a guided tour: create a repo map, reading path, glossary, risk map, and first-task runway for unfamiliar codebases."
 license: MIT
 metadata:
   hermes:

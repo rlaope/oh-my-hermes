@@ -1,7 +1,6 @@
 ---
 name: "omh-decide"
-description: "[omh] Team or business decision between options: tradeoffs, a recommendation, and a decision note you can act on. Use when the user says: strategy-brief, strategy brief, strategy memo, product strategy, strategic options, decision note, leadership strategy, next strategy."
-disable-model-invocation: true
+description: "[omh] Team or business decision between options: tradeoffs, a recommendation, and a decision note you can act."
 license: MIT
 metadata:
   hermes:

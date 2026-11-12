@@ -1,7 +1,6 @@
 ---
 name: "omh-repro-audit"
-description: "[omh] Evaluation logs versus reported paper conditions: audit supplied HellaSwag results with exact scores and review-gated evidence; never run a model. Use when the user says: repro-audit, hellaswag log, hellaswag results, hellaswag score."
-disable-model-invocation: true
+description: "[omh] Evaluation logs versus reported paper conditions: audit supplied HellaSwag results with exact scores and review-gated evidence; never run a model."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

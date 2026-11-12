@@ -1,7 +1,6 @@
 ---
 name: "omh-backend"
-description: "[omh] Designing an API, server, or data-layer change: prepare server, API, and data-layer contracts — auth boundary, error paths, response shape, and schema/migration discipline — before implementation. Use when the user says: backend, back-end, back end, backend skill, server side, server-side, api design, api contract."
-disable-model-invocation: true
+description: "[omh] Designing an API, server, or data-layer change: prepare server, API, and data-layer contracts — auth boundary, error paths, response shape."
 license: MIT
 metadata:
   hermes:

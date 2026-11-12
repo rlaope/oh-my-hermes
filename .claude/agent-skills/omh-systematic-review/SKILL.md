@@ -1,7 +1,6 @@
 ---
 name: "omh-systematic-review"
-description: "[omh] Literature screening against frozen criteria: two blind reviewers, a deterministic merge, open conflicts and agreement for systematic, scoping or rapid reviews. Use when the user says: systematic-review, systematic review, systematic literature review, scoping review, rapid review, prisma screening, title and abstract screening, inclusion and exclusion criteria screening."
-disable-model-invocation: true
+description: "[omh] Literature screening against frozen criteria: two blind reviewers, a deterministic merge, open conflicts and agreement for systematic."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

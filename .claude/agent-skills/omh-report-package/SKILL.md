@@ -1,7 +1,6 @@
 ---
 name: "omh-report-package"
-description: "[omh] Periodic report for executives: weekly/monthly reports, executive briefs, PPT-ready outlines, and upload packages. Use when the user says: report-package, report package, weekly report, monthly report, executive report, exec brief, leadership deck, status package."
-disable-model-invocation: true
+description: "[omh] Periodic report for executives: weekly/monthly reports, executive briefs, PPT-ready outlines, and upload packages."
 license: MIT
 metadata:
   hermes:

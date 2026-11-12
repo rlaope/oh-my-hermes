@@ -1,7 +1,6 @@
 ---
 name: "omh-application-threat-model"
-description: "[omh] Attack paths into an operated system: turn a system's components and data flows into assets, trust boundaries, attack scenarios, controls, and the security test that proves each control holds. Use when the user says: application-threat-model, application threat model, threat model, threat modeling, threat modelling, threat modeling session, threat modeling workshop, security threat model."
-disable-model-invocation: true
+description: "[omh] Attack paths into an operated system: turn a system's components and data flows into assets, trust boundaries, attack scenarios, controls."
 license: MIT
 metadata:
   hermes:

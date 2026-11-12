@@ -1,6 +1,6 @@
 ---
 name: "omh-code-review"
-description: "[omh] Pull request or changes to vet: bug-first review with evidence. Use when the user says: code-review, review, audit, find bugs, claim audit, evidence audit, README claim, what actually happened."
+description: "[omh] Pull request or changes to vet: bug-first review with evidence."
 license: MIT
 metadata:
   hermes:

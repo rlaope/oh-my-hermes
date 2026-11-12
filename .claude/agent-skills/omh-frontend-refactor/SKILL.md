@@ -1,7 +1,6 @@
 ---
 name: "omh-frontend-refactor"
-description: "[omh] Oversized or tangled UI component: behavior-preserving refactor of UI code - preview the full change plan first, apply as a second explicit step, and work impact-ordered from state architecture down to naming polish. Use when the user says: frontend-refactor, front-refactor, frontend refactor, refactor this component, refactor the component, refactor my component, component refactor, react refactor."
-disable-model-invocation: true
+description: "[omh] Oversized or tangled UI component: behavior-preserving refactor of UI code - preview the full change plan first, apply as a second explicit step."
 license: MIT
 metadata:
   hermes:

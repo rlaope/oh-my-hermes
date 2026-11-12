@@ -1,7 +1,6 @@
 ---
 name: "omh-idea-to-deploy"
-description: "[omh] App idea headed for launch: shape an app idea into decisions, delivery handoff, verification, release, and monitoring status. Use when the user says: idea-to-deploy, idea to deploy, from idea to deploy, plan to deploy, idea to launch, ship this idea, ship this feature, launch this feature."
-disable-model-invocation: true
+description: "[omh] App idea headed for launch: shape an app idea into decisions, delivery handoff, verification, release, and monitoring status."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-wiki"
-description: "[omh] Scattered knowledge needing a wiki: wiki construction blueprints and retained knowledge capture with destination-aware external knowledge connection guidance. Use when the user says: wiki, project wiki, write a handover guide, build a wiki, start a wiki, organize my notes, external knowledge store, knowledge base."
-disable-model-invocation: true
+description: "[omh] Scattered knowledge needing a wiki: wiki construction blueprints and retained knowledge capture with destination-aware external knowledge connection."
 license: MIT
 metadata:
   hermes:

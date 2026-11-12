@@ -1,7 +1,6 @@
 ---
 name: "omh-sales-pipeline-review"
-description: "[omh] CRM pipeline or sales forecast to review: turn a supplied CRM export or pipeline snapshot into an evidence-bound pipeline health, forecast, and follow-up review. Aliases: pipeline-review, forecast-review, deal-review. Use when the user says: sales-pipeline-review, sales pipeline review, pipeline review, pipeline health, pipeline coverage, deal review, deal health, sales forecast review."
-disable-model-invocation: true
+description: "[omh] CRM pipeline or sales forecast to review: turn a supplied CRM export or pipeline snapshot into an evidence-bound pipeline health, forecast."
 license: MIT
 metadata:
   hermes:

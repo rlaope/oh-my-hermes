@@ -1,7 +1,6 @@
 ---
 name: "omh-agent-instructions"
-description: "[omh] Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule: write or update what an agent cannot derive from the code, inside a marked region, with every command verified or marked unverified and no counts that drift. Use when the user says: agent-instructions, agents.md, claude.md, gemini.md, copilot-instructions.md, .cursorrules, cursor rules, cursor rule."
-disable-model-invocation: true
+description: "[omh] Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule: write or update what an agent cannot derive from the code."
 license: MIT
 metadata:
   hermes:

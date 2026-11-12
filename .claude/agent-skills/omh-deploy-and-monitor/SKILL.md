@@ -1,7 +1,6 @@
 ---
 name: "omh-deploy-and-monitor"
-description: "[omh] Release rollout needing health signals: release checklist, deploy decision, health signals, rollback gate, and post-deploy status. Use when the user says: deploy-and-monitor, deploy and monitor, deploy monitor, deployment monitoring, release monitor, post deploy, post-deploy, rollback."
-disable-model-invocation: true
+description: "[omh] Release rollout needing health signals: release checklist, deploy decision, health signals, rollback gate, and post-deploy status."
 license: MIT
 metadata:
   hermes:

@@ -1,7 +1,6 @@
 ---
 name: "omh-running-work-board"
-description: "[omh] Live view of running coding units: showing which coding units are running right now, on which runtime and model, with observed tokens and elapsed time. Use when the user says: running-work-board, running work board, which units are running, what models are running, 지금 뭐 돌고 있어, 뭐가 돌고 있어, 어떤 모델로 돌고 있어, 실행 중인 작업 보여줘."
-disable-model-invocation: true
+description: "[omh] Live view of running coding units: showing which coding units are running right now, on which runtime and model, with observed tokens and elapsed time."
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

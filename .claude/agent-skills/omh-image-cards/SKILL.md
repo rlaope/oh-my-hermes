@@ -1,7 +1,6 @@
 ---
 name: "omh-image-cards"
-description: "[omh] Infographic card for meeting notes, a report, or PR: image prompt cards - turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards. Use when the user says: img-summary, img summary, visual prompt card, image card, image generation, image edit, edit this image, remove the background."
-disable-model-invocation: true
+description: "[omh] Infographic card for meeting notes, a report, or PR: image prompt cards - turn meetings, reports, PRs, issues, research."
 license: MIT
 metadata:
   hermes:
