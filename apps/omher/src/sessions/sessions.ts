@@ -29,7 +29,7 @@ import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, he
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
-import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
@@ -334,8 +334,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  stopped it, so its last events are dropped). */
   const endLiveTurn = (id: string, outcome: "interrupted" | "ended") => {
     const key = keys.get(id);
-    if (!key || !store().getState().chats[key]?.turn) return;
-    store().dispatch({ type: "event", ev: { event: "turn.end", bot: key, outcome } as BridgeEvent, now: Date.now() });
+    if (!key) return;
+    if (store().getState().chats[key]?.turn) store().dispatch({ type: "event", ev: { event: "turn.end", bot: key, outcome } as BridgeEvent, now: Date.now() });
+    // nobody is left to take an answer: an ask still open (a background subagent's, which outlives its turn) reads
+    // "Not answered"
+    for (const a of selectAsks(store().getState()).filter((x) => x.bot === key))
+      store().dispatch({ type: "event", ev: { event: "prompt.expired", bot: key, request_id: a.item.request_id, reason: "cancelled" } as BridgeEvent, now: Date.now() });
   };
 
   const onAgentEvent = (id: string, proc: ChatProc) => (ev: ChatEvent) => {
