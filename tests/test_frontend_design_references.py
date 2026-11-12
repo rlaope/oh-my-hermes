@@ -56,7 +56,17 @@ class RegistryTests(unittest.TestCase):
     def test_the_producer_emits_both_references(self) -> None:
         produced = {(t.skill_name, t.relative_path) for t in frontend_design_reference_templates()}
         # forms-and-input.md shares this producer; tests/test_frontend_build_contracts.py pins it.
-        self.assertEqual(produced, {ADOPTION, CHARTS, ("frontend", "references/forms-and-input.md")})
+        # The mobile density gate and editorial layout join it; their own test modules pin the bodies.
+        self.assertEqual(
+            produced,
+            {
+                ADOPTION,
+                CHARTS,
+                ("frontend", "references/forms-and-input.md"),
+                ("frontend", "references/mobile-density-gate.md"),
+                ("frontend", "references/editorial-layout.md"),
+            },
+        )
 
     def test_both_are_packaged_generated_and_portable(self) -> None:
         packaged = {(t.skill_name, t.relative_path): t.content for t in builtin_skill_reference_templates()}

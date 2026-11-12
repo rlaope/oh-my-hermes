@@ -56,6 +56,8 @@ from .expert_question_rendering import (
     expert_question_reference_lines,
     expert_questions_markdown,
 )
+from .frontend_editorial_layout_reference import editorial_layout_reference
+from .frontend_mobile_density_reference import mobile_density_gate_reference
 from .procedure_rendering import (
     copy_procedure_check_payloads,
     copy_procedure_step_payloads,
@@ -12617,6 +12619,16 @@ def _frontend_design_reference_templates_cached() -> tuple[SkillReferenceTemplat
             "frontend",
             "references/forms-and-input.md",
             _forms_and_input_reference(),
+        ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/mobile-density-gate.md",
+            mobile_density_gate_reference(),
+        ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/editorial-layout.md",
+            editorial_layout_reference(),
         ),
     )
 
