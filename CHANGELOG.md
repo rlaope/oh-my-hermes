@@ -180,6 +180,18 @@ All notable changes will be documented here.
   saves a permanent project rule. omher gives the agent no file or
   terminal access of its own (BOUNDARY rule 11).
 
+- **After omher installs oh-my-hermes, your bot's chat offers the model setup,
+  once.** When the app's own installer ends well (the sidebar's "!" or the
+  first-run screen), omher shows the chat of the bot you had open and one
+  quiet line above the composer: "oh-my-hermes is ready. Set up your models?"
+  Its action puts the bot's own model-setup command and one sentence in your
+  language into the message box; nothing is sent until you press Enter. The
+  action or the x ends it for good. If the bot does not list the command
+  within about a minute, the line says it needs a restart and shows Hermes'
+  own command for it; omher restarts nothing. The `./` skill picker now also
+  lists the skills a bot gets through `skills.external_dirs`, which is where
+  oh-my-hermes registers its own.
+
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
