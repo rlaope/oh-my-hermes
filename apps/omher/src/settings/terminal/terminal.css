@@ -1,4 +1,8 @@
-/* Settings > Terminal: the preview, the theme list, and the small fields its rows use. Selection is gray. */
+/* Settings > Terminal: the preview, the theme list, and the small fields its rows use. Selection is gray.
+   The page groups things the way Settings > General does and adds no outline of its own: the preview has the
+   one frame General's preview has, the options sit in General's groups (.st-grp), and the segmented controls
+   are General's. The theme list is rows between two hairlines, not a box; the text fields and the steppers are
+   a quiet fill with no outline. */
 .tm {
   display: flex;
   flex-direction: column;
@@ -6,6 +10,7 @@
 /* the preview is a terminal's own box: term/look.ts sets the padding and the theme's background on it */
 .term-pv {
   --term-pad: 16px;
+  /* as .ap-preview on General: without it a theme whose background is the page's has no edge at all */
   border: 1px solid var(--line);
   border-radius: var(--r);
   overflow: hidden;
@@ -39,13 +44,21 @@
   min-width: 140px;
   max-width: 220px;
 }
+/* the page's two text fields are a quiet fill, no outline until they have the keyboard */
+.tm-q,
+.tm-q:focus {
+  border-color: transparent;
+}
+.tm-q:focus,
+.tm-font:focus {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
 .tm-list {
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--grp-bg);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   max-height: 264px;
   overflow-y: auto;
-  padding: 2px 4px 6px;
+  padding: 2px 0 6px;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }
@@ -54,7 +67,7 @@
   color: var(--quiet);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  padding: 8px 8px 4px;
+  padding: 8px 12px 4px;
 }
 .tm-grid {
   display: grid;
@@ -67,7 +80,8 @@
   gap: 9px;
   min-width: 0;
   height: 28px;
-  padding: 0 8px;
+  /* a row's swatch starts where a group's words do (.st-row) */
+  padding: 0 12px;
   border-radius: var(--r-sm);
   font-size: 12.5px;
   color: var(--body);
@@ -93,7 +107,8 @@
   height: 18px;
   padding: 0 5px;
   border-radius: var(--r-sm);
-  border: 1px solid var(--line-strong);
+  /* the one edge a swatch needs: a theme whose background is the page's would otherwise have no shape */
+  border: 1px solid var(--line);
 }
 .tm-sw::before {
   content: "Aa";
@@ -117,7 +132,7 @@
   white-space: nowrap;
 }
 .tm-none {
-  padding: 14px 8px;
+  padding: 14px 12px;
   font-size: 12px;
   color: var(--quiet);
 }
@@ -128,14 +143,13 @@
   min-width: 0;
   padding: 0 9px;
   border-radius: var(--r-sm);
-  border: 1px solid var(--line);
+  border: 0;
   background: var(--raise);
   color: var(--ink);
   font-size: 12px;
 }
 .tm-font:focus {
   outline: none;
-  border-color: var(--line-strong);
 }
 .tm-step {
   display: flex;
@@ -143,7 +157,6 @@
   gap: 2px;
   padding: 2px;
   border-radius: var(--r);
-  border: 1px solid var(--line);
   background: var(--raise);
 }
 .tm-step button {

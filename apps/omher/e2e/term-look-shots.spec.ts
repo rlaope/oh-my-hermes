@@ -3,11 +3,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { termSample } from "../src/sessions/term/look-sample";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 
-async function mock(op: string): Promise<void> {
+async function mock(op: string, params: Record<string, unknown> = {}): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
   await new Promise<void>((res, rej) => {
     ws.onopen = () => res();
@@ -15,7 +16,7 @@ async function mock(op: string): Promise<void> {
   });
   await new Promise<void>((res) => {
     ws.onmessage = () => res();
-    ws.send(JSON.stringify({ id: "x1", op }));
+    ws.send(JSON.stringify({ id: "x1", op, ...params }));
   });
   ws.close();
 }
@@ -118,6 +119,14 @@ async function fits(page: Page, at: string) {
     // the preview: inside the page, its terminal inside it
     const pv = document.querySelector<HTMLElement>("[data-testid=term-preview]")!;
     within(pv, "the preview");
+    // the page adds no outline Settings > General does not have: the theme list is not a box, and the text
+    // fields and steppers (controls General has none of) carry none
+    const edge = (el: HTMLElement, side: "Top" | "Left" | "Right") => parseFloat(getComputedStyle(el)[`border${side}Width`]) || 0;
+    if (edge(list, "Left") || edge(list, "Right")) out.push("the theme list is a box");
+    for (const el of document.querySelectorAll<HTMLElement>("[data-testid=term-search], [data-testid=term-font], [data-testid=term-settings] .tm-step")) {
+      const c = getComputedStyle(el);
+      if (parseFloat(c.borderTopWidth) > 0 && c.borderTopColor !== "rgba(0, 0, 0, 0)") out.push(`${el.dataset.testid ?? "a field"} is outlined`);
+    }
     const screen = pv.querySelector<HTMLElement>(".xterm-screen")!.getBoundingClientRect();
     const pb = pv.getBoundingClientRect();
     if (screen.right > pb.right + 0.5 || screen.bottom > pb.bottom + 0.5) out.push("the preview's terminal is cut off");
@@ -145,6 +154,9 @@ for (const theme of ["dark", "light"] as const) {
     test(`shots (${theme})`, async ({ page }) => {
       test.skip(!SHOTS, "no shot folder");
       mkdirSync(SHOTS, { recursive: true });
+      // staged shots carry no bot named after the product: the default profile shows as "Juno" (mock.reset, before
+      // each test, puts the name back)
+      await mock("bots.rename", { bot: "default", name: "Juno" });
       const shot = async (name: string) => {
         await page.mouse.move(640, 40);
         await page.waitForTimeout(350);
@@ -152,12 +164,15 @@ for (const theme of ["dark", "light"] as const) {
       };
       await open(page, theme);
       await terminalClaude(page);
-      await page.locator(".xterm-helper-textarea").focus();
-      for (const line of ["git status", "pnpm test"]) {
-        await page.keyboard.type(line);
-        await page.keyboard.press("Enter");
-        await expect(page.locator(".xterm-rows")).toContainText(`you said: ${line}`);
-      }
+      // The mock program prints white and gray only, so a theme would show as a background and nothing else. The
+      // shot's output is the preview's sample (every ANSI colour, bold, dim), written into the session's own
+      // terminal through the dev build's hook, in place of the mock's waiting prompt.
+      await page.evaluate((bytes) => {
+        type T = { element?: HTMLElement; write(data: string): void };
+        const set = (window as unknown as { __omherTerms?: Set<T> }).__omherTerms;
+        [...(set ?? [])].find((x) => x.element?.closest(".term-host"))!.write(bytes);
+      }, `\r\x1b[2K${termSample()}`);
+      await expect(page.locator(".xterm-rows")).toContainText("42 passed");
 
       await settings(page);
       await fits(page, `shot ${theme}`);
@@ -196,7 +211,7 @@ for (const theme of ["dark", "light"] as const) {
       await expect(page.getByTestId("term-preview")).toHaveAttribute("data-theme-id", pick);
       await page.locator("[data-testid=session-list] .ss-row .ss-open").first().click();
       await expect(page.getByTestId("terminal")).toBeVisible();
-      await expect(page.locator(".xterm-rows")).toContainText("you said: pnpm test");
+      await expect(page.locator(".xterm-rows")).toContainText("42 passed");
       await shot(theme === "dark" ? "term-look-dracula-dark" : "term-look-solarized-light");
     });
   });
