@@ -3005,6 +3005,19 @@ class CliRunsOmo(unittest.TestCase):
             self.assertEqual(cli.list("omo", "/w/elsewhere", 0.0)["runs"], [])
             self.assertEqual(_mtimes(Path(d) / "cli"), before, "reading OmO's records changed a file")
 
+    def test_the_runs_time_is_its_first_subagents_start_to_its_last_ones_end(self):
+        # the chat card's rule (#2800): the fan-out runs from the first subagent's start to the last one's end. On the
+        # real records that is 10:28:41.062 -> 10:28:56.701, the span of the two rows the chat shows (9.9 s and
+        # 15.5 s by OmO's own duration_ms, starting 0.14 s apart)
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
+            self.assertEqual(run["started"], min(n["started"] for n in run["nodes"]))
+            self.assertEqual(run["ended"], max(n["ended"] for n in run["nodes"]))
+            self.assertAlmostEqual(run["ended"] - run["started"], 15.639, places=2)
+            self.assertEqual([round(n["ended"] - n["started"], 1) for n in run["nodes"]], [9.9, 15.5])
+
     def test_a_running_record_quiet_for_over_10_minutes_failed_no_result(self):
         with tempfile.TemporaryDirectory() as d:
             homes = _cli_home(Path(d))

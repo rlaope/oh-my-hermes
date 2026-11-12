@@ -72,12 +72,16 @@ for (const theme of themes) {
     await expect(failed).toHaveAttribute("data-state", "error");
     await expect(failed.getByTestId("activity-text")).toContainText("Anthropic rejected this conversation's request format");
     await expect(failed.getByTestId("activity-text")).not.toContainText('{"type"');
-    // the line is cut to the row; its whole reason is on hover
-    await expect(failed.getByTestId("activity-text")).toHaveAttribute("title", /Run \/compact or start a new session to continue/);
+    // the reason wraps onto more lines: its instruction is whole on screen, not cut
+    const text = failed.getByTestId("activity-text");
+    await expect(text).toContainText("Run /compact or start a new session to continue");
+    expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
   });
 
   test(`O5 while OmO retries, the live line says which try (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/retry hold");
+    await page.waitForTimeout(400);
+    await shot(page, "retrying", theme);
     await expect(page.getByTestId("activity-text")).toHaveText("Retrying 1 of 5");
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
@@ -85,6 +89,8 @@ for (const theme of themes) {
   test(`O11 a command Stop cut short reads as stopped, then as finished late (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, "/stoplate");
     await expect(page.getByTestId("activity-text")).toContainText("sleep 40; echo late");
+    // the recorded stream pressed Stop 3 s into the command (6.1 s into the turn); here 1.2 s in
+    await page.waitForTimeout(1200);
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
     const act = page.getByTestId("activity").last();
@@ -94,9 +100,15 @@ for (const theme of themes) {
     await page.waitForTimeout(1200);
     await shot(page, "stopped", theme);
     await expect(step).toHaveAttribute("data-ok", "stopped");
-    // Codex says 37 s later that the command finished: the same row says it kept running and how long it ran
+    // the row itself reads as stopped: its own mark and verb, not the "Ran" of a finished step
+    await expect(step.locator(".k")).toHaveText("Stopped");
+    await expect(step.locator(".act-ic")).toHaveCount(1);
+    // Codex says 37 s later that the command finished: the same row says it kept running, and the time is the
+    // command's own length from its start
     await expect(step).toHaveAttribute("data-late", "done");
-    await expect(step.getByTestId("activity-step-time")).toHaveText("Stopped · kept running, finished after 39s");
+    await expect(step.getByTestId("activity-step-time")).toHaveText("kept running, finished 39s after it started");
+    // the turn's own time is from the message to Stop (the recorded stream: 6.1 s), not 0
+    await expect(act.getByTestId("activity-text")).toHaveText(/^Stopped after [1-9]\d*s$/);
     await expect(act).toHaveAttribute("data-state", "interrupted");
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
@@ -133,6 +145,27 @@ for (const theme of themes) {
     expect((await calls(page)).filter((c) => c.input?.kind === "mode").map((c) => c.input?.mode)).toEqual(["ask"]);
   });
 
+  test(`O13 a new Codex session says it from its first session.info, before any turn, whole at 900-1280px (${theme})`, async ({ page }) => {
+    await session(page, "codex", theme, undefined, { __omherMockCodexUnguarded: true });
+    await page.getByTestId("composer").fill("Look at the README");
+    await page.keyboard.press("Enter");
+    // its first session.info comes before the turn's first event
+    const mode = page.getByTestId("session-mode");
+    await expect(mode).toHaveText("No approvals · full disk access");
+    await page.getByTestId("composer").fill("");
+    await shot(page, "noapproval-first", theme);
+    for (const width of [900, 1100, 1280]) {
+      await page.setViewportSize({ width, height: 820 });
+      const n = mode.locator(".ss-pick-n");
+      await expect(n).toHaveText("No approvals · full disk access");
+      expect(await n.evaluate((el) => el.scrollWidth <= el.clientWidth + 0.5), `${width}px`).toBe(true);
+      // nothing in the row covers it
+      const box = (await mode.boundingBox())!;
+      const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("[data-testid=session-mode]") !== null, [box.x + box.width / 2, box.y + box.height / 2]);
+      expect(hit, `${width}px`).toBe(true);
+    }
+  });
+
   test(`O13 a Codex whose own config still asks keeps "Agent's own" (${theme})`, async ({ page }) => {
     await session(page, "codex", theme, "/status");
     await expect(page.getByTestId("session-status")).toHaveText("Ready");
@@ -153,5 +186,10 @@ for (const theme of themes) {
     await expect(box).toHaveAttribute("data-run", "omo:01a1ce7b-1c30-7e45-8913-aa00b3b32296");
     await expect(box.locator("[data-testid=run-node]")).toHaveCount(2);
     await expect(box.getByTestId("node-title")).toHaveText(["Read a.txt first line", "Count lines of b.txt"]);
+    // the card and Plans say the same time for the same run (first start to last end)
+    const card = page.getByTestId("fanout-card");
+    const cardT = (await card.getByTestId("fanout-summary").innerText()).split(" · ").pop()!.trim();
+    const planT = (await box.getByTestId("run-plan-time").innerText()).replace(/^\s*·\s*/, "").trim();
+    expect(planT).toBe(cardT);
   });
 }
