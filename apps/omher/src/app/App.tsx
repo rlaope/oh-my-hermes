@@ -17,6 +17,7 @@ import { useShortcuts } from "./shortcuts";
 
 // The terminal view (and xterm with it) loads when a session is first opened.
 const SessionView = lazy(() => import("../sessions/SessionView").then((m) => ({ default: m.SessionView })));
+const SessionPanel = lazy(() => import("../sessions/SessionPlans").then((m) => ({ default: m.SessionPanel })));
 
 export function App() {
   const s = useStore();
@@ -45,7 +46,9 @@ export function App() {
       },
     };
   }, [s.bots, current]);
-  const panelOpen = s.ui.panelOpen && s.ui.view === "chat" && !!bot;
+  // a bot's chat shows its Details and Plans; a SESSIONS chat shows Plans for that session alone
+  const onSession = s.ui.view === "session" && !!s.ui.session;
+  const panelOpen = s.ui.panelOpen && ((s.ui.view === "chat" && !!bot) || onSession);
   const Details = slots.detailsPanel;
   const close = () => s.togglePanel(false);
 
@@ -66,7 +69,14 @@ export function App() {
       </main>
       {/* inert while closed: the off-screen panel takes no focus and no clicks */}
       <aside className="details" aria-hidden={!panelOpen} inert={!panelOpen} data-testid="details">
-        {bot &&
+        {onSession ? (
+          // mounted only while open: a closed panel reads nothing, and reopening it reads the session's run afresh
+          panelOpen && (
+            <Suspense fallback={null}>
+              <SessionPanel onClose={close} />
+            </Suspense>
+          )
+        ) : bot &&
           (Details ? (
             <Details bot={bot} open={panelOpen} onClose={close} />
           ) : (

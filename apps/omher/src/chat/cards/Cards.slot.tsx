@@ -7,7 +7,7 @@
 import "./cards.css";
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import type { SlotProps } from "../../features";
-import type { ApprovalChoice, ClarifyAnswers, ClarifyQuestion } from "../../lib/protocol";
+import type { ApprovalChoice, AskSubagent, ClarifyAnswers, ClarifyQuestion } from "../../lib/protocol";
 import { askOpen, getStore, useStore, type ApprovalItem, type AskExpiry, type ClarifyItem } from "../../state/store";
 import { answerOf, EMPTY, type Pick } from "./answers";
 import { riskOf } from "./risk";
@@ -125,6 +125,7 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       aria-keyshortcuts={shown.map((b) => b.key).join(" ")}
       onKeyDown={onKey}
     >
+      <AskedBy who={item.subagent} />
       <div className="card-title">{item.title || t("card.approvalNeeded")}</div>
       {risks.length > 0 && (
         <div className="card-risk" data-testid="card-risk" role="note">
@@ -281,6 +282,7 @@ function Interview({ bot, item, cardRef }: { bot: string; item: ClarifyItem; car
         void submit();
       }}
     >
+      <AskedBy who={item.subagent} />
       <div className="card-title">{t("card.questions", { n: qs.length })}</div>
       <ol className="iv-list">
         {qs.map((q, i) => (
@@ -311,6 +313,16 @@ function Interview({ bot, item, cardRef }: { bot: string; item: ClarifyItem; car
         {err && <span className="card-err">{t("card.notSent", { error: err })}</span>}
       </div>
     </form>
+  );
+}
+
+/** "Subagent · Write c.txt via echo asks": over a card raised inside a subagent, so the person knows who asks. */
+function AskedBy({ who }: { who?: AskSubagent }) {
+  if (!who) return null;
+  return (
+    <div className="card-who" data-testid="card-subagent" title={who.name}>
+      {t("card.subagentAsks", { name: who.name || t("sub.untitled", { n: 1 }) })}
+    </div>
   );
 }
 
@@ -345,6 +357,7 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
 
   return (
     <div ref={ref} tabIndex={-1} className="card" data-testid="card-clarify" role="group" aria-label={t("card.question")}>
+      <AskedBy who={item.subagent} />
       <div className="card-title">{item.question}</div>
       <div className="card-acts">
         {multi ? (

@@ -89,7 +89,8 @@ export function useShortcuts(): void {
         el?.focus();
         el?.select();
       } else if (hit.kind === "details") {
-        if (s.ui.view !== "chat") a.closeSettings();
+        // a SESSIONS chat has its own panel (its Plans); anywhere else the bot's chat comes back first
+        if (s.ui.view !== "chat" && s.ui.view !== "session") a.closeSettings();
         a.togglePanel();
       } else if (hit.kind === "settings") {
         if (s.ui.view === "settings") a.closeSettings();

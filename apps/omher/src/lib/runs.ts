@@ -80,6 +80,8 @@ export interface AgentRun {
   started: number;
   ended?: number;
   updated: number;
+  /** A run its record still calls running, but nothing about it changed for a day (bridge `mark_stale`): not live. */
+  stale?: boolean;
 }
 
 export interface RunCounts {
@@ -269,20 +271,21 @@ export function fromDag(rec: DagRecord, bot: string, handoffs: Iterable<string> 
 // ---- CLI agent runs (`runs.cli`): Claude Code Task/Agent subagents and Codex spawned sub-agents, read by the bridge
 // from the CLIs' own session files. One session with sub-runs = one run, one sub-run = one node.
 
-export type CliAgent = "claude" | "codex" | "pi" | "omp" | "grok";
+export type CliAgent = "claude" | "codex" | "omo" | "pi" | "omp" | "grok";
 /** `found`: the CLI's session folder exists; `no_adapter`: installed, but it keeps no sub-run record omher reads. */
 export type CliAgentStatus = "found" | "not_installed" | "no_adapter";
-export const CLI_AGENTS: CliAgent[] = ["claude", "codex", "pi", "omp", "grok"];
-const CLI_NAME: Record<CliAgent, string> = { claude: "Claude", codex: "Codex", pi: "pi", omp: "omp", grok: "Grok" };
+export const CLI_AGENTS: CliAgent[] = ["claude", "codex", "omo", "pi", "omp", "grok"];
+const CLI_NAME: Record<CliAgent, string> = { claude: "Claude", codex: "Codex", omo: "OmO", pi: "pi", omp: "omp", grok: "Grok" };
 
 /** "Claude" / "Codex": the badge on a CLI run's row. */
 export const cliName = (agent: CliAgent | undefined) => (agent ? CLI_NAME[agent] : "");
 /** A run id from `runs.cli` (`claude:<session>`, `codex:<thread>`), which no bot owns. */
 export const isCliRun = (id: string) => CLI_AGENTS.some((a) => id.startsWith(`${a}:`));
 
-/** Running first, then the most recently updated. */
-export function sortRuns<T extends { state: RunState; updated: number }>(runs: T[]): T[] {
-  return [...runs].sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || b.updated - a.updated);
+/** Live runs first (running and not stale), then the most recently updated. */
+export function sortRuns<T extends { state: RunState; updated: number; stale?: boolean }>(runs: T[]): T[] {
+  const live = (r: T) => Number(r.state === "running" && !r.stale);
+  return [...runs].sort((a, b) => live(b) - live(a) || b.updated - a.updated);
 }
 
 /** A run's or node's length, the one formatter for every Runs surface: under a minute "38s", under an hour "14m",

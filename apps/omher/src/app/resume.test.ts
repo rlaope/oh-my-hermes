@@ -104,9 +104,11 @@ describe("resume snapshot", () => {
     expect(gone.sessions).toHaveLength(3);
   });
 
-  it("Claude Code and Codex continue by themselves; the others wait for Resume", () => {
+  it("Claude Code, Codex and OmO continue by themselves; the others wait for Resume", () => {
     expect(continuesItself({ agent: "claude", view: "chat", agentSession: "u" })).toBe(true);
     expect(continuesItself({ agent: "codex", view: "chat", agentSession: "t" })).toBe(true);
+    // OmO continues with --session (a real omo answered from its earlier turn after a restart)
+    expect(continuesItself({ agent: "omo", view: "chat", agentSession: "01a1ca42-38d5-7b6b-b3e9-d76953dcecd0" })).toBe(true);
     expect(continuesItself({ agent: "claude", view: "chat" })).toBe(false);
     for (const agent of ["pi", "omp", "grok", "omh"] as const) expect(continuesItself({ agent, view: "chat", agentSession: "x" })).toBe(false);
   });
@@ -146,6 +148,31 @@ const saved = (): ResumeSnap["sessions"] => [
 ];
 
 describe("sessions restore", () => {
+  it("a DSH session saved by omher 0.2.4 (deepseek-bot's terminal) comes back ended with a plain line and starts nothing", async () => {
+    const g: Record<string, unknown> = {};
+    const store = createStore(quietBridge());
+    const ss = createSessions(new MockHost(g), () => store);
+    ss.restore([
+      { id: "s7", agent: "dsh", cwd: "/w/bot", startedAt: T, view: "terminal", running: true, agentSession: "33333333-2222-4333-8444-555555555555" },
+      { id: "s8", agent: "dsh", cwd: "/w/bot", startedAt: T, view: "chat", running: false, exitCode: 0, agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" },
+    ]);
+    await new Promise((r) => setTimeout(r, 30));
+    const [old, now] = ss.getState().list;
+    expect(old).toMatchObject({ id: "s7", view: "chat", status: "exited", error: "This DSH session ran deepseek-bot (omher 0.2.4). DSH is DeepSeek Harness now: Restart starts it in this folder." });
+    expect(old.paused).toBeUndefined();
+    expect(old.agentSession).toBeUndefined();
+    expect(now).toMatchObject({ id: "s8", view: "chat", status: "exited", agentSession: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" });
+    expect(((g.__omherSessionCalls ?? []) as { op: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
+    // Restart: the old one starts DeepSeek Harness fresh in its folder, the new one continues its harness session
+    await ss.restart("s7");
+    await ss.restart("s8");
+    const starts = (g.__omherSessionCalls as { op: string; agent?: string; resume?: string }[]).filter((c) => c.op === "chat.start" || c.op === "start");
+    expect(starts.map(({ op, agent, resume }) => ({ op, agent, resume }))).toEqual([
+      { op: "chat.start", agent: "dsh", resume: undefined },
+      { op: "chat.start", agent: "dsh", resume: "session-8c11e2bc-9f55-4bcb-a597-19ea472184e8" },
+    ]);
+  });
+
   it("continues Claude Code and Codex in the same folder and account, pauses the others, keeps ended ones; once only", async () => {
     const g: Record<string, unknown> = {};
     const store = createStore(quietBridge());
@@ -153,7 +180,8 @@ describe("sessions restore", () => {
     ss.restore(saved());
     ss.restore(saved()); // a second restore in the same page load does nothing
     await new Promise((r) => setTimeout(r, 30));
-    const calls = (g.__omherSessionCalls as { op: string; agent?: string; cwd?: string; resume?: string; account?: string }[]).filter((c) => c.op !== "reset");
+    // file housekeeping (the saved attachments of sessions that are gone) starts no program
+    const calls = (g.__omherSessionCalls as { op: string; agent?: string; cwd?: string; resume?: string; account?: string }[]).filter((c) => c.op !== "reset" && !c.op.startsWith("file."));
     expect(calls.map(({ op, agent, cwd, resume, account }) => ({ op, agent, cwd, resume, account }))).toEqual([
       { op: "chat.start", agent: "claude", cwd: "/w/web-app", resume: "11111111-2222-4333-8444-555555555555", account: "work" },
       { op: "chat.start", agent: "codex", cwd: "/w/api", resume: "codex-thread-1", account: undefined },
@@ -221,7 +249,7 @@ describe("sessions restore", () => {
     await ss2.loadAgents();
     await new Promise((res) => setTimeout(res, 30));
     expect(ss2.getState().list).toEqual([expect.objectContaining({ id, status: "draft", agent: "codex", cwd: "/w/api" })]);
-    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset")).toEqual([]);
+    expect(((g2.__omherSessionCalls as { op: string }[] | undefined) ?? []).filter((c) => c.op !== "reset" && !c.op.startsWith("file."))).toEqual([]);
     // + reuses it rather than opening a second one
     expect(ss2.draft()).toBe(id);
   });
@@ -256,7 +284,7 @@ describe("update confirm: the running line", () => {
     );
     expect(sp(runningLine([rec("s1", "pi", "/w/p", "running")], mode))).toBe("1 session running: p (pi). It comes back with a Resume button.");
     expect(sp(runningLine([rec("s1", "claude", "/w/a", "running", "u"), rec("s2", "grok", "/w/g", "starting")], mode))).toBe(
-      "2 sessions running: a (Claude Code), g (Grok). Claude Code and Codex resume after the restart; the others come back with a Resume button.",
+      "2 sessions running: a (Claude Code), g (Grok). Claude Code, Codex and OmO resume after the restart; the others come back with a Resume button.",
     );
   });
 });

@@ -115,6 +115,17 @@
 .thread > .row-clarify {
   padding-left: calc(28px + 10px);
 }
+/* while the bot works, the live line has the typing bubble's height (26px line + 2px margins inside), so its text
+   takes the dots' place and nothing moves; until the answer starts it carries the ringed face in that column */
+.thread > .row-activity.live-line {
+  position: relative;
+  padding-block: calc((var(--fs-msg) * var(--lh-msg) + 18px - 30px) / 2);
+}
+.thread > .row-activity.live-line > .ui-ring-w {
+  position: absolute;
+  left: 0;
+  top: calc((var(--fs-msg) * var(--lh-msg) + 18px - 28px) / 2);
+}
 
 /* bubbles: filled both sides, no border, 10px radius */
 .msg {
@@ -141,6 +152,10 @@
 }
 .msg.a.face > .msg-face.blank {
   visibility: hidden;
+}
+/* the answer being written: its face in the live ring, on the same line */
+.msg.a.face > .ui-ring-w {
+  margin-top: 1px;
 }
 /* the bubble column beside the face: the caption, then the files the bot sent under it (6px), all on the
    bubble's left edge. A definite width so a picture can size against it; the bubble still hugs its text. */
@@ -205,6 +220,16 @@
   margin-top: 3px;
   font-size: 11px;
   color: var(--danger);
+}
+/* a message sent while a turn runs: muted until the agent takes it */
+.msg.u.queued .b,
+.msg.u.dropped .b {
+  opacity: 0.55;
+}
+.msg-wait {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--quiet);
 }
 /* Markdown in bubbles. One rhythm (8px between blocks), headings by size, code blocks as their own surface,
    tables that keep numbers on one line, GFM task lists without a second marker. */
@@ -670,4 +695,25 @@
   margin-top: 3px;
   font-size: 11px;
   color: var(--quiet);
+}
+
+/* the right panel's button, right of the model control: borderless, gray while the panel is open, no accent; the
+   live dot sits on its corner while subagents work. The model control gives way first (it can shrink, this cannot) */
+.head-right > .head-pb {
+  position: relative;
+  flex: none;
+}
+.head-pb.on {
+  background: var(--raise);
+  color: var(--ink);
+}
+.head-pb-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--g-accent);
+  box-shadow: 0 0 0 1.5px var(--bg);
 }

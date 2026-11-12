@@ -14,6 +14,7 @@ import type {
   ApprovalChoice,
   Bot,
   BridgeEvent,
+  EventOf,
   ChatOpenResult,
   ClarifyAnswers,
   ClarifyQuestion,
@@ -30,6 +31,8 @@ import type {
   UsageProvider,
   WorktreeDiff,
   MediaFile,
+  SubagentState,
+  AskSubagent,
   AttachKind,
   AttachResult,
   AccountCli,
@@ -70,6 +73,42 @@ export interface Turn {
   skills: string[];
   /** Answer text streamed so far (cleared when the final `message` lands). */
   streaming: string;
+  /** The fan-outs (delegate_task children) this turn started, as Hermes' subagent events tell them. */
+  fanouts?: Fanout[];
+}
+
+/** One subagent of a fan-out, as its latest event left it. */
+export interface SubagentRow {
+  id: string;
+  index: number;
+  goal: string;
+  /** Which agent reported it (a session's CLI) and its name or type, when the agent gives them. */
+  agent?: string;
+  name?: string;
+  /** Its recent steps, oldest first (at most SUB_STEPS): what the row shows when opened. */
+  steps?: { tool?: string; text: string }[];
+  model?: string;
+  dag?: { run: string; node: string };
+  state: SubagentState;
+  tool?: string;
+  step?: string;
+  summary?: string;
+  /** Its own run time when it ended (Hermes'), else counted from `startedAt`. */
+  seconds?: number;
+  startedAt: number; // ms
+  endedAt?: number; // ms
+}
+
+/** One fan-out of a turn: the children of one delegate_task call. */
+export interface Fanout {
+  /** The delegation id once Hermes names it; until then a local key. */
+  key: string;
+  delegation?: string;
+  count: number;
+  startedAt: number; // ms
+  /** When its last event came (ms): a fan-out no event moved for a while is not shown as running. */
+  updatedAt: number;
+  subs: SubagentRow[];
 }
 
 /** Timeline items. `ts` is seconds since epoch so chat rows and away lines sort together. */
@@ -80,6 +119,9 @@ export type MessageItem = {
   text: string;
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
+  /** user rows only: sent while a turn ran, and the agent has not taken it yet (`queued`), or Stop threw it away
+   *  before the agent read it (`dropped`). */
+  wait?: "queued" | "dropped";
   /** user rows only: sent with "Reply there" (where the person pointed the bot). */
   reply?: { source: string; label: string };
   /** user rows only: files sent with it, shown from the local copies (never read back). */
@@ -115,6 +157,8 @@ export type ApprovalItem = {
   choices: ApprovalChoice[];
   /** The folder the command runs in, when the agent says. */
   cwd?: string;
+  /** Asked inside a subagent: which one. */
+  subagent?: AskSubagent;
   resolved?: ApprovalChoice;
   expired?: AskExpiry;
 };
@@ -129,6 +173,7 @@ export type ClarifyItem = {
   multi?: boolean;
   /** An interview: every question of the ask (2-5), answered in one card. */
   questions?: ClarifyQuestion[];
+  subagent?: AskSubagent;
   answer?: string;
   /** Interview answers per question id (null = skipped). */
   answers?: ClarifyAnswers;
@@ -185,6 +230,9 @@ export interface Chat {
   turnSeq: number;
   /** Set when chat.open failed (bot offline, gateway refused); the timeline shows it instead of loading forever. */
   openError?: string | null;
+  /** A status that came while no turn ran (Hermes says "Resuming interrupted turn…" just before the turn starts):
+   *  never shown on its own; a turn that starts within EARLY_STATUS_MS opens with it. */
+  early?: { text: string; at: number } | null;
 }
 
 /** The composer's "Reply there" chip: a thread elsewhere the next message points the bot at. */
@@ -415,6 +463,19 @@ function withItems(chat: Chat, items: ChatItem[]): Chat {
   return { ...chat, items, messages };
 }
 
+/** The person answered a card: the running turn's "Waiting for approval / your answer" goes back to what the turn
+ *  was doing (its latest step), or to the plain working line, unless another card still waits. */
+function doneWaiting(c: Chat): Chat {
+  const t = c.turn;
+  if (!t || (t.status !== tr("live.waitApproval") && t.status !== tr("live.waitAnswer"))) return c;
+  if (c.items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(c.items, i))) return c;
+  const last = t.steps[t.steps.length - 1];
+  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail) : "" }));
+}
+
+/** How long a status that came before its turn still opens that turn (Hermes sends it right before). */
+const EARLY_STATUS_MS = 5_000;
+
 function newTurn(chat: Chat, bot: string, now: number, status = ""): [Chat, Turn] {
   const seq = chat.turnSeq + 1;
   const turn: Turn = { id: `${bot}-t${seq}`, startedAt: now, status, steps: [], skills: [], streaming: "" };
@@ -427,6 +488,72 @@ function patchTurn(chat: Chat, fn: (t: Turn) => Turn): Chat {
   const turn = fn(chat.turn);
   const items = chat.items.map((i) => (i.kind === "activity" && i.id === turn.id ? { ...i, turn } : i));
   return { ...withItems(chat, items), turn };
+}
+
+/** Applies `fn` to the turn of activity item `id`, wherever it is (the running turn, the last one, or older). */
+function patchTurnById(chat: Chat, id: string, fn: (t: Turn) => Turn): Chat {
+  let next: Turn | null = null;
+  const items = chat.items.map((i) => (i.kind === "activity" && i.id === id ? { ...i, turn: (next = fn(i.turn)) } : i));
+  if (!next) return chat;
+  return {
+    ...withItems(chat, items),
+    turn: chat.turn?.id === id ? next : chat.turn,
+    lastTurn: chat.lastTurn?.id === id ? next : chat.lastTurn,
+  };
+}
+
+const SUB_DONE: SubagentState[] = ["done", "failed", "cancelled"];
+/** How many of a subagent's own steps its row keeps. */
+export const SUB_STEPS = 8;
+export const subagentEnded = (s: Pick<SubagentRow, "state">) => SUB_DONE.includes(s.state);
+
+/** A subagent event into its fan-out. A fan-out is named by its delegation id once Hermes gives one; the turn that
+ *  already shows that delegation takes the event. Otherwise the running turn takes it, and with none running, the
+ *  latest turn whose fan-out holds that subagent still out, else the latest turn that ran a delegate_task (a
+ *  background fan-out outlives its turn). An event no turn can take (the chat opened afterwards) is left to Plans. */
+function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
+  const acts = [...chat.items.filter((i): i is ActivityItem => i.kind === "activity")].reverse();
+  const byDeleg = (t: Turn) => !!ev.delegation && !!t.fanouts?.some((f) => f.delegation === ev.delegation);
+  const outHere = (t: Turn) => !!t.fanouts?.some((f) => f.subs.some((s) => s.id === ev.id && !subagentEnded(s)));
+  const target =
+    acts.find((i) => byDeleg(i.turn))?.id ??
+    chat.turn?.id ??
+    acts.find((i) => outHere(i.turn))?.id ??
+    acts.find((i) => i.turn.steps.some((s) => s.name === "delegate_task"))?.id;
+  if (!target) return chat;
+  return patchTurnById(chat, target, (t) => {
+    const fanouts = [...(t.fanouts ?? [])];
+    // its fan-out by delegation id; a subagent id is matched only inside a fan-out with no other delegation id
+    let fi = fanouts.findIndex(
+      (f) => (!!ev.delegation && f.delegation === ev.delegation) || (f.subs.some((s) => s.id === ev.id) && (!f.delegation || !ev.delegation)),
+    );
+    // a first event names no delegation yet: it joins the newest fan-out still filling with that many children
+    if (fi < 0) fi = fanouts.findIndex((f) => !f.delegation && f.count === ev.count && f.subs.length < f.count && !f.subs.some((s) => s.index === ev.index));
+    if (fi < 0) {
+      fanouts.push({ key: ev.delegation ?? `${t.id}-f${fanouts.length}`, count: ev.count, startedAt: now, updatedAt: now, subs: [] });
+      fi = fanouts.length - 1;
+    }
+    const f = fanouts[fi];
+    const old = f.subs.find((s) => s.id === ev.id);
+    const ended = SUB_DONE.includes(ev.state);
+    const row: SubagentRow = {
+      ...(old ?? { id: ev.id, startedAt: now }),
+      index: ev.index,
+      goal: ev.goal || old?.goal || "",
+      state: old && subagentEnded(old) && !ended ? old.state : ev.state,
+      ...(ev.model ? { model: ev.model } : {}),
+      ...(ev.agent ? { agent: ev.agent } : {}),
+      ...(ev.name ? { name: ev.name } : {}),
+      ...(ev.step && ev.step !== old?.steps?.at(-1)?.text ? { steps: [...(old?.steps ?? []), { tool: ev.tool, text: ev.step }].slice(-SUB_STEPS) } : {}),
+      ...(ev.dag ? { dag: ev.dag } : {}),
+      // the step line is the current tool's; it goes when the child ends (its result line takes its place)
+      ...(ev.step !== undefined ? { step: ev.step, tool: ev.tool } : {}),
+      ...(ended ? { endedAt: old?.endedAt ?? now, summary: ev.summary, seconds: ev.seconds, step: undefined, tool: undefined } : {}),
+    } as SubagentRow;
+    const subs = old ? f.subs.map((s) => (s.id === ev.id ? row : s)) : [...f.subs, row].sort((a, b) => a.index - b.index);
+    fanouts[fi] = { ...f, subs, updatedAt: now, count: Math.max(f.count, ev.count), ...(ev.delegation ? { delegation: ev.delegation } : {}) };
+    return { ...t, fanouts };
+  });
 }
 
 /** Closes the running turn (if any) and moves it to lastTurn. */
@@ -609,18 +736,23 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   }
   const bot = ev.bot;
   switch (ev.event) {
+    // A turn starts only on turn.start (or a chat found running on open). Every other live event belongs to the
+    // running turn and is dropped without one: an agent's own status after its turn ended (OmO's setStatus after
+    // agent_end) must not start a turn that nothing ends.
     case "turn.start":
-      return touchChat(state, bot, (c) => newTurn(endTurn(c, now, "done"), bot, now)[0]);
-    case "status":
-      return touchChat(state, bot, (c) => patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({ ...t, status: ev.text })));
-    case "thinking":
       return touchChat(state, bot, (c) => {
-        const base = c.turn ? c : newTurn(c, bot, now)[0];
-        return base.turn!.status ? base : patchTurn(base, (t) => ({ ...t, status: THINKING }));
+        const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
+        return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null };
       });
+    case "status":
+      return touchChat(state, bot, (c) =>
+        c.turn ? patchTurn(c, (t) => ({ ...t, status: ev.text })) : { ...c, early: { text: ev.text, at: now } },
+      );
+    case "thinking":
+      return touchChat(state, bot, (c) => (c.turn && !c.turn.status ? patchTurn(c, (t) => ({ ...t, status: THINKING })) : c));
     case "tool.start":
       return touchChat(state, bot, (c) =>
-        patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({
+        patchTurn(c, (t) => ({
           ...t,
           status: activityText(ev.name, ev.detail),
           steps: [
@@ -636,16 +768,17 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
         })),
       );
+    case "subagent": {
+      const c = state.chats[bot];
+      const next = c && withSubagent(c, ev, now);
+      return next && next !== c ? { ...state, chats: { ...state.chats, [bot]: next } } : state;
+    }
     case "skill":
       return touchChat(state, bot, (c) =>
-        patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) =>
-          t.skills.includes(ev.name) ? t : { ...t, skills: [...t.skills, ev.name] },
-        ),
+        patchTurn(c, (t) => (t.skills.includes(ev.name) ? t : { ...t, skills: [...t.skills, ev.name] })),
       );
     case "delta":
-      return touchChat(state, bot, (c) =>
-        patchTurn(c.turn ? c : newTurn(c, bot, now)[0], (t) => ({ ...t, streaming: t.streaming + ev.text })),
-      );
+      return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, streaming: t.streaming + ev.text })));
     case "message": {
       const next = touchChat(state, bot, (c) => {
         const cleared = patchTurn(c, (t) => ({ ...t, streaming: "" }));
@@ -673,6 +806,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           command: ev.command,
           choices: ev.choices,
           ...(ev.cwd ? { cwd: ev.cwd } : {}),
+          ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
         };
         return withItems(base, [...base.items, item]);
       });
@@ -690,6 +824,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           choices: ev.choices,
           ...(ev.multi_select ? { multi: true } : {}),
           ...(qs.length > 1 ? { questions: qs } : {}),
+          ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
         };
         return withItems(base, [...base.items, item]);
       });
@@ -713,7 +848,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           base = withItems(c, [...c.items, { kind: "assistant", id: `${c.turn.id}-a`, ts: now / 1000, text }]);
           base = patchTurn(base, (t) => ({ ...t, streaming: "" }));
         }
-        return endTurn(base, now, ev.outcome, ev.error);
+        return { ...endTurn(base, now, ev.outcome, ev.error), early: null };
       });
     case "bot.status":
       return {
@@ -761,6 +896,24 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         ]),
       );
       return bumpUnread(next, bot);
+    }
+    // a message sent while a turn ran (a SESSIONS chat): waiting until the agent takes it, or thrown away by Stop
+    case "message.queued":
+    case "message.taken":
+    case "message.dropped": {
+      const id = (ev as { id?: unknown }).id;
+      if (typeof id !== "string" || !state.chats[bot]?.items.some((i) => i.kind === "user" && i.id === id)) return state;
+      const wait = ev.event === "message.queued" ? ("queued" as const) : ev.event === "message.dropped" ? ("dropped" as const) : undefined;
+      return touchChat(state, bot, (c) =>
+        withItems(
+          c,
+          c.items.map((i) => {
+            if (i.kind !== "user" || i.id !== id) return i;
+            const { wait: _old, ...rest } = i;
+            return wait ? { ...rest, wait } : rest;
+          }),
+        ),
+      );
     }
     default:
       return state;
@@ -821,21 +974,25 @@ export function reduce(state: AppState, a: Action): AppState {
       return reduceEvent(state, a.ev, a.now);
     case "approval.resolved":
       return touchChat(state, a.bot, (c) =>
-        withItems(
-          c,
-          c.items.map((i) =>
-            i.kind === "approval" && i.request_id === a.request_id ? { ...i, resolved: a.choice } : i,
+        doneWaiting(
+          withItems(
+            c,
+            c.items.map((i) =>
+              i.kind === "approval" && i.request_id === a.request_id ? { ...i, resolved: a.choice } : i,
+            ),
           ),
         ),
       );
     case "clarify.resolved":
       return touchChat(state, a.bot, (c) =>
-        withItems(
-          c,
-          c.items.map((i) =>
-            i.kind === "clarify" && i.request_id === a.request_id
-              ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
-              : i,
+        doneWaiting(
+          withItems(
+            c,
+            c.items.map((i) =>
+              i.kind === "clarify" && i.request_id === a.request_id
+                ? { ...i, answer: a.answer, ...(a.answers ? { answers: a.answers } : {}) }
+                : i,
+            ),
           ),
         ),
       );

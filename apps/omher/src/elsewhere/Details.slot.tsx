@@ -13,6 +13,7 @@ import { awayTime, cadence, nextRun, sourceList, sourceName } from "./format";
 import { DiffTab, ScheduleTab, TAB_ICON, TABS, TerminalTab, WorktreesTab, type PanelTab } from "./PanelTabs";
 import { useNow } from "./useNow";
 import { RunsTab } from "../runs/RunsTab";
+import { markTabPicked } from "../chat/parts/PanelButton";
 import "./elsewhere.css";
 import { t as tr } from "../i18n";
 
@@ -35,7 +36,10 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
           aria-selected={tab === t.id}
           title={t.label}
           className={`pn-tab${tab === t.id ? " on" : ""}`}
-          onClick={() => s.setPanelTab(t.id)}
+          onClick={() => {
+            markTabPicked();
+            s.setPanelTab(t.id);
+          }}
           data-testid={`panel-tab-${t.id}`}
         >
           {TAB_ICON[t.id]}

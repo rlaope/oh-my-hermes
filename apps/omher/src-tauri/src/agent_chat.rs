@@ -10,6 +10,8 @@
 //!   `item/commandExecution/requestApproval`, `turn/interrupt`).
 //! - pi and oh-my-pi: `--mode rpc`, JSONL commands, responses and events (`prompt`, `abort`,
 //!   `extension_ui_request` dialogs).
+//! - DSH (DeepSeek Harness): one `dsh --profile headless --json` run per message, continued by `--session-id`
+//!   ([`crate::dsh_chat`]).
 //!
 //! The UI sends only an agent id, a folder and chat input; the program and its arguments come from the
 //! allow-list. Closing the session (or quitting the app) stops the program.
@@ -28,25 +30,158 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, resume_args, signal_group, Mode, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
+use crate::acp_chat::{acp_agent, is_acp_session_id, Acp, RuleProbe, NO_RULES};
+use crate::dsh_chat::DshChat;
+use crate::session_files;
+use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
-/// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts.
+/// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
+/// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
+/// file is already named in `text` by its saved copy's path. `id` is omher's own id for the message's bubble: a
+/// message sent while a turn runs comes back as `message.queued`, then `message.taken` when the agent takes it (or
+/// `message.dropped` when Stop threw it away).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Input {
-    Send { text: String },
+    Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },
     Interrupt,
     Approve { request_id: String, choice: String },
     /// A string, or per-question answers (`{qid: text|null}`) for several questions at once.
     Clarify { request_id: String, answer: Value },
     Model { model: String },
+    /// The session's permission mode, one of [`modes_for`] (never one that skips approvals or lifts the sandbox).
+    Mode { mode: String },
+    /// Reasoning effort, one of the levels the agent itself reported (`session.efforts`).
+    Effort { effort: String },
+}
+
+/// The permission modes a person can pick for agent `id`: Claude Code's own `default` (ask), `plan` and
+/// `acceptEdits`; Codex's read-only, ask and auto-in-the-workspace presets ([`codex_mode`]). No agent is offered a
+/// mode that skips every approval (`bypassPermissions`, `dontAsk`, `auto`) or lifts the sandbox
+/// (`danger-full-access`); the rpc agents have no mode here.
+pub fn modes_for(id: &str) -> &'static [&'static str] {
+    match id {
+        "claude" => &["default", "plan", "acceptEdits"],
+        "codex" => &["read-only", "ask", "auto"],
+        _ => &[],
+    }
+}
+
+/// A Codex mode as its per-turn approval policy and sandbox (`turn/start` `approvalPolicy`, `sandboxPolicy.type`).
+fn codex_mode(mode: &str) -> Option<(&'static str, &'static str)> {
+    match mode {
+        "read-only" => Some(("on-request", "readOnly")),
+        "ask" => Some(("untrusted", "workspaceWrite")),
+        "auto" => Some(("on-request", "workspaceWrite")),
+        _ => None,
+    }
+}
+
+/// The mode a Codex thread reports (approval policy and sandbox type), when it is one of ours.
+fn codex_mode_of(policy: &str, sandbox: &str) -> Option<&'static str> {
+    ["read-only", "ask", "auto"].into_iter().find(|m| codex_mode(m) == Some((policy, sandbox)))
+}
+
+/// One entry of `session.commands`: a command or skill the agent itself reported, typed after `prefix`.
+fn command_entry(name: &str, description: &str, hint: &str, kind: &str, prefix: &str) -> Value {
+    json!({"name": name, "description": clip(description, 160), "hint": hint, "kind": kind, "prefix": prefix})
+}
+
+/// Messages sent while a turn ran, in order, until the agent takes them. Shared by the adapters.
+#[derive(Default)]
+struct Waiting {
+    /// every message sent and not yet seen taken, oldest first: (id, sent while a turn ran)
+    sent: std::collections::VecDeque<(String, bool)>,
+}
+
+impl Waiting {
+    /// A message went out; `busy` = a turn was running. A queued one is said at once.
+    fn push(&mut self, st: &mut Step, id: String, busy: bool) {
+        if busy && !id.is_empty() {
+            st.emit(ev("message.queued", json!({"id": id})));
+        }
+        self.sent.push_back((id, busy));
+    }
+    /// The agent took its oldest message.
+    fn take(&mut self, st: &mut Step) {
+        if let Some((id, true)) = self.sent.pop_front() {
+            if !id.is_empty() {
+                st.emit(ev("message.taken", json!({"id": id})));
+            }
+        }
+    }
+    /// The agent took a message by id (Codex's `clientId`); older ones were taken before it.
+    fn take_id(&mut self, st: &mut Step, id: &str) {
+        if self.sent.iter().any(|(i, _)| i == id) {
+            while let Some((i, _)) = self.sent.front().cloned() {
+                self.take(st);
+                if i == id {
+                    break;
+                }
+            }
+        }
+    }
+    /// The turn is over and took everything sent during it.
+    fn all_taken(&mut self, st: &mut Step) {
+        while !self.sent.is_empty() {
+            self.take(st);
+        }
+    }
+    /// What still waits was thrown away (Stop cleared the agent's queue).
+    fn all_dropped(&mut self, st: &mut Step) {
+        for (id, busy) in std::mem::take(&mut self.sent) {
+            if busy && !id.is_empty() {
+                st.emit(ev("message.dropped", json!({"id": id})));
+            }
+        }
+    }
+    /// Only the queued ones still wait (the agent runs them next).
+    fn keep_queued(&mut self) {
+        self.sent.retain(|(_, busy)| *busy);
+    }
+}
+
+impl Input {
+    /// Check that every attached picture is a file omher saved for a session (`session_files::check`) that an
+    /// agent's image input takes, and read it. Nothing outside omher's own folder is read.
+    pub fn resolve(&mut self, home: &Path) -> Result<(), String> {
+        let Input::Send { images, .. } = self else { return Ok(()) };
+        for p in images.iter_mut() {
+            let real = session_files::check(home, &p.path)?;
+            let mime = session_files::image_mime(&p.path).ok_or_else(|| format!("not a picture: {}", p.path))?;
+            let bytes = std::fs::read(&real).map_err(|e| e.to_string())?;
+            if bytes.len() as u64 > session_files::INLINE_MAX {
+                return Err("picture over 5 MB".into());
+            }
+            p.path = real.to_string_lossy().into_owned();
+            p.mime = mime.into();
+            p.data = session_files::base64(&bytes);
+        }
+        Ok(())
+    }
+}
+
+/// A picture the person attached: its saved copy's path (from the UI) and, once [`Input::resolve`] read it, its type
+/// and bytes (base64) for an agent that takes pictures inline.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(from = "String")]
+pub struct Picture {
+    pub path: String,
+    pub mime: String,
+    pub data: String,
+}
+
+impl From<String> for Picture {
+    fn from(path: String) -> Picture {
+        Picture { path, ..Picture::default() }
+    }
 }
 
 /// Events for the UI: the bot chat's own event names (`turn.start`, `tool.start`, `delta`, `message`,
 /// `approval.request`, `turn.end`, …) plus `session.info` (agent session id, model) and `session.models`.
 pub type Event = Value;
 
-fn ev(name: &str, fields: Value) -> Event {
+pub(crate) fn ev(name: &str, fields: Value) -> Event {
     let mut m = Map::new();
     m.insert("event".into(), Value::String(name.into()));
     if let Value::Object(f) = fields {
@@ -86,6 +221,14 @@ pub trait Adapter: Send {
     fn explain(&self, err: &str) -> String {
         err.to_string()
     }
+    /// The agent's name in a sentence ("Claude Code did not answer …").
+    fn name(&self) -> &str {
+        "The agent"
+    }
+    /// The program found is maybe not the agent at all (`Unrecognized`): its own reason wins over "old version".
+    fn unrecognized(&self) -> bool {
+        false
+    }
 }
 
 /// The adapter for an allow-listed chat agent, or `None` for agents that have no chat mode here. `resume` is a
@@ -97,7 +240,57 @@ pub fn adapter_for(id: &str, cwd: &str, resume: Option<&str>) -> Option<Box<dyn 
         "codex" => Some(Box::new(Codex::new(cwd, resume))),
         // OmO speaks pi's RPC (senpi engine): the same adapter, under its own name
         "pi" | "omp" | "omo" => Some(Box::new(Pi::new(cwd, label))),
+        _ if acp_agent(id).is_some() => Some(Box::new(Acp::new(acp_agent(id)?, cwd, resume))),
         _ => None,
+    }
+}
+
+/// An agent program found in none of its install layouts (`sessions::LAYOUTS`), so maybe another program with the
+/// same name: when it ends before printing one JSON line, its exit reason says so and names the install line,
+/// instead of that other program's own stderr. Everything else is the agent's adapter unchanged.
+struct Unrecognized {
+    inner: Box<dyn Adapter>,
+    /// `` `<path>` does not look like <agent> … ``
+    note: String,
+    spoke: bool,
+}
+
+impl Unrecognized {
+    fn wrap(inner: Box<dyn Adapter>, id: &str, path: &Path) -> Box<dyn Adapter> {
+        let (Some(a), Some(l)) = (agent(id), layout(id)) else { return inner };
+        let note = format!("{} does not look like {} (it is not where {} installs, and it ended without answering in its chat mode). Install {}: {}", path.display(), a.label, a.label, a.label, l.install);
+        Box::new(Unrecognized { inner, note, spoke: false })
+    }
+}
+
+impl Adapter for Unrecognized {
+    fn start(&mut self) -> Step {
+        self.inner.start()
+    }
+    fn on_line(&mut self, line: &str) -> Step {
+        self.spoke |= serde_json::from_str::<Value>(line.trim_start_matches('\u{feff}')).is_ok();
+        self.inner.on_line(line)
+    }
+    fn on_input(&mut self, input: Input) -> Result<Step, String> {
+        self.inner.on_input(input)
+    }
+    fn in_turn(&self) -> bool {
+        self.inner.in_turn()
+    }
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn unrecognized(&self) -> bool {
+        !self.spoke
+    }
+    fn explain(&self, err: &str) -> String {
+        let inner = self.inner.explain(err);
+        // a program that spoke the protocol, or said it is not signed in, is the agent after all
+        if self.spoke || inner.contains("not signed in") {
+            inner
+        } else {
+            self.note.clone()
+        }
     }
 }
 
@@ -105,16 +298,120 @@ pub fn adapter_for(id: &str, cwd: &str, resume: Option<&str>) -> Option<Box<dyn 
 // Shared helpers
 // ---------------------------------------------------------------------------------------------
 
-fn s(v: &Value, k: &str) -> String {
+pub(crate) fn s(v: &Value, k: &str) -> String {
     v.get(k).and_then(Value::as_str).unwrap_or("").to_string()
 }
 
-fn clip(t: &str, n: usize) -> String {
+pub(crate) fn clip(t: &str, n: usize) -> String {
     let one = t.split_whitespace().collect::<Vec<_>>().join(" ");
     if one.chars().count() <= n {
         one
     } else {
         format!("{}…", one.chars().take(n - 1).collect::<String>())
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Subagents: one agent-neutral event for every agent
+// ---------------------------------------------------------------------------------------------
+
+/// The subagents a session's agent started, as ONE event shape whatever the agent (Claude Code's Agent/Task tool,
+/// Codex sub-agent threads, OmO's `task`; later any ACP agent): `{"event": "subagent", id, agent, name, goal,
+/// delegation, index, count, state, model?, tool?, step?, summary?, seconds?}`. `id` is stable for the subagent
+/// (a later event with the same id updates its row); `delegation` groups the subagents started together (one fan-out);
+/// `state` is queued | running | thinking | done | failed | cancelled. omher only shows these: it never assigns,
+/// steers or stops a subagent.
+#[derive(Default)]
+struct Subagents {
+    agent: &'static str,
+    subs: HashMap<String, Sub>,
+    /// the fan-out filling now: its key and how many it has
+    fanout: (String, usize),
+}
+
+struct Sub {
+    name: String,
+    goal: String,
+    model: String,
+    delegation: String,
+    index: usize,
+    /// its last message so far: its answer when it ends without one of its own
+    text: String,
+    ended: bool,
+}
+
+impl Subagents {
+    fn new(agent: &'static str) -> Subagents {
+        Subagents { agent, ..Subagents::default() }
+    }
+    fn has(&self, id: &str) -> bool {
+        self.subs.contains_key(id)
+    }
+    /// Registers `id` in fan-out `delegation` (a new key starts a new fan-out), or returns it as it is.
+    fn add(&mut self, id: &str, delegation: &str, name: &str, goal: &str, model: &str) -> &mut Sub {
+        if !self.subs.contains_key(id) {
+            if self.fanout.0 != delegation {
+                self.fanout = (delegation.to_string(), 0);
+            }
+            let index = self.fanout.1;
+            self.fanout.1 += 1;
+            self.subs.insert(id.to_string(), Sub { name: clip(name, 80), goal: clip(goal, 160), model: String::new(), delegation: delegation.to_string(), index, text: String::new(), ended: false });
+        }
+        let s = self.subs.get_mut(id).unwrap();
+        if !model.is_empty() {
+            s.model = model.to_string();
+        }
+        if s.goal.is_empty() && !goal.is_empty() {
+            s.goal = clip(goal, 160);
+        }
+        s
+    }
+    /// The event for `id` in `state`, with `extra` fields (tool, step, summary, seconds). Unknown ids give none.
+    fn event(&self, id: &str, state: &str, extra: Value) -> Option<Event> {
+        let s = self.subs.get(id)?;
+        let count = if self.fanout.0 == s.delegation { self.fanout.1 } else { s.index + 1 };
+        let mut f = json!({"id": id, "agent": self.agent, "name": s.name, "goal": s.goal, "delegation": s.delegation, "index": s.index, "count": count, "state": state});
+        if !s.model.is_empty() {
+            f["model"] = Value::String(s.model.clone());
+        }
+        if let (Value::Object(m), Value::Object(x)) = (&mut f, extra) {
+            m.extend(x.into_iter().filter(|(_, v)| !v.is_null() && v.as_str() != Some("")));
+        }
+        Some(ev("subagent", f))
+    }
+    /// The subagents not yet ended, in the order they started.
+    fn open(&self) -> Vec<String> {
+        let mut v: Vec<(&String, &Sub)> = self.subs.iter().filter(|(_, s)| !s.ended).collect();
+        v.sort_by(|a, b| (&a.1.delegation, a.1.index).cmp(&(&b.1.delegation, b.1.index)));
+        v.into_iter().map(|(k, _)| k.clone()).collect()
+    }
+    /// A step the subagent runs now.
+    fn step(&self, st: &mut Step, id: &str, tool: &str, step: &str) {
+        st.events.extend(self.event(id, "running", json!({"tool": tool, "step": clip(step, 120)})));
+    }
+    /// Ends `id` once: done (its answer, else its last message), failed (the error) or cancelled.
+    fn end(&mut self, st: &mut Step, id: &str, state: &str, answer: &str, secs: Option<f64>) {
+        let Some(s) = self.subs.get_mut(id) else { return };
+        if s.ended {
+            return;
+        }
+        s.ended = true;
+        let text = if answer.trim().is_empty() { s.text.clone() } else { answer.to_string() };
+        // one plain line: a fenced answer ("```\nalpha line\n```") reads as its text
+        let mut f = json!({"summary": clip(&text.replace("```", " "), 200)});
+        if let Some(x) = secs {
+            f["seconds"] = json!((x * 10.0).round() / 10.0);
+        }
+        st.events.extend(self.event(id, state, f));
+    }
+}
+
+/// The ask (approval or question) events in `st` from index `from` on carry who asked: `subagent: {id, name}`.
+fn tag_asks(st: &mut Step, from: usize, id: &str, name: &str) {
+    for e in &mut st.events[from..] {
+        if matches!(s(e, "event").as_str(), "approval.request" | "clarify.request") {
+            e["subagent"] = json!({"id": id, "name": name});
+        }
     }
 }
 
@@ -199,8 +496,6 @@ fn unwrap_shell(cmd: &str) -> String {
     body.to_string()
 }
 
-/// The first useful line of what a program wrote to stderr: log lines (`2026-11-10T05:09:59Z ERROR …`) and
-/// blank lines skipped, else the last line.
 /// How a turn ends when its program exits in the middle of it: a clean exit (code 0, nothing on stderr) is
 /// "ended", which the UI shows in grey; any other exit is an "error" carrying the reason.
 pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
@@ -211,10 +506,79 @@ pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
     ev("turn.end", json!({"outcome": "error", "error": e}))
 }
 
+/// The first useful line of what a program wrote to stderr: colour codes removed, warnings dropped (`Warning: …`,
+/// a `WARN`/`INFO` log line, Codex's "ignoring 1 unrecognized configuration setting"), then the first line that
+/// is not a log line (`2026-11-10T05:09:59Z ERROR …`), else the last log line, else nothing.
 pub(crate) fn exit_reason(tail: &str) -> String {
     let is_log = |l: &str| l.len() > 11 && l.as_bytes()[..4].iter().all(u8::is_ascii_digit) && l.as_bytes()[4] == b'-' && l.as_bytes()[10] == b'T';
-    let lines: Vec<&str> = tail.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let warning = |l: &str| {
+        let low = l.to_ascii_lowercase();
+        low.starts_with("warning:") || low.starts_with("warn:") || (is_log(l) && [" WARN ", " INFO ", " DEBUG ", " TRACE "].iter().any(|w| l.contains(w))) || low.contains("unrecognized configuration setting")
+    };
+    let lines: Vec<String> = tail.lines().map(|l| strip_ansi(l).trim().to_string()).filter(|l| !l.is_empty() && !warning(l)).collect();
     lines.iter().find(|l| !is_log(l)).or(lines.last()).map(|l| clip(l, 200)).unwrap_or_default()
+}
+
+/// The protocol messages on one line of an agent's stdout, in order: a leading byte-order mark is dropped, and a line
+/// holding two JSON objects back to back (`{…}{…}`, a missed newline) yields both. A line that does not start with a
+/// JSON object (a banner, a terminal frame) yields nothing; after a bad value the rest of the line is dropped.
+pub(crate) fn protocol_lines(line: &str) -> Vec<&str> {
+    let line = line.trim_start_matches('\u{feff}');
+    let mut out = Vec::new();
+    let mut values = serde_json::Deserializer::from_str(line).into_iter::<serde::de::IgnoredAny>();
+    let mut from = 0;
+    while let Some(Ok(_)) = values.next() {
+        let to = values.byte_offset();
+        let one = line[from..to].trim();
+        if !one.starts_with('{') {
+            break;
+        }
+        out.push(one);
+        from = to;
+    }
+    out
+}
+
+/// How long a chat's program has to print its first protocol message. Measured on this Mac (load about 4.5) from
+/// start to the first JSON line: Claude Code 0.25 s, Codex 0.11-0.29 s, OmO 0.71-1.48 s. 20 s leaves a slow first
+/// start (a cold disk, an antivirus scan of node on Windows) more than ten times the slowest of those.
+pub(crate) const START_DEADLINE: Duration = Duration::from_secs(20);
+
+/// The reason a session ends with when its program never spoke its chat protocol: an old version that does not know
+/// the structured mode, or a start that hangs. The UI shows its own words for it (with the install line); this text
+/// is what reaches the session when it has none.
+pub(crate) fn no_chat_mode(agent: &str) -> String {
+    format!("{agent} did not answer in chat mode; it may be an old version: update it, then Restart.")
+}
+
+/// Whether `reason` (an exit's stderr) says the program refused omher's chat-mode arguments (`--mode rpc`,
+/// `app-server`, `--input-format` …): a version that does not have the mode.
+pub(crate) fn refused_chat_mode(reason: &str) -> bool {
+    let low = reason.to_ascii_lowercase();
+    ["unknown option", "unknown argument", "unexpected argument", "unrecognized option", "unrecognized argument", "invalid option", "unknown command", "unrecognized subcommand"]
+        .iter()
+        .any(|p| low.contains(p))
+}
+
+/// `text` without terminal colour and cursor codes (`ESC [ … letter`).
+fn strip_ansi(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut it = text.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '\u{1b}' {
+            if it.peek() == Some(&'[') {
+                it.next();
+                for d in it.by_ref() {
+                    if d.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// What a tool call is about, for the progress line and the approval card: the command, path, pattern,
@@ -251,7 +615,7 @@ fn tool_detail(input: &Value) -> String {
 }
 
 /// The bot chat's tool names for the verbs on the progress line ("Running", "Reading", "Editing" …).
-fn tool_kind(name: &str) -> &str {
+pub(crate) fn tool_kind(name: &str) -> &str {
     match name.to_ascii_lowercase().as_str() {
         "bash" | "shell" | "exec" | "exec_command" | "local_shell" | "powershell" | "eval" => "terminal",
         "read" | "notebookread" | "view" => "read_file",
@@ -291,7 +655,7 @@ fn file_call_detail(input: &Value, cwd: &str) -> String {
 }
 
 /// The progress-line detail of a tool call: the diff summary for file tools, else the command / path / query.
-fn call_detail(name: &str, input: &Value, cwd: &str) -> String {
+pub(crate) fn call_detail(name: &str, input: &Value, cwd: &str) -> String {
     if tool_kind(name) == "patch" {
         file_call_detail(input, cwd)
     } else {
@@ -380,15 +744,73 @@ pub struct Claude {
     auto_turn: bool,
     pending: HashMap<String, ClaudeAsk>,
     model: String,
+    /// a model the person picked while a turn ran: Claude Code uses it from the next turn on, whose init confirms it
+    model_next: String,
+    /// the turn that ran during that pick has ended: the next init settles the header, whatever it names
+    next_due: bool,
     /// model ids (`haiku`, `claude-haiku-5-5`) -> the name Claude Code shows for them
     labels: HashMap<String, String>,
     /// the last assistant message carried an error kind (`authentication_failed`, …)
     error_kind: String,
+    /// messages sent and not yet echoed back taken (`--replay-user-messages`)
+    waiting: Waiting,
+    /// its subagents (Agent/Task calls) by tool_use id
+    subs: Subagents,
+    /// Claude Code's agent / task id -> the tool_use id of its Agent call (asks and task events name the agent id)
+    agent_ids: HashMap<String, String>,
+    /// background tasks Claude Code says are still running (`background_tasks_changed`)
+    background: usize,
+    /// subagents that run in the background: their task notification ends them (a foreground one ends with its
+    /// tool result, which carries its own words and model)
+    bg_subs: std::collections::HashSet<String>,
 }
 
 impl Claude {
     pub fn new(cwd: &str) -> Claude {
-        Claude { cwd: cwd.into(), ..Claude::default() }
+        Claude { cwd: cwd.into(), subs: Subagents::new("claude"), ..Claude::default() }
+    }
+    /// The tool_use id of the subagent a line or request names (`parent_tool_use_id`, `tool_use_id`, an agent id).
+    fn sub_of(&self, v: &Value) -> Option<String> {
+        for k in ["parent_tool_use_id", "tool_use_id"] {
+            let id = s(v, k);
+            if self.subs.has(&id) {
+                return Some(id);
+            }
+        }
+        for k in ["agent_id", "task_id"] {
+            if let Some(id) = self.agent_ids.get(&s(v, k)) {
+                return Some(id.clone());
+            }
+        }
+        None
+    }
+    /// A line of a subagent's own conversation: its steps; its text is held as its answer, never shown as Claude's.
+    fn on_sub_line(&mut self, st: &mut Step, id: &str, v: &Value) {
+        let aid = s(v, "agent_id");
+        if !aid.is_empty() {
+            self.agent_ids.insert(aid, id.to_string());
+        }
+        if s(v, "type") != "assistant" {
+            return;
+        }
+        for b in v["message"].get("content").and_then(Value::as_array).into_iter().flatten() {
+            match s(b, "type").as_str() {
+                "tool_use" => {
+                    let name = s(b, "name");
+                    let input = b.get("input").cloned().unwrap_or(Value::Null);
+                    self.subs.step(st, id, tool_kind(&name), &call_detail(&name, &input, &self.cwd));
+                }
+                "text" => {
+                    let t = s(b, "text");
+                    if !t.trim().is_empty() {
+                        if let Some(sub) = self.subs.subs.get_mut(id) {
+                            sub.text = t;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
     fn next_id(&mut self, p: &str) -> String {
         self.seq += 1;
@@ -413,6 +835,21 @@ impl Claude {
             self.turn = false;
             self.auto_turn = false;
             self.pending.clear();
+            // a foreground subagent lives inside the turn: a turn that ends without its hand-back ended it too
+            // (Stop, an error); one in the background goes on and ends by its own task notification
+            if outcome != "done" {
+                let open: Vec<String> = self.subs.open().into_iter().filter(|id| !self.bg_subs.contains(id)).collect();
+                for id in open {
+                    self.subs.end(step, &id, "cancelled", "", None);
+                }
+            }
+            // a turn that finished took what was sent during it; one that was stopped runs its queued messages next
+            if outcome == "interrupted" {
+                self.waiting.keep_queued();
+            } else {
+                self.waiting.all_taken(step);
+            }
+            self.next_due = !self.model_next.is_empty();
             let mut f = json!({"outcome": outcome});
             if let Some(e) = error.filter(|e| !e.is_empty()) {
                 f["error"] = Value::String(e);
@@ -422,9 +859,34 @@ impl Claude {
     }
 }
 
+/// A subagent's answer from Claude Code's hand-back: the text blocks of `tool_use_result.content` without the
+/// `<tools-used-before-summary>` block; else the tool_result's own text after the frame's "The report follows:".
+fn claude_answer(tur: &Value, block: &Value) -> String {
+    let texts = |c: &Value| -> Vec<String> {
+        match c {
+            Value::String(t) => vec![t.clone()],
+            Value::Array(a) => a.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).collect(),
+            _ => vec![],
+        }
+    };
+    let own: Vec<String> = texts(&tur["content"]).into_iter().filter(|t| !t.trim_start().starts_with("<tools-used-before-summary>")).collect();
+    let text = if own.iter().any(|t| !t.trim().is_empty()) {
+        own.join("\n")
+    } else {
+        let all = texts(&block["content"]).join("\n");
+        let body = all.split("The report follows:").nth(1).unwrap_or(&all);
+        body.split("\nagentId:").next().unwrap_or(body).to_string()
+    };
+    text.replace("```", "").trim().to_string()
+}
+
 const CLAUDE_SIGNED_OUT: &str = "Claude Code is not signed in. Sign in from Settings › Accounts (or open Terminal and run /login), then Restart.";
 
 impl Adapter for Claude {
+    fn name(&self) -> &str {
+        "Claude Code"
+    }
+
     fn start(&mut self) -> Step {
         let mut st = Step::default();
         self.control(&mut st, "init", json!({"subtype": "initialize", "hooks": null}));
@@ -443,11 +905,52 @@ impl Adapter for Claude {
             "system" if s(&v, "subtype") == "init" => {
                 self.model = s(&v, "model");
                 let mut f = json!({"agent_session": s(&v, "session_id"), "model": self.label(&self.model)});
+                // the turn after a pick made mid-turn: its init names the model it runs on, which the header now shows
+                if !self.model_next.is_empty() && (self.next_due || self.label(&self.model_next) == self.label(&self.model)) {
+                    self.model_next.clear();
+                    f["model_next"] = Value::String(String::new());
+                }
+                self.next_due = false;
                 let mode = s(&v, "permissionMode");
                 if !mode.is_empty() {
-                    f["approval"] = Value::String(mode);
+                    f["approval"] = Value::String(mode.clone());
+                    f["mode"] = Value::String(mode);
                 }
                 st.emit(ev("session.info", f));
+            }
+            // a subagent (Agent/Task) or a background command started or ended; what still runs in the background
+            "system" if s(&v, "subtype") == "task_started" => {
+                if let Some(id) = self.sub_of(&v) {
+                    self.agent_ids.insert(s(&v, "task_id"), id);
+                }
+            }
+            "system" if s(&v, "subtype") == "task_notification" => {
+                if let Some(id) = self.sub_of(&v).filter(|id| self.bg_subs.contains(id)) {
+                    let state = match s(&v, "status").as_str() {
+                        "failed" | "error" => "failed",
+                        "stopped" | "killed" | "cancelled" | "interrupted" => "cancelled",
+                        _ => "done",
+                    };
+                    let secs = v.get("usage").and_then(|u| u.get("duration_ms")).and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                    self.subs.end(&mut st, &id, state, &s(&v, "summary"), secs);
+                }
+            }
+            "system" if s(&v, "subtype") == "background_tasks_changed" => {
+                let n = v.get("tasks").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+                if n != self.background {
+                    self.background = n;
+                    st.emit(ev("session.info", json!({"background": n})));
+                }
+            }
+            // a subagent's own conversation
+            _ if sub => {
+                if let Some(id) = self.sub_of(&v) {
+                    self.on_sub_line(&mut st, &id, &v);
+                }
+            }
+            // the permission mode changed (ours, or Claude Code's own ExitPlanMode)
+            "system" if s(&v, "subtype") == "status" && !s(&v, "permissionMode").is_empty() => {
+                st.emit(ev("session.info", json!({"mode": s(&v, "permissionMode")})));
             }
             // the conversation's name changed (a rename in Claude Code); Claude Code says it on its own
             "system" if s(&v, "subtype") == "session_title_changed" => {
@@ -461,6 +964,39 @@ impl Adapter for Claude {
                 let id = s(r, "request_id");
                 let body = &r["response"];
                 if id.starts_with("omher-init-") {
+                    // its own slash commands and skills (a skill's description ends with where it lives)
+                    let commands: Vec<Value> = body
+                        .get("commands")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter(|c| !s(c, "name").is_empty())
+                        .map(|c| {
+                            let d = s(c, "description");
+                            let skill = d.ends_with("(user)") || d.ends_with("(project)");
+                            command_entry(&s(c, "name"), &d, &s(c, "argumentHint"), if skill { "skill" } else { "command" }, "/")
+                        })
+                        .collect();
+                    if !commands.is_empty() {
+                        st.emit(ev("session.commands", json!({"commands": commands})));
+                    }
+                    let mode = s(body, "current_permission_mode");
+                    if !mode.is_empty() {
+                        st.emit(ev("session.info", json!({"mode": mode})));
+                    }
+                    // the effort levels of the model it runs (the `default` entry until it names one)
+                    let levels = body
+                        .get("models")
+                        .and_then(Value::as_array)
+                        .and_then(|ms| ms.iter().find(|m| s(m, "value") == "default").or(ms.first()))
+                        .filter(|m| m.get("supportsEffort").and_then(Value::as_bool).unwrap_or(false))
+                        .and_then(|m| m.get("supportedEffortLevels").cloned())
+                        .unwrap_or(json!([]));
+                    if levels.as_array().is_some_and(|l| !l.is_empty()) {
+                        st.emit(ev("session.efforts", json!({"levels": levels})));
+                        self.control(&mut st, "settings", json!({"subtype": "get_settings"}));
+                    }
+                    self.control(&mut st, "context", json!({"subtype": "get_context_usage"}));
                     if let Some(models) = body.get("models").and_then(Value::as_array) {
                         // the `default` entry first, so a named entry for the same model wins the label
                         let mut sorted: Vec<&Value> = models.iter().collect();
@@ -489,13 +1025,46 @@ impl Adapter for Claude {
                             st.emit(ev("session.info", json!({"model": self.label(&self.model)})));
                         }
                     }
+                } else if id.starts_with("omher-settings-") {
+                    let effort = s(&body["applied"], "effort");
+                    if !effort.is_empty() {
+                        st.emit(ev("session.info", json!({"effort": effort})));
+                    }
+                } else if id.starts_with("omher-context-") {
+                    // the CLI's own count of the context in use and its size
+                    let (used, max) = (body.get("totalTokens").and_then(Value::as_u64), body.get("maxTokens").and_then(Value::as_u64));
+                    if let (Some(used), Some(max)) = (used, max.filter(|m| *m > 0)) {
+                        st.emit(ev("session.usage", json!({"used": used, "max": max})));
+                    }
+                } else if id.starts_with("omher-mode-") || id.starts_with("omher-effort-") {
+                    if s(r, "subtype") == "success" {
+                        if id.starts_with("omher-effort-") {
+                            self.control(&mut st, "settings", json!({"subtype": "get_settings"}));
+                        }
+                    } else {
+                        let what = if id.starts_with("omher-mode-") { "Mode" } else { "Effort" };
+                        st.emit(ev("session.error", json!({"message": format!("{what} not changed: {}", s(r, "error"))})));
+                    }
                 } else if id.starts_with("omher-model-") {
                     if s(r, "subtype") == "success" {
                         let m = s(body, "model");
-                        if !m.is_empty() {
-                            self.model = m;
+                        if self.turn {
+                            // the running turn keeps the model it started on: the header says the pick is for the next
+                            // turn, and that turn's init confirms it
+                            if !m.is_empty() && self.label(&m) != self.label(&self.model) {
+                                self.model_next = m;
+                                st.emit(ev("session.info", json!({"model_next": self.label(&self.model_next)})));
+                            } else {
+                                self.model_next.clear();
+                                st.emit(ev("session.info", json!({"model_next": ""})));
+                            }
+                        } else {
+                            if !m.is_empty() {
+                                self.model = m;
+                            }
+                            self.model_next.clear();
+                            st.emit(ev("session.info", json!({"model": self.label(&self.model), "model_next": ""})));
                         }
-                        st.emit(ev("session.info", json!({"model": self.label(&self.model)})));
                     } else {
                         st.emit(ev("session.error", json!({"message": format!("Model not changed: {}", s(r, "error"))})));
                     }
@@ -520,6 +1089,11 @@ impl Adapter for Claude {
                         if !qs.is_empty() {
                             self.pending.insert(rid.clone(), ClaudeAsk::Question(input, ids));
                             st.emit(clarify_event(&rid, &qs));
+                            if let Some(id) = self.sub_of(req) {
+                                let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
+                                let n = st.events.len() - 1;
+                                tag_asks(&mut st, n, &id, &name);
+                            }
                             return st;
                         }
                     }
@@ -534,6 +1108,12 @@ impl Adapter for Claude {
                     };
                     self.pending.insert(rid.clone(), ClaudeAsk::Tool(name, input, req.get("permission_suggestions").cloned().unwrap_or(Value::Null)));
                     st.emit(ev("approval.request", with_cwd(json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES}), &self.cwd)));
+                    // asked inside a subagent (`agent_id`): the card says which one
+                    if let Some(id) = self.sub_of(req) {
+                        let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
+                        let n = st.events.len() - 1;
+                        tag_asks(&mut st, n, &id, &name);
+                    }
                 } else {
                     // hooks, MCP messages …: omher registers none of them
                     st.out(json!({"type": "control_response", "response": {"subtype": "error", "request_id": rid, "error": "not supported by omher"}}));
@@ -558,7 +1138,10 @@ impl Adapter for Claude {
                                 st.emit(ev("delta", json!({"text": t})));
                             }
                         }
-                        "thinking_delta" => st.emit(ev("thinking", json!({}))),
+                        "thinking_delta" => {
+                            self.begin(&mut st, true);
+                            st.emit(ev("thinking", json!({})));
+                        }
                         _ => {}
                     }
                 }
@@ -589,6 +1172,17 @@ impl Adapter for Claude {
                             }
                             self.begin(&mut st, true);
                             st.emit(ev("tool.start", json!({"tool_id": s(b, "id"), "name": tool_kind(&name), "detail": call_detail(&name, &input, &self.cwd)})));
+                            // a subagent: one Agent/Task call; the calls of one message start together (one fan-out)
+                            if tool_kind(&name) == "delegate_task" {
+                                let id = s(b, "id");
+                                let kind = s(&input, "subagent_type");
+                                let goal = if s(&input, "description").is_empty() { s(&input, "prompt") } else { s(&input, "description") };
+                                self.subs.add(&id, &format!("claude-{mid}"), if kind.is_empty() { "subagent" } else { &kind }, &goal, &s(&input, "model"));
+                                if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
+                                    self.bg_subs.insert(id.clone());
+                                }
+                                st.events.extend(self.subs.event(&id, "running", json!({})));
+                            }
                             if name == "Skill" {
                                 let sk = s(&input, "skill");
                                 if !sk.is_empty() {
@@ -600,11 +1194,34 @@ impl Adapter for Claude {
                     }
                 }
             }
+            // Claude Code took a message the person sent (`--replay-user-messages`): a queued one is not waiting now
+            "user" if !sub && v.get("isReplay").and_then(Value::as_bool) == Some(true) => {
+                self.waiting.take(&mut st);
+                // a message queued behind a stopped turn starts its own
+                self.begin(&mut st, false);
+            }
             "user" if !sub => {
+                let tur = v.get("tool_use_result").or_else(|| v.get("toolUseResult")).cloned().unwrap_or(Value::Null);
                 for b in v["message"].get("content").and_then(Value::as_array).into_iter().flatten() {
                     if s(b, "type") == "tool_result" {
                         let ok = !b.get("is_error").and_then(Value::as_bool).unwrap_or(false);
-                        st.emit(ev("tool.end", json!({"tool_id": s(b, "tool_use_id"), "name": "", "ok": ok, "ms": 0})));
+                        let tid = s(b, "tool_use_id");
+                        st.emit(ev("tool.end", json!({"tool_id": tid, "name": "", "ok": ok, "ms": 0})));
+                        // a subagent's hand-back: its own words (`tool_use_result.content`), not the frame around them;
+                        // a background one only launched here and ends with its task notification
+                        if self.subs.has(&tid) && matches!(s(&tur, "status").as_str(), "async_launched" | "teammate_spawned") {
+                            self.bg_subs.insert(tid.clone());
+                        } else if self.subs.has(&tid) {
+                            let answer = claude_answer(&tur, b);
+                            let secs = tur.get("totalDurationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                            let model = s(&tur, "resolvedModel");
+                            if !model.is_empty() {
+                                if let Some(x) = self.subs.subs.get_mut(&tid) {
+                                    x.model = model;
+                                }
+                            }
+                            self.subs.end(&mut st, &tid, if ok { "done" } else { "failed" }, &answer, secs);
+                        }
                     }
                 }
             }
@@ -635,6 +1252,8 @@ impl Adapter for Claude {
                     self.end(&mut st, "done", None);
                 }
                 self.error_kind.clear();
+                // how full the context is now, as Claude Code counts it
+                self.control(&mut st, "context", json!({"subtype": "get_context_usage"}));
             }
             _ => {}
         }
@@ -644,12 +1263,23 @@ impl Adapter for Claude {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text } => {
+            Input::Send { text, images, id } => {
+                // a message sent while the person's own turn runs waits until Claude Code takes it
+                let busy = self.turn && !self.auto_turn;
+                self.waiting.push(&mut st, id, busy);
                 self.begin(&mut st, false);
                 // the person's message joins a turn Claude Code started itself: it is theirs now
                 self.auto_turn = false;
+                // pictures as Claude Code's own image content (stream-json: an Anthropic base64 image block)
+                let mut content: Vec<Value> = images
+                    .iter()
+                    .map(|p| json!({"type": "image", "source": {"type": "base64", "media_type": p.mime, "data": p.data}}))
+                    .collect();
+                if !text.is_empty() || content.is_empty() {
+                    content.push(json!({"type": "text", "text": text}));
+                }
                 st.out(json!({"type": "user", "session_id": "", "parent_tool_use_id": null,
-                              "message": {"role": "user", "content": [{"type": "text", "text": text}]}}));
+                              "message": {"role": "user", "content": content}}));
             }
             Input::Interrupt => self.control(&mut st, "interrupt", json!({"subtype": "interrupt"})),
             Input::Approve { request_id, choice } => {
@@ -698,6 +1328,20 @@ impl Adapter for Claude {
                 st.out(json!({"type": "control_response", "response": {"subtype": "success", "request_id": request_id, "response": response}}));
             }
             Input::Model { model } => self.control(&mut st, "model", json!({"subtype": "set_model", "model": model})),
+            // Claude Code's own switch; it answers with a status line carrying the new mode
+            Input::Mode { mode } => {
+                if !modes_for("claude").contains(&mode.as_str()) {
+                    return Err(format!("not a mode omher offers: {mode}"));
+                }
+                self.control(&mut st, "mode", json!({"subtype": "set_permission_mode", "mode": mode}));
+            }
+            // for this process only (`apply_flag_settings`, never the settings file); omher sets it again on restart
+            Input::Effort { effort } => {
+                if !["low", "medium", "high", "xhigh", "max"].contains(&effort.as_str()) {
+                    return Err(format!("unknown effort {effort}"));
+                }
+                self.control(&mut st, "effort", json!({"subtype": "apply_flag_settings", "settings": {"effortLevel": effort}}));
+            }
         }
         Ok(st)
     }
@@ -728,13 +1372,26 @@ pub struct Codex {
     model: Option<String>,
     model_id: String,
     labels: HashMap<String, String>,
-    queued: Vec<String>,
+    queued: Vec<(String, Vec<Picture>, String)>,
     /// open approvals and questions by our request id
     pending: HashMap<String, CodexAsk>,
     /// diff summaries of fileChange items, shown on their approval card
     changes: HashMap<String, String>,
     /// the last error notification was a 401 (not signed in)
     unauthorized: bool,
+    /// Stop was pressed before Codex named the turn: interrupt it as soon as it does
+    stop_asked: bool,
+    /// the person's mode (approval policy, sandbox) and effort, sent with every turn from the next one on
+    mode: Option<(&'static str, &'static str)>,
+    effort: Option<String>,
+    /// effort levels per model, from model/list
+    efforts: HashMap<String, Value>,
+    /// skill name -> its SKILL.md path (skills/list), for `$name` in a message
+    skills: HashMap<String, String>,
+    waiting: Waiting,
+    /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
+    /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
+    helpers: Subagents,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -756,6 +1413,13 @@ impl Codex {
             pending: HashMap::new(),
             changes: HashMap::new(),
             unauthorized: false,
+            stop_asked: false,
+            mode: None,
+            effort: None,
+            efforts: HashMap::new(),
+            skills: HashMap::new(),
+            waiting: Waiting::default(),
+            helpers: Subagents::new("codex"),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -763,18 +1427,52 @@ impl Codex {
         self.calls.insert(self.seq, method);
         st.out(json!({"id": self.seq, "method": method, "params": params}));
     }
-    fn turn_start(&mut self, st: &mut Step, text: String) {
+    fn turn_start(&mut self, st: &mut Step, text: String, images: &[Picture], id: &str) {
         let thread = self.thread.clone().unwrap_or_default();
-        let mut p = json!({"threadId": thread, "input": [{"type": "text", "text": text}]});
+        // pictures as app-server `localImage` items: Codex reads the saved copy itself
+        let mut input: Vec<Value> = images.iter().map(|p| json!({"type": "localImage", "path": p.path})).collect();
+        if !text.is_empty() || input.is_empty() {
+            input.push(json!({"type": "text", "text": text}));
+        }
+        // a skill named as `$name` goes with it as Codex's own skill input, as its TUI sends it
+        for w in text.split_whitespace() {
+            if let Some(path) = w.strip_prefix('$').and_then(|n| self.skills.get(n).map(|p| (n, p))) {
+                input.push(json!({"type": "skill", "name": path.0, "path": path.1}));
+            }
+        }
+        let mut p = json!({"threadId": thread, "input": input});
         if let Some(m) = &self.model {
             p["model"] = Value::String(m.clone());
         }
+        if let Some((policy, sandbox)) = self.mode {
+            p["approvalPolicy"] = Value::String(policy.into());
+            p["sandboxPolicy"] = json!({"type": sandbox});
+        }
+        if let Some(e) = &self.effort {
+            p["effort"] = Value::String(e.clone());
+        }
+        if !id.is_empty() {
+            p["clientUserMessageId"] = Value::String(id.into());
+        }
         self.call(st, "turn/start", p);
+    }
+    /// The effort levels of `model`, as model/list gave them.
+    fn efforts_event(&self, model: &str) -> Option<Event> {
+        self.efforts.get(model).filter(|l| l.as_array().is_some_and(|a| !a.is_empty())).map(|l| ev("session.efforts", json!({"levels": l})))
     }
     fn label(&self, model: &str) -> String {
         self.labels.get(model).cloned().unwrap_or_else(|| model.to_string())
     }
+    /// Codex named the running turn: a Stop pressed before that interrupts it now.
+    fn named(&mut self, st: &mut Step, turn: &str) {
+        self.turn_id = Some(turn.into());
+        if std::mem::take(&mut self.stop_asked) && self.turn {
+            let thread = self.thread.clone().unwrap_or_default();
+            self.call(st, "turn/interrupt", json!({"threadId": thread, "turnId": turn}));
+        }
+    }
     fn end(&mut self, st: &mut Step, outcome: &str, error: Option<String>) {
+        self.stop_asked = false;
         if self.turn {
             self.turn = false;
             self.turn_id = None;
@@ -783,6 +1481,12 @@ impl Codex {
             let mut f = json!({"outcome": outcome});
             if let Some(e) = error.filter(|e| !e.is_empty()) {
                 f["error"] = Value::String(e);
+            }
+            // a stopped turn's messages that Codex never recorded were not sent; a finished one took them
+            if outcome == "interrupted" {
+                self.waiting.all_dropped(st);
+            } else {
+                self.waiting.all_taken(st);
             }
             st.emit(ev("turn.end", f));
         }
@@ -801,6 +1505,104 @@ impl Codex {
             Some(a) if a.len() == 1 && !s(&a[0], "command").is_empty() => s(&a[0], "command"),
             _ => raw,
         }
+    }
+    /// A sub-agent's thread: one Codex named as a sub-agent (`subAgentActivity`), or one whose turn belongs to
+    /// another turn (`rootTurnId`). Any other thread id is the session's own.
+    fn is_helper(&self, thread: &str) -> bool {
+        self.helpers.has(thread)
+    }
+    /// A turn of another thread that belongs to a running turn (a sub-agent of a sub-agent, or one Codex did not
+    /// announce): registered as a sub-agent.
+    fn adopt(&mut self, thread: &str, method: &str, p: &Value) {
+        if thread.is_empty() || self.is_helper(thread) || self.thread.as_deref() == Some(thread) || !method.starts_with("turn/") {
+            return;
+        }
+        let t = &p["turn"];
+        let root = s(t, "rootTurnId");
+        if !root.is_empty() && root != s(t, "id") {
+            self.helper(thread, "", "");
+        }
+    }
+    /// The sub-agent of `thread`, registered on first sight in the fan-out of the person's running turn
+    /// ("/root/read_first_line" -> "read first line"). Codex streams no task text for it: its goal stays empty.
+    fn helper(&mut self, thread: &str, path: &str, model: &str) -> &mut Sub {
+        let delegation = format!("codex-{}", self.turn_id.clone().unwrap_or_default());
+        let name = path.rsplit('/').next().unwrap_or("").replace('_', " ");
+        self.helpers.add(thread, &delegation, &name, "", model)
+    }
+    /// `subAgentActivity` (on the session's thread, or a sub-agent's for a nested one): one started or ended.
+    fn helper_activity(&mut self, st: &mut Step, item: &Value, done: bool) {
+        let thread = s(item, "agentThreadId");
+        if thread.is_empty() || self.thread.as_deref() == Some(thread.as_str()) {
+            return;
+        }
+        self.helper(&thread, &s(item, "agentPath"), &s(item, "model"));
+        match (s(item, "kind").as_str(), done) {
+            ("started", false) => st.events.extend(self.helpers.event(&thread, "running", json!({}))),
+            // its thread's own turn/completed normally says so first, with its time
+            ("completed", true) => self.helpers.end(st, &thread, "done", "", None),
+            _ => {}
+        }
+    }
+    /// A line of a sub-agent's own thread: its steps and its end. Its text is held as its answer, never shown as
+    /// Codex's; its deltas, reasoning and warnings are dropped.
+    fn on_helper_line(&mut self, st: &mut Step, thread: &str, method: &str, p: &Value) {
+        let item = p.get("item").cloned().unwrap_or(Value::Null);
+        match method {
+            "item/started" => {
+                if s(&item, "type") == "subAgentActivity" {
+                    return self.helper_activity(st, &item, false);
+                }
+                if let Some((tool, step)) = self.item_step(&item) {
+                    self.helpers.step(st, thread, &tool, &step);
+                }
+            }
+            "item/completed" => match s(&item, "type").as_str() {
+                "agentMessage" => {
+                    let t = s(&item, "text");
+                    if !t.trim().is_empty() {
+                        self.helper(thread, "", "").text = t;
+                    }
+                }
+                "subAgentActivity" => self.helper_activity(st, &item, true),
+                _ => {}
+            },
+            "turn/completed" => {
+                let t = &p["turn"];
+                let secs = t.get("durationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                match s(t, "status").as_str() {
+                    "interrupted" => self.helpers.end(st, thread, "cancelled", "", secs),
+                    "failed" => {
+                        let e = t.get("error").map(|e| s(e, "message")).unwrap_or_default();
+                        self.helpers.end(st, thread, "failed", if e.is_empty() { "failed" } else { &e }, secs)
+                    }
+                    _ => self.helpers.end(st, thread, "done", "", secs),
+                }
+            }
+            _ => {}
+        }
+    }
+    /// The step an item runs, as (tool kind, detail), for the items omher shows as steps.
+    fn item_step(&mut self, item: &Value) -> Option<(String, String)> {
+        let iid = s(item, "id");
+        Some(match s(item, "type").as_str() {
+            "commandExecution" => ("terminal".into(), clip(&Codex::command_of(item), 160)),
+            "fileChange" => {
+                let detail = self.file_changes(item);
+                let paths: Vec<String> = item.get("changes").and_then(Value::as_array).into_iter().flatten().map(|c| rel(&s(c, "path"), &self.cwd)).filter(|p| !p.is_empty()).collect();
+                self.changes.insert(iid, clip(&paths.join(", "), 120));
+                ("patch".into(), detail)
+            }
+            "mcpToolCall" => (s(item, "tool"), format!("{}.{}", s(item, "server"), s(item, "tool"))),
+            "dynamicToolCall" => (tool_kind(&s(item, "tool")).to_string(), tool_detail(&item["arguments"])),
+            "webSearch" => ("web_search".into(), s(item, "query")),
+            "imageView" => ("read_file".into(), rel(&s(item, "path"), &self.cwd)),
+            "sleep" => {
+                let secs = item.get("durationMs").and_then(Value::as_u64).unwrap_or(0) / 1000;
+                ("Waiting".into(), if secs > 0 { format!("{secs}s") } else { String::new() })
+            }
+            _ => return None,
+        })
     }
     fn file_changes(&self, item: &Value) -> String {
         let files: Vec<(String, u64, u64)> = item
@@ -824,6 +1626,10 @@ impl Codex {
 }
 
 impl Adapter for Codex {
+    fn name(&self) -> &str {
+        "Codex"
+    }
+
     fn start(&mut self) -> Step {
         let mut st = Step::default();
         self.call(&mut st, "initialize", json!({"clientInfo": {"name": "omher", "title": "omher", "version": env!("CARGO_PKG_VERSION")}, "capabilities": {"experimentalApi": false}}));
@@ -845,8 +1651,27 @@ impl Adapter for Codex {
             let what = self.calls.remove(&n).unwrap_or("");
             if let Some(err) = v.get("error") {
                 let msg = s(err, "message");
-                if what == "turn/start" {
+                if what == "thread/resume" {
+                    // The thread to continue is gone (deleted or archived: "no rollout found"): start a new one in the
+                    // same folder, say so, and send what was queued to it once Codex names it.
+                    self.resume = None;
+                    st.emit(ev("session.note", json!({"kind": "new_conversation", "text": clip(&format!("The earlier Codex conversation was not found ({msg}); a new one started."), 240)})));
+                    let cwd = self.cwd.clone();
+                    self.call(&mut st, "thread/start", json!({"cwd": cwd}));
+                } else if what == "turn/start" {
                     self.end(&mut st, "error", Some(clip(&msg, 200)));
+                } else if what == "turn/interrupt" && self.turn {
+                    // a refused Stop says so where the person looks: the running turn's line
+                    st.emit(ev("status", json!({"text": clip(&format!("Codex did not stop: {msg}"), 160)})));
+                } else if what == "thread/start" {
+                    // no thread to send to: a message waiting for one ends its turn with the reason
+                    self.queued.clear();
+                    let m = clip(&format!("Codex could not start a conversation: {msg}"), 200);
+                    if self.turn {
+                        self.end(&mut st, "error", Some(m));
+                    } else {
+                        st.emit(ev("session.error", json!({"message": m})));
+                    }
                 } else {
                     st.emit(ev("session.error", json!({"message": format!("{what}: {msg}")})));
                 }
@@ -864,17 +1689,26 @@ impl Adapter for Codex {
                         }
                     }
                     self.call(&mut st, "model/list", json!({}));
+                    let cwd = self.cwd.clone();
+                    self.call(&mut st, "skills/list", json!({"cwds": [cwd]}));
                 }
                 "thread/start" | "thread/resume" => {
                     self.thread = r["thread"].get("id").and_then(Value::as_str).map(String::from);
                     self.model_id = s(r, "model");
                     let mut f = json!({"agent_session": self.thread.clone().unwrap_or_default(), "model": self.label(&self.model_id)});
                     let policy = s(r, "approvalPolicy");
+                    let sandbox = r.get("sandbox").map(|x| s(x, "type")).unwrap_or_default();
+                    // the thread's own mode when it is one of ours; any other (Codex's config) shows as the agent's
+                    f["mode"] = Value::String(codex_mode_of(&policy, &sandbox).unwrap_or("").into());
                     if !policy.is_empty() {
                         f["approval"] = Value::String(policy);
                     }
-                    if let Some(sb) = r.get("sandbox").map(|x| s(x, "type")).filter(|x| !x.is_empty()) {
-                        f["sandbox"] = Value::String(sb);
+                    if !sandbox.is_empty() {
+                        f["sandbox"] = Value::String(sandbox);
+                    }
+                    let effort = s(r, "reasoningEffort");
+                    if !effort.is_empty() {
+                        f["effort"] = Value::String(effort);
                     }
                     // a resumed thread carries the name Codex (or the person) gave it
                     let name = title_of(&s(&r["thread"], "name"));
@@ -882,13 +1716,16 @@ impl Adapter for Codex {
                         f["title"] = Value::String(name);
                     }
                     st.emit(ev("session.info", f));
-                    for text in std::mem::take(&mut self.queued) {
-                        self.turn_start(&mut st, text);
+                    if let Some(e) = self.efforts_event(&self.model_id) {
+                        st.emit(e);
+                    }
+                    for (text, images, id) in std::mem::take(&mut self.queued) {
+                        self.turn_start(&mut st, text, &images, &id);
                     }
                 }
                 "turn/start" => {
                     if let Some(t) = r["turn"].get("id").and_then(Value::as_str) {
-                        self.turn_id = Some(t.into());
+                        self.named(&mut st, t);
                     }
                 }
                 "model/list" => {
@@ -899,10 +1736,33 @@ impl Adapter for Codex {
                             self.labels.insert(s(m, "model"), label);
                         }
                     }
+                    for m in &list {
+                        let levels: Vec<Value> = m.get("supportedReasoningEfforts").and_then(Value::as_array).into_iter().flatten().map(|e| Value::String(s(e, "reasoningEffort"))).filter(|e| e != "").collect();
+                        self.efforts.insert(s(m, "model"), Value::Array(levels));
+                    }
                     let options: Vec<Value> = list.iter().map(|m| json!({"id": s(m, "model"), "label": s(m, "displayName"), "detail": s(m, "description")})).collect();
                     st.emit(ev("session.models", json!({"options": options})));
+                    if let Some(e) = self.efforts_event(&self.model_id) {
+                        st.emit(e);
+                    }
                     if !self.model_id.is_empty() {
                         st.emit(ev("session.info", json!({"model": self.label(&self.model_id)})));
+                    }
+                }
+                "skills/list" => {
+                    // Codex's skills, typed as `$name`
+                    let mut commands = Vec::new();
+                    for sk in r.get("data").and_then(Value::as_array).into_iter().flatten().flat_map(|d| d.get("skills").and_then(Value::as_array).into_iter().flatten()) {
+                        let name = s(sk, "name");
+                        if name.is_empty() || sk.get("enabled").and_then(Value::as_bool) == Some(false) || self.skills.contains_key(&name) {
+                            continue;
+                        }
+                        self.skills.insert(name.clone(), s(sk, "path"));
+                        let d = if s(sk, "shortDescription").is_empty() { s(sk, "description") } else { s(sk, "shortDescription") };
+                        commands.push(command_entry(&name, &d, "", "skill", "$"));
+                    }
+                    if !commands.is_empty() {
+                        st.emit(ev("session.commands", json!({"commands": commands})));
                     }
                 }
                 _ => {}
@@ -911,8 +1771,10 @@ impl Adapter for Codex {
         }
         let p = v.get("params").cloned().unwrap_or(Value::Null);
         // a request from the server (approvals, questions); anything we do not handle is answered with an error
+        let thread = s(&p, "threadId");
         if let Some(rpc_id) = id {
             let key = format!("codex-{}", rpc_id);
+            let n = st.events.len();
             match method.as_str() {
                 "item/commandExecution/requestApproval" => {
                     let reason = s(&p, "reason");
@@ -945,6 +1807,16 @@ impl Adapter for Codex {
                 }
                 _ => st.out(json!({"id": rpc_id, "error": {"code": -32601, "message": "not supported by omher"}})),
             }
+            // asked inside a sub-agent: the card says which one
+            if self.is_helper(&thread) {
+                let name = self.helper(&thread, "", "").name.clone();
+                tag_asks(&mut st, n, &thread, &name);
+            }
+            return st;
+        }
+        self.adopt(&thread, &method, &p);
+        if self.is_helper(&thread) && method != "serverRequest/resolved" {
+            self.on_helper_line(&mut st, &thread, &method, &p);
             return st;
         }
         let item = p.get("item").cloned().unwrap_or(Value::Null);
@@ -957,12 +1829,19 @@ impl Adapter for Codex {
                 }
             }
             "turn/started" => {
-                if let Some(t) = p["turn"].get("id").and_then(Value::as_str) {
-                    self.turn_id = Some(t.into());
-                }
                 if !self.turn {
                     self.turn = true;
                     st.emit(ev("turn.start", json!({})));
+                }
+                if let Some(t) = p["turn"].get("id").and_then(Value::as_str) {
+                    self.named(&mut st, t);
+                }
+            }
+            // how full the context is, as Codex counts it (the last request's tokens against the model's window)
+            "thread/tokenUsage/updated" => {
+                let u = &p["tokenUsage"];
+                if let (Some(used), Some(max)) = (u["last"].get("totalTokens").and_then(Value::as_u64), u.get("modelContextWindow").and_then(Value::as_u64).filter(|m| *m > 0)) {
+                    st.emit(ev("session.usage", json!({"used": used, "max": max})));
                 }
             }
             "item/agentMessage/delta" => {
@@ -973,29 +1852,26 @@ impl Adapter for Codex {
             }
             "item/reasoning/textDelta" | "item/reasoning/summaryTextDelta" => st.emit(ev("thinking", json!({}))),
             "item/started" => {
-                let iid = s(&item, "id");
                 match s(&item, "type").as_str() {
-                    "commandExecution" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "terminal", "detail": clip(&Codex::command_of(&item), 160)}))),
-                    "fileChange" => {
-                        let detail = self.file_changes(&item);
-                        let paths: Vec<String> = item.get("changes").and_then(Value::as_array).into_iter().flatten().map(|c| rel(&s(c, "path"), &self.cwd)).filter(|p| !p.is_empty()).collect();
-                        self.changes.insert(iid.clone(), clip(&paths.join(", "), 120));
-                        st.emit(ev("tool.start", json!({"tool_id": iid, "name": "patch", "detail": detail})));
+                    // Codex recorded a message the person sent (our id as its clientId)
+                    "userMessage" => {
+                        let cid = s(&item, "clientId");
+                        if !cid.is_empty() {
+                            self.waiting.take_id(&mut st, &cid);
+                        }
                     }
-                    "mcpToolCall" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": s(&item, "tool"), "detail": format!("{}.{}", s(&item, "server"), s(&item, "tool"))}))),
-                    "dynamicToolCall" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": tool_kind(&s(&item, "tool")), "detail": tool_detail(&item["arguments"])}))),
-                    "webSearch" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "web_search", "detail": s(&item, "query")}))),
-                    "imageView" => st.emit(ev("tool.start", json!({"tool_id": iid, "name": "read_file", "detail": rel(&s(&item, "path"), &self.cwd)}))),
-                    "sleep" => {
-                        let secs = item.get("durationMs").and_then(Value::as_u64).unwrap_or(0) / 1000;
-                        st.emit(ev("tool.start", json!({"tool_id": iid, "name": "Waiting", "detail": if secs > 0 { format!("{secs}s") } else { String::new() }})));
+                    "subAgentActivity" => self.helper_activity(&mut st, &item, false),
+                    _ => {
+                        if let Some((name, detail)) = self.item_step(&item) {
+                            st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
+                        }
                     }
-                    _ => {}
                 }
             }
             "item/completed" => {
                 let iid = s(&item, "id");
                 match s(&item, "type").as_str() {
+                    "subAgentActivity" => self.helper_activity(&mut st, &item, true),
                     "agentMessage" => {
                         // a question in the message: a question card instead of the bubble
                         let qs: Vec<(String, String, Vec<String>, bool)> = item
@@ -1054,11 +1930,15 @@ impl Adapter for Codex {
                 if info.to_string().contains("\"httpStatusCode\":401") {
                     self.unauthorized = true;
                 }
+                // a status shows only while a turn runs; outside one an error is a note under the chat
                 if p.get("willRetry").and_then(Value::as_bool).unwrap_or(false) {
                     // "Reconnecting... 2/5": say it on the progress line instead of a silent wait
-                    st.emit(ev("status", json!({"text": clip(&s(e, "message"), 120)})));
+                    if self.turn {
+                        st.emit(ev("status", json!({"text": clip(&s(e, "message"), 120)})));
+                    }
                 } else if !self.unauthorized {
-                    st.emit(ev("status", json!({"text": clip(&format!("Error: {}", s(e, "message")), 160)})));
+                    let text = clip(&format!("Error: {}", s(e, "message")), 160);
+                    st.emit(if self.turn { ev("status", json!({"text": text})) } else { ev("session.error", json!({"message": text})) });
                 }
             }
             _ => {}
@@ -1069,21 +1949,31 @@ impl Adapter for Codex {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text } => {
+            Input::Send { text, images, id } => {
+                // a message sent while a turn runs joins it once Codex records it
+                self.waiting.push(&mut st, id.clone(), self.turn);
                 if !self.turn {
                     self.turn = true;
                     st.emit(ev("turn.start", json!({})));
                 }
                 if self.thread.is_none() {
-                    self.queued.push(text);
+                    self.queued.push((text, images, id));
                 } else {
-                    self.turn_start(&mut st, text);
+                    self.turn_start(&mut st, text, &images, &id);
                 }
             }
-            Input::Interrupt => {
-                let (Some(thread), Some(turn)) = (self.thread.clone(), self.turn_id.clone()) else { return Err("nothing is running".into()) };
-                self.call(&mut st, "turn/interrupt", json!({"threadId": thread, "turnId": turn}));
-            }
+            Input::Interrupt => match (self.thread.clone(), self.turn_id.clone()) {
+                (Some(thread), Some(turn)) => self.call(&mut st, "turn/interrupt", json!({"threadId": thread, "turnId": turn})),
+                _ if !self.turn => return Err("nothing is running".into()),
+                // the message still waits for the thread: it is never sent
+                (None, _) => {
+                    self.queued.clear();
+                    self.waiting.all_dropped(&mut st);
+                    self.end(&mut st, "interrupted", None);
+                }
+                // sent, but Codex has not named the turn yet
+                (Some(_), None) => self.stop_asked = true,
+            },
             Input::Approve { request_id, choice } => {
                 let rpc_id = match self.pending.remove(&request_id) {
                     Some(CodexAsk::Command(id)) | Some(CodexAsk::File(id)) => id,
@@ -1121,7 +2011,7 @@ impl Adapter for Codex {
                                 self.turn = true;
                                 st.emit(ev("turn.start", json!({})));
                             }
-                            self.turn_start(&mut st, text);
+                            self.turn_start(&mut st, text, &[], "");
                         }
                     }
                 }
@@ -1135,6 +2025,24 @@ impl Adapter for Codex {
                 // app-server takes the model per turn; the next turn uses it
                 self.model = Some(model.clone());
                 st.emit(ev("session.info", json!({"model": self.label(&model)})));
+                if let Some(e) = self.efforts_event(&model) {
+                    st.emit(e);
+                }
+            }
+            // per turn as well: approval policy and sandbox go with the next turn/start (and Codex keeps them)
+            Input::Mode { mode } => {
+                let m = codex_mode(&mode).ok_or_else(|| format!("not a mode omher offers: {mode}"))?;
+                self.mode = Some(m);
+                st.emit(ev("session.info", json!({"mode": mode})));
+            }
+            Input::Effort { effort } => {
+                let model = self.model.clone().unwrap_or_else(|| self.model_id.clone());
+                let known = self.efforts.get(&model).and_then(Value::as_array).is_some_and(|l| l.iter().any(|e| e == effort.as_str()));
+                if !known {
+                    return Err(format!("{model} has no effort {effort}"));
+                }
+                self.effort = Some(effort.clone());
+                st.emit(ev("session.info", json!({"effort": effort})));
             }
         }
         Ok(st)
@@ -1166,6 +2074,17 @@ pub struct Pi {
     last_stop: String,
     last_error: String,
     pending: HashMap<String, PiAsk>,
+    /// thinking levels it offers (`get_available_thinking_levels`)
+    levels: Vec<String>,
+    reads: u64,
+    waiting: Waiting,
+    /// OmO's subagents (`task` tool), by task id once OmO names them (`st_…`), else `<call id>:<n>`
+    subs: Subagents,
+    /// OmO's task id -> our subagent id; a `task` call id -> its subagents in order
+    task_ids: HashMap<String, String>,
+    calls_subs: HashMap<String, Vec<String>>,
+    /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
+    background: usize,
 }
 
 /// oh-my-pi's tool approval as a select (`Allow tool: bash\nCommand: ls -la` with Approve / Approve bash for this
@@ -1191,11 +2110,97 @@ fn pi_approval(title: &str, options: &[String]) -> Option<(String, String, PiAsk
 
 impl Pi {
     pub fn new(cwd: &str, label: &str) -> Pi {
-        Pi { cwd: cwd.into(), label: label.into(), ..Pi::default() }
+        let agent = match label {
+            "OmO" => "omo",
+            "oh-my-pi" => "omp",
+            _ => "pi",
+        };
+        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), ..Pi::default() }
     }
-    fn cmd(&mut self, st: &mut Step, kind: &'static str, mut fields: Value) {
+    /// A `task` call: one subagent per entry of `tasks` (or the call itself with one task), one fan-out per call.
+    fn task_start(&mut self, st: &mut Step, call: &str, args: &Value) {
+        let one = [args.clone()];
+        let tasks: &[Value] = args.get("tasks").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&one);
+        let kind = s(args, "subagent_type");
+        let mut ids = vec![];
+        for (i, t) in tasks.iter().enumerate() {
+            let id = format!("{call}:{i}");
+            let name = [s(t, "name"), s(t, "subagent_type"), kind.clone()].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
+            let goal = [s(t, "task_summary"), s(t, "description"), s(t, "prompt")].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
+            self.subs.add(&id, &format!("pi-{call}"), &name, &goal, "");
+            st.events.extend(self.subs.event(&id, "queued", json!({})));
+            ids.push(id);
+        }
+        self.calls_subs.insert(call.to_string(), ids);
+    }
+    /// The `task` call's result names each subagent's task id, model and state (a background one runs on).
+    fn task_end(&mut self, st: &mut Step, call: &str, v: &Value) {
+        let Some(ids) = self.calls_subs.remove(call) else { return };
+        let d = &v["result"]["details"];
+        let one = [d.clone()];
+        let items: &[Value] = d.get("items").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&one);
+        let failed = v.get("isError").and_then(Value::as_bool).unwrap_or(false);
+        for (i, id) in ids.iter().enumerate() {
+            let it = items.get(i).cloned().unwrap_or(Value::Null);
+            let tid = s(&it, "task_id");
+            if !tid.is_empty() {
+                self.task_ids.insert(tid, id.clone());
+            }
+            let model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            if let Some(x) = self.subs.subs.get_mut(id) {
+                if !model.is_empty() {
+                    x.model = model;
+                }
+            }
+            match s(&it, "status").as_str() {
+                _ if failed => {
+                    let e = v["result"]["content"].as_array().and_then(|a| a.first()).map(|b| s(b, "text")).unwrap_or_default();
+                    self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, None)
+                }
+                "completed" => self.subs.end(st, id, "done", &s(&it, "final_response"), None),
+                "failed" | "error" => self.subs.end(st, id, "failed", &s(&it, "error"), None),
+                "cancelled" | "aborted" => self.subs.end(st, id, "cancelled", "", None),
+                _ => st.events.extend(self.subs.event(id, "running", json!({}))),
+            }
+        }
+    }
+    /// OmO's notice that a background subagent finished (`senpi-task.completion` in a wake message's details).
+    fn task_done(&mut self, st: &mut Step, m: &Value) {
+        for p in m["details"].get("producerDetails").and_then(Value::as_array).into_iter().flatten() {
+            if s(p, "customType") != "senpi-task.completion" {
+                continue;
+            }
+            for d in p.get("details").and_then(Value::as_array).into_iter().flatten() {
+                let Some(id) = self.task_ids.get(&s(d, "task_id")).cloned() else { continue };
+                let model = s(d, "model");
+                if let Some(x) = self.subs.subs.get_mut(&id) {
+                    if !model.is_empty() {
+                        x.model = model.rsplit('/').next().unwrap_or(&model).to_string();
+                    }
+                }
+                let secs = d.get("duration_ms").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
+                let state = match s(d, "status").as_str() {
+                    "completed" => "done",
+                    "cancelled" | "aborted" => "cancelled",
+                    _ => "failed",
+                };
+                let answer = if state == "failed" { s(d, "error") } else { s(d, "final_response") };
+                self.subs.end(st, &id, state, if state == "failed" && answer.is_empty() { "failed" } else { &answer }, secs);
+            }
+        }
+    }
+    fn cmd(&mut self, st: &mut Step, kind: &'static str, fields: Value) {
         self.seq += 1;
         let id = format!("omher-{}", self.seq);
+        self.send_cmd(st, kind, id, fields);
+    }
+    /// A read on the side (levels, commands, usage): its own ids, so the person's commands keep theirs.
+    fn read(&mut self, st: &mut Step, kind: &'static str) {
+        self.reads += 1;
+        let id = format!("omher-r{}", self.reads);
+        self.send_cmd(st, kind, id, json!({}));
+    }
+    fn send_cmd(&mut self, st: &mut Step, kind: &'static str, id: String, mut fields: Value) {
         self.calls.insert(id.clone(), kind);
         fields["id"] = Value::String(id);
         fields["type"] = Value::String(kind.into());
@@ -1206,6 +2211,10 @@ impl Pi {
             self.turn = false;
             self.streaming = false;
             self.pending.clear();
+            // a run takes its follow-ups before it ends; what is left was cleared by Stop
+            self.waiting.all_dropped(st);
+            // how full the context is now
+            self.read(st, "get_session_stats");
             let (outcome, err) = match self.last_stop.as_str() {
                 "aborted" => ("interrupted", String::new()),
                 "error" => ("error", self.last_error.clone()),
@@ -1230,6 +2239,30 @@ impl Pi {
     }
 }
 
+/// `session.usage` from an rpc `contextUsage` (`{tokens, contextWindow}`), when it has both.
+fn pi_usage(u: &Value) -> Option<Event> {
+    let used = u.get("tokens").and_then(Value::as_u64)?;
+    let max = u.get("contextWindow").and_then(Value::as_u64).filter(|m| *m > 0)?;
+    Some(ev("session.usage", json!({"used": used, "max": max})))
+}
+
+/// `session.commands` from an rpc command list: slash commands and prompts as `/name`, skills as `$skill:name`.
+fn pi_commands(d: &Value) -> Event {
+    let commands: Vec<Value> = d
+        .get("commands")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| !s(c, "name").is_empty())
+        .map(|c| {
+            let skill = s(c, "source") == "skill";
+            let prefix = if s(c, "syntax") == "dollar" { "$" } else { "/" };
+            command_entry(&s(c, "name"), &s(c, "description"), "", if skill { "skill" } else { "command" }, prefix)
+        })
+        .collect();
+    ev("session.commands", json!({"commands": commands}))
+}
+
 fn pi_model(m: &Value) -> Value {
     let provider = s(m, "provider");
     let id = s(m, "id");
@@ -1242,10 +2275,20 @@ impl Adapter for Pi {
         self.friendly(err)
     }
 
+    fn name(&self) -> &str {
+        if self.label.is_empty() {
+            "pi"
+        } else {
+            &self.label
+        }
+    }
+
     fn start(&mut self) -> Step {
         let mut st = Step::default();
         self.cmd(&mut st, "get_state", json!({}));
         self.cmd(&mut st, "get_available_models", json!({}));
+        self.read(&mut st, "get_available_thinking_levels");
+        self.read(&mut st, "get_commands");
         st
     }
 
@@ -1267,7 +2310,8 @@ impl Adapter for Pi {
                         self.last_stop = "error".into();
                         self.last_error = e;
                         self.end(&mut st);
-                    } else if !what.is_empty() {
+                    } else if !what.is_empty() && !matches!(what, "get_available_thinking_levels" | "get_commands" | "get_session_stats") {
+                        // (an agent without those reads simply has no levels, commands or usage)
                         st.emit(ev("session.error", json!({"message": format!("{}: {}", s(&v, "command"), self.friendly(&e))})));
                     }
                     return st;
@@ -1275,7 +2319,27 @@ impl Adapter for Pi {
                 match what {
                     "get_state" => {
                         let model = d.get("model").map(|m| s(m, "name")).filter(|n| !n.is_empty() && n != "unknown").or_else(|| d.get("model").map(|m| s(m, "id")).filter(|n| n != "unknown")).unwrap_or_default();
-                        st.emit(ev("session.info", json!({"agent_session": s(d, "sessionId"), "model": model})));
+                        let mut f = json!({"agent_session": s(d, "sessionId"), "model": model});
+                        let level = s(d, "thinkingLevel");
+                        if !level.is_empty() {
+                            f["effort"] = Value::String(level);
+                        }
+                        st.emit(ev("session.info", f));
+                        if let Some(u) = pi_usage(&d["contextUsage"]) {
+                            st.emit(u);
+                        }
+                    }
+                    "get_available_thinking_levels" => {
+                        self.levels = d.get("levels").and_then(Value::as_array).into_iter().flatten().filter_map(|l| l.as_str().map(String::from)).collect();
+                        if !self.levels.is_empty() {
+                            st.emit(ev("session.efforts", json!({"levels": self.levels})));
+                        }
+                    }
+                    "get_commands" => st.emit(pi_commands(d)),
+                    "get_session_stats" => {
+                        if let Some(u) = pi_usage(&d["contextUsage"]) {
+                            st.emit(u);
+                        }
                     }
                     "get_available_models" => {
                         let options: Vec<Value> = d.get("models").and_then(Value::as_array).into_iter().flatten().map(pi_model).collect();
@@ -1313,6 +2377,14 @@ impl Adapter for Pi {
                     _ => {}
                 }
             }
+            // the agent took the person's message (a follow-up leaves its queue here)
+            "message_end" if s(&v["message"], "role") == "user" => self.waiting.take(&mut st),
+            "thinking_level_changed" => st.emit(ev("session.info", json!({"effort": s(&v, "level")}))),
+            "commands_changed" => st.emit(pi_commands(&v)),
+            "message_start" if s(&v["message"], "role") == "custom" => {
+                let m = v["message"].clone();
+                self.task_done(&mut st, &m);
+            }
             "message_end" => {
                 let m = &v["message"];
                 if s(m, "role") == "assistant" {
@@ -1332,15 +2404,44 @@ impl Adapter for Pi {
             "tool_execution_start" => {
                 let name = s(&v, "toolName");
                 let args = v.get("args").cloned().unwrap_or(Value::Null);
-                st.emit(ev("tool.start", json!({"tool_id": s(&v, "toolCallId"), "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                let call = s(&v, "toolCallId");
+                if name == "task" {
+                    // the step names its subagents, never the call's raw JSON; each one gets its own row
+                    let names: Vec<String> = args.get("tasks").and_then(Value::as_array).into_iter().flatten().map(|t| s(t, "name")).filter(|n| !n.is_empty()).collect();
+                    let detail = if names.is_empty() { tool_detail(&args) } else { names.join(", ") };
+                    st.emit(ev("tool.start", json!({"tool_id": call, "name": "delegate_task", "detail": clip(&detail, 160)})));
+                    self.task_start(&mut st, &call, &args);
+                } else {
+                    st.emit(ev("tool.start", json!({"tool_id": call, "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                }
             }
             "tool_execution_end" => {
                 let ok = !v.get("isError").and_then(Value::as_bool).unwrap_or(false);
-                st.emit(ev("tool.end", json!({"tool_id": s(&v, "toolCallId"), "name": "", "ok": ok, "ms": 0})));
+                let call = s(&v, "toolCallId");
+                st.emit(ev("tool.end", json!({"tool_id": call, "name": "", "ok": ok, "ms": 0})));
+                self.task_end(&mut st, &call, &v);
+            }
+            // what still runs after the turn: background commands (subagents have their own rows)
+            "session_lifecycle" => {
+                let w = &v["lifecycle"]["waitingOn"];
+                let n: usize = w.get("background").and_then(Value::as_array).into_iter().flatten()
+                    .filter(|b| !s(b, "source").starts_with("delivery:"))
+                    .map(|b| b.get("activeCount").and_then(Value::as_u64).unwrap_or(1) as usize).sum();
+                if n != self.background {
+                    self.background = n;
+                    st.emit(ev("session.info", json!({"background": n})));
+                }
             }
             // Both end a run with agent_end. oh-my-pi then adds prompt_result and session_settled, which can arrive
             // after the person's next prompt was sent, so they never end a turn, except a prompt no agent ran for.
-            "agent_end" => self.end(&mut st),
+            "agent_end" => {
+                // a Stop that hit a running tool leaves the last message at stopReason "toolUse": agent_end itself
+                // says the run was aborted
+                if v.get("aborted").and_then(Value::as_bool) == Some(true) {
+                    self.last_stop = "aborted".into();
+                }
+                self.end(&mut st)
+            }
             "prompt_result" if v.get("agentInvoked").and_then(Value::as_bool) == Some(false) => self.end(&mut st),
             "extension_ui_request" => {
                 let id = s(&v, "id");
@@ -1375,9 +2476,10 @@ impl Adapter for Pi {
                             st.emit(ev("prompt.expired", json!({"request_id": target, "reason": "timeout"})));
                         }
                     }
+                    // OmO sets its own statuses (memory, goal, web search) after agent_end too: those are not a turn
                     "setStatus" => {
                         let t = s(&v, "statusText");
-                        if !t.is_empty() {
+                        if !t.is_empty() && self.turn {
                             st.emit(ev("status", json!({"text": clip(&t, 120)})));
                         }
                     }
@@ -1392,8 +2494,13 @@ impl Adapter for Pi {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text } => {
+            Input::Send { text, images, id } => {
+                self.waiting.push(&mut st, id, self.streaming);
                 let mut f = json!({"message": text});
+                // pictures as the rpc prompt's own `images` (ImageContent: base64 data and its type)
+                if !images.is_empty() {
+                    f["images"] = images.iter().map(|p| json!({"type": "image", "data": p.data, "mimeType": p.mime})).collect();
+                }
                 if self.streaming {
                     f["streamingBehavior"] = Value::String("followUp".into());
                 }
@@ -1437,6 +2544,14 @@ impl Adapter for Pi {
             Input::Model { model } => {
                 let (provider, id) = model.split_once('/').ok_or("model must be provider/id")?;
                 self.cmd(&mut st, "set_model", json!({"provider": provider, "modelId": id}));
+                self.read(&mut st, "get_available_thinking_levels");
+            }
+            Input::Mode { mode } => return Err(format!("{} has no permission mode here ({mode})", self.label)),
+            Input::Effort { effort } => {
+                if !self.levels.contains(&effort) {
+                    return Err(format!("unknown thinking level {effort}"));
+                }
+                self.cmd(&mut st, "set_thinking_level", json!({"level": effort}));
             }
         }
         Ok(st)
@@ -1467,6 +2582,8 @@ struct ChatLive {
     sink: ChatSink,
     child: Arc<Mutex<Child>>,
     pid: u32,
+    /// the program and everything it started (`cmd.exe` and its `node.exe` on Windows)
+    tree: Arc<Option<ProcessTree>>,
     exited: Arc<AtomicBool>,
 }
 
@@ -1474,7 +2591,11 @@ struct ChatLive {
 #[derive(Default)]
 pub struct ChatSessions {
     live: Mutex<HashMap<u32, ChatLive>>,
+    /// DSH chats: no process between messages, a run per message ([`DshChat`])
+    dsh: Mutex<HashMap<u32, DshChat>>,
     next: AtomicU32,
+    /// tests: a shorter [`START_DEADLINE`]
+    start_deadline: Option<Duration>,
 }
 
 /// Queue `lines` for the chat's writer thread. Never blocks (a pipe takes only so much before a write
@@ -1550,7 +2671,54 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, accoun
     for (k, v) in account_env {
         cmd.env(k, v);
     }
+    crate::appimage::host_env(&mut cmd);
     Ok(cmd)
+}
+
+/// How long an agent's rule listing ([`RuleProbe`]) may take before the chat is refused.
+const RULES_DEADLINE: Duration = Duration::from_secs(30);
+
+/// `probe`'s variable and value for a chat of the program `argv` in `cwd`: the program's fixed rule listing runs on
+/// pipes with no input, with the same `PATH` and account variable the chat gets; `probe.build` turns its output into
+/// the value, and a second listing with the value set must satisfy `probe.kept`. Any doubt (the variable already set
+/// in omher's own environment, a failed or slow listing, output it cannot read, rules that did not hold) is
+/// [`NO_RULES`], and the chat does not start.
+fn agent_rules(probe: &RuleProbe, argv: &[OsString], cwd: &Path, path_env: &OsString, account_env: &[(String, String)]) -> Result<(String, String), String> {
+    if !cwd.is_absolute() || !cwd.is_dir() {
+        return Err(format!("not a folder: {}", cwd.display()));
+    }
+    if std::env::var_os(probe.var).is_some() {
+        return Err(NO_RULES.into());
+    }
+    let mut argv = argv.to_vec();
+    argv.extend(probe.args.iter().map(OsString::from));
+    let list = |env: &[(String, String)]| -> Option<String> {
+        let mut cmd = command_for(&argv, cwd, Some(path_env.clone()), env).ok()?;
+        cmd.stdin(Stdio::null());
+        let child = cmd.spawn().ok()?;
+        let tree = ProcessTree::adopt(&child);
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = tx.send(child.wait_with_output());
+        });
+        match rx.recv_timeout(RULES_DEADLINE) {
+            Ok(Ok(o)) if o.status.success() => Some(String::from_utf8_lossy(&o.stdout).into_owned()),
+            Err(_) => {
+                if let Some(t) = tree {
+                    t.kill();
+                }
+                None
+            }
+            _ => None,
+        }
+    };
+    let value = list(account_env).and_then(|l| (probe.build)(&l)).ok_or(NO_RULES)?;
+    let mut env = account_env.to_vec();
+    env.push((probe.var.to_string(), value.clone()));
+    match list(&env) {
+        Some(again) if (probe.kept)(&value, &again) => Ok((probe.var.to_string(), value)),
+        _ => Err(NO_RULES.into()),
+    }
 }
 
 impl ChatSessions {
@@ -1570,21 +2738,42 @@ impl ChatSessions {
         if a.mode != Mode::Chat {
             return Err(format!("{} has no chat mode", a.label));
         }
+        if agent_id == "dsh" {
+            // DeepSeek Harness: `resume` is the `session-<uuid>` it reported (resume_args checks it)
+            let chat = DshChat::start(cwd, resume, sink)?;
+            let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
+            self.dsh.lock().unwrap().insert(id, chat);
+            return Ok(id);
+        }
         let args = chat_args(agent_id).ok_or("no chat mode")?;
         // Codex continues a thread over its own protocol (`thread/resume`), not by an argument; the id must
         // still be one Codex reported (a UUID). Claude Code takes `--resume <uuid>` ([`resume_args`]).
+        // An ACP agent (`acp_chat`) continues over its protocol too (`session/resume`), with an id it reported.
+        let acp = acp_agent(agent_id);
         let thread = match (agent_id, resume) {
             ("codex", Some(r)) if is_uuid(r) => Some(r),
             ("codex", Some(_)) => return Err("not a Codex thread id".into()),
+            (_, Some(r)) if acp.is_some() && is_acp_session_id(r) => Some(r),
+            (_, Some(_)) if acp.is_some() => return Err("not a conversation id".into()),
             _ => None,
         };
-        let adapter = adapter_for(agent_id, &cwd.to_string_lossy(), thread).ok_or("no chat adapter")?;
+        let mut adapter = adapter_for(agent_id, &cwd.to_string_lossy(), thread).ok_or("no chat adapter")?;
         let (mut argv, path_env) = launch_for(agent_id)?;
+        let program = argv.clone();
+        if let Some(path) = unrecognized_program(agent_id) {
+            adapter = Unrecognized::wrap(adapter, agent_id, &path);
+        }
         argv.extend(args.iter().map(OsString::from));
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
         }
-        self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)
+        // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own resolved rules,
+        // so nothing the person allows runs unasked and nothing they deny becomes askable; or it does not start
+        let mut env = account_env.to_vec();
+        if let Some(probe) = acp.and_then(|a| a.rules.as_ref()) {
+            env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);
+        }
+        self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)
     }
 
     /// Start `argv` on pipes in `cwd` with `adapter`. Crate-internal: the app reaches it only through
@@ -1606,6 +2795,7 @@ impl ChatSessions {
         }
         let mut cmd = command_for(&argv, cwd, path_env, account_env)?;
         let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", Path::new(&argv[0]).display()))?;
+        let tree = Arc::new(ProcessTree::adopt(&child));
         let mut stdout = child.stdout.take().ok_or("no stdout")?;
         let stderr = child.stderr.take().ok_or("no stderr")?;
         let mut pipe = child.stdin.take().ok_or("no stdin")?;
@@ -1626,6 +2816,10 @@ impl ChatSessions {
         let exited = Arc::new(AtomicBool::new(false));
         let child = Arc::new(Mutex::new(child));
         let tail = Arc::new(Mutex::new(String::new()));
+        // the program printed a protocol message (it speaks its chat mode); until then a start deadline runs
+        let answered = Arc::new(AtomicBool::new(false));
+        // why omher ended the session itself (the start deadline): the exit reports this instead of stderr
+        let verdict: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
         write_lines(&stdin, &first.write)?;
         deliver(&sink, first.events);
@@ -1648,7 +2842,7 @@ impl ChatSessions {
                     }
                 }
             });
-            let (adapter, stdin, sink, done) = (adapter.clone(), stdin.clone(), sink.clone(), reader_done.clone());
+            let (adapter, stdin, sink, done, answered) = (adapter.clone(), stdin.clone(), sink.clone(), reader_done.clone(), answered.clone());
             thread::spawn(move || {
                 let mut pending: Vec<u8> = Vec::new();
                 let run = |lines: &mut dyn Iterator<Item = &[u8]>| {
@@ -1657,13 +2851,13 @@ impl ChatSessions {
                         let mut a = adapter.lock().unwrap();
                         for raw in lines {
                             let line = String::from_utf8_lossy(raw);
-                            let line = line.trim_end_matches(['\n', '\r']);
-                            if line.trim().is_empty() {
-                                continue;
+                            // a BOM, or two messages on one line, still reach the adapter one message at a time
+                            for msg in protocol_lines(line.trim_end_matches(['\n', '\r'])) {
+                                answered.store(true, Ordering::SeqCst);
+                                let step = a.on_line(msg);
+                                out.write.extend(step.write);
+                                out.events.extend(step.events);
                             }
-                            let step = a.on_line(line);
-                            out.write.extend(step.write);
-                            out.events.extend(step.events);
                         }
                     }
                     let _ = write_lines(&stdin, &out.write);
@@ -1682,8 +2876,10 @@ impl ChatSessions {
                 done.store(true, Ordering::SeqCst);
             });
         }
+        // set once stderr reached its end: the exit reason is read from all of it
+        let err_done = Arc::new(AtomicBool::new(false));
         {
-            let tail = tail.clone();
+            let (tail, err_done) = (tail.clone(), err_done.clone());
             thread::spawn(move || {
                 let mut r = stderr;
                 let mut buf = [0u8; 4096];
@@ -1699,10 +2895,38 @@ impl ChatSessions {
                         t.drain(..cut);
                     }
                 }
+                err_done.store(true, Ordering::SeqCst);
             });
         }
         {
-            let (child, exited, sink, adapter, done) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), reader_done.clone());
+            // the start deadline: a program that has printed no protocol message by then is not in its chat mode (an
+            // old version showing its terminal UI, a hung start), so the session ends with that reason, all of it
+            let (child, exited, sink, adapter, answered, verdict, tree) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), answered.clone(), verdict.clone(), tree.clone());
+            let deadline = Instant::now() + self.start_deadline.unwrap_or(START_DEADLINE);
+            thread::spawn(move || {
+                while Instant::now() < deadline {
+                    if answered.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                if answered.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst) {
+                    return;
+                }
+                let why = no_chat_mode(adapter.lock().unwrap().name());
+                *verdict.lock().unwrap() = Some(why.clone());
+                deliver(&sink, vec![ev("session.error", json!({"kind": "no_chat_mode", "message": why}))]);
+                match tree.as_ref() {
+                    Some(t) => t.kill(),
+                    None => {
+                        let _ = child.lock().unwrap().kill();
+                    }
+                }
+            });
+        }
+        {
+            let (child, exited, sink, adapter, done, answered, verdict) = (child.clone(), exited.clone(), sink.clone(), adapter.clone(), reader_done.clone(), answered.clone(), verdict.clone());
+            let err_done = err_done.clone();
             thread::spawn(move || {
                 let code = loop {
                     if let Ok(Some(st)) = child.lock().unwrap().try_wait() {
@@ -1711,17 +2935,26 @@ impl ChatSessions {
                     thread::sleep(Duration::from_millis(40));
                 };
                 exited.store(true, Ordering::SeqCst);
-                // let the reader hand over what the program printed last
+                // let the readers hand over what the program printed last (stdout's events, stderr's reason)
                 let deadline = Instant::now() + Duration::from_millis(800);
-                while !done.load(Ordering::SeqCst) && Instant::now() < deadline {
+                while !(done.load(Ordering::SeqCst) && err_done.load(Ordering::SeqCst)) && Instant::now() < deadline {
                     thread::sleep(Duration::from_millis(10));
                 }
-                let (mid_turn, err) = {
+                let (mid_turn, err, said) = {
                     let a = adapter.lock().unwrap();
                     let raw = exit_reason(&tail.lock().unwrap());
-                    (a.in_turn(), if raw.is_empty() { raw } else { a.explain(&raw) })
+                    match verdict.lock().unwrap().take() {
+                        // the start deadline ended it, and already said so
+                        Some(why) => (a.in_turn(), why, true),
+                        // it never spoke its protocol and refused omher's chat-mode arguments: an old version
+                        None if !answered.load(Ordering::SeqCst) && !a.unrecognized() && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
+                        None => (a.in_turn(), a.explain(&raw), true),
+                    }
                 };
                 if let Ok(mut f) = sink.lock() {
+                    if !said {
+                        f(ChatOut::Event(ev("session.error", json!({"kind": "no_chat_mode", "message": err}))));
+                    }
                     if mid_turn {
                         f(ChatOut::Event(exit_turn_end(code, &err)));
                     }
@@ -1730,12 +2963,16 @@ impl ChatSessions {
             });
         }
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
-        self.live.lock().unwrap().insert(id, ChatLive { stdin, adapter, sink, child, pid, exited });
+        self.live.lock().unwrap().insert(id, ChatLive { stdin, adapter, sink, child, pid, tree, exited });
         Ok(id)
     }
 
     /// One thing the person did in chat `id`.
     pub fn input(&self, id: u32, input: Input) -> Result<(), String> {
+        let dsh = self.dsh.lock().unwrap().get(&id).cloned();
+        if let Some(chat) = dsh {
+            return chat.input(input);
+        }
         let (adapter, stdin, sink) = {
             let g = self.live.lock().unwrap();
             let s = g.get(&id).ok_or("no such session")?;
@@ -1749,6 +2986,9 @@ impl ChatSessions {
 
     /// Stop the program (stdin closed, then hang-up, then a hard kill after a grace period) and forget it.
     pub fn close(&self, id: u32) {
+        if let Some(chat) = self.dsh.lock().unwrap().remove(&id) {
+            thread::spawn(move || chat.stop(Duration::from_millis(1500)));
+        }
         let live = self.live.lock().unwrap().remove(&id);
         if let Some(s) = live {
             thread::spawn(move || stop(s, Duration::from_millis(1500)));
@@ -1757,7 +2997,9 @@ impl ChatSessions {
 
     pub fn close_all(&self) {
         let all: Vec<ChatLive> = self.live.lock().unwrap().drain().map(|(_, s)| s).collect();
-        let handles: Vec<_> = all.into_iter().map(|s| thread::spawn(move || stop(s, Duration::from_millis(400)))).collect();
+        let dsh: Vec<DshChat> = self.dsh.lock().unwrap().drain().map(|(_, c)| c).collect();
+        let mut handles: Vec<_> = all.into_iter().map(|s| thread::spawn(move || stop(s, Duration::from_millis(400)))).collect();
+        handles.extend(dsh.into_iter().map(|c| thread::spawn(move || c.stop(Duration::from_millis(400)))));
         for h in handles {
             let _ = h.join();
         }
@@ -1765,7 +3007,7 @@ impl ChatSessions {
 
     #[cfg(test)]
     pub fn count(&self) -> usize {
-        self.live.lock().unwrap().len()
+        self.live.lock().unwrap().len() + self.dsh.lock().unwrap().len()
     }
 }
 
@@ -1779,9 +3021,15 @@ fn stop(s: ChatLive, grace: Duration) {
     }
     if !s.exited.load(Ordering::SeqCst) {
         signal_group(Some(s.pid), false);
+        // Windows has no hang-up: the whole tree goes now (cmd.exe and the node.exe behind an npm shim)
         #[cfg(not(unix))]
         {
-            let _ = s.child.lock().unwrap().kill();
+            match s.tree.as_ref() {
+                Some(t) => t.kill(),
+                None => {
+                    let _ = s.child.lock().unwrap().kill();
+                }
+            }
         }
     }
     let deadline = Instant::now() + grace;
@@ -1792,6 +3040,11 @@ fn stop(s: ChatLive, grace: Duration) {
         signal_group(Some(s.pid), true);
         let _ = s.child.lock().unwrap().kill();
     }
+    // whatever the program started and left behind (a helper that ignores hang-up, the node.exe behind cmd.exe) goes
+    // with it, also when the program itself already ended
+    if let Some(t) = s.tree.as_ref() {
+        t.kill();
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1801,6 +3054,44 @@ fn stop(s: ChatLive, grace: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A stand-in rule listing: `/bin/sh -c <script>` prints its first listing, or with the variable set its second.
+    #[cfg(unix)]
+    fn rules_with(script: &str) -> Result<(String, String), String> {
+        fn build(l: &str) -> Option<String> {
+            l.strip_prefix("rules:").map(|r| r.trim().to_string())
+        }
+        fn kept(rules: &str, again: &str) -> bool {
+            again.trim() == format!("kept {rules}")
+        }
+        let probe = RuleProbe { args: &[], var: "OMHER_TEST_RULES_VAR", build, kept };
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let argv: Vec<OsString> = vec!["/bin/sh".into(), "-c".into(), script.into()];
+        agent_rules(&probe, &argv, &tmp, &std::env::var_os("PATH").unwrap(), &[])
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn an_agent_starts_only_with_rules_it_listed_and_kept() {
+        let ok = r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then echo "kept $OMHER_TEST_RULES_VAR"; else echo "rules: R1"; fi"#;
+        assert_eq!(rules_with(ok), Ok(("OMHER_TEST_RULES_VAR".to_string(), "R1".to_string())));
+        // each doubt refuses the start with the one plain sentence
+        for bad in [
+            "exit 1",                                                                                // the listing failed
+            "echo 'Error: Config file is not valid JSON'",                                           // nothing it can read
+            r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then echo "kept other"; else echo "rules: R1"; fi"#, // not kept
+            r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then exit 1; else echo "rules: R1"; fi"#,           // second listing failed
+        ] {
+            assert_eq!(rules_with(bad), Err(NO_RULES.to_string()), "{bad}");
+        }
+    }
+
+    impl Input {
+        /// A message with text only.
+        pub fn send(text: impl Into<String>) -> Input {
+            Input::Send { text: text.into(), images: vec![], id: String::new() }
+        }
+    }
 
     fn fixture(name: &str) -> Vec<String> {
         let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join(name);
@@ -1835,7 +3126,7 @@ mod tests {
         let init: Value = serde_json::from_str(&st.write[0]).unwrap();
         assert_eq!(init["type"], "control_request");
         assert_eq!(init["request"]["subtype"], "initialize");
-        let st = c.on_input(Input::Send { text: "say hi".into() }).unwrap();
+        let st = c.on_input(Input::send("say hi")).unwrap();
         assert_eq!(names(&st.events), ["turn.start"]);
         let msg: Value = serde_json::from_str(&st.write[0]).unwrap();
         assert_eq!(msg["type"], "user");
@@ -1847,7 +3138,7 @@ mod tests {
     fn claude_say_hi_streams_deltas_then_one_message_then_done() {
         let mut c = Claude::default();
         c.start();
-        c.on_input(Input::Send { text: "say hi".into() }).unwrap();
+        c.on_input(Input::send("say hi")).unwrap();
         let st = run(&mut c, &fixture("claude-hi.jsonl"));
         let info = st.events.iter().find(|e| s(e, "event") == "session.info").unwrap();
         assert_eq!(s(info, "agent_session"), "eee5079a-c52e-4526-b633-f3d8cb7d6394");
@@ -1856,14 +3147,16 @@ mod tests {
         let end = st.events.last().unwrap();
         assert_eq!((s(end, "event"), s(end, "outcome")), ("turn.end".into(), "done".into()));
         assert!(!c.in_turn());
-        assert!(st.write.is_empty(), "nothing to answer in a plain turn: {:?}", st.write);
+        // nothing to answer in a plain turn; only the context read after it
+        let w: Vec<Value> = st.write.iter().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(w.iter().map(|v| v["request"]["subtype"].clone()).collect::<Vec<_>>(), [json!("get_context_usage")], "{:?}", st.write);
     }
 
     #[test]
     fn claude_approval_round_trip_from_a_real_write_tool_call() {
         let mut c = Claude::new("/w/t14");
         c.start();
-        c.on_input(Input::Send { text: "write note.txt".into() }).unwrap();
+        c.on_input(Input::send("write note.txt")).unwrap();
         let lines = fixture("claude-approve.jsonl");
         let at = lines.iter().position(|l| l.contains("\"can_use_tool\"")).unwrap();
         let st = run(&mut c, &lines[..=at]);
@@ -1917,7 +3210,7 @@ mod tests {
     fn claude_esc_sends_its_own_interrupt_and_the_turn_ends_interrupted() {
         let mut c = Claude::default();
         c.start();
-        c.on_input(Input::Send { text: "write a long story".into() }).unwrap();
+        c.on_input(Input::send("write a long story")).unwrap();
         let st = c.on_input(Input::Interrupt).unwrap();
         let req: Value = serde_json::from_str(&st.write[0]).unwrap();
         assert_eq!(req["type"], "control_request");
@@ -1944,7 +3237,7 @@ mod tests {
     #[test]
     fn claude_ignores_subagent_text_and_ends_errors_with_the_reason() {
         let mut c = Claude::default();
-        c.on_input(Input::Send { text: "x".into() }).unwrap();
+        c.on_input(Input::send("x")).unwrap();
         let st = c.on_line(r#"{"type":"assistant","parent_tool_use_id":"toolu_1","message":{"id":"m","content":[{"type":"text","text":"inner"}]}}"#);
         assert!(st.events.is_empty());
         let st = c.on_line(r#"{"type":"result","subtype":"error_during_execution","is_error":true,"terminal_reason":"error","errors":["API Error: 529 overloaded"]}"#);
@@ -1961,7 +3254,7 @@ mod tests {
         assert_eq!((init["id"].as_u64(), s(&init, "method")), (Some(1), "initialize".to_string()));
         assert_eq!(init["params"]["clientInfo"]["name"], "omher");
         // text typed before the thread exists waits for it
-        let st = x.on_input(Input::Send { text: "run the tests".into() }).unwrap();
+        let st = x.on_input(Input::send("run the tests")).unwrap();
         assert_eq!(names(&st.events), ["turn.start"]);
         assert!(st.write.is_empty());
 
@@ -1972,9 +3265,10 @@ mod tests {
         assert_eq!(sent[1]["method"], "thread/start");
         assert_eq!(sent[1]["params"]["cwd"], "/w/proj");
         assert_eq!(sent[2]["method"], "model/list");
-        assert_eq!(sent[3]["method"], "turn/start");
-        assert_eq!(sent[3]["params"]["threadId"], "thr_1");
-        assert_eq!(sent[3]["params"]["input"][0]["text"], "run the tests");
+        assert_eq!(sent[3]["method"], "skills/list");
+        assert_eq!(sent[4]["method"], "turn/start");
+        assert_eq!(sent[4]["params"]["threadId"], "thr_1");
+        assert_eq!(sent[4]["params"]["input"][0]["text"], "run the tests");
         assert_eq!(s(&st.events[0], "agent_session"), "thr_1");
         assert_eq!(s(&st.events[0], "model"), "gpt-6.1-sol");
 
@@ -2000,7 +3294,7 @@ mod tests {
         let mut x = Codex::new("/w", None);
         x.start();
         run(&mut x, &fixture("codex-turn.jsonl")[..2]);
-        x.on_input(Input::Send { text: "go".into() }).unwrap();
+        x.on_input(Input::send("go")).unwrap();
         x.on_line(r#"{"method":"turn/started","params":{"threadId":"thr_1","turn":{"id":"turn_9","status":"inProgress","items":[]}}}"#);
         let st = x.on_input(Input::Interrupt).unwrap();
         let req: Value = serde_json::from_str(&st.write[0]).unwrap();
@@ -2027,7 +3321,7 @@ mod tests {
         let st = p.start();
         let w: Vec<Value> = st.write.iter().map(|l| serde_json::from_str(l).unwrap()).collect();
         assert_eq!((s(&w[0], "type"), s(&w[1], "type")), ("get_state".into(), "get_available_models".into()));
-        let st = p.on_input(Input::Send { text: "list the ts files".into() }).unwrap();
+        let st = p.on_input(Input::send("list the ts files")).unwrap();
         let cmd: Value = serde_json::from_str(&st.write[0]).unwrap();
         assert_eq!((s(&cmd, "type"), s(&cmd, "message")), ("prompt".into(), "list the ts files".into()));
         assert_eq!(names(&st.events), ["turn.start"]);
@@ -2045,7 +3339,7 @@ mod tests {
     #[test]
     fn pi_dialogs_become_cards_and_abort_is_its_interrupt() {
         let mut p = Pi::default();
-        p.on_input(Input::Send { text: "x".into() }).unwrap();
+        p.on_input(Input::send("x")).unwrap();
         let st = p.on_line(r#"{"type":"extension_ui_request","id":"u1","method":"confirm","title":"Run rm -rf dist?","message":"bash: rm -rf dist"}"#);
         assert_eq!(st.events[0]["choices"], json!(["deny", "once"]));
         let ans: Value = serde_json::from_str(&p.on_input(Input::Approve { request_id: "u1".into(), choice: "deny".into() }).unwrap().write[0]).unwrap();
@@ -2062,7 +3356,7 @@ mod tests {
         // oh-my-pi's prompt_result for a run that already ended draws nothing; for a prompt no agent ran (a
         // command it handled itself) it ends the turn
         assert!(p.on_line(r#"{"type":"prompt_result","id":"omher-3","agentInvoked":true}"#).events.is_empty());
-        p.on_input(Input::Send { text: "y".into() }).unwrap();
+        p.on_input(Input::send("y")).unwrap();
         let st = p.on_line(r#"{"type":"prompt_result","id":"omher-9","agentInvoked":false}"#);
         assert_eq!(s(&st.events[0], "outcome"), "done");
         let m: Value = serde_json::from_str(&p.on_input(Input::Model { model: "anthropic/claude-x".into() }).unwrap().write[0]).unwrap();
@@ -2071,18 +3365,21 @@ mod tests {
 
     #[test]
     fn only_chat_agents_have_adapters() {
-        for id in ["claude", "codex", "omo", "pi", "omp"] {
+        for id in ["claude", "codex", "omo", "pi", "omp", "opencode"] {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
+        // DSH has no adapter: its chat is a run per message (dsh_chat)
         for id in ["omh", "grok", "dsh", "sh", ""] {
             assert!(adapter_for(id, "/w", None).is_none(), "{id}");
         }
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
-        for bad in ["omh", "grok", "dsh", "/bin/sh", "claude -p"] {
+        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], |_| {}).is_err());
+        for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
             assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
         }
         assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
+        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 
@@ -2118,7 +3415,7 @@ mod tests {
         let script = format!("read l; printf '%s\\n' \"$l\" > '{}'; cat '{}'; trap '' HUP; while :; do sleep 1; done", mark.display(), fx.display());
         let (out, sink) = collect();
         let mut adapter: Box<dyn Adapter> = Box::new(Claude::default());
-        adapter.on_input(Input::Send { text: "say hi".into() }).unwrap();
+        adapter.on_input(Input::send("say hi")).unwrap();
         let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], adapter, sink).unwrap();
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end")), 10));
         let first = std::fs::read_to_string(&mark).unwrap();
@@ -2141,7 +3438,7 @@ mod tests {
         let c = ChatSessions::default();
         let (out, sink) = collect();
         let mut adapter: Box<dyn Adapter> = Box::new(Claude::default());
-        adapter.on_input(Input::Send { text: "x".into() }).unwrap();
+        adapter.on_input(Input::send("x")).unwrap();
         let tmp = std::env::temp_dir().canonicalize().unwrap();
         c.spawn(vec!["/bin/sh".into(), "-c".into(), "echo 'Error: not logged in' >&2; exit 2".into()], &tmp, None, &[], adapter, sink).unwrap();
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
@@ -2164,7 +3461,7 @@ mod tests {
         let c = ChatSessions::default();
         let (out, sink) = collect();
         let mut adapter: Box<dyn Adapter> = Box::new(Claude::default());
-        adapter.on_input(Input::Send { text: "x".into() }).unwrap();
+        adapter.on_input(Input::send("x")).unwrap();
         let tmp = std::env::temp_dir().canonicalize().unwrap();
         c.spawn(vec!["/bin/sh".into(), "-c".into(), "exit 0".into()], &tmp, None, &[], adapter, sink).unwrap();
         assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
@@ -2259,11 +3556,11 @@ mod tests {
         // 1 MB of prompts: the pipe takes about 64 KB, the rest must not hold anything up
         let started = Instant::now();
         for _ in 0..16 {
-            c.input(stuck, Input::Send { text: "x".repeat(64 * 1024) }).unwrap();
+            c.input(stuck, Input::send("x".repeat(64 * 1024))).unwrap();
         }
         assert!(started.elapsed() < Duration::from_millis(500), "input blocked: {:?}", started.elapsed());
         // other chats keep working while that one is stuck
-        c.input(other, Input::Send { text: "pong".into() }).unwrap();
+        c.input(other, Input::send("pong")).unwrap();
         assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| t.contains("pong")), 10), "other chat stalled");
         let t = Instant::now();
         c.close_all();
@@ -2307,7 +3604,7 @@ mod tests {
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
             let id = c.start_agent("omo", &dir, resume, &[], move |x| o.lock().unwrap().push(x)).unwrap();
-            c.input(id, Input::Send { text: text.into() }).unwrap();
+            c.input(id, Input::send(text)).unwrap();
             let deadline = Instant::now() + Duration::from_secs(150);
             while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
                 thread::sleep(Duration::from_millis(100));
@@ -2327,6 +3624,116 @@ mod tests {
         assert_eq!(again, session);
         assert!(second.iter().any(|m| m.to_lowercase().contains("pineapple")), "{second:?}");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The real OmO, Claude Code and Codex, one short message each through `start_agent`: every event the chat
+    /// gets (and the ones that come within 4 s after the answer) leaves no turn open and says nothing outside one.
+    /// `OMHER_REAL_OUT=<dir>` keeps each agent's events as `<agent>.json` for a replay through the store.
+    /// Spends one small turn per agent: `cargo test real_agents_answer_and_go_idle -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_agents_answer_and_go_idle() {
+        let dir = std::env::temp_dir().join(format!("omher-real-idle-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        for agent in ["omo", "claude", "codex"] {
+            let c = ChatSessions::default();
+            let out = Arc::new(Mutex::new(Vec::new()));
+            let o = out.clone();
+            let id = c.start_agent(agent, &dir, None, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            if agent == "omo" {
+                // OmO's own default can be a model its provider refuses on this machine: pick one it serves
+                thread::sleep(Duration::from_secs(3));
+                c.input(id, Input::Model { model: std::env::var("OMHER_REAL_OMO_MODEL").unwrap_or("anthropic/claude-fable-5-1".into()) }).unwrap();
+                thread::sleep(Duration::from_secs(1));
+            }
+            c.input(id, Input::Send { text: "hi. reply with just the word ok".into(), images: vec![], id: String::new() }).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(150);
+            while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
+                thread::sleep(Duration::from_millis(100));
+            }
+            // what the agent says after its turn (OmO's setStatus, agent_settled, …)
+            thread::sleep(Duration::from_secs(4));
+            let events: Vec<Event> = out.lock().unwrap().iter().filter_map(|x| match x { ChatOut::Event(e) => Some(e.clone()), _ => None }).collect();
+            c.close(id);
+            thread::sleep(Duration::from_millis(500));
+            let mut open = false;
+            for e in &events {
+                match s(e, "event").as_str() {
+                    "turn.start" => open = true,
+                    "turn.end" => open = false,
+                    "status" | "thinking" | "tool.start" | "tool.end" | "delta" | "skill" => assert!(open, "{agent}: {e} outside a turn"),
+                    _ => {}
+                }
+            }
+            let msgs: Vec<String> = events.iter().filter(|e| s(e, "event") == "message").map(|e| s(e, "text")).collect();
+            let after = events.iter().skip_while(|e| s(e, "event") != "turn.end").skip(1).map(|e| s(e, "event")).collect::<Vec<_>>();
+            println!("{agent}: answer {msgs:?}; {} events; after turn.end: {after:?}", events.len());
+            assert!(!open, "{agent}: the turn never ended");
+            assert!(msgs.iter().any(|m| m.to_lowercase().contains("ok")), "{agent}: {events:?}");
+            if let Some(d) = std::env::var_os("OMHER_REAL_OUT") {
+                std::fs::write(Path::new(&d).join(format!("{agent}.json")), serde_json::to_string_pretty(&events).unwrap()).unwrap();
+            }
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The real attach check: a picture with a word in it and a small text file, saved and resolved exactly as a
+    /// SESSIONS chat does (`session_files::save`, `Input::resolve`, the adapter's own image input; the text file
+    /// named by its saved path), sent to the real agent in a temp folder. Approvals are answered `once`. Needs the
+    /// agent installed and signed in: `OMHER_REAL_AGENT=codex cargo test real_agent_reads_attached_files --
+    /// --ignored --nocapture` (claude, codex or omo; default claude).
+    #[test]
+    #[ignore]
+    fn real_agent_reads_attached_files() {
+        let agent = std::env::var("OMHER_REAL_AGENT").unwrap_or_else(|_| "claude".into());
+        let base = std::env::temp_dir().join(format!("omher-real-attach-{agent}-{}", std::process::id()));
+        let (home, dir) = (base.join("home"), base.join("proj"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        let (home, dir) = (home.canonicalize().unwrap(), dir.canonicalize().unwrap());
+        let png = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/real/word.png")).unwrap();
+        let pic = session_files::save(&home, "s1", "word.png", &png).unwrap();
+        let txt = session_files::save(&home, "s1", "notes.txt", b"alpha line\nthe second line is cobalt-42\ngamma line\n").unwrap();
+        // what the UI sends (attach.ts wireText): the typed text, then the non-picture file by its saved path
+        let text = format!(
+            "1) What word is written in the attached picture? 2) What is the second line of the attached text file? Answer as: picture=<word>; line2=<line>\n\nAttached file (a copy omher saved; open it with your tools):\n- {}",
+            txt.display()
+        );
+        let mut input = Input::Send { text, images: vec![Picture::from(pic.to_string_lossy().into_owned())], id: String::new() };
+        input.resolve(&home).unwrap();
+        let c = Arc::new(ChatSessions::default());
+        let out = Arc::new(Mutex::new(Vec::<ChatOut>::new()));
+        let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
+        let me2 = me.clone();
+        let id = c
+            .start_agent(&agent, &dir, None, &[], move |x| {
+                if let ChatOut::Event(e) = &x {
+                    if s(e, "event") == "approval.request" {
+                        println!("approval {} {}", s(e, "title"), s(e, "command"));
+                        let (c3, rid, id) = (c2.clone(), s(e, "request_id"), *me2.lock().unwrap());
+                        thread::spawn(move || {
+                            let _ = c3.input(id, Input::Approve { request_id: rid, choice: "once".into() });
+                        });
+                    }
+                }
+                o.lock().unwrap().push(x);
+            })
+            .unwrap();
+        *me.lock().unwrap() = id;
+        c.input(id, input).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(240);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
+            thread::sleep(Duration::from_millis(100));
+        }
+        let got = out.lock().unwrap().clone();
+        let msgs: Vec<String> = got.iter().filter_map(|x| match x { ChatOut::Event(e) if s(e, "event") == "message" => Some(s(e, "text")), _ => None }).collect();
+        println!("{agent} answered: {msgs:?}");
+        c.close(id);
+        thread::sleep(Duration::from_millis(500));
+        let all = msgs.join(" ").to_lowercase();
+        let _ = std::fs::remove_dir_all(&base);
+        assert!(all.contains("marigold") && all.contains("cobalt-42"), "{got:?}");
     }
 
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the
@@ -2352,7 +3759,7 @@ mod tests {
                 o.lock().unwrap().push(x);
             })
             .unwrap();
-        c.input(id, Input::Send { text: "reply with the word ok".into() }).unwrap();
+        c.input(id, Input::send("reply with the word ok")).unwrap();
         let deadline = Instant::now() + Duration::from_secs(120);
         while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
             thread::sleep(Duration::from_millis(100));
@@ -2468,7 +3875,7 @@ mod tests {
     #[test]
     fn real_claude_1_plain_answer() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        c.on_input(Input::send("2+2")).unwrap();
         let st = replay(&mut c, &["claude-1-plain.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["2+2 is 4."]);
         assert!(tools(&st.events).is_empty());
@@ -2479,7 +3886,7 @@ mod tests {
     #[test]
     fn real_claude_2_bash_deny_once_session() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "mkdir".into() }).unwrap();
+        c.on_input(Input::send("mkdir")).unwrap();
         let st = replay(&mut c, &["claude-2-approvals.jsonl"], &["deny", "once", "session"]);
         // the row shows the command itself, whatever Claude Code calls the tool (Bash)
         assert_eq!(tools(&st.events), [("terminal", "mkdir -p d1"), ("terminal", "mkdir -p d2"), ("terminal", "mkdir -p d3"), ("terminal", "mkdir -p d4")].map(|(a, b)| (a.to_string(), b.to_string())));
@@ -2509,7 +3916,7 @@ mod tests {
     #[test]
     fn real_claude_3_write_and_edit_show_the_file_and_diff_size() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "notes".into() }).unwrap();
+        c.on_input(Input::send("notes")).unwrap();
         let st = replay(&mut c, &["claude-3-edit.jsonl"], &[]);
         assert_eq!(
             tools(&st.events),
@@ -2525,9 +3932,9 @@ mod tests {
         let lines = real("claude-4-stop.jsonl");
         // the recording first finishes the resume turn, then the person asks for a slow command
         let second = lines.iter().rposition(|l| l.contains("\"subtype\":\"init\"")).unwrap();
-        c.on_input(Input::Send { text: "which file".into() }).unwrap();
+        c.on_input(Input::send("which file")).unwrap();
         run(&mut c, &lines[..second]);
-        c.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        c.on_input(Input::send("sleep")).unwrap();
         let st = run(&mut c, &lines[second..]);
         let card = of(&st.events, "approval.request")[0].clone();
         assert!(s(&card, "command").starts_with("python3 -c"), "{card}");
@@ -2539,7 +3946,7 @@ mod tests {
         assert_eq!(ends(&rest.events), [("interrupted".into(), "".into())]);
         assert!(!c.in_turn());
         // the next message starts a new turn
-        assert_eq!(names(&c.on_input(Input::Send { text: "again".into() }).unwrap().events), ["turn.start"]);
+        assert_eq!(names(&c.on_input(Input::send("again")).unwrap().events), ["turn.start"]);
     }
 
     #[test]
@@ -2547,12 +3954,12 @@ mod tests {
         // Claude Code ran `sleep 25` in the background and answered; while the next turn waited on a question,
         // the task finished and Claude Code started (and ended) a turn of its own.
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        c.on_input(Input::send("sleep")).unwrap();
         let st = replay(&mut c, &["claude-4-background.jsonl"], &[]);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
         assert!(tools(&st.events).iter().any(|t| t.1 == "sleep 25; echo finished"));
         // a result Claude Code started by itself while the person's turn runs leaves that turn running
-        c.on_input(Input::Send { text: "next".into() }).unwrap();
+        c.on_input(Input::send("next")).unwrap();
         let st = run(&mut c, &[r#"{"type":"result","subtype":"success","is_error":false,"terminal_reason":"completed","origin":{"kind":"task-notification"}}"#.into()]);
         assert!(st.events.is_empty() && c.in_turn(), "{:?}", st.events);
         // and on its own it shows as a turn that starts and ends
@@ -2567,7 +3974,7 @@ mod tests {
     #[test]
     fn real_claude_5_ask_user_question_becomes_a_question_card() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "ask".into() }).unwrap();
+        c.on_input(Input::send("ask")).unwrap();
         let lines = real("claude-5-question.jsonl");
         let at = lines.iter().position(|l| l.contains("\"can_use_tool\"")).unwrap();
         let st = run(&mut c, &lines[..=at]);
@@ -2589,7 +3996,7 @@ mod tests {
     #[test]
     fn real_claude_6_bad_command_is_a_calm_failed_step_not_a_failed_turn() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "bad".into() }).unwrap();
+        c.on_input(Input::send("bad")).unwrap();
         let st = replay(&mut c, &["claude-6-error.jsonl"], &["once"]);
         assert_eq!(s(of(&st.events, "approval.request")[0], "command"), "definitely-not-a-command-xyz --flag; echo \"exit=$?\"");
         assert_eq!(text_of(&st.events, "message"), ["exit code 127 (command not found)."]);
@@ -2611,7 +4018,7 @@ mod tests {
     #[test]
     fn real_claude_8_resume_reports_the_same_session() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "which file".into() }).unwrap();
+        c.on_input(Input::send("which file")).unwrap();
         // on resume Claude Code reports the same session and an empty result of a background task from before:
         // the person's turn keeps running until its own result
         let st = replay(&mut c, &["claude-8-resume.jsonl"], &[]);
@@ -2628,7 +4035,7 @@ mod tests {
     fn real_claude_10_close_mid_command_has_no_turn_end_from_the_agent() {
         // the stream stops mid-command (omher closed stdin); the exit watcher ends the turn, not the adapter
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        c.on_input(Input::send("sleep")).unwrap();
         let st = replay(&mut c, &["claude-10-close.jsonl"], &["once"]);
         assert!(ends(&st.events).is_empty());
         assert!(c.in_turn());
@@ -2637,7 +4044,7 @@ mod tests {
     #[test]
     fn real_claude_signed_out_says_how_to_sign_in() {
         let mut c = claude_up();
-        c.on_input(Input::Send { text: "hi".into() }).unwrap();
+        c.on_input(Input::send("hi")).unwrap();
         let st = replay(&mut c, &["claude-signed-out.jsonl"], &[]);
         assert!(text_of(&st.events, "message").is_empty(), "\"Not logged in\" is not an answer bubble");
         let e = ends(&st.events);
@@ -2664,7 +4071,7 @@ mod tests {
     #[test]
     fn real_codex_1_plain_answer() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        x.on_input(Input::send("2+2")).unwrap();
         let st = replay(&mut x, &["codex-1-plain.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["2 + 2 = 4."]);
         assert_eq!(text_of(&st.events, "delta").concat(), "2 + 2 = 4.");
@@ -2674,7 +4081,7 @@ mod tests {
     #[test]
     fn real_codex_2_command_shows_unwrapped_deny_once_session() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "mkdir".into() }).unwrap();
+        x.on_input(Input::send("mkdir")).unwrap();
         let st = replay(&mut x, &["codex-2-approvals.jsonl"], &["deny", "once", "session", "once"]);
         // Codex reports `/bin/zsh -lc 'mkdir -p d1'`; the row and the card show the command
         assert_eq!(tools(&st.events), [("terminal", "mkdir -p d1"), ("terminal", "mkdir -p d2"), ("terminal", "mkdir -p d3"), ("terminal", "mkdir -p d4")].map(|(a, b)| (a.to_string(), b.to_string())));
@@ -2691,7 +4098,7 @@ mod tests {
     #[test]
     fn real_codex_3_file_change_card_and_diff_summary() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "notes".into() }).unwrap();
+        x.on_input(Input::send("notes")).unwrap();
         let st = replay(&mut x, &["codex-3-edit.jsonl"], &["once"]);
         assert_eq!(tools(&st.events), [("patch".to_string(), "notes.txt +1".to_string())]);
         let card = of(&st.events, "approval.request")[0];
@@ -2703,7 +4110,7 @@ mod tests {
     #[test]
     fn real_codex_4_stop_closes_the_open_card_and_ends_interrupted() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        x.on_input(Input::send("sleep")).unwrap();
         let st = run(&mut x, &real("codex-4-stop.jsonl"));
         let card = of(&st.events, "approval.request")[0].clone();
         assert_eq!(s(&card, "command"), "sleep 30; echo finished");
@@ -2719,7 +4126,7 @@ mod tests {
     #[test]
     fn real_codex_5_question_in_a_message_becomes_a_question_card() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "ask".into() }).unwrap();
+        x.on_input(Input::send("ask")).unwrap();
         let lines = real("codex-5-question.jsonl");
         let at = lines.iter().position(|l| l.contains("\"questions\":[{")).unwrap();
         let at = at + lines[at + 1..].iter().position(|l| l.contains("item/completed")).map(|i| i + 1).unwrap_or(0);
@@ -2741,7 +4148,7 @@ mod tests {
     #[test]
     fn real_codex_5_answer_after_the_turn_ended_starts_a_new_turn() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "ask".into() }).unwrap();
+        x.on_input(Input::send("ask")).unwrap();
         let st = run(&mut x, &real("codex-5-question.jsonl"));
         let q = of(&st.events, "clarify.request")[0].clone();
         assert!(!x.in_turn());
@@ -2753,7 +4160,7 @@ mod tests {
     #[test]
     fn real_codex_6_bad_command_fails_its_step_only() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "bad".into() }).unwrap();
+        x.on_input(Input::send("bad")).unwrap();
         let st = replay(&mut x, &["codex-6-error.jsonl"], &["once"]);
         assert_eq!(tools(&st.events), [("terminal".to_string(), "definitely-not-a-command-xyz --flag".to_string())]);
         assert_eq!(of(&st.events, "tool.end")[0]["ok"], false);
@@ -2766,7 +4173,7 @@ mod tests {
         let mut x = codex_up();
         let st = x.on_input(Input::Model { model: "gpt-6-astra".into() }).unwrap();
         assert_eq!(s(&st.events[0], "model"), "GPT-6-Astra");
-        let w = written(&x.on_input(Input::Send { text: "switched".into() }).unwrap());
+        let w = written(&x.on_input(Input::send("switched")).unwrap());
         assert_eq!((w[0]["method"].as_str(), w[0]["params"]["model"].as_str()), (Some("turn/start"), Some("gpt-6-astra")));
         let st = replay(&mut x, &["codex-7-model.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["switched"]);
@@ -2783,10 +4190,264 @@ mod tests {
         assert_eq!(w[1]["params"]["threadId"], id);
         let st = run(&mut x, &real("codex-8-resume.jsonl"));
         assert_eq!(s(of(&st.events, "session.info")[0], "agent_session"), id);
-        let st = x.on_input(Input::Send { text: "which file".into() }).unwrap();
+        let st = x.on_input(Input::send("which file")).unwrap();
         assert_eq!(written(&st)[0]["params"]["threadId"], id);
         let st = replay(&mut x, &["codex-8-resume-turn.jsonl"], &[]);
         assert!(text_of(&st.events, "message")[0].contains("notes.txt"));
+    }
+
+    /// H5, recorded from the real Codex 0.167 (`thread/resume` onto a deleted thread): omher starts a new thread in the
+    /// same folder, says so, and the message the person sent while it waited goes to the new thread.
+    #[test]
+    fn codex_resume_onto_a_gone_thread_starts_a_new_one_and_sends_what_waited() {
+        let gone = "0badbeef-0000-4000-8000-000000000000";
+        let mut x = Codex::new("/w/proj", Some(gone));
+        x.start();
+        let lines = real("codex-11-resume-gone.jsonl");
+        // the person's message is sent before Codex has answered anything (omher reopened the chat by itself)
+        let sent = x.on_input(Input::send("Reply with exactly: ok")).unwrap();
+        assert_eq!(names(&sent.events), ["turn.start"]);
+        assert!(sent.write.is_empty(), "no thread yet: the message waits");
+        let st = run(&mut x, &lines[..5]);
+        let w = written(&st);
+        assert_eq!(w.iter().filter(|c| c["method"] == "thread/resume").count(), 1);
+        // the resume error is said in the chat and answered with a new thread in the same folder, not a popover note
+        let note = of(&st.events, "session.note");
+        assert_eq!(note.len(), 1, "{:?}", st.events);
+        assert_eq!(s(note[0], "kind"), "new_conversation");
+        assert!(of(&st.events, "session.error").is_empty(), "{:?}", st.events);
+        let start = w.iter().find(|c| c["method"] == "thread/start").expect("a new thread");
+        assert_eq!(start["params"]["cwd"], "/w/proj");
+        assert!(x.in_turn(), "the message is still on its way");
+        let st = run(&mut x, &lines[5..]);
+        let new = "01a1cb4b-0d4e-7751-aae4-9d65216fa4e6";
+        assert_eq!(s(of(&st.events, "session.info")[0], "agent_session"), new);
+        let w = written(&st);
+        let turn = w.iter().find(|c| c["method"] == "turn/start").expect("the waiting message is sent");
+        assert_eq!(turn["params"]["threadId"], new);
+        assert_eq!(turn["params"]["input"][0]["text"], "Reply with exactly: ok");
+        // Stop works on it like on any turn
+        x.on_line(r#"{"method":"turn/started","params":{"threadId":"01a1cb4b-0d4e-7751-aae4-9d65216fa4e6","turn":{"id":"t1"}}}"#);
+        assert_eq!(written(&x.on_input(Input::Interrupt).unwrap())[0]["method"], "turn/interrupt");
+    }
+
+    /// H5: when the new thread cannot start either, the waiting message ends its turn with the reason (no Working).
+    #[test]
+    fn codex_resume_and_new_thread_both_refused_end_the_waiting_turn() {
+        let mut x = Codex::new("/w/proj", Some("0badbeef-0000-4000-8000-000000000000"));
+        x.start();
+        x.on_input(Input::send("hi")).unwrap();
+        run(&mut x, &real("codex-11-resume-gone.jsonl")[..5]);
+        let st = x.on_line(r#"{"id":5,"error":{"code":-32600,"message":"not signed in"}}"#);
+        assert_eq!(ends(&st.events), [("error".into(), "Codex could not start a conversation: not signed in".into())]);
+        assert!(!x.in_turn());
+    }
+
+    /// H7, recorded from the real Claude Code 2.1.322: Haiku picked between turns, Sonnet picked right after the next
+    /// message went out. That turn still runs on Haiku (its init and its answer say so); the header keeps Haiku and
+    /// says "next turn: Sonnet", never Sonnet, Haiku, Sonnet; the next turn's init confirms Sonnet.
+    #[test]
+    fn real_claude_11_a_model_picked_mid_turn_is_for_the_next_turn() {
+        let mut c = claude_up();
+        let lines = real("claude-11-model-mid-turn.jsonl");
+        let haiku = written(&c.on_input(Input::Model { model: "haiku".into() }).unwrap())[0].clone();
+        assert_eq!(s(&haiku, "request_id"), "omher-model-3");
+        let st = run(&mut c, &lines[..1]);
+        assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).collect::<Vec<_>>(), ["Haiku 5.5"]);
+        c.on_input(Input::send("Reply with exactly: ok")).unwrap();
+        let sonnet = written(&c.on_input(Input::Model { model: "sonnet".into() }).unwrap())[0].clone();
+        assert_eq!(s(&sonnet, "request_id"), "omher-model-4");
+        // everything until the turn's end, then the next turn
+        let first_end = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();
+        let st = run(&mut c, &lines[1..=first_end]);
+        let models: Vec<String> = of(&st.events, "session.info").iter().filter_map(|e| e.get("model").and_then(Value::as_str).map(String::from)).collect();
+        assert!(models.iter().all(|m| m == "Haiku 5.5"), "the header flips: {models:?}");
+        let next: Vec<String> = of(&st.events, "session.info").iter().filter_map(|e| e.get("model_next").and_then(Value::as_str).map(String::from)).collect();
+        assert_eq!(next, ["Sonnet 5.5"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        c.on_input(Input::send("Reply with exactly: ok")).unwrap();
+        let st = run(&mut c, &lines[first_end + 1..]);
+        let info = of(&st.events, "session.info")[0];
+        assert_eq!(s(info, "model"), "Sonnet 5.5");
+        assert_eq!(info["model_next"], "", "the next turn's init confirms the pick");
+        // a pick between turns still applies at once
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-9","response":{"model":"claude-haiku-5-5"}}}"#.to_string()]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "model"), "Haiku 5.5");
+    }
+
+    /// H11: a byte-order mark before a line, and two messages on one line, reach the adapter as protocol messages,
+    /// one at a time, in order. A banner or a terminal frame is still nothing.
+    #[test]
+    fn protocol_lines_drop_a_bom_and_split_two_messages_on_one_line() {
+        assert_eq!(protocol_lines("\u{feff}{\"a\":1}"), [r#"{"a":1}"#]);
+        assert_eq!(protocol_lines(r#"{"type":"agent_end"}{"type":"agent_start"}"#), [r#"{"type":"agent_end"}"#, r#"{"type":"agent_start"}"#]);
+        assert_eq!(protocol_lines(r#"{"a":1}  {"b":"}{"}"#), [r#"{"a":1}"#, r#"{"b":"}{"}"#]);
+        assert!(protocol_lines("Welcome to OmO 3.0 (press q)").is_empty());
+        assert!(protocol_lines("\u{1b}[?1049h\u{1b}[2J omo 3.0 interactive").is_empty());
+        // a value cut short (a truncated line) yields what came before it
+        assert_eq!(protocol_lines(r#"{"a":1}{"b":"#), [r#"{"a":1}"#]);
+        assert!(protocol_lines("").is_empty());
+    }
+
+    /// H11 on pipes, every adapter: the QA's `pipe-bom` stub (a BOM before pi's get_state answer, agent_end and the
+    /// next agent_start on one line) and the same drift in Claude Code's and Codex's first lines.
+    #[cfg(unix)]
+    #[test]
+    fn a_bom_or_two_messages_on_one_line_do_not_hang_any_chat() {
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        // the stub answers once it has read what omher wrote at start and the person's message (`reads` lines)
+        let run_stub = |adapter: Box<dyn Adapter>, reads: usize, out: &str| {
+            let c = ChatSessions::default();
+            let (got, sink) = collect();
+            let script = format!("{}printf '{out}'; sleep 0.3", "read l; ".repeat(reads));
+            let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], adapter, sink).unwrap();
+            c.input(id, Input::send("hi")).unwrap();
+            assert!(wait_for(|| got.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+            let events: Vec<Event> = got.lock().unwrap().iter().filter_map(|o| match o { ChatOut::Event(e) => Some(e.clone()), _ => None }).collect();
+            events
+        };
+        // pi (the QA stub's bytes): the session id arrives, and the turn ends done at agent_end, not at the exit
+        let ev = run_stub(Box::new(Pi::new("/w", "pi")), 3, r#"\357\273\277{"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"id":"m","name":"M"},"sessionId":"s-bom"}}\r\n{"type":"agent_start"}\r\n{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"crlf ok"}],"stopReason":"stop"}}\r\n{"type":"agent_end"}{"type":"agent_start"}\n"#);
+        assert_eq!(s(of(&ev, "session.info")[0], "agent_session"), "s-bom");
+        assert_eq!(ends(&ev)[0], ("done".into(), "".into()), "{ev:?}");
+        // Claude Code: its init behind a BOM, and the turn's result glued to the line before it
+        let ev = run_stub(Box::new(Claude::new("/w")), 2, r#"\357\273\277{"type":"system","subtype":"init","session_id":"c-bom","model":"m"}\n{"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","content":[{"type":"text","text":"ok"}]}}{"type":"result","subtype":"success","is_error":false,"result":"ok"}\n"#);
+        assert_eq!(s(of(&ev, "session.info")[0], "agent_session"), "c-bom");
+        assert_eq!(ends(&ev)[0], ("done".into(), "".into()), "{ev:?}");
+        // Codex: the initialize answer behind a BOM still opens the thread (the message waiting for it goes out)
+        let c = ChatSessions::default();
+        let (got, sink) = collect();
+        let mark = tmp.join(format!("omher-chat-bom-{}", std::process::id()));
+        let script = format!("read l; printf '\\357\\273\\277{{\"id\":1,\"result\":{{}}}}\\n'; while read l; do printf '%s\\n' \"$l\" >> '{}'; done", mark.display());
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Codex::new("/w", None)), sink).unwrap();
+        assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| t.contains("thread/start")), 10), "Codex's handshake stalled on a BOM");
+        c.close(id);
+        assert!(wait_for(|| got.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let _ = std::fs::remove_file(mark);
+    }
+
+    /// H4: the QA's `old-omo` stub (an old OmO that ignores `--mode rpc`, draws its terminal UI and waits). The start
+    /// deadline ends the session with the plain reason, the message sent meanwhile ends with it, nothing stays
+    /// Working, and the program (and what it started) is stopped.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_that_never_answers_in_chat_mode_ends_with_the_reason() {
+        let mut c = ChatSessions::default();
+        c.start_deadline = Some(Duration::from_millis(600));
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let script = "trap '' HUP; printf '\\033[?1049h\\033[2J omo 3.0 interactive  (press q)\\n'; sleep 30 & cat >/dev/null; wait";
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::new("/w", "OmO")), sink).unwrap();
+        c.input(id, Input::send("hi")).unwrap();
+        let started = Instant::now();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10), "still Working");
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+        let got = out.lock().unwrap().clone();
+        let why = "OmO did not answer in chat mode; it may be an old version: update it, then Restart.";
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "session.error" && s(e, "kind") == "no_chat_mode" && s(e, "message") == why)), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "outcome") == "error" && s(e, "error") == why)), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(_, e) if e == why)), "{got:?}");
+    }
+
+    /// H4: a slow but healthy start is not cut: an agent whose first protocol line comes after a while (within the
+    /// deadline) keeps its session and answers.
+    #[cfg(unix)]
+    #[test]
+    fn a_slow_start_within_the_deadline_still_works() {
+        let mut c = ChatSessions::default();
+        c.start_deadline = Some(Duration::from_millis(1500));
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let script = r#"sleep 0.8; printf '{"id":"omher-1","type":"response","command":"get_state","success":true,"data":{"model":{"name":"M"},"sessionId":"slow"}}\n'; sleep 1.5; printf '{"type":"agent_start"}\n{"type":"agent_end"}\n'; sleep 0.2"#;
+        let mut a: Box<dyn Adapter> = Box::new(Pi::new("/w", "pi"));
+        a.on_input(Input::send("hi")).unwrap();
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], a, sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let got = out.lock().unwrap().clone();
+        assert!(!got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "kind") == "no_chat_mode")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "outcome") == "done")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(0), e) if e.is_empty())), "{got:?}");
+    }
+
+    /// H4: the QA's `old-pi` stub (exits at once with `error: unknown option '--mode'`): the same plain reason, not
+    /// the raw flag error.
+    #[cfg(unix)]
+    #[test]
+    fn an_old_version_that_refuses_the_chat_mode_flag_says_so_plainly() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let (out, sink) = collect();
+        let script = "echo \"error: unknown option '--mode'\" >&2; echo 'Usage: pi [options] [message]' >&2; exit 1";
+        c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::new("/w", "pi")), sink).unwrap();
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        let got = out.lock().unwrap().clone();
+        let why = "pi did not answer in chat mode; it may be an old version: update it, then Restart.";
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "kind") == "no_chat_mode")), "{got:?}");
+        assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(1), e) if e == why)), "{got:?}");
+        // a program that did speak its protocol keeps its own reason (a login, a crash)
+        assert!(refused_chat_mode("error: unknown option '--mode'") && refused_chat_mode("error: unexpected argument 'app-server' found"));
+        assert!(!refused_chat_mode("Error: not logged in"));
+    }
+
+    /// H12: closing a chat stops what its program started too (Unix: the process group; Windows: the Job Object
+    /// that holds `cmd.exe` and the `node.exe` behind an npm shim). Here a child that ignores hang-up and outlives
+    /// its parent stands in for node behind cmd.exe.
+    #[cfg(unix)]
+    #[test]
+    fn closing_a_chat_stops_the_processes_its_program_started() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let mark = tmp.join(format!("omher-chat-tree-{}", std::process::id()));
+        let (out, sink) = collect();
+        // the grandchild writes its pid, ignores HUP and TERM, and lives on alone once the shell above it is gone
+        let script = format!("sh -c 'trap \"\" HUP TERM; echo $$ > \"{}\"; while :; do sleep 1; done' & printf '{{\"type\":\"agent_start\"}}\\n'; wait", mark.display());
+        let id = c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], Box::new(Pi::new("/w", "pi")), sink).unwrap();
+        assert!(wait_for(|| std::fs::read_to_string(&mark).is_ok_and(|t| !t.trim().is_empty()), 10));
+        let pid: i32 = std::fs::read_to_string(&mark).unwrap().trim().parse().unwrap();
+        c.close(id);
+        assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+        assert!(wait_for(|| unsafe { libc::kill(pid, 0) } != 0, 10), "pid {pid} kept running after close");
+        let _ = std::fs::remove_file(mark);
+    }
+
+    /// H12 on Windows (runs on the Windows CI job only): a chat started through `cmd.exe /c` — as an npm `.cmd` shim
+    /// is — whose child outlives cmd.exe; closing the chat ends that child too.
+    #[cfg(windows)]
+    #[test]
+    fn closing_a_chat_stops_the_node_behind_a_cmd_shim() {
+        let c = ChatSessions::default();
+        let tmp = std::env::temp_dir();
+        let mark = tmp.join(format!("omher-chat-tree-{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&mark);
+        let (out, sink) = {
+            let out = Arc::new(Mutex::new(Vec::new()));
+            let o = out.clone();
+            (out, move |x| o.lock().unwrap().push(x))
+        };
+        // cmd.exe starts a PowerShell that writes its own pid and sleeps; cmd.exe itself waits on it, as on node
+        let ps = format!("$PID | Out-File -Encoding ascii '{}'; Start-Sleep -Seconds 120", mark.display());
+        let argv: Vec<OsString> = vec!["cmd.exe".into(), "/c".into(), "powershell".into(), "-NoProfile".into(), "-Command".into(), ps.into()];
+        let id = c.spawn(argv, &tmp, None, &[], Box::new(Pi::new("/w", "pi")), sink).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while Instant::now() < deadline && !std::fs::read_to_string(&mark).is_ok_and(|t| !t.trim().is_empty()) {
+            thread::sleep(Duration::from_millis(100));
+        }
+        let pid: u32 = std::fs::read_to_string(&mark).unwrap().trim().parse().unwrap();
+        c.close(id);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))) {
+            thread::sleep(Duration::from_millis(50));
+        }
+        let alive = || {
+            let o = Command::new("tasklist").args(["/FI", &format!("PID eq {pid}"), "/NH"]).output().unwrap();
+            String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline && alive() {
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(!alive(), "the process behind cmd.exe (pid {pid}) kept running after close");
+        let _ = std::fs::remove_file(mark);
     }
 
     #[test]
@@ -2821,7 +4482,7 @@ mod tests {
     #[test]
     fn real_codex_signed_out_says_how_to_sign_in() {
         let mut x = codex_up();
-        x.on_input(Input::Send { text: "hi".into() }).unwrap();
+        x.on_input(Input::send("hi")).unwrap();
         let st = replay(&mut x, &["codex-signed-out.jsonl"], &[]);
         // the retries show on the progress line instead of a silent wait
         assert!(of(&st.events, "status").iter().any(|e| s(e, "text").starts_with("Reconnecting")));
@@ -2836,7 +4497,7 @@ mod tests {
     fn real_pi_1_plain_answer_ends_on_agent_end() {
         // pi 0.73 ends a prompt with agent_end only (no agent_settled / prompt_result)
         let mut p = pi_up("pi", &["pi-init.jsonl"]);
-        p.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        p.on_input(Input::send("2+2")).unwrap();
         let st = replay(&mut p, &["pi-1-plain.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["4. (model stub-a)"]);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -2850,12 +4511,16 @@ mod tests {
         let mut p = Pi::new("/w/proj", "OmO");
         p.start();
         let st = run(&mut p, &real("omo-init.jsonl"));
+        // its startup thinking_level_changed says the effort first; get_state then names the session
         let info = of(&st.events, "session.info");
-        assert_eq!(s(info[0], "agent_session"), "01a1c85a-703a-72fe-ae88-c1f9ffb5c249");
-        assert_eq!(s(info[0], "model"), "Claude Fable 5.1");
+        assert_eq!(s(info[0], "effort"), "high");
+        let state = info.iter().find(|e| !s(e, "agent_session").is_empty()).unwrap();
+        assert_eq!(s(state, "agent_session"), "01a1c85a-703a-72fe-ae88-c1f9ffb5c249");
+        assert_eq!(s(state, "model"), "Claude Fable 5.1");
+        assert_eq!(s(state, "effort"), "high");
         assert_eq!(of(&st.events, "session.models")[0]["options"].as_array().unwrap().len(), 3);
         assert!(!p.in_turn());
-        p.on_input(Input::Send { text: "hi. reply with just the word ok".into() }).unwrap();
+        p.on_input(Input::send("hi. reply with just the word ok")).unwrap();
         let st = replay(&mut p, &["omo-1-plain.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["ok"]);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -2869,7 +4534,7 @@ mod tests {
     fn real_pi_2_bash_runs_show_the_commands() {
         // pi has no tool approvals of its own: it runs bash straight away
         let mut p = pi_up("pi", &["pi-init.jsonl"]);
-        p.on_input(Input::Send { text: "ls".into() }).unwrap();
+        p.on_input(Input::send("ls")).unwrap();
         let st = replay(&mut p, &["pi-2-tools.jsonl"], &[]);
         assert_eq!(tools(&st.events), [("terminal", "ls -la"), ("terminal", "echo hi"), ("terminal", "pwd")].map(|(a, b)| (a.to_string(), b.to_string())));
         assert!(of(&st.events, "approval.request").is_empty());
@@ -2879,7 +4544,7 @@ mod tests {
     #[test]
     fn real_pi_3_write_and_edit() {
         let mut p = pi_up("pi", &["pi-init.jsonl"]);
-        p.on_input(Input::Send { text: "notes".into() }).unwrap();
+        p.on_input(Input::send("notes")).unwrap();
         let st = replay(&mut p, &["pi-3-edit.jsonl"], &[]);
         assert_eq!(tools(&st.events), [("patch", "notes.txt +1"), ("patch", "README.md +1 -1")].map(|(a, b)| (a.to_string(), b.to_string())));
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -2888,7 +4553,7 @@ mod tests {
     #[test]
     fn real_pi_4_abort_ends_interrupted() {
         let mut p = pi_up("pi", &["pi-init.jsonl"]);
-        p.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        p.on_input(Input::send("sleep")).unwrap();
         let st = run(&mut p, &real("pi-4-running.jsonl"));
         assert_eq!(tools(&st.events), [("terminal".to_string(), "sleep 30; echo finished".to_string())]);
         assert!(ends(&st.events).is_empty() && p.in_turn());
@@ -2903,7 +4568,7 @@ mod tests {
     fn real_pi_5_question_is_plain_text() {
         // pi has no ask tool: the question is the answer bubble and the turn ends, waiting for the reply
         let mut p = pi_up("pi", &["pi-init.jsonl"]);
-        p.on_input(Input::Send { text: "ask".into() }).unwrap();
+        p.on_input(Input::send("ask")).unwrap();
         let st = replay(&mut p, &["pi-5-question.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["Which greeting should go in greet.txt: hello or hi?"]);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -2912,7 +4577,7 @@ mod tests {
     #[test]
     fn real_pi_6_bad_command_fails_its_step_only() {
         let mut p = pi_up("pi", &["pi-init.jsonl"]);
-        p.on_input(Input::Send { text: "bad".into() }).unwrap();
+        p.on_input(Input::send("bad")).unwrap();
         let st = replay(&mut p, &["pi-6-error.jsonl"], &[]);
         assert_eq!(of(&st.events, "tool.end")[0]["ok"], false);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -2925,7 +4590,7 @@ mod tests {
         assert_eq!((s(&w[0], "provider"), s(&w[0], "modelId")), ("stub".into(), "stub-b".into()));
         let st = run(&mut p, &real("pi-7-model.jsonl").iter().map(|l| l.replace("omher-9", s(&w[0], "id").as_str())).collect::<Vec<_>>());
         assert_eq!(s(&st.events[0], "model"), "Stub B");
-        p.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        p.on_input(Input::send("2+2")).unwrap();
         let st = replay(&mut p, &["pi-7-after-model.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["4. (model stub-b)"]);
     }
@@ -2937,7 +4602,7 @@ mod tests {
         let st = run(&mut p, &real("pi-noauth-init.jsonl"));
         assert_eq!(s(of(&st.events, "session.info")[0], "model"), "", "\"unknown\" is not a model name");
         assert_eq!(of(&st.events, "session.models")[0]["options"], json!([]));
-        p.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        p.on_input(Input::send("2+2")).unwrap();
         let st = run(&mut p, &real("pi-signed-out.jsonl").iter().map(|l| l.replace("omher-3", "omher-3")).collect::<Vec<_>>());
         let e = ends(&st.events);
         assert_eq!(e[0], ("error".to_string(), "pi is not signed in. Open Terminal and run /login, then Restart.".to_string()));
@@ -2953,7 +4618,7 @@ mod tests {
         let st = run(&mut p, &real("omp-ready.jsonl"));
         assert!(st.events.is_empty() && st.write.is_empty(), "{:?}", st);
         run(&mut p, &real("omp-init.jsonl"));
-        p.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        p.on_input(Input::send("2+2")).unwrap();
         let st = replay(&mut p, &["omp-1-plain.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["4. (model stub-a)"]);
         // agent_end, prompt_result and session_settled all arrive: one turn.end
@@ -2963,7 +4628,7 @@ mod tests {
     #[test]
     fn real_omp_2_tool_approval_select_maps_to_deny_once_session() {
         let mut p = pi_up("oh-my-pi", &["omp-init.jsonl"]);
-        p.on_input(Input::Send { text: "ls".into() }).unwrap();
+        p.on_input(Input::send("ls")).unwrap();
         let st = replay(&mut p, &["omp-2-approvals.jsonl"], &["deny", "once", "session"]);
         let cards = of(&st.events, "approval.request");
         assert_eq!(cards.len(), 3);
@@ -2982,7 +4647,7 @@ mod tests {
     #[test]
     fn real_omp_3_write_card_names_the_file() {
         let mut p = pi_up("oh-my-pi", &["omp-init.jsonl"]);
-        p.on_input(Input::Send { text: "notes".into() }).unwrap();
+        p.on_input(Input::send("notes")).unwrap();
         let st = replay(&mut p, &["omp-3-edit.jsonl"], &["once", "once"]);
         let titles: Vec<String> = of(&st.events, "approval.request").iter().map(|c| s(c, "title")).collect();
         assert_eq!(titles, ["Allow write to change notes.txt?", "Allow edit to change files?"]);
@@ -2993,7 +4658,7 @@ mod tests {
     #[test]
     fn real_omp_4_abort_ends_interrupted_once() {
         let mut p = pi_up("oh-my-pi", &["omp-init.jsonl"]);
-        p.on_input(Input::Send { text: "sleep".into() }).unwrap();
+        p.on_input(Input::send("sleep")).unwrap();
         run(&mut p, &real("omp-4-running.jsonl"));
         p.on_input(Input::Interrupt).unwrap();
         let st = run(&mut p, &real("omp-4-stopped.jsonl"));
@@ -3003,15 +4668,15 @@ mod tests {
     #[test]
     fn real_omp_5_6_7_question_error_and_model() {
         let mut p = pi_up("oh-my-pi", &["omp-init.jsonl"]);
-        p.on_input(Input::Send { text: "ask".into() }).unwrap();
+        p.on_input(Input::send("ask")).unwrap();
         let st = replay(&mut p, &["omp-5-question.jsonl"], &[]);
         assert_eq!(text_of(&st.events, "message"), ["Which greeting should go in greet.txt: hello or hi?"]);
         let w = written(&p.on_input(Input::Model { model: "stub/stub-b".into() }).unwrap());
         let st = run(&mut p, &real("omp-7-model.jsonl").iter().map(|l| l.replace("omher-9", s(&w[0], "id").as_str())).collect::<Vec<_>>());
         assert_eq!(s(of(&st.events, "session.info")[0], "model"), "Stub B");
-        p.on_input(Input::Send { text: "2+2".into() }).unwrap();
+        p.on_input(Input::send("2+2")).unwrap();
         assert_eq!(text_of(&replay(&mut p, &["omp-7-after-model.jsonl"], &[]).events, "message"), ["4. (model stub-b)"]);
-        p.on_input(Input::Send { text: "bad".into() }).unwrap();
+        p.on_input(Input::send("bad")).unwrap();
         let st = replay(&mut p, &["omp-6-error.jsonl"], &[]);
         assert_eq!(of(&st.events, "tool.end")[0]["ok"], false);
         assert_eq!(ends(&st.events), [("done".into(), "".into())]);
@@ -3020,12 +4685,725 @@ mod tests {
     #[test]
     fn omp_cancel_closes_its_dialog_and_an_ordinary_select_is_a_question() {
         let mut p = Pi::new("/w/proj", "oh-my-pi");
-        p.on_input(Input::Send { text: "x".into() }).unwrap();
+        p.on_input(Input::send("x")).unwrap();
         let st = p.on_line(r#"{"type":"extension_ui_request","id":"u9","method":"select","title":"Which branch?","options":["main","dev"]}"#);
         assert_eq!(s(&st.events[0], "event"), "clarify.request");
         let st = p.on_line(r#"{"type":"extension_ui_request","id":"c1","method":"cancel","targetId":"u9"}"#);
         assert_eq!(st.events[0], json!({"event": "prompt.expired", "request_id": "u9", "reason": "timeout"}));
         assert!(p.on_input(Input::Clarify { request_id: "u9".into(), answer: json!("dev") }).is_err());
+    }
+
+    // -- session controls: permission mode, effort, the agent's own commands, context use, queued messages --
+
+    fn sent_with(text: &str, id: &str) -> Input {
+        Input::Send { text: text.into(), images: vec![], id: id.into() }
+    }
+
+    #[test]
+    fn modes_never_include_one_that_skips_approvals_or_lifts_the_sandbox() {
+        assert_eq!(modes_for("claude"), ["default", "plan", "acceptEdits"]);
+        assert_eq!(modes_for("codex"), ["read-only", "ask", "auto"]);
+        for id in ["omo", "pi", "omp", "dsh", "grok", "omh", ""] {
+            assert!(modes_for(id).is_empty(), "{id}");
+        }
+        for m in ["bypassPermissions", "dontAsk", "auto", "danger-full-access", "dangerFullAccess", "never"] {
+            assert!(!modes_for("claude").contains(&m), "{m}");
+        }
+        // Codex's "auto" is omher's name for auto inside the workspace sandbox (checked below), not a bypass
+        for m in ["bypassPermissions", "danger-full-access", "dangerFullAccess", "never", "full-auto"] {
+            assert!(!modes_for("codex").contains(&m), "{m}");
+        }
+        let mut c = claude_up();
+        for bad in ["bypassPermissions", "dontAsk", "auto", "manual", "PLAN", ""] {
+            assert!(c.on_input(Input::Mode { mode: bad.into() }).is_err(), "{bad}");
+        }
+        let mut x = codex_up();
+        for bad in ["danger-full-access", "dangerFullAccess", "never", "full", ""] {
+            assert!(x.on_input(Input::Mode { mode: bad.into() }).is_err(), "{bad}");
+        }
+        // every Codex preset keeps a sandbox and an approval policy that can ask
+        for m in modes_for("codex") {
+            let (policy, sandbox) = codex_mode(m).unwrap();
+            assert_ne!(policy, "never");
+            assert_ne!(sandbox, "dangerFullAccess");
+        }
+        let mut p = pi_up("OmO", &[]);
+        assert!(p.on_input(Input::Mode { mode: "plan".into() }).is_err());
+    }
+
+    #[test]
+    fn real_claude_9_init_reports_commands_mode_efforts_and_context() {
+        // Claude Code 2.1.322: initialize (its commands trimmed), a `set_permission_mode plan` status
+        // line and a get_context_usage answer
+        let mut c = Claude::new("/w/proj");
+        c.start();
+        let lines = real("claude-9-controls.jsonl");
+        let st = run(&mut c, &lines[..1]);
+        let cmds = &of(&st.events, "session.commands")[0]["commands"];
+        // (trimmed to 8 of the 282 it reported)
+        let rows: Vec<(String, String, String)> = cmds.as_array().unwrap().iter().map(|c| (s(c, "name"), s(c, "kind"), s(c, "prefix"))).collect();
+        assert_eq!(rows.len(), 8);
+        assert!(rows.contains(&("compact".into(), "command".into(), "/".into())), "{rows:?}");
+        assert!(rows.iter().filter(|r| r.1 == "skill").count() >= 3, "a `(user)` skill is marked a skill: {rows:?}");
+        assert_eq!(s(&cmds[0], "hint"), "<optional custom summarization instructions>");
+        assert!(s(&cmds[0], "description").chars().count() <= 161);
+        assert_eq!(s(of(&st.events, "session.info")[0], "mode"), "default");
+        assert_eq!(of(&st.events, "session.efforts")[0]["levels"], json!(["low", "medium", "high", "xhigh", "max"]));
+        // it then asks for its settings (the effort in use) and how full the context is
+        let asked: Vec<String> = written(&st).iter().map(|w| s(&w["request"], "subtype")).collect();
+        assert_eq!(asked, ["get_settings", "get_context_usage"]);
+        // Claude Code says the new mode on its own status line
+        let st = run(&mut c, &lines[1..2]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "mode"), "plan");
+        // the context in use, as Claude Code counts it (never estimated)
+        let st = run(&mut c, &lines[2..3]);
+        assert_eq!(of(&st.events, "session.usage")[0], &json!({"event": "session.usage", "used": 23386, "max": 1000000}));
+        // the effort applied, from get_settings
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"success","request_id":"omher-settings-2","response":{"applied":{"model":"claude-fable-5-2","effort":"high"}}}}"#.into()]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "effort"), "high");
+    }
+
+    #[test]
+    fn claude_mode_and_effort_use_its_own_control_requests() {
+        let mut c = claude_up();
+        let w = written(&c.on_input(Input::Mode { mode: "plan".into() }).unwrap());
+        assert_eq!(w[0]["request"], json!({"subtype": "set_permission_mode", "mode": "plan"}));
+        let w = written(&c.on_input(Input::Effort { effort: "low".into() }).unwrap());
+        // for this process only: never Claude Code's settings file
+        assert_eq!(w[0]["request"], json!({"subtype": "apply_flag_settings", "settings": {"effortLevel": "low"}}));
+        assert!(c.on_input(Input::Effort { effort: "ultra".into() }).is_err());
+        // Claude Code refusing a mode is said under the chat
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"error","request_id":"omher-mode-9","error":"Cannot set permission mode"}}"#.into()]);
+        assert_eq!(s(of(&st.events, "session.error")[0], "message"), "Mode not changed: Cannot set permission mode");
+        // an effort that took is read back
+        let st = run(&mut c, &[r#"{"type":"control_response","response":{"subtype":"success","request_id":"omher-effort-10","response":{}}}"#.into()]);
+        assert_eq!(s(&written(&st)[0]["request"], "subtype"), "get_settings");
+    }
+
+    #[test]
+    fn real_claude_9_a_message_sent_mid_turn_waits_until_claude_code_takes_it() {
+        // Claude Code 2.1.322 with --replay-user-messages: "sleep 8, then FIRST" and, 4 s in, "SECOND". The first
+        // is echoed at once; the second only after the running tool, when Claude Code reads it into the turn.
+        let mut c = claude_up();
+        let lines = real("claude-9-queued.jsonl");
+        let st = c.on_input(sent_with("sleep then FIRST", "local-s1")).unwrap();
+        assert_eq!(names(&st.events), ["turn.start"], "the first message is not queued");
+        let first_echo = lines.iter().position(|l| l.contains("\"isReplay\":true")).unwrap();
+        run(&mut c, &lines[..=first_echo]);
+        let st = c.on_input(sent_with("SECOND", "local-s2")).unwrap();
+        assert_eq!(st.events, [json!({"event": "message.queued", "id": "local-s2"})]);
+        let second_echo = lines.iter().rposition(|l| l.contains("\"isReplay\":true")).unwrap();
+        let st = run(&mut c, &lines[first_echo + 1..second_echo]);
+        assert!(of(&st.events, "message.taken").is_empty(), "still waiting while the tool runs");
+        let st = run(&mut c, &lines[second_echo..=second_echo]);
+        assert_eq!(of(&st.events, "message.taken")[0]["id"], "local-s2");
+        let st = run(&mut c, &lines[second_echo + 1..]);
+        assert_eq!(text_of(&st.events, "message"), ["FIRST\nSECOND"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+    }
+
+    #[test]
+    fn claude_stop_with_a_queued_message_runs_it_next_as_its_own_turn() {
+        // recorded: Stop while "SECOND" waited ends the turn aborted_tools, then Claude Code echoes SECOND and
+        // answers it in a new turn
+        let mut c = claude_up();
+        c.on_input(sent_with("sleep", "a")).unwrap();
+        c.on_input(sent_with("SECOND", "b")).unwrap();
+        c.on_input(Input::Interrupt).unwrap();
+        let st = run(&mut c, &[r#"{"type":"result","subtype":"error_during_execution","is_error":true,"terminal_reason":"aborted_tools"}"#.into()]);
+        assert_eq!(ends(&st.events), [("interrupted".into(), "".into())]);
+        assert!(of(&st.events, "message.taken").is_empty() && of(&st.events, "message.dropped").is_empty());
+        let st = run(&mut c, &[r#"{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"SECOND"}]},"parent_tool_use_id":null}"#.into()]);
+        assert_eq!(names(&st.events), ["message.taken", "turn.start"]);
+        assert_eq!(st.events[0]["id"], "b");
+    }
+
+    #[test]
+    fn codex_mode_and_effort_go_with_every_turn() {
+        let mut x = codex_up();
+        // model/list as Codex 0.167 sends it on this Mac (supportedReasoningEfforts per model)
+        x.call(&mut Step::default(), "model/list", json!({}));
+        let (n, mid) = (x.seq, x.model_id.clone());
+        run(&mut x, &[format!(r#"{{"id":{n},"result":{{"data":[{{"model":"{}","displayName":"GPT","description":"","hidden":false,"supportedReasoningEfforts":[{{"reasoningEffort":"low","description":""}},{{"reasoningEffort":"high","description":""}}]}}]}}}}"#, mid)]);
+        let st = x.on_input(Input::Mode { mode: "read-only".into() }).unwrap();
+        assert_eq!(s(of(&st.events, "session.info")[0], "mode"), "read-only");
+        // the recorded model/list offers these efforts for the thread's model
+        let model = x.model_id.clone();
+        let levels = x.efforts.get(&model).cloned().unwrap();
+        let level = levels.as_array().unwrap()[0].as_str().unwrap().to_string();
+        x.on_input(Input::Effort { effort: level.clone() }).unwrap();
+        assert!(x.on_input(Input::Effort { effort: "turbo".into() }).is_err());
+        let t = written(&x.on_input(sent_with("make a file", "local-s7")).unwrap())[0].clone();
+        assert_eq!(t["method"], "turn/start");
+        assert_eq!(t["params"]["approvalPolicy"], "on-request");
+        assert_eq!(t["params"]["sandboxPolicy"], json!({"type": "readOnly"}));
+        assert_eq!(t["params"]["effort"], level.as_str());
+        assert_eq!(t["params"]["clientUserMessageId"], "local-s7");
+        for (mode, policy, sandbox) in [("ask", "untrusted", "workspaceWrite"), ("auto", "on-request", "workspaceWrite")] {
+            x.on_input(Input::Mode { mode: mode.into() }).unwrap();
+            run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"t","status":"completed"}}}"#.into()]);
+            let t = written(&x.on_input(Input::send("next")).unwrap())[0].clone();
+            assert_eq!((s(&t["params"], "approvalPolicy"), s(&t["params"]["sandboxPolicy"], "type")), (policy.to_string(), sandbox.to_string()));
+        }
+    }
+
+    #[test]
+    fn codex_reports_its_threads_mode_effort_usage_and_skills() {
+        // the shapes Codex 0.167 sent on this Mac: thread/resume after a turn ran read-only, a token usage update,
+        // skills/list
+        let mut x = Codex::new("/w/proj", Some("01a1cad5-b3bb-7f52-9de5-0bfc4cd293f4"));
+        x.start();
+        let st = run(&mut x, &[
+            r#"{"id":1,"result":{}}"#.into(),
+            r#"{"id":2,"result":{"thread":{"id":"01a1cad5-b3bb-7f52-9de5-0bfc4cd293f4"},"model":"gpt-6.1-sol","approvalPolicy":"untrusted","sandbox":{"type":"readOnly","networkAccess":false},"reasoningEffort":"low"}}"#.into(),
+        ]);
+        let info = of(&st.events, "session.info")[0];
+        // untrusted + readOnly is none of omher's presets: the agent's own setting, shown as such
+        assert_eq!((s(info, "mode"), s(info, "effort")), ("".into(), "low".into()));
+        let st = run(&mut x, &[r#"{"id":2,"result":{"thread":{"id":"t"},"model":"m","approvalPolicy":"on-request","sandbox":{"type":"readOnly"}}}"#.into()]);
+        let _ = st;
+        assert_eq!(codex_mode_of("on-request", "readOnly"), Some("read-only"));
+        assert_eq!(codex_mode_of("never", "dangerFullAccess"), None);
+        let st = run(&mut x, &[r#"{"method":"thread/tokenUsage/updated","params":{"threadId":"t","turnId":"u","tokenUsage":{"last":{"totalTokens":41250,"inputTokens":41000,"cachedInputTokens":0,"outputTokens":250,"reasoningOutputTokens":0},"total":{"totalTokens":90000,"inputTokens":1,"cachedInputTokens":0,"outputTokens":1,"reasoningOutputTokens":0},"modelContextWindow":258400}}}"#.into()]);
+        assert_eq!(of(&st.events, "session.usage")[0], &json!({"event": "session.usage", "used": 41250, "max": 258400}));
+        let st = run(&mut x, &[r#"{"id":4,"result":{"data":[{"cwd":"/w/proj","skills":[{"name":"review","description":"Long text","shortDescription":"Review a change","enabled":true,"path":"/home/u/.codex/skills/review/SKILL.md","scope":"user"},{"name":"off","description":"x","enabled":false,"path":"/p","scope":"user"}],"errors":[]}]}}"#.into()]);
+        assert_eq!(of(&st.events, "session.commands")[0]["commands"], json!([{"name": "review", "description": "Review a change", "hint": "", "kind": "skill", "prefix": "$"}]));
+        // a `$name` in the message goes with it as Codex's own skill input
+        let t = written(&x.on_input(Input::send("please $review this")).unwrap())[0].clone();
+        assert_eq!(t["params"]["input"][1], json!({"type": "skill", "name": "review", "path": "/home/u/.codex/skills/review/SKILL.md"}));
+    }
+
+    #[test]
+    fn codex_a_message_sent_mid_turn_waits_until_codex_records_it() {
+        // recorded on Codex 0.167: a second turn/start while one runs becomes a userMessage item of the same turn,
+        // with our clientUserMessageId as its clientId
+        let mut x = codex_up();
+        x.on_input(sent_with("first", "local-s1")).unwrap();
+        run(&mut x, &[r#"{"method":"turn/started","params":{"turn":{"id":"T1","status":"inProgress","items":[]}}}"#.into()]);
+        let st = x.on_input(sent_with("second", "local-s2")).unwrap();
+        assert_eq!(names(&st.events), ["message.queued"]);
+        let st = run(&mut x, &[r#"{"method":"item/started","params":{"item":{"type":"userMessage","id":"u2","clientId":"local-s2","content":[]}}}"#.into()]);
+        assert_eq!(st.events, [json!({"event": "message.taken", "id": "local-s2"})]);
+        // Stop before Codex records one: it was never sent, and says so
+        x.on_input(sent_with("third", "local-s3")).unwrap();
+        x.on_input(Input::Interrupt).unwrap();
+        let st = run(&mut x, &[r#"{"method":"turn/completed","params":{"turn":{"id":"T1","status":"interrupted"}}}"#.into()]);
+        assert_eq!(names(&st.events), ["message.dropped", "turn.end"]);
+        assert_eq!(st.events[0]["id"], "local-s3");
+    }
+
+    #[test]
+    fn real_omo_9_reports_levels_commands_and_context() {
+        // omo 5.0.0-beta.65: get_available_thinking_levels, get_commands (trimmed), get_session_stats after a turn
+        let mut p = Pi::new("/w/proj", "OmO");
+        let w = written(&p.start());
+        assert_eq!(w.iter().map(|v| s(v, "type")).collect::<Vec<_>>(), ["get_state", "get_available_models", "get_available_thinking_levels", "get_commands"]);
+        // the session-stats read the recording answers is the one asked after a turn
+        p.read(&mut Step::default(), "get_session_stats");
+        let st = run(&mut p, &real("omo-9-controls.jsonl"));
+        assert_eq!(of(&st.events, "session.efforts")[0]["levels"], json!(["minimal", "low", "medium", "high", "xhigh", "max"]));
+        let cmds = of(&st.events, "session.commands")[0]["commands"].as_array().unwrap().clone();
+        assert_eq!(cmds.iter().map(|c| (s(c, "kind"), s(c, "prefix"))).collect::<Vec<_>>(), [("command", "/"), ("command", "/"), ("command", "/"), ("skill", "$"), ("skill", "$")].map(|(a, b)| (a.to_string(), b.to_string())));
+        assert!(s(&cmds[3], "name").starts_with("skill:"));
+        assert_eq!(of(&st.events, "session.usage")[0], &json!({"event": "session.usage", "used": 82335, "max": 1000000}));
+        // a level it offers goes as its own set_thinking_level; anything else is refused
+        let w = written(&p.on_input(Input::Effort { effort: "low".into() }).unwrap());
+        assert_eq!((s(&w[0], "type"), s(&w[0], "level")), ("set_thinking_level".into(), "low".into()));
+        assert!(p.on_input(Input::Effort { effort: "off".into() }).is_err());
+        let st = run(&mut p, &[r#"{"type":"thinking_level_changed","level":"low"}"#.into()]);
+        assert_eq!(s(of(&st.events, "session.info")[0], "effort"), "low");
+    }
+
+    #[test]
+    fn real_omo_9_a_follow_up_waits_in_its_queue_until_omo_takes_it() {
+        // omo 5.0.0-beta.65: "numbers 1..80", then (3 s in) "SECOND" as a followUp: queue_update, then after the
+        // first answer a new turn_start, an empty queue and SECOND's own message_end
+        let mut p = pi_up("OmO", &[]);
+        let lines = real("omo-9-queued.jsonl");
+        p.on_input(sent_with("numbers", "a")).unwrap();
+        let start = lines.iter().position(|l| l.contains("\"agent_start\"")).unwrap();
+        let first_user = lines.iter().position(|l| l.contains("\"message_end\"") && l.contains("\"role\":\"user\"")).unwrap();
+        run(&mut p, &lines[..=first_user]);
+        assert!(start < first_user);
+        let st = p.on_input(sent_with("SECOND", "b")).unwrap();
+        assert_eq!(names(&st.events), ["message.queued"]);
+        assert_eq!(written(&st)[0]["streamingBehavior"], "followUp");
+        let second_user = lines.iter().rposition(|l| l.contains("\"message_end\"") && l.contains("\"role\":\"user\"")).unwrap();
+        let st = run(&mut p, &lines[first_user + 1..second_user]);
+        assert!(of(&st.events, "message.taken").is_empty());
+        let st = run(&mut p, &lines[second_user..]);
+        assert_eq!(of(&st.events, "message.taken")[0]["id"], "b");
+        assert_eq!(text_of(&st.events, "message"), ["SECOND"]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        // Stop with a follow-up waiting: omo clears its queue, so the message is dropped
+        p.on_input(sent_with("long", "c")).unwrap();
+        run(&mut p, &[r#"{"type":"agent_start"}"#.into()]);
+        p.on_input(sent_with("later", "d")).unwrap();
+        let st = run(&mut p, &[r#"{"type":"agent_end","aborted":true}"#.into()]);
+        assert_eq!(names(&st.events)[..2], ["message.dropped", "turn.end"]);
+        assert_eq!(st.events[0]["id"], "d");
+    }
+
+    // -- every recorded stream ends with the turn over --
+
+    /// One step of a replay: a recorded file (or the part of it before / from its last `init`), or what the person
+    /// (or the exit watcher) does in between.
+    enum Do {
+        File(&'static str),
+        Head(&'static str),
+        Tail(&'static str),
+        /// lines `from..to` of a file, as recorded
+        Lines(&'static str, usize, usize),
+        Send,
+        Stop,
+        Model(&'static str),
+        /// the program exits: the watcher's `turn.end` when it was mid-turn
+        Exit,
+    }
+
+    /// Each sequence: a name, the adapter, then its steps. Every file in tests/fixtures/real/ is in one of them.
+    fn sequences() -> Vec<(&'static str, &'static str, Vec<Do>)> {
+        use Do::*;
+        let turn = |f: &'static str| vec![Send, File(f)];
+        let mut out: Vec<(&'static str, &'static str, Vec<Do>)> = Vec::new();
+        for f in ["claude-1-plain.jsonl", "claude-2-approvals.jsonl", "claude-3-edit.jsonl", "claude-4-background.jsonl", "claude-5-question.jsonl", "claude-6-error.jsonl", "claude-signed-out.jsonl"] {
+            out.push((f, "claude", turn(f)));
+        }
+        // the recording finishes a turn, then the person asks for a slow command and presses Stop
+        out.push(("claude-4-stop.jsonl", "claude", vec![Send, Head("claude-4-stop.jsonl"), Send, Tail("claude-4-stop.jsonl"), Stop, File("claude-4-stopped.jsonl")]));
+        out.push(("claude-7-model.jsonl", "claude", vec![Model("haiku"), File("claude-7-model.jsonl")]));
+        // a model picked between turns, then one picked right after the next message went out (QA H7)
+        out.push(("claude-11-model-mid-turn.jsonl", "claude", vec![Model("haiku"), Lines("claude-11-model-mid-turn.jsonl", 0, 1), Send, Model("sonnet"), Lines("claude-11-model-mid-turn.jsonl", 1, 6), Send, Tail("claude-11-model-mid-turn.jsonl")]));
+        // a resumed conversation: an old background task's empty result, then the person's answer
+        out.push(("claude-8-resume.jsonl", "claude", vec![Send, File("claude-8-resume.jsonl"), Head("claude-4-stop.jsonl")]));
+        // omher closed the chat mid-command: the exit watcher ends the turn
+        out.push(("claude-10-close.jsonl", "claude", vec![Send, File("claude-10-close.jsonl"), Exit]));
+        for f in ["codex-1-plain.jsonl", "codex-2-approvals.jsonl", "codex-3-edit.jsonl", "codex-5-question.jsonl", "codex-6-error.jsonl", "codex-signed-out.jsonl"] {
+            out.push((f, "codex", turn(f)));
+        }
+        out.push(("codex-4-stop.jsonl", "codex", vec![Send, File("codex-4-stop.jsonl"), Stop, File("codex-4-stopped.jsonl")]));
+        out.push(("codex-7-model.jsonl", "codex", vec![Model("gpt-6-astra"), Send, File("codex-7-model.jsonl")]));
+        out.push(("codex-8-resume.jsonl", "codex-resume", vec![File("codex-8-resume-init.jsonl"), File("codex-8-resume.jsonl"), Send, File("codex-8-resume-turn.jsonl")]));
+        // reopened onto a thread that is gone, with a message waiting: a new thread takes it (QA H5)
+        out.push(("codex-11-resume-gone.jsonl", "codex-resume-gone", vec![Send, File("codex-11-resume-gone.jsonl"), File("codex-1-plain.jsonl")]));
+        // two subagents in parallel (Claude Code 2.1.322, real run), then a subagent whose command needs approval
+        out.push(("claude-9-subagents.jsonl", "claude", vec![Send, File("claude-9-subagents.jsonl"), Send, File("claude-9-subagent-ask.jsonl")]));
+        // OmO 5.1.56: two background subagents (`task`), then the next turn during which their completions arrive
+        out.push(("omo-9-subagents.jsonl", "omo", vec![Send, File("omo-9-subagents.jsonl"), Send, File("omo-9-subagents-after.jsonl")]));
+        // two sub-agents in parallel (their threads stream on the same connection), then Stop while one runs
+        out.push(("codex-9-helpers.jsonl", "codex-helpers", vec![Send, File("codex-9-helpers.jsonl")]));
+        out.push(("codex-10-helper-stop.jsonl", "codex-helper-stop", vec![Send, File("codex-10-helper-stop.jsonl"), Stop, File("codex-10-helper-stopped.jsonl")]));
+        out.push(("omo-1-plain.jsonl", "omo", turn("omo-1-plain.jsonl")));
+        for f in ["omp-1-plain.jsonl", "omp-2-approvals.jsonl", "omp-3-edit.jsonl", "omp-5-question.jsonl", "omp-6-error.jsonl"] {
+            out.push((f, "omp", turn(f)));
+        }
+        out.push(("omp-4-running.jsonl", "omp", vec![Send, File("omp-4-running.jsonl"), Stop, File("omp-4-stopped.jsonl")]));
+        out.push(("omp-7-model.jsonl", "omp", vec![Model("stub/stub-b"), File("omp-7-model.jsonl"), Send, File("omp-7-after-model.jsonl")]));
+        for f in ["pi-1-plain.jsonl", "pi-2-tools.jsonl", "pi-3-edit.jsonl", "pi-5-question.jsonl", "pi-6-error.jsonl"] {
+            out.push((f, "pi", turn(f)));
+        }
+        out.push(("pi-4-running.jsonl", "pi", vec![Send, File("pi-4-running.jsonl"), Stop, File("pi-4-stopped.jsonl")]));
+        out.push(("pi-7-model.jsonl", "pi", vec![Model("stub/stub-b"), File("pi-7-model.jsonl"), Send, File("pi-7-after-model.jsonl")]));
+        out.push(("pi-signed-out.jsonl", "pi-noauth", vec![File("pi-noauth-init.jsonl"), Send, File("pi-signed-out.jsonl"), File("pi-noauth-model.jsonl")]));
+        // the session controls' recordings: start-up reads, and a message sent while a turn ran
+        out.push(("claude-9-controls.jsonl", "claude", vec![File("claude-9-controls.jsonl")]));
+        out.push(("claude-9-queued.jsonl", "claude", turn("claude-9-queued.jsonl")));
+        out.push(("omo-9-controls.jsonl", "omo", vec![File("omo-9-controls.jsonl")]));
+        out.push(("omo-9-queued.jsonl", "omo", turn("omo-9-queued.jsonl")));
+        out
+    }
+
+    /// The adapter of a sequence, after its own start-up recording (the files each one reads before any turn).
+    fn adapter_up(kind: &str) -> (Box<dyn Adapter>, Vec<&'static str>) {
+        match kind {
+            "claude" => (Box::new(Claude::new("/w/proj")), vec!["claude-init.jsonl"]),
+            "codex" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-init.jsonl"]),
+            "codex-resume" => (Box::new(Codex::new("/w/proj", Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"))), vec![]),
+            "codex-resume-gone" => (Box::new(Codex::new("/w/proj", Some("0badbeef-0000-4000-8000-000000000000"))), vec![]),
+            "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
+            "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
+            "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
+            "omp" => (Box::new(Pi::new("/w/proj", "oh-my-pi")), vec!["omp-ready.jsonl", "omp-init.jsonl"]),
+            "pi" => (Box::new(Pi::new("/w/proj", "pi")), vec!["pi-init.jsonl"]),
+            "pi-noauth" => (Box::new(Pi::new("/w/proj", "pi")), vec![]),
+            other => panic!("{other}"),
+        }
+    }
+
+    /// Replays one sequence: every event the chat gets, in order (start-up included), with the person's approvals
+    /// answered as `replay` does. Also returns whether the adapter still thinks a turn runs.
+    fn replay_sequence(kind: &str, steps: &[Do], used: &mut std::collections::BTreeSet<String>) -> (Vec<Event>, bool) {
+        let (mut a, init) = adapter_up(kind);
+        let mut events = a.start().events;
+        for f in init {
+            used.insert(f.into());
+            events.extend(run(a.as_mut(), &real(f)).events);
+        }
+        let split = |name: &str| {
+            let lines = real(name);
+            let at = lines.iter().rposition(|l| l.contains("\"subtype\":\"init\"")).unwrap();
+            (lines[..at].to_vec(), lines[at..].to_vec())
+        };
+        let mut last_write: Vec<String> = Vec::new();
+        let mut exited = false;
+        for step in steps {
+            let lines: Vec<String> = match step {
+                Do::Send => {
+                    events.extend(a.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap().events);
+                    continue;
+                }
+                Do::Stop => {
+                    events.extend(a.on_input(Input::Interrupt).unwrap().events);
+                    continue;
+                }
+                Do::Model(m) => {
+                    let st = a.on_input(Input::Model { model: (*m).into() }).unwrap();
+                    last_write = st.write.clone();
+                    events.extend(st.events);
+                    continue;
+                }
+                Do::Exit => {
+                    if a.in_turn() {
+                        events.push(exit_turn_end(Some(0), ""));
+                    }
+                    exited = true;
+                    continue;
+                }
+                Do::File(f) => {
+                    used.insert((*f).into());
+                    // a model answer names the request it answers: the one this replay sent
+                    let id = last_write.first().and_then(|w| serde_json::from_str::<Value>(w).ok()).map(|w| if w["request_id"].is_string() { s(&w, "request_id") } else { s(&w, "id") }).unwrap_or_default();
+                    real(f).into_iter().map(|l| if id.is_empty() { l } else { l.replace("omher-model-2", &id).replace("omher-9", &id) }).collect()
+                }
+                Do::Head(f) => {
+                    used.insert((*f).into());
+                    split(f).0
+                }
+                Do::Tail(f) => {
+                    used.insert((*f).into());
+                    split(f).1
+                }
+                Do::Lines(f, from, to) => {
+                    used.insert((*f).into());
+                    real(f)[*from..*to].to_vec()
+                }
+            };
+            for l in lines {
+                for e in a.on_line(&l).events {
+                    let ask = s(&e, "event") == "approval.request";
+                    let rid = s(&e, "request_id");
+                    events.push(e);
+                    if ask {
+                        events.extend(a.on_input(Input::Approve { request_id: rid, choice: "once".into() }).unwrap().events);
+                    }
+                }
+            }
+        }
+        // a program that exited runs nothing, whatever its adapter last thought
+        (events, a.in_turn() && !exited)
+    }
+
+    /// Every recorded stream, replayed through its adapter, leaves no turn running, and the events of a turn
+    /// (status, thinking, steps, streamed text) never come outside one. The events go to
+    /// `src/state/__fixtures__/real-agent-replay.json`, which the store's own test replays through the reducer
+    /// (`OMHER_WRITE_REPLAY=1 cargo test real_streams` rewrites it after an adapter change).
+    #[test]
+    fn real_streams_end_their_turns_and_say_nothing_outside_one() {
+        let mut used = std::collections::BTreeSet::new();
+        let mut out = Vec::new();
+        for (name, kind, steps) in sequences() {
+            let (events, running) = replay_sequence(kind, &steps, &mut used);
+            assert!(!running, "{name}: the adapter still thinks a turn runs");
+            let mut open = false;
+            for e in &events {
+                match s(e, "event").as_str() {
+                    "turn.start" => open = true,
+                    "turn.end" => open = false,
+                    "status" | "thinking" | "tool.start" | "tool.end" | "delta" | "skill" => {
+                        assert!(open, "{name}: {e} outside a turn");
+                    }
+                    _ => {}
+                }
+            }
+            assert!(!open, "{name}: the last turn never ended");
+            out.push(json!({"name": name, "agent": kind, "events": events}));
+        }
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("real");
+        // DSH has no adapter (a run per message): dsh_chat.rs's own tests replay its dsh-*.jsonl streams
+        let all: std::collections::BTreeSet<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".jsonl") && !n.starts_with("dsh-")).collect();
+        assert_eq!(all.difference(&used).collect::<Vec<_>>(), Vec::<&String>::new(), "a recorded stream no sequence replays");
+        let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("src").join("state").join("__fixtures__").join("real-agent-replay.json");
+        let text = serde_json::to_string_pretty(&Value::Array(out)).unwrap() + "\n";
+        if std::env::var_os("OMHER_WRITE_REPLAY").is_some() {
+            std::fs::create_dir_all(golden.parent().unwrap()).unwrap();
+            std::fs::write(&golden, &text).unwrap();
+        }
+        let saved = std::fs::read_to_string(&golden).unwrap_or_default().replace("\r\n", "\n");
+        assert!(saved == text, "{} is out of date: run OMHER_WRITE_REPLAY=1 cargo test real_streams", golden.display());
+    }
+
+    #[test]
+    fn omo_status_after_its_turn_ended_is_not_shown() {
+        // omo-1-plain.jsonl: agent_end, then setStatus "(😺 OmO Native)", agent_settled, agent_idle, more setStatus
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::Send { text: "hi".into(), images: vec![], id: String::new() }).unwrap();
+        let lines = real("omo-1-plain.jsonl");
+        let end = lines.iter().position(|l| l.contains("\"type\":\"agent_end\"")).unwrap();
+        run(&mut p, &lines[..=end]);
+        let late = run(&mut p, &lines[end + 1..]);
+        assert!(late.events.is_empty(), "{:?}", late.events);
+        // while a turn runs, its status shows as the agent wrote it
+        p.on_input(Input::Send { text: "again".into(), images: vec![], id: String::new() }).unwrap();
+        let st = p.on_line(r#"{"type":"extension_ui_request","id":"s1","method":"setStatus","statusKey":"memory","statusText":"mem:khope-sionic-ai-d09472c9 9d ago (+1)"}"#);
+        assert_eq!(st.events, [json!({"event": "status", "text": "mem:khope-sionic-ai-d09472c9 9d ago (+1)"})]);
+    }
+
+    /// codex-9-helpers: the person's turn spawns two sub-agents (`write_one`, `read_first_line`); their threads'
+    /// own turns, steps and answers stream on the same connection (recorded with Codex 0.167.0-alpha.3.2).
+    fn codex_helpers_up() -> Codex {
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        run(&mut x, &real("codex-9-helpers-init.jsonl"));
+        x
+    }
+
+    fn subs_of<'a>(events: &'a [Event], id: &str) -> Vec<&'a Event> {
+        events.iter().filter(|e| s(e, "event") == "subagent" && s(e, "id").ends_with(id)).collect()
+    }
+
+    #[test]
+    fn claude_subagents_come_out_as_one_row_each_with_their_own_answer() {
+        // claude-9-subagents: one message, two Agent calls in parallel (Claude Code 2.1.322, a real run)
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-9-subagents.jsonl"));
+        let a = subs_of(&st.events, "NdJyEL");
+        let b = subs_of(&st.events, "4hw1eo");
+        assert_eq!((s(a[0], "agent"), s(a[0], "name"), s(a[0], "goal")), ("claude".into(), "general-purpose".into(), "Read a.txt first line".into()));
+        assert_eq!(s(b[0], "goal"), "Count lines of b.txt");
+        // one fan-out of two (the same message), its steps, then done with its own words and time
+        assert_eq!(s(a[0], "delegation"), s(b[0], "delegation"));
+        assert_eq!((a[0]["index"].clone(), b[0]["index"].clone(), b[0]["count"].clone()), (json!(0), json!(1), json!(2)));
+        assert!(a.iter().any(|e| s(e, "tool") == "read_file" && s(e, "step").ends_with("a.txt")), "{a:?}");
+        let end = a.last().unwrap();
+        assert_eq!((s(end, "state"), s(end, "summary")), ("done".into(), "alpha line".into()));
+        assert_eq!(end["seconds"], json!(3.7));
+        assert_eq!(s(end, "model"), "claude-fable-5-2");
+        assert_eq!(s(b.last().unwrap(), "state"), "done");
+        // a subagent's own text and steps are never Claude's: one answer bubble, steps only of the main thread
+        assert_eq!(text_of(&st.events, "message").len(), 1);
+        assert!(st.events.iter().filter(|e| s(e, "event") == "tool.start").all(|e| s(e, "name") == "delegate_task"));
+        assert_eq!(names(&st.events).iter().filter(|n| *n == "turn.end").count(), 1);
+    }
+
+    #[test]
+    fn a_claude_turn_stopped_with_a_subagent_out_ends_that_subagent_cancelled() {
+        // claude-9-subagents up to the first hand-back, then Stop: Claude Code ends the turn with
+        // error_during_execution and the second subagent never hands back
+        let lines = real("claude-9-subagents.jsonl");
+        let cut = lines.iter().position(|l| l.contains("\"tool_use_id\":\"toolu_01ScWBRPwx9MFSuupGNdJyEL\"") && l.contains("tool_result")).unwrap();
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        run(&mut c, &lines[..=cut]);
+        let st = c.on_line(r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":""}"#);
+        let b = subs_of(&st.events, "4hw1eo");
+        assert_eq!(b.iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["cancelled"]);
+        assert!(subs_of(&st.events, "NdJyEL").is_empty(), "the subagent that handed back stays done");
+        assert_eq!(names(&st.events).last().map(String::as_str), Some("turn.end"));
+    }
+
+    #[test]
+    fn a_claude_subagents_approval_names_the_subagent() {
+        // claude-9-subagent-ask: the subagent's Bash needs permission; Claude Code sends `agent_id` on can_use_tool
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        run(&mut c, &real("claude-9-subagents.jsonl"));
+        c.on_input(Input::send("again")).unwrap();
+        let st = replay(&mut c, &["claude-9-subagent-ask.jsonl"], &[]);
+        let ask = st.events.iter().find(|e| s(e, "event") == "approval.request").unwrap();
+        assert_eq!(ask["subagent"], json!({"id": "toolu_016YS2cG1AUHFFq9nBfbkv9e", "name": "Write c.txt via echo"}));
+        assert!(s(ask, "command").starts_with("echo three"));
+        let sub = subs_of(&st.events, "fbkv9e");
+        assert_eq!(s(sub.last().unwrap(), "summary"), "done");
+    }
+
+    #[test]
+    fn claude_says_how_much_still_runs_in_the_background() {
+        // claude-4-background: background_tasks_changed with one task, then with none (audit O10)
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let mut st = run(&mut c, &real("claude-4-background.jsonl"));
+        // the same event when the task ended (claude-A in the audit's capture): its list is empty
+        st.events.extend(c.on_line(r#"{"type":"system","subtype":"background_tasks_changed","tasks":[]}"#).events);
+        let bg: Vec<Value> = st.events.iter().filter(|e| s(e, "event") == "session.info" && e.get("background").is_some()).map(|e| e["background"].clone()).collect();
+        assert_eq!(bg, [json!(1), json!(0)]);
+    }
+
+    #[test]
+    fn omo_subagents_come_out_as_rows_and_end_when_omo_says_they_finished() {
+        // omo-9: one `task` call with two background subagents (OmO 5.1.56, a real run); their completions arrive in
+        // OmO's next turn as `senpi-task.completion`
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::send("go")).unwrap();
+        let st = run(&mut p, &real("omo-9-subagents.jsonl"));
+        let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        assert_eq!((s(subs[0], "agent"), s(subs[0], "name"), s(subs[0], "goal"), s(subs[0], "state")), ("omo".into(), "first-line".into(), "Report the first line of a.txt".into(), "queued".into()));
+        assert_eq!(s(subs[1], "name"), "line-count");
+        // the call's result: both running in the background, on their resolved model
+        let running: Vec<&&Event> = subs.iter().filter(|e| s(e, "state") == "running").collect();
+        assert_eq!(running.len(), 2);
+        assert_eq!(s(running[0], "model"), "gpt-6-luna-fast");
+        // the `task` step names them, never the raw call JSON
+        let step = st.events.iter().find(|e| s(e, "event") == "tool.start" && s(e, "name") == "delegate_task").unwrap();
+        assert_eq!(s(step, "detail"), "first-line, line-count");
+        p.on_input(Input::send("next")).unwrap();
+        let st = replay(&mut p, &["omo-9-subagents-after.jsonl"], &[]);
+        let done: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        assert_eq!(done.iter().map(|e| (s(e, "name"), s(e, "state"), s(e, "summary"))).collect::<Vec<_>>(), [
+            ("first-line".into(), "done".into(), "alpha line".into()),
+            ("line-count".into(), "done".into(), "2".into()),
+        ]);
+        assert_eq!(done[0]["seconds"], json!(9.9));
+        assert_eq!(s(done[0], "model"), "claude-haiku-5-5");
+    }
+
+    #[test]
+    fn omo_says_what_still_runs_in_the_background() {
+        // omo-B: session_lifecycle waiting_background with one bash (audit O10); subagents are not counted here
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let st = p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"waiting_background","waitingOn":{"children":0,"background":[{"source":"terminal-background-sessions","activeCount":1,"items":[{"id":"bash_1","label":"sleep 20"}]}],"human":[]}}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "background": 1})]);
+        assert!(p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"waiting_background","waitingOn":{"children":0,"background":[{"source":"terminal-background-sessions","activeCount":1}],"human":[]}}}"#).events.is_empty());
+        let st = p.on_line(r#"{"type":"session_lifecycle","lifecycle":{"state":"done","waitingOn":{"children":0,"background":[{"source":"delivery:omo-senpi:wake:x","activeCount":1}],"human":[]}}}"#);
+        assert_eq!(st.events, [json!({"event": "session.info", "background": 0})]);
+    }
+
+    #[test]
+    fn a_codex_helper_finishing_does_not_end_the_persons_turn() {
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
+        let lines = real("codex-9-helpers.jsonl");
+        // the first helper's own turn/completed: the person's turn is still running
+        let child_end = lines.iter().position(|l| l.contains("\"turn/completed\"") && l.contains("01a1ca24-539f")).unwrap();
+        let st = run(&mut x, &lines[..=child_end]);
+        assert!(x.in_turn(), "a helper's turn/completed ended the person's turn");
+        assert!(!names(&st.events).contains(&"turn.end".to_string()), "{:?}", names(&st.events));
+        let st = run(&mut x, &lines[child_end + 1..]);
+        assert!(!x.in_turn());
+        assert_eq!(names(&st.events).iter().filter(|n| *n == "turn.end").count(), 1);
+        assert_eq!(st.events.iter().filter(|e| s(e, "event") == "turn.start").count(), 0, "a helper's step started a turn of its own");
+    }
+
+    #[test]
+    fn a_codex_helpers_text_is_never_codexs_own_answer() {
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
+        let st = run(&mut x, &real("codex-9-helpers.jsonl"));
+        let said = text_of(&st.events, "message");
+        assert!(!said.iter().any(|t| t == "done" || t == "alpha line"), "{said:?}");
+        assert!(said.iter().any(|t| t.starts_with("Agent 1 wrote one.txt")), "{said:?}");
+        // no streamed helper text either (only the session's own thread's deltas), and none of the helpers'
+        // commands is a step of Codex's turn
+        let own = real("codex-9-helpers.jsonl").iter().filter(|l| l.contains("item/agentMessage/delta") && l.contains("\"threadId\":\"01a1ca24-1047")).count();
+        assert_eq!(text_of(&st.events, "delta").len(), own);
+        let steps: Vec<String> = st.events.iter().filter(|e| s(e, "event") == "tool.start").map(|e| s(e, "detail")).collect();
+        assert!(!steps.iter().any(|d| d.contains("echo one") || d.contains("head -n 1")), "{steps:?}");
+    }
+
+    #[test]
+    fn codex_helpers_come_out_as_subagent_lines() {
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
+        let st = run(&mut x, &real("codex-9-helpers.jsonl"));
+        let subs: Vec<&Event> = st.events.iter().filter(|e| s(e, "event") == "subagent").collect();
+        let of = |id: &str| subs.iter().filter(|e| s(e, "id").ends_with(id)).map(|e| (*e).clone()).collect::<Vec<_>>();
+        let one = of("e39bedaf4545");
+        let two = of("13c7f1bb6917");
+        // started, its step, done with its own answer and time
+        assert_eq!(one.iter().map(|e| s(e, "state")).collect::<Vec<_>>(), ["running", "running", "done"]);
+        assert_eq!((s(&one[0], "agent"), s(&one[0], "name"), s(&one[0], "goal")), ("codex".into(), "write one".into(), String::new()));
+        assert_eq!(s(&one[0], "model"), "gpt-6.1-sol");
+        assert_eq!(s(&one[1], "step"), "echo one > one.txt");
+        assert_eq!(s(&one[2], "summary"), "done");
+        assert_eq!(one[2]["seconds"], json!(4.8));
+        assert_eq!(s(&two[0], "name"), "read first line");
+        assert_eq!(s(two.last().unwrap(), "summary"), "alpha line");
+        // one fan-out of two: the same delegation (the person's turn), index 0 and 1
+        let deleg = s(&one[0], "delegation");
+        assert!(deleg.starts_with("codex-") && subs.iter().all(|e| s(e, "delegation") == deleg));
+        assert_eq!((one[0]["index"].clone(), two[0]["index"].clone(), two[0]["count"].clone()), (json!(0), json!(1), json!(2)));
+        // every subagent line comes while the person's turn runs (they belong to it)
+        let end = st.events.iter().position(|e| s(e, "event") == "turn.end").unwrap();
+        assert!(st.events.iter().rposition(|e| s(e, "event") == "subagent").unwrap() < end);
+    }
+
+    #[test]
+    fn codex_stop_while_a_helper_runs_names_the_persons_turn() {
+        // codex-10: one helper runs `sleep 45`; the person presses Stop while it runs
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        run(&mut x, &real("codex-10-helper-stop-init.jsonl"));
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
+        run(&mut x, &real("codex-10-helper-stop.jsonl"));
+        let st = x.on_input(Input::Interrupt).unwrap();
+        let w = written(&st);
+        assert_eq!(w[0]["method"], "turn/interrupt");
+        // the session's own thread and turn, not the helper's (`…fa6d…`, which Codex refuses)
+        assert_eq!(w[0]["params"]["threadId"], "01a1ca32-da48-7f42-adc1-3469420bbfa8");
+        assert_eq!(w[0]["params"]["turnId"], "01a1ca32-e30e-7312-bc08-818ebbf0e1b3");
+        // the recording holds Codex's refusal of the old (helper's) id: a refused Stop shows on the turn's line
+        let st = run(&mut x, &real("codex-10-helper-stopped.jsonl")[..1]);
+        assert_eq!(names(&st.events), ["status"]);
+        assert!(s(&st.events[0], "text").starts_with("Codex did not stop: expected active turn id"));
+        // the helper's message is its summary, not Codex's
+        let st = run(&mut x, &real("codex-10-helper-stopped.jsonl")[1..]);
+        let said = text_of(&st.events, "message");
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].starts_with("The sub-agent completed"));
+        assert_eq!(names(&st.events).last().unwrap(), "turn.end");
+    }
+
+    #[test]
+    fn an_ask_inside_a_codex_helper_names_the_helper() {
+        // shape from codex-rs app-server-protocol (v2 CommandExecutionRequestApprovalParams); this Mac's Codex runs
+        // with approval_policy = never, so no helper approval was recorded
+        let mut x = codex_helpers_up();
+        x.on_input(Input::Send { text: "go".into(), images: vec![], id: String::new() }).unwrap();
+        let lines = real("codex-9-helpers.jsonl");
+        let spawned = lines.iter().position(|l| l.contains("\"subAgentActivity\"") && l.contains("write_one")).unwrap();
+        run(&mut x, &lines[..=spawned]);
+        let st = x.on_line(r#"{"id":91,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-539f-7e51-ad88-e39bedaf4545","turnId":"01a1ca24-53f9-72c0-a436-7edf958315cf","itemId":"exec-1","command":"/bin/zsh -lc 'rm one.txt'","cwd":"/w/proj"}}"#);
+        assert_eq!(s(&st.events[0], "event"), "approval.request");
+        assert_eq!(st.events[0]["subagent"], json!({"id": "01a1ca24-539f-7e51-ad88-e39bedaf4545", "name": "write one"}));
+        // the answer goes back to the same request
+        let st = x.on_input(Input::Approve { request_id: "codex-91".into(), choice: "deny".into() }).unwrap();
+        assert_eq!(written(&st)[0], json!({"id": 91, "result": {"decision": "decline"}}));
+        // an ask on the session's own thread names no helper
+        let st = x.on_line(r#"{"id":92,"method":"item/commandExecution/requestApproval","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turnId":"t","itemId":"exec-2","command":"ls"}}"#);
+        assert!(st.events[0].get("subagent").is_none());
+    }
+
+    #[test]
+    fn codex_stop_before_the_turn_has_an_id_still_stops_it() {
+        // before the thread exists the message only waits: Stop drops it and ends the turn
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        x.on_input(Input::Send { text: "hi".into(), images: vec![], id: String::new() }).unwrap();
+        let st = x.on_input(Input::Interrupt).unwrap();
+        assert_eq!(st.events, [json!({"event": "turn.end", "outcome": "interrupted"})]);
+        assert!(!x.in_turn() && run(&mut x, &real("codex-init.jsonl")).write.iter().all(|w| !w.contains("turn/start")));
+        // sent, but Codex has not named the turn yet: Stop waits for the name, then interrupts it
+        let mut x = codex_up();
+        x.on_input(Input::Send { text: "sleep".into(), images: vec![], id: String::new() }).unwrap();
+        assert!(x.on_input(Input::Interrupt).unwrap().write.is_empty());
+        let st = x.on_line(r#"{"method":"turn/started","params":{"threadId":"t","turn":{"id":"turn_7","status":"inProgress","items":[]}}}"#);
+        assert_eq!(written(&st)[0]["method"], "turn/interrupt");
+        assert_eq!(written(&st)[0]["params"]["turnId"], "turn_7");
+        // an error outside a turn is a note, not a progress line
+        let mut idle = codex_up();
+        let st = idle.on_line(r#"{"method":"error","params":{"error":{"message":"boom"},"willRetry":false}}"#);
+        assert_eq!(names(&st.events), ["session.error"]);
+        assert!(idle.on_line(r#"{"method":"error","params":{"error":{"message":"Reconnecting... 1/5"},"willRetry":true}}"#).events.is_empty());
     }
 
     // -- one shape across agents --
@@ -3079,6 +5457,77 @@ mod tests {
         assert_eq!(Claude::new("/w").explain("boom"), "boom");
     }
 
+    /// H1: a same-named other program (the QA report's shadow stub) ends at once with its own usage text; the
+    /// person reads that the path does not look like the agent, with the install line, not the stub's stderr.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_that_is_not_the_agent_is_named_with_the_install_line() {
+        let stub = "echo \"pi: impostor program (not the agent) args: $*\" >&2; echo 'usage: pi [-v] host...' >&2; exit 64";
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let path = Path::new("/Users/k/shadow/pi");
+        for (label, id) in [("pi", "pi"), ("oh-my-pi", "omp"), ("OmO", "omo")] {
+            let c = ChatSessions::default();
+            let (out, sink) = collect();
+            let mut adapter = Unrecognized::wrap(Box::new(Pi::new("/w", label)), id, path);
+            adapter.on_input(Input::send("hi")).unwrap();
+            c.spawn(vec!["/bin/sh".into(), "-c".into(), stub.into(), "pi".into(), "--mode".into(), "rpc".into()], &tmp, None, &[], adapter, sink).unwrap();
+            assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10));
+            let got = out.lock().unwrap().clone();
+            let install = crate::sessions::layout(id).unwrap().install;
+            let want = format!("/Users/k/shadow/pi does not look like {label} (it is not where {label} installs, and it ended without answering in its chat mode). Install {label}: {install}");
+            assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(64), e) if *e == want)), "{got:?}");
+            assert!(got.iter().any(|o| matches!(o, ChatOut::Event(e) if s(e, "event") == "turn.end" && s(e, "error") == want)), "{got:?}");
+            assert!(!got.iter().any(|o| format!("{o:?}").contains("impostor")), "{got:?}");
+        }
+        // Claude Code and Codex: the same, with their own install line; and with nothing on stderr at all
+        for (id, adapter) in [("claude", Box::new(Claude::new("/w")) as Box<dyn Adapter>), ("codex", Box::new(Codex::new("/w", None)))] {
+            let a = Unrecognized::wrap(adapter, id, path);
+            assert!(a.explain("").ends_with(crate::sessions::layout(id).unwrap().install), "{id}");
+        }
+        // the agent after all: it printed protocol, or it says it is not signed in
+        let mut a = Unrecognized::wrap(Box::new(Pi::new("/w", "oh-my-pi")), "omp", path);
+        assert_eq!(a.explain("No API key found"), "oh-my-pi is not signed in. Open Terminal and run /login, then Restart.");
+        a.on_line("\u{feff}{\"type\":\"response\",\"command\":\"get_state\",\"success\":true,\"data\":{}}");
+        assert_eq!(a.explain("boom"), "boom");
+        // a banner is not protocol
+        let mut b = Unrecognized::wrap(Box::new(Claude::new("/w")), "claude", path);
+        b.on_line("Welcome to some tool v1.2");
+        assert!(b.explain("boom").contains("does not look like Claude Code"));
+        // DSH and oh-my-hermes have no layout row: no wrapper
+        assert_eq!(Unrecognized::wrap(Box::new(Claude::new("/w")), "dsh", path).explain("boom"), "boom");
+    }
+
+    #[test]
+    fn exit_reasons_drop_colour_codes_and_config_warnings() {
+        // Codex 0.167 (audit O8): a coloured log line that only warns about a config setting is no reason
+        let codex = "\u{1b}[2m2026-11-11T10:25:23.520926Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m \u{1b}[2mcodex_app_server\u{1b}[2m:\u{1b}[0m Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.";
+        assert_eq!(exit_reason(codex), "");
+        let codex = format!("{codex}\n\u{1b}[2m2026-11-11T10:25:24Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m codex_api: failed to connect");
+        assert_eq!(exit_reason(&codex), "2026-11-11T10:25:24Z ERROR codex_api: failed to connect");
+        // OmO's skills-catalog warning, then the real reason
+        let omo = "Warning: The skills catalog uses one-line descriptions to limit request size (above 100 skills, 16 KiB of descriptions, or 48 KiB rendered). Remove unused skills to shrink every request.";
+        assert_eq!(exit_reason(omo), "");
+        assert_eq!(exit_reason(&format!("{omo}\nError: model not found")), "Error: model not found");
+        assert_eq!(exit_turn_end(Some(0), &exit_reason(omo)), json!({"event": "turn.end", "outcome": "ended"}));
+    }
+
+    #[test]
+    fn omo_stop_during_a_command_ends_interrupted() {
+        // omo (audit O4): the abort hit the tool, so the last message ended with stopReason "toolUse"; agent_end
+        // carries aborted: true
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::Send { text: "sleep".into(), images: vec![], id: String::new() }).unwrap();
+        p.on_line(r#"{"type":"agent_start"}"#);
+        p.on_line(r#"{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"toolUse"}}"#);
+        let st = p.on_line(r#"{"type":"agent_end","messages":[],"willRetry":false,"aborted":true,"abortSource":"user"}"#);
+        assert_eq!(ends(&st.events), [("interrupted".into(), "".into())]);
+        // an ordinary end stays done
+        p.on_input(Input::Send { text: "hi".into(), images: vec![], id: String::new() }).unwrap();
+        p.on_line(r#"{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}],"stopReason":"stop"}}"#);
+        let st = p.on_line(r#"{"type":"agent_end","messages":[],"willRetry":false}"#);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+    }
+
     #[test]
     fn codex_resume_takes_only_a_thread_uuid() {
         let c = ChatSessions::default();
@@ -3088,5 +5537,95 @@ mod tests {
         }
         assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], |_| {}).is_err());
         assert_eq!(c.count(), 0);
+    }
+
+    // ---- attached files: each agent's own image input (shapes checked against claude 2.1.322, codex 0.167,
+    // omo 5.0 beta on 2026-11-11: each read a word from a PNG sent this way) -----------------------------------
+
+    fn pic() -> Picture {
+        Picture { path: "/h/.omher/session-files/s1/1-word.png".into(), mime: "image/png".into(), data: "iVBORw0KGgo=".into() }
+    }
+    fn with_pic(text: &str) -> Input {
+        Input::Send { text: text.into(), images: vec![pic()], id: String::new() }
+    }
+
+    #[test]
+    fn the_ui_sends_picture_paths_and_text_only_messages_still_parse() {
+        let i: Input = serde_json::from_value(json!({"kind": "send", "text": "hi"})).unwrap();
+        assert_eq!(i, Input::send("hi"));
+        let i: Input = serde_json::from_value(json!({"kind": "send", "text": "look", "images": ["/h/.omher/session-files/s1/1-a.png"]})).unwrap();
+        let Input::Send { images, .. } = i else { panic!() };
+        assert_eq!(images, [Picture { path: "/h/.omher/session-files/s1/1-a.png".into(), ..Picture::default() }]);
+        // the UI cannot hand the shell bytes or a type: only a path, which resolve() checks and reads
+        assert!(serde_json::from_value::<Input>(json!({"kind": "send", "text": "x", "images": [{"path": "/a", "data": "AAAA"}]})).is_err());
+    }
+
+    #[test]
+    fn claude_gets_pictures_as_base64_image_blocks_before_the_text() {
+        let mut c = claude_up_raw();
+        let st = c.on_input(with_pic("What does it say?")).unwrap();
+        let m: Value = serde_json::from_str(&st.write[0]).unwrap();
+        assert_eq!(
+            m["message"]["content"],
+            json!([{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}}, {"type": "text", "text": "What does it say?"}])
+        );
+        // a picture with nothing typed: no empty text block
+        let mut c = claude_up_raw();
+        let st = c.on_input(with_pic("")).unwrap();
+        let m: Value = serde_json::from_str(&st.write[0]).unwrap();
+        assert_eq!(m["message"]["content"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn codex_gets_pictures_as_local_image_items_even_when_queued_before_the_thread() {
+        let mut x = codex_up();
+        let st = x.on_input(with_pic("What does it say?")).unwrap();
+        let t: Value = serde_json::from_str(st.write.last().unwrap()).unwrap();
+        assert_eq!(t["method"], "turn/start");
+        assert_eq!(t["params"]["input"], json!([{"type": "localImage", "path": "/h/.omher/session-files/s1/1-word.png"}, {"type": "text", "text": "What does it say?"}]));
+        // sent before the thread exists: the picture waits with the text
+        let mut x = Codex::new("/w/proj", None);
+        x.start();
+        assert!(x.on_input(with_pic("")).unwrap().write.is_empty());
+        let st = run(&mut x, &real("codex-init.jsonl"));
+        let t: Value = st.write.iter().map(|w| serde_json::from_str::<Value>(w).unwrap()).find(|v| v["method"] == "turn/start").unwrap();
+        assert_eq!(t["params"]["input"], json!([{"type": "localImage", "path": "/h/.omher/session-files/s1/1-word.png"}]));
+    }
+
+    #[test]
+    fn pi_and_omo_get_pictures_as_the_prompt_images() {
+        let mut p = Pi::new("/w/proj", "OmO");
+        p.start();
+        let st = p.on_input(with_pic("What does it say?")).unwrap();
+        let cmd: Value = serde_json::from_str(&st.write[0]).unwrap();
+        assert_eq!(s(&cmd, "type"), "prompt");
+        assert_eq!(s(&cmd, "message"), "What does it say?");
+        assert_eq!(cmd["images"], json!([{"type": "image", "data": "iVBORw0KGgo=", "mimeType": "image/png"}]));
+        let st = p.on_input(Input::send("no picture")).unwrap();
+        let cmd: Value = serde_json::from_str(&st.write[0]).unwrap();
+        assert!(cmd.get("images").is_none());
+    }
+
+    #[test]
+    fn resolve_reads_only_pictures_omher_saved() {
+        let home = std::env::temp_dir().join(format!("omher-resolve-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let home = home.canonicalize().unwrap();
+        let png = session_files::save(&home, "s1", "word.png", b"\x89PNG").unwrap();
+        let mut i = Input::Send { text: "x".into(), images: vec![Picture::from(png.to_string_lossy().into_owned())], id: String::new() };
+        i.resolve(&home).unwrap();
+        let Input::Send { images, .. } = &i else { panic!() };
+        assert_eq!((images[0].mime.as_str(), images[0].data.as_str()), ("image/png", "iVBORw=="));
+        let txt = session_files::save(&home, "s1", "notes.txt", b"a").unwrap();
+        let outside = home.join("secret.png");
+        std::fs::write(&outside, b"x").unwrap();
+        for bad in [txt.to_string_lossy().into_owned(), outside.to_string_lossy().into_owned(), "/etc/hosts".into(), "relative.png".into()] {
+            let mut i = Input::Send { text: "x".into(), images: vec![Picture::from(bad.clone())], id: String::new() };
+            assert!(i.resolve(&home).is_err(), "{bad}");
+        }
+        // other inputs carry no files
+        assert!(Input::Interrupt.resolve(&home).is_ok());
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

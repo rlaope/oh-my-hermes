@@ -1095,8 +1095,9 @@ WALLPAPER_ENV = "OMH_TUI_WALLPAPER"
 WALLPAPER_OFF = "0"
 # The main screen takes the mouse (`_screen_mouse`; the owner's decision of 2026-11-11, back from the one of 2026-11-06
 # that left it to the terminal): a drag selects and copies without the rail and with the rows the TUI wrapped joined
-# again, the wheel opens the transcript view. OMH_TUI_MOUSE=0 leaves the wheel and selection to the terminal there:
-# reports are asked for only while the agent list or the /theme picker takes clicks.
+# again; the wheel up hands the mouse to the terminal (`wheel_lent`), which scrolls its own scrollback, until the next
+# key. OMH_TUI_MOUSE=0 leaves the wheel and selection to the terminal there: reports are asked for only while the
+# agent list or the /theme picker takes clicks.
 MOUSE_ENV = "OMH_TUI_MOUSE"
 MOUSE_NATIVE = "0"
 # A turn that ran this long ends with the terminal's attention signal (`attention_sequence`).
@@ -2132,10 +2133,16 @@ def run_model_chain_picker(
     result = apply_picker_changes(omh_home, changes, hermes_home=hermes_home, contract_option=contract_effort_option)
     if "error" in result:
         return f"/omh-model did not save: {result['error']}"
-    count = len(result["changed"])
+    category_count = len(result.get("categories_changed", []))
+    identity_count = len(result.get("identities_changed", []))
+    parts = []
+    if category_count:
+        parts.append(f"{category_count} categor{'y' if category_count == 1 else 'ies'} to {result['path']}")
+    if identity_count:
+        parts.append(f"{identity_count} custom identit{'y' if identity_count == 1 else 'ies'}")
     warning = f" Warning: {result['warning']}." if result.get("warning") else ""
     return (
-        f"Saved {count} categor{'y' if count == 1 else 'ies'} to {result['path']}. "
+        f"Saved {' and '.join(parts)}. "
         f"New delegations use this order; running children keep theirs.{warning}"
     )
 
@@ -2379,7 +2386,9 @@ class App(ModesMixin, AgentViewMixin):
         self.board_reader: BoardReader | None = None
         self.make_board_reader: Callable[..., BoardReader] | None = None  # `bot_board.BoardReader` when None
         self.redraw_after_pager = False  # a full redraw the main screen is owed once the pager is left
-        self.pager_by_wheel = False  # the open pager is the view the wheel opened, which the wheel down leaves
+        # The wheel turned up on the main screen: reports are off, so the terminal scrolls its own scrollback as in any
+        # shell, until the next key or paste takes them back (`_take_main_mouse`).
+        self.wheel_lent = False
         self.hud: HudSnapshot | None = None
         self.goal: Mapping[str, Any] | None = None  # Hermes' standing /goal, as its last `session.control.update` said
         self.retired_plan = ""  # the text of a finished plan the panel no longer draws (`_retire_finished_plan`)
@@ -4632,6 +4641,7 @@ class App(ModesMixin, AgentViewMixin):
             else:
                 self._on_mouse(event)  # never a key: whatever it is, it types nothing
             return
+        self.wheel_lent = False  # the screen's mouse is the TUI's again from the next frame: a drag copies clean
         if self._copy_key_dropped(event):
             return
         self._drop_selection()  # it is of the screen as it is, which a key may move
@@ -8123,9 +8133,6 @@ class App(ModesMixin, AgentViewMixin):
             return
         text = pager.handle_mouse(event, self.size[1], self.clock())
         self.dirty = True
-        if self.pager_by_wheel and event.button == WHEEL_DOWN and event.pressed and pager.at_end(self.size[1]):
-            self._leave_pager()  # the wheel brought the view back to where the screen was: the screen is back
-            return
         if text:
             pager.note = self._copy_selection(text).line(self.size[0], self.theme)
             self.copy_noted_at = self.clock()
@@ -8134,10 +8141,11 @@ class App(ModesMixin, AgentViewMixin):
         """A report on the main screen while it takes the mouse (`_takes_mouse`), not a click the agent list or the
         /theme picker took: the pager's selection over the rows the live region printed.
 
-        The wheel up opens the transcript view, Ctrl+O's (the open question's,
-        while one is asked), already scrolled one notch up from its end, which
-        is where the screen was; the wheel down does nothing, nor does the wheel
-        while a drag is under way. A press starts a drag, or picks a word or a
+        The wheel up hands the mouse to the terminal (`wheel_lent`): reports go
+        off, so the next notches scroll the terminal's own scrollback, as in
+        any shell, and the next key takes them back; the wheel down does
+        nothing, nor does the wheel while a drag is under way or over the
+        agent list. A press starts a drag, or picks a word or a
         row (`Selection`); the text a release or a double or triple click picks
         goes to the clipboard without the rail or any other gutter cell, and
         the notice row says what the copy did. Rows are read only where
@@ -8159,12 +8167,11 @@ class App(ModesMixin, AgentViewMixin):
         now = self.clock()
         selection = self.selection
         if event.button in (WHEEL_UP, WHEEL_DOWN):
-            over_list = last - (event.y - 1) in self.clickable  # the agent list's rows: the wheel opens nothing there
+            over_list = last - (event.y - 1) in self.clickable  # the agent list's rows: the wheel does nothing there
             if event.pressed and event.button == WHEEL_UP and not selection.dragging and not over_list:
                 self._drop_selection()
-                if self._transcript_view() and self.pager is not None:
-                    self.pager.handle_mouse(event, rows, now)  # one notch up from the end, as the wheel scrolls it
-                    self.pager_by_wheel = True
+                self.wheel_lent = True
+                self._set_mouse(False)  # this notch is spent; the terminal scrolls on the next ones
             return
         row = min(event.y - 1, last)  # a report counts from 1; one under the region is on its last row
         stable = self._last_stable_doc()
@@ -8204,9 +8211,9 @@ class App(ModesMixin, AgentViewMixin):
         return first + limit - 1
 
     def _transcript_view(self) -> bool:
-        """What the mouse opens where it selects nothing: Ctrl+O's view, the open question while one is asked, else the
-        whole transcript at its end; nothing, and no notice, when the transcript has no rows to show (a trackpad's
-        wheel would say so on every notch). True when a view opened."""
+        """What a drag from a row the region did not print opens: Ctrl+O's view, the open question while one is asked,
+        else the whole transcript at its end; nothing, and no notice, when the transcript has no rows to show. True
+        when a view opened."""
         if self.slot is not None:
             self._question_view()
         else:
@@ -8295,17 +8302,17 @@ class App(ModesMixin, AgentViewMixin):
         return {doc: span for doc in range(held[0], held[1] + 1) if (span := self.selection.span_on(doc)) is not None}
 
     def _takes_mouse(self) -> bool:
-        """Whether the main screen takes the mouse (a drag selects, the wheel opens the transcript view): unless
-        OMH_TUI_MOUSE=0 leaves the wheel and selection to the terminal there."""
+        """Whether the main screen takes the mouse (a drag selects, the wheel up hands it to the terminal until the next
+        key): unless OMH_TUI_MOUSE=0 leaves the wheel and selection to the terminal there."""
         return self.environ.get(MOUSE_ENV) != MOUSE_NATIVE
 
     def _take_main_mouse(self, clicks: bool) -> None:
         """Mouse reports on the main screen after a frame: with a held button's motion wherever the TUI takes the mouse
         (`_takes_mouse`), else only while something takes `clicks` (the agent list, the /theme picker), and either way
-        only while the row a report lands on is certain."""
+        only while the row a report lands on is certain; none while the wheel lent the mouse to the terminal."""
         certain = self.region.last_row(self.size[1]) is not None
         if self._takes_mouse():
-            self._set_mouse(certain, drag=True)
+            self._set_mouse(certain and not self.wheel_lent, drag=True)
         else:
             self._set_mouse(clicks and certain)
 
@@ -8647,7 +8654,6 @@ class App(ModesMixin, AgentViewMixin):
         self._drop_selection()  # the main screen comes back with it, and the next frame there paints it off
         self._stop_board_reader()  # a board this replaces reads no more
         self.pager = pager
-        self.pager_by_wheel = False
         self.log_agent = ""
         self.composer._drop_pending()
 

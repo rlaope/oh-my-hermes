@@ -7,7 +7,11 @@ import { activityText, getStore, liveLabel, THINKING, WORKING, type Step, type T
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
 import { t, t as tr, tx, type Key } from "../../i18n";
+import { FanoutCard } from "./Subagents";
 import "./activity.css";
+
+/** A fan-out still counts as running this long after its last event, though its turn ended (background). */
+const FANOUT_QUIET_MS = 10 * 60_000;
 
 export const slot = "activity";
 
@@ -27,7 +31,7 @@ const VERBS: Record<string, Key> = {
 };
 const stepVerb = (name: string) => (VERBS[name] ? tr(VERBS[name]) : name.replace(/_/g, " "));
 const DAG_STATUS: Record<string, Key> = { failed: "act.dag.failed", working: "act.dag.working", stopped: "act.dag.stopped", returned: "act.dag.returned" };
-/** Code-like details (commands, paths, URLs) render in mono; prose (a helper's goal) stays text. */
+/** Code-like details (commands, paths, URLs) render in mono; prose (a subagent's goal) stays text. */
 const isCode = (name: string) => !["delegate_task", "web_search"].includes(name);
 
 /** Step duration: "0.4s" under a second, else "38s" / "2m 41s". */
@@ -82,7 +86,7 @@ function Ticker({ label }: { label: Label }) {
   );
 }
 
-/** "Assigned `t8-site` to a helper · working": one plain line per dag part a delegate_task handed out. The
+/** "Assigned `t8-site` to a subagent · working": one plain line per dag part a delegate_task handed out. The
  *  status is read-only (nothing here reassigns); the run link opens the Runs tab on that run. */
 function DagRows({ step, live }: { step: Step; live: boolean }) {
   const running = step.endedAt === undefined;
@@ -151,12 +155,13 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
 
   const now = Date.now();
   const total = elapsed((t.endedAt ?? now) - t.startedAt);
-  const n = t.steps.length;
+  // what the details show: a delegate_task that handed out dag parts is one row per part
+  const n = t.steps.reduce((k, st) => k + (st.name === "delegate_task" && st.dag?.length ? st.dag.length : 1), 0);
   const state = live ? "live" : t.outcome === "interrupted" || t.outcome === "ended" || t.outcome === "error" ? t.outcome : "done";
   const canOpen = n > 0;
 
   let summary = "";
-  if (state === "done") summary = n === 1 ? tr("act.worked1", { t: total }) : tr("act.worked", { t: total, n });
+  if (state === "done") summary = n === 0 ? tr("act.worked0", { t: total }) : n === 1 ? tr("act.worked1", { t: total }) : tr("act.worked", { t: total, n });
   else if (state === "interrupted") summary = tr("act.stopped", { t: total });
   else if (state === "ended") summary = tr("act.ended", { t: total });
   else if (state === "error") summary = `${tr("act.failedAfter", { t: total })}${t.error ? ` · ${t.error}` : ""}`;
@@ -202,6 +207,9 @@ export default function Activity({ item, live }: SlotProps["activity"]) {
           </span>
         )}
       </button>
+      {t.fanouts?.map((f) => (
+        <FanoutCard key={f.key} fan={f} live={live || now - f.updatedAt < FANOUT_QUIET_MS} />
+      ))}
       {open && canOpen && (
         <div className="act-det" data-testid="activity-details">
           {t.steps.map((s) => (

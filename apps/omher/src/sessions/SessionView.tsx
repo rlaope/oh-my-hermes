@@ -3,16 +3,20 @@
 // the agent's structured mode) or the agent's terminal. A New session (draft) is a chat that has not started, on the
 // agent picked in the SESSIONS + menu: its composer shows that agent read-only and, under it, the folder chip; the
 // first message starts the agent there (Start, for an agent that opens in its terminal). After that the folder is
-// read-only too.
+// read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
+// in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ITheme } from "@xterm/xterm";
-import { selectAsks, useStore } from "../state/store";
+import { selectAsks, useStore, type OutFile } from "../state/store";
 import { resolveTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
+import { Seg } from "../chat/model/Seg";
 import "../chat/model/model.css";
-import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, TerminalIcon } from "../ui";
+import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
+import { composing } from "../lib/ime";
+import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, usageText } from "./controls";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
@@ -21,6 +25,8 @@ import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
+import { PanelToggle } from "../chat/parts/PanelButton";
+import { workingSubagents } from "./SessionPlans";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 
@@ -78,10 +84,51 @@ export const termTheme = (mode: "dark" | "light") => (mode === "light" ? LIGHT :
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
+const isWindows = () => typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
+
+/** A file as the terminal's drop and paste hand it on. */
+const fileIn = (f: File) => ({ name: f.name || "pasted.png", read: async () => new Uint8Array(await f.arrayBuffer()) });
+
 function TerminalPane({ rec }: { rec: SessionRec }) {
   const s = useStore();
   const box = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
   const mode = resolveTheme(s.ui.theme);
+  // A file dropped on the terminal, or a picture pasted there, is saved and its path typed at the prompt (as a
+  // system terminal types a dropped file's path). Plain text pastes stay xterm's own.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+    const over = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (files.length) void getSessions().dropOnTerminal(rec.id, files.map(fileIn), isWindows());
+    };
+    const paste = (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (!files.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void getSessions().dropOnTerminal(rec.id, files.map(fileIn), isWindows());
+    };
+    el.addEventListener("dragenter", over);
+    el.addEventListener("dragover", over);
+    el.addEventListener("drop", drop);
+    el.addEventListener("paste", paste, true);
+    return () => {
+      el.removeEventListener("dragenter", over);
+      el.removeEventListener("dragover", over);
+      el.removeEventListener("drop", drop);
+      el.removeEventListener("paste", paste, true);
+    };
+  }, [rec.id]);
   useEffect(() => {
     if (!box.current) return;
     return getSessions().attach(rec.id, box.current, termTheme(mode));
@@ -92,7 +139,7 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
     getSessions().setTheme(termTheme(mode));
   }, [mode]);
   return (
-    <div className="term-wrap" data-testid="terminal" data-session={rec.id}>
+    <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
     </div>
   );
@@ -100,20 +147,25 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
 
 function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const s = useStore();
+  const ss = useSessions();
   const chat = s.chats[chatKey];
+  // files go to a chat agent; an oh-my-hermes session's chat is Hermes', which takes files in a bot's main chat only
+  const takesFiles = (ss.agents?.find((a) => a.id === rec.agent)?.mode ?? agentDef(rec.agent).mode) === "chat";
   const label = agentDef(rec.agent).label;
-  // The bot chat's parts take a Bot: this session's chat stands in for one.
+  const ended = isEnded(rec);
+  // The bot chat's parts take a Bot: this session's chat stands in for one. An agent that ended before it named a
+  // model (an old version that never answered in chat mode) gets no "pick a model" hint: its end says why.
   const bot: Bot = {
     name: chatKey,
     display_name: label,
     is_default: false,
-    model: rec.model ?? "",
+    // DeepSeek Harness keeps its model in its own app and its headless stream names none: nothing to pick here
+    model: rec.model || (rec.agent === "dsh" ? "dsh" : ended ? label : ""),
     provider: "",
     description: "",
     status: rec.status === "running" ? "online" : rec.status === "starting" ? "starting" : "offline",
     running: !!chat?.turn,
   };
-  const ended = rec.status === "exited" || rec.status === "failed";
   const offlineText = rec.paused
     ? tr("ss.isPaused", { agent: label })
     : rec.status === "failed"
@@ -121,31 +173,12 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
       : rec.status === "starting"
         ? tr("ss.startingAgent", { agent: label })
         : tr("ss.hasEnded", { agent: label });
-  const why = rec.error ? rec.error.trim().split("\n").pop() : "";
   // one element per chat: the bubbles are memoized on it
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
       <Timeline bot={bot} face={face} />
-      {rec.paused ? (
-        <Paused rec={rec} />
-      ) : ended && (
-        <div className="ss-ended" role="status" data-testid="session-ended">
-          <span className="ss-ended-t" title={why || undefined}>
-            {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
-            {why ? ` · ${why}` : ""}
-          </span>
-          <button
-            type="button"
-            className="ss-restart"
-            onClick={() => void getSessions().restart(rec.id)}
-            title={CONTINUES.includes(rec.agent) ? tr("ss.restartContinue", { agent: label }) : tr("ss.restartFolder", { agent: label })}
-            data-testid="session-restart"
-          >
-            {tr("ss.restart")}
-          </button>
-        </div>
-      )}
+      {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
       <Composer
         key={chatKey}
         bot={bot}
@@ -154,8 +187,15 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         offline={rec.status !== "running"}
         offlineText={offlineText}
         onSend={(t) => void getSessions().send(rec.id, t)}
+        onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}
         onStop={() => void getSessions().interrupt(rec.id)}
-        tools={<AgentFixed agent={rec.agent} />}
+        commands={ss.live[rec.id]?.commands?.length ? ss.live[rec.id]!.commands : undefined}
+        tools={
+          <>
+            {modesOf(rec.agent).length > 0 && <SessionMode rec={rec} />}
+            <AgentFixed agent={rec.agent} />
+          </>
+        }
         foot={<Context rec={rec} />}
       />
     </div>
@@ -257,7 +297,90 @@ function Context({ rec, account }: { rec: SessionRec; account?: string }) {
           {as}
         </span>
       )}
+      {!draft && <LiveFoot rec={rec} />}
     </div>
+  );
+}
+
+const BranchIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+    <circle cx="6" cy="5" r="2.2" />
+    <circle cx="6" cy="19" r="2.2" />
+    <circle cx="18" cy="8" r="2.2" />
+    <path d="M6 7.2v9.6M18 10.2c0 4-6 3.4-11.2 7" />
+  </svg>
+);
+
+/** The rest of the line under a running chat: the folder's git branch (none outside a repository) and how full the
+ *  context is, both as the shell and the agent reported them. */
+function LiveFoot({ rec }: { rec: SessionRec }) {
+  const live = useSessions().live[rec.id];
+  const u = usageText(live?.usage);
+  return (
+    <>
+      {live?.branch ? (
+        <span className="ss-branch" title={t("ctl.branch")} data-testid="session-branch">
+          <BranchIcon />
+          <span className="ss-branch-n">{live.branch}</span>
+        </span>
+      ) : null}
+      {u && (
+        <span className="ss-usage" title={t("ctl.contextTip", { agent: agentDef(rec.agent).label })} data-testid="session-usage" data-pct={u.pct}>
+          <span className="ss-ring" style={{ ["--p" as string]: `${u.pct}%` }} aria-hidden="true" />
+          {u.text}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** The session's permission mode, a quiet label in the composer row; its menu lists the modes omher offers for the
+ *  agent (never one that skips approvals or lifts the sandbox). */
+function SessionMode({ rec }: { rec: SessionRec }) {
+  const ss = useSessions();
+  const [open, setOpen] = useState(false);
+  const live = rec.status === "running";
+  const cur = ss.live[rec.id]?.mode ?? rec.mode;
+  const pick = (m: string) => {
+    setOpen(false);
+    if (m !== cur) void getSessions().setMode(rec.id, m);
+  };
+  return (
+    <span className="ss-pick-w">
+      <button
+        type="button"
+        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}`}
+        title={t("ctl.mode")}
+        aria-label={`${t("ctl.mode")}: ${modeLabel(cur)}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        disabled={!live}
+        onClick={() => setOpen((v) => !v)}
+        data-testid="session-mode"
+        data-mode={cur ?? ""}
+      >
+        <span className="ss-pick-n">{modeLabel(cur)}</span>
+        <ChevronDown />
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)} side="top" align="right" width={264} label={t("ctl.mode")} className="ss-dpop">
+        <div data-testid="session-mode-menu">
+          <div className="ss-h ss-h-plain">{t("ctl.mode")}</div>
+          {modesOf(rec.agent).map((m) => {
+            const on = m === cur;
+            return (
+              <button key={m} type="button" className={`ss-item ss-mode-row${on ? " on" : ""}`} aria-pressed={on} onClick={() => pick(m)} data-testid="session-mode-opt" data-mode={m}>
+                <span className="ss-mode-t">
+                  <span className="ss-n">{modeLabel(m)}</span>
+                  <span className="ss-mode-d">{modeHint(m)}</span>
+                </span>
+                <span className="ss-ck">{on && <CheckIcon />}</span>
+              </button>
+            );
+          })}
+          {rec.agent === "codex" && <div className="mp-f">{t("ctl.modeFoot")}</div>}
+        </div>
+      </Popover>
+    </span>
   );
 }
 
@@ -278,6 +401,11 @@ function DraftPane({ rec }: { rec: SessionRec }) {
   const key = `agent:${rec.id}`;
   const bot: Bot = { name: key, display_name: def.label, is_default: false, model: "", provider: "", description: "", status: "online", running: false };
   const start = (text?: string) => void getSessions().start(rec.id, text, account || undefined);
+  /** The first message with files: they are saved before the agent starts; a file that cannot be keeps the draft
+   *  (and the chips) as they were. */
+  const startWithFiles = async (text: string, files: OutFile[]) => {
+    await getSessions().start(rec.id, text, account || undefined, files);
+  };
   // the composer takes the focus once it can be typed in (the folder or the agent list may arrive after it shows)
   const live = ready && !terminal;
   useEffect(() => {
@@ -301,6 +429,7 @@ function DraftPane({ rec }: { rec: SessionRec }) {
         offline={!ready || terminal}
         offlineText={!ready ? (!rec.cwd ? t("sessions.findingHome") : missingNote(rec.agent)) : t("sessions.pressStart", { agent: def.label })}
         onSend={(text) => start(text)}
+        onSendFiles={mode === "chat" ? startWithFiles : undefined}
         onStop={() => undefined}
         tools={<AgentFixed agent={rec.agent} />}
         action={
@@ -317,10 +446,34 @@ function DraftPane({ rec }: { rec: SessionRec }) {
   );
 }
 
+const isEnded = (rec: SessionRec) => rec.status === "exited" || rec.status === "failed";
+
+/** Restart's (and Resume's) tooltip: whether the agent continues this conversation or starts a new one. */
+function againTip(rec: SessionRec): string {
+  const agent = agentDef(rec.agent).label;
+  return CONTINUES.includes(rec.agent) && rec.agentSession ? tr("ss.restartContinue", { agent }) : tr("ss.restartFolder", { agent });
+}
+
+/** An ended session (chat or terminal): one quiet line, and Restart, which starts its agent again in the same folder
+ *  and account. */
+function Ended({ rec }: { rec: SessionRec }) {
+  const why = rec.error ? rec.error.trim().split("\n").pop() : "";
+  return (
+    <div className="ss-ended" role="status" data-testid="session-ended">
+      <span className="ss-ended-t" title={why || undefined}>
+        {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
+        {why ? ` · ${why}` : ""}
+      </span>
+      <button type="button" className="ss-restart" onClick={() => void getSessions().restart(rec.id)} title={againTip(rec)} data-testid="session-restart">
+        {tr("ss.restart")}
+      </button>
+    </div>
+  );
+}
+
 /** A session that was running when omher restarted and does not continue by itself: one line and Resume, which
  *  starts it again in the same folder (and account). */
 function Paused({ rec }: { rec: SessionRec }) {
-  const label = agentDef(rec.agent).label;
   return (
     <div className="ss-ended" role="status" data-testid="session-paused">
       <span className="ss-ended-t">{t("resume.paused")}</span>
@@ -328,7 +481,7 @@ function Paused({ rec }: { rec: SessionRec }) {
         type="button"
         className="ss-restart"
         onClick={() => void getSessions().resume(rec.id)}
-        title={t("resume.resumeTip", { agent: label })}
+        title={againTip(rec)}
         data-testid="session-resume"
       >
         {t("resume.resume")}
@@ -337,24 +490,78 @@ function Paused({ rec }: { rec: SessionRec }) {
   );
 }
 
-/** A restored terminal session that is not running: no terminal is started until the person asks. */
+/** A restored terminal session that is not running: no terminal is started until the person asks (Resume, or
+ *  Restart once it has ended). */
 function TerminalIdle({ rec }: { rec: SessionRec }) {
   const label = agentDef(rec.agent).label;
   return (
     <div className="pane ss-chat ss-idle" data-testid="session-idle">
       <div className="chat-empty">{rec.paused ? null : tr("ss.agentEnded", { agent: label })}</div>
-      {rec.paused && <Paused rec={rec} />}
+      {rec.paused ? <Paused rec={rec} /> : <Ended rec={rec} />}
     </div>
   );
 }
 
-/** The session's model button: the same pill as a bot's, listing what the agent itself offers. */
+/** Model options grouped by provider in the order they came (a model's `provider`, else the agent's own options
+ *  under one group), filtered by a search over label, id and provider. */
+export function groupModels(options: ModelOption[], query: string): { provider: string; rows: ModelOption[] }[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const out: { provider: string; rows: ModelOption[] }[] = [];
+  for (const o of options) {
+    const hay = `${o.label} ${o.id} ${o.provider ?? ""} ${o.detail ?? ""}`.toLowerCase();
+    if (!words.every((w) => hay.includes(w))) continue;
+    const g = o.provider ?? "";
+    const last = out.find((x) => x.provider === g);
+    if (last) last.rows.push(o);
+    else out.push({ provider: g, rows: [o] });
+  }
+  return out;
+}
+
+/** The session's model button: the same pill as a bot's (model, then reasoning), listing what the agent itself
+ *  offers with the bot picker's search and provider groups, and the agent's own reasoning levels when it has them. */
 function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelOption[] | undefined; note: string | undefined }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  const agentLive = useSessions().live[rec.id];
+  const efforts = agentLive?.efforts ?? [];
+  const effort = agentLive?.effort ?? rec.effort ?? "";
   const live = rec.status === "running";
   const label = agentDef(rec.agent).label;
   const vendor = rec.agent === "codex" ? "openai" : rec.agent;
+  const groups = useMemo(() => groupModels(options ?? [], query), [options, query]);
+  const flat = groups.flatMap((g) => g.rows);
+  const many = (options?.length ?? 0) > 6;
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setActive(0);
+    }
+  }, [open]);
+  useEffect(() => setActive(0), [query]);
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
+  const choose = async (o: ModelOption) => {
+    const on = rec.modelNext ? o.label === rec.modelNext || o.id === rec.modelNext : o.label === rec.model || o.id === rec.model;
+    if (on || busy || !live) return;
+    setBusy(true);
+    await getSessions().setModel(rec.id, o);
+    setBusy(false);
+  };
+  const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (flat.length) setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + flat.length) % flat.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (composing(e)) return;
+      if (flat[active]) void choose(flat[active]);
+    }
+  };
   return (
     <div className="mp-wrap">
       <button
@@ -370,44 +577,104 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
           <ModelIcon model={rec.model || label} provider={vendor} size={14} />
           <span className={`mp-d${live ? " live" : ""}`} aria-hidden="true" />
         </span>
-        <span data-testid="model-label">{rec.model || tr("ss.model")}</span>
+        <span className="mp-l" title={rec.model || undefined} data-testid="model-label">
+          {rec.model || tr("ss.model")}
+        </span>
+        {effort && efforts.length > 0 && (
+          <>
+            <span className="sep" />
+            <span className="eff" data-testid="reasoning-label">
+              {levelLabel(effort, efforts)}
+            </span>
+          </>
+        )}
+        {/* a pick made while a turn ran: the agent takes it from the next turn, whose start confirms it */}
+        {rec.modelNext && (
+          <span className="mp-next" title={tr("ss.modelNextTip", { model: rec.model ?? "" })} data-testid="model-next">
+            {tr("ss.modelNext", { model: rec.modelNext })}
+          </span>
+        )}
         <ChevronDown />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} label={tr("ss.model")} width={256} className="mp-pop">
+      <Popover open={open} onClose={() => setOpen(false)} label={tr("ss.model")} width={300} className="mp-pop">
         <div data-testid="model-pop" aria-busy={busy}>
-          <div className="mp-h">{tr("ss.model")}</div>
-          <div className="mp-list">
+          {many ? (
+            <label className="mp-search">
+              <SearchIcon />
+              <input
+                type="search"
+                placeholder={tr("mp.search")}
+                aria-label={tr("mp.search")}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onSearchKey}
+                data-testid="model-search"
+              />
+            </label>
+          ) : (
+            <div className="mp-h">{tr("ss.model")}</div>
+          )}
+          <div className="mp-list" ref={listRef}>
             {!options || options.length === 0 ? (
               <div className="mp-empty">{live ? tr("ss.loadingModels") : tr("ss.agentNotRunning", { agent: label })}</div>
+            ) : !flat.length ? (
+              <div className="mp-empty" data-testid="model-empty">
+                {tr("mp.none")}
+              </div>
             ) : (
-              options.map((o) => {
-                const on = o.label === rec.model || o.id === rec.model;
-                return (
-                  <button
-                    key={`${o.provider ?? ""}/${o.id}`}
-                    type="button"
-                    className={`mp-opt${on ? " on" : ""}`}
-                    aria-pressed={on}
-                    disabled={busy || !live}
-                    title={o.detail || undefined}
-                    onClick={async () => {
-                      if (on) return;
-                      setBusy(true);
-                      await getSessions().setModel(rec.id, o);
-                      setBusy(false);
-                    }}
-                    data-testid="model-opt"
-                  >
-                    <ModelIcon model={`${o.id} ${o.label}`} provider={o.provider ?? vendor} size={13} />
-                    <span className="mp-n">{o.label}</span>
-                    <span className="mp-ck">
-                      <CheckIcon />
-                    </span>
-                  </button>
-                );
-              })
+              groups.map((g) => (
+                <div key={g.provider || "-"} role="group" aria-label={g.provider || label} data-testid="model-group">
+                  {groups.length > 1 && g.provider && <div className="mp-g">{g.provider}</div>}
+                  {g.rows.map((o) => {
+                    const on = rec.modelNext ? o.label === rec.modelNext || o.id === rec.modelNext : o.label === rec.model || o.id === rec.model;
+                    const i = flat.indexOf(o);
+                    return (
+                      <button
+                        key={`${o.provider ?? ""}/${o.id}`}
+                        type="button"
+                        className={`mp-opt${on ? " on" : ""}${many && i === active ? " kb" : ""}`}
+                        aria-pressed={on}
+                        data-active={many && i === active}
+                        disabled={busy || !live}
+                        title={o.detail || undefined}
+                        onClick={() => void choose(o)}
+                        onMouseMove={() => many && i !== active && setActive(i)}
+                        data-testid="model-opt"
+                      >
+                        <ModelIcon model={`${o.id} ${o.label}`} provider={o.provider ?? vendor} size={13} />
+                        <span className="mp-n">{o.label}</span>
+                        <span className="mp-ck">
+                          <CheckIcon />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))
             )}
           </div>
+          {efforts.length > 0 && (
+            <>
+              <div className="mp-h mp-h2">{tr("mp.reasoning")}</div>
+              <Seg
+                label={tr("mp.reasoning")}
+                value={effort}
+                options={levelOptions(efforts)}
+                onChange={(v) => void getSessions().setEffort(rec.id, v)}
+                disabled={!live}
+                small={efforts.length > 5}
+                testId="reasoning-seg"
+              />
+            </>
+          )}
+          {rec.modelNext && !note && (
+            <div className="mp-note" role="status" data-testid="model-next-note">
+              {tr("ss.modelNextTip", { model: rec.model ?? "" })}
+            </div>
+          )}
           {note && (
             <div className="mp-note" role="status" title={note} data-testid="model-note">
               {note}
@@ -450,7 +717,8 @@ export function SessionView() {
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   const chatKey = getSessions().chatKey(rec.id);
   const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
-  const canToggle = mode !== "terminal";
+  // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app)
+  const canToggle = mode !== "terminal" && rec.agent !== "dsh";
   const showChat = rec.view === "chat" && !!chatKey;
   const c = chatKey ? s.chats[chatKey] : undefined;
   const turn = !!c?.turn;
@@ -492,6 +760,11 @@ export function SessionView() {
         >
           {status}
         </span>
+        {showChat && !!rec.background && (
+          <span className="ss-head-bg" data-testid="session-background" title={tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}>
+            {tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}
+          </span>
+        )}
         {canToggle && (
           <div className="head-right ss-head-right" data-testid="head-right">
             <button
@@ -507,6 +780,7 @@ export function SessionView() {
               {rec.view === "terminal" ? <ChatIcon /> : <TerminalIcon />}
             </button>
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
+            {showChat && <PanelToggle working={workingSubagents(c)} />}
           </div>
         )}
       </header>
@@ -514,7 +788,7 @@ export function SessionView() {
         <ChatPane rec={rec} chatKey={chatKey!} />
       ) : rec.paused || ((rec.status === "exited" || rec.status === "failed") && !getSessions().hasTerm(rec.id)) ? (
         <TerminalIdle rec={rec} />
-      ) : rec.view === "chat" && canToggle ? (
+      ) : rec.view === "chat" && mode !== "terminal" ? (
         // a Hermes folder chat between its first message and the bridge's chat id: not a reason to start a terminal
         <div className="pane ss-chat" data-testid="session-chat">
           <div className="thread" data-testid="timeline">
@@ -522,7 +796,11 @@ export function SessionView() {
           </div>
         </div>
       ) : (
-        <TerminalPane key={`${rec.id}-term`} rec={rec} />
+        <>
+          {/* a new key after Restart: a fresh terminal for the program started again */}
+          <TerminalPane key={`${rec.id}-term-${getSessions().termRun(rec.id)}`} rec={rec} />
+          {!canToggle && isEnded(rec) && <Ended rec={rec} />}
+        </>
       )}
     </>
   );

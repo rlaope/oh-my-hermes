@@ -487,6 +487,10 @@ interface EventBase {
   session?: string;
 }
 
+export type SubagentState = "queued" | "running" | "thinking" | "done" | "failed" | "cancelled";
+/** The subagent an approval or question came from. */
+export type AskSubagent = { id: string; name: string };
+
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
   | (EventBase & { event: "status"; text: string })
@@ -500,6 +504,31 @@ export type BridgeEvent =
       dag?: { run: string; node: string }[];
     })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
+  /** A subagent's latest state, in ONE agent-neutral shape: Hermes' `subagent.*` events of a bot's turn (clipped by the
+   *  bridge), and every SESSIONS agent's subagents (Claude Code Agent/Task, Codex sub-agent threads, OmO `task`; any
+   *  later agent emits the same). The same `id` updates the same row; `delegation` groups one fan-out. */
+  | (EventBase & {
+      event: "subagent";
+      id: string;
+      /** Which agent reported it (a session's CLI: "claude", "codex", "omo", …); absent for a bot's own. */
+      agent?: string;
+      /** Its name or type ("general-purpose", "first-line"), when the agent gives one apart from its task. */
+      name?: string;
+      /** The fan-out it belongs to (absent on the first, queued event). */
+      delegation?: string;
+      index: number;
+      count: number;
+      goal: string;
+      dag?: { run: string; node: string };
+      model?: string;
+      state: SubagentState;
+      /** The tool it is running and that tool's line, or its batched progress. */
+      tool?: string;
+      step?: string;
+      /** Its result line (done) or error (failed). */
+      summary?: string;
+      seconds?: number;
+    })
   | (EventBase & { event: "skill"; name: string })
   | (EventBase & { event: "delta"; text: string })
   | (EventBase & { event: "message"; id: string; text: string })
@@ -511,6 +540,8 @@ export type BridgeEvent =
       title: string;
       command: string;
       choices: ApprovalChoice[];
+      /** Asked inside a subagent: which one (its id and name or task). */
+      subagent?: AskSubagent;
       /** The folder the command runs in (agent sessions say it). */
       cwd?: string;
       /** Seconds the gateway waits before giving up on it, when it says. */
@@ -520,6 +551,7 @@ export type BridgeEvent =
       event: "clarify.request";
       request_id: string;
       question: string;
+      subagent?: AskSubagent;
       choices?: string[];
       multi_select?: boolean;
       /** Set when the bot asks several questions at once (an interview); `question` is then the first. */
@@ -558,7 +590,9 @@ export type BridgeEvent =
     })
   /** A plugin folder appeared in the bot's profile (the bot installed it from chat). */
   | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
-  | (EventBase & { event: "plugins.update" });
+  | (EventBase & { event: "plugins.update" })
+  // a SESSIONS chat: a message sent while a turn ran waits until the agent takes it (or Stop drops it)
+  | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string });
 
 export type EventName = BridgeEvent["event"];
 export type EventOf<K extends EventName> = Extract<BridgeEvent, { event: K }>;

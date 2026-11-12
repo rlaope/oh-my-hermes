@@ -51,7 +51,11 @@ from ..native_todo import held_native_write_note
 from ..named_owner_choice import clear_turn_owners, note_turn_owners
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..plan_follow_on import DAG_ULW, acceptance_line, plan_turn_line
-from ..omh_identities import extract_identity_marker, identity_context_payload
+from ..omh_identities import (
+    extract_identity_marker,
+    identity_catalog_context,
+    identity_context_payload,
+)
 from ..dispatch_outcomes import unacknowledged_outcomes
 from ..runtime_reader import read_omh_activity, read_omh_hud, read_omh_status, read_omh_todo
 from ..skill_shortlist import claim_candidate_line, skill_candidate_line, skill_candidates_for_turn
@@ -306,11 +310,21 @@ def _touch_section_session(session_id: str, state: str) -> None:
 def awareness_system_prompt_section(session_info: object) -> str:
     """The primer, for Hermes to freeze into a new session's system prompt.
 
-    The text is the same for every session. `session_info` is read only for
-    the session id, to record that a prompt built under it carries the primer.
+    Main sessions also carry a bounded identity directory from their bound
+    store. Children carry no catalog. Record primer delivery by session id.
     """
     primer = turn_budget.render("primer")
     session_id = str(session_info.get("session_id") or "") if isinstance(session_info, Mapping) else ""
+    info = session_info if isinstance(session_info, Mapping) else {}
+    if info.get("platform") != "subagent":
+        try:
+            store, _ = runtime_paths.resolve_homes(info.get("omh_home"), info.get("hermes_home"))
+            available = max(0, AWARENESS_SECTION_MAX_CHARS - len(primer) - 2)
+            identity_catalog = identity_catalog_context(store, max_chars=available)
+        except runtime_paths.RuntimeBindingError:
+            identity_catalog = ""
+        if identity_catalog:
+            primer += "\n\n" + identity_catalog
     if session_id and 0 < len(primer.strip()) <= AWARENESS_SECTION_MAX_CHARS:
         with _awareness_section_lock:
             state = _awareness_section_sessions.get(session_id, _SECTION_RECORDED)

@@ -204,3 +204,175 @@
     transition: none;
   }
 }
+
+/* fan-out card: one per delegate_task, one row per subagent. No fill, a 1px line, 6px corners. */
+.sa-card {
+  margin: 4px 0 2px;
+  max-width: 560px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 6px 10px 7px;
+  font-size: 12px;
+}
+.sa-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 20px;
+  color: var(--muted);
+}
+.sa-ic {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+.sa-ic.failed {
+  background: var(--danger);
+}
+.sa-sum {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-open {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line);
+}
+.sa-open:hover {
+  color: var(--ink);
+}
+.sa-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 5px;
+}
+.sa-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+.sa-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 18px;
+  color: var(--muted);
+}
+.sa-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sa-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  line-height: 18px;
+  /* a quiet row button: no box, no fill; it opens the subagent's steps and answer */
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sa-top:disabled {
+  cursor: default;
+}
+.sa-top:focus-visible {
+  outline: 1px solid var(--line-strong, var(--muted));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.sa-det {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--muted);
+}
+.sa-step code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: none;
+  padding: 0;
+  color: var(--body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sa-ans {
+  color: var(--body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sa-goal {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--body);
+}
+.sa-st {
+  flex: none;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.sa-st.running,
+.sa-st.thinking {
+  color: var(--ink);
+}
+.sa-st.done {
+  color: var(--ok);
+}
+.sa-st.failed {
+  color: var(--danger);
+}
+.sa-st.cancelled,
+.sa-st.stopped,
+.sa-st.queued {
+  color: var(--quiet);
+}
+.sa-t {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.sa-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+.sa-line code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: none;
+  padding: 0;
+  color: var(--body);
+}
+.sa-line.result {
+  color: var(--muted);
+}

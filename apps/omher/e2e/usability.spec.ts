@@ -209,7 +209,15 @@ test("at 900px the header fits: the name ellipsizes, the model gives way, the pa
   const timelineBefore = await page.getByTestId("timeline").evaluate((e) => e.getBoundingClientRect().width);
   await page.getByTestId("who").click();
   await expect(page.getByTestId("details")).toHaveAttribute("aria-hidden", "false");
-  await page.waitForTimeout(400); // the panel slides in
+  // the panel slides in: measure once two reads 80 ms apart agree and it is on screen (a fixed wait raced the slide)
+  await expect
+    .poll(async () => {
+      const a = (await page.getByTestId("details").boundingBox())?.x ?? -1;
+      await page.waitForTimeout(80);
+      const b = (await page.getByTestId("details").boundingBox())?.x ?? -2;
+      return Math.abs(a - b) < 0.5 && b < 900;
+    })
+    .toBe(true);
   const m = await page.evaluate(() => {
     const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
     const head = r('[data-testid="header"]');

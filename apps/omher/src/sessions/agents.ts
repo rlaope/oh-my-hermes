@@ -6,7 +6,7 @@ import { t } from "../i18n";
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
-export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok";
+export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode";
 
 export type AgentMode = "chat" | "hermes" | "terminal";
 
@@ -22,11 +22,12 @@ export const AGENTS: readonly AgentDef[] = [
   { id: "claude", program: "claude", label: "Claude Code", mode: "chat" },
   { id: "codex", program: "codex", label: "Codex", mode: "chat" },
   { id: "omo", program: "omo", label: "OmO", mode: "chat" },
-  { id: "dsh", program: "dsh", label: "DSH", mode: "terminal" },
+  { id: "dsh", program: "dsh", label: "DSH", mode: "chat" },
   { id: "omh", program: "omh", label: "oh-my-hermes", mode: "hermes" },
   { id: "pi", program: "pi", label: "pi", mode: "chat" },
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
   { id: "grok", program: "grok", label: "Grok", mode: "terminal" },
+  { id: "opencode", program: "opencode", label: "OpenCode", mode: "chat" },
 ];
 
 /** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
@@ -38,31 +39,37 @@ export function terminalNote(agent: AgentId): string {
 }
 
 /** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
- *  never runs it). Grok has no one-line install, so it points at its docs. Codex also notes that the copy
- *  inside the ChatGPT (or Codex) desktop app on macOS is detected. */
+ *  never runs it), each as that product's own docs give it: pi's npm package moved to @earendil-works (its README's
+ *  npm line), oh-my-pi's npm build needs Bun so its line is the installer from its README, Grok's is the one-line
+ *  installer from docs.x.ai. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
+ *  detected. The lines of the agents with an install layout are repeated in `LAYOUTS` (src-tauri/src/sessions.rs),
+ *  which names them when the program found does not look like the agent; a Rust test keeps the two the same. */
 export const INSTALL: Record<AgentId, string> = {
   claude: "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
   omo: "npm i -g omo-ai",
-  dsh: "curl -fsSL https://raw.githubusercontent.com/rlaope/deepseek-bot/master/install.sh | bash",
+  dsh: "npm i -g @deepseek-ai/dsh",
   omh: "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh",
-  pi: "npm i -g @mariozechner/pi-coding-agent",
-  omp: "npm i -g @oh-my-pi/pi-coding-agent",
-  grok: "see grok docs",
+  pi: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+  omp: "curl -fsSL https://omp.sh/install | sh",
+  grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
+  opencode: "npm install -g opencode-ai",
 };
 
-/** Tooltip of an agent that is not installed: what is missing, then how to install it. */
+/** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
+ *  (another `dsh` on PATH, such as deepseek-bot's, does not count) and its desktop app, which carries the CLI. */
 export function missingNote(agent: AgentId): string {
-  const how = INSTALL[agent];
-  const install = how.startsWith("see ") ? t("ss.seeDocs", { agent }) : t("ss.installHow", { cmd: how }) + (agent === "codex" ? t("ss.codexBundled") : "");
-  return t("ss.missing", { program: agentDef(agent).program, how: install });
+  const install = t("ss.installHow", { cmd: INSTALL[agent] }) + (agent === "codex" ? t("ss.codexBundled") : agent === "dsh" ? t("ss.dshApp") : "");
+  return t("ss.missing", { program: agent === "dsh" ? "DeepSeek Harness (dsh)" : agentDef(agent).program, how: install });
 }
 
 export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && AGENTS.some((a) => a.id === v);
 
-/** Chat agents whose Restart (and Resume) continues the conversation: Claude Code `--resume`, Codex
- *  `thread/resume`, OmO `--session`. pi and oh-my-pi start a new one. */
-export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo"];
+/** Agents whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
+ *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session),
+ *  OpenCode `session/resume`. pi, oh-my-pi and Grok (a
+ *  terminal) start a new one. */
+export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
 
@@ -120,6 +127,8 @@ export interface SessionRec {
   agentSession?: string;
   /** The chat's model, when known. */
   model?: string;
+  /** A model picked while a turn ran: the agent takes it from the next turn on (Claude Code), shown until then. */
+  modelNext?: string;
   /** Hermes profile a folder chat (oh-my-hermes) runs on. */
   bot?: string;
   /** The Settings › Accounts login it started with (claude, codex, grok); none = the CLI's own. */
@@ -130,11 +139,18 @@ export interface SessionRec {
   title?: string;
   /** The title the agent gave its conversation (Claude Code's own title, a Codex thread name). */
   agentTitle?: string;
+  /** Work the agent says still runs in the background after its turn (commands; subagents have their own rows). */
+  background?: number;
   /** A short summary of the person's first real message, made here (no model is asked). */
   promptTitle?: string;
   /** How the account it started with reads (`as work@…`), when Settings › Accounts picked one other than This
    *  computer: shown under its composer. Display only; `account` is what the shell gets. */
   startedAs?: string;
+  /** The permission mode the person picked (controls.ts MODES); set again when the agent starts after a restart.
+   *  None = the agent's own. */
+  mode?: string;
+  /** The reasoning effort the person picked, likewise. */
+  effort?: string;
 }
 
 /** Live state of a session's chat that the row needs (from the store). */
