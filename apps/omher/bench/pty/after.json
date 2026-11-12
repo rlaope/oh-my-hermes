@@ -1,298 +1,358 @@
 {
-  "commit": "abb724589 + FLOW_HIGH 2 MiB / FLOW_LOW 1 MiB (the tree of the commit that adds this file)",
+  "commit": "a61590199 (the merge of main and the three lanes) with one uncommitted change, a bundle resource added in tauri.conf.json",
   "machine": "Darwin 25.6.0 arm64; Apple M4 Pro; 14 cores; 48 GB",
   "profile": "release",
   "runs_each": 3,
   "load_average_at_start": [
-    9.784,
-    7.239,
-    6.952
+    6.254,
+    5.095,
+    5.351
   ],
   "results": {
     "sink_cat_200mb_cpu_ms_per_mb": {
-      "median": 3.019,
-      "min": 2.904,
-      "max": 3.033,
+      "median": 2.899,
+      "min": 2.858,
+      "max": 2.95,
       "runs": [
-        3.019,
-        2.904,
-        3.033
+        2.899,
+        2.858,
+        2.95
       ]
     },
     "sink_cat_200mb_mb_s": {
-      "median": 195.044,
-      "min": 193.034,
-      "max": 200.662,
+      "median": 204.234,
+      "min": 199.192,
+      "max": 207.609,
       "runs": [
-        195.044,
-        200.662,
-        193.034
+        204.234,
+        207.609,
+        199.192
       ]
     },
     "sink_yes_5s_mb_s": {
-      "median": 116.517,
-      "min": 114.888,
-      "max": 117.137,
+      "median": 116.907,
+      "min": 114.182,
+      "max": 117.498,
       "runs": [
-        116.517,
-        117.137,
-        114.888
+        116.907,
+        117.498,
+        114.182
       ]
     },
     "sink_yes_5s_messages_per_s": {
-      "median": 1864.275,
-      "min": 1838.211,
-      "max": 1874.2,
+      "median": 1870.511,
+      "min": 1826.908,
+      "max": 1879.962,
       "runs": [
-        1864.275,
-        1874.2,
-        1838.211
+        1870.511,
+        1879.962,
+        1826.908
       ]
     },
     "sink_slow_2ms_10s_drawn_mb_s": {
-      "median": 7.929,
-      "min": 7.725,
-      "max": 8.053,
+      "median": 31.163,
+      "min": 31.161,
+      "max": 31.169,
       "runs": [
-        7.929,
-        8.053,
-        7.725
+        31.169,
+        31.163,
+        31.161
+      ]
+    },
+    "sink_slow_2ms_10s_mean_message_kb": {
+      "median": 64,
+      "min": 64,
+      "max": 64,
+      "runs": [
+        64,
+        64,
+        64
+      ]
+    },
+    "sink_slow_2ms_10s_ms_in_page_per_message": {
+      "median": 2,
+      "min": 2,
+      "max": 2,
+      "runs": [
+        2,
+        2,
+        2
+      ]
+    },
+    "sink_slow_2ms_10s_ms_per_message": {
+      "median": 2.006,
+      "min": 2.005,
+      "max": 2.006,
+      "runs": [
+        2.005,
+        2.006,
+        2.006
       ]
     },
     "sink_slow_2ms_10s_peak_rss_mb": {
-      "median": 10.688,
+      "median": 10.75,
       "min": 10.672,
-      "max": 10.734,
+      "max": 10.766,
       "runs": [
-        10.734,
-        10.672,
-        10.688
+        10.766,
+        10.75,
+        10.672
       ]
     },
     "sink_slow_2ms_10s_queued_mb": {
-      "median": 0.126,
-      "min": 0.126,
+      "median": 0.117,
+      "min": 0.091,
       "max": 0.126,
       "runs": [
-        0.126,
-        0.126,
+        0.091,
+        0.117,
         0.126
       ]
     },
     "sink_interrupt_2ms_mb_after_key": {
       "median": 0.125,
-      "min": 0.105,
-      "max": 0.125,
+      "min": 0.125,
+      "max": 0.126,
       "runs": [
-        0.105,
         0.125,
+        0.126,
         0.125
       ]
     },
     "sink_interrupt_2ms_ms_to_last_byte": {
-      "median": 18.537,
-      "min": 10.664,
-      "max": 19.698,
+      "median": 5.277,
+      "min": 5,
+      "max": 5.368,
       "runs": [
-        19.698,
-        10.664,
-        18.537
+        5.277,
+        5.368,
+        5
       ]
     },
     "echo_200_median_ms": {
-      "median": 15.408,
-      "min": 14.911,
-      "max": 16.093,
+      "median": 23.226,
+      "min": 23.153,
+      "max": 23.923,
       "runs": [
-        14.911,
-        15.408,
-        16.093
+        23.153,
+        23.226,
+        23.923
       ]
     },
     "echo_200_p95_ms": {
-      "median": 20.059,
-      "min": 20.057,
-      "max": 20.064,
+      "median": 36.041,
+      "min": 35.923,
+      "max": 36.05,
       "runs": [
-        20.059,
-        20.057,
-        20.064
+        36.041,
+        36.05,
+        35.923
       ]
     },
     "page_cat_200mb_cpu_ms_per_mb": {
-      "median": 2.894,
-      "min": 2.867,
-      "max": 2.978,
+      "median": 3.008,
+      "min": 2.879,
+      "max": 3.049,
       "runs": [
-        2.978,
-        2.867,
-        2.894
+        3.008,
+        3.049,
+        2.879
       ]
     },
     "page_cat_200mb_mb_s": {
-      "median": 207.463,
-      "min": 202.288,
-      "max": 209.93,
+      "median": 202.197,
+      "min": 198.189,
+      "max": 208.656,
       "runs": [
-        202.288,
-        209.93,
-        207.463
+        202.197,
+        198.189,
+        208.656
       ]
     },
     "page_yes_5s_mb_s": {
-      "median": 114.335,
-      "min": 112.144,
-      "max": 115.931,
+      "median": 116.028,
+      "min": 115.469,
+      "max": 116.087,
       "runs": [
-        112.144,
-        114.335,
-        115.931
+        115.469,
+        116.028,
+        116.087
       ]
     },
     "page_yes_5s_messages_per_s": {
-      "median": 1829.353,
-      "min": 1794.307,
-      "max": 1854.893,
+      "median": 1856.443,
+      "min": 1847.502,
+      "max": 1857.394,
       "runs": [
-        1794.307,
-        1829.353,
-        1854.893
+        1847.502,
+        1856.443,
+        1857.394
       ]
     },
     "page_slow_20ms_10s_drawn_mb_s": {
-      "median": 0.833,
-      "min": 0.813,
-      "max": 0.894,
+      "median": 2.958,
+      "min": 2.955,
+      "max": 2.959,
       "runs": [
-        0.894,
-        0.813,
-        0.833
+        2.955,
+        2.958,
+        2.959
+      ]
+    },
+    "page_slow_20ms_10s_mean_message_kb": {
+      "median": 60.626,
+      "min": 60.626,
+      "max": 60.633,
+      "runs": [
+        60.626,
+        60.633,
+        60.626
+      ]
+    },
+    "page_slow_20ms_10s_ms_in_page_per_message": {
+      "median": 20.002,
+      "min": 20.002,
+      "max": 20.003,
+      "runs": [
+        20.002,
+        20.003,
+        20.002
+      ]
+    },
+    "page_slow_20ms_10s_ms_per_message": {
+      "median": 20.019,
+      "min": 20.011,
+      "max": 20.035,
+      "runs": [
+        20.035,
+        20.019,
+        20.011
       ]
     },
     "page_slow_20ms_10s_peak_rss_mb": {
-      "median": 14.875,
-      "min": 14.844,
-      "max": 14.922,
+      "median": 15.234,
+      "min": 15.188,
+      "max": 15.234,
       "runs": [
-        14.844,
-        14.922,
-        14.875
+        15.234,
+        15.234,
+        15.188
       ]
     },
     "page_slow_20ms_10s_queued_mb": {
-      "median": 1.251,
-      "min": 1.063,
-      "max": 1.501,
+      "median": 1.814,
+      "min": 1.751,
+      "max": 1.814,
       "runs": [
-        1.501,
-        1.251,
-        1.063
+        1.814,
+        1.751,
+        1.814
       ]
     },
     "page_interrupt_2ms_mb_after_key": {
-      "median": 1.252,
-      "min": 1.063,
-      "max": 1.752,
+      "median": 1.376,
+      "min": 0.938,
+      "max": 1.625,
       "runs": [
-        1.252,
-        1.063,
-        1.752
+        0.938,
+        1.625,
+        1.376
       ]
     },
     "page_interrupt_2ms_ms_to_last_byte": {
-      "median": 177.171,
-      "min": 151.215,
-      "max": 255.322,
+      "median": 46.121,
+      "min": 33.811,
+      "max": 52.558,
       "runs": [
-        177.171,
-        151.215,
-        255.322
+        33.811,
+        52.558,
+        46.121
       ]
     },
     "page_interrupt_20ms_mb_after_key": {
-      "median": 1.251,
-      "min": 1.001,
-      "max": 1.251,
+      "median": 1.001,
+      "min": 0.952,
+      "max": 1.001,
       "runs": [
         1.001,
-        1.251,
-        1.251
+        1.001,
+        0.952
       ]
     },
     "page_interrupt_20ms_ms_to_last_byte": {
-      "median": 1479.999,
-      "min": 1159.315,
-      "max": 1586.574,
+      "median": 341.064,
+      "min": 339.971,
+      "max": 352.031,
       "runs": [
-        1159.315,
-        1479.999,
-        1586.574
+        341.064,
+        352.031,
+        339.971
       ]
     },
     "slice_cat_200mb_cpu_ms_per_mb": {
-      "median": 16.271,
-      "min": 16.211,
-      "max": 16.33,
+      "median": 16.098,
+      "min": 16.044,
+      "max": 16.105,
       "runs": [
-        16.271,
-        16.33,
-        16.211
+        16.105,
+        16.044,
+        16.098
       ]
     },
     "slice_cat_200mb_mb_s": {
-      "median": 75.391,
-      "min": 75.242,
-      "max": 75.472,
+      "median": 75.673,
+      "min": 75.567,
+      "max": 75.69,
       "runs": [
-        75.472,
-        75.391,
-        75.242
+        75.567,
+        75.673,
+        75.69
       ]
     },
     "slice_yes_5s_mb_s": {
-      "median": 75.702,
-      "min": 75.543,
-      "max": 75.709,
+      "median": 75.701,
+      "min": 75.667,
+      "max": 75.722,
       "runs": [
-        75.543,
-        75.709,
-        75.702
+        75.701,
+        75.722,
+        75.667
       ]
     },
     "slice_yes_5s_messages_per_s": {
-      "median": 1213.284,
-      "min": 1213.038,
-      "max": 1218.535,
+      "median": 1214.321,
+      "min": 1213.783,
+      "max": 1214.983,
       "runs": [
-        1213.284,
-        1213.038,
-        1218.535
+        1214.321,
+        1214.983,
+        1213.783
       ]
     },
     "slice_interrupt_mb_after_key": {
-      "median": 1.329,
-      "min": 1.299,
-      "max": 1.345,
+      "median": 1.252,
+      "min": 0.923,
+      "max": 1.366,
       "runs": [
-        1.345,
-        1.329,
-        1.299
+        1.252,
+        1.366,
+        0.923
       ]
     },
     "slice_interrupt_ms_to_last_byte": {
-      "median": 16.678,
-      "min": 16.468,
-      "max": 17.024,
+      "median": 16.365,
+      "min": 11.642,
+      "max": 17.445,
       "runs": [
-        17.024,
-        16.678,
-        16.468
+        16.365,
+        17.445,
+        11.642
       ]
     }
   },
   "load_average_at_end": [
-    7.986,
-    7.532,
-    7.121
+    5.953,
+    5.613,
+    5.515
   ]
 }
