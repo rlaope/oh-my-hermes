@@ -1,53 +1,47 @@
-// Builds baseline.json / after.json from raw/<label>-<engine>.json files and, with --table, prints the README table.
-//   node bench/render/report.mjs merge baseline   -> bench/render/baseline.json
-//   node bench/render/report.mjs table baseline after
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+// Builds baseline.json (the seam engine) and after.json (this branch's engine, gpu off / on / auto) from the paired
+// run in raw/final-<engine>-<mode>.json, and prints the README tables.
+//   node bench/render/report.mjs
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const [cmd, ...rest] = process.argv.slice(2);
-const ENGINES = ["chromium", "webkit"];
-const read = (label) => {
-  const out = {};
-  for (const e of ENGINES) {
-    // raw files are <label>-<engine>.json (one gpu setting) or <label>-<engine>-<gpu>.json
-    for (const gpu of ["off", "on", "auto"]) {
-      for (const f of [`${label}-${e}-${gpu}.json`, gpu === "off" ? `${label}-${e}.json` : null]) {
-        if (f && existsSync(join(here, "raw", f))) (out[e] ??= {})[gpu] = JSON.parse(readFileSync(join(here, "raw", f), "utf8"));
-      }
-    }
-  }
-  return out;
+const ENGINES = ["webkit", "chromium-metal", "chromium"];
+const SCEN = ["A", "B", "C", "C2", "C3", "D"];
+const raw = (e, m) => JSON.parse(readFileSync(join(here, "raw", `final-${e}-${m}.json`), "utf8"));
+
+const note = "median [min..max] of 3 runs, 20 MB for A, B and D; modes run round-robin in one process; Playwright-driven browsers on the vite dev server and the mock host, not the Tauri window";
+const base = { label: "baseline", note, engineOf: "seam commit f9fab5d17 (no add-ons, standard renderer)", engines: {} };
+const after = { label: "after", note, engineOf: "this branch's engine", engines: {} };
+for (const e of ENGINES) {
+  base.engines[e] = raw(e, "seam");
+  after.engines[e] = Object.fromEntries(["off", "on", "auto"].map((m) => [m, raw(e, m)]));
+}
+writeFileSync(join(here, "baseline.json"), JSON.stringify(base, null, 2) + "\n");
+writeFileSync(join(here, "after.json"), JSON.stringify(after, null, 2) + "\n");
+
+const med = (s) => (s ? s.median : null);
+const f0 = (x) => (x === null || x === undefined ? "n/a" : String(Math.round(x)));
+const f1 = (x) => (x === null || x === undefined ? "n/a" : String(Math.round(x * 10) / 10));
+const pct = (a, b) => (a && b ? `${b >= a ? "+" : ""}${Math.round(((b - a) / a) * 100)}%` : "");
+const cell = (r, sc) => {
+  const s = r.scenarios[sc];
+  return `${f0(med(s.wallMs))} ms, ${f0(med(s.longFrames))} slow, worst ${f0(med(s.maxGapMs))}`;
 };
-
-if (cmd === "merge") {
-  const label = rest[0];
-  const data = read(label);
-  writeFileSync(join(here, `${label}.json`), JSON.stringify({ label, note: "median [min..max] of 3 runs; Playwright-driven browsers on the vite dev server and the mock host, not the Tauri window", engines: data }, null, 2) + "\n");
-  console.log("wrote", `${label}.json`, Object.keys(data));
-}
-
-if (cmd === "table") {
-  const [a, b] = rest;
-  const A = JSON.parse(readFileSync(join(here, `${a}.json`), "utf8")).engines;
-  const B = JSON.parse(readFileSync(join(here, `${b}.json`), "utf8")).engines;
-  const fmt = (s) => (s ? `${s.median} [${s.min}..${s.max}]` : "n/a");
-  const pct = (x, y) => (x && y ? `${(((y.median - x.median) / x.median) * 100).toFixed(0)}%` : "");
-  const rows = [];
-  for (const e of ENGINES) {
-    for (const gpu of Object.keys(B[e] ?? {})) {
-      const base = A[e]?.off;
-      const aft = B[e][gpu];
-      if (!base || !aft) continue;
-      for (const sc of Object.keys(aft.scenarios)) {
-        const x = base.scenarios[sc], y = aft.scenarios[sc];
-        if (!x) continue;
-        rows.push(`| ${e} | ${sc} | ${gpu} | ${fmt(x.wallMs)} | ${fmt(y.wallMs)} | ${pct(x.wallMs, y.wallMs)} | ${fmt(x.longFrames)} | ${fmt(y.longFrames)} | ${fmt(x.maxGapMs)} | ${fmt(y.maxGapMs)} | ${sc === "D" ? `${fmt(x.echoP50)} / ${fmt(y.echoP50)}` : ""} | ${fmt(x.heapMB)} | ${fmt(y.heapMB)} |`);
-      }
-    }
+let out = "";
+for (const e of ENGINES) {
+  const b = base.engines[e];
+  const { off, on, auto } = after.engines[e];
+  out += `\n**${e}** ${b.engineVersion}, ${b.machine}, load average ${b.loadAvgAtStart} at start; \`gpu: auto\` drew with: ${auto.scenarios.A.runs[0].renderer}\n\n`;
+  out += "| scenario | before (seam) | after, gpu off | change | after, gpu auto (default) | change | after, gpu on | change |\n|---|---|---|---|---|---|---|---|\n";
+  for (const sc of SCEN) {
+    out += `| ${sc} | ${cell(b, sc)} | ${cell(off, sc)} | ${pct(med(b.scenarios[sc].wallMs), med(off.scenarios[sc].wallMs))} | ${cell(auto, sc)} | ${pct(med(b.scenarios[sc].wallMs), med(auto.scenarios[sc].wallMs))} | ${cell(on, sc)} | ${pct(med(b.scenarios[sc].wallMs), med(on.scenarios[sc].wallMs))} |\n`;
   }
-  console.log("| engine | scenario | gpu (after) | wall ms before | wall ms after | change | frames >50 ms before | after | worst frame gap ms before | after | echo p50 ms before / after (D) | heap MB before | after |");
-  console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
-  console.log(rows.join("\n"));
+  out += `\nTyping echo (D), median feed-to-frame ms / p95, and JS heap after the run:\n\n| | before (seam) | gpu off | gpu auto | gpu on |\n|---|---|---|---|---|\n`;
+  const echo = (r) => `${f1(med(r.scenarios.D.echoP50))} / ${f1(med(r.scenarios.D.echoP95))}`;
+  out += `| echo p50 / p95 | ${echo(b)} | ${echo(off)} | ${echo(auto)} | ${echo(on)} |\n`;
+  const heap = (r) => (med(r.scenarios.B.heapMB) === null ? "n/a" : `${f1(med(r.scenarios.B.heapMB))} MB`);
+  out += `| heap after B | ${heap(b)} | ${heap(off)} | ${heap(auto)} | ${heap(on)} |\n`;
 }
+console.log(out);
+

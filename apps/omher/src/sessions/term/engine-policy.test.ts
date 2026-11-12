@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { canRetry, decideWebgl, LOSS_LIMIT, LOSS_WINDOW_MS, recordLoss } from "./engine-policy";
 
-const info = (o: Partial<Parameters<typeof decideWebgl>[0]> = {}) => ({ webgl2: true, renderer: "ANGLE (Apple, Apple M4 Pro, OpenGL 4.1)", vendor: "Google Inc. (Apple)", linux: false, ...o });
+const info = (o: Partial<Parameters<typeof decideWebgl>[0]> = {}) => ({ webgl2: true, renderer: "ANGLE (Apple, Apple M4 Pro, OpenGL 4.1)", vendor: "Google Inc. (Apple)", linux: false, mac: false, ...o });
 
 describe("the auto rule", () => {
   it("allows a hardware renderer", () => {
     expect(decideWebgl(info())).toEqual({ allow: true, reason: "hardware" });
+  });
+  it("stays on the standard renderer on macOS, where the bench measured the GPU slower on full-screen redraws", () => {
+    expect(decideWebgl(info({ mac: true }))).toEqual({ allow: false, reason: "macos-measured-slower" });
+    expect(decideWebgl(info({ mac: true, renderer: null, vendor: null })).allow).toBe(false);
   });
   it("refuses when there is no WebGL2", () => {
     expect(decideWebgl(info({ webgl2: false, renderer: null, vendor: null }))).toEqual({ allow: false, reason: "no-webgl2" });
