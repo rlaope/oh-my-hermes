@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "98a5c97b0614255e876e09ff2048bfb3f6248eca19a3ec26c040bca4f06521f2",
+  "catalog_revision": "1124305eab07a319d6c0ebec539e25b4a8ebfe71daae5ca86f896858e2a6941b",
   "files": {
     "omh-accessibility-audit/SKILL.md": "7f48005d7fd6e9e1b2b30f03eb412145e09971fcc629393a27c1a3c5e29d6cef",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -311,7 +311,7 @@
     "omh-verification-gate/references/generated-artifact-provenance.md": "91a818c86eb8311e39f7e1e0f1dca2bed5066551acff83a656aeb78e947f2fad",
     "omh-verification-gate/references/requirement-coverage-map.md": "91b86c41bdee5e4336c92a15875f8691fb929e75377b3c18187d6bc8eb184a19",
     "omh-verification-gate/references/test-authoring.md": "84f74c11afaa954ea4ba3237781561f5bcd56b32151dcd4a19180bfedf297aad",
-    "omh-visual-qa/SKILL.md": "dea6656bddae2f43b7840506c489af553450ed73173c887fda52cf3eae49f6f4",
+    "omh-visual-qa/SKILL.md": "2923173e7a81556a239ad3e3dcf0ea411941239c0d8257074b1b9cbde0b4d55e",
     "omh-visual-qa/references/motion-continuity.md": "b3640c2c5f1f30a2d550f30d89127b2e5686784664ad46040ff7b5911441b55c",
     "omh-visual-qa/references/playable-check.md": "e57e81a353a53e92fe2bfa317ef393901d68d7bc6f3ed1dc5ad700f00ba41842",
     "omh-visual-qa/references/visual-verdict-contract.md": "4f3b4e0d0806d8bf86ca2cdaca9874dcedeed7948395a4202519feaca9feae80",
