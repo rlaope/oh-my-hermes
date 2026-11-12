@@ -525,18 +525,41 @@ pub struct AgentInfo {
     pub mode: Mode,
     /// Where the program was found, or `None` when it is not installed.
     pub path: Option<String>,
+    /// `hermes`: the oh-my-hermes row of a person who has Hermes but not `omh`. Its session is the same Hermes chat
+    /// in the folder (through the bridge, no program), `path` is where Hermes was found, and it has no terminal view.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<&'static str>,
 }
+
+/// What the oh-my-hermes row says the person has. Its session never runs `omh`: it is a Hermes chat in the folder
+/// through the bridge, so Hermes alone is enough to open one. `omh` found: the row as always ("oh-my-hermes", its
+/// path; the terminal view starts `omh`). Only Hermes (`hermes`, its Python): the row reads "Hermes" and is `via`
+/// Hermes. Neither: not installed.
+pub fn hermes_row(omh: Option<PathBuf>, hermes: Option<PathBuf>) -> AgentInfo {
+    let a = agent("omh").expect("omh is on the allow-list");
+    let info = |label, path: Option<PathBuf>, via| AgentInfo { id: a.id, label, mode: a.mode, path: path.map(|p| p.to_string_lossy().into_owned()), via };
+    match (omh, hermes) {
+        (Some(p), _) => info(a.label, Some(p), None),
+        (None, Some(h)) => info(HERMES_LABEL, Some(h), Some("hermes")),
+        (None, None) => info(a.label, None, None),
+    }
+}
+
+/// The oh-my-hermes row's name when only Hermes is there.
+pub const HERMES_LABEL: &str = "Hermes";
 
 /// Every allow-listed agent with where it was found on this machine.
 pub fn agents_on_this_machine() -> Vec<AgentInfo> {
     let dirs = host_dirs();
     AGENTS
         .iter()
-        .map(|a| AgentInfo {
-            id: a.id,
-            label: a.label,
-            mode: a.mode,
-            path: find_agent(a, &dirs).map(|p| p.to_string_lossy().into_owned()),
+        .map(|a| {
+            let found = find_agent(a, &dirs);
+            if a.id == "omh" {
+                // Hermes as the bridge finds it (the same look-up the first-run screen keys on)
+                return hermes_row(found, crate::bridge::discover_python(host_env, |p| p.is_file()).ok());
+            }
+            AgentInfo { id: a.id, label: a.label, mode: a.mode, path: found.map(|p| p.to_string_lossy().into_owned()), via: None }
         })
         .collect()
 }
@@ -986,6 +1009,28 @@ mod tests {
     fn fs_of(files: &[&Path]) -> impl Fn(&Path) -> bool {
         let set: HashSet<PathBuf> = files.iter().map(|p| p.to_path_buf()).collect();
         move |p| set.contains(p)
+    }
+
+    /// A person with Hermes and no `omh` gets a usable "Hermes" row; with both, the row is as it always was; with
+    /// neither, it is not installed. The row never names a program to start: `launch_for("omh")` still needs `omh`.
+    #[test]
+    fn the_hermes_row_without_omh_with_both_and_with_neither() {
+        let omh = PathBuf::from("/Users/k/.local/bin/omh");
+        let py = PathBuf::from("/Users/k/.hermes/hermes-agent/venv/bin/python");
+        let only = hermes_row(None, Some(py.clone()));
+        assert_eq!((only.id, only.label, only.mode, only.via), ("omh", "Hermes", Mode::Hermes, Some("hermes")));
+        assert_eq!(only.path.as_deref(), Some(py.to_str().unwrap()));
+        let both = hermes_row(Some(omh.clone()), Some(py));
+        assert_eq!((both.label, both.via, both.path.as_deref()), ("oh-my-hermes", None, Some(omh.to_str().unwrap())));
+        let neither = hermes_row(None, None);
+        assert_eq!((neither.label, neither.via, neither.path), ("oh-my-hermes", None, None));
+        // the shell's JSON: `via` only on the Hermes row
+        assert_eq!(serde_json::to_value(&only).unwrap()["via"], "hermes");
+        assert!(serde_json::to_value(&both).unwrap().get("via").is_none());
+        // `omh` on a dir list is found as before; nothing named `hermes` is ever looked up as a session program
+        let dirs = [PathBuf::from("/Users/k/.local/bin")];
+        assert_eq!(find_in_layouts("omh", "omh", &dirs, &env_of(&[]), fs_of(&[&omh]), |p: &Path| p.to_path_buf(), Os::Unix), Some(omh));
+        assert!(AGENTS.iter().all(|a| a.program != "hermes"));
     }
 
     #[test]
@@ -1589,6 +1634,18 @@ mod tests {
         let work = home.join(".omher").join("accounts").join("claude").join("work");
         assert!(text.contains(&format!("cfg={}", work.display())), "{text:?}");
         let _ = std::fs::remove_dir_all(home);
+    }
+
+    /// The rows this machine's shell would send. Ignored by default (reads the real machine): a machine without
+    /// `omh` is simulated with `env -i HOME=<scratch home> PATH=/usr/bin:/bin OMHER_HERMES_PYTHON=<hermes python>`,
+    /// `cargo test real_rows_without_omh -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_rows_without_omh() {
+        let row = agents_on_this_machine().into_iter().find(|a| a.id == "omh").unwrap();
+        println!("omh row: {row:?}");
+        assert_eq!((row.label, row.via), ("Hermes", Some("hermes")));
+        assert!(launch_for("omh").is_err(), "no `omh` program to start");
     }
 
     /// The real check on a developer machine: `claude --version` / `codex --version` through the same

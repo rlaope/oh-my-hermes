@@ -71,7 +71,11 @@ RULES = (
     "omher never reads a key and never changes `~/.dsh`.",
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
-    "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing:",
+    "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing,",
+    "or, for a person who has Hermes but not oh-my-hermes (no `omh` found), when they press \"Add oh-my-hermes\" in the SESSIONS `+` menu"
+    " or Install on the oh-my-hermes first-run card:",
+    "so a person who has Hermes but not `omh` gets the same row named Hermes, with no terminal view, and omher never starts `hermes` or any"
+    " other program for it.",
     "The command is fixed in the shell; nothing from the page reaches it.",
     "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
     "the desktop app opens only a file the bridge just served this way.",
@@ -301,6 +305,21 @@ class TheOneInstaller(unittest.TestCase):
         self.assertNotIn("String", sig)
         self.assertNotIn("&str", sig)
         self.assertIn("Channel<InstallEvent>", sig)
+
+    def test_the_offer_to_add_oh_my_hermes_runs_the_same_installer(self) -> None:
+        """The + menu line and the first-run card reach the installer only through the gate's `install_engine`
+        call (one place in the UI), and the shell has no second install command."""
+        callers = sorted(
+            p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
+            if not p.name.endswith(".test.ts") and re.search(r"[\"']install_engine[\"']", p.read_text(encoding="utf-8"))
+        )
+        self.assertEqual(callers, ["app/BridgeGate.tsx"])
+        add = (UI_SRC / "sessions" / "addOmh.ts").read_text(encoding="utf-8")
+        self.assertIn("gateShell", add)
+        self.assertNotIn("invoke", add)
+        lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
+        self.assertEqual(lib.count("setup::install_command("), 1)
+        self.assertEqual(re.findall(r"^\s+(install_\w+),$", lib, re.M), ["install_engine", "install_engine_command"])
 
 
 class LinkChipsFetchNothing(unittest.TestCase):
@@ -682,6 +701,9 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertEqual([r[0] for r in rows], list(SESSION_AGENTS))
         self.assertEqual([r[1] for r in rows], list(SESSION_AGENTS))
         self.assertEqual(tuple(r[2] for r in rows), SESSION_MODES)
+        # the Hermes-only row (no `omh`) opens the same Hermes chat: `hermes` is never a session program
+        self.assertNotIn('"hermes"', block.group(2))
+        self.assertNotIn('program: "hermes"', self.prod)
 
     def test_ui_list_matches_the_rust_allow_list(self) -> None:
         ui = UI_AGENTS.read_text(encoding="utf-8")
