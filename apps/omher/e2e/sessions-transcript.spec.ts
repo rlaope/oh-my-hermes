@@ -174,6 +174,22 @@ test("edit and resend: the agent takes the last message back and the box holds i
   await expect(page.getByTestId("bubble-edit")).toHaveCount(1);
 });
 
+test("text Edit puts back that starts with / does not open the command menu; typing does", async ({ page }) => {
+  await session(page, "claude", "/work");
+  await done(page);
+  await page.getByTestId("bubble-user").last().hover();
+  await page.getByTestId("bubble-edit").click();
+  const box = page.getByTestId("composer");
+  await expect(box).toHaveValue("/work");
+  await expect(box).toBeFocused();
+  await page.waitForTimeout(200);
+  await expect(page.getByTestId("command-picker")).toHaveCount(0);
+  // the person edits it: the menu follows the typing
+  await page.keyboard.press("Backspace");
+  await expect(box).toHaveValue("/wor");
+  await expect(page.getByTestId("command-picker")).toBeVisible();
+});
+
 test("Edit says the files stay as they are, only when the turn it takes back changed files", async ({ page }) => {
   // a turn that edited calc.py and README.md: the line shows with Edit, on hover
   await session(page, "claude", "/work");

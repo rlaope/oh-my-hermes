@@ -93,6 +93,7 @@ for (const theme of ["dark", "light"] as const) {
     await editShot("before");
     await page.getByTestId("bubble-edit").click();
     await expect(page.getByTestId("composer")).toHaveValue("/work");
+    await expect(page.getByTestId("command-picker")).toHaveCount(0);
     await page.mouse.move(900, 790);
     await page.waitForTimeout(300);
     await editShot("after");
