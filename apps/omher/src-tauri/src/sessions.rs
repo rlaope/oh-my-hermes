@@ -620,8 +620,17 @@ pub(crate) const COALESCE_WINDOW: Duration = Duration::from_millis(4);
 /// reader stops reading the PTY, so the kernel holds the program back as a real terminal does, and at
 /// [`FLOW_LOW`] it reads again. What a session can have undrawn is at most `FLOW_HIGH` plus two messages and one
 /// read (the message that crossed the mark, the one being built, the read under way).
-pub(crate) const FLOW_HIGH: u64 = 1024 * 1024;
-pub(crate) const FLOW_LOW: u64 = 256 * 1024;
+///
+/// The pair is the smallest in `bench/pty/sweep.json` at which a fast page is fed as fast as with no limit. A
+/// page acknowledges once per slice of drawing (xterm works for 12 ms, then yields), and at 100 MB/s a slice is
+/// 1.2 MB: the high mark has to hold more than one slice or the page runs dry before its acknowledgement is back,
+/// and the low mark has to be within one slice of the high one or a single acknowledgement does not start the
+/// reader again. Measured under `yes`, a page drawing 100 MB/s in slices: 75.5 MB/s here against 75.7 with no
+/// limit, 72.9 at 2 MiB / 512 KiB, 71.3 at 1 MiB / 256 KiB, 38.5 at 256 KiB / 64 KiB. What the size costs is how
+/// much a slow page still has to draw after Ctrl+C: at 20 ms a message, 2.6 s here against 0.7 s at 1 MiB /
+/// 256 KiB and 9.5 s at 8 MiB / 2 MiB (292 s with no limit).
+pub(crate) const FLOW_HIGH: u64 = 2 * 1024 * 1024;
+pub(crate) const FLOW_LOW: u64 = 1024 * 1024;
 
 /// Every running session of this app. Dropped sessions are stopped; [`Sessions::close_all`] runs on exit.
 pub struct Sessions {
