@@ -435,12 +435,16 @@
 .ss-head-st.failed {
   color: var(--danger);
 }
+/* The space around a terminal and its colour come from Settings > Terminal (term/look.ts sets both on this box):
+   --term-pad is the left side, and the top, right and bottom keep the proportions of the 14 6 8 16 it always had;
+   --term-bg is the picked theme's background, so the space is the terminal's colour and not the page's. */
 .term-wrap {
+  --term-pad: 16px;
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 14px 6px 8px 16px;
-  background: var(--bg);
+  padding: calc(var(--term-pad) * 0.875) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.5) var(--term-pad);
+  background: var(--term-bg, var(--bg));
 }
 .term-box {
   flex: 1;
