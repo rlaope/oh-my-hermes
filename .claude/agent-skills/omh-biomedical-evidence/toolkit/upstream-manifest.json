@@ -1,0 +1,66 @@
+{
+  "schema": "omh_biomedical_evidence_provenance/v1",
+  "repository": "https://github.com/genomoncology/biomcp",
+  "revision": "a843629fb447750418cf746effe94010b1028a28",
+  "license": "MIT (BioMCP code only; provider data rights separate)",
+  "copyright": "Copyright (c) 2025 Ian Maurer (audited dependency, not authorship of original OMH helper)",
+  "source_audit": [
+    {
+      "repository": "https://github.com/genomoncology/biomcp",
+      "revision": "a843629fb447750418cf746effe94010b1028a28",
+      "path": "LICENSE",
+      "sha256": "6b37b76fb5f5b29c74d9c0e35f9dc18b8e46273eadba8048513887f2d5feaabf",
+      "local_path": "audit-LICENSE"
+    },
+    {
+      "repository": "https://github.com/genomoncology/biomcp",
+      "revision": "a843629fb447750418cf746effe94010b1028a28",
+      "path": "README.md",
+      "sha256": "09474c54a6830ebf26e487a85bf589210736cafe0867d098ef32a0270b982fc2",
+      "local_path": "audit-README.md"
+    },
+    {
+      "repository": "https://github.com/genomoncology/biomcp",
+      "revision": "a843629fb447750418cf746effe94010b1028a28",
+      "path": "docs/reference/source-licensing.md",
+      "sha256": "ff93cd3f54cd001022c7f28c9ac8c344c37eaa957c90d3650d6fc821f2a57530",
+      "local_path": "audit-docs-reference-source-licensing.md"
+    },
+    {
+      "repository": "https://github.com/genomoncology/biomcp",
+      "revision": "a843629fb447750418cf746effe94010b1028a28",
+      "path": "skills/use-cases/05-variant-pathogenicity.md",
+      "sha256": "fb91f4089dc61447f0950d577946547238f22ce43197363ae77e05624ab5a47b",
+      "local_path": "audit-skills-use-cases-05-variant-pathogenicity.md"
+    },
+    {
+      "repository": "https://github.com/genomoncology/biomcp",
+      "revision": "a843629fb447750418cf746effe94010b1028a28",
+      "path": "skills/use-cases/09-trial-recruitment.md",
+      "sha256": "5d027cb4069c8595f6e39f81281bff00384e811bb54f69582fdce17103b70acc",
+      "local_path": "audit-skills-use-cases-09-trial-recruitment.md"
+    }
+  ],
+  "reuse": "Method inspection only; no copied upstream code, playbook prose or raw API responses.",
+  "self_hash": "excluded; outer native/portable inventory hashes this file",
+  "files": {
+    "README.md": {
+      "local_path": "README.md",
+      "local_sha256": "52e74efc55e258cf4f559e3791a2676a93ba42930bdf98e0bf90d340dac1522a",
+      "classification": "original_omh",
+      "upstream": [],
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "modification_notice": "Original OMH offline reconciliation helper/guidance; no upstream code or playbook text copied."
+    },
+    "scripts/reconcile.py": {
+      "local_path": "scripts/reconcile.py",
+      "local_sha256": "59bcd5b2d81b86f2016f3c1394119d6cc45761f4cd7d674c639733a53c4e086e",
+      "classification": "original_omh",
+      "upstream": [],
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "modification_notice": "Original OMH offline reconciliation helper/guidance; no upstream code or playbook text copied."
+    }
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>phone_check overflow fixture</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.4 sans-serif; }
+  header { height: 600px; background: #fee; }
+  ul { margin: 0; padding: 0; list-style: none; }
+  li.row { height: 48px; }
+  .wide { width: 520px; height: 40px; background: #fcc; }
+  button.small { display: block; width: 120px; height: 30px; font-size: 16px; }
+  input.field { display: block; width: 200px; height: 48px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>Tall banner pushes the data down</header>
+<ul>
+  <li class="row">First data row</li>
+</ul>
+<div class="wide">Wider than the phone</div>
+<button class="small" type="button">Save</button>
+<input class="field" aria-label="Name" value="Ada">
+</body>
+</html>

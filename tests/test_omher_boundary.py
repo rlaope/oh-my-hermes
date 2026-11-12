@@ -43,7 +43,9 @@ RULES = (
     "a local CLIProxyAPI's Claude logins are listed, read-only, from its auth file names alone",
     "omher never opens those files, never calls CLIProxyAPI or its management API, and never starts a session with, switches to or removes such a login.",
     "The Claude meter also lists the Claude logins of rule 18 by name, each with only its own record;",
-    "The app runs only the CLIs' own status and sign-in commands, as fixed argv (`claude auth status --json`, `claude auth login`,",
+    "The app runs only the CLIs' own status, sign-in and version commands, as fixed argv (`claude auth status --json`, `claude auth login`, `claude --version`,",
+    "`codex --help`, `codex login status`, `codex login`, `codex --version`)",
+    "and from `--version` only the version number (the first `digits.digits.digits` run with its suffix; never the rest of its text), shown beside the CLI's name.",
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
@@ -52,6 +54,9 @@ RULES = (
     " transcripts under `children/`).",
     "so for a session's own folder omher also reads `<that folder>/.omo/senpi-task/tasks/st_*.json`, the same records"
     " and nothing else in `.omo`, never a symlinked `.omo` or `senpi-task`, and never another folder's.",
+    "An OmO session chat reads the same records for one more thing: when OmO's `task` result names a subagent's"
+    " task id but not its answer, it reads that one record (`st_<task id>.json`, from the same folders and under the"
+    " same rules, read-only, and only a record of that session)",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -215,6 +220,24 @@ class SubagentEvents(unittest.TestCase):
         rule = next(r for r in re.split(r"\n(?=\d+\. )", DOC.read_text(encoding="utf-8")) if "OmO's subagent records" in r)
         self.assertIn("`<that folder>/.omo/senpi-task/tasks/st_*.json`", rule)
         self.assertIn("never a symlinked `.omo` or `senpi-task`, and never another folder's", rule)
+
+    def test_an_omo_chat_reads_only_its_subagents_own_task_records(self) -> None:
+        # the chat's answer for a foreground OmO subagent comes from the record Plans reads (rule 16): one
+        # `st_<id>.json` by task id, in `senpi-task/tasks` under `<omo>/agent/projects/*` or the session's own
+        # `.omo`, never a link, never another session's record, and nothing is written there
+        rust = (SHELL / "agent_chat.rs").read_text(encoding="utf-8")
+        code = rust[: rust.index("#[cfg(test)]\nmod tests")]
+        body = code[code.index("    fn omo_record(&self"):]
+        body = body[: body.index("\n    }\n") + 6]
+        self.assertIn('strip_prefix("st_")', body)
+        self.assertIn('join("senpi-task").join("tasks")', body)
+        self.assertIn('Path::new(&self.cwd).join(".omo")', body)
+        self.assertIn("symlink_metadata", body)
+        self.assertIn('s(&rec, "root_session_id") == self.session', body)
+        self.assertEqual(re.findall(r'join\("([a-z.-]+)"\)', body), [".omo", "senpi-task", "senpi-task", "tasks", "agent", "projects", "senpi-task", "tasks"])
+        for w in ("fs::write", "create_dir", "remove_file", "OpenOptions", "children"):
+            self.assertNotIn(w, body, w)
+        self.assertEqual(code.count("omo_record("), 2)
 
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
@@ -721,18 +744,19 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         self.assertEqual(
             [(cli, step, [a.strip().strip('"') for a in args.split(",")]) for cli, step, args in argv],
             [("claude", "Status", ["auth", "status", "--json"]), ("claude", "Login", ["auth", "login"]),
-             ("codex", "Help", ["--help"]), ("codex", "Status", ["login", "status"]), ("codex", "Login", ["login"])])
+             ("claude", "Version", ["--version"]), ("codex", "Help", ["--help"]),
+             ("codex", "Status", ["login", "status"]), ("codex", "Login", ["login"]), ("codex", "Version", ["--version"])])
         self.assertIn("_ => None", fixed)
         # every spawn goes through `command(program, args, …)`, whose args come from `fixed_args` only
         self.assertEqual(prod.count("Command::new("), 2)  # the CLI itself, or cmd.exe /c for a Windows npm shim
         # the second argument of every `run_to_end(…)` / `command(…)` call is a `fixed_args` result
         calls = re.findall(r"\b(?:run_to_end|command)\(&?program, (\w+)", prod)
-        self.assertEqual(len(calls), 5, calls)
+        self.assertEqual(len(calls), 6, calls)
         self.assertEqual(set(calls), {"args", "help_args"})
         self.assertNotIn(".arg(", prod.replace('c.arg("/c").arg(program)', ""))
         # the page names a CLI and an account id; no Tauri command takes a program or an argument
         lib = self.LIB_RS.read_text(encoding="utf-8")
-        for cmd in ("account_status", "account_login_start", "account_login_cancel", "account_clis", "account_env"):
+        for cmd in ("account_status", "account_version", "account_login_start", "account_login_cancel", "account_clis", "account_env"):
             sig = lib[lib.index(f"async fn {cmd}("):]
             sig = sig[: sig.index(")")]
             self.assertNotRegex(sig, r"\b(argv|args|program|command|path)\b", cmd)

@@ -29,8 +29,8 @@ describe("real agent streams through the reducer", () => {
   const all = replays as Replay[];
 
   it("covers every agent", () => {
-    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "codex-late", "omo", "omp", "pi", "pi-noauth"]));
-    expect(all.length).toBeGreaterThanOrEqual(41);
+    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "codex-late", "omo", "omo-batch", "omo-single", "omp", "pi", "pi-noauth"]));
+    expect(all.length).toBeGreaterThanOrEqual(43);
   });
 
   for (const r of all) {
@@ -96,6 +96,22 @@ describe("real agent streams through the reducer", () => {
     const subs = fans(s).flatMap((x) => x.subs);
     expect(subs.length).toBe(2);
     expect(subs.every((x) => x.agent === "omo" && x.state === "done" && !!x.summary)).toBe(true);
+  });
+
+  it("OmO's foreground batch and single task: each row ends with its own answer and model, the todo list as the checklist", () => {
+    // omo-13-batch / omo-13-single (OmO 5.1.56): the task result names no answer; OmO's own record of each task id does
+    const s = replay(all.find((r) => r.name === "omo-13-batch.jsonl")!);
+    const subs = fans(s).flatMap((x) => x.subs);
+    expect(subs.map((x) => [x.name, x.state, x.summary, x.model])).toEqual([
+      ["helper-a-first-line", "done", "FIRST_LINE: alpha line", "claude-haiku-5-5"],
+      ["helper-b-line-count", "done", "LINE_COUNT: 3", "claude-haiku-5-5"],
+    ]);
+    const act = s.chats["agent:s1"].items.find((i) => i.kind === "activity");
+    const t = act?.kind === "activity" ? act.turn : null;
+    expect(t!.plan?.map((p) => p.status)).toEqual(["completed", "completed"]);
+    expect(t!.steps.some((x) => x.name === "todo" || x.detail.includes('{"'))).toBe(false);
+    const one = fans(replay(all.find((r) => r.name === "omo-13-single.jsonl")!)).flatMap((x) => x.subs);
+    expect(one.map((x) => [x.name, x.state, x.summary, x.model])).toEqual([["helper-single", "done", "FIRST_LINE: alpha line", "claude-haiku-5-5"]]);
   });
 
   it("OmO's own retry of one message is one turn that fails once with OmO's reason, never the raw reply", () => {

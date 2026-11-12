@@ -468,6 +468,25 @@ function omoSessionRun({ ago = 30 } = {}) {
   };
 }
 
+/** The records OmO 5.1.56 wrote for a foreground batch (omo-13-batch, tests/fixtures/omo-home), as CliRuns.omo reads
+ *  them: the MockHost OmO session's "/batch" run, ended `ago` seconds back. */
+function omoBatchRun({ ago = 2 } = {}) {
+  const end = now() - ago;
+  const sid = "01a1ce7b-1c30-7e45-8913-aa00b3b32296";
+  const node = (id, label, summary, started, ended) => ({
+    id, label, deps: [], layer: 0, state: "done", model: "claude-haiku-5-5", provider: "anthropic", executor: "omo",
+    started, ended, summary, attempts: [{ n: 1, outcome: "completed", started, ended }],
+  });
+  const nodes = [
+    node("st_01a1d076", "helper-a-first-line: read a.txt and reply FIRST_LINE: <first line>", "FIRST_LINE: alpha line", end - 28.851, end - 8.926),
+    node("st_01a1d077", "helper-b-line-count: count lines of a.txt and reply LINE_COUNT: <number>", "LINE_COUNT: 3", end - 28.594, end),
+  ];
+  return {
+    id: `omo:${sid}`, kind: "session", agent: "omo", owner: { type: "session", id: sid }, title: "OmO session",
+    cwd: "/Users/you/code/omher", state: "done", started: end - 28.851, updated: end, ended: end, nodes,
+  };
+}
+
 function sessionRun({ ago = 30, hold = false } = {}) {
   const sent = now() - ago;
   const node = (id, label, summary, started, ended) => ({
@@ -601,7 +620,7 @@ const USAGE = {
 const ACCT_CLIS = ["claude", "codex", "pi", "omp", "grok", "gemini"];
 const CPA_EMAILS = ["ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"];
 const ACCT_INSTALLED = { claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false };
-let acct, acctActive, acctLimited, acctLabels;
+let acct, acctActive, acctLimited, acctLabels, acctUsage;
 const ACCT_ID = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 function accountsList() {
   return {
@@ -615,7 +634,7 @@ function accountsList() {
           email: a.email ?? "",
           state,
           dir: a.id === "default" ? null : `/mock/.omher/accounts/${cli}/${a.id}`,
-          usage: cli === "codex" && a.id === "default" ? USAGE.default()[0] : null,
+          usage: acctUsage[`${cli}:${a.id}`] ?? (cli === "codex" && a.id === "default" ? USAGE.default()[0] : null),
           ...(limited ? { resets_at: limited } : {}),
           ...(cli === "claude" && a.email === "owner@example.com" ? { in_cpa: true } : {}),
         };
@@ -660,6 +679,7 @@ function reset() {
   acctActive = Object.fromEntries(ACCT_CLIS.map((c) => [c, "default"]));
   acctLimited = {};
   acctLabels = {};
+  acctUsage = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
   for (const h of subTimers) clearTimeout(h);
   subTimers.clear();
@@ -1342,6 +1362,15 @@ const OPS = {
   "mock.accounts": (p) => {
     const cli = typeof p.cli === "string" ? p.cli : "codex";
     if (typeof p.limit === "string") acctLimited[`${cli}:${p.limit}`] = now() + 2 * 3600;
+    // usage {id, windows: [{label, used_percent?, resets_in_min?}]}: that account's own usage record
+    if (p.usage && typeof p.usage === "object") {
+      const windows = (p.usage.windows ?? []).map((w) => ({
+        label: w.label,
+        ...(typeof w.used_percent === "number" ? { used_percent: w.used_percent } : {}),
+        ...(typeof w.resets_in_min === "number" ? { resets_at: now() + w.resets_in_min * MIN } : {}),
+      }));
+      acctUsage[`${cli}:${p.usage.id}`] = { id: cli, state: "ok", source_mtime: now() - 60, windows };
+    }
     if (p.signed_in && typeof p.signed_in === "object") {
       const a = acct[cli]?.find((x) => x.id === p.signed_in.id);
       if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });
@@ -1477,7 +1506,7 @@ const OPS = {
   // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
   "mock.sessionRun": (p) => {
     const ago = typeof p.ago === "number" ? p.ago : undefined;
-    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), p.agent === "omo" ? omoSessionRun({ ago }) : sessionRun({ ago, hold: p.hold === true })];
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), p.agent === "omo" ? (p.batch ? omoBatchRun({ ago }) : omoSessionRun({ ago })) : sessionRun({ ago, hold: p.hold === true })];
     return { ok: true };
   },
   "mock.reset": () => {

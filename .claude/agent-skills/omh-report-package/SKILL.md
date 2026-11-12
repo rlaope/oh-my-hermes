@@ -1,0 +1,126 @@
+---
+name: "omh-report-package"
+description: "[omh] Periodic report for executives: weekly/monthly reports, executive briefs, PPT-ready outlines, and upload packages."
+license: MIT
+metadata:
+  hermes:
+    tags: [workflow, oh-my-hermes, reporting]
+    category: reporting
+    phase: package-outline
+    role: operator
+    quality_tier: report-gated
+---
+
+# Report Package
+
+This is an OMH `report-package` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+
+## Why This Exists
+
+`report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.
+
+## Do Not Use When
+
+- The user needs SLO, incident, or error-budget review; use `omh-reliability-review`.
+- The user asks only for a designed `.pptx` file; use `omh-materials-package`.
+- The request is meeting minutes, scrum history, or action-item tracking.
+
+## Examples
+
+Good example:
+
+- Prompt: report-package 월간 리더십 보고서 PPT outline 만들어줘.
+- Expected behavior: Prepare a report package with sections, assumptions, missing inputs, and Markdown/JSON outline scope.
+- Why: The request is packaging known information for reporting, not reliability validation or code work.
+
+Bad example:
+
+- Prompt: report-package prove our SLO passed and close the incident.
+- Expected behavior: Route to `omh-reliability-review` and require metric or incident evidence.
+- Why: Report packaging cannot satisfy reliability closure evidence.
+
+## Completion Checklist
+
+- The reporting window, inputs, audience, narrative, and evidence gaps are named.
+- Draft report, generated package, approval, and delivery are separate states.
+- The next action says whether to gather evidence, generate, revise, approve, or deliver.
+
+## Recovery Notes
+
+- If no presentation tool can produce a binary deck, retain the PPT-ready Markdown or JSON outline, mark binary export not_observed, and hand back the outline, assumptions, and missing-input list for separate deck generation.
+- If the tool returns "rendered": false (it still exits 0) or its image count differs from slide_count, keep the deck's outline read-back, leave render QA not observed, and hand back the missing-tool or image-count gap for that file.
+- If the requested achievements export fails, retain the rest of the report package, mark the badge section not_observed, and hand back the missing output from omh achievements export --format md instead of inventing badges.
+
+
+
+## When to Use
+
+Use when Hermes should turn supplied inputs into a report, executive brief, PPT-ready outline, or upload package without claiming presentation delivery.
+
+    Strong routing signals: `report-package`, `report package`, `weekly report`, `monthly report`, `executive report`, `exec brief`, `leadership deck`, `status package`, `ppt outline`, `presentation outline`, `slide outline`, `upload package`, `PPT`, `보고서 패키지`, `주간 보고서`, `월간 보고서`, `경영진 보고`, `리더십 보고`, `피피티`, `슬라이드`, `발표자료`, `업로드 패키지`, `недельный отчёт`, `еженедельный отчёт`, `месячный отчёт`, `ежемесячный отчёт`, `отчёт для начальства`, `сделай отчёт за неделю`, `отчёт руководству`
+
+## Catalog Metadata
+
+Category: `reporting`
+Phase: `package-outline`
+Quality tier: `report-gated`
+Reasoning demand: `standard`
+
+Quality bar:
+
+- Name audience, reporting period, sections, supplied facts, assumptions, and missing data.
+- Keep report packaging independent from reliability review unless explicitly requested.
+- Open with the conclusion and any decision requested; show each metric against target or prior value or mark it no baseline.
+- Export only Markdown/JSON outlines unless a separate presentation tool produces a binary deck.
+- On Hermes, that tool can be the bundled PowerPoint skill (`powerpoint`; `microsoft-office` from v0.22.6), and a deck it builds counts as generated from its read-back (`pptx_read.py --outline`).
+- On Hermes, a rung taken from a bundled document skill is observed only from that skill's result for that exact file, judged by its field, not its exit code: `"rendered": false` or `"recalculated": false` exits 0 yet leaves that rung not observed, blocked on the missing tools it names; other observed evidence for a rung still counts.
+- On Hermes, PowerPoint gives `slide_count` (`pptx_read.py --outline`) and `render_screenshot` (`pptx_render.py` into a fresh directory, its image count matching `slide_count`, since it lists every image already in that directory). Images that exist are not a render pass until each one has been inspected.
+
+Required inputs:
+
+- audience
+- reporting period or scope
+- supplied facts with targets or prior-period figures
+- missing data or assumptions
+
+Expected outputs:
+
+- report package
+- PPT-ready Markdown or JSON outline
+- assumptions and missing-input list
+- Optional supplied achievements summary when requested; plugin-backed badge retrieval is unavailable in this projection.
+
+Artifact expectations:
+
+- operation_artifact/v1 report-package artifact when a wrapper or CLI records it
+
+Safety rules:
+
+- Do not claim source review completion from a prepared report package.
+- Do not claim stakeholder approval or presentation delivery without observed evidence.
+- Do not couple report packages to SLO, incident, or error-budget evidence by default.
+
+## Runtime Evidence
+
+Use the current host's own tools and subagent/task mechanism when available;
+otherwise run the same lanes sequentially or name the unavailable capability.
+A prepared plan, handoff, checklist, or skill installation is not execution,
+review, CI, merge-readiness, or merge evidence. Record actual tool results, or
+`not_observed` / `not_available`, in the record; never invent dispatch or host
+accounting.
+Treat supplied context as advisory, not proof of hidden memory reads or writes.
+State scope, constraints, verification, and the stop condition before work.
+Reply in the user's own words and the host's own voice: the host's persona owns
+reply language, tone, speech level, and sentence endings, progress updates
+included (where it sets no language, use the one the user wrote in), and OMH
+shapes structure and content only; OMH's record terms
+(surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in
+records and tool calls, never in the sentence the user reads unless they ask
+about one; and when a real unresolved user decision or a useful briefing discussion
+remains, offer one specific, content-linked question. Completed work needs no question;
+omit unrelated non-action footers and generic offers to continue.
+Supporting paths are relative to this skill directory; sibling skill paths are
+relative to its parent. Resolve them from the host-provided skill base directory
+(`{baseDir}` on hosts that provide it), never a hardcoded install location.
+A named workflow not installed here is unavailable, not permission to emulate
+its host-specific capabilities. Verify through the real surface before done.

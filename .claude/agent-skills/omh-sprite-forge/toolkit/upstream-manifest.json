@@ -1,0 +1,50 @@
+{
+  "files": {
+    "LICENSE.upstream": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "dc27c232d15db5de494571648f0ddb211165ee70ddb1dd42956a7a42a954700c",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/sprite_forge_toolkit/LICENSE.upstream",
+      "source_sha256": "dc27c232d15db5de494571648f0ddb211165ee70ddb1dd42956a7a42a954700c",
+      "upstream": []
+    },
+    "README.md": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "3a4f407c8230da59939c58d819d7b61ff668b0ea47a600b791dbbf08ebe3ead9",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/sprite_forge_toolkit/README.md",
+      "source_sha256": "3a4f407c8230da59939c58d819d7b61ff668b0ea47a600b791dbbf08ebe3ead9",
+      "upstream": []
+    },
+    "examples/layout.json": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "c40e43fbd0ff2d3d36d85265ba8a6b44a3b494d141ba534a2f2e1d9542f0492b",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/sprite_forge_toolkit/examples/layout.json",
+      "source_sha256": "c40e43fbd0ff2d3d36d85265ba8a6b44a3b494d141ba534a2f2e1d9542f0492b",
+      "upstream": []
+    },
+    "scripts/forge.py": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "57f361d94558443664932967bc79b69c961eacd99f4980e74a3a3d48940b2315",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/sprite_forge_toolkit/scripts/forge.py",
+      "source_sha256": "57f361d94558443664932967bc79b69c961eacd99f4980e74a3a3d48940b2315",
+      "upstream": []
+    }
+  },
+  "license": "MIT",
+  "repository": "https://github.com/rlaope/oh-my-hermes",
+  "revision": null,
+  "revision_note": "Original uncommitted resources identified by content hashes; not attributed to an upstream revision.",
+  "schema": "omh_sprite_forge_provenance/v1",
+  "self_hash": "excluded; outer distribution inventories hash this manifest"
+}

@@ -1,7 +1,9 @@
 """Catalog-generated Agent Skills files, independent of Hermes configuration.
 
-Host-selected installs have one portable receipt; unselected installs duplicate
-one manifest at both roots. Updates reuse an installed user pack's receipt.
+Host-selected installs have one portable receipt; unselected installs write a
+receipt at each root, sharing `target_dirs`, each listing that root's bytes (the
+`.claude/skills` copy carries shortened descriptions). Updates reuse an
+installed user pack's receipt.
 A partial write cannot report fresh: status compares every destination's bytes.
 """
 from __future__ import annotations
@@ -54,6 +56,78 @@ def agent_skill_files() -> dict[str, str]:
     files.update({f"{t.skill_name}/{t.relative_path}": t.content for t in agent_skill_reference_templates()})
     files.update({f"{t.skill_name}/{t.relative_path}": t.content for t in agent_skill_support_templates()})
     return files
+
+
+# Claude Code lists every skill's name and description inside a budget and drops
+# descriptions past it (docs/AGENT-SKILLS.md#claude-code-skill-listing). The
+# Claude copy therefore carries shortened descriptions; the cap is measured there.
+CLAUDE_DESCRIPTION_CAP = 160
+CLAUDE_TRIGGER_MARKER = " Use when the user says:"
+CLAUDE_CUT_MARK = "…"
+_CLAUSE_ENDS = (". ", ": ", "; ", ", ", " -- ")
+_FUNCTION_WORDS = frozenset(
+    "a an the and or of to for with in on instead of before after that which when".split()
+)
+
+
+def _frontmatter_description(content: str) -> str | None:
+    """The JSON-quoted `description:` value of a generated SKILL.md, or None."""
+    if not content.startswith("---\n"):
+        return None
+    for line in content.split("\n---\n", 1)[0].splitlines()[1:]:
+        if line.startswith("description: "):
+            value = json.loads(line.removeprefix("description: "))
+            return value if isinstance(value, str) else None
+    return None
+
+
+def _ends_on_function_word(text: str) -> bool:
+    words = text.rstrip(" .,;:-").split()
+    return bool(words) and words[-1].lower() in _FUNCTION_WORDS
+
+
+def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> str:
+    """The lead before the trigger list; over `cap`, cut at a clause or word boundary and marked with `…`."""
+    lead = description.partition(CLAUDE_TRIGGER_MARKER)[0].strip()
+    if len(lead) <= cap:
+        # Nothing is cut, so nothing is reworded: a lead that ends "you can act on." keeps its last word.
+        return lead.rstrip(" .,;:-") + "."
+    floor = int(cap * 0.6)
+    cuts = [position for position in (lead.rfind(end, 0, cap) for end in _CLAUSE_ENDS) if position >= floor - 1]
+    clause = max(cuts, default=-1)
+    candidate = lead[:clause] if clause >= 0 else lead[: cap - 1].rsplit(" ", 1)[0]
+    while _ends_on_function_word(candidate) and " " in candidate:
+        candidate = candidate.rsplit(" ", 1)[0]
+    # A cut is marked as a cut: a full stop here would pass off half a list as a whole sentence.
+    return candidate.rstrip(" .,;:-") + CLAUDE_CUT_MARK
+
+
+def claude_skill_files(files: dict[str, str] | None = None) -> dict[str, str]:
+    """The Claude Code copy of the portable pack: same files, shorter descriptions.
+
+    Only each SKILL.md's frontmatter `description:` value changes: the text
+    before the generated trigger list, cut to `CLAUDE_DESCRIPTION_CAP`. All
+    skills stay listed and model-invocable; references and toolkit files are
+    unchanged. A SKILL.md without a generated `description:` line is copied as is.
+    """
+    source = agent_skill_files() if files is None else files
+    result = dict(source)
+    for relative, content in source.items():
+        name, _, rest = relative.partition("/")
+        if rest != "SKILL.md" or _frontmatter_description(content) is None:
+            continue
+        head, separator, body = content.partition("\n---\n")
+        lines = head.split("\n")
+        at = next(index for index, line in enumerate(lines) if line.startswith("description: "))
+        text = shorten_description(_frontmatter_description(content) or "")
+        lines[at] = f"description: {json.dumps(text, ensure_ascii=False)}"
+        result[relative] = "\n".join(lines) + separator + body
+    return result
+
+
+def pack_files_for_root(root: Path) -> dict[str, str]:
+    """The bytes a pack root holds: the Claude copy under `.claude/skills`, the portable pack elsewhere."""
+    return claude_skill_files() if (root.name, root.parent.name) == ("skills", ".claude") else agent_skill_files()
 
 
 def agent_skills_targets(scope: str, *, host: str | None = None) -> tuple[Path, Path | None]:
@@ -149,13 +223,17 @@ def agent_skills_manifest(files: dict[str, str], *, roots: tuple[Path, ...] = ()
 
 def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str, Any]:
     roots = (target.absolute(),) if mirror is None else (target.absolute(), mirror.absolute())
-    files = agent_skill_files()
-    expected = agent_skills_manifest(files, roots=roots)
-    portable_expected = agent_skills_manifest(files)
     modified: list[str] = []
     states = []
     installed_revisions = []
+    revisions = []
     for index, root in enumerate(roots):
+        # Each root is compared with its own bytes: a `.claude/skills` copy
+        # carries the Claude listing change, an `.agents/skills` copy does not.
+        files = pack_files_for_root(root)
+        expected = agent_skills_manifest(files, roots=roots)
+        portable_expected = agent_skills_manifest(files)
+        revisions.append(expected["catalog_revision"])
         manifest = _read_manifest(root)
         installed_revisions.append(manifest["catalog_revision"] if manifest else "")
         if manifest is None:
@@ -186,7 +264,7 @@ def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str
         )
     return {
         "schema_version": SCHEMA_VERSION,
-        "catalog_revision": expected["catalog_revision"],
+        "catalog_revision": revisions[0],
         "installed_revisions": installed_revisions,
         "target_dirs": [str(root) for root in roots],
         "projection": projection,
@@ -245,10 +323,10 @@ def installed_receipt_roots(target: Path, manifest: dict[str, Any]) -> tuple[Pat
     return resolved_target, expected_mirror
 
 
-def _changed_file_count(roots: tuple[Path, ...], files: dict[str, str]) -> int:
+def _changed_file_count(roots: tuple[Path, ...]) -> int:
     changed = 0
     for root in roots:
-        for relative, content in files.items():
+        for relative, content in pack_files_for_root(root).items():
             path = _checked_path(root, relative)
             if not path.is_file() or path.read_bytes() != content.encode("utf-8"):
                 changed += 1
@@ -279,7 +357,7 @@ def refresh_installed_agent_skills(home: Path, *, dry_run: bool) -> dict[str, An
     if dry_run:
         return {"would_refresh": names, **result}
     before = agent_skills_status(target, mirror=mirror)
-    changed = _changed_file_count(roots, agent_skill_files())
+    changed = _changed_file_count(roots)
     after = install_agent_skills(target, mirror=mirror)
     return {
         "target_dirs": names,
@@ -292,11 +370,11 @@ def refresh_installed_agent_skills(home: Path, *, dry_run: bool) -> dict[str, An
 
 def install_agent_skills(target: Path, *, mirror: Path | None = None) -> dict[str, Any]:
     roots = (target.absolute(),) if mirror is None else (target.absolute(), mirror.absolute())
-    files = agent_skill_files()
+    packs = [pack_files_for_root(root) for root in roots]
     manifests = [_read_manifest(root) for root in roots]
     # Preflight all destinations before writing either scope or mirror. Preserve
     # unrelated host skills and refuse conflicting files OMH never installed.
-    for root, previous in zip(roots, manifests):
+    for root, previous, files in zip(roots, manifests, packs):
         for relative, content in files.items():
             path = _checked_path(root, relative)
             owned = relative in (previous or {}).get("files", {})
@@ -306,9 +384,9 @@ def install_agent_skills(target: Path, *, mirror: Path | None = None) -> dict[st
                 raise ValueError(f"Agent Skills refuses edited support: {path}")
             if path.exists() and not owned and (not path.is_file() or path.read_bytes() != content.encode("utf-8")):
                 raise ValueError(f"Agent Skills refuses unowned file collision: {path}")
-    manifest = agent_skills_manifest(files, roots=roots)
-    manifest_text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-    for root, previous in zip(roots, manifests):
+    for root, previous, files in zip(roots, manifests, packs):
+        # Each root's receipt lists its own bytes; a mirrored pair shares `target_dirs`.
+        manifest_text = json.dumps(agent_skills_manifest(files, roots=roots), indent=2, sort_keys=True) + "\n"
         for relative, content in files.items():
             atomic_write_text(_checked_path(root, relative), content)
         for relative in (previous or {}).get("files", {}).keys() - files.keys():
