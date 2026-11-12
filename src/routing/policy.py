@@ -10471,7 +10471,7 @@ def contract_redline_guard_applies(normalized_query: str) -> bool:
 # "dashboard API" name a surface with a fault that is not visual.
 _FRONTEND_DESIGN_SURFACES = ("대시보드", "화면", "폰", "모바일", "랜딩 페이지", "랜딩페이지", "page", "dashboard", "screen", "mobile")
 # Redesign or layout work on the surface itself.
-_FRONTEND_DESIGN_ACTIONS = ("디자인해", "디자인을 다시", "디자인 다시", "레이아웃", "redesign", "less generic", "layout")
+_FRONTEND_DESIGN_ACTIONS = ("디자인해", "디자인을 다시", "디자인 다시", "레이아웃", "redesign", "less generic")
 # A repair reaches frontend only when the message names how the UI looks
 # wrong; the bare "fix it" verb (고쳐) is shared with data, auth, performance
 # and hardware faults. "정렬" alone also means sorting, so only misalignment
