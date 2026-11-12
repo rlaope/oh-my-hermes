@@ -533,19 +533,22 @@ def open_directory_without_links(directory):
     only links followed, as in `safe_path`.
     """
     plain = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
-    held = os.open(directory.anchor, plain)
-    walked = Path(directory.anchor)
-    for part in directory.parts[1:]:
-        walked = walked / part
-        # The directory held so far is closed whether or not the next one opens,
-        # so a refused step leaves no descriptor behind.
-        try:
+    # Every descriptor this walk has open is in `owned` until it is closed or
+    # handed back, so a refused step, or an interrupt that lands between two of
+    # the walk's statements before it hands its result back, leaves none behind.
+    owned = []
+    try:
+        owned.append(os.open(directory.anchor, plain))
+        walked = Path(directory.anchor)
+        for part in directory.parts[1:]:
+            walked = walked / part
             flags = plain if system_alias(walked) else plain | os.O_NOFOLLOW
-            following = os.open(part, flags, dir_fd=held)
-        finally:
-            os.close(held)
-        held = following
-    return held
+            owned.append(os.open(part, flags, dir_fd=owned[-1]))
+            os.close(owned.pop(0))
+        return owned.pop()
+    finally:
+        for descriptor in owned:
+            os.close(descriptor)
 
 
 def write_new_file(value, data):

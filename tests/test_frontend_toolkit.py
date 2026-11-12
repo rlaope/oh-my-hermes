@@ -1,9 +1,11 @@
 """Offline contracts plus browser-backed measurements for the frontend phone-check toolkit."""
 from __future__ import annotations
 
+import ast
 import contextlib
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -11,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import textwrap
 import types
 import unittest
 from unittest import mock
@@ -322,6 +325,68 @@ class OfflineCliTests(Fixture):
         with self.assertRaises(OSError):
             walk(top / "a" / "link" / "below")
         self.assertEqual(live, set())
+
+    @POSIX_ONLY
+    def test_directory_walk_interrupted_before_any_statement_leaves_no_descriptor(self):
+        api = helper_api()
+        walk_code = api.open_directory_without_links.__code__
+        source, first_line = inspect.getsourcelines(api.open_directory_without_links)
+        returns = [first_line + node.lineno - 1
+                   for node in ast.walk(ast.parse(textwrap.dedent("".join(source))))
+                   if isinstance(node, ast.Return)]
+        self.assertEqual(len(returns), 1)
+        live = set()
+        real_open, real_close = os.open, os.close
+
+        def tracking_open(*args, **kwargs):
+            fd = real_open(*args, **kwargs)
+            live.add(fd)
+            return fd
+
+        def tracking_close(fd):
+            live.discard(fd)
+            real_close(fd)
+
+        deep = self.root.resolve() / "a" / "b"
+        deep.mkdir(parents=True)
+
+        def walk(stop_at=None):
+            """Run the walk, raising KeyboardInterrupt just before its `stop_at`-th statement."""
+            seen = []
+
+            def local(frame, event, arg):
+                if event == "line":
+                    seen.append(frame.f_lineno)
+                    if len(seen) - 1 == stop_at:
+                        raise KeyboardInterrupt
+                return local
+
+            def tracer(frame, event, arg):
+                return local if frame.f_code is walk_code else None
+
+            previous = sys.gettrace()
+            with mock.patch.object(api.os, "open", tracking_open), \
+                    mock.patch.object(api.os, "close", tracking_close):
+                sys.settrace(tracer)
+                try:
+                    return api.open_directory_without_links(deep), seen
+                finally:
+                    sys.settrace(previous)
+
+        held, lines = walk()
+        real_close(held)
+        live.clear()
+        # Every statement up to and including the one that hands the descriptor
+        # back. An interrupt that lands in the cleanup after it, or inside a
+        # statement, can still drop one descriptor; that is not covered here.
+        last = max(index for index, line in enumerate(lines) if line == returns[0])
+        self.assertGreater(len(set(lines[:last + 1])), 6, lines)
+        for stop_at in range(last + 1):
+            with self.subTest(statement=stop_at, line=lines[stop_at] - first_line):
+                with self.assertRaises(KeyboardInterrupt):
+                    walk(stop_at)
+                self.assertEqual(live, set())
+                live.clear()
 
     def test_shot_is_written_once_when_the_path_stays_new(self):
         shot = self.root / "shot.png"

@@ -453,7 +453,7 @@ impl Acp {
                     emit(st, ev("delta", json!({"text": t})));
                 }
             }
-            "agent_thought_chunk" if self.turn => emit(st, ev("thinking", json!({}))),
+            "agent_thought_chunk" if self.turn => emit(st, crate::agent_chat::thinking_event(&u.get("content").map(|c| s(c, "text")).unwrap_or_default())),
             "tool_call" if self.turn => {
                 let id = s(u, "toolCallId");
                 if id.is_empty() || self.tools.contains_key(&id) {
@@ -747,6 +747,7 @@ impl Adapter for Acp {
             Input::Clarify { .. } => return Err("no such question".into()),
             // the agent picks its own permission mode and effort; omher offers no switch for them here
             Input::Mode { .. } | Input::Effort { .. } => return Err(format!("{} has no mode or effort switch here", self.agent.label)),
+            Input::Rewind => return Err(format!("{} cannot take a message back here", self.agent.label)),
             Input::Model { model } => {
                 let Some(sid) = self.session.clone() else { return Err(format!("{} has not started yet", self.agent.label)) };
                 let mut p = Map::new();

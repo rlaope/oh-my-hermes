@@ -145,6 +145,8 @@ export interface PluginRow {
   catalog_name: string | null;
   tools: number;
   hooks: number;
+  /** Tools the plugin registered in the running gateway (an older bridge leaves it out). */
+  live_tools?: number;
   update_available: boolean;
   /** Secret settings the plugin needs that are not set yet (env names); it stays off until they are. */
   needs_env: string[];
@@ -493,8 +495,10 @@ export type AskSubagent = { id: string; name: string };
 
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
-  | (EventBase & { event: "status"; text: string })
-  | (EventBase & { event: "thinking" })
+  /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try. */
+  | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number } })
+  /** The agent is thinking; `text` is what it thought, when the agent sends it (SESSIONS agents). */
+  | (EventBase & { event: "thinking"; text?: string })
   | (EventBase & {
       event: "tool.start";
       tool_id: string;
@@ -592,7 +596,30 @@ export type BridgeEvent =
   | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
   | (EventBase & { event: "plugins.update" })
   // a SESSIONS chat: a message sent while a turn ran waits until the agent takes it (or Stop drops it)
-  | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string });
+  | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string })
+  /** A SESSIONS file edit's change, per file (replaces what an earlier `tool.diff` of the same step said). */
+  | (EventBase & { event: "tool.diff"; tool_id: string; files: DiffFile[] })
+  /** A SESSIONS agent's own todo list or plan as it stands now (the whole list each time). */
+  | (EventBase & { event: "plan"; items: PlanItem[] })
+  /** A SESSIONS agent took back the person's last message and what came after it (its own rewind); `text` is
+   *  that message as the agent read it, when it says. */
+  | (EventBase & { event: "rewound"; text?: string });
+
+/** One file's change in the diff view. `lines` start with `+`, `-`, ` ` or `@@`; `more` lines were not sent. */
+export interface DiffFile {
+  path: string;
+  kind: "add" | "delete" | "update";
+  lines: string[];
+  added: number;
+  removed: number;
+  more?: number;
+}
+
+/** One row of an agent's todo list. */
+export interface PlanItem {
+  text: string;
+  status: "pending" | "in_progress" | "completed";
+}
 
 export type EventName = BridgeEvent["event"];
 export type EventOf<K extends EventName> = Extract<BridgeEvent, { event: K }>;

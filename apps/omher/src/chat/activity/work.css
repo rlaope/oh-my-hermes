@@ -1,0 +1,215 @@
+/* A SESSIONS agent's work inside a turn: a file edit's diff, its todo list, its thinking. Quiet: 12px text, mono
+   11.5px for code, 1px lines, 6px corners, no fills beyond a faint tint for added and removed lines. */
+
+/* a step that opens to its change */
+.act-step.has-diff {
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.act-step.has-diff:hover .k,
+.act-step.has-diff:focus-visible .k {
+  color: var(--body);
+}
+.act-step.has-diff .act-chev {
+  align-self: center;
+}
+/* only an opened step's own chevron turns (the line's open state must not turn them all) */
+.act.open .act-step.has-diff .act-chev {
+  transform: none;
+}
+.act.open .act-step.has-diff.open .act-chev {
+  transform: rotate(90deg);
+}
+
+/* the diff: per file, monospace, capped in height with its own scroll */
+.dv-body {
+  padding-bottom: 6px;
+}
+.dv {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 4px;
+  min-width: 0;
+}
+.dv-file {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 0;
+}
+.dv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-soft);
+}
+.dv-path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--body);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dv-kind {
+  color: var(--quiet);
+  flex: none;
+}
+.dv-add,
+.dv-del {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.dv-add {
+  color: var(--ok);
+}
+.dv-add + .dv-del,
+.dv-kind + .dv-add {
+  margin-left: -2px;
+}
+.dv-del {
+  color: var(--danger);
+}
+.dv-body {
+  max-height: 280px;
+  overflow: auto;
+  padding: 4px 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+.dv-l {
+  padding: 0 10px 0 22px;
+  position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--body);
+}
+.dv-l::before {
+  position: absolute;
+  left: 9px;
+  color: var(--quiet);
+}
+.dv-l.add {
+  background: color-mix(in srgb, var(--ok) 11%, transparent);
+}
+.dv-l.add::before {
+  content: "+";
+  color: var(--ok);
+}
+.dv-l.del {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.dv-l.del::before {
+  content: "−";
+  color: var(--danger);
+}
+.dv-l.hunk,
+.dv-l.more {
+  color: var(--quiet);
+}
+
+/* the agent's todo list: one compact checklist that changes in place; under way reads in ink */
+.pl {
+  margin: 4px 0 2px;
+  max-width: 560px;
+  font-size: 12px;
+}
+.pl-head {
+  height: 20px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.pl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  line-height: 18px;
+  color: var(--body);
+}
+.pl-box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 10px;
+  text-align: center;
+  color: var(--muted);
+}
+.pl-row.completed .pl-t {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.pl-row.completed .pl-box {
+  border-color: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+.pl-row.in_progress .pl-box {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 70%, transparent);
+  font-size: 12px;
+}
+.pl-t {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* thinking: one quiet line, closed; a click opens the text */
+.th {
+  margin: 1px 0;
+  font-size: 12px;
+}
+.th-h {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 4px 0 2px;
+  margin-left: -2px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: 12px;
+}
+.th-h:hover {
+  color: var(--body);
+}
+.th-chev {
+  display: inline-flex;
+  color: var(--quiet);
+  transition: transform 0.2s;
+}
+.th.open .th-chev {
+  transform: rotate(90deg);
+}
+.th-body {
+  margin: 2px 0 4px 5px;
+  padding: 2px 0 2px 14px;
+  border-left: 1px solid var(--line);
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  line-height: 1.55;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+/* inline code in thinking text: as in the answer */
+.th-body code {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .th-chev {
+    transition: none;
+  }
+}

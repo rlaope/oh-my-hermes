@@ -259,6 +259,24 @@ All notable changes will be documented here.
   saves a permanent project rule. omher gives the agent no file or
   terminal access of its own (BOUNDARY rule 11).
 
+- **After omher installs oh-my-hermes, your bot's chat offers the model setup,
+  once.** When the app's own installer ends well (the sidebar's "!" or the
+  first-run screen), omher shows the chat of the bot you had open and one
+  quiet line above the composer: "oh-my-hermes is ready. Set up your models?"
+  Its action puts the bot's own model-setup command and one sentence in your
+  language into the message box; nothing is sent until you press Enter. The
+  action or the x ends it for good. A bot whose gateway was already running
+  gets oh-my-hermes' skills at once but not yet its tools: omher asks that
+  gateway which tools the plugin registered, and when there are none a second
+  quiet line says the bot does not have oh-my-hermes' tools yet (model setup
+  works without them). If the bot does not list the command within about a
+  minute, one line says only that. omher restarts and reloads nothing.
+- **A bot chat's skill picker lists oh-my-hermes' skills.** oh-my-hermes
+  registers its skills through each profile's `skills.external_dirs`, and the
+  picker read only the profile's own `skills` folder, so no OMH skill showed
+  for anyone. It now reads the folders the profile's own config names too, in
+  Hermes' order, and nothing else.
+
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came
@@ -272,6 +290,29 @@ All notable changes will be documented here.
 - **dag-ulw plans fewer, larger nodes.** It splits where work can run side by
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.
+
+- **A New session in omher opens as a chat or in the agent's own terminal.**
+  Beside the agent in a New session, a quiet Chat | Terminal choice (Chat by
+  default, the last pick remembered per agent) lets a person run `claude`,
+  `codex`, `omo`, `pi`, `omp`, `opencode` or `omh` as the real CLI in a
+  terminal instead of omher's chat; Start opens it in the folder and types
+  nothing. A session opened as a terminal ends with its program (an ended line
+  and Restart), has no Chat toggle or model control, shows the live dot in the
+  list, and after omher restarts comes back not running, waiting for Resume.
+  Every session row ends with a small mark for its view, a speech bubble for a
+  chat and a prompt window for a terminal, so the list says which is which.
+  A row also shows what happened while you looked elsewhere, with a system
+  notification for each: a yellow warning triangle and "waiting" when the
+  session waits for you (an approval or question, or its terminal rang its
+  bell or sent an OSC 9 / 777 notification), a red exclamation mark and
+  "error" when it stopped on an error or a non-zero exit, a green check and
+  "done" when it finished an answer or its program ended; opening the session
+  clears the waiting and done ones, and a session nothing runs in steps back
+  in the list.
+  OpenCode works both ways: its chat is as before, and as a terminal it is the
+  person's own OpenCode with their own rules. DSH has no terminal, Grok has no
+  chat, and Hermes alone (no `omh`) has only its chat; the choice shows those
+  dimmed with the reason. Bot chats are unchanged.
 
 - **omher starts the agent you picked, not another program with its name, and
   finds Grok and pi where their installers put them.** When Homebrew's `grok`
@@ -289,6 +330,23 @@ All notable changes will be documented here.
   installer. Closing an oh-my-hermes session now ends its Hermes
   conversation; it used to stay open, because the bridge called a gateway
   method Hermes does not have.
+
+- **A session chat in omher shows what the agent did.** A file-edit step opens
+  to the real change: removed and added lines per file, in mono, in a box of
+  its own height with its own scroll (Claude Code's Edit/Write and the change
+  it reports back, Codex's file changes, pi's write/edit). The agent's own todo
+  list (Claude Code's tasks, Codex's plan) is one checklist under the activity
+  line that updates in place and stays after the turn. Thinking text is kept,
+  closed under the activity line until clicked, with `inline code` shown as in
+  the answer; an agent that sends none shows none. Answers and code blocks have
+  a copy control on hover, in the bot chat too. Edit on your last message takes
+  it back through the agent's own rewind (Claude Code's `rewind_conversation`,
+  Codex's `thread/revert`) and puts its text back in the box; files are not
+  undone, and when that turn changed files a quiet line beside Edit says so.
+  Agents without a rewind do not offer it. Tested on real Claude Code 2.1.322
+  runs (a two-file edit with its task list, thinking text, a rewind the next
+  turn no longer remembered) and Codex 0.167's app-server (revert on a real
+  thread; its turns ran out of credit).
 
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
   split a run into parallel lanes now looks only at the build nodes: it comes
@@ -308,6 +366,21 @@ All notable changes will be documented here.
   marks first. The SESSIONS + menu fades where its list is cut and keeps a few
   px from the row above, and a session's / menu is as wide as the composer,
   with plain command names and skills marked in the accent colour.
+
+- **omher session chats say what the agent really did: a retry, a Stop, its own
+  permissions and its subagents.** An OmO message that OmO retried by itself is
+  one turn: its line says "Retrying 1 of 5" while OmO tries again, and a retry
+  that fails ends the turn once with OmO's own reason, not two failed turns with
+  a raw `400 {"type":"error",…}` reply; that reason wraps so its advice is
+  whole. A step still running when you press Stop reads "Stopped" with its own
+  mark, in a session and in a bot's chat, and when Codex reports later that the
+  command ran on, the same row says it kept running and how long after its
+  start it finished. A Codex session whose own config asks for no approvals and reaches
+  the whole disk says "No approvals · full disk access" where the mode is shown,
+  from its first message, naming Codex's own config; omher still offers no such
+  mode. An OmO session whose subagent records sit in the project folder
+  (`.omo/senpi-task/tasks/`, where OmO 5.0 and a folder that already has them
+  keep them) shows its run in Plans, with the same time as its chat card.
 
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type

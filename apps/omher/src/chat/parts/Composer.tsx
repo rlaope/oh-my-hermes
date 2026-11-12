@@ -36,6 +36,7 @@ export function Composer({
   tools,
   action,
   foot,
+  heldNote,
 }: {
   bot: Bot;
   running: boolean;
@@ -60,6 +61,9 @@ export function Composer({
   action?: ReactNode;
   /** A quiet line under the box (a session's folder and account). */
   foot?: ReactNode;
+  /** A quiet line shown while the box holds unsent text or files that the draft will not send (a New session that
+   *  opens as a terminal). */
+  heldNote?: string;
 }) {
   // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
   const [text, setText] = useState(() => getDraft(bot.name));
@@ -193,6 +197,9 @@ export function Composer({
   useLayoutEffect(() => {
     if (!draft || draft.bot !== bot.name) return;
     setText(draft.text);
+    // text the app put here (Edit's old message too) does not open the command menu; typing in it does
+    const q = commandQuery(draft.text);
+    setCmdDismissed(q ? `${q.prefix}${q.query}` : null);
     requestAnimationFrame(() => {
       const el = ref.current;
       if (!el) return;
@@ -412,6 +419,11 @@ export function Composer({
           )}
         </div>
       </div>
+      {heldNote && has && (
+        <div className="cmp-held" role="note" data-testid="composer-held">
+          {heldNote}
+        </div>
+      )}
       {foot}
     </div>
   );

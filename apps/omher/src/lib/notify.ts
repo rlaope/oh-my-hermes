@@ -48,6 +48,24 @@ export function noteFor(
   }
 }
 
+/** Something a SESSIONS session did that is not a chat event: its program ended, it could not start, or its
+ *  terminal rang its bell. */
+export interface SessionNote {
+  kind: "ended" | "failed" | "bell";
+  /** `web-app · Claude Code` */
+  name: string;
+  code?: number | null;
+  error?: string;
+}
+
+/** The notification for `n` of session `id`. Pure: no globals. */
+export function sessionNote(id: string, n: SessionNote): Note {
+  const title = t(n.kind === "bell" ? "note.session.bell" : n.kind === "failed" ? "note.session.failed" : "note.session.ended", { name: n.name });
+  const exit = typeof n.code === "number" && n.code !== 0 ? t("ss.endedExit", { code: n.code }) : "";
+  const body = n.kind === "bell" ? t("note.session.bellBody") : clip(n.error || exit || t(n.kind === "failed" ? "ss.couldNotStart" : "note.session.endedBody"));
+  return { title, body, bot: id, tag: `${id}:${n.kind}` };
+}
+
 const isTauri = () => !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
 let granted: boolean | null = null;
