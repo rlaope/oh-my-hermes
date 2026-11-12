@@ -18,6 +18,16 @@ export interface Bot {
   avatar_rev?: number | null;
 }
 
+/** When a plugin change takes effect for the bot, from Hermes' own answer. live: its next conversation. reload: the
+ *  bot's gateway did not reload; one press asks it again (`plugins.reload`). restart: only a restart of
+ *  `restart_bot` (the host gateway, unless the bot runs its own) loads it. */
+export interface PluginLoad {
+  load?: "live" | "reload" | "restart";
+  restart_bot?: string;
+}
+
+export type RestartResult = { outcome: "ok" } | { outcome: "refused"; lines: string[] } | { outcome: "failed"; line: string };
+
 /** What a bot has done, for its page: sessions per place (slack, discord, cron…), skills, routines. */
 export interface BotInfo {
   places: Record<string, number>;
@@ -275,10 +285,19 @@ export interface OpMap {
   "plugins.inspect": { params: { bot: string; catalog_name: string }; result: InspectResult };
   "plugins.install": {
     params: { bot: string; catalog_name: string; inspected_sha: string };
-    result: { name: string; enabled: boolean; restart_required: boolean; warnings: string[]; missing_env: string[] };
+    result: { name: string; enabled: boolean; restart_required: boolean; warnings: string[]; missing_env: string[] } & PluginLoad;
   };
-  "plugins.toggle": { params: { bot: string; key: string; enable: boolean }; result: { name: string; restart_required: boolean } };
-  "plugins.update": { params: { bot: string; name: string }; result: { name: string; unchanged: boolean; restart_required: boolean } };
+  "plugins.toggle": { params: { bot: string; key: string; enable: boolean }; result: { name: string; restart_required: boolean } & PluginLoad };
+  "plugins.update": {
+    params: { bot: string; name: string };
+    result: { name: string; unchanged: boolean; restart_required: boolean } & PluginLoad;
+  };
+  /** Hermes' own `reload-plugins` on the bot's gateway: restarts nothing, interrupts nothing. */
+  "plugins.reload": { params: { bot: string; name?: string }; result: { load: "live" | "restart" | "failed"; line?: string; missing?: string[]; restart_bot?: string } };
+  /** Hermes' own `hermes -p <bot> gateway restart` (`--yes` only with `interrupt`, right after a refusal). */
+  "bots.restart": { params: { bot: string; interrupt?: boolean }; result: RestartResult };
+  /** The other bots a restart of `bot` takes along (the default profile's host gateway serves them). */
+  "bots.restart_scope": { params: { bot: string }; result: { others: { name: string; display_name: string }[] } };
   "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   "chat.set_model": {
@@ -569,6 +588,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  /** After `bots.restart` said ok: the bot is attached again (`ok`), or did not come back in time. */
+  | (EventBase & { event: "bot.restarted"; ok: boolean })
   /** omher accounts changed (added, removed, made active); the Accounts views re-read accounts.list. */
   | (EventBase & { event: "accounts.update" })
   | (EventBase & { event: "folder.closed"; reason?: string })

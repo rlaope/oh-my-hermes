@@ -1111,3 +1111,70 @@ button.upd:hover {
   text-align: left;
   text-decoration: underline;
 }
+
+/* ---- restart one bot (restart.ts): plain lines under the row, borderless text actions, Cancel first ---------- */
+.rs-line {
+  margin: 0 8px 6px 52px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--body);
+}
+.rs-t,
+.rs-why {
+  margin: 0;
+}
+.rs-why {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+}
+.rs-work {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.rs-work li {
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+}
+.rs-acts {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+.rs-act {
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  border-radius: var(--r-sm);
+  background: none;
+  border: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+  cursor: pointer;
+}
+.rs-act:hover {
+  text-decoration-color: currentColor;
+}
+.rs-act:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: 1px;
+}
+.rs-wait {
+  font-size: 12px;
+  color: var(--muted);
+}
+.rs-note .rs-line,
+.pl-load .rs-line {
+  margin: 6px 0 0;
+  text-align: left;
+}
+.pl-load {
+  font-size: 12px;
+  color: var(--body);
+}

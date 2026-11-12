@@ -940,6 +940,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       };
     case "elsewhere.update":
     case "bots.update":
+    case "bot.restarted":
     case "accounts.update":
       return state; // the store refetches; nothing to change here
     case "routine.added": {
@@ -1393,6 +1394,12 @@ export interface Actions {
   systemNote(text: string, bot?: string): void;
   /** Every bridge event, for views that keep their own copy (Accounts listens for `accounts.update`). */
   onBridgeEvent(fn: (ev: BridgeEvent) => void): () => void;
+  /** Hermes' own restart of one bot, only on the person's press (`interrupt` only for "Restart anyway"). */
+  restartBot(bot: string, interrupt?: boolean): Promise<OpMap["bots.restart"]["result"]>;
+  /** The other bots that go down with a restart of `bot` (the default profile's host gateway). */
+  restartScope(bot: string): Promise<OpMap["bots.restart_scope"]["result"]["others"]>;
+  /** Hermes' own `reload-plugins` on the bot's gateway (restarts nothing). */
+  reloadPlugins(bot: string, name?: string): Promise<OpMap["plugins.reload"]["result"]>;
 }
 
 export type BridgeLike = Pick<BridgeClient, "connect" | "request" | "onAny" | "onStatus">;
@@ -1567,6 +1574,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
+        // a restarted bot is attached again: its chat re-reads itself, as after a reconnect
+        if (ev.event === "bot.restarted" && ev.ok && state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
       });
       await bridge.connect();
       try {
@@ -1881,6 +1890,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       eventFns.add(fn);
       return () => eventFns.delete(fn);
     },
+    restartBot: (bot, interrupt) => bridge.request("bots.restart", interrupt ? { bot, interrupt: true } : { bot }),
+    restartScope: async (bot) => (await bridge.request("bots.restart_scope", { bot })).others,
+    reloadPlugins: (bot, name) => bridge.request("plugins.reload", name ? { bot, name } : { bot }),
   };
 
   return {

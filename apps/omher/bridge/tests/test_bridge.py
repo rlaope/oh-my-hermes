@@ -3645,6 +3645,7 @@ class RestartArgv(unittest.TestCase):
             (home / "profiles" / "parked" / "gateway.parked").write_text("")
             self.assertEqual([o["name"] for o in ob.restart_takes_along(home, "default")], ["friren", "kami"])
             self.assertEqual(ob.restart_takes_along(home, "kami"), [])
+            self.assertEqual([ob.host_bot_for(home, n) for n in ("kami", "solo", "default")], ["default", "solo", "default"])
 
     def test_plugin_load_follows_hermes_answer(self):
         self.assertEqual(ob.plugin_load({"restart_required": False, "gateway_reloaded": True}), "live")

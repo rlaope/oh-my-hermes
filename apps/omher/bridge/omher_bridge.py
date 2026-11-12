@@ -1591,6 +1591,21 @@ def run_hermes_restart(hermes: str, bot: str, home: Path, interrupt: bool, timeo
     return restart_outcome(r.returncode, r.stdout)
 
 
+def _standalone(profile_dir: Path) -> bool:
+    gw = _load_yaml(profile_dir / "config.yaml").get("gateway")
+    v = gw.get("standalone") if isinstance(gw, dict) else None
+    return v is True or (isinstance(v, str) and v.strip().lower() in ("1", "true", "yes", "on"))
+
+
+def host_bot_for(home: Path, bot: str) -> str:
+    """The bot whose restart restarts the process serving `bot`: the bot itself when it is the default profile or
+    opts out of the host gateway (`gateway.standalone`), else the default profile (the host gateway)."""
+    for b in discover_bots(home):
+        if b["name"] == bot:
+            return bot if b["is_default"] or _standalone(b["path"]) else "default"
+    return "default"
+
+
 def restart_takes_along(home: Path, bot: str) -> list[dict]:
     """The other bots a restart of `bot` also restarts: for the default profile (the host gateway) every named
     profile it serves, i.e. not opted out (`gateway.standalone`) and not parked (`gateway.parked`), the same tests
@@ -1601,9 +1616,7 @@ def restart_takes_along(home: Path, bot: str) -> list[dict]:
     for b in discover_bots(home):
         if b["is_default"] or (b["path"] / "gateway.parked").exists():
             continue
-        gw = _load_yaml(b["path"] / "config.yaml").get("gateway")
-        standalone = gw.get("standalone") if isinstance(gw, dict) else None
-        if standalone is True or (isinstance(standalone, str) and standalone.strip().lower() in ("1", "true", "yes", "on")):
+        if _standalone(b["path"]):
             continue
         out.append({"name": b["name"], "display_name": b["display_name"]})
     return out
@@ -4788,6 +4801,7 @@ class Bridge:
         self._own_plugins.add((bot["name"], installed))
         return {"name": installed, "enabled": bool(res.get("enabled", True)),
                 "restart_required": bool(res.get("restart_required")), "load": plugin_load(res),
+                "restart_bot": host_bot_for(self.home, bot["name"]),
                 "warnings": _strs(res.get("warnings"), 6),
                 "missing_env": _strs(res.get("missing_env"), 12)}
 
@@ -4799,7 +4813,7 @@ class Bridge:
         conn = await self._conn(bot["name"])
         res = await self._plugins(conn, "toggle", key=key, enable=p["enable"])
         return {"name": str(res.get("name") or key), "restart_required": bool(res.get("restart_required")),
-                "load": plugin_load(res) if p["enable"] else "live"}
+                "load": plugin_load(res) if p["enable"] else "live", "restart_bot": host_bot_for(self.home, bot["name"])}
 
     async def op_plugins_update(self, p) -> dict:
         bot = self._bot(p.get("bot"))
@@ -4810,7 +4824,8 @@ class Bridge:
             raise BridgeError("needs_review", f"This update needs a closer look. Ask {bot['display_name']} in chat to update {name}.")
         return {"name": str(res.get("name") or name), "unchanged": bool(res.get("unchanged")),
                 "restart_required": bool(res.get("restart_required")),
-                "load": "live" if res.get("unchanged") else plugin_load(res)}
+                "load": "live" if res.get("unchanged") else plugin_load(res),
+                "restart_bot": host_bot_for(self.home, bot["name"])}
 
     async def op_plugins_reload(self, p) -> dict:
         """Ask the bot's running gateway to load newly enabled plugins now (Hermes' `reload-plugins`): handlers go
@@ -4832,7 +4847,8 @@ class Bridge:
                 act = entry
                 break
         missing = (act or {}).get("missing_dependencies") or []
-        return {"load": "restart" if missing else "live", "missing": _strs(missing, 12)}
+        return {"load": "restart" if missing else "live", "missing": _strs(missing, 12),
+                "restart_bot": host_bot_for(self.home, bot["name"])}
 
     async def op_plugins_remove(self, p) -> dict:
         bot = self._bot(p.get("bot"))

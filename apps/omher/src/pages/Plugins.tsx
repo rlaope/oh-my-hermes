@@ -8,6 +8,7 @@ import { t, type Key } from "../i18n";
 import { Avatar, Popover, SearchIcon } from "../ui";
 import { AskBox, BotChip, errorLine, PageHead, Toggle } from "./kit";
 import { CategoryIcon, DotsIcon } from "./icons";
+import { PluginLoad } from "./PluginLoad";
 
 type Tab = "installed" | "browse" | "builtin";
 const CATEGORIES = ["automation", "tools", "memory", "voice", "web", "desktop", "models", "platform", "general"] as const;
@@ -455,7 +456,7 @@ type SheetState =
   | { step: "checking" }
   | { step: "ready"; ins: InspectResult }
   | { step: "installing"; ins: InspectResult }
-  | { step: "done"; line: string; more: string }
+  | { step: "done"; line: string; load: "live" | "reload" | "restart"; restartBot?: string }
   | { step: "refused"; line: string; recheck: boolean }
   | { step: "failed"; line: string };
 
@@ -489,7 +490,9 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
       setSt({
         step: "done",
         line: r.enabled ? t("plug.sheet.doneOn", { name: label }) : t("plug.sheet.doneOff", { name: label, env }),
-        more: r.restart_required ? t("plug.sheet.restart", { bot: bot.display_name }) : t("plug.sheet.live", { bot: bot.display_name }),
+        // when it takes effect, from Hermes' own answer; an older bridge without `load` falls back to restart_required
+        load: !r.enabled ? "live" : (r.load ?? (r.restart_required ? "reload" : "live")),
+        restartBot: r.restart_bot,
       });
       onInstalled();
     } catch (e) {
@@ -522,7 +525,7 @@ function InstallSheet({ entry, bot, onClose, onInstalled }: { entry: CatalogEntr
         ) : st.step === "done" ? (
           <div className="pl-sheet-res" data-testid="sheet-done">
             <b>{st.line}</b>
-            <span>{st.more}</span>
+            <PluginLoad bot={bot} plugin={entry.name} load={st.load} restartBot={st.restartBot} testId="sheet-load" />
           </div>
         ) : st.step === "refused" || st.step === "failed" ? (
           <p className="pg-err" role="alert" data-testid="sheet-error">
