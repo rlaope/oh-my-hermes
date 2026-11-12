@@ -1,0 +1,60 @@
+{
+  "files": {
+    "LICENSE.upstream": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "63c08b48f0c8ada3b1b82329d94c9583089ad5b9d511418ac084de0f48a3eb64",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/frontend_toolkit/LICENSE.upstream",
+      "source_sha256": "63c08b48f0c8ada3b1b82329d94c9583089ad5b9d511418ac084de0f48a3eb64",
+      "upstream": []
+    },
+    "README.md": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "937fbcf3314959b62041463d8b2971aaa3769177a39e0aaf876803a7b06f7518",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/frontend_toolkit/README.md",
+      "source_sha256": "937fbcf3314959b62041463d8b2971aaa3769177a39e0aaf876803a7b06f7518",
+      "upstream": []
+    },
+    "examples/phone-clean.html": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "97540f64b7b35faeddf96e3aaa2c61e761164fd8e1eba9e91da3c83f3a3e8465",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/frontend_toolkit/examples/phone-clean.html",
+      "source_sha256": "97540f64b7b35faeddf96e3aaa2c61e761164fd8e1eba9e91da3c83f3a3e8465",
+      "upstream": []
+    },
+    "examples/phone-overflow.html": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "be1d24b1f07e0e9c06cb5599f0cc401f83292182c3c7fef78664b81a88920903",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/frontend_toolkit/examples/phone-overflow.html",
+      "source_sha256": "be1d24b1f07e0e9c06cb5599f0cc401f83292182c3c7fef78664b81a88920903",
+      "upstream": []
+    },
+    "scripts/phone_check.py": {
+      "classification": "original_omh",
+      "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
+      "license": "MIT",
+      "local_sha256": "ad1a642d0d45881c4ef90d08ca7ac34ed5d2e54a131089bd46337cd4240cd1cd",
+      "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
+      "source_path": "src/skills/frontend_toolkit/scripts/phone_check.py",
+      "source_sha256": "ad1a642d0d45881c4ef90d08ca7ac34ed5d2e54a131089bd46337cd4240cd1cd",
+      "upstream": []
+    }
+  },
+  "license": "MIT",
+  "repository": "https://github.com/rlaope/oh-my-hermes",
+  "revision": null,
+  "revision_note": "Original uncommitted resources identified by content hashes; not attributed to an upstream revision.",
+  "schema": "omh_frontend_toolkit_provenance/v1",
+  "self_hash": "excluded; outer distribution inventories hash this manifest"
+}

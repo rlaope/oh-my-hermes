@@ -197,6 +197,49 @@ Korean, Japanese, and Chinese copy takes the same checks in its own
 register; translate the meaning of an action name, and keep it identical
 across the flow in every locale.
 
+## Screen copy: what the page says about itself
+
+Interface copy covers the controls. This section covers the sentences, numbers,
+and labels a page uses to describe itself; review them against the captured
+screen, not the source.
+
+Review prompts - a stated reason keeps each one:
+
+- **A hero sentence that introduces the product** - does it tell a visitor
+  something they could not infer from the name and the first image, or does it
+  restate them?
+- **A one-line description under every section title** - the section-level
+  version of the eyebrow, title, and description prompt above. Which sections
+  need it to be understood?
+- **A contrast headline of the "not X but Y" shape** - is X something a visitor
+  believed before arriving? A denial of a position nobody held spends the
+  headline on nothing.
+- **A paragraph narrating how a decision was reached** - does the visitor need
+  the history, or only the result? The history belongs in a changelog or a case
+  study.
+
+Reject on sight:
+
+- 01 / 02 / 03 numbering on content that has no order. Numbers promise a
+  sequence; use them only when the reader must take the items in that order.
+- A button label that does not say what happens when it is pressed.
+- An outcome number with no source.
+
+The test for any number on the page is: "what is this number trying to prove?"
+
+- A comparison measured on the same basis stays, with the basis visible.
+- A configuration or limit value that explains behaviour stays, because it
+  tells the reader what to expect.
+- A boast about improvement goes, or gets its source beside it.
+
+When there is no real content, do not invent sentences, roles, or experience.
+Leave the title and the image slot in place and ask what goes there. An invented
+testimonial or team bio is a claim about real people that nobody made.
+
+After the build, read every string on the captured screen. Components fill in
+numbers and copy on their own, and the placeholder a component ships with is
+easy to leave in.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
