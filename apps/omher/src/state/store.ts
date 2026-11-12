@@ -173,6 +173,9 @@ export type ApprovalItem = {
   cwd?: string;
   /** Asked inside a subagent: which one. */
   subagent?: AskSubagent;
+  /** Asked while no turn ran in a coding-agent session (a background subagent after the turn's end): no turn's end
+   *  closes it. */
+  outside?: boolean;
   resolved?: ApprovalChoice;
   expired?: AskExpiry;
 };
@@ -188,6 +191,7 @@ export type ClarifyItem = {
   /** An interview: every question of the ask (2-5), answered in one card. */
   questions?: ClarifyQuestion[];
   subagent?: AskSubagent;
+  outside?: boolean;
   answer?: string;
   /** Interview answers per question id (null = skipped). */
   answers?: ClarifyAnswers;
@@ -894,6 +898,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           choices: ev.choices,
           ...(ev.cwd ? { cwd: ev.cwd } : {}),
           ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
+          ...(c.turn || !bot.startsWith("agent:") ? {} : { outside: true }),
         };
         return withItems(base, [...base.items, item]);
       });
@@ -912,6 +917,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           ...(ev.multi_select ? { multi: true } : {}),
           ...(qs.length > 1 ? { questions: qs } : {}),
           ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
+          ...(c.turn || !bot.startsWith("agent:") ? {} : { outside: true }),
         };
         return withItems(base, [...base.items, item]);
       });
@@ -1230,14 +1236,23 @@ export interface Ask {
   ts: number;
 }
 
-/** False once the ask is answered, expired, or the turn that raised it is over (it went unanswered). An ask
- *  raised outside any known turn stays open until answered or expired. */
+/** False once the ask is answered, expired, or what raised it is gone: the turn it was asked in is over (it went
+ *  unanswered), or the subagent that asked has ended. An ask of a subagent follows that subagent, not the turn: a
+ *  background one runs on after the turn and still waits for the answer (Claude Code asks after its `result`, and
+ *  keeps waiting on an ask its turn left open). An ask raised while no turn ran stays open until answered, expired
+ *  (the agent withdrew it, or its session ended) or its subagent ends. */
 export function askOpen(items: ChatItem[], it: ApprovalItem | ClarifyItem): boolean {
   if (it.expired) return false;
   if (it.kind === "approval" ? !!it.resolved : it.answer !== undefined) return false;
+  let sub: SubagentRow | undefined;
   let owner: number | undefined;
-  for (const i of items) if (i.kind === "activity" && i.turn.startedAt <= it.ts * 1000 + 1) owner = i.turn.endedAt ?? -1;
-  return owner === undefined || owner === -1;
+  for (const i of items) {
+    if (i.kind !== "activity") continue;
+    if (i.turn.startedAt <= it.ts * 1000 + 1) owner = i.turn.endedAt ?? -1;
+    if (it.subagent?.id) for (const f of i.turn.fanouts ?? []) sub = f.subs.find((s) => s.id === it.subagent!.id) ?? sub;
+  }
+  if (sub) return !subagentEnded(sub);
+  return !!it.outside || owner === undefined || owner === -1;
 }
 
 let asksCache: { chats: AppState["chats"]; out: Ask[] } | null = null;

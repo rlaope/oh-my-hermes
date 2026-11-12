@@ -458,6 +458,8 @@ class MockChat {
   private waiting: string | null = null;
   /** the open approval is a subagent's (/subask) */
   private subWaiting = false;
+  /** the open approval is a background subagent's, asked after the turn ended (/lateask) */
+  private lateAsk = false;
   /** "/subagents hold": the second subagent is still out */
   private holding = false;
   private model: string;
@@ -730,6 +732,29 @@ class MockChat {
         });
         return;
       }
+      if (text.startsWith("/lateask")) {
+        // claude-13-late-ask.jsonl (Claude Code 2.1.322): the subagent runs in the background, the turn ends, and only
+        // then the subagent asks; the answer reaches Claude Code with no turn running, the subagent finishes, and
+        // Claude Code's own turn tells of it
+        const rid = `req-${++this.seq}`;
+        const sub = (extra: Record<string, unknown>) =>
+          this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "running", ...extra });
+        this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-4", name: "delegate_task", detail: "Write gamma to c.txt" }));
+        this.at(50, () => sub({}));
+        this.at(60, () => this.emit({ event: "session.info", background: 1 }));
+        this.at(80, () => this.emit({ event: "tool.end", tool_id: "sa-4", name: "", ok: true, ms: 0 }));
+        this.say("started", 100);
+        this.at(500, () => {
+          this.end("done"); // clears the pending timers: the late ask is scheduled after it
+          this.at(300, () => sub({ tool: "terminal", step: "echo gamma > c.txt" }));
+          this.at(400, () => {
+            this.waiting = rid;
+            this.lateAsk = true;
+            this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "echo gamma > c.txt", cwd: this.cwd, choices: ["deny", "once", "session"], subagent: { id: "sa-4", name: "Write gamma to c.txt" } });
+          });
+        });
+        return;
+      }
       if (text.startsWith("/retry")) {
         // omo-12-retry.jsonl as the Pi adapter emits it: OmO retries the failed run once by itself (the line says
         // which try), the retry fails too, and the turn ends once with OmO's own reason
@@ -813,7 +838,19 @@ class MockChat {
     } else if (i.kind === "approve") {
       if (i.request_id !== this.waiting) throw new Error("no such request");
       this.waiting = null;
-      if (i.request_id.startsWith("req-") && this.subWaiting) {
+      if (this.lateAsk) {
+        // no turn runs: the subagent goes on, ends, the background count drops, and Claude Code's own turn says so
+        this.lateAsk = false;
+        const done = i.choice !== "deny";
+        this.at(300, () => this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "done", summary: done ? "WROTE" : "The command was not allowed.", seconds: 7.4 }));
+        this.at(320, () => this.emit({ event: "session.info", background: 0 }));
+        this.at(400, () => {
+          this.turn = true;
+          this.emit({ event: "turn.start" });
+          this.say(done ? "The subagent finished and reported WROTE." : "The subagent could not write c.txt.", 20);
+          this.at(400, () => this.end("done"));
+        });
+      } else if (i.request_id.startsWith("req-") && this.subWaiting) {
         // the subagent's command ran (or was refused); the subagent hands back, then the agent answers
         this.subWaiting = false;
         const done = i.choice !== "deny";

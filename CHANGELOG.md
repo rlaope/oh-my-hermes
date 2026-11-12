@@ -168,6 +168,18 @@ All notable changes will be documented here.
   protocol messages on one line, no longer gets dropped. On Windows, closing a chat also
   ends the `node.exe` behind the agent's `.cmd` shim.
 
+- **A subagent's approval that comes after its turn ended reaches you in omher.**
+  When Claude Code ran a subagent in the background, the turn ended first and
+  the subagent asked afterwards (or asked during the turn and the turn ended
+  with the ask open). omher showed that ask as "Not answered" with no buttons,
+  left it out of Needs you and kept the header on Ready, while the subagent
+  waited for an answer nobody could give. Now it is a live card with Deny,
+  Allow once and Allow for session, the session reads "Needs you" in its
+  header and its sidebar row, and the answer reaches Claude Code with no turn
+  running; the subagent then finishes. The ask reads "Not answered" once its
+  subagent ends, Claude Code withdraws it (Stop), or the session's program
+  ends. A Codex subagent's approval follows the same rule.
+
 - **Claude Code in omher reads the files you attach without asking.** A
   file attached to a Claude Code session is saved in that session's own
   folder under `~/.omher/session-files`, outside the work folder, so every
