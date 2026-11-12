@@ -153,8 +153,10 @@ class ToolRowTests(unittest.TestCase):
         tool = ToolRow("t", "terminal", "seq 5", TOOL_OK, duration_s=0.1, output=("1", "2", "3", "4", "5"))
         self.assertEqual(
             lines_text(rows_of(tool)),
-            ["┃ ● terminal(seq 5)  0.1s", "┃   ⎿  1", "┃      2", "┃      3", "┃      … +2 lines · ctrl+o shows all"],
-        )
+            ["┃ ● terminal(seq 5)  0.1s", "┃   ⎿  … +2 lines · ctrl+o shows all", "┃      3", "┃      4", "┃      5"],
+        )  # a successful shell run shows its end, the count above it
+        read = ToolRow("t", "read_file", "a.py", TOOL_OK, duration_s=0.1, output=("1", "2", "3", "4", "5"))
+        self.assertEqual(lines_text(rows_of(read))[1:], ["┃   ⎿  1", "┃      2", "┃      3", "┃      … +2 lines · ctrl+o shows all"])
         failed = ToolRow("t", "terminal", "pytest", TOOL_ERROR, duration_s=2.0, output=("a", "b", "c", "1 failed"))
         self.assertEqual(lines_text(rows_of(failed))[1:], ["┃   ⎿  … +1 line · ctrl+o shows all", "┃      b",
                                                            "┃      c", "┃      1 failed"])
