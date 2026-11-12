@@ -1,7 +1,7 @@
 // The one activity line per turn (design rule 6). Tool/skill calls never get their own timeline rows:
 // while the turn runs, this line's text slides up in place; when it ends it collapses to
 // "Worked for 2m 41s · 6 steps" and a click opens one detail row per step.
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import type { SlotProps } from "../../features";
 import { activityText, getStore, liveLabel, subagentEnded, THINKING, WORKING, type Step, type Turn } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
@@ -9,6 +9,7 @@ import { elapsed } from "../../app/time";
 import { useClock } from "../../app/clock";
 import { t, t as tr, tx, type Key } from "../../i18n";
 import { FanoutCard, rowMs } from "./Subagents";
+import { DiffView, PlanList, ThinkingText } from "./Work";
 import "./activity.css";
 
 /** A fan-out still counts as running this long after its last event, though its turn ended (background). */
@@ -118,15 +119,32 @@ function DagRows({ step, live }: { step: Step; live: boolean }) {
 }
 
 function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }) {
+  // a file edit that carries its change opens to it (closed by default: a long change never moves the chat)
+  const [diffOpen, setDiffOpen] = useState(false);
   if (step.name === "delegate_task" && step.dag?.length) return <DagRows step={step} live={live} />;
   const failed = step.ok === false;
   const running = step.endedAt === undefined;
   const ms = (step.endedAt ?? now) - step.startedAt;
-  return (
+  const diff = step.diff?.length ? step.diff : null;
+  const row = (
     <div
-      className={`act-step${failed ? " fail" : ""}`}
+      className={`act-step${failed ? " fail" : ""}${diff ? " has-diff" : ""}${diffOpen ? " open" : ""}`}
       data-testid="activity-step"
       data-ok={failed ? "false" : running ? "running" : "true"}
+      {...(diff
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-expanded": diffOpen,
+            onClick: () => setDiffOpen((o) => !o),
+            onKeyDown: (e: KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setDiffOpen((o) => !o);
+              }
+            },
+          }
+        : {})}
     >
       <span className="k">{stepVerb(step.name)}</span>
       {step.detail &&
@@ -140,7 +158,19 @@ function StepRow({ step, live, now }: { step: Step; live: boolean; now: number }
           </span>
         ))}
       <span className="s">{running && live ? "…" : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}</span>
+      {diff && (
+        <span className="act-chev" aria-hidden>
+          <ChevronRight size={9} />
+        </span>
+      )}
     </div>
+  );
+  if (!diff) return row;
+  return (
+    <>
+      {row}
+      {diffOpen && <DiffView files={diff} />}
+    </>
   );
 }
 
@@ -208,6 +238,7 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
           </span>
         )}
       </button>
+      {t.thinking && <ThinkingText text={t.thinking} />}
       {t.fanouts?.map((f) => (
         <FanoutCard key={f.key} fan={f} live={live || now - f.updatedAt < FANOUT_QUIET_MS} bot={bot} />
       ))}
@@ -218,6 +249,8 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
           ))}
         </div>
       )}
+      {/* the agent's todo list: under the step rows, so a click on the line opens the steps right below it */}
+      {t.plan && t.plan.length > 0 && <PlanList items={t.plan} />}
     </div>
   );
 }

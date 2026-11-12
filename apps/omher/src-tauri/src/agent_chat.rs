@@ -53,6 +53,9 @@ pub enum Input {
     Mode { mode: String },
     /// Reasoning effort, one of the levels the agent itself reported (`session.efforts`).
     Effort { effort: String },
+    /// Take back the person's last message and what came after it, through the agent's own rewind (Claude Code
+    /// `rewind_conversation`, Codex `thread/revert`); the UI then offers its text again. Files stay as they are.
+    Rewind,
 }
 
 /// The permission modes a person can pick for agent `id`: Claude Code's own `default` (ask), `plan` and
@@ -472,6 +475,139 @@ fn edit_detail(files: &[(String, u64, u64)]) -> String {
     clip(&parts.join(", "), 160)
 }
 
+/// How many lines of one file's change the diff view gets, and how long one line may be. The rest is counted
+/// (`more`), never sent.
+const DIFF_LINES: usize = 400;
+const DIFF_LINE_CHARS: usize = 2000;
+
+/// The text's lines (a trailing newline ends the last line, it does not start an empty one).
+fn text_lines(t: &str) -> Vec<&str> {
+    if t.is_empty() {
+        return vec![];
+    }
+    t.strip_suffix('\n').unwrap_or(t).split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect()
+}
+
+/// One file's change for the diff view (`tool.diff`), in one agent-neutral shape: `lines` start with `+`, `-`,
+/// ` ` (context) or `@@` (a hunk), at most [`DIFF_LINES`] of them; `added` / `removed` count every line.
+pub(crate) fn diff_file(path: &str, kind: &str, lines: Vec<String>) -> Value {
+    let added = lines.iter().filter(|l| l.starts_with('+')).count();
+    let removed = lines.iter().filter(|l| l.starts_with('-')).count();
+    let more = lines.len().saturating_sub(DIFF_LINES);
+    let kept: Vec<String> = lines.into_iter().take(DIFF_LINES).map(|l| if l.chars().count() > DIFF_LINE_CHARS { l.chars().take(DIFF_LINE_CHARS).collect() } else { l }).collect();
+    let mut f = json!({"path": path, "kind": kind, "lines": kept, "added": added, "removed": removed});
+    if more > 0 {
+        f["more"] = json!(more);
+    }
+    f
+}
+
+/// `prefix` before every line of `t`.
+fn marked(prefix: char, t: &str) -> Vec<String> {
+    text_lines(t).into_iter().map(|l| format!("{prefix}{l}")).collect()
+}
+
+/// The change a file tool call asks for, from its input alone: Claude Code `Write {file_path, content}` /
+/// `Edit {file_path, old_string, new_string}` / `MultiEdit {file_path, edits}`, pi `write {path, content}` /
+/// `edit {path, edits:[{oldText,newText}]}`. `None` for anything else (oh-my-pi's hashline edit has no plain text).
+pub(crate) fn input_diff(name: &str, input: &Value, cwd: &str) -> Option<Value> {
+    if tool_kind(name) != "patch" {
+        return None;
+    }
+    let path = ["file_path", "path", "notebook_path"].iter().map(|k| s(input, k)).find(|p| !p.is_empty())?;
+    let mut lines = Vec::new();
+    let mut kind = "update";
+    if let Some(c) = input.get("content").and_then(Value::as_str) {
+        kind = "add";
+        lines.extend(marked('+', c));
+    }
+    let pair = |old: &str, new: &str, lines: &mut Vec<String>| {
+        if !lines.is_empty() {
+            lines.push("@@".into());
+        }
+        lines.extend(marked('-', old));
+        lines.extend(marked('+', new));
+    };
+    if input.get("old_string").is_some() || input.get("new_string").is_some() {
+        pair(&s(input, "old_string"), &s(input, "new_string"), &mut lines);
+    }
+    for e in input.get("edits").and_then(Value::as_array).into_iter().flatten() {
+        let old = if e.get("old_string").is_some() { s(e, "old_string") } else { s(e, "oldText") };
+        let new = if e.get("new_string").is_some() { s(e, "new_string") } else { s(e, "newText") };
+        pair(&old, &new, &mut lines);
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    Some(diff_file(&rel(&path, cwd), kind, lines))
+}
+
+/// The change Claude Code made, from its tool result (`structuredPatch` hunks with context, or a new file's
+/// content): what the diff view shows once the edit ran.
+fn claude_result_diff(tur: &Value, cwd: &str) -> Option<Value> {
+    let path = s(tur, "filePath");
+    if path.is_empty() {
+        return None;
+    }
+    let hunks = tur.get("structuredPatch").and_then(Value::as_array).filter(|h| !h.is_empty());
+    if let Some(hunks) = hunks {
+        let mut lines = Vec::new();
+        for h in hunks {
+            let n = |k: &str| h.get(k).and_then(Value::as_u64).unwrap_or(0);
+            lines.push(format!("@@ -{},{} +{},{} @@", n("oldStart"), n("oldLines"), n("newStart"), n("newLines")));
+            lines.extend(h.get("lines").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(String::from));
+        }
+        return Some(diff_file(&rel(&path, cwd), if s(tur, "type") == "create" { "add" } else { "update" }, lines));
+    }
+    if s(tur, "type") == "create" {
+        return Some(diff_file(&rel(&path, cwd), "add", marked('+', &s(tur, "content"))));
+    }
+    None
+}
+
+/// The files of a Codex `fileChange` item: an added file's diff is its content, a deleted one's its old content,
+/// an update's a unified diff (its `---` / `+++` headers dropped).
+fn codex_diff(item: &Value, cwd: &str) -> Vec<Value> {
+    item.get("changes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| !s(c, "path").is_empty())
+        .map(|c| {
+            let diff = s(c, "diff");
+            let kind = c.get("kind").map(|k| s(k, "type")).unwrap_or_default();
+            let (kind, lines) = match kind.as_str() {
+                "add" => ("add", marked('+', &diff)),
+                "delete" => ("delete", marked('-', &diff)),
+                _ => (
+                    "update",
+                    text_lines(&diff)
+                        .into_iter()
+                        .filter(|l| !(l.starts_with("+++") || l.starts_with("---") || l.starts_with("diff --git") || l.starts_with("index ")))
+                        .map(String::from)
+                        .collect(),
+                ),
+            };
+            diff_file(&rel(&s(c, "path"), cwd), kind, lines)
+        })
+        .collect()
+}
+
+/// A `plan` event: the agent's own todo list as it stands now, `status` pending | in_progress | completed.
+pub(crate) fn plan_event(items: &[(String, String)]) -> Event {
+    let items: Vec<Value> = items.iter().filter(|(t, _)| !t.trim().is_empty()).map(|(t, st)| json!({"text": clip(t, 200), "status": st})).collect();
+    ev("plan", json!({"items": items}))
+}
+
+/// A `thinking` event, with the text the agent sent (none when it sends only a marker).
+pub(crate) fn thinking_event(text: &str) -> Event {
+    if text.is_empty() {
+        ev("thinking", json!({}))
+    } else {
+        ev("thinking", json!({"text": text}))
+    }
+}
+
 /// The command a shell wrapper runs: `/bin/zsh -lc 'mkdir -p d1'` -> `mkdir -p d1` (Codex reports the
 /// wrapped form). Anything else comes back as it is.
 fn unwrap_shell(cmd: &str) -> String {
@@ -763,7 +899,16 @@ pub struct Claude {
     /// subagents that run in the background: their task notification ends them (a foreground one ends with its
     /// tool result, which carries its own words and model)
     bg_subs: std::collections::HashSet<String>,
+    /// the uuids of the person's messages Claude Code echoed back in this process, oldest first: what a rewind
+    /// takes back (the last one)
+    sent_uuids: Vec<String>,
+    /// its own todo list (TaskCreate / TaskUpdate, or TodoWrite): (task id or the call's id until it has one, text,
+    /// status)
+    tasks: Vec<(String, String, String)>,
 }
+
+/// Claude Code's todo tools: shown as the turn's checklist (`plan`), never as steps.
+const CLAUDE_TODO_TOOLS: [&str; 5] = ["TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"];
 
 impl Claude {
     pub fn new(cwd: &str) -> Claude {
@@ -822,6 +967,55 @@ impl Claude {
     }
     fn label(&self, model: &str) -> String {
         self.labels.get(model).cloned().unwrap_or_else(|| model.to_string())
+    }
+    fn plan(&self) -> Event {
+        let items: Vec<(String, String)> = self.tasks.iter().map(|(_, t, st)| (t.clone(), st.clone())).collect();
+        plan_event(&items)
+    }
+    /// A todo tool call: the list as it will stand (TodoWrite names it whole; TaskCreate adds one, TaskUpdate
+    /// changes one). Whether the list changed.
+    fn todo_call(&mut self, name: &str, id: &str, input: &Value) -> bool {
+        match name {
+            "TodoWrite" => {
+                self.tasks = input
+                    .get("todos")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                    .map(|(i, t)| (format!("todo-{i}"), s(t, "content"), s(t, "status")))
+                    .filter(|t| !t.1.trim().is_empty())
+                    .collect();
+                true
+            }
+            "TaskCreate" => {
+                let text = s(input, "subject");
+                if text.trim().is_empty() {
+                    return false;
+                }
+                self.tasks.push((id.to_string(), text, "pending".into()));
+                true
+            }
+            "TaskUpdate" => {
+                let key = s(input, "taskId");
+                let Some(at) = self.tasks.iter().position(|t| t.0 == key) else { return false };
+                let status = s(input, "status");
+                if status == "deleted" {
+                    self.tasks.remove(at);
+                    return true;
+                }
+                let subject = s(input, "subject");
+                let t = &mut self.tasks[at];
+                if !status.is_empty() {
+                    t.2 = status;
+                }
+                if !subject.trim().is_empty() {
+                    t.1 = subject;
+                }
+                true
+            }
+            _ => false,
+        }
     }
     fn begin(&mut self, step: &mut Step, auto: bool) {
         if !self.turn {
@@ -1045,6 +1239,17 @@ impl Adapter for Claude {
                         let what = if id.starts_with("omher-mode-") { "Mode" } else { "Effort" };
                         st.emit(ev("session.error", json!({"message": format!("{what} not changed: {}", s(r, "error"))})));
                     }
+                } else if id.starts_with("omher-rewind-") {
+                    // the conversation is back to before the person's last message: the chat takes that message
+                    // back and offers its text again
+                    if s(r, "subtype") == "success" && body.get("rewound").and_then(Value::as_bool) == Some(true) {
+                        self.sent_uuids.pop();
+                        st.emit(ev("rewound", json!({"text": s(body, "prefillText")})));
+                    } else {
+                        let why = if s(r, "error").is_empty() { s(body, "error") } else { s(r, "error") };
+                        st.emit(ev("session.error", json!({"message": clip(&format!("Not taken back: {}", if why.is_empty() { "Claude Code refused" } else { &why }), 200)})));
+                    }
+                    st.emit(ev("session.info", json!({"rewind": !self.sent_uuids.is_empty()})));
                 } else if id.starts_with("omher-model-") {
                     if s(r, "subtype") == "success" {
                         let m = s(body, "model");
@@ -1140,7 +1345,7 @@ impl Adapter for Claude {
                         }
                         "thinking_delta" => {
                             self.begin(&mut st, true);
-                            st.emit(ev("thinking", json!({})));
+                            st.emit(thinking_event(&s(d, "thinking")));
                         }
                         _ => {}
                     }
@@ -1171,7 +1376,18 @@ impl Adapter for Claude {
                                 continue; // it shows as the question card
                             }
                             self.begin(&mut st, true);
+                            // its todo list: one checklist that changes in place, not a step per update
+                            if CLAUDE_TODO_TOOLS.contains(&name.as_str()) {
+                                if self.todo_call(&name, &s(b, "id"), &input) {
+                                    st.emit(self.plan());
+                                }
+                                continue;
+                            }
                             st.emit(ev("tool.start", json!({"tool_id": s(b, "id"), "name": tool_kind(&name), "detail": call_detail(&name, &input, &self.cwd)})));
+                            // a file edit: the change it asks for, until its result says what it did
+                            if let Some(f) = input_diff(&name, &input, &self.cwd) {
+                                st.emit(ev("tool.diff", json!({"tool_id": s(b, "id"), "files": [f]})));
+                            }
                             // a subagent: one Agent/Task call; the calls of one message start together (one fan-out)
                             if tool_kind(&name) == "delegate_task" {
                                 let id = s(b, "id");
@@ -1196,6 +1412,13 @@ impl Adapter for Claude {
             }
             // Claude Code took a message the person sent (`--replay-user-messages`): a queued one is not waiting now
             "user" if !sub && v.get("isReplay").and_then(Value::as_bool) == Some(true) => {
+                let uuid = s(&v, "uuid");
+                if !uuid.is_empty() {
+                    self.sent_uuids.push(uuid);
+                    if self.sent_uuids.len() == 1 {
+                        st.emit(ev("session.info", json!({"rewind": true})));
+                    }
+                }
                 self.waiting.take(&mut st);
                 // a message queued behind a stopped turn starts its own
                 self.begin(&mut st, false);
@@ -1206,6 +1429,20 @@ impl Adapter for Claude {
                     if s(b, "type") == "tool_result" {
                         let ok = !b.get("is_error").and_then(Value::as_bool).unwrap_or(false);
                         let tid = s(b, "tool_use_id");
+                        // a task Claude Code created: from now on its own id names it (TaskUpdate's taskId)
+                        let task_id = tur.get("task").map(|t| s(t, "id")).unwrap_or_default();
+                        if let Some(t) = self.tasks.iter_mut().find(|t| t.0 == tid) {
+                            if !task_id.is_empty() {
+                                t.0 = task_id;
+                            }
+                            continue;
+                        }
+                        // the change the edit made, with the lines around it
+                        if ok {
+                            if let Some(f) = claude_result_diff(&tur, &self.cwd) {
+                                st.emit(ev("tool.diff", json!({"tool_id": tid, "files": [f]})));
+                            }
+                        }
                         st.emit(ev("tool.end", json!({"tool_id": tid, "name": "", "ok": ok, "ms": 0})));
                         // a subagent's hand-back: its own words (`tool_use_result.content`), not the frame around them;
                         // a background one only launched here and ends with its task notification
@@ -1328,6 +1565,14 @@ impl Adapter for Claude {
                 st.out(json!({"type": "control_response", "response": {"subtype": "success", "request_id": request_id, "response": response}}));
             }
             Input::Model { model } => self.control(&mut st, "model", json!({"subtype": "set_model", "model": model})),
+            // Claude Code's own rewind: the conversation goes back to before the last message it took
+            Input::Rewind => {
+                if self.turn {
+                    return Err("wait until the turn ends".into());
+                }
+                let Some(uuid) = self.sent_uuids.last().cloned() else { return Err("nothing to take back".into()) };
+                self.control(&mut st, "rewind", json!({"subtype": "rewind_conversation", "target_message_uuid": uuid}));
+            }
             // Claude Code's own switch; it answers with a status line carrying the new mode
             Input::Mode { mode } => {
                 if !modes_for("claude").contains(&mode.as_str()) {
@@ -1392,6 +1637,10 @@ pub struct Codex {
     /// Codex's sub-agents by their own thread id. The app-server streams their threads on this connection; their
     /// events become `subagent` events and never touch the person's turn, its answer or its Stop.
     helpers: Subagents,
+    /// the person's turns Codex named in this process, oldest first: a rewind reverts the thread to before the last
+    turns: Vec<String>,
+    /// reasoning items that streamed a summary: their raw text is not shown as well
+    summarized: std::collections::HashSet<String>,
 }
 
 const CODEX_SIGNED_OUT: &str = "Codex is not signed in. Sign in from Settings › Accounts (or run `codex login`), then Restart.";
@@ -1420,6 +1669,8 @@ impl Codex {
             skills: HashMap::new(),
             waiting: Waiting::default(),
             helpers: Subagents::new("codex"),
+            turns: Vec::new(),
+            summarized: Default::default(),
         }
     }
     fn call(&mut self, st: &mut Step, method: &'static str, params: Value) {
@@ -1466,6 +1717,12 @@ impl Codex {
     /// Codex named the running turn: a Stop pressed before that interrupts it now.
     fn named(&mut self, st: &mut Step, turn: &str) {
         self.turn_id = Some(turn.into());
+        if self.turns.last().map(String::as_str) != Some(turn) {
+            self.turns.push(turn.into());
+            if self.turns.len() == 1 {
+                st.emit(ev("session.info", json!({"rewind": true})));
+            }
+        }
         if std::mem::take(&mut self.stop_asked) && self.turn {
             let thread = self.thread.clone().unwrap_or_default();
             self.call(st, "turn/interrupt", json!({"threadId": thread, "turnId": turn}));
@@ -1658,6 +1915,8 @@ impl Adapter for Codex {
                     st.emit(ev("session.note", json!({"kind": "new_conversation", "text": clip(&format!("The earlier Codex conversation was not found ({msg}); a new one started."), 240)})));
                     let cwd = self.cwd.clone();
                     self.call(&mut st, "thread/start", json!({"cwd": cwd}));
+                } else if what == "thread/revert" {
+                    st.emit(ev("session.error", json!({"message": clip(&format!("Not taken back: {msg}"), 200)})));
                 } else if what == "turn/start" {
                     self.end(&mut st, "error", Some(clip(&msg, 200)));
                 } else if what == "turn/interrupt" && self.turn {
@@ -1727,6 +1986,12 @@ impl Adapter for Codex {
                     if let Some(t) = r["turn"].get("id").and_then(Value::as_str) {
                         self.named(&mut st, t);
                     }
+                }
+                // the thread is back to before the person's last turn (its files stay as they are)
+                "thread/revert" => {
+                    self.turns.pop();
+                    st.emit(ev("rewound", json!({})));
+                    st.emit(ev("session.info", json!({"rewind": !self.turns.is_empty()})));
                 }
                 "model/list" => {
                     let list: Vec<&Value> = r.get("data").and_then(Value::as_array).into_iter().flatten().filter(|m| !m.get("hidden").and_then(Value::as_bool).unwrap_or(false)).collect();
@@ -1850,7 +2115,41 @@ impl Adapter for Codex {
                     st.emit(ev("delta", json!({"text": t})));
                 }
             }
-            "item/reasoning/textDelta" | "item/reasoning/summaryTextDelta" => st.emit(ev("thinking", json!({}))),
+            // its reasoning: the summary when Codex writes one, else the raw text
+            "item/reasoning/summaryTextDelta" => {
+                self.summarized.insert(s(&p, "itemId"));
+                st.emit(thinking_event(&s(&p, "delta")));
+            }
+            "item/reasoning/summaryPartAdded" => st.emit(thinking_event("\n\n")),
+            "item/reasoning/textDelta" => {
+                let t = if self.summarized.contains(&s(&p, "itemId")) { String::new() } else { s(&p, "delta") };
+                st.emit(thinking_event(&t));
+            }
+            // its plan: the whole list each time, one checklist that changes in place
+            "turn/plan/updated" if self.turn => {
+                let items: Vec<(String, String)> = p
+                    .get("plan")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .map(|x| {
+                        let st = match s(x, "status").as_str() {
+                            "inProgress" => "in_progress",
+                            "completed" => "completed",
+                            _ => "pending",
+                        };
+                        (s(x, "step"), st.to_string())
+                    })
+                    .collect();
+                st.emit(plan_event(&items));
+            }
+            // a file change's patch moved before it ran (Codex reworked it): the diff view follows
+            "item/fileChange/patchUpdated" => {
+                let files = codex_diff(&json!({"changes": p.get("changes").cloned().unwrap_or(Value::Null)}), &self.cwd);
+                if !files.is_empty() {
+                    st.emit(ev("tool.diff", json!({"tool_id": s(&p, "itemId"), "files": files})));
+                }
+            }
             "item/started" => {
                 match s(&item, "type").as_str() {
                     // Codex recorded a message the person sent (our id as its clientId)
@@ -1864,6 +2163,13 @@ impl Adapter for Codex {
                     _ => {
                         if let Some((name, detail)) = self.item_step(&item) {
                             st.emit(ev("tool.start", json!({"tool_id": s(&item, "id"), "name": name, "detail": detail})));
+                            // a file change carries its patch: the diff view shows it
+                            if s(&item, "type") == "fileChange" {
+                                let files = codex_diff(&item, &self.cwd);
+                                if !files.is_empty() {
+                                    st.emit(ev("tool.diff", json!({"tool_id": s(&item, "id"), "files": files})));
+                                }
+                            }
                         }
                     }
                 }
@@ -1897,6 +2203,13 @@ impl Adapter for Codex {
                         }
                     }
                     "commandExecution" | "fileChange" | "mcpToolCall" | "dynamicToolCall" | "webSearch" | "imageView" | "sleep" => {
+                        // what the change finally was (it may differ from what it asked)
+                        if s(&item, "type") == "fileChange" {
+                            let files = codex_diff(&item, &self.cwd);
+                            if !files.is_empty() {
+                                st.emit(ev("tool.diff", json!({"tool_id": iid, "files": files})));
+                            }
+                        }
                         let status = s(&item, "status");
                         let ok = !matches!(status.as_str(), "failed" | "declined");
                         st.emit(ev("tool.end", json!({"tool_id": iid, "name": "", "ok": ok, "ms": item.get("durationMs").and_then(Value::as_u64).unwrap_or(0)})));
@@ -2034,6 +2347,14 @@ impl Adapter for Codex {
                 let m = codex_mode(&mode).ok_or_else(|| format!("not a mode omher offers: {mode}"))?;
                 self.mode = Some(m);
                 st.emit(ev("session.info", json!({"mode": mode})));
+            }
+            // Codex's own revert: the thread goes back to before the person's last turn
+            Input::Rewind => {
+                if self.turn {
+                    return Err("wait until the turn ends".into());
+                }
+                let (Some(thread), Some(turn)) = (self.thread.clone(), self.turns.last().cloned()) else { return Err("nothing to take back".into()) };
+                self.call(&mut st, "thread/revert", json!({"threadId": thread, "beforeTurnId": turn}));
             }
             Input::Effort { effort } => {
                 let model = self.model.clone().unwrap_or_else(|| self.model_id.clone());
@@ -2373,7 +2694,8 @@ impl Adapter for Pi {
                             st.emit(ev("delta", json!({"text": t})));
                         }
                     }
-                    "thinking_delta" | "thinking_start" => st.emit(ev("thinking", json!({}))),
+                    "thinking_delta" => st.emit(thinking_event(&s(e, "delta"))),
+                    "thinking_start" => st.emit(thinking_event("")),
                     _ => {}
                 }
             }
@@ -2413,6 +2735,10 @@ impl Adapter for Pi {
                     self.task_start(&mut st, &call, &args);
                 } else {
                     st.emit(ev("tool.start", json!({"tool_id": call, "name": tool_kind(&name), "detail": call_detail(&name, &args, &self.cwd)})));
+                    // pi's write / edit name the text they change: the diff view shows it
+                    if let Some(f) = input_diff(&name, &args, &self.cwd) {
+                        st.emit(ev("tool.diff", json!({"tool_id": call, "files": [f]})));
+                    }
                 }
             }
             "tool_execution_end" => {
@@ -2547,6 +2873,7 @@ impl Adapter for Pi {
                 self.read(&mut st, "get_available_thinking_levels");
             }
             Input::Mode { mode } => return Err(format!("{} has no permission mode here ({mode})", self.label)),
+            Input::Rewind => return Err(format!("{} cannot take a message back here", self.label)),
             Input::Effort { effort } => {
                 if !self.levels.contains(&effort) {
                     return Err(format!("unknown thinking level {effort}"));
@@ -2619,11 +2946,12 @@ fn write_lines(stdin: &ChatInputQueue, lines: &[String]) -> Result<(), String> {
 
 /// Adjacent `delta` events of one read window become one, so a fast token stream is a few UI messages.
 fn merge_deltas(events: Vec<Event>) -> Vec<Event> {
-    let is_delta = |e: &Event| e.as_object().is_some_and(|m| m.len() == 2 && s(e, "event") == "delta" && m.get("text").is_some_and(Value::is_string));
+    // streamed answer text, and streamed thinking text, each joined with the piece right before it of its own kind
+    let joinable = |e: &Event| e.as_object().is_some_and(|m| m.len() == 2 && matches!(s(e, "event").as_str(), "delta" | "thinking") && m.get("text").is_some_and(Value::is_string));
     let mut out: Vec<Event> = Vec::with_capacity(events.len());
     for e in events {
         if let Some(last) = out.last_mut() {
-            if is_delta(last) && is_delta(&e) {
+            if joinable(last) && joinable(&e) && s(last, "event") == s(&e, "event") {
                 let joined = s(last, "text") + &s(&e, "text");
                 last["text"] = Value::String(joined);
                 continue;
@@ -3785,6 +4113,78 @@ mod tests {
         let all = msgs.join(" ").to_lowercase();
         let _ = std::fs::remove_dir_all(&base);
         assert!(all.contains("marigold") && all.contains("cobalt-42"), "{got:?}");
+    }
+
+    /// The real check for a session's transcript: the agent (OMHER_REAL_AGENT, default claude) in a temp folder through
+    /// omher's own start, asked for a two-file edit with its todo list; prints what the chat got (each edit's change,
+    /// the todo list, the thinking text), then takes the message back with the agent's own rewind and asks whether it
+    /// remembers it. Approvals for files inside the folder are answered `once`. Spends two short turns:
+    /// `cargo test real_agent_shows_its_work -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_agent_shows_its_work() {
+        let agent = std::env::var("OMHER_REAL_AGENT").unwrap_or_else(|_| "claude".into());
+        let base = std::env::var("OMHER_REAL_DIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir().join(format!("omher-real-work-{agent}-{}", std::process::id())));
+        let dir = base.join("proj");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("calc.py"), "def add(a, b):\n    return a + b\n\n\ndef sub(a, b):\n    return a - b\n").unwrap();
+        std::fs::write(dir.join("README.md"), "# calc\n\nTiny math helpers.\n").unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let c = Arc::new(ChatSessions::default());
+        let out = Arc::new(Mutex::new(Vec::<ChatOut>::new()));
+        let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
+        let me2 = me.clone();
+        let inside = dir.to_string_lossy().into_owned();
+        let id = c
+            .start_agent(&agent, &dir, None, &[], move |x| {
+                if let ChatOut::Event(e) = &x {
+                    if s(e, "event") == "approval.request" {
+                        let ok = s(e, "title").contains("calc.py") || s(e, "title").contains("README.md") || s(e, "command").contains(&inside);
+                        let (c3, rid, id) = (c2.clone(), s(e, "request_id"), *me2.lock().unwrap());
+                        thread::spawn(move || {
+                            let _ = c3.input(id, Input::Approve { request_id: rid, choice: if ok { "once".into() } else { "deny".into() } });
+                        });
+                    }
+                }
+                o.lock().unwrap().push(x);
+            })
+            .unwrap();
+        *me.lock().unwrap() = id;
+        let ends = |out: &Arc<Mutex<Vec<ChatOut>>>| out.lock().unwrap().iter().filter(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")).count();
+        let wait = |n: usize| {
+            let deadline = Instant::now() + Duration::from_secs(300);
+            while Instant::now() < deadline && ends(&out) < n {
+                thread::sleep(Duration::from_millis(200));
+            }
+        };
+        let text = "Make a 3-item todo list with your task tools first, then do it, updating each item as you go: in calc.py add a mul(a, b) function and give add a one-line docstring; in README.md add a line listing the functions. Think briefly first.";
+        c.input(id, Input::Send { text: text.into(), images: vec![], id: "local-1".into() }).unwrap();
+        wait(1);
+        thread::sleep(Duration::from_millis(500));
+        // the rewind, then a question about the message it took back
+        let r = c.input(id, Input::Rewind);
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "rewound" || s(e, "event") == "session.error")) {
+            thread::sleep(Duration::from_millis(200));
+        }
+        c.input(id, Input::Send { text: "Did I ask you for anything earlier in this conversation? Answer yes or no, then say what in five words.".into(), images: vec![], id: "local-2".into() }).unwrap();
+        wait(2);
+        let got: Vec<Value> = out.lock().unwrap().iter().filter_map(|x| match x { ChatOut::Event(e) => Some(e.clone()), _ => None }).collect();
+        c.close(id);
+        let dump = base.join("events.jsonl");
+        std::fs::write(&dump, got.iter().map(|e| e.to_string() + "\n").collect::<String>()).unwrap();
+        println!("rewind input: {r:?}; events: {}", dump.display());
+        for e in &got {
+            match s(e, "event").as_str() {
+                "tool.diff" => println!("DIFF {}", e["files"]),
+                "plan" => println!("PLAN {}", e["items"]),
+                "rewound" | "message" | "turn.end" | "session.error" => println!("{e}"),
+                _ => {}
+            }
+        }
+        let thinking: String = got.iter().filter(|e| s(e, "event") == "thinking").map(|e| s(e, "text")).collect();
+        println!("THINKING {thinking:?}");
+        assert!(got.iter().any(|e| s(e, "event") == "tool.diff"), "no diff");
     }
 
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the
@@ -5008,6 +5408,8 @@ mod tests {
         Send,
         Stop,
         Model(&'static str),
+        /// the person takes the last message back (edit and resend)
+        Rewind,
         /// the program exits: the watcher's `turn.end` when it was mid-turn
         Exit,
     }
@@ -5023,6 +5425,11 @@ mod tests {
         // the recording finishes a turn, then the person asks for a slow command and presses Stop
         out.push(("claude-4-stop.jsonl", "claude", vec![Send, Head("claude-4-stop.jsonl"), Send, Tail("claude-4-stop.jsonl"), Stop, File("claude-4-stopped.jsonl")]));
         out.push(("claude-7-model.jsonl", "claude", vec![Model("haiku"), File("claude-7-model.jsonl")]));
+        // a two-file edit with its todo list (TaskCreate/TaskUpdate), and one with thinking text (Claude Code 2.1.322)
+        out.push(("claude-12-work.jsonl", "claude", turn("claude-12-work.jsonl")));
+        out.push(("claude-12-thinking.jsonl", "claude", turn("claude-12-thinking.jsonl")));
+        // a turn, then edit and resend: Claude Code's own rewind, then the next message
+        out.push(("claude-12-rewind.jsonl", "claude", vec![Send, Lines("claude-12-rewind.jsonl", 0, 5), Rewind, Lines("claude-12-rewind.jsonl", 5, 6), Send, Lines("claude-12-rewind.jsonl", 6, 11)]));
         // a model picked between turns, then one picked right after the next message went out (QA H7)
         out.push(("claude-11-model-mid-turn.jsonl", "claude", vec![Model("haiku"), Lines("claude-11-model-mid-turn.jsonl", 0, 1), Send, Model("sonnet"), Lines("claude-11-model-mid-turn.jsonl", 1, 6), Send, Tail("claude-11-model-mid-turn.jsonl")]));
         // H10: started with `--add-dir <the session's attachment folder>`; turn 1 reads the attached copy, turn 2 a file elsewhere
@@ -5115,6 +5522,12 @@ mod tests {
                     events.extend(st.events);
                     continue;
                 }
+                Do::Rewind => {
+                    let st = a.on_input(Input::Rewind).unwrap();
+                    last_write = st.write.clone();
+                    events.extend(st.events);
+                    continue;
+                }
                 Do::Exit => {
                     if a.in_turn() {
                         events.push(exit_turn_end(Some(0), ""));
@@ -5138,7 +5551,9 @@ mod tests {
                 }
                 Do::Lines(f, from, to) => {
                     used.insert((*f).into());
-                    real(f)[*from..*to].to_vec()
+                    // a recorded answer to a request this replay sent names that request
+                    let id = last_write.first().and_then(|w| serde_json::from_str::<Value>(w).ok()).map(|w| s(&w, "request_id")).unwrap_or_default();
+                    real(f)[*from..*to].iter().map(|l| if id.is_empty() { l.clone() } else { l.replace("omher-rewind-REQ", &id) }).collect()
                 }
             };
             for l in lines {
@@ -5680,5 +6095,161 @@ mod tests {
         // other inputs carry no files
         assert!(Input::Interrupt.resolve(&home).is_ok());
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    // ---- what a session shows of the agent's work: diffs, its todo list, thinking, edit and resend ----
+
+    fn of_kind<'a>(events: &'a [Event], name: &str) -> Vec<&'a Event> {
+        events.iter().filter(|e| s(e, "event") == name).collect()
+    }
+
+    #[test]
+    fn claude_two_file_edit_shows_each_change_and_one_todo_list_that_updates_in_place() {
+        // claude-12-work: Claude Code 2.1.322 (sonnet), TaskCreate x3, then per item TaskUpdate in_progress, an Edit,
+        // TaskUpdate completed; calc.py twice and README.md once
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-12-work.jsonl"));
+        // the todo tools are the checklist, never steps
+        let steps: Vec<String> = of_kind(&st.events, "tool.start").iter().map(|e| s(e, "name")).collect();
+        assert!(!steps.iter().any(|n| n.starts_with("Task") || n.starts_with("Todo")), "{steps:?}");
+        let plans = of_kind(&st.events, "plan");
+        assert_eq!(plans.len(), 3 + 6, "one plan event per change of the list");
+        let last = &plans.last().unwrap()["items"];
+        let rows: Vec<(String, String)> = last.as_array().unwrap().iter().map(|i| (s(i, "text"), s(i, "status"))).collect();
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().all(|r| r.1 == "completed"), "{rows:?}");
+        assert_eq!(rows[1].0, "Add mul(a, b) function to calc.py");
+        // midway the second is in progress and the first done
+        let mid: Vec<String> = plans[5]["items"].as_array().unwrap().iter().map(|i| s(i, "status")).collect();
+        assert_eq!(mid, ["completed", "in_progress", "pending"]);
+        // every edit carries its change, the input's first and the result's (hunks with context) last
+        let diffs = of_kind(&st.events, "tool.diff");
+        let edits = of_kind(&st.events, "tool.start").into_iter().filter(|e| s(e, "name") == "patch").count();
+        assert_eq!(edits, 3);
+        assert_eq!(diffs.len(), 6);
+        let files: Vec<String> = diffs.iter().map(|d| s(&d["files"][0], "path")).collect();
+        assert_eq!(files, ["calc.py", "calc.py", "calc.py", "calc.py", "README.md", "README.md"]);
+        let mul = &diffs[3]["files"][0];
+        let lines: Vec<String> = mul["lines"].as_array().unwrap().iter().map(|l| l.as_str().unwrap().to_string()).collect();
+        assert_eq!(lines[0], "@@ -5,3 +5,7 @@");
+        assert!(lines.contains(&"+def mul(a, b):".to_string()) && lines.contains(&" def sub(a, b):".to_string()), "{lines:?}");
+        assert_eq!((mul["added"].as_u64(), mul["removed"].as_u64()), (Some(4), Some(0)));
+    }
+
+    #[test]
+    fn claude_thinking_text_is_kept_and_a_marker_without_text_stays_empty() {
+        // claude-12-thinking: Claude Code 2.1.322 (fable) streams its thinking as text deltas
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-12-thinking.jsonl"));
+        let text: String = of_kind(&st.events, "thinking").iter().map(|e| s(e, "text")).collect();
+        assert!(text.starts_with("No todo tool is available, so I'll track the three steps inline"), "{text}");
+        // claude-3-edit: an older recording with the thinking text stripped; the events say only that it thinks
+        let mut c = claude_up();
+        c.on_input(Input::send("go")).unwrap();
+        let st = run(&mut c, &real("claude-3-edit.jsonl"));
+        let t = of_kind(&st.events, "thinking");
+        assert!(!t.is_empty() && t.iter().all(|e| e.get("text").is_none()));
+        // joined in delivery like answer text, never across kinds
+        let got = merge_deltas(vec![thinking_event("a"), thinking_event("b"), ev("delta", json!({"text": "c"})), thinking_event("d")]);
+        assert_eq!(got, vec![thinking_event("ab"), ev("delta", json!({"text": "c"})), thinking_event("d")]);
+    }
+
+    #[test]
+    fn claude_rewind_takes_back_the_last_message_through_its_own_rewind_conversation() {
+        // claude-12-rewind: a real turn, then `rewind_conversation` to its message (Claude Code answered rewound:true
+        // and the next turn had no memory of it: "NONE")
+        let mut c = claude_up();
+        assert!(c.on_input(Input::Rewind).is_err(), "nothing sent yet");
+        c.on_input(Input::send("Remember the word ORCHID. Reply only: ok")).unwrap();
+        let lines = real("claude-12-rewind.jsonl");
+        run(&mut c, &lines[..5]);
+        let st = c.on_input(Input::Rewind).unwrap();
+        let w = written(&st);
+        assert_eq!(w[0]["request"], json!({"subtype": "rewind_conversation", "target_message_uuid": "de0a73ab-5879-4e81-b093-fb2cdb29704a"}));
+        let rid = s(&w[0], "request_id");
+        let st = c.on_line(&lines[5].replace("omher-rewind-REQ", &rid));
+        assert_eq!(st.events[0], json!({"event": "rewound", "text": "Remember the word ORCHID. Reply only: ok"}));
+        assert_eq!(st.events[1], json!({"event": "session.info", "rewind": false}));
+        // a refusal says so and keeps the message
+        c.on_input(Input::send("again")).unwrap();
+        run(&mut c, &lines[6..]);
+        let st = c.on_input(Input::Rewind).unwrap();
+        let rid = s(&written(&st)[0], "request_id");
+        let st = c.on_line(&format!(r#"{{"type":"control_response","response":{{"subtype":"error","request_id":"{rid}","error":"turn running"}}}}"#));
+        assert_eq!(names(&st.events), ["session.error", "session.info"]);
+        assert_eq!(st.events[1]["rewind"], json!(true));
+        // never while a turn runs
+        c.on_input(Input::send("x")).unwrap();
+        assert!(c.on_input(Input::Rewind).is_err());
+    }
+
+    #[test]
+    fn codex_plan_reasoning_and_file_changes_come_out_in_the_same_shapes() {
+        // shapes from codex-rs app-server-protocol v2 (codex 0.167 `generate-ts`): turn/plan/updated, reasoning
+        // summary and raw deltas, a fileChange update with a unified diff; Codex has no credit on this Mac, so the
+        // turn is built from the schema, the item/started of a real fileChange (codex-3-edit) is real
+        let mut x = codex_up();
+        x.on_input(Input::send("go")).unwrap();
+        let t = r#"{"method":"turn/started","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turn":{"id":"t9","items":[],"status":"inProgress"}}}"#;
+        let plan = r#"{"method":"turn/plan/updated","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","explanation":null,"plan":[{"step":"Add mul to calc.py","status":"completed"},{"step":"List functions in README.md","status":"inProgress"},{"step":"Run a check","status":"pending"}]}}"#;
+        let sum = r#"{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","itemId":"rs1","delta":"Two files to touch.","summaryIndex":0}}"#;
+        let raw = r#"{"method":"item/reasoning/textDelta","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","itemId":"rs1","delta":"raw","contentIndex":0}}"#;
+        let raw2 = r#"{"method":"item/reasoning/textDelta","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","itemId":"rs2","delta":"only raw","contentIndex":0}}"#;
+        let fc = r##"{"method":"item/started","params":{"threadId":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa","turnId":"t9","item":{"type":"fileChange","id":"fc1","status":"inProgress","changes":[{"path":"/w/proj/calc.py","kind":{"type":"update","move_path":null},"diff":"--- a/calc.py\n+++ b/calc.py\n@@ -5,2 +5,5 @@\n def sub(a, b):\n     return a - b\n+\n+def mul(a, b):\n+    return a * b\n"},{"path":"/w/proj/README.md","kind":{"type":"add"},"diff":"# calc\nFunctions: add, sub, mul\n"}]}}}"##;
+        let st = run(&mut x, &[t.into(), plan.into(), sum.into(), raw.into(), raw2.into(), fc.into()]);
+        let p = of_kind(&st.events, "plan");
+        assert_eq!(p[0]["items"], json!([{"text": "Add mul to calc.py", "status": "completed"}, {"text": "List functions in README.md", "status": "in_progress"}, {"text": "Run a check", "status": "pending"}]));
+        let th: Vec<String> = of_kind(&st.events, "thinking").iter().map(|e| s(e, "text")).collect();
+        assert_eq!(th, ["Two files to touch.", "", "only raw"], "a summarized item's raw text is not shown twice");
+        let d = of_kind(&st.events, "tool.diff");
+        assert_eq!(s(d[0], "tool_id"), "fc1");
+        let f = d[0]["files"].as_array().unwrap();
+        assert_eq!((s(&f[0], "path"), s(&f[0], "kind")), ("calc.py".into(), "update".into()));
+        assert_eq!(f[0]["lines"][0], "@@ -5,2 +5,5 @@");
+        assert_eq!((f[0]["added"].as_u64(), f[0]["removed"].as_u64()), (Some(3), Some(0)));
+        assert_eq!((s(&f[1], "kind"), f[1]["lines"].clone()), ("add".into(), json!(["+# calc", "+Functions: add, sub, mul"])));
+        // a real recording (codex-3-edit): the new file's content is its change
+        let mut x = codex_up();
+        x.on_input(Input::send("go")).unwrap();
+        let st = run(&mut x, &real("codex-3-edit.jsonl"));
+        let d = of_kind(&st.events, "tool.diff");
+        assert!(!d.is_empty());
+        assert_eq!(d[0]["files"][0]["lines"], json!(["+hello from qa"]));
+    }
+
+    #[test]
+    fn codex_rewind_reverts_the_thread_before_the_last_turn() {
+        // thread/revert {threadId, beforeTurnId} answered and followed by thread/reverted, as Codex 0.167 did in a
+        // scratch thread (two failed turns, no credit; the revert itself needs none)
+        let mut x = codex_up();
+        assert!(x.on_input(Input::Rewind).is_err());
+        x.on_input(Input::send("go")).unwrap();
+        run(&mut x, &real("codex-1-plain.jsonl"));
+        let st = x.on_input(Input::Rewind).unwrap();
+        let w = written(&st);
+        assert_eq!(s(&w[0], "method"), "thread/revert");
+        assert_eq!(w[0]["params"]["threadId"], json!("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"));
+        assert!(!s(&w[0]["params"], "beforeTurnId").is_empty());
+        let id = w[0]["id"].as_u64().unwrap();
+        let st = x.on_line(&format!(r#"{{"id":{id},"result":{{"thread":{{"id":"01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"}},"turnsBackwardsCursor":null,"itemsBackwardsCursor":null}}}}"#));
+        assert_eq!(st.events, vec![json!({"event": "rewound"}), json!({"event": "session.info", "rewind": false})]);
+        assert!(x.on_input(Input::Rewind).is_err(), "nothing left to take back");
+    }
+
+    #[test]
+    fn diff_lines_are_capped_and_counted() {
+        let big: String = (0..450).map(|i| format!("line {i}\n")).collect();
+        let f = input_diff("Write", &json!({"file_path": "/w/proj/big.txt", "content": big}), "/w/proj").unwrap();
+        assert_eq!(f["lines"].as_array().unwrap().len(), DIFF_LINES);
+        assert_eq!((f["added"].as_u64(), f["more"].as_u64()), (Some(450), Some(50)));
+        assert_eq!(s(&f, "path"), "big.txt");
+        // MultiEdit: one hunk per edit; a non-file tool has none
+        let m = input_diff("MultiEdit", &json!({"file_path": "/w/proj/a.ts", "edits": [{"old_string": "a", "new_string": "b"}, {"old_string": "c", "new_string": "d"}]}), "/w/proj").unwrap();
+        assert_eq!(m["lines"], json!(["-a", "+b", "@@", "-c", "+d"]));
+        assert!(input_diff("Bash", &json!({"command": "ls"}), "/w/proj").is_none());
+        // the rpc and acp agents have no rewind; DSH neither
+        assert!(Pi::new("/w/proj", "OmO").on_input(Input::Rewind).is_err());
     }
 }
