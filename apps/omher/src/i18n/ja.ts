@@ -270,6 +270,8 @@ export const ja: Record<Key, string> = {
   "plug.hook1": "フック 1 個",
   "plug.channel": "メッセージチャンネル",
   "plug.needsKey": "オンにするには API キーが必要",
+  "plug.details": "詳細",
+  "plug.detailsFor": "{name}の詳細",
   "plug.install": "インストール",
   "plug.installed": "インストール済み",
   "plug.update": "アップデート",

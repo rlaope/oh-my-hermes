@@ -270,6 +270,8 @@ export const ko: Record<Key, string> = {
   "plug.hook1": "훅 1개",
   "plug.channel": "메신저 채널",
   "plug.needsKey": "켜려면 API 키가 필요해요",
+  "plug.details": "상세",
+  "plug.detailsFor": "{name} 상세",
   "plug.install": "설치",
   "plug.installed": "설치됨",
   "plug.update": "업데이트",

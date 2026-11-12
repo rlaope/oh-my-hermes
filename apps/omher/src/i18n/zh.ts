@@ -270,6 +270,8 @@ export const zh: Record<Key, string> = {
   "plug.hook1": "1 个钩子",
   "plug.channel": "消息频道",
   "plug.needsKey": "需要 API 密钥才能开启",
+  "plug.details": "详情",
+  "plug.detailsFor": "{name} 详情",
   "plug.install": "安装",
   "plug.installed": "已安装",
   "plug.update": "更新",

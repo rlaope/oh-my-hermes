@@ -802,7 +802,9 @@
   font-weight: 650;
 }
 .pl-sheet .pl-ds {
-  -webkit-line-clamp: 3;
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
 }
 .pl-sheet-wait {
   color: var(--muted);
