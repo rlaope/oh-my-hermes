@@ -2170,10 +2170,16 @@ def run_model_chain_picker(
     result = apply_picker_changes(omh_home, changes, hermes_home=hermes_home, contract_option=contract_effort_option)
     if "error" in result:
         return f"/omh-model did not save: {result['error']}"
-    count = len(result["changed"])
+    category_count = len(result.get("categories_changed", []))
+    identity_count = len(result.get("identities_changed", []))
+    parts = []
+    if category_count:
+        parts.append(f"{category_count} categor{'y' if category_count == 1 else 'ies'} to {result['path']}")
+    if identity_count:
+        parts.append(f"{identity_count} custom identit{'y' if identity_count == 1 else 'ies'}")
     warning = f" Warning: {result['warning']}." if result.get("warning") else ""
     return (
-        f"Saved {count} categor{'y' if count == 1 else 'ies'} to {result['path']}. "
+        f"Saved {' and '.join(parts)}. "
         f"New delegations use this order; running children keep theirs.{warning}"
     )
 

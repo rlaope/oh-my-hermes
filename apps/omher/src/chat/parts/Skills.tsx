@@ -51,9 +51,10 @@ export function SkillPicker({
   );
 }
 
-/** The `/` menu of a SESSIONS chat: the commands and skills its agent reported, in the skill picker's look (name as a
- * monospace pill with its prefix, what it takes, one-line description); a skill carries a quiet "skill" tag. At most
- * MENU_MAX rows; the last line says how many more match. Keys stay in the textarea, as for skills. */
+/** The `/` menu of a SESSIONS chat: the commands and skills its agent reported, as wide as the composer: the name in
+ * plain monospace text with its prefix, what it takes, and its one-line description; a skill carries a "skill" mark in
+ * the accent colour, so skills stand apart from commands at a glance. At most MENU_MAX rows; the last line says how
+ * many more match. Keys stay in the textarea, as for skills. */
 export function CommandPicker({
   items,
   more,
@@ -86,13 +87,17 @@ export function CommandPicker({
             onMouseMove={() => i !== active && onHover(i)}
             onClick={() => onPick(c)}
           >
-            <code className="sk-pill">
+            <span className="sk-name" data-testid="command-name">
               {c.prefix}
               {c.name}
-            </code>
+            </span>
             {c.hint && <span className="sk-hint">{c.hint}</span>}
             {c.description && <span className="sk-d">{c.description}</span>}
-            {c.kind === "skill" && <span className="sk-kind">{t("ctl.skill")}</span>}
+            {c.kind === "skill" && (
+              <span className="sk-kind" data-testid="command-skill">
+                {t("ctl.skill")}
+              </span>
+            )}
           </div>
         ))
       ) : (
