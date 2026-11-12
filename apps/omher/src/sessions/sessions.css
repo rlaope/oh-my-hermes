@@ -651,6 +651,11 @@
 .ss-way-o.on {
   background: var(--raise2);
   color: var(--ink);
+  font-weight: 500;
+}
+/* the composer is nearly white in the light theme: the picked word needs a darker gray to read as picked */
+[data-theme="light"] .ss-way-o.on {
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
 }
 .ss-way-o[aria-disabled="true"] {
   opacity: 0.45;

@@ -202,3 +202,30 @@ test("a terminal-opened session has no Chat toggle and its row shows the live do
   await expect(rows.first().getByTestId("live-dot")).toHaveCount(0);
   expect(await count(page, "chat.start", "claude")).toBe(1);
 });
+
+test("the choice is one Tab stop and the arrow keys move it; a way the agent lacks takes the focus but is never picked", async ({ page }) => {
+  await open(page);
+  await draft(page, "claude");
+  const chat = page.getByTestId("session-way-chat");
+  const term = page.getByTestId("session-way-terminal");
+  await expect(chat).toHaveAttribute("tabindex", "0");
+  await expect(term).toHaveAttribute("tabindex", "-1");
+  await chat.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(term).toBeFocused();
+  await expect(term).toHaveAttribute("aria-checked", "true");
+  await expect(term).toHaveAttribute("tabindex", "0");
+  await expect(page.getByTestId("session-go")).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
+  await expect(chat).toHaveAttribute("aria-checked", "true");
+  // back on Chat the box can be typed in again and takes the focus, as it does after a click on Chat
+  await expect(page.getByTestId("composer")).toBeFocused();
+
+  // DSH has no terminal: the arrow reaches the dimmed word (its reason is its title) and Chat stays picked
+  await draft(page, "dsh");
+  await page.getByTestId("session-way-chat").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("session-way-terminal")).toBeFocused();
+  await expect(page.getByTestId("session-way-chat")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("composer")).toBeEnabled();
+});

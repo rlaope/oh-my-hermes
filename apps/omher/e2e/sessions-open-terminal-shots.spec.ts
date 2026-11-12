@@ -7,7 +7,7 @@ import { join } from "node:path";
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 
-async function mock(op: string): Promise<void> {
+async function mock(op: string, params: Record<string, unknown> = {}): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
   await new Promise<void>((res, rej) => {
     ws.onopen = () => res();
@@ -15,7 +15,7 @@ async function mock(op: string): Promise<void> {
   });
   await new Promise<void>((res) => {
     ws.onmessage = () => res();
-    ws.send(JSON.stringify({ id: "x1", op }));
+    ws.send(JSON.stringify({ id: "x1", op, ...params }));
   });
   ws.close();
 }
@@ -100,6 +100,9 @@ for (const theme of ["dark", "light"] as const) {
     test(`shots (${theme})`, async ({ page }) => {
       test.skip(!SHOTS, "no shot folder");
       mkdirSync(SHOTS, { recursive: true });
+      // staged shots carry no bot named after the product: the default profile shows as "Juno" (mock.reset, before
+      // each test, puts the name back)
+      await mock("bots.rename", { bot: "default", name: "Juno" });
       const shot = async (what: string) => {
         await page.mouse.move(640, 60);
         await page.waitForTimeout(350);

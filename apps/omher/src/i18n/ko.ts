@@ -905,7 +905,7 @@ export const ko: Record<Key, string> = {
   "ss.open.terminalTip": "터미널에서 이름을 직접 입력한 것처럼, {agent}의 터미널로 열어요",
   "ss.open.noTermDsh": "DeepSeek Harness는 여기서 터미널이 없어 채팅으로 열려요",
   "ss.open.noTermHermes": "Hermes만으로는 터미널이 없어요. oh-my-hermes를 추가하면 열 수 있어요",
-  "ss.open.noChat": "{agent}는 여기서 채팅이 없어 터미널로 열려요",
+  "ss.open.noChat": "여기서는 {agent} 채팅이 없어 터미널로 열려요",
   "ss.open.withheld": "터미널은 이 글과 파일 없이 시작돼요",
   "ss.couldNotStartWhy": "{agent}를 시작하지 못했어요 · {error}",
   "ss.noRules": "omher가 OpenCode에 직접 설정한 권한 규칙이 그대로 지켜지는지 확인하지 못해 OpenCode를 시작하지 않았어요.",
