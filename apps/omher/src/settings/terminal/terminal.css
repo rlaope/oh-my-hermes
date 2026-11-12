@@ -177,13 +177,14 @@
   outline: none;
   background: var(--seg-on);
 }
-/* a row's words keep a readable measure: when the control leaves them less, the control goes under them */
+/* a row's words keep a readable measure (150px): when the control leaves them less, the control goes under them.
+   At 900px wide that is the four-segment Scrollback row only; the others stay side by side. */
 .tm .st-row {
   flex-wrap: wrap;
   row-gap: 8px;
 }
 .tm .st-k {
-  flex: 1 1 200px;
+  flex: 1 1 150px;
 }
 .tm .st-v {
   max-width: 100%;
