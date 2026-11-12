@@ -860,6 +860,7 @@ export const zh: Record<Key, string> = {
   "ss.backToChat": "回到聊天",
   "ss.openTerminal": "在终端中打开",
   "ss.couldNotStartWhy": "{agent} 无法启动 · {error}",
+  "ss.noRules": "omher 无法确认 OpenCode 会保留你自己设置的权限规则，因此没有启动 OpenCode。",
   "ss.lookingAgents": "正在查找代理…",
   "ss.stopIn": "停止 {folder} 中的 {agent}？",
   "ss.stopQ": "停止 {agent}？",

@@ -862,6 +862,7 @@ export const en = {
   "ss.backToChat": "Back to the chat",
   "ss.openTerminal": "Open in Terminal",
   "ss.couldNotStartWhy": "{agent} could not start · {error}",
+  "ss.noRules": "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.",
   "ss.lookingAgents": "Looking for agents…",
   "ss.stopIn": "Stop {agent} in {folder}?",
   "ss.stopQ": "Stop {agent}?",

@@ -115,6 +115,21 @@ All notable changes will be documented here.
   recorded row, and done DAG work is drawn green. The TUI's DAG block and the chat's end
   post get the same graph as before. Thanks @yqm-307. (#2745)
 
+- **OpenCode runs as a chat in omher SESSIONS, on one adapter for every ACP
+  agent.** omher now speaks the Agent Client Protocol (JSON-RPC on stdio)
+  with one adapter and a table row per agent; OpenCode (`opencode acp`) is
+  the first row. It streams answers, shows each tool step with its time,
+  shows the skill it loads, lists the models it offers, continues a
+  conversation after a restart (`session/resume`, checked against a real
+  OpenCode 1.19.5 run), and Stop ends a turn even while it waits for you.
+  OpenCode would otherwise run every edit and shell command without asking:
+  omher reads OpenCode's own resolved rules first and starts it with ask
+  rules built from them, so what you allow asks, what you deny stays denied,
+  and if OpenCode does not keep them omher does not start it. Its approval
+  card offers Deny and Allow once only, because OpenCode's "Always allow"
+  saves a permanent project rule. omher gives the agent no file or
+  terminal access of its own (BOUNDARY rule 11).
+
 - **Claude Fable 5.2 now leads the `visual-engineering` chain.** Frontend and
   visual lanes routed through Hermes try Fable 5.2 first, then Claude Opus
   5.5, Gemini 4 Argon and Kimi K3.1 Pro, all at `high` (before, Opus 5.5 came

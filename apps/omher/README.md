@@ -2,7 +2,7 @@
 
 omher is a desktop app for your Hermes bots, on macOS, Windows and Linux. Each Hermes profile is one bot. Each bot has one main
 chat, and the app shows what that bot is doing in its other sessions (Slack, Discord, Telegram, cron)
-read-only. Under the bots, SESSIONS starts a terminal agent (Claude Code, Codex, oh-my-hermes, pi, oh-my-pi) in a
+read-only. Under the bots, SESSIONS starts a terminal agent (Claude Code, Codex, OpenCode, oh-my-hermes, pi, oh-my-pi) in a
 folder you pick and runs it inside the window, as if you had typed `claude` or `codex` in a terminal. It is part of
 this repository but is not part of the `omh` Python package.
 
@@ -94,7 +94,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   becomes the agent's first prompt; a terminal agent starts on Start. DSH is DeepSeek Harness only (the CLI inside its
   app, or the npm package `@deepseek-ai/dsh`; any other `dsh` on PATH is skipped) and opens as a chat: one
   `dsh --profile headless --json` run per message, continued with the harness's `--session-id`. The program runs in a pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
-  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`); the shell
+  Windows) drawn with xterm.js. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A chat session's approvals
   and questions are asks like a bot's: they join the Needs-you strip and ⌘J (named by folder and agent), and the
@@ -103,6 +103,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   (`session_title_changed` from Claude Code, `thread/name/updated` from Codex, `session.title` from Hermes, or the
   bridge's `cli.title` read of their own session files), else a summary of your first message made in the UI
   (`src/sessions/titles.ts`, no model call), else the folder. The second line is the folder and the agent.
+- **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
+  (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
+  protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become
+  approval cards with Deny and Allow once (OpenCode's "Always allow" saves a project rule, so omher does not
+  offer it). Before OpenCode starts, omher reads its resolved rules (`opencode agent list`) and starts it with
+  ask rules built from them: what you allow asks first, what you deny stays denied. If omher cannot confirm OpenCode
+  kept them, it does not start OpenCode.
 
 Rules the code keeps:
 
@@ -114,7 +121,7 @@ Rules the code keeps:
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
-  `omp` or `grok`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
+  `omp`, `grok` or `opencode`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.
 - **Automations and plugins change only through the bot.** The Automations page reads each profile's
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and

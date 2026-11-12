@@ -15,8 +15,8 @@ DOC = ROOT / "docs" / "OMHER-BOUNDARY.md"
 BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
 SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
 UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
-SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok")
-SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal")
+SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode")
+SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat")
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio")
 CONTEXT = ROOT / "CONTEXT.md"
@@ -49,10 +49,17 @@ RULES = (
     "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
     "omher never commits, checks out, pushes or edits a repository.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
-    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, with no arguments,",
+    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
-    " --permission-prompt-tool stdio`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`) on pipes;",
+    " --permission-prompt-tool stdio`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`) on pipes;",
+    "An Agent Client Protocol agent (`opencode acp`) gets no such argument: omher sends the conversation id it reported",
+    "and tells the agent at `initialize` that omher offers no file reading or writing and no terminal,",
+    "OpenCode also gets one environment variable, `OPENCODE_CONFIG_CONTENT`, holding ask rules for its `bash` and `edit` tools",
+    "right before the chat, the shell runs `opencode agent list` (that one fixed argument, in the same folder, with the same environment, on pipes, nothing on stdin, at most 30 seconds)",
+    "so allow becomes ask, ask stays ask and deny stays deny, for blanket and pattern rules alike;",
+    "OpenCode is not started and the chat says so in one sentence; omher reads and writes none of OpenCode's own files,",
+    "never its always-allow.",
     "the only other argument continues a conversation, with an id the shell checks is a UUID:",
     "`--resume <id>` for Claude Code, `--session <id>` for OmO.",
     "DSH is DeepSeek Harness only:",
@@ -670,7 +677,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         chat = self.prod.split("pub fn chat_args", 1)[1].split("\n}\n", 1)[0]
         arms = re.findall(r'^\s+(.+?) => (&.+?\[\.\.\]),?$', chat, re.M)
         self.assertEqual(arms, [('"claude"', "&CLAUDE_CHAT_ARGS[..]"), ('"codex"', '&["app-server"][..]'),
-                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]')])
+                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]'), ('"opencode"', '&["acp"][..]')])
         resume = self.prod.split("pub fn resume_args", 1)[1].split("\n}\n", 1)[0]
         # exactly two flags, each for named agents only; every other agent is refused
         self.assertEqual(re.findall(r'^\s+(.+?) => ("--[a-z-]+"|return Err)', resume, re.M),
@@ -683,6 +690,46 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         for needle in ("launch_for(agent_id)?", "chat_args(agent_id)", "resume_args(agent_id, r)?", "\n        if a.mode != Mode::Chat {\n            return Err("):
             self.assertIn(needle, start)
         self.assertIn("pub(crate) fn spawn<F>", self.chat)
+
+    def test_acp_agents_turn_off_files_and_terminal_and_continue_inside_the_protocol(self) -> None:
+        """Rule 11: the ACP adapter offers the agent no file access and no terminal, a conversation id travels in
+        `session/resume` (checked by a strict pattern), OpenCode's only extra variable is the fixed ask rule, and an
+        approval answer is never the agent's always-allow."""
+        acp = (SHELL / "acp_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        self.assertIn('"clientCapabilities": {"fs": {"readTextFile": false, "writeTextFile": false}, "terminal": false}', acp)
+        self.assertNotIn("fs/read_text_file", acp)
+        self.assertNotIn("terminal/create", acp)
+        self.assertIn("b.is_ascii_alphanumeric() || b == b'_' || b == b'-'", acp)
+        self.assertIn("(1..=128).contains(&id.len())", acp)
+        rows = re.search(r"pub const ACP_AGENTS: \[AcpAgent; (\d+)\] = \[(.*?)\];", acp, re.S)
+        self.assertIsNotNone(rows)
+        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode"])
+        # OpenCode's one variable carries ask rules built from its own `agent list`: allow -> ask, deny stays deny
+        self.assertEqual(re.findall(r'rules: (.*?),\n', rows.group(2)),
+                         ['Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept })'])
+        self.assertNotIn("OPENCODE_PERMISSION", acp)
+        self.assertIn('if a == "deny" { "deny" } else { "ask" }', acp)
+        self.assertIn('const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];', acp)
+        # the refusal the UI translates is the same sentence on both sides
+        no_rules = re.search(r'pub const NO_RULES: &str = "([^"]+)";', acp).group(1)
+        ts = (ROOT / "apps" / "omher" / "src" / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        self.assertIn(f'export const NO_RULES = "{no_rules}";', ts)
+        # the answer omher sends is the allow-once or reject option the request named, never allow_always
+        self.assertIn('let (once, deny) = (opt("allow_once"), opt("reject_once").or_else(|| opt("reject_always")));', acp)
+        self.assertNotIn('opt("allow_always")', acp)
+        # no process is started here, and no file is opened
+        for needle in ("Command::new", "std::fs::", "File::open"):
+            self.assertNotIn(needle, acp)
+        # the shell adds the row's env and nothing else, and takes an ACP id only through the protocol
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);", start)
+        # the listing runs the same resolved program with the probe's fixed arguments only, and kills it on timeout
+        rules = self.chat.split("fn agent_rules(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("argv.extend(probe.args.iter().map(OsString::from));", rules)
+        self.assertIn("cmd.stdin(Stdio::null());", rules)
+        self.assertIn("rx.recv_timeout(RULES_DEADLINE)", rules)
+        self.assertIn("const RULES_DEADLINE: Duration = Duration::from_secs(30);", self.chat)
+        self.assertIn('(_, Some(r)) if acp.is_some() && is_acp_session_id(r) => Some(r),', start)
 
     def test_dsh_is_deepseek_harness_run_headless_with_fixed_arguments(self) -> None:
         """Rule 11's DSH sentences: the CLI is DeepSeek Harness's own, each message is one fixed headless run
@@ -802,7 +849,11 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         # the chat's spawn builds its command there and the allow-listed start hands the account through
         self.assertIn("command_for(&argv, cwd, path_env, account_env)?", self.chat.split("pub(crate) fn spawn<F>", 1)[1])
         start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn("self.spawn(argv, cwd, Some(path_env), account_env, adapter, sink)", start)
+        # the account's variable, plus only the ACP row's ask rules (rule 11: OpenCode's, built from its own listing)
+        self.assertIn("let mut env = account_env.to_vec();", start)
+        self.assertEqual(start.count("env.push("), 1)
+        self.assertIn("env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);", start)
+        self.assertIn("self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)", start)
 
     def test_start_agent_resolves_argv_from_the_allow_list_only(self) -> None:
         start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
