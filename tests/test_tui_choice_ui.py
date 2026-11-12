@@ -441,7 +441,7 @@ class PickerTests(unittest.TestCase):
 
     def test_the_info_line_says_the_pickers_keys_not_the_composers(self) -> None:
         # The picker's keys stand in for the composer's line while it has them, and leave with it.
-        keys = {"sessions": "↑↓ move · enter switches · esc closes", "rewind": "↑↓ move · enter edits it · esc closes",
+        keys = {"sessions": "↑↓ move · enter switches · ctrl+r renames · ctrl+d deletes · esc closes", "rewind": "↑↓ move · enter edits it · esc closes",
                 "model": "↑↓ move · enter switches this session · esc closes"}
         for name, opener in self.openers():
             with self.subTest(picker=name):

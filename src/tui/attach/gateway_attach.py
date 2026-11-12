@@ -42,10 +42,21 @@ the stdio entry's in a closed set of places. `Adapter` translates those, after
 * `config.set model` (a `/model` switch of this session) is the owner's
   revision-fenced `session.mutate model`, read and sent as Ink's
   `canonicalSessionControls.ts` does, and answered in the stdio entry's
-  shape: the model, `deferred` while a turn runs, or `confirm_required` and
+  shape: the model (and the provider the owner committed), `deferred` while a turn runs, or `confirm_required` and
   Hermes' message for a guarded target; the owner's one-time token for that
   target is kept and rides the same switch sent again with
   `confirm_expensive_model`. Every other `config.set` passes.
+* `session.title` with a title (the session picker's rename) and
+  `session.delete` (its delete) are the owner's revision-fenced
+  `session.mutate rename` (`{title}`, at the revision only: a metadata edit
+  carries no generation fence) and `session.mutate delete` (at the revision
+  and the generation), read first by a `session.resume` as Ink's
+  `mutateCanonical` reads them, and answered in the stdio entry's shapes
+  (`{title}`, `{deleted}`). That read attaches this connection to the
+  session; unless this connection already viewed it, the attachment is
+  handed back with a plain `session.detach` once the edit is answered (a
+  deleted session excepted), as Ink's `useSessionDelete.ts` hands back a
+  refused delete's.
 * `session.steer` and `session.redirect` get the execution generation of the turn they steer,
   `shell.exec` the session it runs in, and `session.list` is the owner's live
   listing followed by its stored one.
@@ -568,6 +579,8 @@ class Adapter:
             "config.set": self._config_set,
             "shell.exec": self._shell,
             "session.list": self._list,
+            "session.title": self._rename,
+            "session.delete": self._delete,
             "image.attach": self._attach,
             "image.attach_bytes": self._attach_bytes,
             "image.detach": self._detach_image,
@@ -786,7 +799,8 @@ class Adapter:
                 return [_reply(request_id, {"key": "model", "value": "", "confirm_required": True,
                                             "confirm_message": str(result.get("confirm_message") or "")})]
             self._note_generation(session_id, result.get("execution_generation"))
-            return [_reply(request_id, {"key": "model", "value": result.get("model") or "", "scope": "session",
+            provider = {"provider": result["provider"]} if isinstance(result.get("provider"), str) and result["provider"] else {}
+            return [_reply(request_id, {"key": "model", "value": result.get("model") or "", **provider, "scope": "session",
                                         "deferred": result.get("status") == "deferred"})]
 
         return [self._call("session.resume", {"session_id": session_id}, on_read)]
@@ -820,6 +834,70 @@ class Adapter:
             return [self._call("session.list", {**params, "scope": "stored"}, on_stored)]
 
         return [self._call("session.list", params, on_live)]
+
+    def _rename(self, request_id: object, params: dict[str, Any]) -> list[Action]:
+        """`session.title` with a title is the owner's `session.mutate rename`, at the revision a `session.resume`
+        reads and no generation (Ink's `mutateCanonical` sends a rename so), answered `{pending, title}` as the stdio
+        entry answers it. One without a title (a read) passes."""
+        if "title" not in params:
+            return [self._forward(request_id, "session.title", params, translated=False)]
+        title = params.get("title")
+
+        def answer(result: dict[str, Any]) -> dict[str, Any]:
+            return {"pending": False, "title": str(result.get("title") or title).strip()}
+
+        return self._metadata_edit(request_id, params.get("session_id"), "rename", {"title": title}, answer)
+
+    def _delete(self, request_id: object, params: dict[str, Any]) -> list[Action]:
+        """`session.delete` is the owner's `session.mutate delete` (the shared gateway has no `session.delete`), at
+        the revision and generation a `session.resume` reads, answered `{deleted: <id>}` as the stdio entry answers."""
+        session_id = params.get("session_id")
+        return self._metadata_edit(request_id, session_id, "delete", {}, lambda _result: {"deleted": session_id})
+
+    def _metadata_edit(self, request_id: object, session_id: object, operation: str, payload: dict[str, Any],
+                       answer: Callable[[dict[str, Any]], dict[str, Any]]) -> list[Action]:
+        """A rename or delete of a session the picker lists, which this connection may not view.
+
+        The `session.resume` that reads the revision (and, for a delete, the
+        generation) attaches this connection as a viewer. That attachment is
+        handed back with a plain `session.detach` (no end reason: one would
+        run the owner's viewer close) once the edit is answered, unless this
+        connection viewed the session already, as Ink's `useSessionDelete.ts`
+        hands back a refused delete's, or a resume opened it while the edit
+        waited (the owner reuses one subscription per viewer, so handing it
+        back would cut the opened session's events). A deleted session leaves
+        nothing to hand back, and a view of it here is forgotten.
+        """
+
+        def on_read(snapshot: dict[str, Any]) -> list[Action]:
+            result = snapshot.get("result")
+            if not isinstance(result, dict):
+                return [(TO_CLIENT, {**snapshot, "id": request_id})]
+            resolved = result.get("session_id") or session_id
+            subscription = result.get("subscription_id")
+            release = ({"session_id": resolved, "subscription_id": subscription}
+                       if isinstance(subscription, str) and subscription and resolved not in self.sessions else None)
+            mutate = {"session_id": session_id, "request_id": self.new_id(), "expected_revision": result.get("revision"),
+                      "operation": operation, "payload": payload}
+            if operation != "rename":  # a metadata edit carries no generation fence (`mutateCanonical`)
+                mutate["expected_generation"] = result.get("execution_generation")
+
+            def on_mutated(reply: dict[str, Any]) -> list[Action]:
+                done = reply.get("result")
+                said: Action = (_reply(request_id, answer(done)) if isinstance(done, dict)
+                                else (TO_CLIENT, {**reply, "id": request_id}))
+                if isinstance(done, dict) and operation == "delete":
+                    if isinstance(resolved, str):
+                        self.sessions.pop(resolved, None)
+                    return [said]
+                adopted = self.sessions.get(resolved) if isinstance(resolved, str) else None
+                if release is None or (adopted is not None and adopted.subscription_id == release["subscription_id"]):
+                    return [said]  # decided now, not at the read: a resume since adopted this subscription
+                return [self._call("session.detach", release, lambda _gone: []), said]
+
+            return [self._call("session.mutate", mutate, on_mutated)]
+
+        return [self._call("session.resume", {"session_id": session_id}, on_read)]
 
     # ── the commands the owner runs through a verb of its own ──
 
