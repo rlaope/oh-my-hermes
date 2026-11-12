@@ -864,9 +864,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   mouse to the terminal, and the next key or paste takes it back, so a drag
   copies clean again. The wheel down does nothing on the main screen while
   the OMH TUI holds the mouse. Ctrl+O still opens the transcript view. A row the OMH TUI did not print in this screen (the shell's
-  output above the session, the rows from before a Ctrl+Z) selects nothing:
-  dragging from there opens the transcript view instead (the open question,
-  while one is asked), and with nothing to show it opens nothing. While the
+  output above the session, the rows from before a Ctrl+Z) selects nothing,
+  and dragging from there opens nothing: the mouse never opens a view over
+  the screen, only Ctrl+O does. While the
   window is being resized the mouse is the terminal's, and a selection is
   dropped; on a terminal that ignores the erase of its scrollback (`CSI 3 J`)
   rows reflowed into the scrollback with a selection on them can keep it

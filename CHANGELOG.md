@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The mouse never opens the OMH TUI's history view.** A drag that started
+  on a row the OMH TUI did not print (the shell's output above the session,
+  the rows from before a Ctrl+Z) still opened the full-screen transcript
+  view, the last mouse path that did after the wheel stopped opening it. It
+  now selects nothing and opens nothing; only Ctrl+O opens the view.
+
 - **Hermes' own terminal opens as Hermes' own when `omh` falls back from
   inside an OMH TUI session.** When the OMH TUI could not start, `omh` handed
   Hermes the shell's whole environment, so an `omh` run from a shell that had
