@@ -157,8 +157,11 @@ test("the shortcut does nothing in a bot chat", async ({ page }) => {
 
 test("a terminal that is not focused does not take the shortcut (the bar is for the terminal the keyboard is in)", async ({ page }) => {
   await terminalWithText(page);
-  // the keyboard is in the sidebar's search field, not the terminal
-  await page.keyboard.press(`${await modKey(page)}+k`);
+  // the keyboard is in the sidebar's search field, not the terminal. A click, not the search shortcut: off macOS
+  // Ctrl+K typed in a terminal is the program's (src/app/shortcuts.ts), so the shortcut would leave the keyboard
+  // where it was
+  await page.getByTestId("bot-search").click();
+  await expect(page.getByTestId("bot-search")).toBeFocused();
   await find(page);
   await settle(page);
   await expect(bar(page)).toHaveCount(0);
