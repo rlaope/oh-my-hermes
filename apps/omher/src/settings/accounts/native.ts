@@ -25,6 +25,8 @@ export interface AccountHost {
   clis(): Promise<Partial<Record<AccountCli, boolean>> | null>;
   /** null: this CLI has no status command (or there is no app). */
   status(cli: AccountCli, account: string): Promise<LoginStatus | null>;
+  /** The CLI's version token (\"2.1.322\"), or null: no `--version` for this CLI, nothing parseable, or no app. */
+  version(cli: AccountCli): Promise<string | null>;
   signIn(cli: AccountCli, account: string, onEvent: (ev: SignInEvent) => void): Promise<number>;
   cancel(login: number): Promise<void>;
 }
@@ -54,6 +56,10 @@ const tauriHost: AccountHost = {
     const { invoke } = await core();
     return invoke<LoginStatus | null>("account_status", { cli, id: account });
   },
+  async version(cli) {
+    const { invoke } = await core();
+    return invoke<string | null>("account_version", { cli });
+  },
   async signIn(cli, account, onEvent) {
     const { invoke, Channel } = await core();
     const ch = new Channel<SignInEvent>();
@@ -70,6 +76,7 @@ const noHost: AccountHost = {
   canSignIn: false,
   clis: async () => null,
   status: async () => null,
+  version: async () => null,
   signIn: async () => {
     throw new Error(t("acc.needsApp"));
   },
