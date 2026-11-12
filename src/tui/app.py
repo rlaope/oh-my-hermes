@@ -87,7 +87,8 @@ person sends from the composer is appended to Hermes' own input history
 (`history.py`), never an answer to a question Hermes asked. The other files
 the TUI writes are metadata: that session file, what OMH's HUD reader (`panels.HudPoller`, its fan-out cache
 under `<omh_home>/runtime/`) and the model-chain picker (`/omh-model`'s saved
-chains) write under the OMH home, and an empty fallback marker at the path
+chains) write under the OMH home, the models last switched to
+(`model_picker.record_recent`), and an empty fallback marker at the path
 `omh` named, which `omh` removes. An attached image is a file the
 gateway resolves and stages itself (`image.attach`, `clipboard.paste`,
 `input.detect_drop`); the TUI reads its bytes into memory once, has Hermes
@@ -232,7 +233,7 @@ from .modes import (
 from .pager import ALT_SCREEN_OFF, ALT_SCREEN_ON, ROW_END, HistoryPager, Pager, Selection, forget_cells, reversed_cells
 from .model_picker import KEYS as MODEL_PICKER_KEYS
 from .model_picker import PICK as MODEL_PICK
-from .model_picker import ModelPicker, model_rows, typed_switch_value
+from .model_picker import ModelPicker, model_rows, read_recent, record_recent, typed_switch_value
 from . import dag_block
 from .dag_tree import TreeState
 from .turn_ends import TURN_DONE, TURN_INTERRUPTED, TURN_OPEN, TURN_STOPPED, read_turn_end, record_turn_end
@@ -517,6 +518,8 @@ MODEL_CONFIRM_QID = "confirm"
 MODEL_KEEP_CHOICE = "Keep {current}"
 MODEL_SWITCH_CHOICE = "Switch to {model} anyway"
 MODEL_KEPT_NOTICE = "Model not switched: this session stays on {current}."
+# The `session.info` routes kept for an outstanding /model switch to read its provider from (`info_routes`).
+INFO_ROUTES_KEPT = 16
 MODEL_CONFIRM_STALE_NOTICE = "Model not switched: the session changed before the confirmation landed; run /model again."
 # A question the TUI asks itself goes through the slot like Hermes' own; its answer stays here (`_respond`).
 LOCAL_QUESTION_PREFIX = "omh-local-"
@@ -2222,6 +2225,12 @@ class App(ModesMixin, AgentViewMixin):
         # The model a switch was deferred to (Hermes makes it as the next turn starts) and `turns_ended` then; None
         # once it is over. A drop Hermes reports names it (`_model_switch_dropped`).
         self.model_deferred: tuple[str, int] | None = None
+        # Every (model, provider) a `session.info` named, in arrival order, and how many came before the first one
+        # kept; Hermes' stdio entry says a switched route there before it answers `config.set`, whose answer names no
+        # provider. Each switch reads only the routes said after it went out (`_switch_model` notes the count), so a
+        # second /model sent while the first is out cannot take the first one's route away.
+        self.info_routes: list[tuple[str, str]] = []
+        self.info_routes_dropped = 0
         # Hermes' configured default model and provider (a sessionless `model.options`) when last read, and the
         # config file's mtime then; None until read. A default that moves is switched to (`_check_default`).
         self.default_route: tuple[str, str] | None = None
@@ -4356,6 +4365,12 @@ class App(ModesMixin, AgentViewMixin):
         self._take_skills(payload)
         self._take_title(payload)
         self.model = as_text(payload.get("model")) or self.model
+        route = (as_text(payload.get("model")).strip(), as_text(payload.get("provider")).strip())
+        if all(route):
+            self.info_routes.append(route)
+            if len(self.info_routes) > INFO_ROUTES_KEPT:
+                del self.info_routes[0]
+                self.info_routes_dropped += 1
         self._take_usage(payload.get("usage"))
         self._take_session_state(payload)
         # `running` is not read: the previous turn's closing `running: false` arrives after
@@ -5347,14 +5362,17 @@ class App(ModesMixin, AgentViewMixin):
             with self._for_command(echo):
                 self.transcript.add_notice(CALL_EXPIRED_NOTICE.format(method="config.set", seconds=seconds), NOTICE_WARN)
 
+        # An info said before this switch went out names the route being left, not the one Hermes confirms for it.
+        since = self.info_routes_dropped + len(self.info_routes)
         sent = self._request(
-            "config.set", params, lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result)),
+            "config.set", params,
+            lambda result: (settled(), self._on_model_switched(sid, value, confirmed, result, since)),
             lambda _error: bool(settled()), unanswered,
         )
         if sent is not None and echo is not None and not echo.done:
             self.transcript.add_notice(line)  # under the echo until the answer takes its place
 
-    def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any]) -> None:
+    def _on_model_switched(self, sid: str, value: str, confirmed: bool, result: dict[str, Any], since: int = -1) -> None:
         """A `config.set model` answer: switched (for this session, or as Hermes' default too), switched at the next
         turn, or not until the person confirms."""
         if result.get("confirm_required"):
@@ -5381,11 +5399,29 @@ class App(ModesMixin, AgentViewMixin):
         self.model = model
         self.model_deferred = None
         self.dirty = True
+        self._remember_model(model, as_text(result.get("provider")).strip(), value, since)
         global_scope = result.get("scope") == MODEL_GLOBAL_SCOPE
         self.transcript.add_notice((MODEL_SWITCHED_GLOBAL_NOTICE if global_scope else MODEL_SWITCHED_NOTICE).format(model=model))
         warning = as_text(result.get("warning")).strip()
         if warning:
             self.transcript.add_notice(warning, NOTICE_WARN)
+
+    def _remember_model(self, model: str, provider: str, value: str, since: int = -1) -> None:
+        """A switch Hermes made to `model`, the model its answer named (an alias sent resolves to it), goes to the front
+        of the OMH home's recent list (`model_picker.record_recent`), which bare /model shows first.
+
+        The provider is Hermes' too: its answer's (the attach adapter passes the shared owner's), else the one the
+        `session.info` said after this switch went out (`since`, a count of infos) named with that model (the stdio
+        entry's), else the one `value` sent, which Hermes switched on. A switch none of them names a provider for, or
+        a launch without an OMH home, records nothing.
+        """
+        home = self._omh_home()
+        if not provider and since >= 0:
+            heard = self.info_routes[max(since - self.info_routes_dropped, 0):]
+            provider = next((said for named, said in reversed(heard) if named == model), "")
+        provider = provider or (contract.model_switch_parts(value) or ("", ""))[1]
+        if home is not None and provider:
+            record_recent(home, model, provider)
 
     def _confirm_model(
         self, result: Mapping[str, Any], intro: str, model: str, current: str,
@@ -5672,7 +5708,9 @@ class App(ModesMixin, AgentViewMixin):
             return
         if self._picker_taken("/model"):
             return
-        self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model)
+        home = self._omh_home()
+        self.model_picker = ModelPicker(model_rows(result), current=as_text(result.get("model")) or self.model,
+                                        recent=read_recent(home) if home is not None else [])
         if query:
             self.model_picker.query = query
             self.model_picker.index = 0

@@ -35,6 +35,14 @@ All notable changes will be documented here.
   a drag copies without the rail again. Ctrl+O still opens the transcript
   view.
 
+- **Bare `/model` in the OMH TUI lists the models you last switched to first.**
+  Each switch Hermes confirmed puts the model and provider Hermes confirmed
+  (an alias you typed is kept as the model it resolved to, and a `/model`
+  without `--provider` as the provider Hermes switched on) at the front of
+  `~/.omh/tui/recent-models.json` (at most five, no repeats); a switch Hermes
+  deferred or asked to confirm records nothing. With an empty filter the picker
+  opens with those still on offer under `Recent`, then the whole list under
+  `All models`; typing filters as before, with no group.
 - **The slash menu and the pickers match letters typed in order.** `/rld` now
   offers `/reload-skills`, and `snt` finds a `claude-sonnet-…` row in `/model`.
   Names and rows that start with or contain what you typed keep their place and

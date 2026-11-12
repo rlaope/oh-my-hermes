@@ -1765,7 +1765,9 @@ image), `/theme`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's
 plan), `/whats-new` (this version's What's new, also `/whatsnew`), `/model` (alone, a picker of the models Hermes offers this session,
 from Hermes' `model.options`, opened on the session's model, marked `●`, which
 comes first when no provider lists it, and with the highlight's place in the
-header, `Model (12/162)`, once the list scrolls; the one you pick is sent as Hermes' own
+header, `Model (12/162)`, once the list scrolls; with nothing typed, the last five models
+Hermes switched to (kept in `~/.omh/tui/recent-models.json`) head the list under
+`Recent`, the whole list following under `All models`; the one you pick is sent as Hermes' own
 `/model <name> --provider <slug> --session`, so it lasts for this session;
 `/model <name>` goes to Hermes as typed), `/export` (Hermes' export writes a
 profile archive, not the transcript, so the first `/export` says so and the

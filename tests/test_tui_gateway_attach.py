@@ -505,6 +505,15 @@ class ModelSwitchTests(AdapterCase):
         self.assertEqual(adapter.sessions[SID].generation, 6)
         self.assertFalse(adapter.waiting())
 
+    def test_the_answer_names_the_provider_the_owner_committed(self) -> None:
+        adapter, mutate = self.switch("sonnet --session")
+        [(_, answer)] = adapter.from_owner(_answer(mutate["id"], {
+            "session_id": SID, "operation": "model", "model": "claude-sonnet-4-6", "provider": "anthropic",
+            "execution_generation": 6}))
+        self.assertEqual(answer["result"], {
+            "key": "model", "value": "claude-sonnet-4-6", "provider": "anthropic", "scope": "session",
+            "deferred": False})
+
     def test_a_pick_while_a_turn_runs_is_deferred_and_a_guarded_one_is_not_made(self) -> None:
         adapter, mutate = self.switch("claude-opus-5-5 --session")
         self.assertEqual(mutate["params"]["payload"], {"model": "claude-opus-5-5"})
