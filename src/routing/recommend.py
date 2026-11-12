@@ -6515,12 +6515,6 @@ _SKILL_OFFERS_ITSELF: dict[str, Callable[[str, set[str]], bool]] = {
     # Changing how a page looks is not operating a browser on it, even when
     # the page is named by a browser phrase ("login page").
     "browser-operator": lambda normalized_query, query_tokens: not appearance_edit_request(query_tokens),
-    # Editing recorded video is not editing the UI shown in it.
-    "frontend": lambda query, tokens: not (
-        any(normalized_phrase(term) in query for term in ("녹화", "recorded", "recording"))
-        and any(normalized_phrase(term) in query for term in ("영상", "video"))
-        and any(normalized_phrase(term) in query for term in ("편집", "edit"))
-    ),
     "apple-design": _apple_design_offers_itself,
     "codebase-uml": _codebase_uml_offers_itself,
     "context": _context_alignment_offers_itself,

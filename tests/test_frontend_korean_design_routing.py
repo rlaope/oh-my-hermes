@@ -43,9 +43,18 @@ NEGATIVE = (
     "모바일 앱 스토어 출시 준비해줘",
     "iOS 앱 화면 디자인 리뷰해줘",
     "랜딩 페이지 소개 영상 만들어줘",
-    "폰 화면 녹화한 영상 편집해줘",
     "대시보드가 뭐야?",
     "디자인 규칙을 빌드에서 검사하게 해줘",
+)
+# Recorded video beside a UI surface. The guard reads none of these, and no
+# rule withdraws frontend from them: an earlier commit of this change did, by
+# the co-occurrence of record, video and edit words, and it took frontend away
+# from the two page edits below, which the base dispatches. Each keeps its base
+# verdict, including the first one's clarification with frontend on top.
+RECORDED_VIDEO_KEEPS_BASE = (
+    ("폰 화면 녹화한 영상 편집해줘", ("clarify", "oh-my-hermes", "frontend")),
+    ("edit the landing page so the recorded video autoplays", ("dispatch", "frontend", "frontend")),
+    ("랜딩 페이지에 녹화 영상 넣게 레이아웃 편집해줘", ("dispatch", "frontend", "frontend")),
 )
 # One request per closed shape, with the tier the predicate names for it.
 TIER_EXAMPLES = (
@@ -236,6 +245,12 @@ class FrontendKoreanDesignRoutingTests(unittest.TestCase):
                 _, selected, top = verdict(message)
                 self.assertNotEqual(selected, "frontend")
                 self.assertNotEqual(top, "frontend")
+                self.assertEqual(tier(message), "")
+
+    def test_recorded_video_beside_a_surface_keeps_base_route(self):
+        for message, expected in RECORDED_VIDEO_KEEPS_BASE:
+            with self.subTest(message=message):
+                self.assertEqual(verdict(message), expected)
                 self.assertEqual(tier(message), "")
 
     def test_greenfield_baseline(self):

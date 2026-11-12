@@ -10585,7 +10585,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase('frontend-design-case-9', 'UI design or neighbouring request keeps its route', '모바일 앱 스토어 출시 준비해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'cto-loop'),
     RoutingInterventionCase('frontend-design-case-10', 'UI design or neighbouring request keeps its route', 'iOS 앱 화면 디자인 리뷰해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'code-review'),
     RoutingInterventionCase('frontend-design-case-11', 'UI design or neighbouring request keeps its route', '랜딩 페이지 소개 영상 만들어줘', 'dispatch', 'deep-interview', 'answer_clarification', 'clarification', ''),
-    RoutingInterventionCase('frontend-design-case-12', 'UI design or neighbouring request keeps its route', '폰 화면 녹화한 영상 편집해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'visual-qa'),
+    RoutingInterventionCase('frontend-design-case-12', 'UI design or neighbouring request keeps its route', '폰 화면 녹화한 영상 편집해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'frontend'),
     RoutingInterventionCase('frontend-design-case-13', 'UI design or neighbouring request keeps its route', '대시보드가 뭐야?', 'fallback', 'oh-my-hermes', 'answer_directly', 'clarification', ''),
     RoutingInterventionCase('frontend-design-case-14', 'UI design or neighbouring request keeps its route', '디자인 규칙을 빌드에서 검사하게 해줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'award-bar-score'),
     RoutingInterventionCase('frontend-design-case-15', 'UI design or neighbouring request keeps its route', '대시보드에 어제 매출 데이터가 안 나와 고쳐줘', 'clarify', 'oh-my-hermes', 'answer_clarification', 'clarification', 'workflow-learning'),
