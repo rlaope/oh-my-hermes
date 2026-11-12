@@ -45,7 +45,7 @@
   background: var(--grp-bg);
   max-height: 264px;
   overflow-y: auto;
-  padding: 2px 4px 4px;
+  padding: 2px 4px 6px;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }
@@ -58,7 +58,7 @@
 }
 .tm-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1px 4px;
 }
 .tm-row {
@@ -106,6 +106,8 @@
   width: 6px;
   height: 6px;
   border-radius: 1px;
+  /* a colour equal to the background (black on a dark theme) still shows as a square */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
 }
 .tm-name {
   flex: 1;
@@ -175,15 +177,22 @@
   outline: none;
   background: var(--seg-on);
 }
-/* a row's words wrap beside its control instead of pushing it off the page */
+/* a row's words keep a readable measure: when the control leaves them less, the control goes under them */
 .tm .st-row {
-  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.tm .st-k {
+  flex: 1 1 200px;
 }
 .tm .st-v {
-  max-width: none;
+  max-width: 100%;
+  margin-left: auto;
 }
+/* as wide as the segmented controls on General, wider when the words need it */
 .tm .st-v .mseg.sm {
   width: auto;
+  min-width: 200px;
 }
 .tm .st-v .mseg button {
   flex: 1 0 auto;

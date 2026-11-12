@@ -10,6 +10,11 @@ import type { TermSettings } from "../../sessions/term/settings";
 import type { TermTheme } from "../../sessions/term/themes";
 import { t } from "../../i18n";
 
+// xterm draws no cursor until its terminal has had the keyboard once, and the preview never has it. Leaving the
+// alternate screen (a no-op here: the sample is on the normal one) is the escape sequence that marks the cursor as
+// in use, so the picked cursor shape shows.
+const SHOW_CURSOR = "\x1b[?47l";
+
 export function TermPreview({ theme, settings }: { theme: TermTheme; settings: TermSettings }) {
   const host = useRef<HTMLDivElement>(null);
   const live = useRef<{ term: Terminal; fit: FitAddon } | null>(null);
@@ -57,7 +62,7 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
       live.current = { term, fit };
       look();
       layout();
-      term.write(termSample(), layout);
+      term.write(termSample() + SHOW_CURSOR, layout);
       ro = new ResizeObserver(layout);
       ro.observe(el);
     });
