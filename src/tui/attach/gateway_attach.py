@@ -42,7 +42,7 @@ the stdio entry's in a closed set of places. `Adapter` translates those, after
 * `config.set model` (a `/model` switch of this session) is the owner's
   revision-fenced `session.mutate model`, read and sent as Ink's
   `canonicalSessionControls.ts` does, and answered in the stdio entry's
-  shape: the model, `deferred` while a turn runs, or `confirm_required` and
+  shape: the model (and the provider the owner committed), `deferred` while a turn runs, or `confirm_required` and
   Hermes' message for a guarded target; the owner's one-time token for that
   target is kept and rides the same switch sent again with
   `confirm_expensive_model`. Every other `config.set` passes.
@@ -786,7 +786,8 @@ class Adapter:
                 return [_reply(request_id, {"key": "model", "value": "", "confirm_required": True,
                                             "confirm_message": str(result.get("confirm_message") or "")})]
             self._note_generation(session_id, result.get("execution_generation"))
-            return [_reply(request_id, {"key": "model", "value": result.get("model") or "", "scope": "session",
+            provider = {"provider": result["provider"]} if isinstance(result.get("provider"), str) and result["provider"] else {}
+            return [_reply(request_id, {"key": "model", "value": result.get("model") or "", **provider, "scope": "session",
                                         "deferred": result.get("status") == "deferred"})]
 
         return [self._call("session.resume", {"session_id": session_id}, on_read)]

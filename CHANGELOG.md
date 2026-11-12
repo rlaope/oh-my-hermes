@@ -5,7 +5,9 @@ All notable changes will be documented here.
 ## Unreleased
 
 - **Bare `/model` in the OMH TUI lists the models you last switched to first.**
-  Each switch Hermes confirmed puts its model and provider at the front of
+  Each switch Hermes confirmed puts the model and provider Hermes confirmed
+  (an alias you typed is kept as the model it resolved to, and a `/model`
+  without `--provider` as the provider Hermes switched on) at the front of
   `~/.omh/tui/recent-models.json` (at most five, no repeats); a switch Hermes
   deferred or asked to confirm records nothing. With an empty filter the picker
   opens with those still on offer under `Recent`, then the whole list under

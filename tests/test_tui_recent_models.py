@@ -17,6 +17,7 @@ from _tui_lines import lines_text
 from test_tui_modes import SID, RecordingClient, answer, make_app, notices
 from test_tui_muscle_memory import OPTIONS, send
 from omh.tui.app import App
+from omh.tui.gateway import Event
 from omh.tui.keys import CHAR, ENTER, Key
 from omh.tui.model_picker import (
     ALL_GROUP, RECENT_GROUP, RECENT_LIMIT, RECENT_SCHEMA, ModelPicker, model_rows, read_recent, record_recent,
@@ -92,9 +93,33 @@ class RecordTests(HomeTests):
         answer(app, client, None, {"code": 4002, "message": "unknown model"})
         self.assertFalse(recent_path(self.home).exists())
 
-    def test_a_switch_that_names_no_provider_records_nothing(self) -> None:
+    def test_the_model_hermes_confirmed_is_recorded_not_the_alias_sent(self) -> None:
         app, client = self.app()
+        self.switch(app, client, "sonnet", "anthropic", result={"key": "model", "value": "claude-sonnet-4-6"})
+        self.assertEqual(app.model, "claude-sonnet-4-6")
+        self.assertEqual(self.stored(), [("claude-sonnet-4-6", "anthropic")])
+
+    def test_a_switch_naming_no_provider_records_the_provider_hermes_confirmed(self) -> None:
+        app, client = self.app()
+        send(app, "/model opus")
+        # Hermes' stdio entry announces the switched session (`session.info`) before it answers the call.
+        app._on_event(Event("session.info", SID, {"model": "claude-opus-5-5", "provider": "anthropic"}))
+        answer(app, client, {"key": "model", "value": "claude-opus-5-5", "scope": "session"})
+        self.assertIn("This session now runs claude-opus-5-5.", notices(app))
+        self.assertEqual(self.stored(), [OPUS])
+
+    def test_the_provider_in_hermes_answer_wins_over_the_one_sent(self) -> None:
+        app, client = self.app()
+        self.switch(app, client, "opus", "claude", result={"key": "model", "value": "claude-opus-5-5",
+                                                            "provider": "anthropic"})  # the shared owner's answer
+        self.assertEqual(self.stored(), [OPUS])
+
+    def test_a_switch_hermes_names_no_provider_for_records_nothing(self) -> None:
+        app, client = self.app()
+        # Said before the switch went out: it is the session's old route, not what Hermes confirmed for this one.
+        app._on_event(Event("session.info", SID, {"model": "claude-opus-5-5", "provider": "openrouter"}))
         send(app, "/model claude-opus-5-5")
+        app._on_event(Event("session.info", SID, {"model": "claude-fable-5", "provider": "anthropic"}))  # not this model
         answer(app, client, {"key": "model", "value": "claude-opus-5-5", "scope": "session"})
         self.assertIn("This session now runs claude-opus-5-5.", notices(app))
         self.assertFalse(recent_path(self.home).exists())
