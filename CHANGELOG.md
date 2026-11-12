@@ -128,6 +128,18 @@ All notable changes will be documented here.
   user-scope one is also refreshed by `omh update`). `tools/claude_context_skills.py`
   counts the skill rows of a saved `/context` output.
 
+- **A subagent's approval that comes after its turn ended reaches you in omher.**
+  When Claude Code ran a subagent in the background, the turn ended first and
+  the subagent asked afterwards (or asked during the turn and the turn ended
+  with the ask open). omher showed that ask as "Not answered" with no buttons,
+  left it out of Needs you and kept the header on Ready, while the subagent
+  waited for an answer nobody could give. Now it is a live card with Deny,
+  Allow once and Allow for session, the session reads "Needs you" in its
+  header and its sidebar row, and the answer reaches Claude Code with no turn
+  running; the subagent then finishes. The ask reads "Not answered" once its
+  subagent ends, Claude Code withdraws it (Stop), or the session's program
+  ends. A Codex subagent's approval follows the same rule.
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt
