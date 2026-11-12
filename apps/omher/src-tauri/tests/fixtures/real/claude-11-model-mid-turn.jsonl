@@ -1,5 +1,5 @@
-{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-2","response":{"model":"claude-haiku-5-5"}}}
-{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-3","response":{"model":"claude-sonnet-5-5"}}}
+{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-3","response":{"model":"claude-haiku-5-5"}}}
+{"type":"control_response","response":{"subtype":"success","request_id":"omher-model-4","response":{"model":"claude-sonnet-5-5"}}}
 {"type":"system","subtype":"init","cwd":"/w/proj","session_id":"8807e0e5-dd2a-4324-98d1-1949e74bd4b2","model":"claude-haiku-5-5","permissionMode":"default"}
 {"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}}
 {"type":"assistant","parent_tool_use_id":null,"message":{"id":"msg_011CgwSYtfMJpV2oL7SAAKfj","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"ok"}]}}

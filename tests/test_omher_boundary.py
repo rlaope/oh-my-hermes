@@ -18,7 +18,7 @@ UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
 SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode")
 SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat")
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-                    "--include-partial-messages", "--permission-prompt-tool", "stdio")
+                    "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages")
 CONTEXT = ROOT / "CONTEXT.md"
 DOCS_INDEX = ROOT / "docs" / "README.md"
 
@@ -52,7 +52,7 @@ RULES = (
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
-    " --permission-prompt-tool stdio`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`) on pipes;",
+    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`) on pipes;",
     "An Agent Client Protocol agent (`opencode acp`) gets no such argument: omher sends the conversation id it reported",
     "and tells the agent at `initialize` that omher offers no file reading or writing and no terminal,",
     "OpenCode also gets one environment variable, `OPENCODE_CONFIG_CONTENT`, holding ask rules for its `bash` and `edit` tools",
@@ -184,10 +184,11 @@ class DocPins(unittest.TestCase):
         # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
         # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
-        # boundary on purpose; 26: rule 26 (SESSIONS attachments saved under ~/.omher/session-files) did too.
+        # boundary on purpose; 26: rule 26 (SESSIONS attachments saved under ~/.omher/session-files) did too; 27:
+        # rule 27 (a session's mode, effort and branch read: only the agent's own switches, never a bypass) as well.
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 26, len(rules))
+        self.assertTrue(6 <= len(rules) <= 27, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -786,9 +787,9 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertNotIn(".spawn(", body)
         # what the person does in a chat is one of five inputs, never a command line
         inputs = re.search(r"pub enum Input \{(.*?)\n\}", self.chat, re.S).group(1)
-        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model"])
-        # Send carries text and the paths of saved pictures only (rule 26): never bytes or a type from the page
-        self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture> },", inputs)
+        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort"])
+        # Send carries text, the paths of saved pictures (rule 26) and the bubble's id only: never bytes or a type
+        self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },", inputs)
         self.assertIn('#[serde(from = "String")]\npub struct Picture', self.chat)
 
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
@@ -1049,3 +1050,51 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
         self.assertIn('onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}', self.view)
         self.assertIn("=== \"chat\";", self.view.split("const takesFiles", 1)[1].split("\n", 1)[0])
         self.assertIn('onSendFiles={mode === "chat" ? startWithFiles : undefined}', self.view)
+
+
+class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
+    """Rule 27: a session's permission mode, effort and model go through the agent's own protocol, never a mode that
+    skips approvals or lifts the sandbox and never a settings file; the branch comes from `.git/HEAD` with no program."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        cls.branch = (SHELL / "git_branch.rs").read_text(encoding="utf-8")
+        cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        cls.ui = (UI_SRC / "sessions" / "controls.ts").read_text(encoding="utf-8")
+
+    def test_the_offered_modes_keep_approvals_and_the_sandbox(self) -> None:
+        modes = self.chat.split("pub fn modes_for", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"(\w+)" => &\[(.*?)\]', modes), [("claude", '"default", "plan", "acceptEdits"'), ("codex", '"read-only", "ask", "auto"')])
+        codex = self.chat.split("fn codex_mode(", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"([\w-]+)" => Some\(\("([\w-]+)", "(\w+)"\)\)', codex),
+                         [("read-only", "on-request", "readOnly"), ("ask", "untrusted", "workspaceWrite"), ("auto", "on-request", "workspaceWrite")])
+        # the UI offers the same modes
+        self.assertIn('claude: ["default", "plan", "acceptEdits"],', self.ui)
+        self.assertIn('codex: ["read-only", "ask", "auto"],', self.ui)
+        for banned in ("bypassPermissions", "dangerFullAccess", "danger-full-access", "dangerously", "dontAsk"):
+            self.assertNotIn(f'"{banned}"', self.chat, banned)
+            self.assertNotIn(banned, self.ui, banned)
+        self.assertNotIn('"never"', self.chat.split("fn codex_mode(", 1)[1].split("\n}\n", 1)[0])
+
+    def test_mode_and_effort_go_through_the_agents_own_messages_only(self) -> None:
+        self.assertIn('json!({"subtype": "set_permission_mode", "mode": mode})', self.chat)
+        self.assertIn('json!({"subtype": "apply_flag_settings", "settings": {"effortLevel": effort}})', self.chat)
+        self.assertIn('self.cmd(&mut st, "set_thinking_level", json!({"level": effort}));', self.chat)
+        # a mode outside modes_for is refused before anything is written
+        self.assertIn('if !modes_for("claude").contains(&mode.as_str()) {', self.chat)
+        # no settings or config file of an agent is written or read for them
+        for banned in ("settings.json", "config.toml", "fs::write(", "OpenOptions"):
+            self.assertNotIn(banned, self.chat, banned)
+
+    def test_the_branch_is_a_head_file_read_and_nothing_else(self) -> None:
+        prod = self.branch.split("#[cfg(test)]", 1)[0]
+        for banned in ("Command::new", "spawn", "fs::write", "OpenOptions", "remove_", "create_dir", "TcpStream"):
+            self.assertNotIn(banned, prod, banned)
+        self.assertIn('d.join("HEAD")', prod)
+        self.assertIn("const MAX: u64 = 4096;", prod)
+        self.assertIn("f.take(MAX)", prod)
+        sig = re.search(r"async fn session_branch\((.*?)\) -> ", self.lib, re.S)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig.group(1).strip(), "cwd: String")
+        self.assertIn("git_branch::branch(std::path::Path::new(&cwd))", self.lib)

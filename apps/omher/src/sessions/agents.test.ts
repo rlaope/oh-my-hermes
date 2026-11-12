@@ -205,7 +205,8 @@ describe("mock session host", () => {
     await host.chatInput(id, { kind: "send", text: "/slow" });
     await host.chatInput(id, { kind: "interrupt" });
     await wait(60);
-    expect(ev.pop()).toEqual({ event: "turn.end", outcome: "interrupted" });
+    // the turn ends, then (an agent that reports it) how full the context is
+    expect(ev.filter((e) => e.event === "turn.end").pop()).toEqual({ event: "turn.end", outcome: "interrupted" });
     await host.chatClose(id);
     await expect(host.chatInput(id, { kind: "send", text: "x" })).rejects.toThrow();
     const ops = (g.__omherSessionCalls as { op: string; input?: unknown }[]).map((c) => c.op);

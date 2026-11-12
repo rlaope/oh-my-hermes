@@ -221,6 +221,16 @@
   font-size: 11px;
   color: var(--danger);
 }
+/* a message sent while a turn runs: muted until the agent takes it */
+.msg.u.queued .b,
+.msg.u.dropped .b {
+  opacity: 0.55;
+}
+.msg-wait {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--quiet);
+}
 /* Markdown in bubbles. One rhythm (8px between blocks), headings by size, code blocks as their own surface,
    tables that keep numbers on one line, GFM task lists without a second marker. */
 .md > * + * {

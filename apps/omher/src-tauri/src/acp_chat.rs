@@ -700,7 +700,7 @@ impl Adapter for Acp {
     fn on_input(&mut self, input: Input) -> Result<Step, String> {
         let mut st = Step::default();
         match input {
-            Input::Send { text, images } => {
+            Input::Send { text, images, .. } => {
                 if !images.is_empty() {
                     return Err(format!("{} chats take text only here", self.agent.label));
                 }
@@ -745,6 +745,8 @@ impl Adapter for Acp {
                 out(&mut st, json!({"jsonrpc": "2.0", "id": a.rpc_id, "result": {"outcome": {"outcome": "selected", "optionId": option}}}));
             }
             Input::Clarify { .. } => return Err("no such question".into()),
+            // the agent picks its own permission mode and effort; omher offers no switch for them here
+            Input::Mode { .. } | Input::Effort { .. } => return Err(format!("{} has no mode or effort switch here", self.agent.label)),
             Input::Model { model } => {
                 let Some(sid) = self.session.clone() else { return Err(format!("{} has not started yet", self.agent.label)) };
                 let mut p = Map::new();
@@ -815,7 +817,7 @@ mod tests {
             }
             if i == 1 {
                 if let Some(text) = send {
-                    let w = a.on_input(Input::Send { text: text.into(), images: vec![] }).unwrap();
+                    let w = a.on_input(Input::Send { text: text.into(), images: vec![], id: String::new() }).unwrap();
                     all.write.extend(w.write);
                     all.events.extend(w.events);
                 }
@@ -1377,7 +1379,9 @@ mod tests {
         assert!(st.write.is_empty());
         assert_eq!(names(&st.events), ["turn.end"]);
         assert!(a.on_input(Input::Interrupt).is_err());
-        assert!(a.on_input(Input::Send { text: "x".into(), images: vec![crate::agent_chat::Picture::from("/p.png".to_string())] }).is_err());
+        assert!(a.on_input(Input::Mode { mode: "plan".into() }).is_err());
+        assert!(a.on_input(Input::Effort { effort: "high".into() }).is_err());
+        assert!(a.on_input(Input::Send { text: "x".into(), images: vec![crate::agent_chat::Picture::from("/p.png".to_string())], id: String::new() }).is_err());
     }
 
     #[test]
