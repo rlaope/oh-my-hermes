@@ -230,8 +230,10 @@ All notable changes will be documented here.
     card per fan-out with a row per subagent that opens to its own steps and
     answer, and the session header opens Plans on that session's run. A Codex
     session stays on your turn while its subagents work, and Stop stops your
-    turn, not a subagent's. omher only shows subagents; it never starts, steers
-    or stops one. (#2800, #2788)
+    turn, not a subagent's. When OmO runs subagents in the foreground, each row
+    ends with that subagent's own answer, model and time, and OmO's todo list
+    shows as the turn's checklist. omher only shows subagents; it never
+    starts, steers or stops one. (#2800, #2788, #2838)
   - **Chat or terminal.** Beside the agent in a New session, a quiet Chat |
     Terminal choice runs `claude`, `codex`, `omo`, `pi`, `omp`, `opencode` or
     `omh` as the real CLI in a terminal in the folder. Every session row marks

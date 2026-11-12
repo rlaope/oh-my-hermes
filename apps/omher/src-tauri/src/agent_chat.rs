@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, SyncSender, TrySendError};
@@ -2406,6 +2406,12 @@ pub struct Pi {
     calls_subs: HashMap<String, Vec<String>>,
     /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
     background: usize,
+    /// OmO's own folder (`~/.omo`): its record of each subagent, read when a `task` result names no answer
+    omo_home: Option<PathBuf>,
+    /// the conversation OmO reported (`get_state`): a subagent record must belong to it
+    session: String,
+    /// OmO `todo` calls in flight: their list is the turn's checklist, not a step
+    todo_calls: std::collections::HashSet<String>,
     /// OmO ended a run with `failure`: the turn's end waits for what OmO says next, a retry of its own
     /// (`auto_retry_start`) or its last word on it (`auto_retry_end`, or the run settling)
     held: bool,
@@ -2432,6 +2438,48 @@ fn pi_approval(title: &str, options: &[String]) -> Option<(String, String, PiAsk
     Some((title, command, PiAsk::Approve { once, session, deny }))
 }
 
+/// OmO's own folder: `~/.omo`.
+fn omo_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).filter(|h| !h.is_empty()).map(|h| PathBuf::from(h).join(".omo"))
+}
+
+/// Seconds since the epoch of an ISO time as OmO writes it (`2026-11-12T15:53:23.423Z`, UTC).
+fn iso_secs(t: &str) -> Option<f64> {
+    let t = t.strip_suffix('Z')?;
+    let (date, time) = t.split_once('T')?;
+    let d: Vec<i64> = date.split('-').map(|x| x.parse().ok()).collect::<Option<_>>()?;
+    let (hms, frac) = time.split_once('.').unwrap_or((time, "0"));
+    let h: Vec<i64> = hms.split(':').map(|x| x.parse().ok()).collect::<Option<_>>()?;
+    if d.len() != 3 || h.len() != 3 {
+        return None;
+    }
+    let (y, m) = if d[1] <= 2 { (d[0] - 1, d[1] + 9) } else { (d[0], d[1] - 3) };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + d[2] - 1;
+    let days = era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+    Some((days * 86400 + h[0] * 3600 + h[1] * 60 + h[2]) as f64 + format!("0.{frac}").parse::<f64>().ok()?)
+}
+
+/// OmO's todo list as its `todo` result states it (`details.phases[].tasks[] {content, status}`), in order.
+fn omo_todo(d: &Value) -> Option<Vec<(String, String)>> {
+    let phases = d.get("phases")?.as_array()?;
+    Some(
+        phases
+            .iter()
+            .flat_map(|p| p.get("tasks").and_then(Value::as_array).into_iter().flatten())
+            .map(|t| {
+                let st = match s(t, "status").as_str() {
+                    "in_progress" => "in_progress",
+                    "completed" => "completed",
+                    _ => "pending",
+                };
+                (s(t, "content"), st.to_string())
+            })
+            .collect(),
+    )
+}
+
 impl Pi {
     pub fn new(cwd: &str, label: &str) -> Pi {
         let agent = match label {
@@ -2439,7 +2487,42 @@ impl Pi {
             "oh-my-pi" => "omp",
             _ => "pi",
         };
-        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), ..Pi::default() }
+        let omo_home = if agent == "omo" { omo_home_dir() } else { None };
+        Pi { cwd: cwd.into(), label: label.into(), subs: Subagents::new(agent), omo_home, ..Pi::default() }
+    }
+    /// OmO's own record of subagent `task_id` (`st_…`), read-only: the same `senpi-task/tasks/st_*.json` files the
+    /// Plans reader reads (BOUNDARY rule 16), under `<omo>/agent/projects/*/` or this session's own folder's `.omo`,
+    /// never through a link, and only a record of this session. `None` when there is none or it does not parse.
+    fn omo_record(&self, task_id: &str) -> Option<Value> {
+        let ok = task_id.len() <= 67 && task_id.strip_prefix("st_").is_some_and(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'));
+        if !ok {
+            return None;
+        }
+        let file = format!("{task_id}.json");
+        let mut stores: Vec<PathBuf> = vec![];
+        let real_dir = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_dir());
+        if !self.cwd.is_empty() {
+            let dot = Path::new(&self.cwd).join(".omo");
+            if real_dir(&dot) && real_dir(&dot.join("senpi-task")) {
+                stores.push(dot.join("senpi-task").join("tasks"));
+            }
+        }
+        if let Some(root) = self.omo_home.as_ref().map(|h| h.join("agent").join("projects")).filter(|r| real_dir(r)) {
+            for e in std::fs::read_dir(&root).ok()?.flatten() {
+                if e.file_type().is_ok_and(|t| t.is_dir()) {
+                    stores.push(e.path().join("senpi-task").join("tasks"));
+                }
+            }
+        }
+        stores.into_iter().filter(|d| real_dir(d)).find_map(|d| {
+            let p = d.join(&file);
+            let m = std::fs::symlink_metadata(&p).ok()?;
+            if !m.is_file() || m.len() > 1 << 20 {
+                return None;
+            }
+            let rec: Value = serde_json::from_str(&std::fs::read_to_string(&p).ok()?).ok()?;
+            (s(&rec, "task_id") == task_id && (self.session.is_empty() || s(&rec, "root_session_id") == self.session)).then_some(rec)
+        })
     }
     /// A `task` call: one subagent per entry of `tasks` (or the call itself with one task), one fan-out per call.
     fn task_start(&mut self, st: &mut Step, call: &str, args: &Value) {
@@ -2470,19 +2553,39 @@ impl Pi {
             if !tid.is_empty() {
                 self.task_ids.insert(tid, id.clone());
             }
-            let model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            let status = s(&it, "status");
+            // a foreground result (OmO 5.1.56) names no answer: OmO's own record of that task id has it, with the
+            // model it ran on and its times, as Plans reads them
+            let own = if status == "completed" { "final_response" } else { "error" };
+            let rec = if !failed && matches!(status.as_str(), "completed" | "failed" | "error") && s(&it, own).is_empty() { self.omo_record(&s(&it, "task_id")) } else { None };
+            let rec = rec.filter(|r| s(r, "status") == status);
+            let mut model = it.get("resolved_model").map(|m| s(m, "model_id")).unwrap_or_default();
+            let mut secs = None;
+            if let Some(r) = &rec {
+                let m = r.get("effective_model").map(|m| s(m, "model_id")).filter(|m| !m.is_empty()).unwrap_or_else(|| s(r, "model"));
+                if !m.is_empty() {
+                    model = m.rsplit('/').next().unwrap_or(&m).to_string();
+                }
+                if let (Some(a), Some(b)) = (iso_secs(&s(r, "started_at")), iso_secs(&s(r, "terminal_at"))) {
+                    secs = (b >= a).then_some(b - a);
+                }
+            }
             if let Some(x) = self.subs.subs.get_mut(id) {
                 if !model.is_empty() {
                     x.model = model;
                 }
             }
-            match s(&it, "status").as_str() {
+            let answer = |k: &str| if s(&it, k).is_empty() { rec.as_ref().map(|r| s(r, k)).unwrap_or_default() } else { s(&it, k) };
+            match status.as_str() {
                 _ if failed => {
                     let e = v["result"]["content"].as_array().and_then(|a| a.first()).map(|b| s(b, "text")).unwrap_or_default();
                     self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, None)
                 }
-                "completed" => self.subs.end(st, id, "done", &s(&it, "final_response"), None),
-                "failed" | "error" => self.subs.end(st, id, "failed", &s(&it, "error"), None),
+                "completed" => self.subs.end(st, id, "done", &answer("final_response"), secs),
+                "failed" | "error" => {
+                    let e = answer("error");
+                    self.subs.end(st, id, "failed", if e.is_empty() { "failed" } else { &e }, secs)
+                }
                 "cancelled" | "aborted" => self.subs.end(st, id, "cancelled", "", None),
                 _ => st.events.extend(self.subs.event(id, "running", json!({}))),
             }
@@ -2690,6 +2793,7 @@ impl Adapter for Pi {
                 match what {
                     "get_state" => {
                         let model = d.get("model").map(|m| s(m, "name")).filter(|n| !n.is_empty() && n != "unknown").or_else(|| d.get("model").map(|m| s(m, "id")).filter(|n| n != "unknown")).unwrap_or_default();
+                        self.session = s(d, "sessionId");
                         let mut f = json!({"agent_session": s(d, "sessionId"), "model": model});
                         let level = s(d, "thinkingLevel");
                         if !level.is_empty() {
@@ -2777,7 +2881,10 @@ impl Adapter for Pi {
                 let name = s(&v, "toolName");
                 let args = v.get("args").cloned().unwrap_or(Value::Null);
                 let call = s(&v, "toolCallId");
-                if name == "task" {
+                if name == "todo" && self.label == "OmO" {
+                    // OmO's todo list: the turn's checklist once its result says how the list stands, never a step
+                    self.todo_calls.insert(call);
+                } else if name == "task" {
                     // the step names its subagents, never the call's raw JSON; each one gets its own row
                     let names: Vec<String> = args.get("tasks").and_then(Value::as_array).into_iter().flatten().map(|t| s(t, "name")).filter(|n| !n.is_empty()).collect();
                     let detail = if names.is_empty() { tool_detail(&args) } else { names.join(", ") };
@@ -2794,6 +2901,12 @@ impl Adapter for Pi {
             "tool_execution_end" => {
                 let ok = !v.get("isError").and_then(Value::as_bool).unwrap_or(false);
                 let call = s(&v, "toolCallId");
+                if self.todo_calls.remove(&call) {
+                    if let Some(items) = omo_todo(&v["result"]["details"]) {
+                        st.emit(plan_event(&items));
+                    }
+                    return st;
+                }
                 st.emit(ev("tool.end", json!({"tool_id": call, "name": "", "ok": ok, "ms": 0})));
                 self.task_end(&mut st, &call, &v);
             }
@@ -4356,8 +4469,17 @@ mod tests {
         x
     }
 
+    /// The OmO records recorded with the omo-13 streams (never the person's own `~/.omo`).
+    fn fixture_omo_home() -> Option<PathBuf> {
+        Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("omo-home"))
+    }
+
+    fn omo_pi() -> Pi {
+        Pi { omo_home: fixture_omo_home(), ..Pi::new("/w/proj", "OmO") }
+    }
+
     fn pi_up(label: &str, init: &[&str]) -> Pi {
-        let mut p = Pi::new("/w/proj", label);
+        let mut p = if label == "OmO" { omo_pi() } else { Pi::new("/w/proj", label) };
         p.start();
         for f in init {
             run(&mut p, &real(f));
@@ -5531,6 +5653,10 @@ mod tests {
         out.push(("omo-9-queued.jsonl", "omo", turn("omo-9-queued.jsonl")));
         // OmO 5.1.56 (audit O5): a run fails, OmO retries it once by itself, the retry fails too
         out.push(("omo-12-retry.jsonl", "omo", turn("omo-12-retry.jsonl")));
+        // OmO 5.1.56: a foreground `task` with two subagents in one call (a batch), with a todo list; then a single
+        // foreground `task`. Neither result names an answer: OmO's own records (tests/fixtures/omo-home) do
+        out.push(("omo-13-batch.jsonl", "omo-batch", turn("omo-13-batch.jsonl")));
+        out.push(("omo-13-single.jsonl", "omo-single", turn("omo-13-single.jsonl")));
         // Codex 0.167 (audit O11/O13): its own config runs without approvals and with full disk access; Stop during
         // `sleep 40`, the next turn, then the stopped command's end 37 s after Stop
         out.push(("codex-12-late-step.jsonl", "codex-late", vec![Send, File("codex-12-late-step.jsonl"), Stop, File("codex-12-late-step-stopped.jsonl"), Send, File("codex-12-late-step-after.jsonl")]));
@@ -5547,7 +5673,9 @@ mod tests {
             "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
             "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
             "codex-late" => (Box::new(Codex::new("/w/proj", Some("01a1ca24-1047-7ee0-aac2-faf093d44dbe"))), vec!["codex-12-late-step-init.jsonl"]),
-            "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
+            "omo" => (Box::new(omo_pi()), vec!["omo-init.jsonl"]),
+            "omo-batch" => (Box::new(omo_pi()), vec!["omo-13-batch-init.jsonl"]),
+            "omo-single" => (Box::new(omo_pi()), vec!["omo-13-single-init.jsonl"]),
             "omp" => (Box::new(Pi::new("/w/proj", "oh-my-pi")), vec!["omp-ready.jsonl", "omp-init.jsonl"]),
             "pi" => (Box::new(Pi::new("/w/proj", "pi")), vec!["pi-init.jsonl"]),
             "pi-noauth" => (Box::new(Pi::new("/w/proj", "pi")), vec![]),
@@ -5817,6 +5945,66 @@ mod tests {
         ]);
         assert_eq!(done[0]["seconds"], json!(9.9));
         assert_eq!(s(done[0], "model"), "claude-haiku-5-5");
+    }
+
+    /// The rows a recorded OmO 5.1.56 turn ends with: (name, state, summary, model, seconds).
+    fn omo_rows(p: &mut Pi, file: &str) -> (Step, Vec<(String, String, String, String, Value)>) {
+        p.on_input(Input::send("go")).unwrap();
+        let st = run(p, &real(file));
+        let rows = st.events.iter().filter(|e| s(e, "event") == "subagent" && s(e, "state") != "queued" && s(e, "state") != "running").map(|e| (s(e, "name"), s(e, "state"), s(e, "summary"), s(e, "model"), e["seconds"].clone())).collect();
+        (st, rows)
+    }
+
+    #[test]
+    fn an_omo_foreground_batch_ends_each_row_with_its_own_answer_and_model() {
+        // omo-13-batch (OmO 5.1.56, a real run): one foreground `task` with two subagents. Its result's items carry
+        // only {task_id, name, status}; each answer, model and time is in OmO's own record of that task id
+        let mut p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        let (st, rows) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert_eq!(rows, [
+            ("helper-a-first-line".into(), "done".into(), "FIRST_LINE: alpha line".into(), "claude-haiku-5-5".into(), json!(19.9)),
+            ("helper-b-line-count".into(), "done".into(), "LINE_COUNT: 3".into(), "claude-haiku-5-5".into(), json!(28.6)),
+        ]);
+        assert_eq!(st.events.iter().filter(|e| s(e, "event") == "turn.end").count(), 1);
+    }
+
+    #[test]
+    fn an_omo_single_foreground_task_ends_with_its_answer() {
+        // omo-13-single (OmO 5.1.56, a real run): one task, no `tasks` array; the result names its model, no answer
+        let mut p = pi_up("OmO", &["omo-13-single-init.jsonl"]);
+        let (_, rows) = omo_rows(&mut p, "omo-13-single.jsonl");
+        assert_eq!(rows, [("helper-single".into(), "done".into(), "FIRST_LINE: alpha line".into(), "claude-haiku-5-5".into(), json!(23.0))]);
+    }
+
+    #[test]
+    fn an_omo_row_without_its_own_record_ends_with_no_answer_never_another_ones() {
+        // no record to read: the rows end done with no answer, and the turn still ends
+        let mut p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        p.omo_home = Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("no-such-home"));
+        let (st, rows) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert_eq!(rows.iter().map(|r| (r.1.as_str(), r.2.as_str())).collect::<Vec<_>>(), [("done", ""), ("done", "")]);
+        assert_eq!(st.events.iter().filter(|e| s(e, "event") == "turn.end").count(), 1);
+        // records of another conversation (the single run's session) are never taken for this one's rows
+        let mut p = pi_up("OmO", &["omo-13-single-init.jsonl"]);
+        let (_, rows) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert_eq!(rows.iter().map(|r| r.2.as_str()).collect::<Vec<_>>(), ["", ""]);
+        // a task id that is not OmO's shape is never looked up
+        let p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        for bad in ["../st_01a1d076", "st_01a1d076/..", "st_", "x_01a1d076", "st_01a1d076.json"] {
+            assert!(p.omo_record(bad).is_none(), "{bad}");
+        }
+        assert_eq!(s(&p.omo_record("st_01a1d076").unwrap(), "final_response"), "FIRST_LINE: alpha line");
+    }
+
+    #[test]
+    fn omos_todo_list_is_the_turns_checklist_never_a_step_with_its_json() {
+        // omo-13-batch: OmO's `todo` init and two `done` calls
+        let mut p = pi_up("OmO", &["omo-13-batch-init.jsonl"]);
+        let (st, _) = omo_rows(&mut p, "omo-13-batch.jsonl");
+        assert!(!st.events.iter().any(|e| s(e, "event") == "tool.start" && (s(e, "name") == "todo" || s(e, "detail").contains("{\""))), "a todo step");
+        let plans: Vec<Vec<(String, String)>> = st.events.iter().filter(|e| s(e, "event") == "plan").map(|e| e["items"].as_array().unwrap().iter().map(|i| (s(i, "text"), s(i, "status"))).collect()).collect();
+        assert_eq!(plans.first().unwrap(), &[("Spawn foreground batch of two helper tasks".to_string(), "in_progress".to_string()), ("Give one-line summary of batch results".into(), "pending".into())]);
+        assert!(plans.last().unwrap().iter().all(|(_, st)| st == "completed"));
     }
 
     #[test]
