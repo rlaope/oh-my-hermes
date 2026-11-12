@@ -12,3 +12,14 @@ export function afterOpen(_term: Terminal, _el: HTMLElement, _s: TermSettings): 
 export function feed(term: Terminal, data: string | Uint8Array, done?: () => void): void {
   term.write(data, done);
 }
+
+/** What draws the terminals now: the GPU renderer, the standard one, or null while no terminal is open.
+ *  Settings shows it, so a person (and a check of the real window) can see which is in use. */
+export function rendererInUse(): "gpu" | "standard" | null {
+  return null;
+}
+
+/** A terminal came onto the page (`shown`) or left it while its program keeps running. */
+export function onVisible(_term: Terminal, _shown: boolean): void {
+  /* nothing to release or restore yet */
+}

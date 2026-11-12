@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { afterOpen, feed } from "./term/engine";
+import { afterOpen, feed, onVisible } from "./term/engine";
 import { applyLook, termOptions } from "./term/look";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { termTheme } from "./term/themes";
@@ -877,9 +877,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (fresh) void ready().then(() => startTerm(id, tt));
     const ro = new ResizeObserver(refit);
     ro.observe(container);
+    onVisible(tt.term, true);
     tt.term.focus();
     return () => {
       ro.disconnect();
+      onVisible(tt.term, false);
       if (tt.el.parentElement === container) container.removeChild(tt.el);
     };
   };
@@ -1164,7 +1166,17 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const relook = () => {
     const settings = readTermSettings();
     const theme = termTheme(look, settings);
-    for (const t of terms.values()) applyLook(t.term, theme, settings);
+    for (const t of terms.values()) {
+      applyLook(t.term, theme, settings);
+      // a changed font or line height changes how many cells fit
+      if (t.el.isConnected && t.el.clientWidth > 0) {
+        try {
+          t.fit.fit();
+        } catch {
+          /* not measurable yet */
+        }
+      }
+    }
   };
   const setLook = (mode: "dark" | "light") => {
     look = mode;

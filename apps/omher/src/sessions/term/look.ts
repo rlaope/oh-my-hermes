@@ -12,7 +12,8 @@ export function termOptions(theme: ITheme, s: TermSettings): ITerminalOptions {
     fontSize: s.fontSize,
     lineHeight: s.lineHeight,
     cursorBlink: s.cursorBlink,
-    allowProposedApi: false,
+    // the engine's add-ons (Unicode widths) register through xterm's proposed API
+    allowProposedApi: true,
     scrollback: s.scrollback,
     // dim text (agents use it a lot) stays readable on the light background
     minimumContrastRatio: 4.5,
