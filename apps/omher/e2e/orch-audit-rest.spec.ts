@@ -72,6 +72,8 @@ for (const theme of themes) {
     await expect(failed).toHaveAttribute("data-state", "error");
     await expect(failed.getByTestId("activity-text")).toContainText("Anthropic rejected this conversation's request format");
     await expect(failed.getByTestId("activity-text")).not.toContainText('{"type"');
+    // the line is cut to the row; its whole reason is on hover
+    await expect(failed.getByTestId("activity-text")).toHaveAttribute("title", /Run \/compact or start a new session to continue/);
   });
 
   test(`O5 while OmO retries, the live line says which try (${theme})`, async ({ page }) => {
@@ -118,6 +120,9 @@ for (const theme of themes) {
     expect(look.size).toBeLessThanOrEqual(13);
     expect(look.bg).toBe("rgba(0, 0, 0, 0)");
     expect(look.border).toBe("0px");
+    // whole, never cut with an ellipsis
+    const name = mode.locator(".ss-pick-n");
+    expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     // the menu says where it comes from, and still offers only omher's own modes
     await mode.click();
     await expect(page.getByTestId("session-mode-own")).toHaveText("No approvals · full disk access · from Codex's own config");

@@ -204,7 +204,7 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
         {live ? (
           <Ticker label={shownLabel(liveLabel(t))} />
         ) : (
-          <span className="act-sum" data-testid="activity-text">
+          <span className="act-sum" data-testid="activity-text" title={state === "error" ? summary : undefined}>
             {summary}
           </span>
         )}

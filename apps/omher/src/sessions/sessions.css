@@ -713,6 +713,10 @@
 .ss-mode-own {
   color: var(--needs);
 }
+/* the sentence is the point: it is never cut to "full disk a…" */
+.ss-mode.own {
+  max-width: none;
+}
 .ss-mode-own {
   padding: 2px 6px 6px;
   font-size: 12px;
