@@ -1,6 +1,6 @@
 ---
 name: "omh-refactor-plan"
-description: "[omh] Decided cross-module refactor to phase: refactor planning - turn a decided boundary-changing refactor into a phased plan - reconnaissance."
+description: "[omh] Decided cross-module refactor to phase: refactor planning - turn a decided boundary-changing refactor into a phased plan - reconnaissance…"
 license: MIT
 metadata:
   hermes:

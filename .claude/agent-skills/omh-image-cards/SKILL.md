@@ -1,6 +1,6 @@
 ---
 name: "omh-image-cards"
-description: "[omh] Infographic card for meeting notes, a report, or PR: image prompt cards - turn meetings, reports, PRs, issues, research."
+description: "[omh] Infographic card for meeting notes, a report, or PR: image prompt cards - turn meetings, reports, PRs, issues, research…"
 license: MIT
 metadata:
   hermes:

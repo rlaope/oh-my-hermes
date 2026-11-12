@@ -1,6 +1,6 @@
 ---
 name: "omh-research-brief"
-description: "[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing."
+description: "[omh] Business question on market, competitors, pricing: business research brief - turns a market, competitor, pricing…"
 license: MIT
 metadata:
   hermes:

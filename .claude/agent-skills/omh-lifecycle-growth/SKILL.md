@@ -1,6 +1,6 @@
 ---
 name: "omh-lifecycle-growth"
-description: "[omh] Churn or weak activation among users: turn an observed onboarding, activation, retention, re-engagement, referral."
+description: "[omh] Churn or weak activation among users: turn an observed onboarding, activation, retention, re-engagement, referral…"
 license: MIT
 metadata:
   hermes:

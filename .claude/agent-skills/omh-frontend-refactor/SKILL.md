@@ -1,6 +1,6 @@
 ---
 name: "omh-frontend-refactor"
-description: "[omh] Oversized or tangled UI component: behavior-preserving refactor of UI code - preview the full change plan first, apply as a second explicit step."
+description: "[omh] Oversized or tangled UI component: behavior-preserving refactor of UI code - preview the full change plan first, apply as a second explicit step…"
 license: MIT
 metadata:
   hermes:

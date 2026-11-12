@@ -1,6 +1,6 @@
 ---
 name: "omh-external-connector-readiness"
-description: "[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider."
+description: "[omh] Evaluating a plugin, connector, or API for adoption: external connector readiness - assess whether a named plugin, connector, API, data provider…"
 license: MIT
 metadata:
   hermes:

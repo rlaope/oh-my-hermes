@@ -1,6 +1,6 @@
 ---
 name: "omh-model-finetuning"
-description: "[omh] Fine-tuning a model on your own data -- SFT, DPO, RLVR or a LoRA adapter: decide first whether prompting or retrieval already closes the gap."
+description: "[omh] Fine-tuning a model on your own data -- SFT, DPO, RLVR or a LoRA adapter: decide first whether prompting or retrieval already closes the gap…"
 license: MIT
 metadata:
   hermes:

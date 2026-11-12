@@ -1,6 +1,6 @@
 ---
 name: "omh-internal-audit"
-description: "[omh] Testing an internal control -- SOX, ICFR or ITGC: define the population and the sample, name the evidence that proves each item, re-perform the control."
+description: "[omh] Testing an internal control -- SOX, ICFR or ITGC: define the population and the sample, name the evidence that proves each item, re-perform the control…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-ops-observability-card"
-description: "[omh] Tracking cost, tokens, latency, or service health: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue."
+description: "[omh] Tracking cost, tokens, latency, or service health: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue…"
 license: MIT
 metadata:
   hermes:

@@ -169,7 +169,8 @@ CLI's `.claude/skills` root, changes one thing: each `SKILL.md`'s frontmatter
 user says:` trigger list) and, if that is still longer than
 `CLAUDE_DESCRIPTION_CAP` (160 characters, `src/install/agent_skills_projection.py`),
 to the last clause boundary under the cap, else the last word, never ending on
-a function word, closed with a full stop. The leading `[omh] ` stays. All 123
+a function word, and marked with `…` so a cut reads as a cut. A lead that already
+fits is kept whole. The leading `[omh] ` stays. All 123
 skills stay listed and model-invocable; no flag and no extra skill is added.
 The trigger phrases remain in the portable pack and in the skill bodies.
 Bodies, references and toolkit files are byte-identical to `agent-skills/`,
@@ -192,11 +193,15 @@ all eight `ulw-*` among them. A `< 20` row can also be a description of about
 45 characters or less; the shortest description here is 61, so `< 20` means
 dropped.
 
-**What a model picks is a different measurement.** In four task prompts, one
-run each (`claude -p --setting-sources project --tools "Read,Skill" --max-turns 4`,
-same version and model, 2026-11-13), the model loaded the fitting skill in 4 of
-4 runs on this pack; on the pack before this change it did in 3 of 4
-(2026-11-12). Four prompts are too few to give a rate.
+**What a model picks is a different measurement.** Four task prompts were run
+with `claude -p --setting-sources project --tools "Read,Skill" --max-turns 4`
+(same version and model, 2026-11-12 and 2026-11-13). For three of them the model
+loaded the fitting skill in every run: 3 of 3 on the pack before this change and
+6 of 6 on this pack. For the fourth, a slow Postgres query whose fitting skill is
+`omh-relational-db`, it loaded the skill in 0 of 1 runs before this change and in
+2 of 8 on this pack (four runs with each of the two endings tried for a cut
+description, `.` and `…`; one load with each). These runs show no difference
+between the two packs in what a model picks, and they are too few to give a rate.
 
 **Tried and rejected.** The first design flagged 113 skills
 `disable-model-invocation: true` and listed them in one generated `omh-index`

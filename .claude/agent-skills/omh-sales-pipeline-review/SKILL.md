@@ -1,6 +1,6 @@
 ---
 name: "omh-sales-pipeline-review"
-description: "[omh] CRM pipeline or sales forecast to review: turn a supplied CRM export or pipeline snapshot into an evidence-bound pipeline health, forecast."
+description: "[omh] CRM pipeline or sales forecast to review: turn a supplied CRM export or pipeline snapshot into an evidence-bound pipeline health, forecast…"
 license: MIT
 metadata:
   hermes:

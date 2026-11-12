@@ -1,6 +1,6 @@
 ---
 name: "omh-toolbelt-readiness"
-description: "[omh] Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs."
+description: "[omh] Which tools and credentials a workflow needs: inventory which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs…"
 license: MIT
 metadata:
   hermes:

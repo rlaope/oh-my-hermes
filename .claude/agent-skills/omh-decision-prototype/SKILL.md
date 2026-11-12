@@ -1,6 +1,6 @@
 ---
 name: "omh-decision-prototype"
-description: "[omh] Uncertain technical choice for a spike: bounded decision prototype workflow: resolve one uncertain interaction, API, performance."
+description: "[omh] Uncertain technical choice for a spike: bounded decision prototype workflow: resolve one uncertain interaction, API, performance…"
 license: MIT
 metadata:
   hermes:

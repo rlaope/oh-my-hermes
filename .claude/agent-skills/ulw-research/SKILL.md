@@ -1,6 +1,6 @@
 ---
 name: "ulw-research"
-description: "[omh] Deep dive before a decision: deep research engine - grounding for specs and decisions: study open-source reference implementations with pinned refs."
+description: "[omh] Deep dive before a decision: deep research engine - grounding for specs and decisions: study open-source reference implementations with pinned refs…"
 license: MIT
 metadata:
   hermes:

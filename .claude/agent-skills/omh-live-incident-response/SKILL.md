@@ -1,6 +1,6 @@
 ---
 name: "omh-live-incident-response"
-description: "[omh] Production is down or an incident is open: command an incident that is still open -- severity as declared live state, commander and roles."
+description: "[omh] Production is down or an incident is open: command an incident that is still open -- severity as declared live state, commander and roles…"
 license: MIT
 metadata:
   hermes:

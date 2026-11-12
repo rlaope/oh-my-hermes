@@ -1,6 +1,6 @@
 ---
 name: "omh-native-debugging"
-description: "[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger."
+description: "[omh] Native program crashes or corrupts memory: prepare hypothesis-driven debugging of native binaries and instruct the executor to drive a debugger…"
 license: MIT
 metadata:
   hermes:

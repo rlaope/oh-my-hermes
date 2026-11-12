@@ -1,6 +1,6 @@
 ---
 name: "omh-harness-session-inventory"
-description: "[omh] Lost track of agent sessions and worktrees: normalize Codex, Claude Code, Hermes, OpenCode, Cursor, MCP host, worktree."
+description: "[omh] Lost track of agent sessions and worktrees: normalize Codex, Claude Code, Hermes, OpenCode, Cursor, MCP host, worktree…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-agent-instructions"
-description: "[omh] Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule: write or update what an agent cannot derive from the code."
+description: "[omh] Agent instruction file for a repo -- AGENTS.md, CLAUDE.md, a Cursor rule: write or update what an agent cannot derive from the code…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-git-workflow"
-description: "[omh] Git branch in trouble -- a merge conflict, a commit that broke something, history to repair: plan the resolution, the bisect, or the rewrite."
+description: "[omh] Git branch in trouble -- a merge conflict, a commit that broke something, history to repair: plan the resolution, the bisect, or the rewrite…"
 license: MIT
 metadata:
   hermes:

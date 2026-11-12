@@ -63,6 +63,7 @@ def agent_skill_files() -> dict[str, str]:
 # Claude copy therefore carries shortened descriptions; the cap is measured there.
 CLAUDE_DESCRIPTION_CAP = 160
 CLAUDE_TRIGGER_MARKER = " Use when the user says:"
+CLAUDE_CUT_MARK = "…"
 _CLAUSE_ENDS = (". ", ": ", "; ", ", ", " -- ")
 _FUNCTION_WORDS = frozenset(
     "a an the and or of to for with in on instead of before after that which when".split()
@@ -86,7 +87,7 @@ def _ends_on_function_word(text: str) -> bool:
 
 
 def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> str:
-    """The lead before the trigger list, cut at a clause or word boundary within `cap`."""
+    """The lead before the trigger list; over `cap`, cut at a clause or word boundary and marked with `…`."""
     lead = description.partition(CLAUDE_TRIGGER_MARKER)[0].strip()
     if len(lead) <= cap:
         # Nothing is cut, so nothing is reworded: a lead that ends "you can act on." keeps its last word.
@@ -97,7 +98,8 @@ def shorten_description(description: str, cap: int = CLAUDE_DESCRIPTION_CAP) -> 
     candidate = lead[:clause] if clause >= 0 else lead[: cap - 1].rsplit(" ", 1)[0]
     while _ends_on_function_word(candidate) and " " in candidate:
         candidate = candidate.rsplit(" ", 1)[0]
-    return candidate.rstrip(" .,;:-") + "."
+    # A cut is marked as a cut: a full stop here would pass off half a list as a whole sentence.
+    return candidate.rstrip(" .,;:-") + CLAUDE_CUT_MARK
 
 
 def claude_skill_files(files: dict[str, str] | None = None) -> dict[str, str]:

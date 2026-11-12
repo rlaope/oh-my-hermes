@@ -1,6 +1,6 @@
 ---
 name: "omh-mobile-release"
-description: "[omh] Releasing an iOS or Android app through the stores -- signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix."
+description: "[omh] Releasing an iOS or Android app through the stores -- signing, the privacy manifest, a TestFlight or Play beta, a staged rollout, a hotfix…"
 license: MIT
 metadata:
   hermes:

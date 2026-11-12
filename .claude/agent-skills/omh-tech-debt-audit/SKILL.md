@@ -1,6 +1,6 @@
 ---
 name: "omh-tech-debt-audit"
-description: "[omh] Accumulated tech debt or architecture deepening to rank: build the severity-by-effort debt ledger from observed repo evidence - orient."
+description: "[omh] Accumulated tech debt or architecture deepening to rank: build the severity-by-effort debt ledger from observed repo evidence - orient…"
 license: MIT
 metadata:
   hermes:

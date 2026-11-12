@@ -1,6 +1,6 @@
 ---
 name: "omh-market-research"
-description: "[omh] Market sizing or customer/competitive analysis: investigate a scoped market with TAM/SAM/SOM sensitivity, attributed customer evidence."
+description: "[omh] Market sizing or customer/competitive analysis: investigate a scoped market with TAM/SAM/SOM sensitivity, attributed customer evidence…"
 license: MIT
 metadata:
   hermes:

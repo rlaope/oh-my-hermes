@@ -1,6 +1,6 @@
 ---
 name: "omh-application-threat-model"
-description: "[omh] Attack paths into an operated system: turn a system's components and data flows into assets, trust boundaries, attack scenarios, controls."
+description: "[omh] Attack paths into an operated system: turn a system's components and data flows into assets, trust boundaries, attack scenarios, controls…"
 license: MIT
 metadata:
   hermes:

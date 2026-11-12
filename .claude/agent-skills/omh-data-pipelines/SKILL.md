@@ -1,6 +1,6 @@
 ---
 name: "omh-data-pipelines"
-description: "[omh] Data pipeline work -- an ETL or streaming job, a backfill or replay, duplicate events, a schema change downstream, a lineage question."
+description: "[omh] Data pipeline work -- an ETL or streaming job, a backfill or replay, duplicate events, a schema change downstream, a lineage question…"
 license: MIT
 metadata:
   hermes:

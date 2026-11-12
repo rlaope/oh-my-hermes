@@ -1,6 +1,6 @@
 ---
 name: "omh-product-discovery-validation"
-description: "[omh] Unvalidated early product idea: test whether a customer problem, segment, and business hypothesis deserve product investment, ending in kill, pivot."
+description: "[omh] Unvalidated early product idea: test whether a customer problem, segment, and business hypothesis deserve product investment, ending in kill, pivot…"
 license: MIT
 metadata:
   hermes:

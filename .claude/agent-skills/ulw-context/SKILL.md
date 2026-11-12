@@ -1,6 +1,6 @@
 ---
 name: "ulw-context"
-description: "[omh] Repository vocabulary unclear or inconsistent: project terminology alignment workflow: look up, capture, correct."
+description: "[omh] Repository vocabulary unclear or inconsistent: project terminology alignment workflow: look up, capture, correct…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

@@ -1,6 +1,6 @@
 ---
 name: "omh-jit-learn"
-description: "[omh] Blocked on a project by a knowledge gap: just-in-time learning workflow: select and confirm an immediate learning target, research credible sources."
+description: "[omh] Blocked on a project by a knowledge gap: just-in-time learning workflow: select and confirm an immediate learning target, research credible sources…"
 license: MIT
 metadata:
   hermes:

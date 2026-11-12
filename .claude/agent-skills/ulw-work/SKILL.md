@@ -1,6 +1,6 @@
 ---
 name: "ulw-work"
-description: "[omh] Accepted plan awaiting implementation: split it into disjoint parallel lanes with per-lane acceptance criteria, verification commands, and owners."
+description: "[omh] Accepted plan awaiting implementation: split it into disjoint parallel lanes with per-lane acceptance criteria, verification commands, and owners…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

@@ -1,6 +1,6 @@
 ---
 name: "omh-iac-change"
-description: "[omh] Infrastructure-as-code change -- Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart: read the drift."
+description: "[omh] Infrastructure-as-code change -- Terraform, OpenTofu, Pulumi, a Kubernetes manifest, a Helm chart: read the drift…"
 license: MIT
 metadata:
   hermes:

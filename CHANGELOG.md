@@ -113,13 +113,15 @@ All notable changes will be documented here.
   by name only. The Claude copy is now its own generated pack,
   `.claude/agent-skills/`, which `.claude/install.sh`, `install.ps1` and
   `omh install --target agents` write to `.claude/skills`. It keeps all 123
-  skills and cuts each description to its lead, at most 160 characters; the
+  skills and cuts each description to its lead, at most 160 characters (a cut
+  one ends with `…`); the
   trigger phrases stay in the portable pack. On Claude Code 2.1.322 with
   `claude-opus-5-5` and an empty config directory (2026-11-13), `/context`
   shows 123 of 123 OMH skills with a description in an 8.5k listing, where it
-  showed 61 of 123 in 9.9k. In four task prompts the model loaded the fitting
-  skill in 4 of 4 runs on this pack and 3 of 4 on the old one; see
-  `docs/AGENT-SKILLS.md#claude-code-skill-listing`. A listing already full
+  showed 61 of 123 in 9.9k. In four task prompts, what the model loaded on its
+  own did not differ from the old pack in the runs made (three prompts loaded the
+  fitting skill in every run on both; the fourth in 0 of 1 runs before and 2 of 8
+  after); see `docs/AGENT-SKILLS.md#claude-code-skill-listing`. A listing already full
   from other skills stays full. `.agents/skills` and the Hermes skills keep
   their bytes. An existing `.claude/skills` mirror from
   `omh install --target agents` reports stale until that install is rerun (a

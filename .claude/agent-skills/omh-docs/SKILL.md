@@ -1,6 +1,6 @@
 ---
 name: "omh-docs"
-description: "[omh] Explaining OMH itself: current-source-first documentation for OMH itself: product identity, public capability catalog, model routing, local state."
+description: "[omh] Explaining OMH itself: current-source-first documentation for OMH itself: product identity, public capability catalog, model routing, local state…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

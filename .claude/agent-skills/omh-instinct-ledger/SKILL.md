@@ -1,6 +1,6 @@
 ---
 name: "omh-instinct-ledger"
-description: "[omh] Recurring lessons worth promoting: turn repeated project or cross-project lessons into atomic."
+description: "[omh] Recurring lessons worth promoting: turn repeated project or cross-project lessons into atomic…"
 license: MIT
 metadata:
   hermes:

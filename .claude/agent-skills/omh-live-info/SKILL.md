@@ -1,6 +1,6 @@
 ---
 name: "omh-live-info"
-description: "[omh] Live rate, score, or local time a work task needs: policy overlay for live lookups - add provider, freshness, units."
+description: "[omh] Live rate, score, or local time a work task needs: policy overlay for live lookups - add provider, freshness, units…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-source-finder"
-description: "[omh] Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream."
+description: "[omh] Gathering candidate papers, datasets, or repos: source candidate inventory - prepare typed source candidates and acquisition status before downstream…"
 license: MIT
 metadata:
   hermes:

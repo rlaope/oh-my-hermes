@@ -1,6 +1,6 @@
 ---
 name: "omh-data-share-review"
-description: "[omh] Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue."
+description: "[omh] Before data leaves the team -- a dataset, log, ticket export or transcript excerpt bound for a vendor, a public issue…"
 license: MIT
 metadata:
   hermes:

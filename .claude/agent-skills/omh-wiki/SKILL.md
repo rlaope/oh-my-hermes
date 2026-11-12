@@ -1,6 +1,6 @@
 ---
 name: "omh-wiki"
-description: "[omh] Scattered knowledge needing a wiki: wiki construction blueprints and retained knowledge capture with destination-aware external knowledge connection."
+description: "[omh] Scattered knowledge needing a wiki: wiki construction blueprints and retained knowledge capture with destination-aware external knowledge connection…"
 license: MIT
 metadata:
   hermes:

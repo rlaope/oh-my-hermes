@@ -1,6 +1,6 @@
 ---
 name: "omh-skill-scout"
-description: "[omh] Existing skills to reuse before authoring: prepare a metadata-only search-before-creation report for local, marketplace, GitHub."
+description: "[omh] Existing skills to reuse before authoring: prepare a metadata-only search-before-creation report for local, marketplace, GitHub…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-frontend"
-description: "[omh] Building or polishing a web or terminal UI: prepare design-system-driven web and terminal (TUI) UI creation, redesign, polish, accessibility."
+description: "[omh] Building or polishing a web or terminal UI: prepare design-system-driven web and terminal (TUI) UI creation, redesign, polish, accessibility…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

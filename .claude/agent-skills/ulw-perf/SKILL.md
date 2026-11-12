@@ -1,6 +1,6 @@
 ---
 name: "ulw-perf"
-description: "[omh] Software slowness, memory leaks, or cost spikes: find where a system is actually slow, leaking, or expensive across runtime, memory, token cost, storage."
+description: "[omh] Software slowness, memory leaks, or cost spikes: find where a system is actually slow, leaking, or expensive across runtime, memory, token cost, storage…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-commit-pr-authoring"
-description: "[omh] Commit message or pull-request body to write for a change: draft it in the repository's own convention."
+description: "[omh] Commit message or pull-request body to write for a change: draft it in the repository's own convention…"
 license: MIT
 metadata:
   hermes:

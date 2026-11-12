@@ -1,6 +1,6 @@
 ---
 name: "omh-skill-health"
-description: "[omh] OMH skill portfolio health overview: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals."
+description: "[omh] OMH skill portfolio health overview: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

@@ -1,6 +1,6 @@
 ---
 name: "omh-production-audit"
-description: "[omh] Imminent production launch or release: evaluate release, deploy, security, observability, rollback, docs."
+description: "[omh] Imminent production launch or release: evaluate release, deploy, security, observability, rollback, docs…"
 license: MIT
 metadata:
   hermes:

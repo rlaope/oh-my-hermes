@@ -74,13 +74,15 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 self.assertLessEqual(len(text), CLAUDE_DESCRIPTION_CAP)
                 self.assertGreaterEqual(len(text), 40)
-                self.assertTrue(text.endswith("."), text)
                 self.assertNotIn("Use when the user says", text)
                 lead = description(self.portable[relative]).partition(" Use when the user says:")[0].strip()
                 if len(lead) <= CLAUDE_DESCRIPTION_CAP:
                     # Nothing was cut, so nothing is reworded: a lead that ends "act on." keeps its last word.
                     self.assertEqual(text, lead.rstrip(" .,;:-") + ".")
                     continue
+                # A cut says it is one, and is a prefix of the lead it was cut from.
+                self.assertTrue(text.endswith("…"), text)
+                self.assertTrue(lead.startswith(text[:-1]), text)
                 words = text[:-1].rstrip(" ,;:-").split()
                 self.assertNotIn(words[-1].lower(), FUNCTION_WORDS, text)
                 self.assertNotIn(" ".join(words[-2:]).lower(), FUNCTION_WORDS, text)
@@ -103,9 +105,9 @@ class ClaudeDescriptionProducerTests(unittest.TestCase):
         long = "[omh] " + "Check the build output and report every failure, " + "then fix the cause of it for the team and the rest of us"
         cut = shorten_description(long, 80)
         self.assertLessEqual(len(cut), 80)
-        self.assertEqual(cut, "[omh] Check the build output and report every failure.")
+        self.assertEqual(cut, "[omh] Check the build output and report every failure…")
         tail = shorten_description("[omh] " + "word " * 12 + "and the", 40)
-        self.assertTrue(tail.endswith("word."), tail)
+        self.assertTrue(tail.endswith("word…"), tail)
 
 
 class CommittedPackTests(unittest.TestCase):

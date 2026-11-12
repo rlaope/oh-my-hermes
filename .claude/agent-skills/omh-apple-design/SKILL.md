@@ -1,6 +1,6 @@
 ---
 name: "omh-apple-design"
-description: "[omh] Designing or reviewing an iOS, macOS, or Apple-style UI: prepare native Apple UI or Apple marketing product-visual direction, review."
+description: "[omh] Designing or reviewing an iOS, macOS, or Apple-style UI: prepare native Apple UI or Apple marketing product-visual direction, review…"
 license: MIT
 metadata:
   hermes:

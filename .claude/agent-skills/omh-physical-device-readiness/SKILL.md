@@ -1,6 +1,6 @@
 ---
 name: "omh-physical-device-readiness"
-description: "[omh] Agent control of a robot, 3D printer, or IoT relay: gate robots, 3D printers, IoT relays, sensors, and lab hardware before trials."
+description: "[omh] Agent control of a robot, 3D printer, or IoT relay: gate robots, 3D printers, IoT relays, sensors, and lab hardware before trials…"
 license: MIT
 metadata:
   hermes:

@@ -1,6 +1,6 @@
 ---
 name: "omh-voice-input"
-description: "[omh] Dictated voice note about project work or status: terse voice and mobile-style requests - turn short spoken-style asks into clarify, plan, status."
+description: "[omh] Dictated voice note about project work or status: terse voice and mobile-style requests - turn short spoken-style asks into clarify, plan, status…"
 license: MIT
 metadata:
   hermes:

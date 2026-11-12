@@ -1,6 +1,6 @@
 ---
 name: "omh-backend"
-description: "[omh] Designing an API, server, or data-layer change: prepare server, API, and data-layer contracts — auth boundary, error paths, response shape."
+description: "[omh] Designing an API, server, or data-layer change: prepare server, API, and data-layer contracts — auth boundary, error paths, response shape…"
 license: MIT
 metadata:
   hermes:

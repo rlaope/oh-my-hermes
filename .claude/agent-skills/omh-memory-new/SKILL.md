@@ -1,6 +1,6 @@
 ---
 name: "omh-memory-new"
-description: "[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse."
+description: "[omh] Project fact to remember across future sessions: capture one bounded durable project or product memory candidate through explicit remember, refuse…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

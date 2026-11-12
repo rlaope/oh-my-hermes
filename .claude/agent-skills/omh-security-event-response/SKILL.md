@@ -1,6 +1,6 @@
 ---
 name: "omh-security-event-response"
-description: "[omh] Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory."
+description: "[omh] Security event on the code already shipped -- a CVE in a dependency, a secret committed to the repo, a license question, an advisory…"
 license: MIT
 metadata:
   hermes:

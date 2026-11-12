@@ -1,6 +1,6 @@
 ---
 name: "omh-inference-serving"
-description: "[omh] Self-hosted LLM serving on GPUs: choose the serving engine and quantization from decision tables."
+description: "[omh] Self-hosted LLM serving on GPUs: choose the serving engine and quantization from decision tables…"
 license: MIT
 metadata:
   hermes:

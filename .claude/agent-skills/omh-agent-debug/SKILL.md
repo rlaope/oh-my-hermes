@@ -1,6 +1,6 @@
 ---
 name: "omh-agent-debug"
-description: "[omh] Agent is stuck, looping, or drifting: capture a stuck, looping, drifting, or repeatedly failing agent run, diagnose the likely failure pattern."
+description: "[omh] Agent is stuck, looping, or drifting: capture a stuck, looping, drifting, or repeatedly failing agent run, diagnose the likely failure pattern…"
 license: MIT
 metadata:
   hermes:

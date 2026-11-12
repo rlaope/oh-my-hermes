@@ -1,6 +1,6 @@
 ---
 name: "omh-apps"
-description: "[omh] Email, Slack, or Jira action to perform: external app actions - email, Slack, Discord, Notion, Linear, Jira, CRM, and similar providers."
+description: "[omh] Email, Slack, or Jira action to perform: external app actions - email, Slack, Discord, Notion, Linear, Jira, CRM, and similar providers…"
 license: MIT
 metadata:
   hermes:

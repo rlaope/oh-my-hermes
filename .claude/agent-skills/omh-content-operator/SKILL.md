@@ -1,6 +1,6 @@
 ---
 name: "omh-content-operator"
-description: "[omh] Product or company copy to publish or rewrite: scope publish-ready writing, rewriting, summarization, translation, release-note, newsletter."
+description: "[omh] Product or company copy to publish or rewrite: scope publish-ready writing, rewriting, summarization, translation, release-note, newsletter…"
 license: MIT
 metadata:
   hermes:

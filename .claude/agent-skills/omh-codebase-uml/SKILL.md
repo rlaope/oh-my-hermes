@@ -1,6 +1,6 @@
 ---
 name: "omh-codebase-uml"
-description: "[omh] Architecture picture of a codebase: turn a repository into one readable, interface-level PlantUML architecture picture - packages or modules."
+description: "[omh] Architecture picture of a codebase: turn a repository into one readable, interface-level PlantUML architecture picture - packages or modules…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

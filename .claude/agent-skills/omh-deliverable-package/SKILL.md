@@ -1,6 +1,6 @@
 ---
 name: "omh-deliverable-package"
-description: "[omh] Attachment and deliverable status tracking: track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared, generated, QA, approved."
+description: "[omh] Attachment and deliverable status tracking: track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared, generated, QA, approved…"
 license: MIT
 metadata:
   hermes:

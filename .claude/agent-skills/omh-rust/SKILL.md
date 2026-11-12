@@ -1,6 +1,6 @@
 ---
 name: "omh-rust"
-description: "[omh] Rust ownership, lifetime, or unsafe trouble: prepare Rust changes with ownership, error, and API discipline, and escalate any unsafe, FFI."
+description: "[omh] Rust ownership, lifetime, or unsafe trouble: prepare Rust changes with ownership, error, and API discipline, and escalate any unsafe, FFI…"
 license: MIT
 metadata:
   hermes:

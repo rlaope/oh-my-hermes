@@ -1,6 +1,6 @@
 ---
 name: "omh-llm-app-dev"
-description: "[omh] LLM-powered feature to build: LLM app development: prepare a build handoff for an LLM-powered feature with a pinned provider boundary."
+description: "[omh] LLM-powered feature to build: LLM app development: prepare a build handoff for an LLM-powered feature with a pinned provider boundary…"
 license: MIT
 metadata:
   hermes:

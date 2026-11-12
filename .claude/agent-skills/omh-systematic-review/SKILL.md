@@ -1,6 +1,6 @@
 ---
 name: "omh-systematic-review"
-description: "[omh] Literature screening against frozen criteria: two blind reviewers, a deterministic merge, open conflicts and agreement for systematic."
+description: "[omh] Literature screening against frozen criteria: two blind reviewers, a deterministic merge, open conflicts and agreement for systematic…"
 license: MIT
 compatibility: "Requires the omh CLI on PATH (pip install oh-my-hermes)."
 metadata:

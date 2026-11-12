@@ -1,6 +1,6 @@
 ---
 name: "omh-files"
-description: "[omh] Folder cleanup, renames, or deletions: policy overlay for local file tasks - add path scoping and destructive-action gates after preferring native file."
+description: "[omh] Folder cleanup, renames, or deletions: policy overlay for local file tasks - add path scoping and destructive-action gates after preferring native file…"
 license: MIT
 metadata:
   hermes:
