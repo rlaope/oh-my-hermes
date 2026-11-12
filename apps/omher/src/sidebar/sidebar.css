@@ -21,6 +21,78 @@
 }
 .side-add {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+/* the "!" (oh-my-hermes is not installed): the + button's size and quiet colour, no fill until hovered */
+.omh-note {
+  position: relative;
+}
+.omh-note .ui-pop.omh-pop {
+  /* opens under the "!", toward the sidebar's left edge and over the chat if it must; never past the window */
+  left: auto;
+  right: -30px;
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  padding: 10px 12px 10px;
+  border-radius: var(--r);
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+.omh-pop-t {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.omh-pop-p {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--body);
+}
+.omh-pop-st {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.omh-pop .gate-log {
+  margin-bottom: 8px;
+}
+.omh-pop-err {
+  margin: 0 0 8px;
+  font: 12px/18px var(--mono);
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.omh-pop-a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* one plain action and one quiet one, as the app's other card actions (neutral ink fill, never the accent) */
+.omh-pop-go {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 500;
+}
+.omh-pop-go:disabled {
+  opacity: 0.5;
+}
+.omh-pop-hide {
+  font-size: 12px;
+  color: var(--muted);
+}
+.omh-pop-hide:hover:not(:disabled) {
+  color: var(--ink);
 }
 .side-add .ui-ib:disabled {
   opacity: 0.5;
