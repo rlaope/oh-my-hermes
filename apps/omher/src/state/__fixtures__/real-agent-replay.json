@@ -1086,6 +1086,240 @@
         ]
       },
       {
+        "event": "session.info",
+        "model": "Haiku 5.5",
+        "model_next": ""
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "model_next": ""
+      },
+      {
+        "agent_session": "372c81cb-b88e-4c05-8e7c-98529d1f5554",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Haiku 5.5"
+      },
+      {
+        "detail": "/home/u/.omher/session-files/s1/1-meeting notes.txt",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01TG7EdpAKp4Zk2tocSvCpjj"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01TG7EdpAKp4Zk2tocSvCpjj"
+      },
+      {
+        "event": "delta",
+        "text": "PERIWINKLE"
+      },
+      {
+        "event": "delta",
+        "text": " is the fi"
+      },
+      {
+        "event": "delta",
+        "text": "rst line"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxGLhAoNRPUgTppxq85u-0",
+        "text": "PERIWINKLE is the first line"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "372c81cb-b88e-4c05-8e7c-98529d1f5554",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Haiku 5.5"
+      },
+      {
+        "detail": "/w/elsewhere/plan.txt",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01Ae34vNHvcJ3mMBYQiqpQCU"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "/w/elsewhere/plan.txt",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "59f1836e-edfa-44c9-95da-3285979ad6f8",
+        "title": "Allow Read?"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": false,
+        "tool_id": "toolu_01Ae34vNHvcJ3mMBYQiqpQCU"
+      },
+      {
+        "event": "delta",
+        "text": "The Read o"
+      },
+      {
+        "event": "delta",
+        "text": "f `/w/else"
+      },
+      {
+        "event": "delta",
+        "text": "where/plan"
+      },
+      {
+        "event": "delta",
+        "text": ".txt` was "
+      },
+      {
+        "event": "delta",
+        "text": "denied, so"
+      },
+      {
+        "event": "delta",
+        "text": " I have no"
+      },
+      {
+        "event": "delta",
+        "text": " first lin"
+      },
+      {
+        "event": "delta",
+        "text": "e to repor"
+      },
+      {
+        "event": "delta",
+        "text": "t. I did n"
+      },
+      {
+        "event": "delta",
+        "text": "ot try ano"
+      },
+      {
+        "event": "delta",
+        "text": "ther path "
+      },
+      {
+        "event": "delta",
+        "text": "or a diffe"
+      },
+      {
+        "event": "delta",
+        "text": "rent tool "
+      },
+      {
+        "event": "delta",
+        "text": "to get aro"
+      },
+      {
+        "event": "delta",
+        "text": "und the de"
+      },
+      {
+        "event": "delta",
+        "text": "nial. If y"
+      },
+      {
+        "event": "delta",
+        "text": "ou want me"
+      },
+      {
+        "event": "delta",
+        "text": " to read i"
+      },
+      {
+        "event": "delta",
+        "text": "t, approve"
+      },
+      {
+        "event": "delta",
+        "text": " the read "
+      },
+      {
+        "event": "delta",
+        "text": "or tell me"
+      },
+      {
+        "event": "delta",
+        "text": " another w"
+      },
+      {
+        "event": "delta",
+        "text": "ay to acce"
+      },
+      {
+        "event": "delta",
+        "text": "ss it."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxGLzHhhP2Lo8pRRAKSF-0",
+        "text": "The Read of `/w/elsewhere/plan.txt` was denied, so I have no first line to report. I did not try another path or a different tool to get around the denial. If you want me to read it, approve the read or tell me another way to access it."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-12-attach-read.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
         "event": "turn.start"
       },
       {
@@ -5419,5 +5653,419 @@
       }
     ],
     "name": "omo-9-queued.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "status",
+        "retry": {
+          "attempt": 1,
+          "max": 5
+        },
+        "text": "Retrying 1 of 5"
+      },
+      {
+        "error": "Anthropic rejected this conversation's request format, even after retrying without web search replay data. Run /compact or start a new session to continue, and report it if it happens again.",
+        "event": "turn.end",
+        "outcome": "error"
+      }
+    ],
+    "name": "omo-12-retry.jsonl"
+  },
+  {
+    "agent": "codex-late",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "agent_session": "01a1ca24-1047-7ee0-aac2-faf093d44dbe",
+        "approval": "never",
+        "effort": "xhigh",
+        "event": "session.info",
+        "mode": "",
+        "model": "GPT-6.1-Sol",
+        "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ]
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 31238
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " in"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " foreground"
+      },
+      {
+        "event": "delta",
+        "text": " and"
+      },
+      {
+        "event": "delta",
+        "text": " wait"
+      },
+      {
+        "event": "delta",
+        "text": " for"
+      },
+      {
+        "event": "delta",
+        "text": " it"
+      },
+      {
+        "event": "delta",
+        "text": " to"
+      },
+      {
+        "event": "delta",
+        "text": " finish"
+      },
+      {
+        "event": "delta",
+        "text": ".\n"
+      },
+      {
+        "event": "message",
+        "id": "msg_0d5f75ad81e44d60016af4433ad9b887d09a92dfdff397ed7e",
+        "text": "I’ll run the command in the foreground and wait for it to finish.\n"
+      },
+      {
+        "detail": "sleep 40; echo late",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43368
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43368
+      },
+      {
+        "event": "turn.end",
+        "outcome": "interrupted"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " and"
+      },
+      {
+        "event": "delta",
+        "text": " wait"
+      },
+      {
+        "event": "delta",
+        "text": " for"
+      },
+      {
+        "event": "delta",
+        "text": " its"
+      },
+      {
+        "event": "delta",
+        "text": " output"
+      },
+      {
+        "event": "delta",
+        "text": ".\n"
+      },
+      {
+        "event": "message",
+        "id": "msg_06e385cc77ea6e32016af4434408d487d0992eabcd358b26de",
+        "text": "I’ll run the command and wait for its output.\n"
+      },
+      {
+        "detail": "sleep 12; echo slow",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-cf413606-2ef5-4618-9589-d1258f15f63d"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43551
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43611
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": ".\n"
+      },
+      {
+        "event": "message",
+        "id": "msg_06e385cc77ea6e32016af4434b452487d0964b96aa222f3026",
+        "text": "2 + 2 = 4.\n"
+      },
+      {
+        "event": "tool.end",
+        "ms": 11927,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-cf413606-2ef5-4618-9589-d1258f15f63d"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43848
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": ";"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " output"
+      },
+      {
+        "event": "delta",
+        "text": " was"
+      },
+      {
+        "event": "delta",
+        "text": " `"
+      },
+      {
+        "event": "delta",
+        "text": "slow"
+      },
+      {
+        "event": "delta",
+        "text": "`."
+      },
+      {
+        "event": "message",
+        "id": "msg_06e385cc77ea6e32016af443520a0487d0a686d915975396f7",
+        "text": "2 + 2 = 4; the command output was `slow`."
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43926
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "tool.end",
+        "ms": 39887,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c"
+      }
+    ],
+    "name": "codex-12-late-step.jsonl"
   }
 ]

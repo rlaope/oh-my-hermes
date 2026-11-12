@@ -65,7 +65,7 @@ describe("session agents", () => {
 
   it("row model: folder as the title, agent and state below, live while running", () => {
     const base: SessionRec = { id: "s1", agent: "claude", cwd: "/Users/k/app", startedAt: 1_700_000_000_000, status: "running", view: "terminal" };
-    expect(rowModel(base)).toEqual({ title: "app", titleSource: "folder", folder: "app", sub: "Claude Code", live: true, needsYou: false, ts: 1_700_000_000 });
+    expect(rowModel(base)).toEqual({ title: "app", titleSource: "folder", folder: "app", sub: "Claude Code", live: true, needsYou: false, mark: null, over: false, ts: 1_700_000_000 });
     expect(rowModel({ ...base, status: "starting" })).toMatchObject({ sub: "Claude Code · Starting…", live: true });
     expect(rowModel({ ...base, status: "exited", exitCode: 0 })).toMatchObject({ sub: "Claude Code · Ended", live: false });
     expect(rowModel({ ...base, status: "exited", exitCode: null }).sub).toBe("Claude Code · Ended");

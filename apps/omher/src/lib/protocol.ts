@@ -145,6 +145,8 @@ export interface PluginRow {
   catalog_name: string | null;
   tools: number;
   hooks: number;
+  /** Tools the plugin registered in the running gateway (an older bridge leaves it out). */
+  live_tools?: number;
   update_available: boolean;
   /** Secret settings the plugin needs that are not set yet (env names); it stays off until they are. */
   needs_env: string[];
@@ -493,7 +495,8 @@ export type AskSubagent = { id: string; name: string };
 
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
-  | (EventBase & { event: "status"; text: string })
+  /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try. */
+  | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number } })
   | (EventBase & { event: "thinking" })
   | (EventBase & {
       event: "tool.start";

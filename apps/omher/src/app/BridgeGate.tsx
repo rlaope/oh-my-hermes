@@ -9,6 +9,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import mark from "../assets/omher-mark.png";
 import "./gate.css";
 import { t } from "../i18n";
+import { omhInstalled } from "../onboarding/omhPrompt";
 
 export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes" };
 export type InstallEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };
@@ -60,11 +61,29 @@ export function InstallLog({ lines, compact, testId = "setup-log" }: { lines: st
     <pre className={`gate-log${compact ? " gate-log-sm" : ""}`} data-testid={testId} ref={ref} aria-live="polite">
       {lines.map((line, i) => (
         <span key={i} className={`gate-line gate-line--${lineTone(line)}`}>
-          {line}
+          {compact ? slashBreaks(line) : line}
         </span>
       ))}
     </pre>
   );
+}
+
+/** A line with a break chance (`<wbr>`) after each "/" inside a path (a word starting with `/`, `~/`, `./` or holding
+ *  `://`), so the small log wraps a path between its parts and never inside a word; other words break only at spaces. */
+export function slashBreaks(line: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let k = 0;
+  for (const word of line.split(/(\s+)/)) {
+    if (!/^(~|\.{1,2})?\/|:\/\//.test(word)) {
+      out.push(word);
+      continue;
+    }
+    word.split(/(?<=\/)(?=[^/])/).forEach((part, i) => {
+      if (i) out.push(<wbr key={`w${k++}`} />);
+      out.push(part);
+    });
+  }
+  return out;
 }
 
 const hasShell = () => inTauri() || testShell() !== null;
@@ -168,6 +187,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         // The shell starts the bridge again after a clean install; poll it from "starting".
         setInstall("idle");
         setStatus({ state: "starting" });
+        omhInstalled();
       } else {
         setInstall("failed");
       }

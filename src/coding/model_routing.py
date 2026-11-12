@@ -907,7 +907,12 @@ def resolve_model_route(
             raw_identities.get(identity_id) if isinstance(raw_identities, Mapping) else None
         )
         raw_chain = (
-            identity_profile.get("model_chain") if isinstance(identity_profile, Mapping) else None
+            identity_profile.get("model_chain")
+            if (
+                isinstance(identity_profile, Mapping)
+                and identity_profile.get("enabled", True) is not False
+            )
+            else None
         )
         if isinstance(raw_chain, (list, tuple)) and raw_chain:
             identity_chain = tuple(

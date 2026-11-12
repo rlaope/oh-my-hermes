@@ -52,10 +52,26 @@
 .side-sh-row .ss-pop.ui-pop-top {
   bottom: calc(100% + 4px);
 }
+/* ...and keeps a few px of air under the sidebar row above it (MENU_AIR in SessionsSection.tsx): a band of the
+   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows */
+.side-sh-row .ss-pop.ui-pop-top::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: calc(100% + 1px);
+  height: 6px;
+  background: var(--side);
+}
 /* the list scrolls inside the menu when the window is too short for every agent (fitMenu sets its max height) */
 .ss-scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* more agents below the cut: the last rows fade out, so the list reads as one that scrolls; gone at the end */
+.ss-scroll.more {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 /* the first frame, before the menu knows where it fits, is not shown */
 .ss-pop-measuring {
@@ -170,17 +186,6 @@
 .ss-add-omh-b:hover,
 .ss-add-omh-b:focus-visible {
   color: var(--ink);
-}
-.ss-add-omh-err {
-  padding: 0 6px 4px 32px;
-  font-size: 11px;
-  color: var(--danger);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ss-add-omh .gate-log {
-  margin: 2px 0 2px;
 }
 .ss-missing {
   font-size: 10.5px;
@@ -536,6 +541,69 @@
 .ss-row .bot-p {
   color: var(--muted);
 }
+/* the mark for the view a row opens to (chat or terminal): at the end of line 2, under the time, in the colour of
+   the line it ends. The terminal's is solid with the prompt cut out in the row's own background, the chat's an
+   outline. The close button takes its place on hover, as it takes the time's. */
+.ss-view {
+  --ss-cut: var(--side);
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  display: grid;
+  place-items: center;
+  height: 17px;
+  color: var(--muted);
+}
+.ss-row.active .ss-view {
+  --ss-cut: var(--active-row);
+}
+/* a solid shape weighs more than an outline of the same colour: the terminal's takes the quieter gray, so a list of
+   terminals is not a column of chips beside the names */
+.ss-view[data-view="terminal"] {
+  color: var(--quiet);
+}
+.ss-row:hover .ss-view {
+  visibility: hidden;
+}
+/* a session's state stands in the time's place as a sign and a word, in one colour: a yellow warning triangle (it
+   waits for you), a red exclamation mark (it stopped on an error), a green check (it finished). No dots. */
+.ss-row .ss-sign {
+  display: inline-block;
+  margin-right: 4px;
+  line-height: 0;
+  vertical-align: -1.5px;
+}
+/* the triangle is the yellow of a warning sign in both themes; its word keeps the amber that reads at 11px */
+.ss-row .ss-sign.needs {
+  color: #e9a23b;
+}
+.ss-row .bot-t.err {
+  color: var(--danger);
+}
+.ss-row .bot-t.ok {
+  color: var(--ok);
+}
+/* 11px green on the light sidebar: a deeper shade, as the amber has */
+[data-theme="light"] .ss-row .bot-t.ok {
+  color: #17693f;
+}
+/* the close button takes the time's place on hover, but a state stays: it moves left of the button */
+.ss-row:hover .bot-t.wait,
+.ss-row:hover .bot-t.err,
+.ss-row:hover .bot-t.ok {
+  visibility: visible;
+  margin-right: 22px;
+}
+/* a session nothing runs in steps back: its agent mark fades and its name is muted, so the running ones lead */
+.ss-row.over .ss-av > * {
+  opacity: 0.5;
+}
+.ss-row.over .bot-n {
+  color: var(--muted);
+}
+.ss-row.over .ss-view {
+  opacity: 0.55;
+}
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {
   flex: 0 1 auto;
@@ -651,6 +719,11 @@
 .ss-way-o.on {
   background: var(--raise2);
   color: var(--ink);
+  font-weight: 500;
+}
+/* the composer is nearly white in the light theme: the picked word needs a darker gray to read as picked */
+[data-theme="light"] .ss-way-o.on {
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
 }
 .ss-way-o[aria-disabled="true"] {
   opacity: 0.45;
@@ -747,6 +820,26 @@
 }
 .ss-mode.set {
   color: var(--ink);
+}
+/* the agent's own setting asks for nothing or reaches the whole disk: said in the warning text colour, no box */
+.ss-mode.own,
+.ss-mode-own {
+  color: var(--needs);
+}
+/* the sentence is the point: it is never cut to "full disk a…"; the message field gives way */
+.ss-mode.own {
+  max-width: none;
+  flex-shrink: 0;
+}
+.ss-pick-w:has(> .ss-mode.own) {
+  flex-shrink: 0;
+}
+.ss-mode.own .ss-pick-n {
+  overflow: visible;
+}
+.ss-mode-own {
+  padding: 2px 6px 6px;
+  font-size: 12px;
 }
 .ss-dpop .ss-h.ss-h-plain {
   padding-left: 6px;

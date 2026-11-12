@@ -2,10 +2,10 @@
 // its actions; they never edit this file.
 import { useSyncExternalStore } from "react";
 import { BridgeClient, type BridgeStatus } from "../lib/bridge";
-import { noteFor, showNote, windowWatched } from "../lib/notify";
+import { noteFor, sessionNote, showNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
-import { toWire } from "../chat/parts/skillTokens";
+import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -57,6 +57,10 @@ export interface Step {
   startedAt: number; // ms
   endedAt?: number; // ms
   ok?: boolean;
+  /** Still running when the person pressed Stop (`ok` false, `endedAt` the Stop). */
+  stopped?: boolean;
+  /** A stopped step the agent later said it finished (Codex runs a command on after Stop): how it ended and when. */
+  late?: { ok: boolean; endedAt: number; ms: number };
   /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
   dag?: { run: string; node: string }[];
 }
@@ -128,6 +132,8 @@ export type MessageItem = {
   files?: SentFile[];
   /** user rows only: the prompt text actually sent when it differs from `text` (files add `@file:` refs). */
   sent?: string;
+  /** user rows only: the skills its `$name` tokens called, drawn as pills in the bubble. */
+  skills?: string[];
 };
 
 /** A file the person sent, as their own bubble shows it. `url` is a blob URL for pictures and video. */
@@ -556,17 +562,33 @@ function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
   });
 }
 
-/** Closes the running turn (if any) and moves it to lastTurn. */
+/** Closes the running turn (if any) and moves it to lastTurn. A step still open when the person stopped the turn
+ *  reads as stopped, not as finished. */
 function endTurn(chat: Chat, now: number, outcome: NonNullable<Turn["outcome"]>, error?: string): Chat {
   if (!chat.turn) return chat;
+  const stop = outcome === "interrupted";
   const patched = patchTurn(chat, (t) => ({
     ...t,
     endedAt: now,
     outcome,
     ...(error ? { error } : {}),
-    steps: t.steps.map((s) => (s.endedAt ? s : { ...s, endedAt: now })),
+    steps: t.steps.map((s) => (s.endedAt ? s : { ...s, endedAt: now, ...(stop ? { ok: false, stopped: true } : {}) })),
   }));
   return { ...patched, lastTurn: patched.turn, turn: null };
+}
+
+/** The end of a step the person stopped, reported after its turn was over (Codex's command ran on): the stopped
+ *  step, in whichever turn holds it, says it kept running and how it ended. Any other step end outside its turn
+ *  is dropped. */
+function lateStepEnd(chat: Chat, ev: EventOf<"tool.end">, now: number): Chat {
+  const held = [...chat.items]
+    .reverse()
+    .find((i): i is ActivityItem => i.kind === "activity" && i.turn.steps.some((s) => s.id === ev.tool_id && s.stopped && !s.late));
+  if (!held) return chat;
+  return patchTurnById(chat, held.id, (t) => ({
+    ...t,
+    steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, late: { ok: ev.ok, endedAt: now, ms: ev.ms > 0 ? ev.ms : now - s.startedAt } } : s)),
+  }));
 }
 
 function touchChat(state: AppState, bot: string, fn: (c: Chat) => Chat): AppState {
@@ -605,7 +627,9 @@ export function replyChipFor(a: Away): ReplyChip | null {
 }
 const SOURCE_NAMES: Record<string, string> = { slack: "Slack", discord: "Discord", telegram: "Telegram" };
 
-function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string): Chat {
+/** `since`: when the chat.open request went out. A turn that started or ended after that is newer than the reply's
+ *  `running`, which then changes nothing: the live events are the truth for it. */
+function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, since = Infinity): Chat {
   const server: MessageItem[] = res.messages.map((m) => ({
     kind: m.role,
     id: m.id,
@@ -621,8 +645,9 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
-      // keep the local pictures, and the text as typed (skill tokens go out hoisted)
-      if (twin && (i.files || i.sent)) Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}) });
+      // keep the local pictures, and the text as typed with its skill tokens (they go out hoisted)
+      if (twin && (i.files || i.sent || i.skills))
+        Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}), ...(i.skills ? { skills: i.skills } : {}) });
       return !twin;
     }
     return i.ts >= lastServerTs;
@@ -635,9 +660,9 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     loaded: true,
     sessionId: res.session_id,
   };
-  if (res.running && !next.turn) {
+  if (res.running && !next.turn && !((next.lastTurn?.endedAt ?? -Infinity) >= since)) {
     next = newTurn(next, bot, now, WORKING)[0];
-  } else if (!res.running && next.turn) {
+  } else if (!res.running && next.turn && next.turn.startedAt < since) {
     next = endTurn(next, now, "done");
   }
   return next;
@@ -652,7 +677,7 @@ export type Action =
   | { type: "error"; message: string | null }
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
-  | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number }
+  | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
   | {
       type: "local.user";
       bot: string;
@@ -662,6 +687,7 @@ export type Action =
       reply?: { source: string; label: string };
       files?: SentFile[];
       sent?: string;
+      skills?: string[];
     }
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | { type: "send.failed"; bot: string; id: string; error: string }
@@ -696,7 +722,10 @@ export type Action =
   /** After a restart: the panel, Plans view and open session as they were (resume.ts). */
   | { type: "ui.restore"; ui: Pick<Ui, "panelOpen" | "panelTab" | "runsFull" | "runId"> & { session: string | null } }
   /** Drop a chat that is gone for good (a closed SESSIONS chat): its open asks go with it. */
-  | { type: "chat.forget"; bot: string };
+  | { type: "chat.forget"; bot: string }
+  /** A SESSIONS chat ended with `error`: its last turn, failed with that same reason, no longer repeats it (the
+   *  Ended line above the composer says it once, beside Restart). */
+  | { type: "turn.reasonMoved"; bot: string; error: string };
 
 // ---- chats that are not a bot's main chat ------------------------------------------------------
 //
@@ -744,10 +773,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
         return { ...newTurn(endTurn(c, now, "done"), bot, now, early)[0], early: null };
       });
-    case "status":
-      return touchChat(state, bot, (c) =>
-        c.turn ? patchTurn(c, (t) => ({ ...t, status: ev.text })) : { ...c, early: { text: ev.text, at: now } },
-      );
+    case "status": {
+      // the agent's own retry of this turn: the line says which try, in the person's language
+      const text = ev.retry ? tr("live.retrying", { n: ev.retry.attempt, max: ev.retry.max }) : ev.text;
+      return touchChat(state, bot, (c) => (c.turn ? patchTurn(c, (t) => ({ ...t, status: text })) : { ...c, early: { text, at: now } }));
+    }
     case "thinking":
       return touchChat(state, bot, (c) => (c.turn && !c.turn.status ? patchTurn(c, (t) => ({ ...t, status: THINKING })) : c));
     case "tool.start":
@@ -763,10 +793,12 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       );
     case "tool.end":
       return touchChat(state, bot, (c) =>
-        patchTurn(c, (t) => ({
-          ...t,
-          steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
-        })),
+        c.turn?.steps.some((s) => s.id === ev.tool_id)
+          ? patchTurn(c, (t) => ({
+              ...t,
+              steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, endedAt: now, ok: ev.ok } : s)),
+            }))
+          : lateStepEnd(c, ev, now),
       );
     case "subagent": {
       const c = state.chats[bot];
@@ -945,7 +977,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "select":
       return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat" } };
     case "chat.opened":
-      return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot), openError: null }));
+      return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c) =>
         withItems(c, [
@@ -958,6 +990,7 @@ export function reduce(state: AppState, a: Action): AppState {
             ...(a.reply ? { reply: a.reply } : {}),
             ...(a.files?.length ? { files: a.files } : {}),
             ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
+            ...(a.skills?.length ? { skills: a.skills } : {}),
           },
         ]),
       );
@@ -1088,6 +1121,12 @@ export function reduce(state: AppState, a: Action): AppState {
     }
     case "ui.focusAsk":
       return { ...state, ui: { ...state.ui, focusAsk: { bot: a.bot, id: a.id, seq: (state.ui.focusAsk?.seq ?? 0) + 1 } } };
+    case "turn.reasonMoved": {
+      const c = state.chats[a.bot];
+      const last = c?.lastTurn;
+      if (!c || !last || last.outcome !== "error" || last.error?.trim() !== a.error.trim()) return state;
+      return { ...state, chats: { ...state.chats, [a.bot]: patchTurnById(c, last.id, ({ error: _, ...t }) => t) } };
+    }
     case "chat.forget": {
       if (!state.chats[a.bot]) return state;
       const chats = { ...state.chats };
@@ -1199,7 +1238,7 @@ export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
   /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. Skill tokens
-   *  (`./name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
+   *  (`$name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
   send(text: string): Promise<void>;
   /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
@@ -1270,8 +1309,9 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
-  /** The bot's skills for the composer's `./` picker, read once per bot; [] when the bridge cannot list them. */
-  skills(bot: string): Promise<Skill[]>;
+  /** The bot's skills for the composer's `$` picker, read once per bot (`fresh`: read again, e.g. right after an
+   *  install); [] when the bridge cannot list them. */
+  skills(bot: string, fresh?: boolean): Promise<Skill[]>;
   /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
   linkPlaces(bot: string): Promise<LinkPlaces>;
   avatarOf(bot: string): Promise<{ rev: number | null; data: string | null }>;
@@ -1362,6 +1402,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   // skills.list per bot: the promise (asked once) and the names, for hoisting tokens when a message is sent
   const skillLists = new Map<string, Promise<Skill[]>>();
   const skillNames = new Map<string, string[]>();
+  const tokenNames = (text: string, bot: string) => [...new Set(findTokens(text, skillNames.get(bot) ?? []).map((k) => k.name))];
 
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
@@ -1376,6 +1417,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
 
   const loadChat = async (bot: string) => {
     let res: ChatOpenResult;
+    const since = now();
     try {
       res = await bridge.request("chat.open", { bot });
     } catch (e) {
@@ -1383,7 +1425,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "chat.failed", bot, message: errText(e) });
       throw e;
     }
-    dispatch({ type: "chat.opened", bot, res, now: now() });
+    dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
   const loadElsewhere = async (bot?: string) => {
     const b = botArg(bot);
@@ -1489,11 +1531,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const first =
           state.selectedBot && bots.some((b) => b.name === state.selectedBot) ? state.selectedBot : (back?.bot ?? bots[0]?.name);
         void loadAutomations();
-        if (first) await selectBot(first);
+        // the panel and view come back as the bot is selected, before its chat and lists load: put back only once
+        // those reads ended, a click on the panel in the meantime (the places chip, ⌘.) was undone by it
+        const loading = first ? selectBot(first) : Promise.resolve();
         if (back?.bot) {
           const { panelOpen, panelTab, runsFull, runId, session } = back;
           dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
         } else if (back?.session) dispatch({ type: "ui.session", id: back.session });
+        await loading;
         // Load the other chats too, so the sidebar can show previews and unread counts.
         await Promise.allSettled(
           bots.filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),
@@ -1513,7 +1558,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       const wire = toWire(t, skillNames.get(bot) ?? []);
-      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire });
+      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot) });
       if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
         await bridge.request("chat.send", chip ? { bot, text: wire, reply_to: chip.session_id } : { bot, text: wire });
@@ -1540,7 +1585,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const sent = toWire(promptText(text, results), skillNames.get(bot) ?? []);
       const id = `local-${++localSeq}`;
       const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
-      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent });
+      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent, skills: tokenNames(text.trim(), bot) });
       try {
         await bridge.request("chat.send", { bot, text: sent });
       } catch (e) {
@@ -1731,7 +1776,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
-    skills(bot) {
+    skills(bot, fresh) {
+      if (fresh) skillLists.delete(bot);
       let list = skillLists.get(bot);
       if (!list) {
         list = bridge
@@ -1873,6 +1919,14 @@ export function notifySessionEvent(ev: BridgeEvent, state: AppState): void {
     if (route) route.open();
     else void singleton?.actions.selectBot(note.bot);
   });
+}
+
+/** A system notification for what session `id` did outside its chat (its program ended, it could not start, its
+ *  terminal rang), unless the person is looking at that session. A click opens the session. */
+export function notifySessionNote(id: string, n: SessionNote, state: AppState): void {
+  if (!notifyEnabled()) return;
+  if (windowWatched() && state.ui.view === "session" && state.ui.session === id) return;
+  void showNote(sessionNote(id, n), () => singleton?.actions.openSession(id));
 }
 
 /** Set by SESSIONS: the chat key shown for a session id (so its own notifications stay quiet). */

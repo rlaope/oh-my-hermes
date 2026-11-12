@@ -41,8 +41,11 @@ async function open(page: Page, height: number) {
 
 const box = (page: Page, sel: string) =>
   page.evaluate((s) => {
-    const r = document.querySelector(s)!.getBoundingClientRect();
-    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    const el = document.querySelector(s)!;
+    const r = el.getBoundingClientRect();
+    // a menu opened upward keeps a band of the sidebar's colour above its edge (its air): it covers what lies there
+    const band = parseFloat(getComputedStyle(el, "::before").height) || 0;
+    return { top: r.top - band, bottom: r.bottom, left: r.left, right: r.right };
   }, sel);
 
 for (const height of [600, 720, 820]) {

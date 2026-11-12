@@ -44,13 +44,23 @@ machine and finds Hermes' Python on its own (see "Where omher looks for Hermes" 
 first launch offers to install it, as described above.
 
 **macOS (11 or later).** Download `omher-<version>-macos-arm64.dmg` (Apple Silicon) or `-macos-x64.dmg` (Intel),
-open it and drag omher into Applications. The app is ad-hoc signed, not notarized, so the first launch needs
-one extra step: right-click omher in Applications, choose **Open**, then **Open** again. After that it opens
-normally. If macOS still says the app "is damaged", clear the download flag once:
+open it and drag omher into Applications. The app is ad-hoc signed, not notarized, so macOS stops the first
+launch of a copy downloaded in a browser with a warning that it cannot check the app. Allow it once:
+
+- **macOS 15 (Sequoia) or later:** close the warning, open **System Settings › Privacy & Security**, scroll down
+  to Security and click **Open Anyway** next to omher, then **Open** when the warning comes back. Right-click ›
+  Open no longer gets past the warning on these versions.
+- **macOS 14 or earlier:** right-click omher in Applications, choose **Open**, then **Open** again.
+
+After that it opens normally. The same thing in one Terminal line, which also helps when macOS says the app
+"is damaged":
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/omher.app
 ```
+
+The one-line installer above needs neither step: it downloads the same `.dmg` with `curl`, which sets no
+download flag.
 
 **Windows 10/11 (x64).** Download `omher-<version>-windows-x64-setup.exe` (installs for your user, no admin) or
 the `.msi`. The installer is not code-signed, so SmartScreen may say "Windows protected your PC": choose

@@ -1014,6 +1014,8 @@ class Plugins(BridgeCase):
             rows = (await s.req("plugins.list", bot="kami"))["result"]["plugins"]
             self.assertEqual([(r["name"], r["enabled"], r["tier"], r["needs_env"]) for r in rows],
                              [("homeassistant", True, "official", []), ("browserbase", False, "bundled", ["BROWSERBASE_API_KEY"])])
+            # live_tools: what the plugin registered in the running gateway (Hermes' loader record), never the catalog
+            self.assertEqual([r["live_tools"] for r in rows], [2, 0])
             self.assertTrue((await s.req("plugins.toggle", bot="kami", key="homeassistant", enable=False))["ok"])
             self.assertFalse((await s.req("plugins.toggle", bot="kami", key="homeassistant"))["ok"])
             self.assertTrue((await s.req("plugins.update", bot="kami", name="homeassistant"))["ok"])
@@ -1884,6 +1886,36 @@ class Skills(BridgeCase):
             with mock.patch.object(ob, "read_skill_head", wraps=ob.read_skill_head) as head:
                 ob.read_skills(skills.parent)
             self.assertEqual(head.call_count, 1)  # three links back into the tree, one read
+
+    async def test_external_dirs_of_the_profile_config_are_listed_after_its_own(self):
+        """oh-my-hermes registers its skills in `skills.external_dirs` (not the profile's own folder): `skills.list`
+        reads those folders too, after the profile's own, as Hermes' skill scan does; a missing folder is skipped."""
+        async with Env() as env:
+            prof = env.home / "profiles" / "kami"
+            own = prof / "skills" / "plan"
+            own.mkdir(parents=True)
+            (own / "SKILL.md").write_text("---\nname: plan\ndescription: the bot's own\n---\n")
+            omh = env.home / "omh-skills"
+            for name, desc in (("omh-model-setup", "Model and provider configuration"), ("plan", "OMH's plan")):
+                (omh / "guide" / name).mkdir(parents=True)
+                (omh / "guide" / name / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {desc}\n---\n")
+            rel = prof / "more"
+            (rel / "x").mkdir(parents=True)
+            (rel / "x" / "SKILL.md").write_text("---\nname: relative-one\n---\n")
+            cfg = prof / "config.yaml"
+            cfg.write_text(cfg.read_text() + f"skills:\n  external_dirs:\n    - {omh}\n    - {env.home}/missing\n    - more\n    - {omh}\n")
+            before = self._tree(env.home)
+            s = await self.open(env)
+            got = {x["name"]: x["description"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(sorted(got), ["omh-model-setup", "plan", "relative-one"])
+            self.assertEqual(got["plan"], "the bot's own")  # the profile's own folder wins, as in Hermes
+            self.assertEqual(got["omh-model-setup"], "Model and provider configuration")
+            self.assertEqual(self._tree(env.home), before)
+            self.assertEqual(env.connects, [])
+            # one entry as a plain string (Hermes reads a scalar too)
+            cfg.write_text(cfg.read_text().split("skills:")[0] + f"skills:\n  external_dirs: {omh}\n")
+            again = {x["name"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(again, {"omh-model-setup", "plan"})
 
     async def test_no_skills_folder_and_unknown_bot(self):
         async with Env() as env:
@@ -3005,6 +3037,19 @@ class CliRunsOmo(unittest.TestCase):
             self.assertEqual(cli.list("omo", "/w/elsewhere", 0.0)["runs"], [])
             self.assertEqual(_mtimes(Path(d) / "cli"), before, "reading OmO's records changed a file")
 
+    def test_the_runs_time_is_its_first_subagents_start_to_its_last_ones_end(self):
+        # the chat card's rule (#2800): the fan-out runs from the first subagent's start to the last one's end. On the
+        # real records that is 10:28:41.062 -> 10:28:56.701, the span of the two rows the chat shows (9.9 s and
+        # 15.5 s by OmO's own duration_ms, starting 0.14 s apart)
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
+            self.assertEqual(run["started"], min(n["started"] for n in run["nodes"]))
+            self.assertEqual(run["ended"], max(n["ended"] for n in run["nodes"]))
+            self.assertAlmostEqual(run["ended"] - run["started"], 15.639, places=2)
+            self.assertEqual([round(n["ended"] - n["started"], 1) for n in run["nodes"]], [9.9, 15.5])
+
     def test_a_running_record_quiet_for_over_10_minutes_failed_no_result(self):
         with tempfile.TemporaryDirectory() as d:
             homes = _cli_home(Path(d))
@@ -3016,6 +3061,61 @@ class CliRunsOmo(unittest.TestCase):
             run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
             n = next(x for x in run["nodes"] if x["id"] == "st_01a1ca28")
             self.assertEqual((n["state"], n["attempts"][0]["reason"]), ("failed", "no result"))
+
+
+class CliRunsOmoFolder(unittest.TestCase):
+    """O15: OmO keeps a folder's subagent records in that folder (`<folder>/.omo/senpi-task/tasks/`) when they are
+    already there, and OmO 5.0 always does. Real records (redacted: OmO 5.0.0-beta.65, two subagents that failed on
+    their first model and the two retries that answered), stored as `dot-omo/` because the repo ignores `.omo/`."""
+
+    SID = "01a1ce7e-2a44-78c8-9e51-05926dd01556"
+
+    def setUp(self):
+        import shutil
+        self._d = tempfile.TemporaryDirectory()
+        root = Path(self._d.name)
+        self.homes = _cli_home(root)
+        self.homes["omo"] = root / "omo-home"
+        (self.homes["omo"] / "agent" / "projects").mkdir(parents=True)
+        self.folder = root / "omo-folder"
+        shutil.copytree(CLI_FIX / "omo-folder" / "dot-omo", self.folder / ".omo")
+        for p in (self.folder / ".omo" / "senpi-task" / "tasks").glob("*.json"):
+            r = json.loads(p.read_text(encoding="utf-8"))
+            r["spawn_spec"] = {"cwd": str(self.folder)}
+            p.write_text(json.dumps(r), encoding="utf-8")
+
+    def tearDown(self):
+        self._d.cleanup()
+
+    def test_the_sessions_folder_records_are_its_run_with_each_answer(self):
+        before = _mtimes(self.folder)
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        listed = cli.list("omo", str(self.folder), 0.0)["runs"]
+        self.assertEqual([r["id"] for r in listed], [f"omo:{self.SID}"])
+        self.assertEqual(listed[0]["counts"], {"nodes": 4, "done": 2, "running": 0, "failed": 2})
+        run = cli.get(f"omo:{self.SID}")["run"]
+        self.assertEqual([(n["label"], n["state"]) for n in run["nodes"]],
+                         [("Report the first line of a.txt", "failed"), ("Report how many lines b.txt has", "failed"),
+                          ("Report the first line of a.txt", "done"), ("Report how many lines b.txt has", "done")])
+        self.assertIn("alpha line", run["nodes"][2]["summary"])
+        self.assertIn("3 lines", run["nodes"][3]["summary"])
+        self.assertEqual(_mtimes(self.folder), before, "reading OmO's records changed a file")
+
+    def test_another_folders_records_and_links_are_not_read(self):
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        # asked for another folder (or for none), the records inside this one are not read
+        self.assertEqual(cli.list("omo", str(Path(self._d.name) / "elsewhere"), 0.0)["runs"], [])
+        self.assertEqual(cli.list("omo", None, 0.0)["runs"], [])
+        # a linked .omo, or a linked senpi-task inside it, is skipped
+        for link in (".omo", "senpi-task"):
+            other = Path(self._d.name) / f"linked-{link.strip('.')}"
+            other.mkdir()
+            if link == ".omo":
+                (other / ".omo").symlink_to(self.folder / ".omo", target_is_directory=True)
+            else:
+                (other / ".omo").mkdir()
+                (other / ".omo" / "senpi-task").symlink_to(self.folder / ".omo" / "senpi-task", target_is_directory=True)
+            self.assertEqual(ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).list("omo", str(other), 0.0)["runs"], [], link)
 
 
 class ClaudeAnswer(unittest.TestCase):

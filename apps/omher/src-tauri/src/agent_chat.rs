@@ -33,7 +33,7 @@ use serde_json::{json, Map, Value};
 use crate::acp_chat::{acp_agent, is_acp_session_id, Acp, RuleProbe, NO_RULES};
 use crate::dsh_chat::DshChat;
 use crate::session_files;
-use crate::sessions::{agent, chat_args, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
+use crate::sessions::{agent, chat_args, cmd_path_arg, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
 
 /// What the person did in the chat. Mirrors `ChatInput` in src/sessions/host.ts. A message's `images` are the
 /// saved copies (`session_files`) of the pictures the person attached, for the agent's own image input; any other
@@ -2085,6 +2085,9 @@ pub struct Pi {
     calls_subs: HashMap<String, Vec<String>>,
     /// background work OmO says is still running (`session_lifecycle.waitingOn.background`)
     background: usize,
+    /// OmO ended a run with `failure`: the turn's end waits for what OmO says next, a retry of its own
+    /// (`auto_retry_start`) or its last word on it (`auto_retry_end`, or the run settling)
+    held: bool,
 }
 
 /// oh-my-pi's tool approval as a select (`Allow tool: bash\nCommand: ls -la` with Approve / Approve bash for this
@@ -2207,6 +2210,7 @@ impl Pi {
         st.out(fields);
     }
     fn end(&mut self, st: &mut Step) {
+        self.held = false;
         if self.turn {
             self.turn = false;
             self.streaming = false;
@@ -2229,14 +2233,57 @@ impl Pi {
         self.last_stop.clear();
         self.last_error.clear();
     }
-    /// A calm line for an error: a missing login names where to sign in, anything else its first line.
+    /// A calm line for an error: a missing login names where to sign in, a provider's raw reply
+    /// (`400 {"type":"error","error":{"message":…}}`) its message, anything else its first line.
     fn friendly(&self, err: &str) -> String {
         let who = if self.label.is_empty() { "pi" } else { &self.label };
         if err.contains("No API key") || err.contains("/login") || err.contains("No default model") {
             return format!("{who} is not signed in. Open Terminal and run /login, then Restart.");
         }
-        clip(err.lines().find(|l| !l.trim().is_empty()).unwrap_or(err), 200)
+        let line = err.lines().find(|l| !l.trim().is_empty()).unwrap_or(err);
+        clip(&provider_message(line).unwrap_or_else(|| line.to_string()), 200)
     }
+    /// What OmO said after a run that ended with `failure`, while its end waits (`held`). True when the line was
+    /// taken here (a retry starts, or its last word ends the turn).
+    fn after_failure(&mut self, st: &mut Step, v: &Value) -> bool {
+        match s(v, "type").as_str() {
+            // OmO tries again by itself: the same turn goes on, and its line says which try this is
+            "auto_retry_start" => {
+                self.held = false;
+                self.last_stop.clear();
+                self.last_error.clear();
+                let n = v.get("attempt").and_then(Value::as_u64).unwrap_or(1);
+                let max = v.get("maxAttempts").and_then(Value::as_u64).unwrap_or(0);
+                st.emit(ev("status", json!({"text": format!("Retrying {n} of {max}"), "retry": {"attempt": n, "max": max}})));
+                true
+            }
+            // the retries are over: the turn ends once, with OmO's own words for why
+            "auto_retry_end" => {
+                self.held = false;
+                let why = s(v, "finalError");
+                if v.get("success").and_then(Value::as_bool) != Some(true) && !why.is_empty() {
+                    self.last_stop = "error".into();
+                    self.last_error = why;
+                }
+                self.end(st);
+                true
+            }
+            // no retry came: the run settled (or the next one starts) on that failure
+            "agent_settled" | "agent_idle" | "agent_start" | "model_config_error" | "prompt_result" => {
+                self.held = false;
+                self.end(st);
+                false
+            }
+            _ => false,
+        }
+    }
+}
+
+/// The message of a provider's raw error reply, `400 {"type":"error","error":{"message":"…"}}`.
+fn provider_message(line: &str) -> Option<String> {
+    let body: Value = serde_json::from_str(line[line.find('{')?..].trim()).ok()?;
+    let m = body.get("error").map(|e| if e.is_string() { e.as_str().unwrap_or_default().to_string() } else { s(e, "message") }).unwrap_or_else(|| s(&body, "message"));
+    (!m.trim().is_empty()).then_some(m)
 }
 
 /// `session.usage` from an rpc `contextUsage` (`{tokens, contextWindow}`), when it has both.
@@ -2299,6 +2346,9 @@ impl Adapter for Pi {
     fn on_line(&mut self, line: &str) -> Step {
         let mut st = Step::default();
         let Ok(v) = serde_json::from_str::<Value>(line) else { return st };
+        if self.held && self.after_failure(&mut st, &v) {
+            return st;
+        }
         match s(&v, "type").as_str() {
             "response" => {
                 let what = self.calls.remove(&s(&v, "id")).unwrap_or("");
@@ -2439,10 +2489,19 @@ impl Adapter for Pi {
                 // says the run was aborted
                 if v.get("aborted").and_then(Value::as_bool) == Some(true) {
                     self.last_stop = "aborted".into();
+                } else if self.turn && v.get("failure").is_some_and(Value::is_object) {
+                    // OmO may retry this by itself (`auto_retry_start` comes after agent_end, whatever its
+                    // `willRetry` says): one message stays one turn until OmO says how it went
+                    self.held = true;
+                    return st;
                 }
                 self.end(&mut st)
             }
             "prompt_result" if v.get("agentInvoked").and_then(Value::as_bool) == Some(false) => self.end(&mut st),
+            // OmO's own retry worked (it says so before that run's agent_end): the line stops saying it retries
+            "auto_retry_end" if self.turn && v.get("success").and_then(Value::as_bool) == Some(true) => {
+                st.emit(ev("status", json!({"text": ""})));
+            }
             "extension_ui_request" => {
                 let id = s(&v, "id");
                 let method = s(&v, "method");
@@ -2675,6 +2734,20 @@ fn command_for(argv: &[OsString], cwd: &Path, path_env: Option<OsString>, accoun
     Ok(cmd)
 }
 
+/// `--add-dir <dir>` with `dir` as one argument. A Windows `.cmd` shim runs through `cmd.exe /c`, which parses the
+/// line itself: there the folder goes in as [`cmd_path_arg`] allows it, and a folder it refuses adds nothing (the
+/// person then answers a card per read, as before).
+fn add_dir_args(program: &OsString, dir: &Path) -> Vec<OsString> {
+    let dir = dir.as_os_str().to_owned();
+    if program == "cmd.exe" {
+        return match cmd_path_arg(&dir.to_string_lossy()) {
+            Ok(d) => vec!["--add-dir".into(), d.into()],
+            Err(_) => vec![],
+        };
+    }
+    vec!["--add-dir".into(), dir]
+}
+
 /// How long an agent's rule listing ([`RuleProbe`]) may take before the chat is refused.
 const RULES_DEADLINE: Duration = Duration::from_secs(30);
 
@@ -2730,7 +2803,7 @@ impl ChatSessions {
     /// continues that conversation. `account_env` is `accounts::session_env` for that agent, as for a terminal session:
     /// the chosen account's home variable, or nothing. Anything not on the allow-list, or without a chat
     /// mode, is refused before a process exists.
-    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], sink: F) -> Result<u32, String>
+    pub fn start_agent<F>(&self, agent_id: &str, cwd: &Path, resume: Option<&str>, account_env: &[(String, String)], files: Option<&Path>, sink: F) -> Result<u32, String>
     where
         F: FnMut(ChatOut) + Send + 'static,
     {
@@ -2766,6 +2839,12 @@ impl ChatSessions {
         argv.extend(args.iter().map(OsString::from));
         if let Some(r) = resume.filter(|_| thread.is_none()) {
             argv.extend(resume_args(agent_id, r)?);
+        }
+        // Claude Code reads the files the person attached without a card: the session's own attachment folder
+        // (`session_files::session_dir`, made before the start; a folder made later is not honoured) is its one
+        // extra working directory, as one argument. Reads anywhere else outside `cwd` still ask.
+        if let Some(dir) = files.filter(|_| agent_id == "claude") {
+            argv.extend(add_dir_args(&argv[0], dir));
         }
         // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own resolved rules,
         // so nothing the person allows runs unasked and nothing they deny becomes askable; or it does not start
@@ -3363,6 +3442,37 @@ mod tests {
         assert_eq!((s(&m, "provider"), s(&m, "modelId")), ("anthropic".into(), "claude-x".into()));
     }
 
+    /// H10, recorded from the real Claude Code started with `--add-dir` on the session's attachment folder (made before
+    /// the start): reading the attached copy needs no card; reading a file in another folder still asks.
+    #[test]
+    fn claude_reads_an_attached_file_without_a_card_and_asks_for_anything_else() {
+        let mut c = claude_up();
+        let lines = real("claude-12-attach-read.jsonl");
+        let second = lines.iter().rposition(|l| l.contains("\"subtype\":\"init\"")).unwrap();
+        c.on_input(Input::send("first line of the attached file?")).unwrap();
+        let one = run(&mut c, &lines[..second]);
+        assert!(!names(&one.events).contains(&"approval.request".to_string()), "{:?}", one.events);
+        assert!(one.events.iter().any(|e| s(e, "event") == "tool.start" && s(e, "detail").ends_with("/.omher/session-files/s1/1-meeting notes.txt")));
+        assert!(one.events.iter().any(|e| s(e, "event") == "message" && s(e, "text") == "PERIWINKLE is the first line"));
+        c.on_input(Input::send("read /w/elsewhere/plan.txt")).unwrap();
+        let two = run(&mut c, &lines[second..]);
+        let asks: Vec<&Event> = two.events.iter().filter(|e| s(e, "event") == "approval.request").collect();
+        assert_eq!(asks.len(), 1, "{:?}", two.events);
+        assert!(serde_json::to_string(asks[0]).unwrap().contains("/w/elsewhere/plan.txt"));
+    }
+
+    #[test]
+    fn the_attachment_folder_is_one_add_dir_argument() {
+        // one argv element, spaces and all, exactly the folder given: never split, never a parent
+        let dir = Path::new("/Users/me/.omher/session-files/s12");
+        assert_eq!(add_dir_args(&OsString::from("/opt/bin/claude"), dir), [OsString::from("--add-dir"), OsString::from("/Users/me/.omher/session-files/s12")]);
+        let spaced = Path::new("/Users/Jane Doe/.omher/session-files/s3");
+        assert_eq!(add_dir_args(&OsString::from("/opt/bin/claude"), spaced), [OsString::from("--add-dir"), OsString::from("/Users/Jane Doe/.omher/session-files/s3")]);
+        // through `cmd.exe /c` (a Windows .cmd shim) the folder goes as cmd allows it, or not at all
+        assert_eq!(add_dir_args(&OsString::from("cmd.exe"), Path::new(r"C:\Users\a&b\.omher\session-files\s1")), [OsString::from("--add-dir"), OsString::from(r"C:\Users\a^&b\.omher\session-files\s1")]);
+        assert!(add_dir_args(&OsString::from("cmd.exe"), Path::new(r"C:\Users\50%\.omher\session-files\s1")).is_empty());
+    }
+
     #[test]
     fn only_chat_agents_have_adapters() {
         for id in ["claude", "codex", "omo", "pi", "omp", "opencode"] {
@@ -3374,12 +3484,12 @@ mod tests {
         }
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
-        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], |_| {}).is_err());
+        assert!(c.start_agent("dsh", &tmp, Some("eee5079a-c52e-4526-b633-f3d8cb7d6394"), &[], None, |_| {}).is_err());
         for bad in ["omh", "grok", "/bin/sh", "claude -p"] {
-            assert!(c.start_agent(bad, &tmp, None, &[], |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent(bad, &tmp, None, &[], None, |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], |_| {}).is_err());
-        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], |_| {}).is_err());
+        assert!(c.start_agent("claude", &tmp, Some("--dangerously-skip-permissions"), &[], None, |_| {}).is_err());
+        assert!(c.start_agent("opencode", &tmp, Some("ses_x --yolo"), &[], None, |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 
@@ -3603,7 +3713,7 @@ mod tests {
             let c = ChatSessions::default();
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
-            let id = c.start_agent("omo", &dir, resume, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            let id = c.start_agent("omo", &dir, resume, &[], None, move |x| o.lock().unwrap().push(x)).unwrap();
             c.input(id, Input::send(text)).unwrap();
             let deadline = Instant::now() + Duration::from_secs(150);
             while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")) {
@@ -3640,7 +3750,7 @@ mod tests {
             let c = ChatSessions::default();
             let out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
-            let id = c.start_agent(agent, &dir, None, &[], move |x| o.lock().unwrap().push(x)).unwrap();
+            let id = c.start_agent(agent, &dir, None, &[], None, move |x| o.lock().unwrap().push(x)).unwrap();
             if agent == "omo" {
                 // OmO's own default can be a model its provider refuses on this machine: pick one it serves
                 thread::sleep(Duration::from_secs(3));
@@ -3707,7 +3817,7 @@ mod tests {
         let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
         let me2 = me.clone();
         let id = c
-            .start_agent(&agent, &dir, None, &[], move |x| {
+            .start_agent(&agent, &dir, None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") == "approval.request" {
                         println!("approval {} {}", s(e, "title"), s(e, "command"));
@@ -3748,7 +3858,7 @@ mod tests {
         let out = Arc::new(Mutex::new(Vec::new()));
         let o = out.clone();
         let id = c
-            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], move |x| {
+            .start_agent("claude", &dir.canonicalize().unwrap(), None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") != "session.models" {
                         println!("event {e}");
@@ -4974,6 +5084,8 @@ mod tests {
         out.push(("claude-7-model.jsonl", "claude", vec![Model("haiku"), File("claude-7-model.jsonl")]));
         // a model picked between turns, then one picked right after the next message went out (QA H7)
         out.push(("claude-11-model-mid-turn.jsonl", "claude", vec![Model("haiku"), Lines("claude-11-model-mid-turn.jsonl", 0, 1), Send, Model("sonnet"), Lines("claude-11-model-mid-turn.jsonl", 1, 6), Send, Tail("claude-11-model-mid-turn.jsonl")]));
+        // H10: started with `--add-dir <the session's attachment folder>`; turn 1 reads the attached copy, turn 2 a file elsewhere
+        out.push(("claude-12-attach-read.jsonl", "claude", vec![Model("haiku"), Lines("claude-12-attach-read.jsonl", 0, 1), Send, Head("claude-12-attach-read.jsonl"), Send, Tail("claude-12-attach-read.jsonl")]));
         // a resumed conversation: an old background task's empty result, then the person's answer
         out.push(("claude-8-resume.jsonl", "claude", vec![Send, File("claude-8-resume.jsonl"), Head("claude-4-stop.jsonl")]));
         // omher closed the chat mid-command: the exit watcher ends the turn
@@ -5010,6 +5122,11 @@ mod tests {
         out.push(("claude-9-queued.jsonl", "claude", turn("claude-9-queued.jsonl")));
         out.push(("omo-9-controls.jsonl", "omo", vec![File("omo-9-controls.jsonl")]));
         out.push(("omo-9-queued.jsonl", "omo", turn("omo-9-queued.jsonl")));
+        // OmO 5.1.56 (audit O5): a run fails, OmO retries it once by itself, the retry fails too
+        out.push(("omo-12-retry.jsonl", "omo", turn("omo-12-retry.jsonl")));
+        // Codex 0.167 (audit O11/O13): its own config runs without approvals and with full disk access; Stop during
+        // `sleep 40`, the next turn, then the stopped command's end 37 s after Stop
+        out.push(("codex-12-late-step.jsonl", "codex-late", vec![Send, File("codex-12-late-step.jsonl"), Stop, File("codex-12-late-step-stopped.jsonl"), Send, File("codex-12-late-step-after.jsonl")]));
         out
     }
 
@@ -5022,6 +5139,7 @@ mod tests {
             "codex-resume-gone" => (Box::new(Codex::new("/w/proj", Some("0badbeef-0000-4000-8000-000000000000"))), vec![]),
             "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
             "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
+            "codex-late" => (Box::new(Codex::new("/w/proj", Some("01a1ca24-1047-7ee0-aac2-faf093d44dbe"))), vec!["codex-12-late-step-init.jsonl"]),
             "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
             "omp" => (Box::new(Pi::new("/w/proj", "oh-my-pi")), vec!["omp-ready.jsonl", "omp-init.jsonl"]),
             "pi" => (Box::new(Pi::new("/w/proj", "pi")), vec!["pi-init.jsonl"]),
@@ -5115,12 +5233,31 @@ mod tests {
             let (events, running) = replay_sequence(kind, &steps, &mut used);
             assert!(!running, "{name}: the adapter still thinks a turn runs");
             let mut open = false;
+            // steps still running when a turn was stopped: the agent may say later that one ended (Codex runs a
+            // command on after Stop), and the reducer gives that end to the stopped step
+            let (mut steps, mut stopped) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
             for e in &events {
                 match s(e, "event").as_str() {
                     "turn.start" => open = true,
-                    "turn.end" => open = false,
+                    "turn.end" => {
+                        open = false;
+                        if s(e, "outcome") == "interrupted" {
+                            stopped.append(&mut steps);
+                        }
+                        steps.clear();
+                    }
+                    "tool.end" if !open => assert!(stopped.remove(&s(e, "tool_id")), "{name}: {e} outside a turn"),
                     "status" | "thinking" | "tool.start" | "tool.end" | "delta" | "skill" => {
                         assert!(open, "{name}: {e} outside a turn");
+                        match s(e, "event").as_str() {
+                            "tool.start" => {
+                                steps.insert(s(e, "tool_id"));
+                            }
+                            "tool.end" => {
+                                steps.remove(&s(e, "tool_id"));
+                            }
+                            _ => {}
+                        }
                     }
                     _ => {}
                 }
@@ -5529,13 +5666,73 @@ mod tests {
     }
 
     #[test]
+    fn omo_retry_of_its_own_is_one_turn_that_ends_once_with_omos_reason() {
+        // omo-12-retry (audit O5, OmO 5.1.56): agent_end with `failure`, auto_retry_start, a second run, agent_end,
+        // auto_retry_end {finalError}, model_config_error. One message: one turn, one end, OmO's words, no raw JSON
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let mut events = p.on_input(Input::send("which model?")).unwrap().events;
+        events.extend(run(&mut p, &real("omo-12-retry.jsonl")).events);
+        let kinds: Vec<String> = events.iter().map(|e| s(e, "event")).filter(|k| k.starts_with("turn.")).collect();
+        assert_eq!(kinds, ["turn.start", "turn.end"], "{events:?}");
+        let why = "Anthropic rejected this conversation's request format, even after retrying without web search replay data. Run /compact or start a new session to continue, and report it if it happens again.";
+        assert_eq!(ends(&events), [("error".into(), why.into())]);
+        // while OmO retried, the line said so, from OmO's own numbers
+        let retry: Vec<&Event> = events.iter().filter(|e| s(e, "event") == "status" && e.get("retry").is_some()).collect();
+        assert_eq!(retry.len(), 1);
+        assert_eq!((retry[0]["retry"]["attempt"].as_u64(), retry[0]["retry"]["max"].as_u64()), (Some(1), Some(5)));
+        assert!(!p.in_turn());
+    }
+
+    #[test]
+    fn omo_failure_with_no_retry_ends_once_with_the_providers_message() {
+        // the same recorded lines without OmO's retry: the run's end waits for OmO's next word, then ends once; the
+        // raw `400 {"type":"error",…}` reads as the provider's message
+        let lines = real("omo-12-retry.jsonl");
+        let first_end = lines.iter().position(|l| l.contains("\"type\":\"agent_end\"")).unwrap();
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        let mut events = p.on_input(Input::send("which model?")).unwrap().events;
+        let held = run(&mut p, &lines[..=first_end]).events;
+        assert!(held.iter().all(|e| s(e, "event") != "turn.end"), "{held:?}");
+        assert!(p.in_turn());
+        events.extend(held);
+        let rest: Vec<String> = lines[first_end + 1..].iter().filter(|l| l.contains("model_config_error") || l.contains("agent_settled")).cloned().collect();
+        events.extend(run(&mut p, &rest).events);
+        assert_eq!(ends(&events), [("error".into(), "unknown provider for model claude-haiku-4-5".into())]);
+        // a retry that works clears the retry line and the turn goes on to its answer
+        let mut p = pi_up("OmO", &["omo-init.jsonl"]);
+        p.on_input(Input::send("again")).unwrap();
+        run(&mut p, &lines[..=first_end + 2]);
+        let st = p.on_line(r#"{"type":"auto_retry_end","success":true,"attempt":1}"#);
+        assert_eq!(st.events, [json!({"event": "status", "text": ""})]);
+        assert!(p.in_turn());
+    }
+
+    #[test]
+    fn codex_stop_leaves_the_command_running_and_its_late_end_comes_after_the_turn() {
+        // codex-12-late-step (audit O11/O13, Codex 0.167): Stop during `sleep 40; echo late`; Codex ends the turn
+        // at once and reports the command's end 37 s later, after the next turn. The adapter passes that end on.
+        let steps = &sequences().into_iter().find(|x| x.0 == "codex-12-late-step.jsonl").unwrap().2;
+        let (events, running) = replay_sequence("codex-late", steps, &mut Default::default());
+        assert!(!running);
+        let info = events.iter().find(|e| s(e, "event") == "session.info" && e.get("approval").is_some()).unwrap();
+        assert_eq!((s(info, "approval"), s(info, "sandbox"), s(info, "mode")), ("never".into(), "dangerFullAccess".into(), "".into()));
+        let id = "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c";
+        let at = |pred: &dyn Fn(&Event) -> bool| events.iter().position(|e| pred(e)).unwrap();
+        let stop = at(&|e| s(e, "event") == "turn.end" && s(e, "outcome") == "interrupted");
+        let late = at(&|e| s(e, "event") == "tool.end" && s(e, "tool_id") == id);
+        let next_end = events.iter().rposition(|e| s(e, "event") == "turn.end").unwrap();
+        assert!(stop < next_end && next_end < late, "the command's end comes after both turns");
+        assert_eq!((events[late]["ok"].as_bool(), events[late]["ms"].as_u64()), (Some(true), Some(39887)));
+    }
+
+    #[test]
     fn codex_resume_takes_only_a_thread_uuid() {
         let c = ChatSessions::default();
         let tmp = std::env::temp_dir();
         for bad in ["x", "--yolo", "01a1c3b9-4b7f-7542-900c-c5f4dc80eef", "../01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"] {
-            assert!(c.start_agent("codex", &tmp, Some(bad), &[], |_| {}).is_err(), "{bad}");
+            assert!(c.start_agent("codex", &tmp, Some(bad), &[], None, |_| {}).is_err(), "{bad}");
         }
-        assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], |_| {}).is_err());
+        assert!(c.start_agent("pi", &tmp, Some("01a1c3b9-4b7f-7542-900c-c5f4dc80eefa"), &[], None, |_| {}).is_err());
         assert_eq!(c.count(), 0);
     }
 

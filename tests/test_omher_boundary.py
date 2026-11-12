@@ -50,6 +50,8 @@ RULES = (
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
+    "so for a session's own folder omher also reads `<that folder>/.omo/senpi-task/tasks/st_*.json`, the same records"
+    " and nothing else in `.omo`, never a symlinked `.omo` or `senpi-task`, and never another folder's.",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
     " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
@@ -62,8 +64,14 @@ RULES = (
     "so allow becomes ask, ask stays ask and deny stays deny, for blanket and pattern rules alike;",
     "OpenCode is not started and the chat says so in one sentence; omher reads and writes none of OpenCode's own files,",
     "never its always-allow.",
-    "the only other argument continues a conversation, with an id the shell checks is a UUID:",
+    "the only other arguments are one that continues a conversation, with an id the shell checks is a UUID:",
     "`--resume <id>` for Claude Code, `--session <id>` for OmO.",
+    "A Claude Code chat also gets `--add-dir <home>/.omher/session-files/<session id>`: exactly that session's own"
+    " attachment folder (rule 26), passed as one argument, never a parent folder and never the home folder;",
+    "the shell makes that folder before Claude Code starts (Claude Code honours only a folder that exists then),"
+    " so reading a file the person attached needs no approval card, while a read anywhere else outside the"
+    " session's folder still asks.",
+    "The UI sends only the session id (`s` and digits), never a path;",
     "DSH is DeepSeek Harness only:",
     "never another `dsh` on PATH.",
     "A DSH chat runs one `dsh --profile headless --patch <home>/.omher/dsh/headless.patch.yml --json -` per message on pipes,",
@@ -72,8 +80,8 @@ RULES = (
     "The UI sends an agent id, never a command line or arguments; the shell refuses any other id.",
     "The process is stopped when its session is closed and when the app exits.",
     "omher runs one installer, and only when the person presses Install on the first-run screen that appears because Hermes is missing,",
-    "or, for a person who has Hermes but not oh-my-hermes (no `omh` found), when they press \"Add oh-my-hermes\" in the SESSIONS `+` menu"
-    " or Install on the oh-my-hermes first-run card:",
+    "or, for a person who has Hermes but not oh-my-hermes (no `omh` found), when they press Install in the popover of the sidebar's \"!\""
+    " (oh-my-hermes is not installed; the SESSIONS `+` menu's \"Add oh-my-hermes\" line only opens that popover):",
     "so a person who has Hermes but not `omh` gets the same row named Hermes, with no terminal view, and omher never starts `hermes` or any"
     " other program for it.",
     "The command is fixed in the shell; nothing from the page reaches it.",
@@ -94,7 +102,11 @@ RULES = (
     "a Claude Code, Codex, OmO or DSH chat that was running starts again by itself in the same folder, continuing its own conversation,",
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
-    "For the composer's `./` skill picker omher reads, never writes, the bot's own skill files",
+    "For the composer's `$` skill picker omher reads, never writes, the bot's own skill files",
+    "then the folders the profile's `config.yaml` names in `skills.external_dirs`, where oh-my-hermes registers its skills",
+    "pressing it puts the model-setup skill's `/command` and one sentence into the composer, and nothing is sent;",
+    "omher restarts and reloads nothing and runs nothing for it.",
+    "omher asks that gateway's own `plugins.manage` `list` (rule 25) and reads only whether the `omh` row is enabled",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
@@ -184,6 +196,22 @@ class SubagentEvents(unittest.TestCase):
         self.assertNotIn("children", body.split('"""', 2)[2])
         self.assertRegex(src, r'_OMO_TASK = re\.compile\(r"\^st_')
 
+    def test_omo_records_in_a_folder_are_read_only_for_the_sessions_own_folder(self) -> None:
+        # O15: OmO 5.0 (and 5.1 once a folder holds them) keeps its records in `<folder>/.omo/senpi-task/tasks/`;
+        # omher reads them only for the folder the session runs in, never through a link, and nothing else in .omo
+        src = BRIDGE.read_text(encoding="utf-8")
+        body = src[src.index("    def omo(self"):src.index("    # ---- ops")]
+        code = body.split('"""', 2)[2]
+        self.assertIn('dot = Path(cwd) / ".omo"', code)
+        self.assertIn("if cwd:", code)
+        self.assertIn("not dot.is_symlink()", code)
+        self.assertIn('not (dot / "senpi-task").is_symlink()', code)
+        self.assertEqual(code.count('".omo"'), 1)
+        self.assertEqual(re.findall(r'dot / "([a-z-]+)"', code), ["senpi-task", "senpi-task"])
+        rule = next(r for r in re.split(r"\n(?=\d+\. )", DOC.read_text(encoding="utf-8")) if "OmO's subagent records" in r)
+        self.assertIn("`<that folder>/.omo/senpi-task/tasks/st_*.json`", rule)
+        self.assertIn("never a symlinked `.omo` or `senpi-task`, and never another folder's", rule)
+
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
         rust = (SHELL / "agent_chat.rs").read_text(encoding="utf-8")
@@ -202,7 +230,7 @@ class DocPins(unittest.TestCase):
         # 22: rule 10 (the bridge's read-only git, side panel), rule 11 (SESSIONS' allow-listed agents),
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
-        # (skills.list for the ./ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
+        # (skills.list for the $ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
         # through the person's own `gh`), rule 22 (link chips: channel names read, web links opened on a
         # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
@@ -307,8 +335,8 @@ class TheOneInstaller(unittest.TestCase):
         self.assertIn("Channel<InstallEvent>", sig)
 
     def test_the_offer_to_add_oh_my_hermes_runs_the_same_installer(self) -> None:
-        """The + menu line and the first-run card reach the installer only through the gate's `install_engine`
-        call (one place in the UI), and the shell has no second install command."""
+        """The sidebar's "!" popover (the one surface; the + menu's line only opens it) reaches the installer only
+        through the gate's `install_engine` call (one place in the UI), and the shell has no second install command."""
         callers = sorted(
             p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
             if not p.name.endswith(".test.ts") and re.search(r"[\"']install_engine[\"']", p.read_text(encoding="utf-8"))
@@ -317,6 +345,12 @@ class TheOneInstaller(unittest.TestCase):
         add = (UI_SRC / "sessions" / "addOmh.ts").read_text(encoding="utf-8")
         self.assertIn("gateShell", add)
         self.assertNotIn("invoke", add)
+        # one installer surface: only the "!" popover runs it; the + menu's line opens the popover
+        runners = sorted(
+            p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.tsx")
+            if re.search(r"\.run\(\)", p.read_text(encoding="utf-8")) and "getAddOmh" in p.read_text(encoding="utf-8")
+        )
+        self.assertEqual(runners, ["sidebar/OmhNotice.tsx"])
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
         self.assertEqual(lib.count("setup::install_command("), 1)
         self.assertEqual(re.findall(r"^\s+(install_\w+),$", lib, re.M), ["install_engine", "install_engine_command"])
@@ -453,7 +487,13 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         op = ast.unparse(fns["op_skills_list"])
         self.assertIn("asyncio.to_thread(read_skills, bot['path'])", op)
         self.assertNotIn("conn", op)  # no gateway call: a file read
-        reader = "\n".join(ast.unparse(fns[n]) for n in ("read_skills", "read_skill_head", "_frontmatter_value"))
+        names = ("read_skills", "skill_roots", "_scan_skills", "read_skill_head", "_frontmatter_value")
+        reader = "\n".join(ast.unparse(fns[n]) for n in names)
+        # the profile's own folder first, then the config's skills.external_dirs (parsed, never written)
+        roots = ast.unparse(fns["skill_roots"])
+        self.assertIn("roots = [profile_dir / 'skills']", roots)
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('skills')", roots)
+        self.assertIn("cfg.get('external_dirs')", roots)
         self.assertIn("os.walk(root, followlinks=True)", reader)
         self.assertIn("real = os.path.realpath(dirpath)", reader)
         self.assertIn("if real in seen:", reader)
@@ -462,11 +502,29 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("read_skill_head(skill)", reader)
         self.assertIn("fh.read(SKILL_HEAD_MAX)", reader)
         self.assertIn("SKILL_HEAD_MAX = 8 * 1024", self.source)
-        opens = [c for n in ("read_skills", "read_skill_head", "_frontmatter_value") for c in ast.walk(fns[n])
+        opens = [c for n in names for c in ast.walk(fns[n])
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
         self.assertEqual([ast.unparse(c) for c in opens], ["open(path, 'rb')"])
         for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self."):
             self.assertNotIn(banned, reader, banned)
+
+    def test_the_model_setup_line_only_fills_the_composer(self) -> None:
+        """Rule 19: the one-time line after omher's own install writes into the composer on the person's press
+        (`actions.prefill`) and sends nothing; it runs no program, restarts nothing and asks the shell for nothing."""
+        app = ROOT / "apps" / "omher" / "src" / "onboarding"
+        line = (app / "OmhPromptLine.tsx").read_text(encoding="utf-8")
+        logic = (app / "omhPrompt.ts").read_text(encoding="utf-8")
+        self.assertIn("getStore().actions.prefill(promptText(p.command!))", line)
+        for text in (line, logic):
+            for banned in (".send(", "sendWithFiles", "chat.send", "invoke(", "@tauri-apps", "gateShell", "install("):
+                self.assertNotIn(banned, text, banned)
+        # the command comes from skills.list, never written as a literal
+        self.assertNotIn('"/omh-model-setup"', logic)
+        self.assertIn("getStore().actions.skills(bot, true)", logic)
+        # the plugin check reads the running gateway's list only (rule 25's `list`), never a toggle or an install
+        self.assertIn("getStore().actions.pluginsList(bot)", logic)
+        for banned in ("togglePlugin", "installPlugin", "plugins.toggle", "plugins.install", "updatePlugin", "removePlugin"):
+            self.assertNotIn(banned, logic, banned)
 
     def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
         """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""
@@ -733,6 +791,34 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             self.assertIn(needle, start)
         self.assertIn("pub(crate) fn spawn<F>", self.chat)
 
+    def test_claude_reads_only_its_own_attachment_folder_without_a_card(self) -> None:
+        """Rule 11: Claude Code's one extra argument is `--add-dir` + the session's own attachment folder as ONE argv
+        element: made by `session_files::session_dir` from the session id (never a path from the page), before the
+        start, never a parent and never the home folder; no other agent gets it."""
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn('if let Some(dir) = files.filter(|_| agent_id == "claude") {', start)
+        self.assertIn("argv.extend(add_dir_args(&argv[0], dir));", start)
+        self.assertNotIn('"--add-dir"', start)  # the flag itself lives in add_dir_args only
+        add = self.chat.split("fn add_dir_args", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"--add-dir"', add), ['"--add-dir"', '"--add-dir"'])
+        self.assertIn('vec!["--add-dir".into(), dir]', add)
+        self.assertNotIn("parent()", add)
+        self.assertNotIn("join(", add)
+        self.assertEqual(self.chat.count('"--add-dir"'), 2)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        sig = re.search(r"async fn chat_start\((.*?)\) -> ", lib, re.S)
+        body = lib[sig.end():].split("\n}\n", 1)[0]
+        self.assertIn('("claude", Some(s)) => user_home().and_then(|h| session_files::session_dir(&h, s)).ok(),', body)
+        self.assertIn("files.as_deref()", body)
+        self.assertNotIn("parent()", body)
+        files = (SHELL / "session_files.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        made = files.split("pub fn session_dir", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("if !valid_session(session) {", "d.is_symlink()", "let dir = root.join(session);", "fs::create_dir_all(&dir)"):
+            self.assertIn(needle, made)
+        # the UI passes the session id, never a path
+        host = (UI_SRC / "sessions" / "host.ts").read_text(encoding="utf-8")
+        self.assertIn('invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, account: account ?? null, session: session ?? null, onEvent: ch })', host)
+
     def test_acp_agents_turn_off_files_and_terminal_and_continue_inside_the_protocol(self) -> None:
         """Rule 11: the ACP adapter offers the agent no file access and no terminal, a conversation id travels in
         `session/resume` (checked by a strict pattern), OpenCode's only extra variable is the fixed ask rule, and an
@@ -822,7 +908,8 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
         # `account` names the account a session restarted after an app restart ran with (session_env_for checks it)
-        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "on_event"})
+        # `session` is the SESSIONS id (`s` and digits) whose attachment folder a Claude Code chat may read (rule 11)
+        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "session", "on_event"})
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("chats.start_agent(&agent", body)
         self.assertNotIn(".spawn(", body)
@@ -1117,6 +1204,19 @@ class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
             self.assertNotIn(f'"{banned}"', self.chat, banned)
             self.assertNotIn(banned, self.ui, banned)
         self.assertNotIn('"never"', self.chat.split("fn codex_mode(", 1)[1].split("\n}\n", 1)[0])
+
+    def test_an_agents_own_unguarded_setting_is_only_said_never_offered(self) -> None:
+        # O13: ownSetting.ts recognises the agent's reported values to name them; it sends, offers and writes nothing
+        own = (UI_SRC / "sessions" / "ownSetting.ts").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'^import .*$', own, re.M), ['import { t } from "../i18n";', 'import { MODES } from "./controls";'])
+        for banned in ("setMode", "getSessions", "invoke(", "input(", "export const MODES", "localStorage"):
+            self.assertNotIn(banned, own, banned)
+        self.assertIn("export function ownSetting(", own)
+        view = (UI_SRC / "sessions" / "SessionView.tsx").read_text(encoding="utf-8")
+        # the menu still lists only omher's modes
+        self.assertIn("{modesOf(rec.agent).map((m) => {", view)
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("the session only says so where the mode is shown, naming the agent's own config as where it comes from", text)
 
     def test_mode_and_effort_go_through_the_agents_own_messages_only(self) -> None:
         self.assertIn('json!({"subtype": "set_permission_mode", "mode": mode})', self.chat)

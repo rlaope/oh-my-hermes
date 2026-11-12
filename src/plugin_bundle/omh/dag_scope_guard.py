@@ -24,12 +24,19 @@ Brackets are always literal, so `app/[slug]/page.tsx` covers itself and not
 `app/s/page.tsx`. The node's own handoff
 report, on this host or under a Docker/SSH run's `handoff_root`, always passes.
 
+A node defined `read_only` (a review, verify or explore node that reports and
+changes nothing; `omh_dag define` refuses one that also declares a write
+scope) is held tighter: every `write_file` or `patch` target inside the
+workspace is blocked except that same handoff report, and the message tells
+the child to write its findings there instead.
+
 What passes, on purpose: a session no ledger binds to a node (every parent and
-every ordinary child); a node with an empty write scope, which declared
-nothing to hold it to; a node already settled or a run cancelled, whose late
-calls are not this run's work any more; and a target outside the workspace
-(scratch files, another checkout). As with the evidence guard, a shell command
-is not judged, and an unresolvable lookup passes and warns once.
+every ordinary child); a node with an empty write scope and no `read_only`,
+which declared nothing to hold it to; a node already settled or a run
+cancelled, whose late calls are not this run's work any more; and a target
+outside the workspace (scratch files, another checkout). As with the evidence
+guard, a shell command is not judged (a read-only node's included), and an
+unresolvable lookup passes and warns once.
 """
 
 from __future__ import annotations
@@ -66,7 +73,8 @@ def dag_scope_directive(
             return None
         record, node, owner = bound
         scope = [str(entry) for entry in node.get("write_scope") or []]
-        if not scope:
+        read_only = node.get("read_only") is True
+        if not scope and not read_only:
             return None
         pinned = record.get("workspace_root")
         base = _comparable(pinned if isinstance(pinned, str) and pinned else _workspace_root(task_id) or os.getcwd())
@@ -78,7 +86,11 @@ def dag_scope_directive(
         }
         for requested in _edit_targets(str(tool_name), tool_input):
             target = _comparable(os.path.join(cwd, os.path.expanduser(requested)))
-            if target in handoffs or not _inside(target, base) or _covered(target, scope, base):
+            if target in handoffs or not _inside(target, base):
+                continue
+            if read_only:
+                return {"action": "block", "message": dag_read_only_message(requested, str(record["run"]), node)}
+            if _covered(target, scope, base):
                 continue
             return {"action": "block", "message": dag_scope_message(requested, str(record["run"]), node, scope)}
     except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -94,6 +106,14 @@ def dag_scope_message(requested: str, run: str, node: Mapping[str, Any], scope: 
         "children writing the same file overwrite each other. Do not retry this write or route it through the "
         "shell; finish what your scope covers and name the file you could not change in your handoff report, "
         "so the parent can repair or extend the run."
+    )
+
+
+def dag_read_only_message(requested: str, run: str, node: Mapping[str, Any]) -> str:
+    return (
+        f"OMH blocked this write: dag-ulw node {node['id']} in run {run} is read-only, so its child changes no file "
+        f"in the workspace ({requested!r}). Do not retry this write or route it through the shell; write findings "
+        "into your handoff report instead."
     )
 
 

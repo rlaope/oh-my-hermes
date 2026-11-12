@@ -33,7 +33,13 @@ from ..degradation import (
     safe_error_type,
     runtime_binding_degradation,
 )
-from ..active_workflow_context import active_workflow_context, render_active_workflow_context
+from ..active_workflow_context import (
+    ACTIVE_WORKFLOW_ENDED_LINE,
+    ACTIVE_WORKFLOW_HEAD,
+    ActiveWorkflowContext,
+    active_workflow_context,
+    render_active_workflow_context,
+)
 from ..approval_bypass import record_approval_bypass
 from ..awareness_delivery import claim_route_guidance_delivery, record_awareness_delivery
 from ..context_budget_plan import context_budget_continuation, render_context_budget
@@ -51,7 +57,11 @@ from ..native_todo import held_native_write_note
 from ..named_owner_choice import clear_turn_owners, note_turn_owners
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..plan_follow_on import DAG_ULW, acceptance_line, plan_turn_line
-from ..omh_identities import extract_identity_marker, identity_context_payload
+from ..omh_identities import (
+    extract_identity_marker,
+    identity_catalog_context,
+    identity_context_payload,
+)
 from ..dispatch_outcomes import unacknowledged_outcomes
 from ..runtime_reader import read_omh_activity, read_omh_hud, read_omh_status, read_omh_todo
 from ..skill_shortlist import claim_candidate_line, skill_candidate_line, skill_candidates_for_turn
@@ -306,11 +316,21 @@ def _touch_section_session(session_id: str, state: str) -> None:
 def awareness_system_prompt_section(session_info: object) -> str:
     """The primer, for Hermes to freeze into a new session's system prompt.
 
-    The text is the same for every session. `session_info` is read only for
-    the session id, to record that a prompt built under it carries the primer.
+    Main sessions also carry a bounded identity directory from their bound
+    store. Children carry no catalog. Record primer delivery by session id.
     """
     primer = turn_budget.render("primer")
     session_id = str(session_info.get("session_id") or "") if isinstance(session_info, Mapping) else ""
+    info = session_info if isinstance(session_info, Mapping) else {}
+    if info.get("platform") != "subagent":
+        try:
+            store, _ = runtime_paths.resolve_homes(info.get("omh_home"), info.get("hermes_home"))
+            available = max(0, AWARENESS_SECTION_MAX_CHARS - len(primer) - 2)
+            identity_catalog = identity_catalog_context(store, max_chars=available)
+        except runtime_paths.RuntimeBindingError:
+            identity_catalog = ""
+        if identity_catalog:
+            primer += "\n\n" + identity_catalog
     if session_id and 0 < len(primer.strip()) <= AWARENESS_SECTION_MAX_CHARS:
         with _awareness_section_lock:
             state = _awareness_section_sessions.get(session_id, _SECTION_RECORDED)
@@ -359,21 +379,156 @@ def _primer_already_in_api_history(conversation_history: object, primer: str) ->
     subtracting the clean message prefix, so a user quoting
     ``[OMH Awareness]`` cannot suppress guidance.
     """
-    if not primer or not isinstance(conversation_history, (list, tuple)):
+    if not primer:
         return False
+    return any(primer in injected for injected in _replayed_injections(conversation_history))
+
+
+def _replayed_injections(conversation_history: object) -> list[str]:
+    """The host-injected suffix of every replayed user turn, newest first.
+
+    A string turn carries its injection in the ``api_content`` sidecar; the
+    clean message prefix is subtracted. A multimodal turn has no sidecar:
+    Hermes appends the injection to its parts and stamps what the person typed
+    as ``display_metadata.typed_ask`` (`_typed_ask_injection`). Either way
+    text a person typed (quoting an `[OMH ...]` line, say) is never read as
+    something OMH already injected.
+    """
+    if not isinstance(conversation_history, (list, tuple)):
+        return []
+    injections: list[str] = []
     for message in reversed(conversation_history):
         if not isinstance(message, dict):
             continue
         api_content = message.get("api_content")
         if not isinstance(api_content, str):
+            injected = _typed_ask_injection(message)
+            if injected:
+                injections.append(injected)
             continue
         clean_content = message.get("content")
         injected_content = api_content
         if isinstance(clean_content, str) and api_content.startswith(clean_content):
             injected_content = api_content[len(clean_content) :]
-        if primer in injected_content:
-            return True
-    return False
+        injections.append(injected_content)
+    return injections
+
+
+# `session_persistence._image_marker`: the line an image part becomes when
+# Hermes flattens a multimodal row into the session DB.
+_SCREENSHOT_MARKER = re.compile(r"\[screenshot(?: detail=(?:low|high|auto))?\]")
+
+
+def _typed_ask_injection(message: Mapping[str, object]) -> str:
+    """What Hermes appended after the person's ask on a multimodal turn, or ``""``.
+
+    A list-content turn takes no ``api_content`` sidecar: Hermes appends the
+    turn's injected context (memory, ``pre_llm_call``, gateway notes) as a
+    trailing text part and, whenever it does, stamps the ask itself -- the
+    turn's text parts joined by newlines -- as ``display_metadata.typed_ask``
+    (Hermes ``agent/turn_context.py`` `_append_multimodal_context`,
+    `_merge_gateway_notes`; ``agent/message_metadata.py`` ``TYPED_ASK``).
+    That stamp is the host's own boundary: the injection is what follows it.
+    A row rebuilt from the session DB is the same parts flattened to one
+    string with each image as a ``[screenshot]`` line, which the ask never
+    contains. No stamp, or text that does not begin with the stamped ask,
+    reads as no injection, so a person's quoted line is never counted.
+    """
+    metadata = message.get("display_metadata")
+    typed_ask = metadata.get("typed_ask") if isinstance(metadata, Mapping) else None
+    if not isinstance(typed_ask, str):
+        return ""
+    content = message.get("content")
+    if isinstance(content, list):
+        texts = (
+            part.get("text")
+            for part in content
+            if isinstance(part, Mapping) and part.get("type") == "text"
+        )
+        flattened = "\n".join(text for text in texts if isinstance(text, str) and text)
+    elif isinstance(content, str):
+        return _flattened_row_injection(content, typed_ask)
+    else:
+        return ""
+    if not flattened.startswith(typed_ask):
+        return ""
+    injected = flattened[len(typed_ask) :]
+    if typed_ask and not injected.startswith("\n"):
+        return ""
+    return injected
+
+
+# `gateway/run.py` timestamp prefix (`[Wed 2026-11-11 21:26:40 KST] `) a gateway with
+# message timestamps on puts before a replayed user row's first line.
+_REPLAY_STAMP = re.compile(r"\[[^\]\n]{1,80}\] ")
+
+
+def _flattened_row_injection(content: str, typed_ask: str) -> str:
+    """What follows the stamped ask in a session-DB row, or ``""``.
+
+    The row is the turn's parts flattened one per line, each image a
+    ``[screenshot]`` line, then the injected suffix (Hermes
+    ``session_persistence._durable_content``). The ask's own lines are found
+    in order: an image line or an empty part's blank line may sit before or
+    between them, a line the person typed is matched as typed (a literal
+    ``[screenshot]`` too), and the first may carry the gateway's timestamp
+    prefix. Image lines right after the ask belong to the turn; the rest is
+    the injection. An ask that is not all there reads as no injection.
+    """
+    lines = content.split("\n")
+    at = 0
+    for index, wanted in enumerate(typed_ask.split("\n") if typed_ask else []):
+        while at < len(lines):
+            line = lines[at]
+            if index == 0 and (stamp := _REPLAY_STAMP.match(line)) and line[stamp.end():] == wanted:
+                line = wanted
+            if line == wanted:
+                break
+            if not (_SCREENSHOT_MARKER.fullmatch(line) or (wanted and not line)):
+                return ""
+            at += 1
+        else:
+            return ""
+        at += 1
+    while at < len(lines) and (_SCREENSHOT_MARKER.fullmatch(lines[at]) or not lines[at]):
+        at += 1
+    return "\n" + "\n".join(lines[at:]) if at < len(lines) else ""
+
+
+def _replayed_workflow_line(conversation_history: object) -> str:
+    """The latest `[OMH Active Workflow]` line Hermes is still replaying, or ``""``.
+
+    Hermes replays each turn's injection byte for byte, so the reminder sent
+    once stays in front of the model until a compaction drops it; this is how
+    the hook knows whether it is still there and what it said last.
+    """
+    for injected in _replayed_injections(conversation_history):
+        at = injected.rfind(ACTIVE_WORKFLOW_HEAD)
+        if at >= 0:
+            return injected[at:].split("\n", 1)[0]
+    return ""
+
+
+def _active_workflow_delta(
+    workflow_context: ActiveWorkflowContext | None, conversation_history: object
+) -> str:
+    """This turn's workflow line: only what replayed history does not already say.
+
+    The reminder rides the message when the latest replayed workflow line is
+    not this exact text (first turn, after a compaction dropped it, or after
+    the workflow changed). With no active workflow, a replayed reminder that
+    is still standing gets `ACTIVE_WORKFLOW_ENDED_LINE` once. Keyed on the
+    rendered text, as opencode keys an instruction source on its content hash
+    and emits only added, changed and removed sources
+    (packages/core/src/instructions/index.ts:143-160).
+    """
+    replayed = _replayed_workflow_line(conversation_history)
+    if workflow_context:
+        rendered = render_active_workflow_context(workflow_context)
+        return "" if replayed == rendered else rendered
+    if replayed and replayed != ACTIVE_WORKFLOW_ENDED_LINE:
+        return ACTIVE_WORKFLOW_ENDED_LINE
+    return ""
 
 
 def _without_replayed_boundary(
@@ -1046,7 +1201,9 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
         )
         if workflow_context:
             payload["omh_active_workflow"] = workflow_context
-            context_parts.append(render_active_workflow_context(workflow_context))
+        workflow_line = _active_workflow_delta(workflow_context, kwargs.get("conversation_history"))
+        if workflow_line:
+            context_parts.append(workflow_line)
         # `dag-ulw` as one option beside carrying a plan out, on `/plan`'s own
         # turn and, conditionally, on the turn right after a plan was made
         # (`plan_follow_on`). A child is never offered dag-ulw, nor a home
@@ -1214,6 +1371,11 @@ def _turn_context(**kwargs) -> dict[str, object] | None:
                 omh_home=omh_home,
                 session_id=session_id,
             )
+        if "omh_active_workflow" in payload:
+            # The reminder is already in replayed history, but the metadata
+            # rides every call; Hermes skips a result with empty context.
+            payload["context"] = ""
+            return payload
         return None
 
     if status.get("active_executors"):
