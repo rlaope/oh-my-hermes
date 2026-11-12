@@ -2,6 +2,7 @@
 // terminal and outlives a restart, a font size changes how many columns fit (and the program is told), the search
 // field filters the list, the preview is a real terminal, and the page fits a 900x700 window.
 import { expect, test, type Page } from "@playwright/test";
+import { feed } from "./term-find-helpers";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
@@ -260,6 +261,58 @@ test("cursor, contrast and the other options reach the open terminal and are kep
     optionIsMeta: false,
     gpu: "off",
   });
+});
+
+/** What a word in the open terminal measures against the theme's background, as the page drew it (the cell's colour
+ *  laid over the background at the cell's own opacity, which is how dim text is drawn). */
+const wordContrast = (page: Page, word: string) =>
+  page.evaluate(async (w) => {
+    type T = { element?: HTMLElement; options: { theme?: { background?: string } } };
+    const host = document.querySelector('[data-testid="terminal"] .xterm')!;
+    const term = [...((window as unknown as { __omherTerms?: Set<T> }).__omherTerms ?? [])].find((t) => t.element === host)!;
+    const { contrastRatio } = (await import("/src/sessions/term/find-colors.ts" as string)) as { contrastRatio: (a: string, b: string) => number };
+    const bgHex = term.options.theme!.background!;
+    const bg = [1, 3, 5].map((i) => parseInt(bgHex.slice(i, i + 2), 16));
+    const span = [...host.querySelectorAll<HTMLElement>(".xterm-rows span")].find((s) => (s.textContent ?? "").trim() === w);
+    if (!span) return null;
+    const cs = getComputedStyle(span);
+    const m = /rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?/.exec(cs.color)!;
+    const a = (m[4] === undefined ? 1 : Number(m[4])) * Number(cs.opacity);
+    const shown = [Number(m[1]), Number(m[2]), Number(m[3])].map((v, i) => Math.round(v * a + bg[i] * (1 - a)));
+    return Math.round(contrastRatio(`#${shown.map((v) => v.toString(16).padStart(2, "0")).join("")}`, bgHex) * 100) / 100;
+  }, word);
+
+test("the contrast hints are true: High lifts a text colour to 4.5:1 and leaves dim text below it, and the row says so", async ({ page }) => {
+  await open(page);
+  // Solarized Light: its yellow is 2.98:1 on its background, and dim text is the faintest of the catalog
+  await page.evaluate(async () => {
+    const m = (await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void };
+    m.writeTermSettings({ themeDark: "solarized-light" });
+  });
+  await terminalClaude(page);
+  expect(await look(page)).toMatchObject({ background: "#fdf6e3", contrast: 4.5 });
+  await feed(page, "\r\n\x1b[33myellowword\x1b[0m\r\n\x1b[2mdimword\x1b[0m\r\n");
+  await expect.poll(() => wordContrast(page, "yellowword")).toBeGreaterThanOrEqual(4.5);
+  const dim = await wordContrast(page, "dimword");
+  expect(dim).toBeLessThan(3);
+
+  // "As the theme": the yellow is the theme's own again; the dim text has not moved
+  await page.evaluate(async () => {
+    const m = (await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void };
+    m.writeTermSettings({ contrast: "theme" });
+  });
+  await expect.poll(() => wordContrast(page, "yellowword")).toBeLessThan(3.5);
+  expect(await wordContrast(page, "dimword")).toBe(dim);
+
+  await settings(page);
+  const row = page.getByTestId("term-contrast-row");
+  await expect(row).toContainText("Colours stay exactly as the theme has them");
+  await expect(row).not.toContainText("Dim text");
+  await page.getByTestId("term-contrast").getByRole("radio", { name: "High" }).click();
+  await expect(row).toContainText("Text colours are lifted to 4.5:1 on every background. Dim text can stay below that.");
+  await page.getByTestId("term-contrast").getByRole("radio", { name: "Auto" }).click();
+  await expect(row).toContainText("4.5:1 on a light background and 3:1 on a dark one. Dim text can stay below that.");
+  await expect(row).not.toContainText("Faint text");
 });
 
 test("the search field filters the list", async ({ page }) => {

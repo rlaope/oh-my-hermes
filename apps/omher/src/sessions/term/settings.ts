@@ -4,8 +4,9 @@
 
 export type TermGpu = "auto" | "on" | "off";
 export type TermCursor = "block" | "bar" | "underline";
-/** How far faint text is lifted from the background: `high` is 4.5:1 everywhere, `auto` is 4.5:1 on a light
- *  background and 3:1 on a dark one, `theme` leaves the theme's colours as they are. */
+/** How far text colours are lifted from the background: `high` is 4.5:1 everywhere, `auto` is 4.5:1 on a light
+ *  background and 3:1 on a dark one, `theme` leaves the theme's colours as they are. Dim (SGR 2) text is not held
+ *  to it: xterm halves the target for a dim cell and draws it at half strength. */
 export type TermContrast = "auto" | "high" | "theme";
 
 export const TERM_CURSORS: readonly TermCursor[] = ["block", "bar", "underline"];

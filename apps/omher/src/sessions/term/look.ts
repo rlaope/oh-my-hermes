@@ -46,7 +46,7 @@ export function termOptions(theme: ITheme, s: TermSettings): ITerminalOptions {
     // the engine's add-ons (Unicode widths) register through xterm's proposed API
     allowProposedApi: true,
     scrollback: s.scrollback,
-    // dim text (agents use it a lot) stays readable
+    // text colours near the background are lifted; dim (SGR 2) text is not held to this (xterm halves its target)
     minimumContrastRatio: termContrast(theme.background, s.contrast),
     macOptionIsMeta: s.optionIsMeta,
     theme,
