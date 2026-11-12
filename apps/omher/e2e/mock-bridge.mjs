@@ -529,6 +529,8 @@ let asked;
 const subTimers = new Set();
 // Bots whose turns the test drives by hand (mock.manual).
 let manual;
+// Bots whose skills.list is empty (mock.noSkills).
+let noSkills;
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -672,6 +674,7 @@ function reset() {
   pending = new Map();
   asked = new Map();
   manual = new Set();
+  noSkills = new Set();
   idSeq = 0;
   calls = [];
   submits = [];
@@ -1028,7 +1031,7 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
-  "skills.list": (p) => (needBot(p), { skills: SKILL_SEED.map((x) => ({ ...x })) }),
+  "skills.list": (p) => (needBot(p), { skills: noSkills.has(p.bot) ? [] : SKILL_SEED.map((x) => ({ ...x })) }),
   "links.places": (p) => ({ places: structuredClone(LINK_PLACES[needBot(p).name] ?? { slack: {}, discord: {} }) }),
   "panel.terminal": (p) => ({
     runs: (PANEL_RUNS[needBot(p).name] ?? []).map(({ ago, ...r }) => ({ ...r, session_id: "s-" + r.id, ts: now() - ago })),
@@ -1336,6 +1339,10 @@ const OPS = {
     needStr(p, "bot");
     if (p.on === false) manual.delete(p.bot);
     else manual.add(p.bot);
+    return {};
+  },
+  "mock.noSkills": (p) => {
+    noSkills.add(needStr(p, "bot"));
     return {};
   },
   "mock.cliTitle": (p) => {

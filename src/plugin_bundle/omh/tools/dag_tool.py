@@ -177,7 +177,7 @@ OMH_DAG_SCHEMA = {
     "description": (
         "Keep a dag-ulw run: small nodes the parent dispatches via delegate_task. define records nodes "
         "(id, label, category, prompt with TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN, depends_on, "
-        "write_scope, role, owner, local) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
+        "write_scope, role, owner, local, read_only) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
         "than 48 nodes, and prompts naming none of the markers; a one-shot session caps nodes at "
         "delegation.oneshot_max_children. Lint is advice. ready returns delegate_task calls per category "
         "within the free slots: route each via omh_delegate_route, then delegate_task unchanged. After each "
@@ -213,6 +213,7 @@ OMH_DAG_SCHEMA = {
                         "role": {"type": "string", "enum": list(dag_run.ROLES)},
                         "owner": {"type": "string", "enum": list(EXTERNAL_OWNERS)},
                         "local": {"type": "boolean"},
+                        "read_only": {"type": "boolean"},
                     },
                     "required": ["id", "label", "category", "prompt"],
                 },

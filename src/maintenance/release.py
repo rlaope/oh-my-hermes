@@ -425,7 +425,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # result reported" under the word list. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base d00be3a6e.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72895
+# 72895 -> 72940: omh_dag nodes gain an optional `read_only` boolean (its
+# child writes nothing in the workspace but its handoff), named in the
+# description's node field list (+45, 3504 -> 3549). Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against base 55c802b39.
+# No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72940
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

@@ -19,6 +19,8 @@ const ALLOWED = new Set([
   // commands and sample code shown as code
   "/skill",
   "/plan",
+  "$skill",
+  "$plan",
   "dag ulw",
   "/v1/responses",
   "hermes profile create <name>",

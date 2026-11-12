@@ -10,7 +10,9 @@ Enforcement rides the OMH plugin's `pre_tool_call` hook using the Hermes
 host's own block directive (`hermes_cli/plugins.py`,
 `_get_pre_tool_call_directive_details`): a hook may return
 `{"action": "block", "message": ...}` and the message becomes the tool result
-the model sees.
+the model sees. A rule can instead ask you (`"effect": "ask"`, below), using
+the host's other directive, `{"action": "approve", "message", "rule_key"}`,
+which puts the call in front of Hermes' approval prompt.
 
 ## Opt-in
 
@@ -44,9 +46,40 @@ $OMH_HOME/rules/toolcall-rules.json     (default: ~/.omh/rules/toolcall-rules.js
 | `message` | yes | The rule text the model reads, at most 1,000 characters. |
 | `tools` | no | Tool names this rule watches (at most 16). Empty or omitted means every tool. |
 | `repeat` | no | `"once"` (default): fire at most once per session, so a blocked retry cannot loop. `"always"`: fire on every matching call. |
+| `effect` | no | `"block"` (default): refuse the call. `"ask"`: send it to Hermes' approval prompt when a person can answer one, and block it otherwise. Any other value skips the rule. |
 
 Rules match in file order; the first match wins. At most 64 rules are read,
 and a file over 262,144 bytes is ignored whole.
+
+## Asking instead of blocking
+
+```json
+{
+  "name": "ask-before-push",
+  "pattern": "git push",
+  "message": "This pushes to a remote. Allow it?",
+  "tools": ["terminal"],
+  "effect": "ask",
+  "repeat": "always"
+}
+```
+
+A matching call stops at Hermes' approval prompt with your message and a line
+naming the rule. The prompt's key is `omh-toolcall-rule:<name>`, so answering
+`[a]lways` allows that rule's calls from then on and no other rule's. An ask
+never overrides OMH's own refusals: a write into OMH's evidence stores, an
+edit to a skill OMH installed, a dag-ulw child's write outside its node's
+scope, or any other call OMH refuses is still blocked, and no prompt is shown.
+
+Asking needs someone to answer. In a delegated child, a single-query
+`hermes chat -q` process, or a programmatic platform (`webhook`,
+`msgraph_webhook`, `api_server`), the rule blocks instead, as a `block` rule
+would: there the host answers the prompt from config, and at
+`approvals.unattended_mode: approve` it would run the call. A plugin cannot
+tell a cron turn apart, so a cron turn is asked, and the host's
+`approvals.cron_mode` answers it. A `repeat: "once"` ask rule is used up the
+first time it asks or blocks in a session. OMH never sees how a prompt was
+answered.
 
 ## Validation
 
@@ -60,7 +93,8 @@ omh ops toolcall-rules-validate --path …   # explicit file
 
 Exit 0 with `"valid": true` means every rule parses and loads; exit 1 lists
 each defect with its rule index, including patterns the enforcing hook would
-refuse and a file-size overflow that would disable the whole file.
+refuse, an `effect` other than `block` or `ask`, and a file-size overflow that
+would disable the whole file.
 
 ## Rehearsing a planned batch
 

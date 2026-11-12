@@ -5,7 +5,7 @@ import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { noteFor, showNote, windowWatched } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
-import { toWire } from "../chat/parts/skillTokens";
+import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -140,6 +140,8 @@ export type MessageItem = {
   files?: SentFile[];
   /** user rows only: the prompt text actually sent when it differs from `text` (files add `@file:` refs). */
   sent?: string;
+  /** user rows only: the skills its `$name` tokens called, drawn as pills in the bubble. */
+  skills?: string[];
 };
 
 /** A file the person sent, as their own bubble shows it. `url` is a blob URL for pictures and video. */
@@ -678,8 +680,9 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     if (i.id.startsWith("local-")) {
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
-      // keep the local pictures, and the text as typed (skill tokens go out hoisted)
-      if (twin && (i.files || i.sent)) Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}) });
+      // keep the local pictures, and the text as typed with its skill tokens (they go out hoisted)
+      if (twin && (i.files || i.sent || i.skills))
+        Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}), ...(i.skills ? { skills: i.skills } : {}) });
       return !twin;
     }
     return i.ts >= lastServerTs;
@@ -719,6 +722,7 @@ export type Action =
       reply?: { source: string; label: string };
       files?: SentFile[];
       sent?: string;
+      skills?: string[];
     }
   | { type: "reply.set"; bot: string; chip: ReplyChip | null }
   | { type: "send.failed"; bot: string; id: string; error: string }
@@ -1041,6 +1045,7 @@ export function reduce(state: AppState, a: Action): AppState {
             ...(a.reply ? { reply: a.reply } : {}),
             ...(a.files?.length ? { files: a.files } : {}),
             ...(a.sent !== undefined && a.sent !== a.text ? { sent: a.sent } : {}),
+            ...(a.skills?.length ? { skills: a.skills } : {}),
           },
         ]),
       );
@@ -1288,7 +1293,7 @@ export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
   /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. Skill tokens
-   *  (`./name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
+   *  (`$name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
   send(text: string): Promise<void>;
   /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
@@ -1359,7 +1364,7 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
-  /** The bot's skills for the composer's `./` picker, read once per bot; [] when the bridge cannot list them. */
+  /** The bot's skills for the composer's `$` picker, read once per bot; [] when the bridge cannot list them. */
   skills(bot: string): Promise<Skill[]>;
   /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
   linkPlaces(bot: string): Promise<LinkPlaces>;
@@ -1451,6 +1456,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   // skills.list per bot: the promise (asked once) and the names, for hoisting tokens when a message is sent
   const skillLists = new Map<string, Promise<Skill[]>>();
   const skillNames = new Map<string, string[]>();
+  const tokenNames = (text: string, bot: string) => [...new Set(findTokens(text, skillNames.get(bot) ?? []).map((k) => k.name))];
 
   const dispatch = (a: Action) => {
     const next = reduce(state, a);
@@ -1606,7 +1612,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       const wire = toWire(t, skillNames.get(bot) ?? []);
-      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire });
+      dispatch({ type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot) });
       if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
         await bridge.request("chat.send", chip ? { bot, text: wire, reply_to: chip.session_id } : { bot, text: wire });
@@ -1633,7 +1639,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const sent = toWire(promptText(text, results), skillNames.get(bot) ?? []);
       const id = `local-${++localSeq}`;
       const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
-      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent });
+      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent, skills: tokenNames(text.trim(), bot) });
       try {
         await bridge.request("chat.send", { bot, text: sent });
       } catch (e) {

@@ -20,7 +20,7 @@ from unittest.mock import patch
 from _cli_harness import run_cli
 
 from omh.plugin_bundle.omh import toolcall_rule_faults
-from omh.plugin_bundle.omh.hooks import tool_hooks
+from omh.plugin_bundle.omh.hooks import nudge_budget, session_attendance, tool_hooks
 from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
 from omh.plugin_bundle.omh.toolcall_rule_faults import (
     read_toolcall_rule_faults,
@@ -312,6 +312,148 @@ class HookWiringTest(unittest.TestCase):
         self.assertEqual(result.get("action"), "block")
 
 
+ASK_RULE = {**BOX_LEAK_RULE, "name": "ask-box-leak", "effect": "ask"}
+
+
+class AskEffectTest(unittest.TestCase):
+    """An `"effect": "ask"` rule sends the call to the person, or blocks.
+
+    Driven through the served `pre_tool_call`, the hook Hermes calls. The
+    attendance predicate reads process-global maps and one environment
+    marker, so each test clears both and names the session's state itself.
+    """
+
+    def setUp(self):
+        _reset_state()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        session_attendance.reset_session_attendance()
+        nudge_budget.reset_nudge_budget()
+        self.addCleanup(session_attendance.reset_session_attendance)
+        self.addCleanup(nudge_budget.reset_nudge_budget)
+        # This suite may itself run under a single-query Hermes process.
+        env = patch.dict(os.environ, {session_attendance.SINGLE_QUERY_SESSION_ENV: ""})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def _call(self, session_id="session-a", content="Box::leak(x)"):
+        return pre_tool_call(
+            tool_name="write_file",
+            tool_input={"content": content},
+            session_id=session_id,
+            omh_home=str(self.home),
+        )
+
+    def test_attended_ask_rule_escalates_with_a_per_rule_key(self):
+        _write_rules(self.home, [ASK_RULE])
+        session_attendance.note_session_platform("session-a", "cli")
+        result = self._call()
+        self.assertEqual(result["action"], "approve")
+        self.assertEqual(result["rule_key"], "omh-toolcall-rule:ask-box-leak")
+        self.assertIn(BOX_LEAK_RULE["message"], result["message"])
+        self.assertIn("ask-box-leak", result["message"])
+
+    def test_unattended_platform_gets_a_block_not_an_escalation(self):
+        _write_rules(self.home, [ASK_RULE])
+        session_attendance.note_session_platform("session-a", "api_server")
+        result = self._call()
+        self.assertEqual(result["action"], "block")
+        self.assertNotIn("rule_key", result)
+        self.assertIn("[OMH Rule] ask-box-leak", result["message"])
+
+    def test_single_query_process_gets_a_block(self):
+        _write_rules(self.home, [ASK_RULE])
+        with patch.dict(os.environ, {session_attendance.SINGLE_QUERY_SESSION_ENV: "1"}):
+            result = self._call()
+        self.assertEqual(result["action"], "block")
+
+    def test_delegated_child_gets_a_block(self):
+        _write_rules(self.home, [ASK_RULE])
+        nudge_budget.note_delegated_session("child-1")
+        self.assertEqual(self._call(session_id="child-1")["action"], "block")
+
+    def test_ask_rule_with_repeat_once_is_claimed_when_it_fires(self):
+        _write_rules(self.home, [ASK_RULE])
+        self.assertIsNone(self._call(content="Arc::new(x)"))
+        self.assertEqual(self._call()["action"], "approve")
+        # Claimed by the escalation above, so the same session is not asked again.
+        self.assertIsNone(self._call())
+        self.assertEqual(self._call(session_id="session-b")["action"], "approve")
+
+    def test_attended_ask_rule_does_not_override_the_evidence_store_veto(self):
+        # An approve lets the call run after a yes, so OMH's own hard vetoes
+        # must still be judged under an ask rule and win over it. The rule and
+        # the write are the independent review's failing input (ask B1).
+        _write_rules(self.home, [{
+            "name": "ask-before-write", "pattern": "write_file", "message": "Allow this file write?",
+            "tools": ["write_file"], "effect": "ask", "repeat": "always",
+        }])
+        session_attendance.note_session_platform("session-a", "cli")
+        result = pre_tool_call(
+            tool_name="write_file",
+            args={
+                "path": str(self.home / "runtime" / "research_receipts" / "forged.json"),
+                "content": '{"status": "fetched"}',
+            },
+            session_id="session-a",
+            omh_home=str(self.home),
+        )
+        self.assertEqual(result["action"], "block")
+        self.assertNotIn("rule_key", result)
+        self.assertIn("research fetch receipts", result["message"])
+        # The same rule still asks for a write outside OMH's stores.
+        outside = pre_tool_call(
+            tool_name="write_file",
+            args={"path": str(self.home / "notes.md"), "content": "x"},
+            session_id="session-a",
+            omh_home=str(self.home),
+        )
+        self.assertEqual(outside["action"], "approve")
+
+    def test_ask_rule_with_repeat_always_asks_every_time(self):
+        _write_rules(self.home, [{**ASK_RULE, "repeat": "always"}])
+        self.assertEqual(self._call()["action"], "approve")
+        self.assertEqual(self._call()["action"], "approve")
+
+    def test_missing_effect_and_explicit_block_still_block(self):
+        _write_rules(self.home, [{**BOX_LEAK_RULE, "repeat": "always"}])
+        self.assertEqual(self._call()["action"], "block")
+        _reset_state()
+        _write_rules(self.home, [{**BOX_LEAK_RULE, "effect": "block"}])
+        result = self._call()
+        self.assertEqual(result["action"], "block")
+        self.assertNotIn("rule_key", result)
+
+    def test_an_invalid_effect_skips_only_that_rule(self):
+        _write_rules(
+            self.home,
+            [{**BOX_LEAK_RULE, "name": "typo", "effect": "deny"}, {**BOX_LEAK_RULE, "name": "kept"}],
+        )
+        self.assertEqual([rule.name for rule in load_toolcall_rules(toolcall_rules_path(str(self.home)))], ["kept"])
+        self.assertIn("[OMH Rule] kept", self._call()["message"])
+
+    def test_an_invalid_effect_alone_fails_open(self):
+        _write_rules(self.home, [{**ASK_RULE, "effect": "deny"}])
+        self.assertIsNone(self._call())
+
+    def test_validation_accepts_both_effects_and_refuses_others(self):
+        errors, accepted = validate_toolcall_rules_document(
+            {
+                "schema_version": TOOLCALL_RULES_SCHEMA_VERSION,
+                "rules": [
+                    {**BOX_LEAK_RULE, "name": "a", "effect": "ask"},
+                    {**BOX_LEAK_RULE, "name": "b", "effect": "block"},
+                    {**BOX_LEAK_RULE, "name": "c", "effect": "ASK"},
+                    {**BOX_LEAK_RULE, "name": "d", "effect": None},
+                ],
+            }
+        )
+        self.assertEqual(accepted, 2)
+        self.assertEqual([error.split(":")[0] for error in errors], ["rules[2]", "rules[3]"])
+        self.assertTrue(all("effect must be one of block, ask" in error for error in errors))
+
+
 class ValidateCliTest(unittest.TestCase):
     def setUp(self):
         _reset_state()
@@ -345,6 +487,20 @@ class ValidateCliTest(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertFalse(payload["valid"])
         self.assertTrue(any("rules[0]" in error for error in payload["errors"]))
+
+    def test_ask_effect_is_accepted(self):
+        path = _write_rules(self.home, [ASK_RULE])
+        result = self._run("--path", str(path))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["accepted_rules"], 1)
+
+    def test_unknown_effect_exits_one_with_a_named_error(self):
+        path = _write_rules(self.home, [{**BOX_LEAK_RULE, "effect": "deny"}])
+        result = self._run("--path", str(path))
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["accepted_rules"], 0)
+        self.assertTrue(any(e.startswith("rules[0]: effect must be one of block, ask") for e in payload["errors"]))
 
     def test_missing_file_is_a_named_error(self):
         result = self._run("--path", str(self.home / "nope.json"))
@@ -703,6 +859,65 @@ class DoctorRulesVisibilityTest(unittest.TestCase):
         )
         self.assertEqual(status, 0, stderr)
         self.assertNotIn("plugin_hook_errors", self._checks())
+
+class AskRuleDoesNotOverrideTheBoardTest(unittest.TestCase):
+    """Review round 2: an ask rule over a tracked Kanban call the board refuses is still refused, before the person
+    is asked, and asking reserves nothing; an admissible one is asked and stays unreserved until the yes."""
+
+    def _run(self, variant: str) -> tuple[object, str, bool]:
+        from unittest.mock import patch as _patch
+        from _delegation_state import homes
+        from five_issue_cases.kanban import request, supplied_schemas
+        from test_agent_board_plugin import HOOKS, host, native_action
+        from omh.plugin_bundle.omh import agent_board_bridge as board
+        from omh.plugin_bundle.omh import toolcall_rules as rules
+
+        with homes() as home, _patch.object(board, "default_omh_home", return_value=home.omh), \
+                _patch.object(board, "effective_root", return_value="fixture-root") as root, \
+                _patch.object(board, "host_capabilities", return_value=(supplied_schemas(), HOOKS)) as caps:
+            session_attendance.reset_session_attendance()
+            session_attendance.note_session_platform("session", "cli")
+            bridge = board.installed_bridge("qa-board")
+            prepared = bridge.prepare(request(), host=host(), schemas=supplied_schemas(), hooks=HOOKS)
+            action = native_action(prepared)
+            args = dict(action["arguments"])
+            if variant == "foreign-board":
+                args["board"] = "foreign-board"
+            elif variant == "revoked-binding":
+                root.return_value = None
+            elif variant == "revoked-schema":
+                caps.return_value = ({}, HOOKS)
+            path = rules.toolcall_rules_path(str(home.omh))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"schema_version": rules.TOOLCALL_RULES_SCHEMA_VERSION, "rules": [
+                {"name": "ask-before-board", "pattern": "kanban_create", "message": "Allow this board action?",
+                 "tools": ["kanban_create"], "effect": "ask", "repeat": "always"}]}), encoding="utf-8")
+            _reset_state()
+            directive = pre_tool_call(tool_name=action["tool_name"], args=args, session_id="session",
+                                      task_id="host-task", tool_call_id="call", **home.hooks())
+            status = bridge.status("qa-board", "qa-create-1")
+            return directive, status["state"], bool(status.get("in_flight"))
+
+    def setUp(self):
+        env = patch.dict(os.environ, {session_attendance.SINGLE_QUERY_SESSION_ENV: ""})
+        env.start()
+        self.addCleanup(env.stop)
+        self.addCleanup(session_attendance.reset_session_attendance)
+        self.addCleanup(_reset_state)
+
+    def test_a_board_refusal_wins_over_the_ask(self):
+        for variant in ("foreign-board", "revoked-binding", "revoked-schema"):
+            with self.subTest(variant=variant):
+                directive, state, in_flight = self._run(variant)
+                self.assertEqual(directive["action"], "block")
+                self.assertIn("OMH board", directive["message"])
+                self.assertEqual((state, in_flight), ("prepared", False))
+
+    def test_an_admissible_board_call_is_asked_and_not_reserved_yet(self):
+        directive, state, in_flight = self._run("ordinary")
+        self.assertEqual(directive["action"], "approve")
+        self.assertEqual(directive["rule_key"], "omh-toolcall-rule:ask-before-board")
+        self.assertEqual((state, in_flight), ("prepared", False))
 
 
 if __name__ == "__main__":

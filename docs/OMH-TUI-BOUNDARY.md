@@ -62,7 +62,12 @@ before each prompt that starts a turn, and the default again when the mtime
 moved, and, beyond opening and closing
 sessions (`client.capabilities`, `session.create`, `session.resume`,
 `session.close`), sends only what this bullet names below, plus
-`session.history` again when Hermes refuses a rewind; when no turn runs, a
+`session.history` again when Hermes refuses a rewind; in the `/sessions`
+picker, only on the person's keys, `session.title` (the highlighted session's
+new title, after Ctrl+R and Enter) and `session.delete` (after a second
+Ctrl+D; never the session it is in), which the gateway child sends to a
+shared gateway as the owner's revision-fenced `session.mutate rename` and
+`delete`, reading the revision first with `session.resume`; when no turn runs, a
 steer Hermes refused as an ordinary prompt; and, at once, the decline frame for
 a request it cannot show (a vault unlock or save-login prompt, a terminal,
 preview or window read, a preview action, a tour, a display sudo install, a
@@ -302,7 +307,10 @@ before, which `omh` reads for its exit card and removes with the directory;
 the relaunch marker beside it, when the person picked a restart after an update;
 and what OMH's own HUD reader
 and model-chain picker already write under the OMH home (the HUD fan-out cache
-and its lock, and the chains `/omh-model` saves), and a fallback marker at the
+and its lock, and the chains `/omh-model` saves); the models the person last
+switched to, `<omh_home>/tui/recent-models.json` (the model and provider of
+each switch Hermes confirmed, at most five, nothing else, written atomically;
+bare `/model` lists them first, and without an OMH home nothing is kept); and a fallback marker at the
 path `omh` named, holding what the TUI printed about why it did not start,
 which `omh` prints again once Hermes' own terminal (which clears the screen)
 closes, and then removes. A pasted clipboard image is saved by Hermes' own

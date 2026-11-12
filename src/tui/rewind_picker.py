@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from .fuzzy import subsequence_tail
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
 from .session_picker import age_text, picker_frame, picker_row
 from .style import Line, Span
@@ -81,8 +82,7 @@ class RewindPicker:
     caret: tuple[int, int] | None = None  # the last render's caret, at the end of its filter row
 
     def visible(self) -> list[RewindRow]:
-        needle = self.query.casefold()
-        return [row for row in self.rows if needle in row.text.casefold()] if needle else list(self.rows)
+        return subsequence_tail(self.rows, self.query, lambda row: (row.text,))
 
     def handle_key(self, event: Key | Paste) -> RewindAction | None:
         """Apply one key; a `RewindAction` when the person picked a prompt or closed the picker."""
