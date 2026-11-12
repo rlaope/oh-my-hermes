@@ -99,6 +99,23 @@ consistency finding with a concrete `file:line` alternative, not a bug.
   changelog for a user-facing change is a finding.
 - Verification claims in the PR body match what the diff can actually support.
 
+## Lessons from re-fixed commits
+
+[`docs/LESSONS.md`](docs/LESSONS.md) keeps what fix commits taught when they
+replaced lines a different pull request had landed shortly before. A lesson seen
+on 3 or more separate days (distinct UTC dates of the fix commits) moves into
+this file and is marked moved there; a lesson with fewer days stays there. The
+file is made by hand from the output of `tools/refix_report.py`, and nothing runs
+that on a schedule, so a lesson here is only as current as the last time someone
+ran it.
+
+- **Another program's behaviour is recorded, not recalled.** When a change
+  encodes how another program behaves (its protocol, method names, output
+  shape, or what a host loads), the pull request carries a fixture recorded
+  from that program or says that no run against it was made. A `Not-tested:`
+  trailer naming the real counterpart is the prompt to ask which of the two the
+  change did. Evidence and the days counted are in `docs/LESSONS.md`.
+
 ## Re-review convergence
 
 A review round that can raise anything about anything never converges. From

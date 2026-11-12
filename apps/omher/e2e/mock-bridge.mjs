@@ -468,6 +468,25 @@ function omoSessionRun({ ago = 30 } = {}) {
   };
 }
 
+/** The records OmO 5.1.56 wrote for a foreground batch (omo-13-batch, tests/fixtures/omo-home), as CliRuns.omo reads
+ *  them: the MockHost OmO session's "/batch" run, ended `ago` seconds back. */
+function omoBatchRun({ ago = 2 } = {}) {
+  const end = now() - ago;
+  const sid = "01a1ce7b-1c30-7e45-8913-aa00b3b32296";
+  const node = (id, label, summary, started, ended) => ({
+    id, label, deps: [], layer: 0, state: "done", model: "claude-haiku-5-5", provider: "anthropic", executor: "omo",
+    started, ended, summary, attempts: [{ n: 1, outcome: "completed", started, ended }],
+  });
+  const nodes = [
+    node("st_01a1d076", "helper-a-first-line: read a.txt and reply FIRST_LINE: <first line>", "FIRST_LINE: alpha line", end - 28.851, end - 8.926),
+    node("st_01a1d077", "helper-b-line-count: count lines of a.txt and reply LINE_COUNT: <number>", "LINE_COUNT: 3", end - 28.594, end),
+  ];
+  return {
+    id: `omo:${sid}`, kind: "session", agent: "omo", owner: { type: "session", id: sid }, title: "OmO session",
+    cwd: "/Users/you/code/omher", state: "done", started: end - 28.851, updated: end, ended: end, nodes,
+  };
+}
+
 function sessionRun({ ago = 30, hold = false } = {}) {
   const sent = now() - ago;
   const node = (id, label, summary, started, ended) => ({
@@ -1487,7 +1506,7 @@ const OPS = {
   // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
   "mock.sessionRun": (p) => {
     const ago = typeof p.ago === "number" ? p.ago : undefined;
-    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), p.agent === "omo" ? omoSessionRun({ ago }) : sessionRun({ ago, hold: p.hold === true })];
+    cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), p.agent === "omo" ? (p.batch ? omoBatchRun({ ago }) : omoSessionRun({ ago })) : sessionRun({ ago, hold: p.hold === true })];
     return { ok: true };
   },
   "mock.reset": () => {

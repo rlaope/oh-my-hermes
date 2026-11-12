@@ -172,6 +172,35 @@ for (const theme of themes) {
     await expect(page.getByTestId("session-mode")).toHaveText("Agent's own");
   });
 
+  test(`an OmO foreground batch: each row ends with its own answer and model, as Plans says (${theme})`, async ({ page }) => {
+    // omo-13-batch.jsonl (OmO 5.1.56): one foreground `task`, two subagents; OmO's result names no answer, its own
+    // record of each task id does, and Plans reads the same records
+    await session(page, "omo", theme, "/batch");
+    const card = page.getByTestId("fanout-card");
+    await expect(card).toHaveAttribute("data-state", "done");
+    await expect(page.getByTestId("session-status")).toHaveText("Ready");
+    await mock("mock.sessionRun", { agent: "omo", batch: true });
+    await page.getByTestId("panel-button").click();
+    const box = page.getByTestId("panel-runs").getByTestId("run-graph-box");
+    await expect(box.locator("[data-testid=run-node]")).toHaveCount(2);
+    await page.waitForTimeout(400);
+    await shot(page, "omo-batch", theme);
+    const rows = card.getByTestId("subagent-row");
+    await expect(rows.getByTestId("subagent-line")).toHaveText(["FIRST_LINE: alpha line", "LINE_COUNT: 3"]);
+    for (const i of [0, 1]) await expect(rows.nth(i).locator(".sa-mark")).toHaveAttribute("title", "Haiku 5.5");
+    // the checklist, never the todo call's JSON
+    await expect(page.locator(".msg").getByText('{"')).toHaveCount(0);
+    // Plans: the same two, in the same state, with the same answers and times
+    expect(await box.locator("[data-testid=run-node]").evaluateAll((els) => els.map((e) => e.getAttribute("data-state")))).toEqual(["done", "done"]);
+    const rowT = await rows.getByTestId("subagent-time").allInnerTexts();
+    expect(rowT).toEqual(["19s", "28s"]);
+    for (const [i, t] of rowT.entries()) await expect(box.locator("[data-testid=run-node]").nth(i).getByTestId("node-status")).toContainText(t);
+    for (const [i, answer] of ["FIRST_LINE: alpha line", "LINE_COUNT: 3"].entries()) {
+      await box.locator("[data-testid=run-node]").nth(i).click();
+      await expect(page.getByTestId("run-drawer").getByTestId("run-summary")).toHaveText(answer);
+    }
+  });
+
   test(`O15 an OmO session's subagents show as its run in Plans (${theme})`, async ({ page }) => {
     await session(page, "omo", theme, "/subagents");
     await expect(page.getByTestId("fanout-card")).toHaveAttribute("data-state", "done");

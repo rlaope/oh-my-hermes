@@ -106,6 +106,28 @@ All notable changes will be documented here.
   HUD now reads the home `HERMES_HOME` names; the bot board alone keeps the
   bots' home.
 
+- **Claude Code lists a description for every OMH skill it may pick on its own.**
+  Claude Code fits skill descriptions into a listing budget of 1% of the
+  context window and drops the rest. With the whole pack in `.claude/skills`,
+  62 of 123 OMH skills (`omh-plan` and all eight `ulw-*` among them) were listed
+  by name only. The Claude copy is now its own generated pack,
+  `.claude/agent-skills/`, which `.claude/install.sh`, `install.ps1` and
+  `omh install --target agents` write to `.claude/skills`. It keeps all 123
+  skills and cuts each description to its lead, at most 160 characters (a cut
+  one ends with `…`); the
+  trigger phrases stay in the portable pack. On Claude Code 2.1.322 with
+  `claude-opus-5-5` and an empty config directory (2026-11-13), `/context`
+  shows 123 of 123 OMH skills with a description in an 8.5k listing, where it
+  showed 61 of 123 in 9.9k. In four task prompts, what the model loaded on its
+  own did not differ from the old pack in the runs made (three prompts loaded the
+  fitting skill in every run on both; the fourth in 0 of 1 runs before and 2 of 8
+  after); see `docs/AGENT-SKILLS.md#claude-code-skill-listing`. A listing already full
+  from other skills stays full. `.agents/skills` and the Hermes skills keep
+  their bytes. An existing `.claude/skills` mirror from
+  `omh install --target agents` reports stale until that install is rerun (a
+  user-scope one is also refreshed by `omh update`). `tools/claude_context_skills.py`
+  counts the skill rows of a saved `/context` output.
+
 - **A session in omher shows the subagents its agent starts, and opens Plans
   for that session.** Claude Code's subagent messages were dropped and a Task
   was one clipped "Asked a helper" step; Codex and OmO subagents were not shown
@@ -243,6 +265,28 @@ All notable changes will be documented here.
   gateway's `session.stats` counters where they count more than the chat's
   recorded row, and done DAG work is drawn green. The TUI's DAG block and the chat's end
   post get the same graph as before. Thanks @yqm-307. (#2745)
+
+- **instinct-ledger can start from git history, and code-review gains two
+  rules.** A fix commit that replaces lines a different pull request landed
+  shortly before is a re-fix, and nothing turned such a pair into a lesson.
+  `instinct-ledger` now ships `references/refixed-commits.md`: how to find the
+  pairs (blame the removed lines at the fix's parent and split by first-parent
+  merge, listing the non-merge fix commits reachable from the default branch), that
+  the count is an upper bound to read pair by pair, that two pairs from one day
+  count once, what a ledger line carries, and where a promoted rule goes. Two
+  requests that reached the generic router and `code-review`
+  (`어제 머지된 커밋 중에 다시 고친 것들 찾아서 교훈으로 정리해줘`,
+  `review yesterday's merged commits for fixes of fixes and write the lessons`)
+  now dispatch `instinct-ledger`, when the message holds both a re-fix phrase
+  (`fix of fix`, `fixes of fixes`, `re-fixed commits`, `refixed commits`,
+  `다시 고친 커밋`, `다시 고친 것들`) and a lesson cue (`lesson`, `lessons`,
+  `교훈`); `nightly lessons from merged work` keeps its base route. Messages
+  that use fix, lesson, commit, merge or review for other work, or hold a re-fix
+  phrase without asking for lessons, keep the route they had; a message that
+  negates the request while naming both still reaches the ledger. The `code-review` quality bar adds two rules: a fix
+  reaches every place of the same shape, and a read, parse or hash that failed
+  means unknown, never empty, none or equal. The idea of mining re-fixed commits
+  comes from `yetone/magpie` (MIT), concept only, reimplemented here.
 
 - **OpenCode runs as a chat in omher SESSIONS, on one adapter for every ACP
   agent.** omher now speaks the Agent Client Protocol (JSON-RPC on stdio)
@@ -402,6 +446,15 @@ All notable changes will be documented here.
   marks first. The SESSIONS + menu fades where its list is cut and keeps a few
   px from the row above, and a session's / menu is as wide as the composer,
   with plain command names and skills marked in the accent colour.
+
+- **An OmO subagent run in the foreground ends in omher with its own answer.**
+  When OmO 5.1.56 runs subagents in the foreground (one or several in one
+  call), its result names each task but not its answer, so the rows ended
+  "done" with nothing under them. Each row now shows that subagent's answer,
+  model and time from OmO's own record of the task, the same record Plans
+  reads, so the chat and Plans agree; a row whose record is missing stays
+  without an answer rather than showing another's. OmO's todo list shows as
+  the turn's checklist instead of a step with raw JSON.
 
 - **omher session chats say what the agent really did: a retry, a Stop, its own
   permissions and its subagents.** An OmO message that OmO retried by itself is
@@ -724,6 +777,20 @@ All notable changes will be documented here.
   child and clear it afterwards. Planning itself still runs in the parent
   session.
 
+- **A maintainer script lists fix commits that replaced lines another pull
+  request landed shortly before, and the first lessons file is written from its
+  output.** `uv run python tools/refix_report.py [revision] [--days 7]
+  [--window-hours 48] [--json]` blames the lines each `fix`/`hotfix` commit
+  replaces and prints the pairs from a different pull request; its count is an
+  upper bound, since a replaced young line does not say why. Run on `65796e68f`
+  for 7 days it found 179 fix commits, 80 of them in that class, 217 pairs, 0 files that
+  could not be blamed (the script reads paths with `git diff -z`, so names with
+  a space, a quote or non-ASCII letters are kept, and a failed blame is counted
+  and printed); 8 were
+  kept after reading them and give three lessons in `docs/LESSONS.md`. One met
+  the three-separate-days bar and is now in `REVIEW.md`. Nothing runs the script
+  on a schedule. `docs/REVIEW-SWEEP.md` gains a step for pull requests from forks
+  with the changes that stop the review until a maintainer has read them.
 - **dag-ulw names the node whose judgement decides the run, and gives it
   `ultrabrain`.** The skill told the model to climb `quick` ->
   `unspecified-low` -> `unspecified-high` and capped `ultrabrain` at one

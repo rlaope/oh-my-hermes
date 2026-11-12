@@ -721,6 +721,32 @@ class MockChat {
         });
         return;
       }
+      if (text.startsWith("/batch")) {
+        // omo-13-batch.jsonl as the Pi adapter emits it (OmO 5.1.56): one foreground `task` with two subagents and
+        // a todo list; the task result names no answer, so each row ends with what OmO's own record of that task id
+        // says (answer, model, its own time), the record Plans reads too
+        const d = "pi-toolu_batch";
+        const sub = (i: number, extra: Record<string, unknown>) =>
+          this.emit({
+            event: "subagent", id: `toolu_batch:${i}`, agent: this.agent, name: i ? "helper-b-line-count" : "helper-a-first-line",
+            goal: i ? "helper-b-line-count: count lines of a.txt and reply LINE_COUNT: <number>" : "helper-a-first-line: read a.txt and reply FIRST_LINE: <first line>",
+            delegation: d, index: i, count: i + 1, state: "queued", ...extra,
+          });
+        const plan = (a: string, b: string) => this.emit({ event: "plan", items: [{ text: "Spawn foreground batch of two helper tasks", status: a }, { text: "Give one-line summary of batch results", status: b }] });
+        this.at(40, () => this.emit({ event: "tool.start", tool_id: "toolu_batch", name: "delegate_task", detail: "helper-a-first-line, helper-b-line-count" }));
+        this.at(50, () => sub(0, {}));
+        this.at(60, () => sub(1, {}));
+        this.at(70, () => plan("in_progress", "pending"));
+        this.at(900, () => {
+          this.emit({ event: "tool.end", tool_id: "toolu_batch", name: "", ok: true, ms: 0 });
+          sub(0, { count: 2, state: "done", summary: "FIRST_LINE: alpha line", model: "claude-haiku-5-5", seconds: 19.9 });
+          sub(1, { count: 2, state: "done", summary: "LINE_COUNT: 3", model: "claude-haiku-5-5", seconds: 28.6 });
+          plan("completed", "completed");
+        });
+        this.say("Both helpers came back: `FIRST_LINE: alpha line` and `LINE_COUNT: 3`.", 1000);
+        this.at(1200, () => this.end("done"));
+        return;
+      }
       if (text.startsWith("/subagents")) {
         // the events the Claude adapter emitted for a real run (claude-9-subagents.jsonl): two Agent calls in one
         // message, each subagent's own step, then each one's own answer and time; the second one is slow enough to

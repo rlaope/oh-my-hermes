@@ -40,15 +40,18 @@ to run any `.ps1` file, so calling the script directly
 one process only and changes no machine or user policy. With PowerShell 7, run
 the same line with `pwsh` in place of `powershell`.
 
-Claude installs only `.claude/skills/`; the other five adapters install only
-`.agents/skills/`. User scope places the same relative path under the user's
+Claude installs only `.claude/skills/`, from its own generated copy of the
+pack in `.claude/agent-skills/` (see
+[Claude Code skill listing](#claude-code-skill-listing)); the other five
+adapters install `agent-skills/` into `.agents/skills/` only. User scope places the same relative path under the user's
 home. These paths come from the recorded [host matrix](#host-support-matrix),
 not invented vendor-specific directories. In particular, `.openclaw/` and
 `.pi/` contain installers, **not** new host skill scan paths. OpenClaw's custom
 `OPENCLAW_STATE_DIR` caveat below still applies; no alternative path is guessed.
 
-Both installers read the pack's one inventory,
-`agent-skills/.omh-agent-skills-manifest.json`, verify the complete source file
+Both installers read their pack's one inventory,
+`agent-skills/.omh-agent-skills-manifest.json` (Claude:
+`.claude/agent-skills/.omh-agent-skills-manifest.json`), verify the complete source file
 list and SHA256s against it before writing, copy only listed files, verify the
 installed bytes, copy that inventory verbatim as the receipt, and print the
 installed skill names. Re-running is idempotent. A reinstall replaces edited
@@ -126,9 +129,13 @@ An explicit import rooted at the mirror still imports the selected source.
 `.omh-agent-skills-manifest.json` uses `schema_version:
 omh_agent_skills_projection/v1`, a content-addressed `catalog_revision`,
 `target_dirs`, and a `files` mapping from projection-relative path to SHA256.
-Without a host selector, both scopes retain absolute `target_dirs` and write the
-**same manifest** at their two roots; each listed file digest applies to both
-copies. Host-selected single-target installs instead use the portable `["."]`
+Without a host selector, both scopes retain absolute `target_dirs` and write a
+manifest at each of their two roots with the **same `target_dirs`**; each lists
+the digests of its own root's files, because the `.claude/skills` copy carries
+the [Claude listing change](#claude-code-skill-listing) and the
+`.agents/skills` copy does not. A mirror written before that change reports
+stale (clean drift) until the install is rerun or `omh update` refreshes it.
+Host-selected single-target installs instead use the portable `["."]`
 receipt described above. Older absolute single-target receipts report stale
 (clean drift) until an explicit reinstall refreshes them. Manifest paths never
 choose the write destinations.
@@ -145,6 +152,97 @@ files, refreshes both chosen-scope copies, and removes retired manifest-owned
 files; it does not import those edits into the catalog. Like the clone scripts,
 it refuses an edited toolkit file (`Agent Skills refuses edited support`), and
 status then says to move that file aside before rerunning. There is no automatic update, host reload, or background sync.
+
+## Claude Code skill listing
+
+Claude Code puts a listing of skill names and descriptions into every turn,
+inside a budget. Its [skills documentation](https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short)
+says: "The listing always contains every skill name, but if you have many
+skills, Claude Code drops some descriptions to fit the listing's character
+budget, which removes the keywords Claude needs to match your request. The
+budget scales at 1% of the model's context window."
+
+The whole portable pack did not fit. So the Claude copy, generated into
+`.claude/agent-skills/` and installed by `.claude/install.sh`, `.ps1` and the
+CLI's `.claude/skills` root, changes one thing: each `SKILL.md`'s frontmatter
+`description:` is cut to its lead (the text before the generated ` Use when the
+user says:` trigger list) and, if that is still longer than
+`CLAUDE_DESCRIPTION_CAP` (160 characters, `src/install/agent_skills_projection.py`),
+to the last clause boundary under the cap, else the last word, never ending on
+a function word, and marked with `…` so a cut reads as a cut. A lead that already
+fits is kept whole. The leading `[omh] ` stays. All 123
+skills stay listed and model-invocable; no flag and no extra skill is added.
+The trigger phrases remain in the portable pack and in the skill bodies.
+Bodies, references and toolkit files are byte-identical to `agent-skills/`,
+and `.agents/skills` and the Hermes `skills/` tree do not change. The built
+descriptions run from 61 to 160 characters (mean 134).
+
+Measured on 2026-11-13 with Claude Code 2.1.322 and `claude-opus-5-5` (1M
+context), in a fresh git project after `.claude/install.sh`, with an empty
+`CLAUDE_CONFIG_DIR`:
+
+| Pack | Skills listing | OMH rows | With a description | Name-only (`< 20`) |
+| --- | --- | --- | --- | --- |
+| before this change | 9.9k | 123 | 61 | 62 |
+| this pack (cap 160) | 8.5k | 123 | 123 | 0 |
+
+The same pack in user scope (`install.sh --user`, scratch `HOME`) lists 123 of
+123 with a description. Before this change, the rows that lost their
+description were everything from `omh-localization-review` on, `omh-plan` and
+all eight `ulw-*` among them. A `< 20` row can also be a description of about
+45 characters or less; the shortest description here is 61, so `< 20` means
+dropped.
+
+**What a model picks is a different measurement.** Four task prompts were run
+with `claude -p --setting-sources project --tools "Read,Skill" --max-turns 4`
+(same version and model, 2026-11-12 and 2026-11-13). For three of them the model
+loaded the fitting skill in every run: 3 of 3 on the pack before this change and
+6 of 6 on this pack. For the fourth, a slow Postgres query whose fitting skill is
+`omh-relational-db`, it loaded the skill in 0 of 1 runs before this change and in
+2 of 8 on this pack (four runs with each of the two endings tried for a cut
+description, `.` and `…`; one load with each). These runs show no difference
+between the two packs in what a model picks, and they are too few to give a rate.
+
+**Tried and rejected.** The first design flagged 113 skills
+`disable-model-invocation: true` and listed them in one generated `omh-index`
+skill. It listed 11 skills (3.2k), but in the same four prompts the model
+loaded the fitting skill in 0 of 4 runs and never opened the index. The
+index idea came from `yetone/magpie` (MIT, commit
+`5e933e153a87c4017a19502e1d2e87aa714572b9`); concept only, reimplemented and
+then dropped.
+
+To measure your own setup, run `/context` in the project and count the rows:
+
+```sh
+claude -p "/context" > context.md
+uv run python tools/claude_context_skills.py context.md
+```
+
+The script prints, per source, how many skills are listed, how many have a
+description, and how many are name-only. It reads the saved file and does not
+run `claude`.
+
+**When your own listing is already full.** The shorter descriptions do not
+create budget. With the owner's real home on 2026-11-13 (55 user skills, 124
+plugin skills, listing 9.9k), an empty project kept 35 of 55 user
+descriptions; with the pack before this change the user skills kept 25 of 55
+and the project 5 of 123 OMH descriptions; with this pack, 28 of 55 and 6 of
+123. A full listing is not fixed by this change. Claude Code documents these
+settings for it:
+
+- `skillListingBudgetFraction` raises the share of the context window the
+  listing may use (default `0.01`; "Raise this key to keep more descriptions
+  visible at the cost of more context per turn",
+  [settings reference](https://code.claude.com/docs/en/settings-reference#skilllistingbudgetfraction)).
+  The skills page also names the `SLASH_COMMAND_TOOL_CHAR_BUDGET` environment
+  variable "to a fixed character count".
+- `skillOverrides` sets a skill to `"name-only"` ("Claude sees the skill by
+  name without its description") or `"user-invocable-only"` ("Claude doesn't
+  see the skill, but you can still type `/name`") without editing its
+  `SKILL.md` ([settings reference](https://code.claude.com/docs/en/settings-reference#skilloverrides)).
+  Use it to free budget from skills you rarely want Claude to choose.
+- `/skill-doctor` "see[s] what each of your skills costs and how often it gets
+  used" ([Find unused skills](https://code.claude.com/docs/en/skills#find-unused-skills)).
 
 ## Duplicate copies
 
@@ -401,8 +499,9 @@ described below.
 
 - **installed** is observed by OMH itself. It reads the host's scan path, repo
   scope under `--project-root` and user scope under `--user-home` (default:
-  your home), and compares every file's bytes with the pack inventory,
-  `agent-skills/.omh-agent-skills-manifest.json`. The read writes nothing and
+  your home), and compares every file's bytes with its host's pack inventory,
+  `agent-skills/.omh-agent-skills-manifest.json` (Claude Code:
+  `.claude/agent-skills/.omh-agent-skills-manifest.json`). The read writes nothing and
   runs no host process. `--project-root` defaults to the current directory, as the
   host-selected installers use; an install made without `--host` writes at
   the repository root, so pass that root when running from a subdirectory.
@@ -515,14 +614,17 @@ files alone. `--output /tmp/stage/agent-skills` stages the tree and its sibling
 adapter directories without modifying the checkout.
 
 The gate detects missing, stale, and extra canonical files, including
-references and the inventory, and missing/stale adapter files. Catalog host rows
+references and the inventory, missing/stale adapter files, and missing, stale
+and extra files in Claude Code's own pack, `.claude/agent-skills/` (with its
+own inventory). Catalog host rows
 live in `src/skills/host_adapters.py`; `host_adapter_render.py` produces both
 scripts and each host's `manifest.json` from those rows alone, with
 `transform: copy-only`. No adapter file carries a file digest or path list:
-the per-file SHA256s live once, in `agent-skills/.omh-agent-skills-manifest.json`
-(the exact receipt the CLI writes, named by each host manifest's `inventory`
-field), so a skill body edit moves that body and the inventory and nothing
-under the six host directories. The installers run from the same checkout as
+the per-file SHA256s live once per pack, in `agent-skills/.omh-agent-skills-manifest.json`
+and, for Claude Code, `.claude/agent-skills/.omh-agent-skills-manifest.json`
+(the exact receipts the CLI writes, named by each host manifest's `inventory`
+field), so a skill body edit moves that body and its inventory in each pack and
+no installer or host `manifest.json`. The installers run from the same checkout as
 that inventory, so embedding the hashes in the scripts would verify nothing the
 committed, byte-gated inventory does not. Both scripts accept only the exact
 layout the producer emits: every line of the `files` block is one

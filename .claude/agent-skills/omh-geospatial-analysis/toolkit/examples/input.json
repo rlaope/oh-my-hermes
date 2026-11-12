@@ -1,0 +1,10 @@
+{
+  "type": "FeatureCollection",
+  "data_class": "synthetic",
+  "fixture_id": "synthetic-rectangles-v1",
+  "crs": {"type": "name", "properties": {"name": "EPSG:3857"}},
+  "features": [
+    {"type": "Feature", "properties": {"name": "synthetic-west"}, "geometry": {"type": "Polygon", "coordinates": [[[0,0],[10,0],[10,10],[0,10],[0,0]]]}},
+    {"type": "Feature", "properties": {"name": "synthetic-east"}, "geometry": {"type": "Polygon", "coordinates": [[[20,0],[30,0],[30,10],[20,10],[20,0]]]}}
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "task_id": "st_01a1d076",
+  "name": "helper-a-first-line",
+  "task_summary": "helper-a-first-line: read a.txt and reply FIRST_LINE: <first line>",
+  "status": "completed",
+  "root_session_id": "01a1d076-23eb-7888-ba30-7ca24b132e45",
+  "parent_session_id": "01a1d076-23eb-7888-ba30-7ca24b132e45",
+  "model": "anthropic/claude-haiku-5-5",
+  "effective_model": {
+    "provider": "anthropic",
+    "model_id": "claude-haiku-5-5",
+    "display": "anthropic/claude-haiku-5-5",
+    "source": "category"
+  },
+  "created_at": "2026-11-12T15:53:23.419Z",
+  "started_at": "2026-11-12T15:53:23.423Z",
+  "terminal_at": "2026-11-12T15:53:43.348Z",
+  "updated_at": "2026-11-12T15:53:43.348Z",
+  "final_response": "FIRST_LINE: alpha line",
+  "spawn_spec": {
+    "cwd": "/w/proj"
+  }
+}

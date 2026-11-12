@@ -45,7 +45,7 @@ from omh.quality.agent_skills_discovery import (
     probe_descriptors,
     summarize_receipts,
 )
-from omh.skills.host_adapters import HOST_ADAPTERS, host_adapter, source_digest
+from omh.skills.host_adapters import HOST_ADAPTERS, host_adapter, host_pack_files, source_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 T0 = datetime(2026, 10, 14, 3, 0, 0, tzinfo=timezone.utc)
@@ -374,7 +374,7 @@ class ObservationTests(Roots):
                 # The adapter points at the pack's one inventory; the digest a
                 # receipt binds is that inventory's, identical for every host.
                 inventory = json.loads((ROOT / committed["source"] / committed["inventory"]).read_bytes())
-                self.assertEqual(inventory["files"], agent_skills_manifest(files)["files"])
+                self.assertEqual(inventory["files"], agent_skills_manifest(host_pack_files(host, files))["files"])
                 for scope in SCOPES:
                     receipt = receipt_of(payload, host, scope)
                     self.assertEqual(receipt["source_digest"], source_digest(inventory["files"]))
@@ -507,7 +507,8 @@ class MatrixTests(Roots):
         files = agent_skill_files()
         self.current = CurrentPack(
             catalog_revision=agent_skills_manifest(files)["catalog_revision"],
-            source_digests={host: source_digest(agent_skills_manifest(files)["files"]) for host in HOSTS},
+            source_digests={host: source_digest(agent_skills_manifest(host_pack_files(host, files))["files"])
+                            for host in HOSTS},
             target_paths={(d.host, d.scope): d.target_path for d in probe_descriptors(version_probed=())},
             os=self.payload["current"]["os"],
             host_versions={"claude": "9.8.7"},

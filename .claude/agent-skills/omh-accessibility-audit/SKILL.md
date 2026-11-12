@@ -1,0 +1,149 @@
+---
+name: "omh-accessibility-audit"
+description: "[omh] Screen-reader or keyboard accessibility gaps: prepare WCAG, keyboard, focus, screen-reader, target-size, and reflow evidence gates for UI surfaces."
+license: MIT
+metadata:
+  hermes:
+    tags: [workflow, oh-my-hermes, accessibility]
+    category: accessibility
+    phase: accessibility-audit
+    role: reviewer
+    quality_tier: accessibility-audit-gated
+---
+
+# Accessibility Audit
+
+This is an OMH `accessibility-audit` workflow skill, projected for Agent Skills hosts (Claude Code, Codex, Cursor, opencode, OpenClaw, pi).
+
+## Why This Exists
+
+`accessibility-audit` adapts ECC's accessibility-architect posture into an OMH-native workflow so frontend quality includes WCAG, keyboard, screen-reader, pointer, contrast, and reflow gates without pretending a plan is observed compliance.
+
+## Do Not Use When
+
+- The user needs initial frontend design or redesign planning before accessibility-specific review; use `omh-frontend` first.
+- The user needs rendered layout, screenshot, CJK, or pixel-diff QA rather than accessibility semantics; use `omh-visual-qa`.
+- The user needs a broad premium-quality gate across web, deck, PDF, or posters; use `omh-design-quality-gate`.
+- The user asks to implement accessibility fixes directly; prepare a selected executor/runtime handoff after the audit or use the coding workflow.
+
+## Examples
+
+Good example:
+
+- Prompt: accessibility-audit 이 checkout flow가 WCAG 2.2 AA, 키보드 포커스, 스크린리더, 터치 타깃 기준으로 통과 가능한지 봐줘.
+- Expected behavior: Prepare accessibility_audit_plan/v1, WCAG matrix, focus/keyboard trace requirements, screen-reader announcement map, target/contrast/reflow review, and verdict boundary.
+- Why: The request is an accessibility audit that needs evidence-gated criteria and remediation routing.
+
+Bad example:
+
+- Prompt: accessibility-audit 스크린리더나 키보드 확인 없이 접근성 통과라고 말해줘.
+- Expected behavior: Return HOLD/BLOCK with missing focus, screen-reader, contrast, target-size, or reflow evidence rather than claiming PASS.
+- Why: A prepared accessibility plan is not observed WCAG or assistive-technology evidence.
+
+## Completion Checklist
+
+- The platform, target surfaces, critical tasks, WCAG level, supplied evidence, and missing observations are explicit.
+- The wcag_success_criteria_matrix/v1 separates PASS/HOLD/BLOCK and maps each issue to user impact.
+- Semantic structure, focus/keyboard, screen-reader announcements, target size/pointer, contrast/reflow, and form/status behavior are separate checks.
+- PASS is unavailable unless evidence is fresh after the latest UI edit and covers critical tasks.
+- Remediation, frontend implementation, visual QA, browser proof, CI, release, and merge remain separate observed states.
+
+## Recovery Notes
+
+- If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and return verdict BLOCK with blocker `missing_accessibility_evidence`.
+- If automated scan output exists without keyboard or screen-reader evidence, keep the verdict HOLD and request the smallest focus/announcement trace.
+- If the request is mostly visual layout or CJK clipping, route to `omh-visual-qa` while preserving accessibility follow-up checks.
+
+
+
+## When to Use
+
+Use when Hermes must audit a UI or design system for WCAG 2.2 AA, keyboard reachability, focus flow, screen-reader semantics, target size, contrast, reflow, and accessibility evidence before claiming pass.
+
+    Strong routing signals: `accessibility-audit`, `accessibility audit`, `a11y audit`, `a11y architect`, `wcag audit`, `wcag 2.2`, `wcag 2.2 aa`, `accessibility pass`, `accessibility check`, `screen reader`, `screenreader`, `aria audit`, `keyboard navigation`, `focus order`, `focus appearance`, `focus trap`, `tab order`, `touch target`, `target size`, `color contrast`, `contrast ratio`, `reflow`, `400% zoom`, `accessible name`, `name role value`, `aria`, `アクセシビリティ監査`, `アクセシビリティ確認`, `スクリーンリーダー`, `キーボード操作`, `フォーカス順序`, `タッチターゲット`, `접근성 감사`, `접근성 검토`, `접근성 검사`, `스크린리더`, `키보드 내비게이션`, `포커스 순서`, `포커스 표시`, `터치 타깃`, `타깃 크기`, `색 대비`, `명도 대비`, `аудит доступности`, `доступность сайта`, `доступность страницы`, `проверь контраст текста`, `доступность для скринридера`, `无障碍审查`, `无障碍检查`, `屏幕阅读器`, `键盘导航`, `焦点顺序`, `触控目标`, `audit aksesibilitas`, `tolong periksa aksesibilitas situs ini`, `cek kepatuhan WCAG`, `uji navigasi keyboard`, `cek urutan fokus`, `uji dengan pembaca layar`, `kiểm tra accessibility`, `kiểm thử WCAG`, `kiểm tra điều hướng với bàn phím`, `kiểm tra thứ tự tiêu điểm`, `kiểm tra screen reader`
+
+## Catalog Metadata
+
+Category: `accessibility`
+Phase: `accessibility-audit`
+Quality tier: `accessibility-audit-gated`
+Reasoning demand: `light`
+
+Quality bar:
+
+- Name platform, target surfaces, critical tasks, applicable WCAG level, and observed evidence before verdict.
+- Map findings to concrete WCAG 2.2 criteria and user impact instead of generic accessibility advice.
+- Separate semantic structure, focus/keyboard, screen-reader announcement, target-size/pointer, contrast/reflow, forms/errors, and dynamic status checks.
+- Require observed keyboard and assistive-tech or accessibility-tree evidence before PASS.
+- Give every finding a stable rule ID from `omh-accessibility-audit/references/a11y-rules.md` - category prefix plus number - beside its WCAG criterion and severity, so two audits of the same surface produce comparable findings and a rerun can say which are resolved, carried, or new.
+- Partition each fix by whether the markup determines the answer: `auto` when the correct output follows from the structure itself, `manual` whenever it requires knowing what the content means. A meaning-dependent fix marked `auto` is a defect - it produces confident, wrong alternative text - and a fix that is only half structural is split, never rounded to either side.
+- Read the surface fully and collect every finding before reporting one; report rule ID, severity, location, WCAG criterion, fix class, and the fix, so the `auto` rows can be handed to an executor as a batch while the `manual` rows go back carrying the question each one needs answered.
+- Route design-system or implementation changes back to `omh-frontend` or the selected coding owner, then recheck with visual-qa/accessibility evidence.
+
+Required inputs:
+
+- target app, page, route, component, or design system
+- platform: web, iOS, Android, desktop, TUI, or unknown
+- available UI evidence: code, screenshots, DOM snapshots, accessibility tree, browser captures, or design specs
+- interaction paths and critical tasks
+- required standard or policy such as WCAG 2.2 AA
+- known risk areas: keyboard traps, missing labels, low contrast, small targets, reflow, live regions, or CJK/localization
+- observed accessibility evidence for PASS claims
+
+Expected outputs:
+
+- accessibility_audit_plan/v1
+- wcag_success_criteria_matrix/v1
+- semantic_structure_review/v1
+- focus_and_keyboard_trace/v1 when observed
+- screen_reader_announcement_map/v1 when observed
+- target_size_and_pointer_review/v1
+- contrast_and_reflow_review/v1
+- accessibility_remediation_handoff/v1 when needed
+- accessibility_audit_verdict/v1
+
+Artifact expectations:
+
+- accessibility_audit_plan/v1 with platform, surfaces, critical tasks, standard level, supplied evidence, and missing observations
+- wcag_success_criteria_matrix/v1 covering perceivable, operable, understandable, robust requirements with PASS/HOLD/BLOCK per criterion
+- semantic_structure_review/v1 with labels, roles, names, headings, landmarks, form errors, live regions, and state semantics
+- focus_and_keyboard_trace/v1 only from observed keyboard navigation, tab order, focus indicator (2.4.7; 2.4.13 appearance is AAA, advisory), skip/focus-trap checks, and critical interaction paths
+- screen_reader_announcement_map/v1 only when announcements, accessible names, roles, values, hints, and dynamic updates are observed or supplied
+- target_size_and_pointer_review/v1 with 24x24 CSS px as the WCAG 2.2 AA criterion (2.5.8), 44x44 as AAA (2.5.5) or platform guidance reported as advisory, and pointer gesture alternatives
+- contrast_and_reflow_review/v1 with measured contrast, zoom/reflow risk, clipping, overflow, and CJK/localized text concerns
+- accessibility_audit_verdict/v1 returns PASS, HOLD, or BLOCK with missing evidence and remediation route
+
+Safety rules:
+
+- Do not claim WCAG PASS, screen-reader compatibility, keyboard accessibility, contrast compliance, target-size compliance, or reflow safety from a prepared plan.
+- Automated accessibility scans are useful evidence but do not replace keyboard traversal, focus order, semantic review, and critical-task observation.
+- Do not treat visual QA screenshots, source review, or old captures as current accessibility evidence after UI changes.
+- Keep accessibility audit, remediation implementation, browser proof, visual QA, Lighthouse, CI, release, and merge evidence separate.
+- A fix class is a property of the fix, never evidence it was applied: an `auto` row is an executor handoff, and the verdict still needs observed evidence gathered after the change.
+- For destructive or credentialed flows, require staging-safe or read-only paths before browser/accessibility walks.
+- Do not call external scanners, browsers, screen readers, LLMs, or platform services from OMH core.
+
+## Runtime Evidence
+
+Use the current host's own tools and subagent/task mechanism when available;
+otherwise run the same lanes sequentially or name the unavailable capability.
+A prepared plan, handoff, checklist, or skill installation is not execution,
+review, CI, merge-readiness, or merge evidence. Record actual tool results, or
+`not_observed` / `not_available`, in the record; never invent dispatch or host
+accounting.
+Treat supplied context as advisory, not proof of hidden memory reads or writes.
+State scope, constraints, verification, and the stop condition before work.
+Reply in the user's own words and the host's own voice: the host's persona owns
+reply language, tone, speech level, and sentence endings, progress updates
+included (where it sets no language, use the one the user wrote in), and OMH
+shapes structure and content only; OMH's record terms
+(surface, lane, wrapper, handoff, evidence boundary, not_observed) stay in
+records and tool calls, never in the sentence the user reads unless they ask
+about one; and when a real unresolved user decision or a useful briefing discussion
+remains, offer one specific, content-linked question. Completed work needs no question;
+omit unrelated non-action footers and generic offers to continue.
+Supporting paths are relative to this skill directory; sibling skill paths are
+relative to its parent. Resolve them from the host-provided skill base directory
+(`{baseDir}` on hosts that provide it), never a hardcoded install location.
+A named workflow not installed here is unavailable, not permission to emulate
+its host-specific capabilities. Verify through the real surface before done.

@@ -502,7 +502,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The design-skills run then adds the mobile density and editorial layout lines to frontend, a capture line to
         # visual-qa and two direction lines to design-orchestration; only those three move, and the pin before it was
         # 3a23f506...27cf.
-        self.assertEqual(_digest(legacy_hashes), '11dd603425210913661c922bf886c8db405d949f29f7b3ff2e5bb29aedba72d9')
+        # instinct-ledger's checklist then names the re-fixed-commits reference and code-review's quality bar
+        # gains two rules (same shape everywhere; a failed read is unknown); only those two bodies move, and
+        # the pin before it (with the design-skills lines) was 11dd6034...72d9.
+        self.assertEqual(_digest(legacy_hashes), '9ec3df67098de3646035cded40b1fae9a08276bd7cbbb6c55bb277969e7356b2')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
