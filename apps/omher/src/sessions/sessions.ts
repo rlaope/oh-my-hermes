@@ -23,8 +23,12 @@
 // message by its saved copy's path. An oh-my-hermes session takes no files: the bridge attaches files to a bot's
 // main chat only.
 import { useSyncExternalStore } from "react";
-import type { ITheme, Terminal } from "@xterm/xterm";
+import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import { afterOpen, feed } from "./term/engine";
+import { applyLook, termOptions } from "./term/look";
+import { onTermSettings, readTermSettings } from "./term/settings";
+import { termTheme } from "./term/themes";
 import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
@@ -96,6 +100,8 @@ interface Term {
   el: HTMLDivElement;
   hostId: number | null;
   closed: boolean;
+  /** Undoes what the engine attached after the terminal opened (its renderer, add-ons). */
+  undo: () => void;
 }
 
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
@@ -762,6 +768,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return true;
   };
 
+  /** The app theme in force, as the terminal views last reported it. */
+  let look: "dark" | "light" = "dark";
+
   /** How many times session `id`'s terminal was started again (Restart): the view keys its terminal on it. */
   const termRuns = new Map<string, number>();
 
@@ -778,7 +787,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         r.cwd,
         t.term.cols,
         t.term.rows,
-        (d) => t.term.write(d),
+        (d) => feed(t.term, d),
         (code) => {
           t.closed = true;
           if (!ofChat) patchRec(id, { status: "exited", exitCode: code });
@@ -807,18 +816,20 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!t) return;
     if (t.hostId !== null && !t.closed) void host.close(t.hostId).catch(() => undefined);
     t.closed = true;
+    t.undo();
     t.term.dispose();
     t.el.remove();
     terms.delete(id);
   };
 
   /** Mount session `id`'s terminal into `container` (creating and starting it the first time). */
-  const attach = (id: string, container: HTMLElement, theme: ITheme): (() => void) => {
-    if (xtermMods) return mount(xtermMods, id, container, theme);
+  const attach = (id: string, container: HTMLElement, mode: "dark" | "light"): (() => void) => {
+    look = mode;
+    if (xtermMods) return mount(xtermMods, id, container);
     let detach: (() => void) | null = null;
     let gone = false;
     void loadXterm().then((m) => {
-      if (!gone) detach = mount(m, id, container, theme);
+      if (!gone) detach = mount(m, id, container);
     });
     return () => {
       gone = true;
@@ -826,27 +837,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
-  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement, theme: ITheme): (() => void) => {
+  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement): (() => void) => {
+    const settings = readTermSettings();
+    const theme = termTheme(look, settings);
     let t = terms.get(id);
     const fresh = !t;
     if (!t) {
       const el = document.createElement("div");
       el.className = "term-host";
-      const term = new Terminal({
-        fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace",
-        fontSize: 12.5,
-        lineHeight: 1.2,
-        cursorBlink: true,
-        allowProposedApi: false,
-        scrollback: 5000,
-        // dim text (agents use it a lot) stays readable on the light background
-        minimumContrastRatio: 4.5,
-        macOptionIsMeta: true,
-        theme,
-      });
+      const term = new Terminal(termOptions(theme, settings));
       const fit = new FitAddon();
       term.loadAddon(fit);
-      t = { term, fit, el, hostId: null, closed: false };
+      t = { term, fit, el, hostId: null, closed: false, undo: () => undefined };
       terms.set(id, t);
       const tt = t;
       term.onData((d) => {
@@ -858,8 +860,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
     const tt = t;
     container.appendChild(tt.el);
-    if (fresh) tt.term.open(tt.el);
-    tt.term.options.theme = theme;
+    if (fresh) {
+      tt.term.open(tt.el);
+      tt.undo = afterOpen(tt.term, tt.el, settings);
+    }
+    applyLook(tt.term, theme, settings);
     const refit = () => {
       if (!tt.el.isConnected || tt.el.clientWidth === 0) return;
       try {
@@ -1155,9 +1160,17 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
-  const setTheme = (theme: ITheme) => {
-    for (const t of terms.values()) t.term.options.theme = theme;
+  /** Every open terminal takes the look again: the app theme changed, or a terminal setting did. */
+  const relook = () => {
+    const settings = readTermSettings();
+    const theme = termTheme(look, settings);
+    for (const t of terms.values()) applyLook(t.term, theme, settings);
   };
+  const setLook = (mode: "dark" | "light") => {
+    look = mode;
+    relook();
+  };
+  onTermSettings(relook);
 
   return {
     getState: () => state,
@@ -1175,7 +1188,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     start,
     attach,
     close,
-    setTheme,
+    setLook,
     setView,
     setModel,
     setMode,
