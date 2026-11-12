@@ -607,7 +607,9 @@ export function replyChipFor(a: Away): ReplyChip | null {
 }
 const SOURCE_NAMES: Record<string, string> = { slack: "Slack", discord: "Discord", telegram: "Telegram" };
 
-function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string): Chat {
+/** `since`: when the chat.open request went out. A turn that started or ended after that is newer than the reply's
+ *  `running`, which then changes nothing: the live events are the truth for it. */
+function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, since = Infinity): Chat {
   const server: MessageItem[] = res.messages.map((m) => ({
     kind: m.role,
     id: m.id,
@@ -638,9 +640,9 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string):
     loaded: true,
     sessionId: res.session_id,
   };
-  if (res.running && !next.turn) {
+  if (res.running && !next.turn && !((next.lastTurn?.endedAt ?? -Infinity) >= since)) {
     next = newTurn(next, bot, now, WORKING)[0];
-  } else if (!res.running && next.turn) {
+  } else if (!res.running && next.turn && next.turn.startedAt < since) {
     next = endTurn(next, now, "done");
   }
   return next;
@@ -655,7 +657,7 @@ export type Action =
   | { type: "error"; message: string | null }
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
-  | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number }
+  | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
   | {
       type: "local.user";
       bot: string;
@@ -952,7 +954,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "select":
       return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat" } };
     case "chat.opened":
-      return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot), openError: null }));
+      return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
     case "local.user":
       return touchChat(state, a.bot, (c) =>
         withItems(c, [
@@ -1391,6 +1393,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
 
   const loadChat = async (bot: string) => {
     let res: ChatOpenResult;
+    const since = now();
     try {
       res = await bridge.request("chat.open", { bot });
     } catch (e) {
@@ -1398,7 +1401,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "chat.failed", bot, message: errText(e) });
       throw e;
     }
-    dispatch({ type: "chat.opened", bot, res, now: now() });
+    dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
   const loadElsewhere = async (bot?: string) => {
     const b = botArg(bot);
@@ -1504,11 +1507,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         const first =
           state.selectedBot && bots.some((b) => b.name === state.selectedBot) ? state.selectedBot : (back?.bot ?? bots[0]?.name);
         void loadAutomations();
-        if (first) await selectBot(first);
+        // the panel and view come back as the bot is selected, before its chat and lists load: put back only once
+        // those reads ended, a click on the panel in the meantime (the places chip, ⌘.) was undone by it
+        const loading = first ? selectBot(first) : Promise.resolve();
         if (back?.bot) {
           const { panelOpen, panelTab, runsFull, runId, session } = back;
           dispatch({ type: "ui.restore", ui: { panelOpen, panelTab, runsFull, runId, session } });
         } else if (back?.session) dispatch({ type: "ui.session", id: back.session });
+        await loading;
         // Load the other chats too, so the sidebar can show previews and unread counts.
         await Promise.allSettled(
           bots.filter((b) => b.name !== first && online(b)).map((b) => loadChat(b.name)),

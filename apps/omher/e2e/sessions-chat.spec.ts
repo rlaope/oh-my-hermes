@@ -80,10 +80,11 @@ test("Claude Code opens as a chat: bubbles, one progress line, no terminal", asy
   await expect(page.getByTestId("session-agent")).toHaveText("Claude Code");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/omher");
   await expect(page.getByTestId("model-label")).toHaveText("Opus 5.5");
-  // the UI sent only an agent id and a folder
+  // the UI sent only an agent id, a folder and the session's own id (whose attachment folder Claude Code may read)
   const st = (await calls(page)).find((c) => c.op === "chat.start")!;
-  expect(Object.keys(st).sort()).toEqual(["agent", "cwd", "id", "op"]);
+  expect(Object.keys(st).sort()).toEqual(["agent", "cwd", "id", "op", "session"]);
   expect(st).toMatchObject({ agent: "claude", cwd: "/Users/you/code/omher" });
+  expect(st.session).toMatch(/^s\d+$/);
   await expect(page.getByTestId("bubble-user")).toHaveText("explain the sessions feature");
   await expect(row.getByTestId("live-ring")).toBeVisible(); // the answer ring while the turn runs, as on a bot row
   await expect(row.getByTestId("live-dot")).toHaveCount(0); // a chat row rings; only a terminal row keeps the dot
