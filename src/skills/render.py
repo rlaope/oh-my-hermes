@@ -4821,9 +4821,9 @@ Load this when the evidence for an instinct is a repository's git history: a fix
 
 A re-fix is a fix commit that replaces lines a different pull request landed shortly before. The first change was not enough, and the fix is the repository's own record of what the first author missed.
 
-1. List the fix commits in the window (subjects that start with `fix` or `hotfix`, on the first-parent history of the default branch).
+1. List the non-merge fix commits in the window that are reachable from the default branch (subjects that start with `fix` or `hotfix`; `git log --no-merges` without `--first-parent`, because on a merge-commit history the first-parent line holds only the merges and lists none).
 2. For each fix, find the lines it removes or changes, then blame exactly those lines in the fix's parent: `git blame --porcelain -L <start>,<end> <fix>^ -- <path>`. The blame names the commit that last wrote each line.
-3. Split by how the blamed commit reached the branch. When it came in through the same first-parent merge as the fix, it is a review fixup before merge and not a signal. When it came in through another merge, the pair is a signal: one pull request left a fault that a later one repaired.
+3. Split by how the blamed commit reached the branch: follow the first-parent merges only here, to decide which pull request brought each commit in. When it came in through the same first-parent merge as the fix, it is a review fixup before merge and not a signal. When it came in through another merge, the pair is a signal: one pull request left a fault that a later one repaired.
 4. Keep the pairs where the blamed commit is recent (the window is the person's to choose, such as 48 hours) and discard pairs where only whitespace, comments, or generated files changed.
 
 ## 2. The count is an upper bound

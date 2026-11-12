@@ -2,9 +2,9 @@
 
 Base verdicts below were measured on 65796e68f with
 `build_chat_interaction_payload(msg, source="discord")["route"]` (action,
-selected_skill, candidate_skill). The three requests were fallback (generic
-router, low), clarify on code-review (high) and clarify on verification-gate
-(medium) there; the thirty messages use the same nouns (fix, lesson, commit,
+selected_skill, candidate_skill). Two requests reach the ledger (it takes a re-fix phrase AND a lesson cue;
+"nightly lessons from merged work" went back to its base route, clarify on
+verification-gate). Before the fix they were fallback and clarify on code-review; the thirty messages use the same nouns (fix, lesson, commit,
 merge, review) for other work and must keep the verdict they had.
 """
 
@@ -27,7 +27,6 @@ REFERENCE_PATH = "references/refixed-commits.md"
 REACHES_THE_LEDGER = (
     "어제 머지된 커밋 중에 다시 고친 것들 찾아서 교훈으로 정리해줘",
     "review yesterday's merged commits for fixes of fixes and write the lessons",
-    "nightly lessons from merged work",
 )
 
 # (message, action, selected_skill, candidate_skill) at the base commit.
@@ -64,6 +63,74 @@ MUST_NOT_CHANGE = (
     ('고친 것들 목록 보여줘', 'dispatch', 'oh-my-hermes', 'oh-my-hermes'),
 )
 
+# The reviewer's 30 messages (base verdicts, 65796e68f); 9 of them used to select the ledger.
+REVIEWER_30 = (
+    ("Review yesterday's billing patch for an off-by-one error.", 'clarify', 'oh-my-hermes', 'code-review'),
+    ('Fix the release branch merge and keep the changelog entries.', 'dispatch', 'ultrawork', 'ultrawork'),
+    ("Turn yesterday's commits into customer-facing release notes.", 'dispatch', 'content-operator', 'content-operator'),
+    ('Check whether the last commit fixed the regression in export.', 'dispatch', 'verification-gate', 'verification-gate'),
+    ("List the merged PR titles for yesterday's standup.", 'clarify', 'oh-my-hermes', 'verification-gate'),
+    ('Write a lesson for onboarding engineers to git commit signing.', 'clarify', 'oh-my-hermes', 'lifecycle-growth'),
+    ('Review my lesson plan before I commit it to the course repo.', 'clarify', 'oh-my-hermes', 'code-review'),
+    ('Merge the lesson-plan branch once its tests pass.', 'clarify', 'oh-my-hermes', 'verification-gate'),
+    ('Fix the script that counts commits made yesterday.', 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ("Review the fixes in yesterday's security patch, not our habits.", 'clarify', 'oh-my-hermes', 'code-review'),
+    ("Shorten the re-fixed commits' messages to fit our subject limit.", 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ('Translate the phrase fixes of fixes into Korean for this article.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('Fix the display of lessons from merged work in the report UI.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('The test is named fixes of fixes; review its assertion failure.', 'clarify', 'oh-my-hermes', 'code-review'),
+    ('Do not extract lessons from merged work; fix the merge conflict instead.', 'dispatch', 'git-workflow', 'git-workflow'),
+    ('어제 배포한 수정에서 로그인 에러가 났어요. 원인 찾아주세요.', 'dispatch', 'browser-operator', 'browser-operator'),
+    ('리뷰 받은 커밋을 합치고 테스트를 실행해 주세요.', 'dispatch', 'code-review', 'code-review'),
+    ('어제 머지한 PR 제목을 회의 자료에 넣어 주세요.', 'clarify', 'oh-my-hermes', 'meeting-brief'),
+    ('교훈 문서 오타 수정 후 커밋해 주세요.', 'clarify', 'oh-my-hermes', 'materials-package'),
+    ('커밋 서명에 관한 수업 교안을 리뷰해 주세요.', 'clarify', 'oh-my-hermes', 'code-review'),
+    ('지난주 머지 충돌을 고친 내역을 릴리스 노트로 써 주세요.', 'clarify', 'oh-my-hermes', 'verification-gate'),
+    ('어제 수업에서 쓴 git 예제의 커밋 메시지를 고쳐 주세요.', 'clarify', 'oh-my-hermes', 'build-failure-triage'),
+    ('다시 고친 커밋 메시지가 너무 길어요. 짧게 바꿔 주세요.', 'clarify', 'oh-my-hermes', 'voice-operator'),
+    ('다시 고친 것들 중 README 오타만 이번 릴리스에 머지해 주세요.', 'clarify', 'oh-my-hermes', 'code-review'),
+    ('다시 고친 커밋을 취소하고 이전 버전으로 롤백해 주세요.', 'clarify', 'oh-my-hermes', 'deploy-and-monitor'),
+    ('다시 고친 커밋에서 파일 하나가 빠졌어요. 추가해 주세요.', 'clarify', 'oh-my-hermes', 'materials-package'),
+    ('교훈 목록 API의 merge 필드 타입을 고쳐 주세요.', 'dispatch', 'oh-my-hermes', 'oh-my-hermes'),
+    ('어제 커밋한 강의 자료를 코드 리뷰해 주세요.', 'dispatch', 'code-review', 'code-review'),
+    ('이번 리뷰 의견을 반영하고 fix 커밋으로 올려 주세요.', 'dispatch', 'code-review', 'code-review'),
+    ('배포 브랜치에 어제 고친 커밋을 cherry-pick 해 주세요.', 'clarify', 'oh-my-hermes', 'build-failure-triage'),
+)
+
+# 20 messages holding a re-fix phrase without asking for lessons (base verdicts).
+REFIX_WITHOUT_LESSONS = (
+    ('Revert the fixes of fixes on the release branch.', 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ('Squash the fix of fix commits before we open the PR.', 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ('Rename the branch that holds the re-fixed commits.', 'dispatch', 'ultrawork', 'ultrawork'),
+    ('Cherry-pick the refixed commits onto hotfix/2.1.', 'dispatch', 'git-workflow', 'git-workflow'),
+    ('Who authored the fixes of fixes in the payments module?', 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ('Open an issue titled fix of fix for the flaky login test.', 'clarify', 'oh-my-hermes', 'build-failure-triage'),
+    ('Add a CI check that blocks fix of fix commits from merging.', 'clarify', 'oh-my-hermes', 'build-failure-triage'),
+    ('Reword the subject of the re-fixed commits to start with a verb.', 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ('Show me the diff of the refixed commits from last night.', 'clarify', 'oh-my-hermes', 'live-info-operator'),
+    ('Delete the fixes of fixes from the changelog draft.', 'clarify', 'oh-my-hermes', 'ultrawork'),
+    ('Translate fixes of fixes into French for the docs page.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('Write a regex that detects the phrase fix of fix in commit subjects.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('Run the tests again on the re-fixed commits and report failures.', 'dispatch', 'verification-gate', 'verification-gate'),
+    ('Tag the refixed commits as v2.0.1-rc1.', 'clarify', 'oh-my-hermes', 'release-cut'),
+    ('다시 고친 커밋들을 하나로 합쳐 주세요.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('다시 고친 커밋 목록을 CSV로 내보내 주세요.', 'dispatch', 'oh-my-hermes', 'oh-my-hermes'),
+    ('다시 고친 것들만 따로 브랜치로 빼 주세요.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('다시 고친 커밋의 작성자에게 슬랙으로 알려 주세요.', 'clarify', 'oh-my-hermes', 'automation-blueprint'),
+    ('다시 고친 것들 때문에 빌드가 깨졌는지 확인해 주세요.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+    ('다시 고친 커밋을 main에 리베이스해 주세요.', 'fallback', 'oh-my-hermes', 'oh-my-hermes'),
+)
+
+# Known limit, not pinned: phrases cannot tell negation apart, so these still reach
+# the ledger because they hold a re-fix phrase and a lesson cue.
+NEGATIONS_THAT_STILL_FLIP = (
+    'Do not write lessons about the fixes of fixes, just revert them.',
+    'No lessons needed for the re-fixed commits; squash them and push.',
+    '교훈은 필요 없고 다시 고친 커밋만 롤백해 주세요.',
+    'Skip the lessons and the retro, simply delete the fix of fix commits.',
+    "I don't want any lesson from the refixed commits, cherry-pick them to release.",
+)
+
 # One negative per English trigger phrase: the words appear, but only inside
 # longer words, so the phrase was not said.
 PHRASE_NEGATIVES = {
@@ -71,7 +138,6 @@ PHRASE_NEGATIVES = {
     "fixes of fixes": "list the fixes of fixesque names",
     "re-fixed commits": "list the re-fixed commitsmen",
     "refixed commits": "list the refixed commitsmen",
-    "lessons from merged work": "lessons from merged workflows in a retro",
 }
 
 
@@ -84,12 +150,31 @@ def _definition(name: str):
 
 
 class InstinctLedgerRoutingTests(unittest.TestCase):
-    def test_the_three_requests_dispatch_the_ledger(self) -> None:
+    def test_the_two_requests_dispatch_the_ledger(self) -> None:
         for message in REACHES_THE_LEDGER:
             with self.subTest(message=message):
                 route = _route(message)
                 self.assertEqual(route["action"], "dispatch")
                 self.assertEqual(route["selected_skill"], SKILL)
+
+    def test_a_lesson_request_without_a_re_fix_phrase_keeps_its_base_route(self) -> None:
+        route = _route("nightly lessons from merged work")
+        self.assertEqual((route["action"], route["selected_skill"], route["candidate_skill"]), ("clarify", "oh-my-hermes", "verification-gate"))
+
+    def test_a_re_fix_phrase_without_a_lesson_cue_never_dispatches_the_ledger(self) -> None:
+        self.assertEqual(len(REVIEWER_30), 30)
+        self.assertEqual(len(REFIX_WITHOUT_LESSONS), 20)
+        for message, action, selected, candidate in REVIEWER_30 + REFIX_WITHOUT_LESSONS:
+            with self.subTest(message=message):
+                route = _route(message)
+                self.assertNotEqual(route["selected_skill"], SKILL)
+                self.assertEqual((route["action"], route["selected_skill"], route["candidate_skill"]), (action, selected, candidate))
+
+    def test_negation_is_a_known_limit(self) -> None:
+        self.assertEqual(len(NEGATIONS_THAT_STILL_FLIP), 5)
+        for message in NEGATIONS_THAT_STILL_FLIP:
+            with self.subTest(message=message):
+                self.assertEqual(_route(message)["selected_skill"], SKILL)
 
     def test_thirty_other_uses_of_the_same_nouns_keep_their_base_verdict(self) -> None:
         self.assertEqual(len(MUST_NOT_CHANGE), 30)
@@ -131,7 +216,10 @@ class InstinctLedgerReferenceTests(unittest.TestCase):
             for template in builtin_skill_reference_templates()
             if template.skill_name == SKILL and template.relative_path == REFERENCE_PATH
         )
+        self.assertNotIn("on the first-parent history of the default branch", body)
         for needle in (
+            "non-merge fix commits in the window that are reachable from the default branch",
+            "follow the first-parent merges only here",
             "git blame --porcelain -L",
             "<fix>^",
             "first-parent merge",

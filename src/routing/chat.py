@@ -3886,27 +3886,31 @@ _MEMORY_RECALL_INCIDENT_CUES = (
     "forgot my preference",
     "memory was not used",
 )
-# Lessons taken from git history. Each phrase is a whole multi-word shape that
-# names re-fixed commits or the lessons drawn from merged work; "fix", "lesson",
-# "commit", "merge" and "review" alone also name ordinary work and are never
-# cues here. Matched as whole words (`_instinct_ledger_history_phrase_spoken`):
-# "fix of fix" must not read inside "fix of fixing the build".
+# Lessons taken from git history. A re-fix phrase alone also shows up when the
+# work is editing, reverting or reviewing such commits, so the fast path needs
+# BOTH a whole multi-word re-fix phrase and a lesson cue (`lesson`, `lessons`,
+# `교훈`). "fix", "commit", "merge" and "review" alone are never cues. English
+# phrases match as whole words: "fix of fix" must not read inside "fix of fixing
+# the build". Negation ("do not write lessons about the fixes of fixes") cannot
+# be told apart by phrases and is a known limit.
 _INSTINCT_LEDGER_HISTORY_PHRASES: tuple[str, ...] = (
     "fix of fix",
     "fixes of fixes",
     "re-fixed commits",
     "refixed commits",
-    "lessons from merged work",
     "다시 고친 커밋",
     "다시 고친 것들",
 )
+_INSTINCT_LEDGER_LESSON_CUE = re.compile(r"(?<![\w-])lessons?(?![\w-])|교훈")
 
 
 def _instinct_ledger_history_phrase_spoken(text: str, phrase: str) -> bool:
-    """True unless an English history phrase only appears inside a longer word."""
-    if phrase not in _INSTINCT_LEDGER_HISTORY_PHRASES or not phrase.isascii():
+    """A history phrase counts only as a whole word and next to a lesson cue."""
+    if phrase not in _INSTINCT_LEDGER_HISTORY_PHRASES:
         return True
-    return re.search(rf"(?<![\w-]){re.escape(phrase)}(?![\w-])", text) is not None
+    if phrase.isascii() and re.search(rf"(?<![\w-]){re.escape(phrase)}(?![\w-])", text) is None:
+        return False
+    return _INSTINCT_LEDGER_LESSON_CUE.search(text) is not None
 
 
 _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
