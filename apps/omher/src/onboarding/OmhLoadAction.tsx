@@ -7,5 +7,5 @@ import type { Bot } from "../lib/protocol";
 import { PluginLoad } from "../pages/PluginLoad";
 
 export function OmhLoadAction({ bot }: { bot: Bot }) {
-  return <PluginLoad bot={bot} plugin="omh" load="reload" testId="omh-load" />;
+  return <PluginLoad bot={bot} plugin="omh" load="reload" compact testId="omh-load" />;
 }

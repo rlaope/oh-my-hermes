@@ -26,12 +26,14 @@ function RestartLoad({ bot, testId }: { bot: Bot; testId: string }) {
   );
 }
 
-export function PluginLoad({ bot, plugin, load, testId = "plug-load" }: {
+export function PluginLoad({ bot, plugin, load, compact = false, testId = "plug-load" }: {
   bot: Bot;
   plugin: string;
   load: Load;
   /** The profile whose gateway serves the bot (the bridge's answer); the restart resolves it again on the press. */
   restartBot?: string;
+  /** Beside a line that already says the bot lacks it (slot 12's OmhPromptLine): the press alone, no sentence. */
+  compact?: boolean;
   testId?: string;
 }) {
   const s = useStore();
@@ -56,7 +58,11 @@ export function PluginLoad({ bot, plugin, load, testId = "plug-load" }: {
   };
   return (
     <span className="pl-load" data-testid={testId} data-load={st.load}>
-      {st.load === "failed" ? t("plug.sheet.loadFailed", { bot: bot.display_name, why: st.why ?? "" }) : t("plug.sheet.reload", { bot: bot.display_name })}{" "}
+      {st.load === "failed"
+        ? `${t("plug.sheet.loadFailed", { bot: bot.display_name, why: st.why ?? "" })} `
+        : compact
+          ? null
+          : `${t("plug.sheet.reload", { bot: bot.display_name })} `}
       {st.load === "loading" ? (
         <span className="rs-wait" role="status">
           {t("plug.sheet.loading")}
