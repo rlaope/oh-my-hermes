@@ -2438,11 +2438,8 @@ fn pi_approval(title: &str, options: &[String]) -> Option<(String, String, PiAsk
     Some((title, command, PiAsk::Approve { once, session, deny }))
 }
 
-/// OmO's own folder: `~/.omo` (the test build reads the recorded records under tests/fixtures/omo-home).
+/// OmO's own folder: `~/.omo`.
 fn omo_home_dir() -> Option<PathBuf> {
-    if cfg!(test) {
-        return Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("omo-home"));
-    }
     std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).filter(|h| !h.is_empty()).map(|h| PathBuf::from(h).join(".omo"))
 }
 
@@ -4472,8 +4469,17 @@ mod tests {
         x
     }
 
+    /// The OmO records recorded with the omo-13 streams (never the person's own `~/.omo`).
+    fn fixture_omo_home() -> Option<PathBuf> {
+        Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("omo-home"))
+    }
+
+    fn omo_pi() -> Pi {
+        Pi { omo_home: fixture_omo_home(), ..Pi::new("/w/proj", "OmO") }
+    }
+
     fn pi_up(label: &str, init: &[&str]) -> Pi {
-        let mut p = Pi::new("/w/proj", label);
+        let mut p = if label == "OmO" { omo_pi() } else { Pi::new("/w/proj", label) };
         p.start();
         for f in init {
             run(&mut p, &real(f));
@@ -5667,9 +5673,9 @@ mod tests {
             "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
             "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
             "codex-late" => (Box::new(Codex::new("/w/proj", Some("01a1ca24-1047-7ee0-aac2-faf093d44dbe"))), vec!["codex-12-late-step-init.jsonl"]),
-            "omo" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-init.jsonl"]),
-            "omo-batch" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-13-batch-init.jsonl"]),
-            "omo-single" => (Box::new(Pi::new("/w/proj", "OmO")), vec!["omo-13-single-init.jsonl"]),
+            "omo" => (Box::new(omo_pi()), vec!["omo-init.jsonl"]),
+            "omo-batch" => (Box::new(omo_pi()), vec!["omo-13-batch-init.jsonl"]),
+            "omo-single" => (Box::new(omo_pi()), vec!["omo-13-single-init.jsonl"]),
             "omp" => (Box::new(Pi::new("/w/proj", "oh-my-pi")), vec!["omp-ready.jsonl", "omp-init.jsonl"]),
             "pi" => (Box::new(Pi::new("/w/proj", "pi")), vec!["pi-init.jsonl"]),
             "pi-noauth" => (Box::new(Pi::new("/w/proj", "pi")), vec![]),

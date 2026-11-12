@@ -187,7 +187,7 @@ for (const theme of themes) {
     await shot(page, "omo-batch", theme);
     const rows = card.getByTestId("subagent-row");
     await expect(rows.getByTestId("subagent-line")).toHaveText(["FIRST_LINE: alpha line", "LINE_COUNT: 3"]);
-    for (const i of [0, 1]) await expect(rows.nth(i).locator(".sa-mark")).toHaveAttribute("title", /claude-haiku-5-5|Claude Haiku/i);
+    for (const i of [0, 1]) await expect(rows.nth(i).locator(".sa-mark")).toHaveAttribute("title", "Haiku 5.5");
     // the checklist, never the todo call's JSON
     await expect(page.locator(".msg").getByText('{"')).toHaveCount(0);
     // Plans: the same two, in the same state, with the same answers and times
