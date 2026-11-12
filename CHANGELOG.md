@@ -246,18 +246,19 @@ All notable changes will be documented here.
   drawn, so a runaway program no longer fills memory and Ctrl+C is answered at
   once. Measured against a model of the page written in Rust, not the app's
   window: with a page that needs 20 ms a message, ten seconds of `yes` held 15
-  MB instead of 1,211 MB, and Ctrl+C stopped the output after 0.3 s instead of
-  69 s; with a page that draws 100 MB/s, after 14 ms instead of 865 ms. A
-  session that is not the one on screen keeps drawing, so a background agent
-  is not held at that mark.
+  MB instead of 1,211 MB, and Ctrl+C stopped the output in under half a second
+  instead of 69 s; with a page that draws 100 MB/s, after 14 ms instead of 865
+  ms. A session that is not the one on screen keeps drawing, so a background
+  agent is not held at that mark.
   What did not get faster, as measured: throughput against the 100 MB/s page
   is unchanged (75.6 and 75.7 MB/s), a keystroke's echo is unchanged (31.7 and
   31.1 ms run alternately), and a page that needs 20 ms for every message
   draws 5.3% fewer bytes a second because its messages are smaller. The GPU
-  renderer is 2.2 to 3.4 times slower than the standard one on a full-screen
-  redraw in WebKit, so Auto uses the standard renderer on every platform
-  (nothing was measured on Windows or Linux) and On still tries the GPU. No
-  number here was taken in the Tauri window; the tables are in
+  renderer is 1.2 to 3.4 times slower than the standard one on a full-screen
+  redraw in WebKit, over two measurement runs (2.2, 3.4 and 1.3 times in one;
+  1.7, 3.0 and 1.2 in the other), so Auto uses the standard renderer on every
+  platform (nothing was measured on Windows or Linux) and On still tries the
+  GPU. No number here was taken in the Tauri window; the tables are in
   `apps/omher/bench/render/README.md` and `apps/omher/bench/pty/README.md`.
 
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
