@@ -62,7 +62,7 @@ export function Sidebar() {
         />
       </label>
       <NeedsStrip asks={asks} />
-      <section className="side-sec" data-testid="side-bots">
+      <section className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots">
         <div className="side-sh">{t("nav.bots")}</div>
         <nav className="bot-list" aria-label={t("nav.bots")}>
           {bots.map((b) => {
