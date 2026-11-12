@@ -38,6 +38,13 @@ that reads as template or cheap, with the change that fixes it:
   own art or a deliberate material, and on-screen product UI reads as a
   shipped app rather than bare boxes.
 
+When the first frame is the thumbnail, a value it shows is already at its final
+state there: a counter caught at zero or mid-roll puts the wrong number on the
+film's preview still. A film whose concept opens another way on purpose
+(`references/craft-workflow.md` has that intent written in `concept.md`) names
+the frame that serves as the still instead and passes its time to
+`finish.py --poster`.
+
 ## Frame checks before the first style frame
 
 Run these on the storyboard, then again on the rendered style frame. Each is a
@@ -75,6 +82,16 @@ measurement with a stated number, not an impression.
   family beyond the product or brand palette, or misses contrast, is REVISE
   before render.
 
+In an authored 9:16 frame, run these checks on a layout composed for that
+frame: content stacked down the height between the top and bottom zones that
+`references/craft-design.md` (Layout and safe areas) keeps clear. With
+`frame_fill`, record the y of the highest and the lowest content edge. A shrunk
+landscape layout, the 16:9 arrangement scaled to the narrow width with unused
+height under it that the storyboard does not name as intended space, is REVISE:
+recompose it for the tall frame. Captured footage that cannot be recomposed
+keeps its lane's framing (`references/game-capture.md`) or takes a virtual
+camera that follows the subject.
+
 ## Anti-slide evidence, not keyword approval
 
 Record `anti_slide_review` from actual segment and transition evidence. Compare
@@ -82,7 +99,10 @@ adjacent shots' hierarchy, focal geometry, media, pose and rhythm. Reject repeat
 headline/card/rail grammar when every shot is a centered title plus the same
 boxes/rail with only text/color swapped. Do not repair it by sprinkling particles
 or changing a palette. Recompose the narrative around the evidence/semantic object,
-change medium/focal scale/camera purpose, or remove an unnecessary card. A coherent
+change medium/focal scale/camera purpose, or remove an unnecessary card. Rhythm
+includes the arc a scene runs: two adjacent scenes that both build one value and
+then rest repeat one template even when their layouts differ, so give the second
+another arc, such as opening on its result. A coherent
 recurring motif is valid when it develops meaning; justify that from the output,
 not a checklist keyword or numeric quality score.
 
@@ -96,6 +116,28 @@ glow, palette or camera moves to hide it.
 moving strips and both entry/exit cut boundaries from real renders. Re-render and
 review the final encoded revision; approval of the earlier draft is not approval
 of the new file. Budget exhaustion with unresolved defects means REVISE/HOLD.
+
+## The no-context judge
+
+`references/craft-qa.md` (Critique) has a subagent with no context of the
+making judge the sheets, the frame strips and its question table. Three
+additions bind that pass to the record:
+
+- The record names who judged. Each keep/fix/rebuild row carries `judged_by`,
+  `maker` or `no_context`, and `artistic_verdict` says which of the two it
+  rests on. Where the host can start no fresh session the value stays `maker`
+  and the delivery says the no-context pass was not observed.
+- Ask one question before the table's own: what does each scene say, read from
+  the frames alone, and is anything misspelled, cut off or at odds with another
+  scene? The judge has no script, so the maker compares that reading with the
+  segment's `message`; a scene read differently from its message is fix or
+  rebuild.
+- The judge runs two rounds by default, a number the brief's revision budget
+  may change. Each round is a new session, so the second judge also has only
+  the frames and the questions. A rebuild still open after the last round goes
+  to the person with the judge's rows and the frames: they choose another
+  round, cutting the scene, or accepting the film with the defect named in the
+  delivery. Until they do, `artistic_verdict` stays REVISE.
 
 ## Four independent verdicts
 

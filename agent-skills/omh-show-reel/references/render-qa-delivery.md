@@ -121,6 +121,37 @@ files and rerun final-file checks. Explicitly name which locale samples were
 rendered and which remain contract-only; do not claim five-language fluency or
 font/TTS/render support from fixtures.
 
+Hand each tool report on as it was emitted. The JSON that `qa_check.py`,
+`motion_check.py` and `mix.py` print and the table `finish.py` prints are saved
+with the project and go to the next reader, another agent or the person, word
+for word, with every check row and every `limitations` line. A summary may sit
+beside a report, never in its place: a summary keeps the verdict and drops
+rows, and a dropped row can be the one that failed.
+
+## From a failed check to an edit
+
+Each name below is printed by the kit's own checkers. Find its row, make the
+edit, export again and run the same check on the new file. A policy value
+changes only when the brief's delivery target changed; moving a limit to clear
+a row leaves the same file. A printed name that is not below is a policy key
+outside the set `toolkit/README.md` lists: correct the key.
+
+| Printed name | What it found | The edit |
+| --- | --- | --- |
+| `muted mode contains undeclared audio` | The declared mode is muted and the file has an audio stream. | Export without the audio track, or declare the mode the brief asks for. |
+| `required audio stream missing` | The declared mode needs sound and the file has none. | Mux the mix into the master with `finish.py --audio`; a muted brief declares `muted` instead. |
+| `lufs outside +/-1` | Integrated loudness is more than 1 LU from the policy `lufs`, or was not measured. | Master the mix to the target again, encode and measure the encoded file. |
+| `true_peak ceiling` | True peak is above the policy `true_peak`, or was not measured. | Lower the master, leaving room for the encoder to raise peaks, and measure the encoded file. |
+| `max_bytes` | The file is larger than the size cap. | Encode the share copy at a lower rate and repeat every final-file check on it. |
+| `max_h264_level` | Defined under Measured export above. | Encode as H.264 at a level the delivery target plays. |
+| `hardware_decode` | Defined under Measured export above; a REVISE lists the decoder's lines in `hardware_decode_errors`. | Read those lines and encode with settings that decoder accepts. For HOLD, run the check on a macOS host or record playback on the target. |
+| `duration`, `fps`, `frames`, `width`, `height` | The measured value differs from the policy value, `duration` by more than one frame. | Compare `project.json`, `REEL.config` and the policy with the brief, correct the one that is wrong and render again. |
+| `probe_decode_measure` | HOLD: the file could not be probed, decoded or measured, and `reason` says why. | Fix the tool path or the export that `reason` names. Nothing counts as measured until it runs clean. |
+| `unannotated_stillness` | Defined under Measure motion above; `at` and `duration` place it. | Add an event there or shorten the stretch (`references/craft-workflow.md`, Common problems, lists the kinds). A hold the brief's `motion_limits` planned goes in `--holds` with its reason. |
+| `still_share_exceeded` | Defined under Measure motion above, for the kinetic profile; holds do not lower it. | Cut or shorten the rests before the end card, and pass the end card's measured length to `--endcard`. |
+| `FAIL` on a `finish.py` row | That output is not yuv420p in tv range, or its loudness or peak is outside the target `finish.py` prints beside the flag. | Colour: encode through `render.mjs` and `finish.py` only. Loudness or peak: master again as in the `lufs` and `true_peak` rows. |
+| `flash_review_required` | Defined under Measure motion above; the report gives the count, not the time. | Find the second on `contact_sheet.py --around` strips of the cuts, split the area that changes at once or soften the flip into a wipe (`references/craft-techniques-2.md`, T20), render that range with the final `--sub` setting and measure again. |
+
 ## Delivery: show_reel_delivery_manifest/v1
 
 Separate generated, attached, received and published states with exact file

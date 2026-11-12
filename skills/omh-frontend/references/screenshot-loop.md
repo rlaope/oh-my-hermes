@@ -38,7 +38,10 @@ work lands.
    counterpart of the TUI's 80x24 and 120x40; add the widths the
    product actually targets. Capture each in every theme the contract
    defines, and once with `prefers-reduced-motion: reduce` for any surface
-   that animates.
+   that animates. Take the 375 capture with touch and mobile-user-agent
+   emulation on when the session can set them; a width-only capture is
+   named as such. A surface people use on a phone also goes through
+   `references/mobile-density-gate.md`.
 3. Compare each capture against the comparison target, side by side.
 4. List every difference — spacing, weight, color, alignment,
    truncation, state treatment — however small. A difference you did

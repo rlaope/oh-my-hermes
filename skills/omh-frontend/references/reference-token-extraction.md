@@ -41,6 +41,34 @@ selected, and only its recorded findings enter the contract.
   against it side by side — and verify the implementation is a reusable
   design-system build, not a screenshot-matched one-off.
 
+## Skeleton versus brand
+
+A reference carries two layers: a skeleton (layout, spacing rhythm,
+component anatomy, motion) and a brand (colour and type). They are taken
+separately.
+
+- **A project that already has a brand or design system** takes skeleton and
+  motion from the reference, and colour and type from its own brand. Taking
+  the reference's colour and type as well would replace the brand with the
+  reference.
+- **Colour and type are extracted too** when no brand exists yet, or when the
+  user asked to match the reference. Record which of the two applied in the
+  Research Log.
+- **Several references** are rebuilt on one spacing unit, one grid and one
+  type scale, with one transition treatment across all borrowed sections.
+  Stacked as they came, they read as several sites on one page.
+- **Drop what only meant something for the reference's owner**: its mascot,
+  its seasonal banner, its menu names.
+
+## Remove traces before it leaves the team
+
+Before a result goes outside the team, search it for traces of the
+reference: its name in titles, comments and metadata, redrawn copies of its
+artwork, and working notes that name it. The search is a command whose
+output is in hand; reading the files does not count. The result's own copy
+does not name the reference either. Keep the Research Log, which stays with
+the team, as the one place the reference is named.
+
 ## Boundary
 
 Extraction produces a prepared contract. Rendered comparisons, screenshots,
