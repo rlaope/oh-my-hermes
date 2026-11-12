@@ -62,8 +62,14 @@ RULES = (
     "so allow becomes ask, ask stays ask and deny stays deny, for blanket and pattern rules alike;",
     "OpenCode is not started and the chat says so in one sentence; omher reads and writes none of OpenCode's own files,",
     "never its always-allow.",
-    "the only other argument continues a conversation, with an id the shell checks is a UUID:",
+    "the only other arguments are one that continues a conversation, with an id the shell checks is a UUID:",
     "`--resume <id>` for Claude Code, `--session <id>` for OmO.",
+    "A Claude Code chat also gets `--add-dir <home>/.omher/session-files/<session id>`: exactly that session's own"
+    " attachment folder (rule 26), passed as one argument, never a parent folder and never the home folder;",
+    "the shell makes that folder before Claude Code starts (Claude Code honours only a folder that exists then),"
+    " so reading a file the person attached needs no approval card, while a read anywhere else outside the"
+    " session's folder still asks.",
+    "The UI sends only the session id (`s` and digits), never a path;",
     "DSH is DeepSeek Harness only:",
     "never another `dsh` on PATH.",
     "A DSH chat runs one `dsh --profile headless --patch <home>/.omher/dsh/headless.patch.yml --json -` per message on pipes,",
@@ -711,6 +717,34 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             self.assertIn(needle, start)
         self.assertIn("pub(crate) fn spawn<F>", self.chat)
 
+    def test_claude_reads_only_its_own_attachment_folder_without_a_card(self) -> None:
+        """Rule 11: Claude Code's one extra argument is `--add-dir` + the session's own attachment folder as ONE argv
+        element: made by `session_files::session_dir` from the session id (never a path from the page), before the
+        start, never a parent and never the home folder; no other agent gets it."""
+        start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn('if let Some(dir) = files.filter(|_| agent_id == "claude") {', start)
+        self.assertIn("argv.extend(add_dir_args(&argv[0], dir));", start)
+        self.assertNotIn('"--add-dir"', start)  # the flag itself lives in add_dir_args only
+        add = self.chat.split("fn add_dir_args", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'"--add-dir"', add), ['"--add-dir"', '"--add-dir"'])
+        self.assertIn('vec!["--add-dir".into(), dir]', add)
+        self.assertNotIn("parent()", add)
+        self.assertNotIn("join(", add)
+        self.assertEqual(self.chat.count('"--add-dir"'), 2)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        sig = re.search(r"async fn chat_start\((.*?)\) -> ", lib, re.S)
+        body = lib[sig.end():].split("\n}\n", 1)[0]
+        self.assertIn('("claude", Some(s)) => user_home().and_then(|h| session_files::session_dir(&h, s)).ok(),', body)
+        self.assertIn("files.as_deref()", body)
+        self.assertNotIn("parent()", body)
+        files = (SHELL / "session_files.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        made = files.split("pub fn session_dir", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("if !valid_session(session) {", "d.is_symlink()", "let dir = root.join(session);", "fs::create_dir_all(&dir)"):
+            self.assertIn(needle, made)
+        # the UI passes the session id, never a path
+        host = (UI_SRC / "sessions" / "host.ts").read_text(encoding="utf-8")
+        self.assertIn('invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, account: account ?? null, session: session ?? null, onEvent: ch })', host)
+
     def test_acp_agents_turn_off_files_and_terminal_and_continue_inside_the_protocol(self) -> None:
         """Rule 11: the ACP adapter offers the agent no file access and no terminal, a conversation id travels in
         `session/resume` (checked by a strict pattern), OpenCode's only extra variable is the fixed ask rule, and an
@@ -800,7 +834,8 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIsNotNone(sig)
         params = {p.split(":")[0].strip() for p in sig.group(1).split(",") if ":" in p}
         # `account` names the account a session restarted after an app restart ran with (session_env_for checks it)
-        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "on_event"})
+        # `session` is the SESSIONS id (`s` and digits) whose attachment folder a Claude Code chat may read (rule 11)
+        self.assertEqual(params, {"shell", "agent", "cwd", "resume", "account", "session", "on_event"})
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
         self.assertIn("chats.start_agent(&agent", body)
         self.assertNotIn(".spawn(", body)

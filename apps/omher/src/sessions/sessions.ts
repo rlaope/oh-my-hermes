@@ -385,7 +385,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const proc: ChatProc = { kind: "agent" };
     procs.set(id, proc);
     try {
-      proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r));
+      proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r), id);
       if (procs.get(id) !== proc) {
         // closed while starting
         void host.chatClose(proc.hostId).catch(() => undefined);
