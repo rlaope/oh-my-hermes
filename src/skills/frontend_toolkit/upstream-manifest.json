@@ -14,10 +14,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "d42633ecd936145041951cf06a94e4524a0e26f31b1f3cb9e2a2e3edb9577e41",
+      "local_sha256": "4cb82055a1fa51eecbc655f0cb80fba6b3bb53630fec26f2d2c3f5e44222a727",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/frontend_toolkit/README.md",
-      "source_sha256": "d42633ecd936145041951cf06a94e4524a0e26f31b1f3cb9e2a2e3edb9577e41",
+      "source_sha256": "4cb82055a1fa51eecbc655f0cb80fba6b3bb53630fec26f2d2c3f5e44222a727",
       "upstream": []
     },
     "examples/phone-clean.html": {
@@ -44,10 +44,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "23fa6cdc4d0fd71fb6a0cab3d26b3382ef4f223dc10936cc4ecb31109f50d67d",
+      "local_sha256": "01e02dde40accfa2287fd79c027cf7ac9abb2d761e6b7881127bccdcb90af626",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/frontend_toolkit/scripts/phone_check.py",
-      "source_sha256": "23fa6cdc4d0fd71fb6a0cab3d26b3382ef4f223dc10936cc4ecb31109f50d67d",
+      "source_sha256": "01e02dde40accfa2287fd79c027cf7ac9abb2d761e6b7881127bccdcb90af626",
       "upstream": []
     }
   },

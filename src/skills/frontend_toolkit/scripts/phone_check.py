@@ -75,9 +75,20 @@ PAGE_SCRIPT = """
   // A box fixed to the viewport does not move with the page, so its place is
   // its viewport rectangle; adding the scroll offset would put a control parked
   // above the screen back inside the page once the page has scrolled.
+  // `position: fixed` alone does not say that: under an ancestor with a
+  // transform, a filter or paint containment the box is fixed to that ancestor
+  // and scrolls with the page. Chromium gives such a box that ancestor as its
+  // offsetParent and gives a box fixed to the viewport none, so the walk goes
+  // on from the ancestor, which may itself be fixed to the viewport.
   const fixedToViewport = (el) => {
-    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
-      if (getComputedStyle(node).position === 'fixed') return true;
+    let node = el;
+    while (node && node.nodeType === 1) {
+      if (getComputedStyle(node).position === 'fixed') {
+        if (!node.offsetParent) return true;
+        node = node.offsetParent;
+      } else {
+        node = node.parentElement;
+      }
     }
     return false;
   };
@@ -241,7 +252,12 @@ def safe_path(value):
     if ".." in path.parts:
         raise ValueError("path traversal is not accepted")
     path = path.absolute()
-    if any(part.is_symlink() and not system_alias(part) for part in (path, *path.parents)):
+    try:
+        linked = any(part.is_symlink() and not system_alias(part) for part in (path, *path.parents))
+    except OSError as exc:
+        # A directory that cannot be searched cannot be checked either; refuse it as a bad path.
+        raise ValueError(f"path could not be checked: {exc.strerror}") from exc
+    if linked:
         raise ValueError("symlink paths are not accepted")
     return path
 

@@ -279,6 +279,16 @@ class OfflineCliTests(Fixture):
                 api.write_new_file(shot, b"other")
         self.assertEqual(shot.read_bytes(), b"bytes")
 
+    @POSIX_ONLY
+    def test_unsearchable_directory_is_refused_not_crashed(self):
+        if os.geteuid() == 0:
+            self.skipTest("root can search every directory")
+        locked = self.root / "locked"
+        (locked / "inner").mkdir(parents=True)
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o700)
+        self.refused([CLEAN, "--shot", locked / "inner" / "shot.png"], "path could not be checked")
+
     def test_shot_is_written_once_when_the_path_stays_new(self):
         shot = self.root / "shot.png"
         with patch_modules(fake_playwright(lambda: None)):
@@ -372,6 +382,8 @@ class PureHelperTests(unittest.TestCase):
         self.assertIn("firstOnPage(opts.action_selector)", api.PAGE_SCRIPT)
         # A control fixed to the viewport is judged by its viewport box, not by box plus scroll.
         self.assertIn("if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;", api.PAGE_SCRIPT)
+        # `position: fixed` under a containing ancestor is not fixed to the viewport.
+        self.assertIn("if (!node.offsetParent) return true;", api.PAGE_SCRIPT)
 
     def test_page_script_takes_thresholds_and_list_limit_as_arguments(self):
         api = helper_api()
@@ -562,6 +574,49 @@ class BrowserTests(Fixture):
     def test_fixed_control_on_screen_is_placed_by_its_viewport_box(self):
         report = self.measure(self.scrolled_page("pinned.html", 20))
         self.assertEqual(report["first_action_y"], 20)
+
+    def contained_page(self, name, containing, fixed_top):
+        # A `position: fixed` control under an ancestor that makes its own
+        # containing block is fixed to that ancestor and scrolls with the page.
+        page = self.root / name
+        page.write_text('<!doctype html><meta name="viewport" content="width=device-width"><style>'
+                        'body{margin:0;height:2500px} a,button{display:block;width:120px;height:48px}'
+                        ' #real{position:absolute;top:150px}</style>'
+                        f'<div style="position:absolute;top:0;left:0;width:200px;{containing}">'
+                        f'<button style="position:fixed;top:{fixed_top}px">In the page</button></div>'
+                        '<button id="real">Real</button>'
+                        '<script>addEventListener("load", () => scrollTo(0, 200))</script>')
+        return page
+
+    def test_fixed_under_a_containing_ancestor_is_a_page_control(self):
+        # Scrolled by 200 px, the control sits at document y 20 (viewport -180).
+        # It is reachable by scrolling back, so it is the first action, at 20;
+        # read as fixed to the viewport it was skipped and 150 was reported.
+        for name, containing in (("transform", "transform:translateZ(0)"), ("filter", "filter:blur(0px)"),
+                                 ("contain", "contain:paint"), ("will-change", "will-change:transform")):
+            with self.subTest(containing=name):
+                report = self.measure(self.contained_page(f"contained-{name}.html", containing, 20))
+                self.assertEqual(report["first_action_y"], 20)
+
+    def test_fixed_under_a_containing_ancestor_is_placed_in_page_px(self):
+        # At 350 px inside the ancestor the control is at document y 350
+        # (viewport 150 after the scroll); read as fixed to the viewport it
+        # was reported at its viewport position.
+        page = self.contained_page("contained-low.html", "transform:translateZ(0)", 350)
+        report = self.measure(page, "--data", "div > button")
+        self.assertEqual(report["first_action_y"], 350)
+        self.assertEqual(report["first_data_y"], 350)
+
+    def test_fixed_ancestor_inside_a_containing_ancestor_is_followed_to_the_top(self):
+        # The control's own fixed ancestor is fixed to a transformed box, and
+        # that box is fixed to the viewport: the control does not scroll.
+        page = self.root / "nested.html"
+        page.write_text('<!doctype html><meta name="viewport" content="width=device-width"><style>'
+                        'body{margin:0;height:2500px} a{display:block;width:120px;height:48px}</style>'
+                        '<div style="position:fixed;top:30px;left:0;transform:translateZ(0)">'
+                        '<div style="position:fixed;top:10px;left:0"><a href="#x">Pinned</a></div></div>'
+                        '<script>addEventListener("load", () => scrollTo(0, 200))</script>')
+        self.assertEqual(self.measure(page)["first_action_y"], 40)
 
     def test_bad_selector_is_exit_2(self):
         self.refused([str(CLEAN), "--data", "li["], "measuring failed")
