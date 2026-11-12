@@ -128,7 +128,7 @@ export type MessageItem = {
   files?: SentFile[];
   /** user rows only: the prompt text actually sent when it differs from `text` (files add `@file:` refs). */
   sent?: string;
-  /** user rows only: the skills its `/name` tokens called, drawn as pills in the bubble. */
+  /** user rows only: the skills its `$name` tokens called, drawn as pills in the bubble. */
   skills?: string[];
 };
 
@@ -1215,7 +1215,7 @@ export interface Actions {
   init(): Promise<void>;
   selectBot(bot: string): Promise<void>;
   /** Sends to the main chat; a "Reply there" chip goes along as `reply_to` and is then cleared. Skill tokens
-   *  (`./name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
+   *  (`$name`) go out hoisted to the front as `/name`; the bubble keeps the text as typed. */
   send(text: string): Promise<void>;
   /** Put (or clear, with null) the composer's "Reply there" chip for a bot. Sends nothing. */
   setReplyTo(chip: ReplyChip | null, bot?: string): void;
@@ -1286,7 +1286,7 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
-  /** The bot's skills for the composer's `/` picker, read once per bot; [] when the bridge cannot list them. */
+  /** The bot's skills for the composer's `$` picker, read once per bot; [] when the bridge cannot list them. */
   skills(bot: string): Promise<Skill[]>;
   /** Channel names for Slack / Discord link chips, read once per bot; empty when the bridge cannot say. */
   linkPlaces(bot: string): Promise<LinkPlaces>;

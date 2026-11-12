@@ -5,7 +5,7 @@ import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
 import { AttachButton, Chips, chipsFor, useDropZone, type Chip } from "./Attach";
 import "./attach.css";
 import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
-import { findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
+import { SIGIL, findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
 import { commandQuery, matchCommands, pickText, type AgentCommand } from "./commands";
 import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
@@ -16,10 +16,10 @@ const MAX_H = 200;
 /** Autosizing textarea with a + at its left edge for files (menu, drop on the chat, paste). Enter sends,
  * Shift+Enter breaks the line, Stop interrupts. Files go first (`chat.attach`), then
  * the text; if one fails nothing is sent and the chips stay. A "Reply there" chip sits above the text: the
- * next message points the bot at that thread (omher posts nothing). With `skills`, `/` at the start or after a
- * space opens the bot's skills, anywhere in the message, and only while one matches; a `/name` token is drawn as a
+ * next message points the bot at that thread (omher posts nothing). With `skills`, `$` at the start or after a
+ * space opens the bot's skills, anywhere in the message, and only while one matches; a `$name` token is drawn as a
  * gray pill by a mirror layer under the textarea (same font, padding and wrapping, scrolled with it), and goes out
- * hoisted to the front (store `send`). `./name` is plain text. */
+ * hoisted to the front as `/name` (store `send`). `/name` and `./name` go out as typed. */
 export function Composer({
   bot,
   running,
@@ -50,7 +50,7 @@ export function Composer({
   onClearReply?: () => void;
   /** Placeholder while `offline` (default: "<bot> is offline"). */
   offlineText?: string;
-  /** Offer the bot's skills on `/` (a bot's main chat). */
+  /** Offer the bot's skills on `$` (a bot's main chat). */
   skills?: boolean;
   /** An agent's own commands and skills, listed when the box starts with `/` (or `$`); none = no menu. */
   commands?: AgentCommand[];
@@ -76,14 +76,15 @@ export function Composer({
   const has = text.trim().length > 0 || good.length > 0;
   const store = useStore();
 
-  // skills: read once, the first time the text has a `/` where a token can start (the store keeps the list per bot)
+  // skills: read once, the first time the text has a `$` where a token can start, or is a single `/word` (the
+  // hint below says which of the two a skill takes). The store keeps the list per bot.
   const [skills, setSkills] = useState<Skill[] | null>(null);
   const [caret, setCaret] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [active, setActive] = useState<number | null>(null);
   const placeCaret = useRef<number | null>(null);
-  const wantSkills = skillsOn && /(^|\s)\//.test(text);
+  const wantSkills = skillsOn && (/(^|\s)\$/.test(text) || /^\/[\w-]*$/.test(text));
   const loadSkills = store.skills;
   useEffect(() => {
     if (!wantSkills || skills) return;
@@ -99,7 +100,7 @@ export function Composer({
   const fragKey = frag ? `${frag.start}:${frag.query}` : null;
   const items = useMemo(() => (frag && skills ? matchSkills(skills, frag.query) : []), [skills, fragKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // a row is chosen from the start only when what is typed begins a skill's name. A name that merely contains it
-  // (`/new` in `competitor-news-monitor`) is listed with no row chosen, so Enter still sends Hermes' own command.
+  // (`$5` in `p5js`), or matches only in other letter case (`$HOME`), is listed with no row chosen: Enter sends.
   const at = active === null ? leadRow(items, frag?.query ?? "") : Math.min(active, items.length - 1);
   useEffect(() => setActive(null), [fragKey]);
 
@@ -110,7 +111,7 @@ export function Composer({
   const [cmdActive, setCmdActive] = useState(0);
   const [cmdDismissed, setCmdDismissed] = useState<string | null>(null);
   const cmdOpen = !!cmd && focused && cqKey !== cmdDismissed;
-  // no popup when no skill matches (a path such as `/tmp` sends on the first Enter); the agent's own menu wins
+  // no popup when no skill matches (`$20`, `$HOME` send on the first Enter); the agent's own menu wins
   const picking = !!frag && focused && fragKey !== dismissed && items.length > 0 && !cmdOpen;
   const cmdAt = cmd ? Math.min(cmdActive, Math.max(cmd.shown.length - 1, 0)) : 0;
   useEffect(() => setCmdActive(0), [cqKey]);
@@ -171,12 +172,12 @@ export function Composer({
 
   const trackCaret = (el: HTMLTextAreaElement) => setCaret(el.selectionStart === el.selectionEnd ? el.selectionStart : null);
 
-  /** Put `/name ` where the `/` fragment is (the rest of its word included) and the caret after it. */
+  /** Put `$name ` where the `$` fragment is (the rest of its word included) and the caret after it. */
   const pick = (s: Skill) => {
     if (!frag || caret === null) return;
     let end = caret;
     while (end < text.length && !/\s/.test(text[end])) end += 1;
-    const put = `/${s.name} `;
+    const put = `${SIGIL}${s.name} `;
     const next = text.slice(0, frag.start) + put + text.slice(end).replace(/^ /, "");
     placeCaret.current = frag.start + put.length;
     setCaret(frag.start + put.length);
@@ -241,9 +242,19 @@ export function Composer({
     }
   };
 
-  // the `/skill` hint, where there is no list to pick from (a bot without skills, a bridge without skills.list);
-  // a chat with its agent's own menu shows that instead
-  const slash = !commands && /^\/[\w-]*$/.test(text) && (!skillsOn || skills?.length === 0);
+  // one line above the box while it holds a single `/word` or `$word`. "sigil": a bot chat's `/` is a command, a
+  // skill is `$name`. "none": there is no list to pick from (a bot without skills, a bridge without skills.list),
+  // so the whole name goes at the start with a slash. A chat with its agent's own menu shows that instead.
+  const lead = commands ? undefined : /^([/$])[\w-]*$/.exec(text)?.[1];
+  const hint: "sigil" | "none" | null = !lead
+    ? null
+    : !skillsOn
+      ? lead === "/" ? "none" : null
+      : !skills
+        ? null // the list is being read
+        : !skills.length
+          ? "none"
+          : lead === "/" ? "sigil" : null;
   const showStop = running && !has;
 
   return (
@@ -251,9 +262,12 @@ export function Composer({
       {overlay}
       {picking && <SkillPicker items={items} active={at} onPick={pick} onHover={setActive} popRef={pop} />}
       {cmdOpen && cmd && <CommandPicker items={cmd.shown} more={cmd.total - cmd.shown.length} active={cmdAt} onPick={pickCommand} onHover={setCmdActive} popRef={cmdPop} />}
-      {slash && (
-        <div className="hint" role="note" data-testid="skill-hint">
-          <span className="hint-k">/skill</span> {tx("cmp.skillHint", { example: <code>/plan</code>, bot: bot.display_name })}
+      {hint && (
+        <div className="hint" role="note" data-testid="skill-hint" data-kind={hint}>
+          <span className="hint-k">{hint === "sigil" ? "$skill" : "/skill"}</span>{" "}
+          {hint === "sigil"
+            ? tx("cmp.skillSigil", { example: <code>$plan</code>, bot: bot.display_name })
+            : tx("cmp.skillHint", { example: <code>/plan</code>, bot: bot.display_name })}
         </div>
       )}
       <div className={`composer${has ? " has" : ""}`} data-testid="composer-box">

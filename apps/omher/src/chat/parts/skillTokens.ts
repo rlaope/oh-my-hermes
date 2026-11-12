@@ -1,21 +1,21 @@
-// Skill tokens in the composer: `/name`, where `name` is one of the bot's skills. A token stands after the start
-// of the text or whitespace and before the end, whitespace or closing punctuation, anywhere in the message, and
-// never inside inline code or a fenced block. `./name` is plain text: a `/` after any other character (`./`,
-// `and/or`, a URL, `src/plan`) never starts a token, so `./name` is how a person writes a skill's name without
-// calling it. The person sees what they typed; the wire carries each token hoisted to the front as `/name`
-// (OMH's router and Hermes read a skill sigil at the start of the message).
+// Skill tokens in the composer: `$name`, where `name` is one of the bot's skills (the sigil Codex uses for a
+// skill). A token stands after the start of the text or whitespace and before the end, whitespace or closing
+// punctuation, anywhere in the message, and never inside inline code or a fenced block. `/` is not a skill sigil
+// here: `/name` is one of Hermes' own commands or a skill typed the Hermes way, and it goes out as typed, as do
+// `./name` and a path. The person sees what they typed; the wire carries each token hoisted to the front as
+// `/name` (OMH's router and Hermes read a skill at the start of the message, with a slash).
 
 import type { Skill } from "../../lib/protocol";
 
 export interface SkillToken {
   name: string;
-  /** `text.slice(start, end)` is `/name`. */
+  /** `text.slice(start, end)` is `$name`. */
   start: number;
   end: number;
 }
 
 /** Whether the character at `at` ends a token: the end of the text, whitespace, closing punctuation, or a full
- * stop that does not start a file extension ("/plan." ends a sentence; "/plan.md" is a path, not a skill). */
+ * stop that does not start a file extension ("$plan." ends a sentence; "$plan.md" is not a skill). */
 const closes = (text: string, at: number) => at >= text.length || /[\s,;:!?)]/.test(text[at]) || (text[at] === "." && !/[\w/]/.test(text[at + 1] ?? ""));
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
@@ -54,13 +54,17 @@ export function codeRanges(text: string): [number, number][] {
 
 const inside = (ranges: [number, number][], i: number) => ranges.some(([s, e]) => i >= s && i < e);
 
-/** Every skill token in `text`, in order. Longer names win (`/plan-x` is `plan-x` when both exist). */
+/** What a person types before a skill's name. */
+export const SIGIL = "$";
+
+/** Every skill token in `text`, in order. Longer names win (`$plan-x` is `plan-x` when both exist). Names match
+ * as written, so a shell variable in capitals (`$HOME`) is not a skill. */
 export function findTokens(text: string, names: readonly string[]): SkillToken[] {
-  if (!names.length || !text.includes("/")) return [];
+  if (!names.length || !text.includes(SIGIL)) return [];
   const byLength = [...names].filter(Boolean).sort((a, b) => b.length - a.length);
   const code = codeRanges(text);
   const out: SkillToken[] = [];
-  for (let i = text.indexOf("/"); i >= 0; i = text.indexOf("/", i + 1)) {
+  for (let i = text.indexOf(SIGIL); i >= 0; i = text.indexOf(SIGIL, i + 1)) {
     if ((i > 0 && !/\s/.test(text[i - 1])) || inside(code, i)) continue;
     const name = byLength.find((n) => text.startsWith(n, i + 1) && closes(text, i + 1 + n.length));
     if (!name) continue;
@@ -70,10 +74,10 @@ export function findTokens(text: string, names: readonly string[]): SkillToken[]
   return out;
 }
 
-/** The text to send: each token taken out and put in front as `/name` (in order, once each). Where a token was,
- * the whitespace around it becomes one run (a line break wins). The slash words a message starts with (Hermes
- * commands, skills) stay first, as typed, and the hoisted skills follow them. Text with no token after those
- * words comes back unchanged. */
+/** The text to send: each `$name` token taken out and put in front as `/name` (in order, once each). Where a
+ * token was, the whitespace around it becomes one run (a line break wins). The slash words a message starts with
+ * (Hermes commands, a skill typed as `/name`) stay first, as typed, and the hoisted skills follow them. Text with
+ * no token comes back unchanged. */
 export function toWire(text: string, names: readonly string[]): string {
   const typed = /^\s*\/[\w-]+(?:[ \t]+\/[\w-]+)*(?=\s|$)/.exec(text)?.[0] ?? "";
   const tokens = findTokens(text, names).filter((t) => t.start >= typed.length);
@@ -99,14 +103,14 @@ export function sentTokens(text: string, skills: readonly string[] | undefined):
   return skills?.length ? findTokens(text, skills) : [];
 }
 
-/** The `/query` the caret is typing, or null: `/` after the start or whitespace, outside code, and the caret
- * at the end of a run with no whitespace, slash or backtick. */
+/** The `$query` the caret is typing, or null: `$` after the start or whitespace, outside code, and the caret
+ * at the end of a run with no whitespace, `$`, slash or backtick. */
 export function fragmentAt(text: string, caret: number): { start: number; query: string } | null {
   let k = Math.min(caret, text.length);
   const end = k;
-  while (k > 0 && !/[\s/`]/.test(text[k - 1])) k -= 1;
+  while (k > 0 && !/[\s$/`]/.test(text[k - 1])) k -= 1;
   const start = k - 1;
-  if (start < 0 || text[start] !== "/" || (start > 0 && !/\s/.test(text[start - 1]))) return null;
+  if (start < 0 || text[start] !== SIGIL || (start > 0 && !/\s/.test(text[start - 1]))) return null;
   if (inside(codeRanges(text), start)) return null;
   return { start, query: text.slice(k, end) };
 }
@@ -118,9 +122,9 @@ export function matchSkills(skills: readonly Skill[], query: string): Skill[] {
   return [...head, ...skills.filter((s) => !s.name.toLowerCase().startsWith(q) && s.name.toLowerCase().includes(q))];
 }
 
-/** The row the picker opens on for `items = matchSkills(skills, query)`: the first when `query` begins its name,
- * none (-1) when the matches only contain it. Hermes' own commands are not skills, and a short one sits inside many
- * skill names (`/new` in `competitor-news-monitor`): Enter must send it, not put that skill in its place. */
+/** The row the picker opens on for `items = matchSkills(skills, query)`: the first when `query`, as written,
+ * begins its name; none (-1) otherwise. A price or a shell variable is not a skill: `$5` sits inside `p5js` and
+ * `$HOME` is `homeassistant` in capitals, and for those Enter must send what was typed, not put a skill in. */
 export function leadRow(items: readonly Skill[], query: string): number {
-  return items.length && items[0].name.toLowerCase().startsWith(query.toLowerCase()) ? 0 : -1;
+  return items.length && items[0].name.startsWith(query) ? 0 : -1;
 }

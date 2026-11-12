@@ -7,7 +7,7 @@ import { sentTokens, type SkillToken } from "./skillTokens";
 import { withLinks } from "./LinkChip";
 import "./skills.css";
 
-/** The `/` skill picker above the composer: one row per skill (name as a monospace pill, one-line description).
+/** The `$` skill picker above the composer: one row per skill (name as a monospace pill, one-line description).
  * Keys stay in the textarea (the composer moves `active`); a row takes the mouse without taking focus. */
 export function SkillPicker({
   items,
@@ -115,7 +115,7 @@ export function CommandPicker({
 }
 
 /** What the composer's mirror layer draws under the textarea: the same text, transparent, with each token's
- * gray pill and a zero-width mark at `anchor` (where the `/` being typed starts) to place the picker. */
+ * gray pill and a zero-width mark at `anchor` (where the `$` being typed starts) to place the picker. */
 export function mirrorText(text: string, tokens: SkillToken[], anchor: number | null, anchorRef: Ref<HTMLSpanElement>): ReactNode[] {
   const out: ReactNode[] = [];
   let at = 0;
