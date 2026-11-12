@@ -78,7 +78,10 @@ class ShowReelGapRuleTests(unittest.TestCase):
         self.assertEqual({f"references/{page.name}" for page in pages}, set(manifest["references"]))
         for page in pages:
             with self.subTest(page=page.name):
-                self.assertEqual(hashlib.sha256(page.read_bytes()).hexdigest(),
+                # The digests are of the committed bytes; a Windows checkout with
+                # autocrlf hands these pages over with CRLF line endings.
+                committed = page.read_bytes().replace(b"\r\n", b"\n")
+                self.assertEqual(hashlib.sha256(committed).hexdigest(),
                                  manifest["references"][f"references/{page.name}"]["local_sha256"])
 
 

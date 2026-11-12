@@ -363,17 +363,17 @@ def open_directory_without_links(directory):
     """
     plain = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
     held = os.open(directory.anchor, plain)
-    try:
-        walked = Path(directory.anchor)
-        for part in directory.parts[1:]:
-            walked = walked / part
+    walked = Path(directory.anchor)
+    for part in directory.parts[1:]:
+        walked = walked / part
+        # The directory held so far is closed whether or not the next one opens,
+        # so a refused step leaves no descriptor behind.
+        try:
             flags = plain if system_alias(walked) else plain | os.O_NOFOLLOW
             following = os.open(part, flags, dir_fd=held)
+        finally:
             os.close(held)
-            held = following
-    except BaseException:
-        os.close(held)
-        raise
+        held = following
     return held
 
 

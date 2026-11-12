@@ -68,7 +68,7 @@ def builtin_skill_support_templates():
     from .biomedical_evidence_skill import biomedical_evidence_support_templates
     from .molecular_docking_skill import molecular_docking_support_templates
     from .ai_job_search_skill import ai_job_search_support_templates
-    from .frontend_toolkit_support import frontend_toolkit_support_templates
+    from .frontend_support import frontend_toolkit_support_templates
 
     return validate_support_templates([
         *show_reel_support_templates(),

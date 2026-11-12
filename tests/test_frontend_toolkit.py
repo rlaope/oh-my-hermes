@@ -289,6 +289,40 @@ class OfflineCliTests(Fixture):
         self.addCleanup(locked.chmod, 0o700)
         self.refused([CLEAN, "--shot", locked / "inner" / "shot.png"], "path could not be checked")
 
+    @POSIX_ONLY
+    def test_directory_walk_keeps_one_descriptor_and_none_when_refused(self):
+        api = helper_api()
+        live = set()  # descriptor numbers are reused, so track what is open now
+        real_open, real_close = os.open, os.close
+
+        def tracking_open(*args, **kwargs):
+            fd = real_open(*args, **kwargs)
+            live.add(fd)
+            return fd
+
+        def tracking_close(fd):
+            live.discard(fd)
+            real_close(fd)
+
+        def walk(path):
+            with mock.patch.object(api.os, "open", tracking_open), \
+                    mock.patch.object(api.os, "close", tracking_close):
+                return api.open_directory_without_links(path)
+
+        top = self.root.resolve()
+        deep = top / "a" / "b"
+        deep.mkdir(parents=True)
+        held = walk(deep)
+        self.addCleanup(real_close, held)
+        self.assertEqual(live, {held})
+        self.assertTrue(os.path.samestat(os.fstat(held), os.stat(deep)))
+
+        live.clear()
+        (top / "a" / "link").symlink_to(deep)
+        with self.assertRaises(OSError):
+            walk(top / "a" / "link" / "below")
+        self.assertEqual(live, set())
+
     def test_shot_is_written_once_when_the_path_stays_new(self):
         shot = self.root / "shot.png"
         with patch_modules(fake_playwright(lambda: None)):
@@ -411,7 +445,7 @@ class PureHelperTests(unittest.TestCase):
 
 class ResourceTests(unittest.TestCase):
     def test_manifest_digests_match_bytes(self):
-        from omh.skills import frontend_toolkit_support as support
+        from omh.skills import frontend_support as support
         manifest = json.loads((TOOLKIT / "upstream-manifest.json").read_text())
         self.assertEqual(manifest["schema"], "omh_frontend_toolkit_provenance/v1")
         self.assertEqual(set(manifest["files"]), set(support.TOOLKIT_RESOURCES) - {"upstream-manifest.json"})
@@ -424,13 +458,13 @@ class ResourceTests(unittest.TestCase):
         self.assertEqual(support.frontend_toolkit_provenance_manifest()["files"], manifest["files"])
 
     def test_every_file_on_disk_is_a_declared_resource(self):
-        from omh.skills import frontend_toolkit_support as support
+        from omh.skills import frontend_support as support
         on_disk = {p.relative_to(TOOLKIT).as_posix() for p in TOOLKIT.rglob("*")
                    if p.is_file() and "__pycache__" not in p.parts}
         self.assertEqual(on_disk, set(support.TOOLKIT_RESOURCES))
 
     def test_support_templates_validate(self):
-        from omh.skills import frontend_toolkit_support as support
+        from omh.skills import frontend_support as support
         templates = support.frontend_toolkit_support_templates()
         self.assertEqual({t.relative_path for t in templates},
                          {"toolkit/" + p for p in support.TOOLKIT_RESOURCES})
@@ -444,7 +478,7 @@ class ResourceTests(unittest.TestCase):
     def test_registered_in_package_data_and_gitattributes(self):
         pyproject = (ROOT / "pyproject.toml").read_text()
         attributes = (ROOT / ".gitattributes").read_text()
-        support = (ROOT / "src/skills/frontend_toolkit_support.py").read_text()
+        support = (ROOT / "src/skills/frontend_support.py").read_text()
         for line in ("src/skills/frontend_toolkit/** text eol=lf",
                      "skills/omh-frontend/toolkit/** text eol=lf",
                      "agent-skills/omh-frontend/toolkit/** text eol=lf"):
