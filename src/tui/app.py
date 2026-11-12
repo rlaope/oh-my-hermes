@@ -2424,11 +2424,9 @@ class App(ModesMixin, AgentViewMixin):
         self.copy_noted_at: float | None = None  # when the pager's footer or `copy_note` started saying what a copy did
         self.copy_note: Notification | None = None  # what a copy on the main screen did, on the notice row meanwhile
         # The main screen's selection, by the rows the live region printed (`LiveRegion.doc_row`), each selected row's
-        # line as the screen showed it when the mouse last moved it (`_keep_selection_true`), and whether the button is
-        # down after a press on a row no selection can start on (one the region did not print).
+        # line as the screen showed it when the mouse last moved it (`_keep_selection_true`).
         self.selection = Selection()
         self.selected_lines: dict[int, Line] = {}
-        self.unmapped_press = False
         self.button_held = False  # a press on the main screen or in a pager whose release has not come
         self.copied_at: float | None = None  # when the last drag on the main screen copied, on `clock`
         self.report_at: float | None = None  # when the last mouse report was decoded, on `clock`
@@ -8147,9 +8145,9 @@ class App(ModesMixin, AgentViewMixin):
     def _redraw(self, arg: str) -> None:
         self._full_redraw()
 
-    def _history(self, arg: str, quiet: bool = False) -> None:
+    def _history(self, arg: str) -> None:
         """The blocks held now in a pager that renders each one, details shown, only when a page reaches it; with
-        nothing to show, a notice, or with `quiet` nothing at all."""
+        nothing to show, a notice."""
         transcript = self.transcript
         blocks, dropped = transcript.shown_blocks(), transcript.dropped  # what the pager holds, as it opens
 
@@ -8162,15 +8160,13 @@ class App(ModesMixin, AgentViewMixin):
         # Stops at the first block with rows, the first one but for a reply that was only a line break, and
         # keeps what it rendered for the first frame.
         if pager.shows_nothing(self.size[0], self.theme):
-            if not quiet:
-                transcript.add_notice("Nothing in this session's transcript yet.")
+            transcript.add_notice("Nothing in this session's transcript yet.")
             return
         self._show_pager(pager)
 
-    def _details_view(self, quiet: bool = False) -> None:
-        """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end; `quiet`
-        as `_history` takes it."""
-        self._history("", quiet)
+    def _details_view(self) -> None:
+        """The whole transcript with every detail (thinking, tool output, whole diffs) in the pager, at its end."""
+        self._history("")
         if isinstance(self.pager, HistoryPager):
             self.pager.handle_key(Key(END), self.size[1])
 
@@ -8288,8 +8284,8 @@ class App(ModesMixin, AgentViewMixin):
         the notice row says what the copy did. Rows are read only where
         `LiveRegion.doc_row` is certain of them, never guessed: a press on a
         row it is not (the shell's output above the session, an earlier
-        region's after Ctrl+Z) selects nothing, and moving the held button
-        from there opens the transcript view instead; a drag carried over such
+        region's after Ctrl+Z) selects nothing and opens nothing (only Ctrl+O
+        opens the transcript view); a drag carried over such
         a row stops at the nearest row it is certain of, and one under the
         region's last row is on that row. Nothing happens while the screen is
         being redrawn for a new size, a pager is open or the TUI does not
@@ -8314,22 +8310,16 @@ class App(ModesMixin, AgentViewMixin):
         stable = self._last_stable_doc()
         if event.button == BUTTON_LEFT and event.pressed and not event.motion:
             doc = self.region.doc_row(row, rows)
-            self.unmapped_press = doc is None
             if doc is not None and doc > stable:
                 doc = None  # a live row that changes on its own (the working row, the info line): nothing to select
             self._copied(selection.press(None if doc is None else (doc, event.x - 1), now, self._printed_line))
         elif event.motion and event.pressed:
-            if self.unmapped_press:
-                self.unmapped_press = False
-                self._transcript_view()  # nothing certain to select there: the transcript view, where all of it is
-                return
             doc = next((found for at in range(row, last + 1) if (found := self.region.doc_row(at, rows)) is not None),
                        None)
             if doc is not None:
                 # Over a live row that changes on its own, the drag runs to the end of the last row that does not.
                 selection.move((doc, event.x - 1) if doc <= stable else (stable, ROW_END))
         elif not event.pressed:
-            self.unmapped_press = False
             self._copied(selection.release(now, self._printed_line))
         self._note_selected_lines()
         self.dirty = True
@@ -8346,16 +8336,6 @@ class App(ModesMixin, AgentViewMixin):
         if working:
             limit = min(limit, budget.tail + budget.pad - working)
         return first + limit - 1
-
-    def _transcript_view(self) -> bool:
-        """What a drag from a row the region did not print opens: Ctrl+O's view, the open question while one is asked,
-        else the whole transcript at its end; nothing, and no notice, when the transcript has no rows to show. True
-        when a view opened."""
-        if self.slot is not None:
-            self._question_view()
-        else:
-            self._details_view(quiet=True)
-        return self.pager is not None
 
     def _note_selected_lines(self) -> None:
         """Keep each selected row's text as the screen shows it now, to tell later whether the row still shows it."""
@@ -8823,7 +8803,6 @@ class App(ModesMixin, AgentViewMixin):
         # The terminal reflowed the rows a selection was painted on; the full redraw erases them.
         self.selection.forget()
         self.selected_lines = {}
-        self.unmapped_press = False
         self.region.forget_marks()
         self._take_size()
         self.dirty = True
@@ -8862,7 +8841,6 @@ class App(ModesMixin, AgentViewMixin):
         # frame's synchronized update, so the blank screen never shows.
         self.region = self._new_region(at_top=True, lead=CLEAR_SCREEN_AND_SCROLLBACK)
         self.selection.forget()  # its rows were the old region's, which the clear erases with the highlight on them
-        self.unmapped_press = False
         self.rows_ground = self._ground()
         self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
         if self.banner_record is not None:
