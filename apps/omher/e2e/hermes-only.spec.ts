@@ -216,31 +216,136 @@ test("C. the popover: title, one sentence, Install and Don't show again; 12-13px
   for (const b of [m.icon!, m.plus!]) expect(m.pop!.top >= b.bottom || m.pop!.bottom <= b.top).toBe(true);
 });
 
-test("C. the popover hangs under the !, right-aligned to it, narrower than the sidebar, and cuts no sidebar row in half", async ({ page }) => {
+/** Every sidebar element against the popover's box: fully inside it, fully outside it, or (the bad case) partly under it. */
+const partly = (page: Page) =>
+  page.evaluate(() => {
+    const pop = document.querySelector(".omh-pop")!.getBoundingClientRect();
+    const side = document.querySelector(".side")!;
+    const bad: string[] = [];
+    // what paints: the rows themselves, the search field, and every leaf (text, icons, rings); a list or section that
+    // holds rows runs on past the popover by design, so it is judged by its rows
+    const painted = [...side.querySelectorAll(".search, .bot-list > *, .ss-list > *, .side-sec > .side-sh, .side-foot > *, *")].filter(
+      (e) => e.matches(".search, .bot-list > *, .ss-list > *, .side-sec > .side-sh, .side-foot > *") || e.children.length === 0 || e.matches(".ui-ring, svg"),
+    );
+    for (const e of painted) {
+      if (e.closest(".omh-note") || e.closest("svg") !== e && e.closest("svg")) continue;
+      const r = e.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      const out = r.right <= pop.left + 0.5 || r.left >= pop.right - 0.5 || r.bottom <= pop.top + 0.5 || r.top >= pop.bottom - 0.5;
+      const inside = r.left >= pop.left - 0.5 && r.right <= pop.right + 0.5 && r.top >= pop.top - 0.5 && r.bottom <= pop.bottom + 0.5;
+      // a clipped child counts by what shows: its visible part inside a scrolled list
+      if (!out && !inside) bad.push(`${e.className || e.tagName} ${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)}`);
+    }
+    return { bad, pop: { left: pop.left, right: pop.right, top: pop.top, bottom: pop.bottom } };
+  });
+
+const settled = (page: Page) => page.waitForFunction(() => document.querySelector(".omh-pop")!.getAnimations().every((a) => a.playState !== "running"));
+
+test("C. the popover is exactly as wide as a sidebar row, starts under the top row, and covers each sidebar element whole or not at all", async ({ page }) => {
   await open(page);
   await page.getByTestId("omh-notice").click();
   await expect(page.getByTestId("omh-pop")).toBeVisible();
-  await page.waitForFunction(() => document.querySelector(".omh-pop")!.getAnimations().every((a) => a.playState !== "running"));
+  await settled(page);
   const m = await page.evaluate(() => {
-    const r = (e: Element) => e.getBoundingClientRect();
-    const pop = r(document.querySelector(".omh-pop")!);
-    const icon = r(document.querySelector("[data-testid=omh-notice]")!);
-    const side = r(document.querySelector(".side")!);
-    const rows = [...document.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec):not(.side-top)")]
-      .map((e) => ({ top: r(e).top, bottom: r(e).bottom, name: (e.textContent ?? "").slice(0, 20) }))
-      .filter((x) => x.bottom > x.top);
-    return { pop: { top: pop.top, bottom: pop.bottom, left: pop.left, right: pop.right }, icon: { bottom: icon.bottom, right: icon.right }, side: { left: side.left, right: side.right }, rows };
+    const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+    return { pop: r(".omh-pop"), row: r(".bot-list > *"), top: r(".side-top"), side: r(".side") };
   });
-  expect(Math.abs(m.pop.right - m.icon.right)).toBeLessThanOrEqual(0.5);
-  expect(m.pop.top).toBeGreaterThanOrEqual(m.icon.bottom);
-  expect(m.pop.top - m.icon.bottom).toBeLessThanOrEqual(8);
-  expect(m.pop.right - m.pop.left).toBeLessThan(m.side.right - m.side.left - 30);
-  expect(m.pop.left).toBeGreaterThanOrEqual(m.side.left + 4);
-  // every sidebar row is wholly under it, wholly below it, or wholly above it: none shows half
-  for (const row of m.rows) {
-    const clear = row.bottom <= m.pop.top + 0.5 || row.top >= m.pop.bottom - 0.5 || (row.top >= m.pop.top - 0.5 && row.bottom <= m.pop.bottom + 0.5);
-    expect(clear, `${row.name} ${row.top}-${row.bottom} vs ${m.pop.top}-${m.pop.bottom}`).toBe(true);
-  }
+  // as wide as the rows, plus the live ring's reach past their edge (4px each side), and inside the sidebar
+  expect(m.row.left - m.pop.left).toBeGreaterThanOrEqual(4);
+  expect(m.row.left - m.pop.left).toBeLessThanOrEqual(4.5);
+  expect(m.pop.right - m.row.right).toBeGreaterThanOrEqual(4);
+  expect(m.pop.right - m.row.right).toBeLessThanOrEqual(4.5);
+  expect(m.pop.left).toBeGreaterThanOrEqual(m.side.left);
+  expect(m.pop.right).toBeLessThanOrEqual(m.side.right);
+  expect(Math.abs(m.pop.top - m.top.bottom)).toBeLessThanOrEqual(0.5);
+  const c = await partly(page);
+  expect(c.bad, JSON.stringify(c.pop)).toEqual([]);
+});
+
+test("C. the same padding above the title and below the actions; any extra room sits between the sentence and the actions", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("omh-notice").click();
+  await settled(page);
+  const m = await page.evaluate(() => {
+    const pop = document.querySelector(".omh-pop")!.getBoundingClientRect();
+    const t = document.querySelector(".omh-pop-t")!.getBoundingClientRect();
+    const p = document.querySelector(".omh-pop-p")!.getBoundingClientRect();
+    const a = document.querySelector(".omh-pop-a")!.getBoundingClientRect();
+    const b = getComputedStyle(document.querySelector(".omh-pop")!).borderTopWidth;
+    return { above: t.top - pop.top, below: pop.bottom - a.bottom, between: a.top - p.bottom, border: parseFloat(b) };
+  });
+  expect(Math.abs(m.above - m.below), JSON.stringify(m)).toBeLessThanOrEqual(0.5);
+  expect(m.between).toBeGreaterThanOrEqual(10);
+});
+
+test("C. running: Installing… keeps Install's outlined box and left edge, only lower contrast", async ({ page }) => {
+  await open(page, { plan: { exit: 0, lines: ["[1/4] Create isolated Python environment at ~/.local/share/omh/venv"], hold: true } });
+  await page.getByTestId("omh-notice").click();
+  const b = page.getByTestId("omh-pop-install");
+  const look = () =>
+    b.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      const p = document.querySelector(".omh-pop-c")!.getBoundingClientRect();
+      return { left: Math.round(r.left - p.left), h: r.height, border: cs.borderTopWidth, style: cs.borderTopStyle, borderColor: cs.borderTopColor, color: cs.color, opacity: cs.opacity };
+    });
+  const rest = await look();
+  await b.click();
+  await expect(b).toHaveText("Installing…");
+  await expect(b).toBeDisabled();
+  const run = await look();
+  expect(run.left).toBe(rest.left);
+  expect(run.left).toBe(0);
+  expect(run.h).toBe(rest.h);
+  expect(run.border).toBe("1px");
+  expect(run.style).toBe("solid");
+  expect(run.borderColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(run.color).not.toBe(rest.color);
+  expect(run.opacity).toBe("1");
+});
+
+test("C. the output wraps at spaces and after / only, never inside a word; one token too long for the box scrolls sideways", async ({ page }) => {
+  const LONG = "sha256:" + "0123456789abcdef".repeat(4);
+  await open(page, { plan: { exit: 0, lines: ["[1/4] Create isolated Python environment at ~/.local/share/omh/venv", LONG], hold: true } });
+  await page.getByTestId("omh-notice").click();
+  await page.getByTestId("omh-pop-install").click();
+  const log = page.getByTestId("omh-pop-log");
+  await expect(log).toContainText("0123456789abcdef");
+  const m = await log.evaluate((el) => {
+    // the words of each line, as the rows they land on: a word split over two rows has two client rects
+    const split: string[] = [];
+    for (const line of el.querySelectorAll(".gate-line")) {
+      const text = line.textContent ?? "";
+      const node = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      let offset = 0;
+      const runs: { n: Text; start: number }[] = [];
+      for (let t = node.nextNode() as Text | null; t; t = node.nextNode() as Text | null) {
+        runs.push({ n: t, start: offset });
+        offset += t.data.length;
+      }
+      // words between spaces, and between "/" inside a path
+      const re = /[^\s/]+\/?/g;
+      for (let w; (w = re.exec(text)); ) {
+        const range = document.createRange();
+        const at = (i: number) => {
+          const r = runs.filter((x) => x.start <= i).pop()!;
+          return [r.n, i - r.start] as const;
+        };
+        const [sn, so] = at(w.index);
+        const [en, eo] = at(w.index + w[0].length - 1);
+        range.setStart(sn, so);
+        range.setEnd(en, eo + 1);
+        const tops = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+        if (tops.size > 1) split.push(w[0]);
+      }
+    }
+    const rows = [...el.querySelectorAll(".gate-line")].map((l) => Math.round(l.getBoundingClientRect().height / 18));
+    return { split, rows, sw: el.scrollWidth, cw: el.clientWidth };
+  });
+  expect(m.split).toEqual([]);
+  // the path line wraps (at spaces / after "/"), the long token stays on one row and the box scrolls sideways
+  expect(m.rows[1]).toBe(1);
+  expect(m.sw).toBeGreaterThan(m.cw);
 });
 
 test("C. the ! has the + menu's pressed look while its popover is open, and none at rest", async ({ page }) => {
@@ -313,7 +418,7 @@ test("C. running: the installer's output in the house style, as tall as its line
 });
 
 test("C. the output takes the popover's whole inner width; a short line stays one line, a long one wraps", async ({ page }) => {
-  await open(page, { plan: { exit: 0, lines: ["[ok] Hermes Agent", "x".repeat(60)], hold: true } });
+  await open(page, { plan: { exit: 0, lines: ["[ok] Hermes Agent", "step ".repeat(14) + "xxxx"], hold: true } });
   await page.getByTestId("omh-notice").click();
   await page.getByTestId("omh-pop-install").click();
   const log = page.getByTestId("omh-pop-log");
@@ -433,16 +538,9 @@ for (const height of [600, 720, 820]) {
     expect(m.pop!.bottom).toBeLessThanOrEqual(m.h - 4);
     expect(m.pop!.left).toBeGreaterThanOrEqual(4);
     expect(m.pop!.right).toBeLessThanOrEqual(m.w - 4);
-    // and no sidebar row shows half under it
-    const cut = await page.evaluate(
-      ([top, bottom]) =>
-        [...document.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec):not(.side-top)")]
-          .map((e) => e.getBoundingClientRect())
-          .filter((r) => r.bottom > r.top)
-          .filter((r) => !(r.bottom <= top + 0.5 || r.top >= bottom - 0.5 || (r.top >= top - 0.5 && r.bottom <= bottom + 0.5))).length,
-      [m.pop!.top, m.pop!.bottom],
-    );
-    expect(cut).toBe(0);
+    // and no sidebar element shows partly under it
+    const c = await partly(page);
+    expect(c.bad, JSON.stringify(c.pop)).toEqual([]);
     // Install again's buttons are in view: the actions never scroll away
     await expect(page.getByTestId("omh-pop-install")).toBeInViewport();
   });

@@ -34,10 +34,14 @@
   background: var(--raise2);
   color: var(--ink);
 }
-/* under the "!", right-aligned to it, as narrow as its sentence reads; its height is set by OmhNotice so the bottom
-   edge lands on a sidebar row boundary, the text scrolling inside when the window is short */
+/* right under the top row, as wide as the sidebar's rows plus the live ring a row draws past its edge (OmhNotice
+   measures both), so a row it lies over is covered whole and nothing of it shows beside it; its height is set so the bottom edge lands on a row boundary, the text
+   scrolling inside when the window is short. The same padding above the title and below the actions. */
 .omh-note .ui-pop.omh-pop {
-  padding: 10px 12px;
+  top: var(--omh-pop-t, calc(100% + 6px));
+  left: var(--omh-pop-l, auto);
+  right: auto;
+  padding: 12px;
   border-radius: var(--r);
   cursor: default;
   -webkit-app-region: no-drag;
@@ -50,6 +54,7 @@
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
+  padding-bottom: 10px;
 }
 .omh-pop-t {
   display: block;
@@ -82,7 +87,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  margin-top: 10px;
+  /* room the row-boundary rule adds goes here, between the sentence and the actions, never under them */
+  margin-top: auto;
 }
 /* the app's quiet outlined action (transparent at rest, a thin border, 12px), never the brightest thing here */
 .omh-pop-go {
@@ -102,9 +108,10 @@
 .omh-pop-go:hover:not(:disabled) {
   background: var(--raise);
 }
+/* running: the same outlined box in the same place, only lower contrast */
 .omh-pop-go:disabled {
   color: var(--muted);
-  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--quiet) 55%, var(--pop));
   cursor: default;
 }
 .omh-pop-hide {

@@ -1,10 +1,10 @@
 // The sidebar's one sign that oh-my-hermes is missing: a quiet "!" circle left of the top row's +, shown only to a
-// person who has Hermes and not `omh` (and not after "Don't show again"). It opens a small popover under it, right-
-// aligned to it: what oh-my-hermes adds, Install (the shell's one fixed installer, its output shown here in the setup
+// person who has Hermes and not `omh` (and not after "Don't show again"). It opens a popover right under the top row,
+// exactly as wide as the sidebar's rows (their left and right inset), so every row it lies over is covered whole: what oh-my-hermes adds, Install (the shell's one fixed installer, its output shown here in the setup
 // screen's own log view) and "Don't show again". When the install ends well the agents are read again, `omh` is found
 // and the "!" goes. The popover's bottom edge lands on a sidebar row boundary (the + menu's rule), so no row shows
 // half under it, and it stays inside the window, scrolling inside when it must.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { IconButton, Popover, Spinner } from "../ui";
 import { t } from "../i18n";
 import { InstallLog } from "../app/BridgeGate";
@@ -23,6 +23,8 @@ const AlertIcon = () => (
 /** Air between the popover and the window's bottom edge, and between its edge and a row it stops above. */
 const WINDOW_AIR = 6;
 const ROW_CLEAR = 2;
+/** How far a bot row's live ring reaches past the row's left edge (`.ui-ring`, measured: 4px). */
+const RING_BLEED = 4;
 /** The sidebar rows a popover edge may not cut (the + menu's rows, without the top row it hangs from). */
 const ROWS = ".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec):not(.side-top)";
 
@@ -53,6 +55,8 @@ export function OmhNotice() {
   const content = useRef<HTMLDivElement>(null);
   const actions = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<{ min?: number; max?: number }>({});
+  // where the popover sits, from its anchor (the "!" wrapper): the sidebar rows' inset, the top row's bottom edge
+  const [place, setPlace] = useState<{ left: number; top: number; width: number } | null>(null);
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
@@ -66,12 +70,23 @@ export function OmhNotice() {
       const pop = box?.parentElement;
       const anchor = pop?.offsetParent;
       if (!box || !c || !act || !pop || !(anchor instanceof HTMLElement)) return;
-      // offsets, not the popover's own rect: they ignore its pop-in transform
-      const top = anchor.getBoundingClientRect().top + pop.offsetTop;
+      const side = anchor.closest<HTMLElement>(".side");
+      const sideTop = side?.querySelector(".side-top");
+      if (!side || !sideTop) return;
+      // the rows' own box (the sidebar's content box, which a bot row spans), widened by what a row draws past it: the
+      // live ring around a working bot's face reaches RING_BLEED px into the sidebar's padding
+      const s = side.getBoundingClientRect();
+      const cs = getComputedStyle(side);
+      const left = s.left + Math.max(0, parseFloat(cs.paddingLeft) - RING_BLEED);
+      const width = s.right - Math.max(0, parseFloat(cs.paddingRight) - RING_BLEED) - left;
+      const top = sideTop.getBoundingClientRect().bottom;
+      const a = anchor.getBoundingClientRect();
+      const p = { left: left - a.left, top: top - a.top, width };
+      setPlace((o) => (o && o.left === p.left && o.top === p.top && o.width === p.width ? o : p));
       const chrome = pop.offsetHeight - box.offsetHeight;
-      const rows = [...(anchor.closest(".side")?.querySelectorAll(ROWS) ?? [])].map((r) => r.getBoundingClientRect()).filter((r) => r.height > 0);
-      // its natural height: all of the text (scrolled or not) and the actions under it, never the room a `min` adds
-      const natural = c.scrollHeight + (act.offsetTop + act.offsetHeight - (c.offsetTop + c.offsetHeight));
+      const rows = [...side.querySelectorAll(ROWS)].map((r) => r.getBoundingClientRect()).filter((r) => r.height > 0);
+      // its natural height: all of the text (scrolled or not) and the actions, never the room a `min` adds
+      const natural = c.scrollHeight + act.offsetHeight;
       const next = fitNotice(top, natural, chrome, innerHeight - WINDOW_AIR, rows);
       setFit((f) => (f.min === next.min && f.max === next.max ? f : next));
     };
@@ -89,7 +104,10 @@ export function OmhNotice() {
   const failed = add.phase === "failed";
   const a = getAddOmh();
   return (
-    <div className="omh-note">
+    <div
+      className="omh-note"
+      style={place ? ({ "--omh-pop-l": `${place.left}px`, "--omh-pop-t": `${place.top}px` } as CSSProperties) : undefined}
+    >
       <IconButton
         label={t("omh.icon")}
         className="omh-note-b"
@@ -100,7 +118,7 @@ export function OmhNotice() {
       >
         {running ? <Spinner size={13} label={t("gate.installing")} /> : <AlertIcon />}
       </IconButton>
-      <Popover open={add.open} onClose={() => a.setOpen(false)} align="right" width={200} label="oh-my-hermes" className="omh-pop">
+      <Popover open={add.open} onClose={() => a.setOpen(false)} align="right" width={place?.width ?? "calc(var(--side-w) - 16px)"} label="oh-my-hermes" className="omh-pop">
         <div ref={inner} className="omh-pop-in" style={{ minHeight: fit.min, maxHeight: fit.max }} data-testid="omh-pop" data-phase={add.phase}>
           <div ref={content} className="omh-pop-c">
             <b className="omh-pop-t">oh-my-hermes</b>
