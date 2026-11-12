@@ -44,14 +44,15 @@
   min-width: 140px;
   max-width: 220px;
 }
-/* the page's two text fields are a quiet fill, no outline until they have the keyboard */
+/* the page's two text fields are a quiet fill with no outline; with the keyboard the fill deepens (as a
+   stepper's number does) */
 .tm-q,
 .tm-q:focus {
   border-color: transparent;
 }
 .tm-q:focus,
 .tm-font:focus {
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  background: var(--raise2);
 }
 .tm-list {
   border-top: 1px solid var(--line);
