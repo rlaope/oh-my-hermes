@@ -20,6 +20,16 @@ def _lines(*names: str) -> str:
     return "".join(f"{name}\n" for name in names)
 
 
+# Characters a Windows filesystem refuses in a file name; the file cannot be created there at all.
+_WINDOWS_FORBIDDEN = '<>:"/\\|?*'
+
+
+def _names_this_filesystem_holds(names: tuple[str, ...], windows: bool = os.name == "nt") -> tuple[str, ...]:
+    if not windows:
+        return names
+    return tuple(name for name in names if not any(char in _WINDOWS_FORBIDDEN for char in name))
+
+
 class RefixReportTests(unittest.TestCase):
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
@@ -130,7 +140,10 @@ class RefixReportTests(unittest.TestCase):
 
     def test_unusual_filenames_are_kept(self) -> None:
         # git C-quotes or tab-pads these in a plain diff header; each must classify like a plain name.
-        for name in ("normal.py", "a b.py", "café.py", 'a"b.py', "star*[x].py"):
+        # On Windows the two names with `"` and `*` cannot exist on disk, so they are left out there;
+        # the space, non-ASCII and bracket names still exercise the quoted and padded headers.
+        names = ("normal.py", "a b.py", "café.py", "br[x].py", 'a"b.py', "star*[x].py")
+        for name in _names_this_filesystem_holds(names):
             with self.subTest(name=name):
                 self.setUp()
                 self.seed()
