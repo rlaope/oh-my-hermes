@@ -248,9 +248,9 @@ test("cursor, contrast and the other options reach the open terminal and are kep
   const now = await look(page);
   expect(now).toMatchObject({ optionIsMeta: false, blink: false });
   expect(now?.font).toMatch(/^"Menlo", /);
-  // the GPU row shows the setting; with no renderer reported yet it says nothing about one
+  // the GPU row shows the setting, and its second line says what draws the open terminal (Off: the standard one)
   await page.getByTestId("term-gpu").getByRole("radio", { name: "Off" }).click();
-  await expect(page.getByTestId("term-gpu-row")).not.toContainText("In use now");
+  await expect(page.getByTestId("term-gpu-row")).toContainText("In use now: standard");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("omher.term") || "{}"))).toMatchObject({
     cursorStyle: "bar",
     contrast: "theme",

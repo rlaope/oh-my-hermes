@@ -144,3 +144,27 @@ test("a picture pasted on a terminal still goes through the drop/paste path, not
     .toBe(true);
   expect(await typed(page)).toMatch(/session-files\/s\d+\/1-image\.png/);
 });
+
+test("the GPU row's second line says what draws the terminals: standard, then GPU when it is switched on, nothing with no terminal open", async ({ page }) => {
+  await openApp(page, { term: { gpu: "off" } });
+  const row = page.getByTestId("term-gpu-row");
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-terminal").click();
+  await expect(row).toContainText("Auto"); // the row is there, with Auto / On / Off
+  await expect(row).not.toContainText("In use now"); // no terminal is open yet
+  await page.getByTestId("nav-bot-kami").or(page.getByTestId("bot-kami")).first().click();
+  await newTerminal(page);
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-terminal").click();
+  await expect(row).toContainText("In use now: standard");
+  await expect(row.getByRole("radio")).toHaveText(["Auto", "On", "Off"]);
+  // switching to On re-attaches the open terminal's renderer and the line follows (the terminal is hidden here,
+  // so it holds no GPU context; back on the session it does)
+  await row.getByRole("radio", { name: "On" }).click();
+  await page.locator("[data-testid=session-list] .ss-row").first().click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => (await import("/src/sessions/term/engine.ts" as string)).rendererInUse())).toBe("gpu");
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-terminal").click();
+  await expect(row).toContainText("In use now: GPU");
+});

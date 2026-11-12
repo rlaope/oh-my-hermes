@@ -37,6 +37,9 @@ interface State {
   gpu: TermSettings["gpu"];
   shown: boolean;
   addon: WebglAddon | null;
+  /** it drew with the GPU the last time it was on the page and nothing has taken that away: a terminal that left
+   *  the page (Settings is open) gave its context back but still counts as a GPU terminal for `rendererInUse` */
+  gpuLast: boolean;
   /** an attach is waiting for the add-on's chunk */
   loading: boolean;
   /** times (ms) this terminal lost its context */
@@ -56,7 +59,9 @@ let stopSettings: (() => void) | null = null;
 
 const wants = (s: State) => !s.gone && s.shown && !s.gaveUp && !s.addon && s.gpu !== "off" && (s.gpu === "on" || probeWebgl().allow);
 
-function detach(s: State): void {
+/** `release`: the terminal left the page, so its context goes but it would take one again on its return. */
+function detach(s: State, release = false): void {
+  if (!release) s.gpuLast = false;
   s.unwatch?.();
   s.unwatch = null;
   const a = s.addon;
@@ -91,6 +96,7 @@ function attach(s: State): void {
         const off = addon.onContextLoss(() => lost(s, addon));
         s.term.loadAddon(addon);
         s.addon = addon;
+        s.gpuLast = true;
         // xterm waits 3 s for a lost context to come back before it says so, and draws nothing meanwhile: the
         // canvas's own event sends the terminal back to the standard renderer at once
         const onLost = () => lost(s, addon);
@@ -148,7 +154,7 @@ function reconsider(settings: TermSettings): void {
 
 /** Called once, right after `term.open(el)`. Returns what undoes it (called before the terminal is disposed). */
 export function afterOpen(term: Terminal, el: HTMLElement, settings: TermSettings): () => void {
-  const s: State = { term, gpu: settings.gpu, shown: el.isConnected, addon: null, loading: false, losses: [], gaveUp: false, retry: null, gone: false, unwatch: null, held: [] };
+  const s: State = { term, gpu: settings.gpu, shown: el.isConnected, addon: null, gpuLast: false, loading: false, losses: [], gaveUp: false, retry: null, gone: false, unwatch: null, held: [] };
   states.set(term, s);
   // CJK, emoji and box drawing take the widths agents' TUIs expect. Output waits (in order) until they are active.
   const release = () => {
@@ -203,10 +209,11 @@ export function feed(term: Terminal, data: string | Uint8Array, done?: () => voi
 }
 
 /** What draws the terminals now: the GPU renderer, the standard one, or null while no terminal is open.
- *  Settings shows it, so a person (and a check of the real window) can see which is in use. */
+ *  Settings shows it, so a person (and a check of the real window) can see which is in use. Settings is itself a
+ *  page no terminal is on, so a terminal that left the page counts as GPU when it drew with the GPU until then. */
 export function rendererInUse(): "gpu" | "standard" | null {
   if (!states.size) return null;
-  for (const s of states.values()) if (s.shown && s.addon) return "gpu";
+  for (const s of states.values()) if (!s.gone && (s.addon || (!s.shown && s.gpuLast && !s.gaveUp && s.gpu !== "off"))) return "gpu";
   return "standard";
 }
 
@@ -220,7 +227,7 @@ export function onVisible(term: Terminal, shown: boolean): void {
       clearTimeout(s.retry);
       s.retry = null;
     }
-    detach(s); // gives the GPU context back
+    detach(s, true); // gives the GPU context back
     return;
   }
   if (s.addon) repaint(s);
