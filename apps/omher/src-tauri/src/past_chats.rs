@@ -388,7 +388,15 @@ fn codex_assistant_text(o: &Value) -> Option<String> {
     if s(o, "type") != "response_item" || s(p, "type") != "message" || s(p, "role") != "assistant" {
         return None;
     }
-    let text = p["content"].as_array()?.iter().filter(|b| s(b, "type") == "output_text").map(|b| s(b, "text")).collect::<Vec<_>>().join("\n");
+    // a thread Codex imported from another agent carries that agent's tool results as answer text: not an answer
+    let text = p["content"]
+        .as_array()?
+        .iter()
+        .filter(|b| s(b, "type") == "output_text")
+        .map(|b| s(b, "text"))
+        .filter(|t| !t.trim_start().starts_with("[external_agent_tool_result]"))
+        .collect::<Vec<_>>()
+        .join("\n");
     (!text.trim().is_empty()).then_some(text)
 }
 
@@ -647,6 +655,7 @@ mod tests {
             serde_json::json!({"timestamp": "2026-11-12T15:28:56.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "# AGENTS.md instructions for /w\n..."}, {"type": "input_text", "text": "<environment_context>x</environment_context>"}]}}),
             serde_json::json!({"timestamp": "2026-11-12T15:29:00.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Remember COBALT please"}]}}),
             serde_json::json!({"timestamp": "2026-11-12T15:29:05.000Z", "type": "response_item", "payload": {"type": "reasoning", "summary": []}}),
+            serde_json::json!({"timestamp": "2026-11-12T15:29:08.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "[external_agent_tool_result]\n{}\n[/external_agent_tool_result]"}]}}),
             serde_json::json!({"timestamp": "2026-11-12T15:29:09.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Remembered."}]}}),
         ]
     }
@@ -744,6 +753,10 @@ mod tests {
         let row = rows.first().expect("the CLI's conversation is listed");
         let msgs = messages(&root, &agent, &row.id, &cwd).unwrap();
         println!("MESSAGES {msgs:?}");
+        // OMHER_REAL_LIST_ONLY: only the read-only listing and messages (no model turn)
+        if std::env::var("OMHER_REAL_LIST_ONLY").is_ok() {
+            return;
+        }
         let c = Arc::new(ChatSessions::default());
         let out = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
         let o = out.clone();
