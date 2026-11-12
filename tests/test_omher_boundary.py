@@ -43,7 +43,9 @@ RULES = (
     "a local CLIProxyAPI's Claude logins are listed, read-only, from its auth file names alone",
     "omher never opens those files, never calls CLIProxyAPI or its management API, and never starts a session with, switches to or removes such a login.",
     "The Claude meter also lists the Claude logins of rule 18 by name, each with only its own record;",
-    "The app runs only the CLIs' own status and sign-in commands, as fixed argv (`claude auth status --json`, `claude auth login`,",
+    "The app runs only the CLIs' own status, sign-in and version commands, as fixed argv (`claude auth status --json`, `claude auth login`, `claude --version`,",
+    "`codex --help`, `codex login status`, `codex login`, `codex --version`)",
+    "and from `--version` only the version number (the first `digits.digits.digits` run with its suffix; never the rest of its text), shown beside the CLI's name.",
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
@@ -718,18 +720,19 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         self.assertEqual(
             [(cli, step, [a.strip().strip('"') for a in args.split(",")]) for cli, step, args in argv],
             [("claude", "Status", ["auth", "status", "--json"]), ("claude", "Login", ["auth", "login"]),
-             ("codex", "Help", ["--help"]), ("codex", "Status", ["login", "status"]), ("codex", "Login", ["login"])])
+             ("claude", "Version", ["--version"]), ("codex", "Help", ["--help"]),
+             ("codex", "Status", ["login", "status"]), ("codex", "Login", ["login"]), ("codex", "Version", ["--version"])])
         self.assertIn("_ => None", fixed)
         # every spawn goes through `command(program, args, …)`, whose args come from `fixed_args` only
         self.assertEqual(prod.count("Command::new("), 2)  # the CLI itself, or cmd.exe /c for a Windows npm shim
         # the second argument of every `run_to_end(…)` / `command(…)` call is a `fixed_args` result
         calls = re.findall(r"\b(?:run_to_end|command)\(&?program, (\w+)", prod)
-        self.assertEqual(len(calls), 5, calls)
+        self.assertEqual(len(calls), 6, calls)
         self.assertEqual(set(calls), {"args", "help_args"})
         self.assertNotIn(".arg(", prod.replace('c.arg("/c").arg(program)', ""))
         # the page names a CLI and an account id; no Tauri command takes a program or an argument
         lib = self.LIB_RS.read_text(encoding="utf-8")
-        for cmd in ("account_status", "account_login_start", "account_login_cancel", "account_clis", "account_env"):
+        for cmd in ("account_status", "account_version", "account_login_start", "account_login_cancel", "account_clis", "account_env"):
             sig = lib[lib.index(f"async fn {cmd}("):]
             sig = sig[: sig.index(")")]
             self.assertNotRegex(sig, r"\b(argv|args|program|command|path)\b", cmd)

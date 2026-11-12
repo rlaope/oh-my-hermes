@@ -279,6 +279,12 @@ All notable changes will be documented here.
     approvals · full disk access". A running subagent card counts "1 of 2
     done", a subagent waiting for you reads "waiting" in the sidebar, and a
     bot's chat header keeps the model name whole from 900px up. (#2824, #2812)
+  - **Accounts that reset soonest go first.** A new switch under Auto-switch
+    in Settings › Accounts (off by default) hands the next session to the
+    account whose limit resets soonest when the one in use runs out, and the
+    chat line says so. Codex also sends one notification when a window under
+    50% used resets within the hour, and each CLI's version shows beside its
+    name. (#2834)
   - **Files you attach to Claude Code.** Claude Code reads a file attached to
     its session without a "Run this command?" card; a read anywhere else
     outside the work folder still asks. (#2818)
@@ -534,6 +540,12 @@ All notable changes will be documented here.
   when no node decides the run). Repair and extend rounds do not raise it,
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
+- **The one-line installer can remove OMH.** `curl -fsSL https://omher.app/install | sh -s -- --uninstall` (and
+  `install.ps1 --uninstall` on Windows) finds the installed `omh` without relying on PATH, runs `omh uninstall`
+  and shows its output and exit code; `--purge` becomes `--all` and `--dry-run` previews. An uninstall run never
+  downloads or installs anything, and with no command found it says where it looked and exits nonzero. The idea of
+  removal through the install one-liner comes from yetone/magpie (MIT, commit 5e933e1; concept only, reimplemented
+  here). `install.ps1` and its test were written without a PowerShell host; CI is their first run.
 - **omher.app shows the real GitHub star count.** The header used to show a
   `4.9k` baked into the page on 2026-10-31 whenever the visitor's own,
   unauthenticated GitHub API call was rate-limited. The Pages deploy now

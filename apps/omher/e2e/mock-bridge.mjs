@@ -601,7 +601,7 @@ const USAGE = {
 const ACCT_CLIS = ["claude", "codex", "pi", "omp", "grok", "gemini"];
 const CPA_EMAILS = ["ana@example.com", "ben@example.com", "cho@example.com", "team@example.org"];
 const ACCT_INSTALLED = { claude: true, codex: true, pi: true, omp: false, grok: false, gemini: false };
-let acct, acctActive, acctLimited, acctLabels;
+let acct, acctActive, acctLimited, acctLabels, acctUsage;
 const ACCT_ID = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 function accountsList() {
   return {
@@ -615,7 +615,7 @@ function accountsList() {
           email: a.email ?? "",
           state,
           dir: a.id === "default" ? null : `/mock/.omher/accounts/${cli}/${a.id}`,
-          usage: cli === "codex" && a.id === "default" ? USAGE.default()[0] : null,
+          usage: acctUsage[`${cli}:${a.id}`] ?? (cli === "codex" && a.id === "default" ? USAGE.default()[0] : null),
           ...(limited ? { resets_at: limited } : {}),
           ...(cli === "claude" && a.email === "owner@example.com" ? { in_cpa: true } : {}),
         };
@@ -660,6 +660,7 @@ function reset() {
   acctActive = Object.fromEntries(ACCT_CLIS.map((c) => [c, "default"]));
   acctLimited = {};
   acctLabels = {};
+  acctUsage = {};
   for (const t of Object.values(turns ?? {})) t?.timers.forEach(clearTimeout);
   for (const h of subTimers) clearTimeout(h);
   subTimers.clear();
@@ -1342,6 +1343,15 @@ const OPS = {
   "mock.accounts": (p) => {
     const cli = typeof p.cli === "string" ? p.cli : "codex";
     if (typeof p.limit === "string") acctLimited[`${cli}:${p.limit}`] = now() + 2 * 3600;
+    // usage {id, windows: [{label, used_percent?, resets_in_min?}]}: that account's own usage record
+    if (p.usage && typeof p.usage === "object") {
+      const windows = (p.usage.windows ?? []).map((w) => ({
+        label: w.label,
+        ...(typeof w.used_percent === "number" ? { used_percent: w.used_percent } : {}),
+        ...(typeof w.resets_in_min === "number" ? { resets_at: now() + w.resets_in_min * MIN } : {}),
+      }));
+      acctUsage[`${cli}:${p.usage.id}`] = { id: cli, state: "ok", source_mtime: now() - 60, windows };
+    }
     if (p.signed_in && typeof p.signed_in === "object") {
       const a = acct[cli]?.find((x) => x.id === p.signed_in.id);
       if (a) Object.assign(a, { logged_in: true, email: p.signed_in.email ?? "" });

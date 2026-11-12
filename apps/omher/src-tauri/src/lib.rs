@@ -207,6 +207,14 @@ async fn account_status(cli: String, id: String) -> Result<Option<accounts::Logi
     tauri::async_runtime::spawn_blocking(move || accounts::status(&home, &cli, &id)).await.map_err(|e| e.to_string())?
 }
 
+/// The CLI's version through its fixed `--version` (Claude Code, Codex); only the version token comes back,
+/// `null` for other CLIs or output with no version in it.
+#[tauri::command]
+async fn account_version(cli: String) -> Result<Option<String>, String> {
+    let home = user_home()?;
+    tauri::async_runtime::spawn_blocking(move || accounts::version(&home, &cli)).await.map_err(|e| e.to_string())?
+}
+
 /// Start the CLI's own sign-in (`claude auth login`, `codex login`) with omher account `id` as its home. The
 /// browser part happens in the CLI; its plain output lines and then its exit arrive on `on_event`.
 #[tauri::command]
@@ -461,6 +469,7 @@ pub fn run() {
             account_env,
             account_clis,
             account_status,
+            account_version,
             account_login_start,
             account_login_cancel,
             sessions_agents,
