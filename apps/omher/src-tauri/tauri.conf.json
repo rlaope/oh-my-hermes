@@ -27,7 +27,8 @@
   "bundle": {
     "active": true,
     "resources": {
-      "../bridge/omher_bridge.py": "bridge/omher_bridge.py"
+      "../bridge/omher_bridge.py": "bridge/omher_bridge.py",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "targets": "all",
     "icon": [
