@@ -9,6 +9,7 @@ when a page is actually measured, so `--help` works on a bare interpreter.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -71,9 +72,22 @@ PAGE_SCRIPT = """
     }
     return null;
   };
-  const top = (el) => (el ? r1(el.getBoundingClientRect().top + sy) : null);
+  // A box fixed to the viewport does not move with the page, so its place is
+  // its viewport rectangle; adding the scroll offset would put a control parked
+  // above the screen back inside the page once the page has scrolled.
+  const fixedToViewport = (el) => {
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      if (getComputedStyle(node).position === 'fixed') return true;
+    }
+    return false;
+  };
+  const top = (el) => {
+    if (!el) return null;
+    return r1(el.getBoundingClientRect().top + (fixedToViewport(el) ? 0 : sy));
+  };
   const onPage = (el) => {
     const r = el.getBoundingClientRect();
+    if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;
     return r.bottom + sy > 0 && r.right + sx > 0;
   };
   const firstOnPage = (selector) => {
@@ -169,10 +183,12 @@ def is_text_entry(local_name, input_type=""):
 
 
 def in_document_area(bottom, right):
-    """True when a box in page coordinates reaches into the document area.
+    """True when a box reaches into the area the reader can get to.
 
     A skip link parked above or left of the page (negative top and left) is
-    not where the first action sits; the page script skips such controls.
+    not where the first action sits; the page script skips such controls. The
+    box is in page coordinates, except for a control fixed to the viewport,
+    whose box is its viewport rectangle whatever the scroll position.
     """
     return bottom > 0 and right > 0
 
@@ -315,13 +331,47 @@ class RunError(Exception):
     """The page could not be measured; carries the exit-2 message."""
 
 
+def can_hold_directory():
+    """True where a file can be created relative to an already opened directory."""
+    return (os.open in os.supports_dir_fd and os.unlink in os.supports_dir_fd
+            and hasattr(os, "O_NOFOLLOW") and hasattr(os, "O_DIRECTORY"))
+
+
+def open_directory_without_links(directory):
+    """Open `directory` one component at a time and return its descriptor.
+
+    Each step opens the next name relative to the directory already held and
+    refuses a link, so a component swapped for a link after the path was
+    checked cannot redirect the walk. macOS's own top-level aliases are the
+    only links followed, as in `safe_path`.
+    """
+    plain = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+    held = os.open(directory.anchor, plain)
+    try:
+        walked = Path(directory.anchor)
+        for part in directory.parts[1:]:
+            walked = walked / part
+            flags = plain if system_alias(walked) else plain | os.O_NOFOLLOW
+            following = os.open(part, flags, dir_fd=held)
+            os.close(held)
+            held = following
+    except BaseException:
+        os.close(held)
+        raise
+    return held
+
+
 def write_new_file(value, data):
     """Create `value` and write `data`, never replacing or following anything.
 
     The `--shot` check runs before the page loads, and loading can take long
-    enough for a file or a link to appear at that path. So the parent is
-    resolved again here and the file is created exclusively without following a
-    link: a path that came to exist in between is refused and left untouched.
+    enough for a file or a link to appear at that path or above it. So the path
+    is checked again here, its directory is opened component by component
+    without following a link, and the file is created exclusively inside that
+    held directory: a name that came to exist is refused and left untouched,
+    and a directory swapped for a link cannot move the write elsewhere. Where
+    the platform cannot hold a directory (Windows), the second check and the
+    exclusive create are the whole guard.
     """
     try:
         path = safe_path(value)
@@ -329,18 +379,33 @@ def write_new_file(value, data):
         raise RunError(f"--shot: {exc}") from exc
     flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
              | getattr(os, "O_BINARY", 0))
+    held = None
     try:
-        fd = os.open(path, flags, 0o644)
-    except FileExistsError as exc:
-        raise RunError("--shot path appeared while the page loaded; refusing to replace it") from exc
-    except OSError as exc:
-        raise RunError(f"--shot could not be created: {exc.strerror}") from exc
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
-    except OSError as exc:
-        path.unlink(missing_ok=True)
-        raise RunError(f"--shot could not be written: {exc.strerror}") from exc
+        if can_hold_directory():
+            try:
+                held = open_directory_without_links(path.parent)
+            except OSError as exc:
+                raise RunError("--shot: symlink paths are not accepted; "
+                               f"the directory could not be opened without following one ({exc.strerror})") from exc
+        try:
+            fd = os.open(path.name, flags, 0o644, dir_fd=held) if held is not None else os.open(path, flags, 0o644)
+        except FileExistsError as exc:
+            raise RunError("--shot path appeared while the page loaded; refusing to replace it") from exc
+        except OSError as exc:
+            raise RunError(f"--shot could not be created: {exc.strerror}") from exc
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+        except OSError as exc:
+            if held is not None:
+                with contextlib.suppress(OSError):
+                    os.unlink(path.name, dir_fd=held)
+            else:
+                path.unlink(missing_ok=True)
+            raise RunError(f"--shot could not be written: {exc.strerror}") from exc
+    finally:
+        if held is not None:
+            os.close(held)
     return path
 
 

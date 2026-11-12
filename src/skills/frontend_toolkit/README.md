@@ -28,8 +28,8 @@ ran.
 |---|---|
 | `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0 |
 | `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width |
-| `first_data_y` | top of the first visible match of `--data`, in document px; without `--data` the guess is `table tbody tr, [role=row], li, article`, and `"not_found"` plus a hint means pass `--data` |
-| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped |
+| `first_data_y` | top of the first visible match of `--data`, in document px (a match fixed to the viewport is placed by its viewport box); without `--data` the guess is `table tbody tr, [role=row], li, article`, and `"not_found"` plus a hint means pass `--data` |
+| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped, and a control fixed to the viewport is judged and placed by its viewport box, so one parked above the screen stays skipped after the page scrolls |
 | `small_targets` | visible `a, button, [role=button], input, select, summary` under 44 px in either dimension: count and first 20 |
 | `small_inputs` | visible text-entry controls (`textarea`, `select`, and `input` other than checkbox, radio, button, submit, reset, file, image, range, color and hidden) whose computed font size is under 16 px: count and first 20; `checked` counts only these |
 | `console_errors` | `console.error` messages and uncaught page errors during load |
@@ -77,7 +77,11 @@ small targets and no small inputs.
   `index.html`; a path with `..` or a symlink component (macOS's own `/tmp`,
   `/var` and `/etc` links are trusted).
 - `--shot` that already exists, is a link, has no existing parent directory or
-  does not end in `.png`.
+  does not end in `.png`. The path is checked again after the page loads, and
+  on macOS and Linux the file is created inside its directory opened without
+  following a link, so a path or a directory that changed meanwhile is refused.
+  Windows has no such create; there the second check and an exclusive create
+  are the guard.
 
 The script makes no network request beyond loading the target and passes user
 strings to the page only as selector arguments to one fixed script.

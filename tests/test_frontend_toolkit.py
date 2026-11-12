@@ -6,12 +6,14 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 from _local_package import load_local_package
 from _module_patch import patch_modules
@@ -214,6 +216,69 @@ class OfflineCliTests(Fixture):
         self.assertIn("symlink", err)
         self.assertEqual(list(elsewhere.iterdir()), [])
 
+    def swap_after_the_last_path_check(self, api, swap):
+        """Patch the write's own path check so that `swap` runs right after it passed."""
+        checked = api.safe_path
+
+        def safe_path_then_swap(value):
+            path = checked(value)
+            swap()
+            return path
+
+        return mock.patch.object(api, "safe_path", safe_path_then_swap)
+
+    @POSIX_ONLY
+    def test_shot_directory_swapped_for_a_link_after_the_last_check_is_refused(self):
+        # The path check and the create are two steps. A directory above the
+        # file that becomes a link between them must not move the write.
+        for depth in ("parent", "grandparent"):
+            with self.subTest(swapped=depth):
+                api = helper_api()
+                if not api.can_hold_directory():
+                    self.skipTest("this platform cannot create a file inside a held directory")
+                top = self.root / f"out-{depth}"
+                folder = top / "inner" if depth == "grandparent" else top
+                folder.mkdir(parents=True)
+                elsewhere = self.root / f"elsewhere-{depth}"
+                (elsewhere / "inner").mkdir(parents=True)
+
+                def swap(top=top, folder=folder, elsewhere=elsewhere):
+                    if folder != top:
+                        folder.rmdir()
+                    top.rmdir()
+                    top.symlink_to(elsewhere, target_is_directory=True)
+
+                with self.swap_after_the_last_path_check(api, swap), self.assertRaises(api.RunError) as refused:
+                    api.write_new_file(folder / "shot.png", b"bytes")
+                self.assertIn("symlink", str(refused.exception))
+                self.assertEqual([p for p in elsewhere.rglob("*") if p.is_file()], [])
+
+    def test_shot_write_failure_leaves_no_partial_file(self):
+        api = helper_api()
+        shot = self.root / "shot.png"
+
+        def failing_fdopen(fd, *_, **__):
+            os.close(fd)
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(api.os, "fdopen", failing_fdopen):
+            with self.assertRaises(api.RunError) as refused:
+                api.write_new_file(shot, b"bytes")
+        self.assertIn("could not be written", str(refused.exception))
+        self.assertFalse(os.path.lexists(shot))
+
+    def test_shot_is_written_where_a_directory_cannot_be_held(self):
+        # Windows has no directory-relative create; the second check and the
+        # exclusive create still write a new file and refuse an existing one.
+        api = helper_api()
+        shot = self.root / "shot.png"
+        with mock.patch.object(api, "can_hold_directory", lambda: False):
+            self.assertEqual(api.write_new_file(shot, b"bytes"), shot)
+            self.assertEqual(shot.read_bytes(), b"bytes")
+            with self.assertRaises(api.RunError):
+                api.write_new_file(shot, b"other")
+        self.assertEqual(shot.read_bytes(), b"bytes")
+
     def test_shot_is_written_once_when_the_path_stays_new(self):
         shot = self.root / "shot.png"
         with patch_modules(fake_playwright(lambda: None)):
@@ -305,6 +370,8 @@ class PureHelperTests(unittest.TestCase):
         self.assertFalse(api.in_document_area(bottom=48, right=-1))    # parked left of the page
         self.assertFalse(api.in_document_area(bottom=0, right=120))
         self.assertIn("firstOnPage(opts.action_selector)", api.PAGE_SCRIPT)
+        # A control fixed to the viewport is judged by its viewport box, not by box plus scroll.
+        self.assertIn("if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;", api.PAGE_SCRIPT)
 
     def test_page_script_takes_thresholds_and_list_limit_as_arguments(self):
         api = helper_api()
@@ -473,6 +540,28 @@ class BrowserTests(Fixture):
                         '<a class="skip" href="#main">Skip to content</a>'
                         '<main id="main"><a href="/start" style="display:block;height:48px">Start</a></main>')
         self.assertEqual(self.measure(page)["first_action_y"], 150)
+
+    def scrolled_page(self, name, fixed_top):
+        # The page scrolls itself by 200 px before it is measured, and carries
+        # one control fixed to the viewport at `fixed_top`.
+        page = self.root / name
+        page.write_text('<!doctype html><meta name="viewport" content="width=device-width"><style>'
+                        'body{margin:0;min-height:3000px} main{padding-top:150px}'
+                        f' .pinned{{position:fixed;top:{fixed_top}px;left:0;display:block;height:48px}}</style>'
+                        '<a class="pinned" href="#main">Pinned</a>'
+                        '<main id="main"><a href="/start" style="display:block;height:48px">Start</a></main>'
+                        '<script>window.scrollTo(0, 200)</script>')
+        return page
+
+    def test_fixed_control_parked_above_the_screen_stays_skipped_after_scroll(self):
+        # Fixed at -100 px its box is above the screen at every scroll position;
+        # adding the scroll offset would report it at 100 instead of skipping it.
+        report = self.measure(self.scrolled_page("parked.html", -100))
+        self.assertEqual(report["first_action_y"], 150)
+
+    def test_fixed_control_on_screen_is_placed_by_its_viewport_box(self):
+        report = self.measure(self.scrolled_page("pinned.html", 20))
+        self.assertEqual(report["first_action_y"], 20)
 
     def test_bad_selector_is_exit_2(self):
         self.refused([str(CLEAN), "--data", "li["], "measuring failed")
