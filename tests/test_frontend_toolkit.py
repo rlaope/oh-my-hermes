@@ -383,10 +383,18 @@ class OfflineCliTests(Fixture):
         self.assertGreater(len(set(lines[:last + 1])), 6, lines)
         for stop_at in range(last + 1):
             with self.subTest(statement=stop_at, line=lines[stop_at] - first_line):
-                with self.assertRaises(KeyboardInterrupt):
-                    walk(stop_at)
-                self.assertEqual(live, set())
-                live.clear()
+                # Whatever this pass left open is closed before it is judged, so
+                # one leak is one failure and nothing stays open after the test.
+                left = None
+                try:
+                    with self.assertRaises(KeyboardInterrupt):
+                        walk(stop_at)
+                    left = set(live)
+                finally:
+                    for descriptor in live:
+                        real_close(descriptor)
+                    live.clear()
+                self.assertEqual(left, set())
 
     def test_shot_is_written_once_when_the_path_stays_new(self):
         shot = self.root / "shot.png"
