@@ -94,8 +94,9 @@ test("1. Hermes without omh: the + row reads Hermes with Hermes' mark and opens 
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/web-app");
   const opened = (await mock("mock.calls")).calls!.find((c) => c.op === "folder.open")!;
   expect(opened.params).toMatchObject({ bot: "friren", cwd: "/Users/you/code/web-app" });
-  const sent = (await mock("mock.calls")).calls!.find((c) => c.op === "chat.send" && c.params.session);
-  expect(sent?.params.text).toBe("What is in this folder?");
+  await expect
+    .poll(async () => (await mock("mock.calls")).calls!.find((c) => c.op === "chat.send" && c.params.session)?.params.text)
+    .toBe("What is in this folder?");
   await expect(page.getByTestId("session-list").getByTestId("session-sub").first()).toContainText("Hermes");
 });
 
