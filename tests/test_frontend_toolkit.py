@@ -907,12 +907,17 @@ class BrowserTests(Fixture):
     def test_rtl_link_the_browser_has_not_rendered_yet_counts_when_scrolling_reaches_it(self):
         # `content-visibility: auto` leaves off-screen content unrendered, and an
         # unrendered box has no part an observer reports. Scrolling down renders
-        # the link at 5000, so it is the first action; the same box inside a
-        # container that clips it away is never rendered, and the button at 300 is.
+        # the link at 5000, so it is the first action. The same box inside a
+        # container that clips it away is never rendered, and a link parked far
+        # left inside it stays behind the box's own paint clip: the button at
+        # 300 is first on both.
         lazy = ('<div style="position:absolute;top:5000px;right:0;width:300px;height:200px;'
-                'content-visibility:auto"><a id="first" href="#">first</a></div>')
+                'content-visibility:auto"><a id="first" href="#"%s>first</a></div>')
         clip = '<div style="position:absolute;top:0;right:0;width:390px;height:100px;overflow:hidden">%s</div>'
-        for label, body, expected in (("reachable", lazy, 5000), ("clipped", clip % lazy, 300)):
+        parked = ' style="position:absolute;left:-9999px"'
+        cases = (("reachable", lazy % "", 5000), ("clipped", clip % (lazy % ""), 300),
+                 ("parked-left", lazy % parked, 300))
+        for label, body, expected in cases:
             with self.subTest(lazy=label):
                 report = self.measure(self.parked_left_page(f"lazy-{label}.html", "", body))
                 self.assertEqual(report["first_action_y"], expected)
@@ -938,11 +943,32 @@ class BrowserTests(Fixture):
             ("row-left-parked", f'<div dir="ltr" style="{box}overflow-x:auto">'
                                 '<a id="first" href="#" style="position:absolute;left:-200px;top:0">first</a>'
                                 '<div style="width:720px;height:10px"></div></div>', 300),
+            ("legacy-box-reverse", f'<div dir="ltr" style="{box}overflow:auto;display:-webkit-box;'
+                                   '-webkit-box-direction:reverse"><div style="width:600px;height:20px"></div>'
+                                   '<a id="first" href="#">first</a></div>', 500),
+            ("vertical-lr", f'<div style="{box}overflow:auto;writing-mode:vertical-lr">'
+                            '<div style="width:600px;height:50px"></div><a id="first" href="#">first</a></div>', 552),
         )
         for label, body, expected in cases:
             with self.subTest(box=label):
                 report = self.measure(self.parked_left_page(f"reverse-{label}.html", "", body))
                 self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
+        # The link sits in a reversed scroll box whose listener loads more
+        # content on the first scroll. Finding the link must not scroll the box:
+        # the input and button the listener adds were counted as the page's own.
+        body = ('<div id="box" style="position:absolute;top:500px;right:0;width:300px;height:100px;'
+                'overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                '<div style="height:400px;flex:none"></div><a id="first" href="#" style="flex:none">first</a></div>'
+                '<script>document.getElementById("box").addEventListener("scroll", () => {'
+                'const more = document.createElement("article");'
+                'more.innerHTML = "<input style=\'font-size:12px\'><button>loaded</button>";'
+                'document.body.prepend(more); }, {once: true});</script>')
+        report = self.measure(self.parked_left_page("scroll-listener.html", "", body))
+        self.assertEqual(report["first_action_y"], 152)
+        self.assertEqual(report["small_targets"]["checked"], 2)
+        self.assertEqual(report["small_inputs"]["checked"], 0)
 
     def test_left_to_right_neighbours_are_unchanged(self):
         # These pass on the code before the right-to-left change as well; they

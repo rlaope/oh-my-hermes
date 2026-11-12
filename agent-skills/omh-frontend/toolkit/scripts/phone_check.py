@@ -178,27 +178,46 @@ async (opts) => {
   // way: what the reader can bring into it. <body> is not such a box while
   // the viewport has taken its overflow.
   // How far a box still scrolls toward lower and toward higher positions. It
-  // scrolls from 0 up to `d`, or from -`d` up to 0 (right-to-left text, a
-  // reversed flex line, a vertical-rl box). Away from 0 the sign of the
-  // position says which. At 0 no property the box reports does, so the box is
-  // asked: it is sent to its lowest position on that axis and put back at
-  // once, without animation. That is the one place this script moves anything
-  // on the page, and only a box that clips a candidate control at 0 gets it.
-  const lowestOf = (box, horizontal) => {
-    const at = [box.scrollLeft, box.scrollTop];
-    box.scrollTo({left: horizontal ? -1e7 : at[0], top: horizontal ? at[1] : -1e7, behavior: 'instant'});
-    const lowest = horizontal ? box.scrollLeft : box.scrollTop;
-    box.scrollTo({left: at[0], top: at[1], behavior: 'instant'});
-    return lowest;
+  // scrolls from 0 up to `d`, or from -`d` up to 0. Away from 0 the sign of
+  // the position says which. At 0 the box's start corner does: a box scrolls
+  // away from the corner its content starts in, which is block-start and
+  // inline-start, or main-start and cross-start for a flex container, the
+  // legacy `-webkit-box` included (CSS Overflow, on unreachable scrollable
+  // overflow). This reads the box's
+  // writing mode, direction and flex flow and moves nothing: scrolling the box
+  // to ask runs the page's own scroll listeners in the middle of a
+  // measurement, and what they add is then counted.
+  const across = {left: 'right', right: 'left', top: 'bottom', bottom: 'top'};
+  const startCorner = (style) => {
+    const mode = style.writingMode;
+    const rtl = style.direction === 'rtl';
+    let block = 'top', inline = rtl ? 'right' : 'left';
+    if (/^(vertical|sideways)-/.test(mode)) {
+      block = mode.endsWith('-rl') ? 'right' : 'left';
+      inline = (mode === 'sideways-lr') !== rtl ? 'bottom' : 'top';
+    }
+    let sides = [block, inline];
+    const legacy = style.display === '-webkit-box' || style.display === '-webkit-inline-box';
+    if (legacy || style.display === 'flex' || style.display === 'inline-flex') {
+      const column = legacy ? style.webkitBoxOrient === 'vertical' : style.flexDirection.startsWith('column');
+      const reverse = legacy ? style.webkitBoxDirection === 'reverse' : style.flexDirection.endsWith('-reverse');
+      let main = column ? block : inline, cross = column ? inline : block;
+      if (reverse) main = across[main];
+      if (!legacy && style.flexWrap === 'wrap-reverse') cross = across[cross];
+      sides = [main, cross];
+    }
+    return {right: sides.includes('right'), bottom: sides.includes('bottom')};
   };
-  const travel = (at, d, lowest) => at > 0 ? [Math.min(d, at), Math.max(0, d - at)]
+  const travel = (at, d, fromEnd) => at > 0 ? [Math.min(d, at), Math.max(0, d - at)]
     : at < 0 ? [Math.max(0, d + at), Math.min(d, -at)]
-    : d && lowest() < 0 ? [d, 0] : [0, d];
+    : fromEnd ? [d, 0] : [0, d];
   // Content the browser has not rendered yet (`content-visibility: auto`, off
   // screen) has no part an observer can report, though scrolling to it renders
-  // it. The browser says which boxes those are. Such a box counts when the box
-  // that skips it can be reached and its own box lies where the page reaches;
-  // a clip between the two is not seen until the browser renders it.
+  // it. The browser says which boxes those are. What clips such a box shows
+  // only once it is rendered, and this script does not move the page to render
+  // it. So it counts when the box that skips it can be reached and its own box
+  // passes the edge test a page that starts at the left gets: below the top
+  // and right of page x 0. A clip inside the skipped content is not seen.
   const rendered = (el) => typeof el.checkVisibility !== 'function'
     || el.checkVisibility({contentVisibilityAuto: true});
   const renderSkipped = (el) => typeof el.checkVisibility === 'function'
@@ -208,6 +227,10 @@ async (opts) => {
     while (box && !rendered(box)) box = box.parentElement;
     return box;
   };
+  const pastTopAndLeft = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom + sy > 0 && r.right + sx > 0;
+  };
   const scrollBoxAbove = (node) => {
     for (let box = node; box && box !== doc; box = box.parentElement) {
       if (box === document.body && viewportFromBody) continue;
@@ -215,8 +238,9 @@ async (opts) => {
       const dx = offersScroll(style.overflowX) ? Math.max(0, box.scrollWidth - box.clientWidth) : 0;
       const dy = offersScroll(style.overflowY) ? Math.max(0, box.scrollHeight - box.clientHeight) : 0;
       if (!dx && !dy) continue;
-      const [left, right] = travel(box.scrollLeft, dx, () => lowestOf(box, true));
-      const [up, down] = travel(box.scrollTop, dy, () => lowestOf(box, false));
+      const corner = startCorner(style);
+      const [left, right] = travel(box.scrollLeft, dx, corner.right);
+      const [up, down] = travel(box.scrollTop, dy, corner.bottom);
       return {node: box, grown: [up, right, down, left].map((px) => px + 'px').join(' ')};
     }
     return null;
@@ -244,7 +268,7 @@ async (opts) => {
     if (skipped.length) {
       await settle(Array.from(new Set(skipped.map((item) => item.by).filter(Boolean))));
       for (const {el, by} of skipped) {
-        reach.set(el, Boolean(by) && reach.get(by) === true && inReach(el, el.getBoundingClientRect()));
+        reach.set(el, Boolean(by) && reach.get(by) === true && pastTopAndLeft(el));
       }
     }
     while (pending.length) {
