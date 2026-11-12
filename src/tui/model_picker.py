@@ -31,6 +31,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from .escapes import strip_escapes
+from .fuzzy import subsequence_tail
 from .gateway_contract import MODEL_PROVIDER_FLAG, MODEL_SESSION_FLAG, model_switch_value, plain_word
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
 from .session_picker import picker_frame, picker_row
@@ -144,10 +145,7 @@ class ModelPicker:
             self.index = next((number for number, row in enumerate(self.rows) if row.current), 0)
 
     def visible(self) -> list[ModelRow]:
-        needle = self.query.casefold()
-        if not needle:
-            return list(self.rows)
-        return [row for row in self.rows if needle in f"{row.model}\n{row.provider}\n{row.provider_name}".casefold()]
+        return subsequence_tail(self.rows, self.query, lambda row: (row.model, row.provider, row.provider_name))
 
     def handle_key(self, event: Key | Paste) -> ModelAction | None:
         """Apply one key; a `ModelAction` when the person picked a model or closed the picker."""
