@@ -348,6 +348,14 @@ All notable changes will be documented here.
   turn no longer remembered) and Codex 0.167's app-server (revert on a real
   thread; its turns ran out of credit).
 
+- **omher sessions are easy to find, reopen and switch.** A session row's right-click menu now holds Rename,
+  Show in Finder / Explorer, Open in Terminal (your own system terminal in that folder), Copy conversation id,
+  New session here and Close session. The sidebar search also filters sessions by name and folder. The SESSIONS
+  `+` menu ends with "Continue a conversation" for Claude Code and Codex: their recent conversations in your recent
+  folders and home, read-only from their own files, and picking one continues it in omher with its last messages
+  shown. ⌘N (Ctrl+N) opens the `+` menu and ⌘⇧] / ⌘⇧[ move to the next and previous session. The Dock shows how
+  many approvals and questions wait (Linux launchers that show counts too; Windows gets a dot on the taskbar
+  button). BOUNDARY rule 29.
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
   split a run into parallel lanes now looks only at the build nodes: it comes
   when at least 80% of two or more build nodes sit on one chain, in a run of
