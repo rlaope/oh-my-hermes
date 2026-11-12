@@ -22,6 +22,7 @@ import { SessionFace } from "./SessionFace";
 import { agentDef, agentLabel, CONTINUES, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
+import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
@@ -197,9 +198,20 @@ function OpenPick({ rec, way }: { rec: SessionRec; way: OpenAs }) {
           className={`ss-way-o${way === w ? " on" : ""}`}
           aria-checked={way === w}
           aria-disabled={!has[w] || undefined}
+          // one Tab stop for the pair; the arrow keys move between the two, as in any radio group
+          tabIndex={way === w ? 0 : -1}
           title={tip(w)}
           onClick={() => {
             if (has[w]) getSessions().setOpen(rec.id, w);
+          }}
+          onKeyDown={(e) => {
+            if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+            e.preventDefault();
+            const other = w === "chat" ? "terminal" : "chat";
+            // the focus moves even to a way the agent lacks, so its reason can be read; only one it has is picked
+            // (picking Chat then hands the focus to the box, as a click on Chat does)
+            e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid=session-way-${other}]`)?.focus();
+            if (has[other]) getSessions().setOpen(rec.id, other);
           }}
           data-testid={`session-way-${w}`}
         >
@@ -684,6 +696,23 @@ export function SessionView() {
   const s = useStore();
   const ss = useSessions();
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
+  // looking at a session sees what its row carried for the person (it rang, it finished): at once when it is opened,
+  // and when the window comes back to it
+  const shown = rec?.id ?? null;
+  const unseen = shown ? ss.unseen[shown] : undefined;
+  useEffect(() => {
+    if (!shown) return;
+    const see = () => {
+      if (windowWatched()) getSessions().seen(shown);
+    };
+    see();
+    window.addEventListener("focus", see);
+    document.addEventListener("visibilitychange", see);
+    return () => {
+      window.removeEventListener("focus", see);
+      document.removeEventListener("visibilitychange", see);
+    };
+  }, [shown, unseen]);
   if (!rec) {
     return (
       <div className="chat-empty" data-testid="session-gone">

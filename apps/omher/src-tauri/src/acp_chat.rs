@@ -1246,7 +1246,7 @@ mod tests {
             let out: Out = Arc::new(Mutex::new(Vec::new()));
             let o = out.clone();
             let id = c
-                .start_agent("opencode", &dir, resume, &[], move |x| {
+                .start_agent("opencode", &dir, resume, &[], None, move |x| {
                     if let ChatOut::Event(e) = x {
                         o.lock().unwrap().push(e)
                     }
@@ -1306,7 +1306,7 @@ mod tests {
         let out: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
         let o = out.clone();
         let id = c
-            .start_agent("opencode", &dir, None, &[], move |x| match x {
+            .start_agent("opencode", &dir, None, &[], None, move |x| match x {
                 ChatOut::Event(e) => o.lock().unwrap().push(e),
                 ChatOut::Exit(code, err) => o.lock().unwrap().push(json!({"event": "exit", "code": code, "error": err})),
             })

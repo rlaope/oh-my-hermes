@@ -7,7 +7,7 @@ import { join } from "node:path";
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 
-async function mock(op: string): Promise<void> {
+async function mock(op: string, params: Record<string, unknown> = {}): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
   await new Promise<void>((res, rej) => {
     ws.onopen = () => res();
@@ -15,7 +15,7 @@ async function mock(op: string): Promise<void> {
   });
   await new Promise<void>((res) => {
     ws.onmessage = () => res();
-    ws.send(JSON.stringify({ id: "x1", op }));
+    ws.send(JSON.stringify({ id: "x1", op, ...params }));
   });
   ws.close();
 }
@@ -100,6 +100,9 @@ for (const theme of ["dark", "light"] as const) {
     test(`shots (${theme})`, async ({ page }) => {
       test.skip(!SHOTS, "no shot folder");
       mkdirSync(SHOTS, { recursive: true });
+      // staged shots carry no bot named after the product: the default profile shows as "Juno" (mock.reset, before
+      // each test, puts the name back)
+      await mock("bots.rename", { bot: "default", name: "Juno" });
       const shot = async (what: string) => {
         await page.mouse.move(640, 60);
         await page.waitForTimeout(350);
@@ -145,6 +148,108 @@ for (const theme of ["dark", "light"] as const) {
       await draft(page, "dsh");
       await neutral();
       await shot("dsh-disabled");
+
+    });
+
+    // the list with every kind of row, each with its view mark: a chat, a running terminal, an ended terminal and a
+    // terminal draft. Taken at two device pixels per pixel, as the app's window draws on the screens it ships to.
+    test.describe("rows", () => {
+      test.use({ deviceScaleFactor: 2 });
+      test(`shot of the session rows (${theme})`, async ({ page }) => {
+        test.skip(!SHOTS, "no shot folder");
+        mkdirSync(SHOTS, { recursive: true });
+        await mock("bots.rename", { bot: "default", name: "Juno" });
+        const folder = (p: string) => page.evaluate((v) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = v), p);
+        await open(page, theme);
+        await draft(page, "claude");
+        await page.getByTestId("session-way-terminal").click();
+        await page.getByTestId("session-go").click();
+        await expect(page.locator(".xterm-rows")).toContainText("(mock)");
+        await page.locator(".xterm-helper-textarea").focus();
+        await page.keyboard.type("exit");
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("session-ended")).toBeVisible();
+        await folder("/Users/you/code/api-server");
+        await draft(page, "opencode");
+        await page.getByTestId("session-way-terminal").click();
+        await page.getByTestId("session-go").click();
+        await expect(page.locator(".xterm-rows")).toContainText("opencode");
+        await folder("/Users/you/code/docs-site");
+        await draft(page, "claude");
+        await page.getByTestId("session-way-chat").click();
+        await page.getByTestId("composer").fill("Summarize the README");
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("session-status")).toHaveText("Ready");
+        await folder("/Users/you/code/infra");
+        await draft(page, "codex");
+        await page.getByTestId("session-way-terminal").click();
+        await expect(page.locator("[data-testid=session-list] [data-testid=session-view]")).toHaveCount(4);
+        // show an unselected list: the selected row's mark is cut in another background
+        await page.getByTestId("bot-kami").click();
+        await page.mouse.move(700, 300);
+        await page.waitForTimeout(350);
+        const list = (await page.getByTestId("session-list").boundingBox())!;
+        await page.screenshot({
+          path: join(SHOTS, `open-term-rows-${theme}.png`),
+          animations: "disabled",
+          clip: { x: 0, y: list.y - 34, width: list.x + list.width + 8, height: list.height + 42 },
+        });
+      });
+
+      // the states: a terminal that rang, one that ended on an error, a chat that finished unseen, a chat with an
+      // open approval, and a terminal that just runs
+      test(`shot of the session rows with their state signs (${theme})`, async ({ page }) => {
+        test.skip(!SHOTS, "no shot folder");
+        mkdirSync(SHOTS, { recursive: true });
+        await mock("bots.rename", { bot: "default", name: "Juno" });
+        const folder = (p: string) => page.evaluate((v) => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = v), p);
+        const line = async (text: string) => {
+          await page.locator(".xterm-helper-textarea").focus();
+          await page.keyboard.type(text);
+          await page.keyboard.press("Enter");
+        };
+        const terminal = async (agent: string, mark: string) => {
+          await draft(page, agent);
+          await page.getByTestId("session-way-terminal").click();
+          await page.getByTestId("session-go").click();
+          await expect(page.locator(".xterm-rows")).toContainText(mark);
+        };
+        const rowOf = (name: string) => page.locator("[data-testid=session-list] .ss-row").filter({ hasText: name });
+        await open(page, theme);
+        await terminal("claude", "(mock)");
+        await line("after 2500 bell");
+        await folder("/Users/you/code/api-server");
+        await terminal("opencode", "opencode");
+        await line("after 2500 exit 3");
+        await folder("/Users/you/code/docs-site");
+        await draft(page, "claude");
+        await page.getByTestId("session-way-chat").click();
+        await page.getByTestId("composer").fill("Summarize the README");
+        await page.keyboard.press("Enter");
+        await page.getByTestId("bot-kami").click();
+        await folder("/Users/you/code/infra");
+        await draft(page, "codex");
+        await page.getByTestId("session-way-chat").click();
+        await page.getByTestId("composer").fill("/approve clean the build folder");
+        await page.keyboard.press("Enter");
+        await page.getByTestId("bot-kami").click();
+        await folder("/Users/you/code/mobile-app");
+        await terminal("claude", "(mock)");
+        await page.getByTestId("bot-kami").click();
+        await expect(rowOf("web-app")).toHaveAttribute("data-mark", "needs", { timeout: 10_000 });
+        await expect(rowOf("api-server")).toHaveAttribute("data-mark", "error", { timeout: 10_000 });
+        await expect(rowOf("docs-site")).toHaveAttribute("data-mark", "done", { timeout: 10_000 });
+        await expect(rowOf("infra")).toHaveAttribute("data-mark", "needs", { timeout: 10_000 });
+        await expect(rowOf("mobile-app")).not.toHaveAttribute("data-mark", /.+/);
+        await page.mouse.move(700, 300);
+        await page.waitForTimeout(350);
+        const list = (await page.getByTestId("session-list").boundingBox())!;
+        await page.screenshot({
+          path: join(SHOTS, `open-term-marks-${theme}.png`),
+          animations: "disabled",
+          clip: { x: 0, y: list.y - 34, width: list.x + list.width + 8, height: list.height + 42 },
+        });
+      });
     });
   });
 }

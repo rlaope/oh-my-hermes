@@ -202,3 +202,84 @@ test("a terminal-opened session has no Chat toggle and its row shows the live do
   await expect(rows.first().getByTestId("live-dot")).toHaveCount(0);
   expect(await count(page, "chat.start", "claude")).toBe(1);
 });
+
+test("the choice is one Tab stop and the arrow keys move it; a way the agent lacks takes the focus but is never picked", async ({ page }) => {
+  await open(page);
+  await draft(page, "claude");
+  const chat = page.getByTestId("session-way-chat");
+  const term = page.getByTestId("session-way-terminal");
+  await expect(chat).toHaveAttribute("tabindex", "0");
+  await expect(term).toHaveAttribute("tabindex", "-1");
+  await chat.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(term).toBeFocused();
+  await expect(term).toHaveAttribute("aria-checked", "true");
+  await expect(term).toHaveAttribute("tabindex", "0");
+  await expect(page.getByTestId("session-go")).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
+  await expect(chat).toHaveAttribute("aria-checked", "true");
+  // back on Chat the box can be typed in again and takes the focus, as it does after a click on Chat
+  await expect(page.getByTestId("composer")).toBeFocused();
+
+  // DSH has no terminal: the arrow reaches the dimmed word (its reason is its title) and Chat stays picked
+  await draft(page, "dsh");
+  await page.getByTestId("session-way-chat").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("session-way-terminal")).toBeFocused();
+  await expect(page.getByTestId("session-way-chat")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("composer")).toBeEnabled();
+});
+
+test("a session row carries a mark for its view: a draft shows the picked way, a started session the view it is in", async ({ page }) => {
+  await open(page);
+  const rowOf = (name: string) => page.locator("[data-testid=session-list] .ss-row").filter({ hasText: name });
+
+  // a draft follows the choice beside the agent
+  await draft(page, "claude");
+  const mark = rowOf("New session").getByTestId("session-view");
+  await expect(mark).toHaveAttribute("data-view", "chat");
+  await expect(mark).toHaveAttribute("aria-label", "Chat");
+  await page.getByTestId("session-way-terminal").click();
+  await expect(mark).toHaveAttribute("data-view", "terminal");
+  await expect(mark).toHaveAttribute("aria-label", "Terminal");
+
+  // opened as a terminal: the mark stays the terminal's, running and ended
+  await page.getByTestId("session-go").click();
+  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
+  const term = rowOf("web-app").getByTestId("session-view");
+  await expect(term).toHaveAttribute("data-view", "terminal");
+  await expect(term).toHaveAttribute("title", "Terminal");
+
+  // opened as a chat: the chat's mark; the header's Terminal toggle moves it, and back
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/Users/you/code/api-server"));
+  await draft(page, "claude");
+  await page.getByTestId("session-way-chat").click();
+  await page.getByTestId("composer").fill("hello");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-status")).toHaveText("Ready");
+  const chat = rowOf("hello").getByTestId("session-view");
+  await expect(chat).toHaveAttribute("data-view", "chat");
+  await page.getByTestId("session-terminal-toggle").click();
+  await expect(chat).toHaveAttribute("data-view", "terminal");
+  await page.getByTestId("session-terminal-toggle").click();
+  await expect(chat).toHaveAttribute("data-view", "chat");
+  await expect(term).toHaveAttribute("data-view", "terminal");
+
+  // the mark sits inside its row, clear of the agent line; a bot row has none
+  await page.mouse.move(700, 300);
+  for (const m of [term, chat]) {
+    const fit = await m.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const row = el.closest(".ss-row")!.getBoundingClientRect();
+      const sub = el.parentElement!.querySelector("[data-testid=session-sub]")!;
+      const s = sub.getBoundingClientRect();
+      return { w: r.width, inRow: r.left >= row.left && r.right <= row.right + 0.5, clearOfSub: r.left >= s.right - 0.5, subCut: sub.scrollWidth > sub.clientWidth + 1 };
+    });
+    expect(fit.w).toBeGreaterThan(10);
+    expect(fit.inRow).toBe(true);
+    expect(fit.clearOfSub).toBe(true);
+    expect(fit.subCut).toBe(false);
+  }
+  await expect(page.locator("[data-testid=bot-kami] [data-testid=session-view]")).toHaveCount(0);
+  await expect(page.locator("[data-testid=bot-friren] [data-testid=session-view]")).toHaveCount(0);
+});
