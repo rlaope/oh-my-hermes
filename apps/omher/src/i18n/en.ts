@@ -111,6 +111,11 @@ export const en = {
   "omh.icon": "oh-my-hermes is not installed",
   "omh.pop.body": "With it your bots plan big jobs in parts, hand the parts out, and the plan shows in Plans as it runs.",
   "omh.pop.hide": "Don't show again",
+  "omhp.ready": "oh-my-hermes is ready. Set up your models?",
+  "omhp.fill": "Put it in the message box",
+  "omhp.ask": "Set up my models from the providers this computer already has. Show me what will change before you apply anything.",
+  "omhp.noSkills": "{bot} does not list oh-my-hermes' skills yet.",
+  "omhp.tools": "{bot} does not have oh-my-hermes' tools yet (subagent plans and the rest). Model setup works without them.",
   "onb.botsHint": "Each bot is a Hermes profile. Add one with + above.",
   "onb.sessionsHint": "Run a coding agent in a folder, as a chat.",
 

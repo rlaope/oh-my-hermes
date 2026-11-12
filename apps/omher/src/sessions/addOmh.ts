@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { appendLine, gateShell, type GateShell } from "../app/BridgeGate";
 import { t } from "../i18n";
 import { getSessions } from "./sessions";
+import { omhInstalled } from "../onboarding/omhPrompt";
 
 export type AddOmhPhase = "idle" | "running" | "failed";
 
@@ -68,6 +69,7 @@ export function createAddOmh(shell: () => Promise<GateShell | null>, reload: () 
     if (code === 0 && !refused) {
       await reload();
       set({ phase: "idle", lines: [], error: null, open: false });
+      omhInstalled();
     } else {
       set({ phase: "failed", error: failLine(state.lines, code, refused) });
     }

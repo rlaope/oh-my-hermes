@@ -101,6 +101,10 @@ RULES = (
     "and any other session that was running comes back paused until the person presses Resume; nothing starts twice.",
     "A session started again this way may name the account it ran with, which the shell uses only while that account's folder still exists,",
     "For the composer's `$` skill picker omher reads, never writes, the bot's own skill files",
+    "then the folders the profile's `config.yaml` names in `skills.external_dirs`, where oh-my-hermes registers its skills",
+    "pressing it puts the model-setup skill's `/command` and one sentence into the composer, and nothing is sent;",
+    "omher restarts and reloads nothing and runs nothing for it.",
+    "omher asks that gateway's own `plugins.manage` `list` (rule 25) and reads only whether the `omh` row is enabled",
     "It follows the profile's symlinked skill folders and files as Hermes' own skill scan does, reads each real folder once",
     "reads only the first 8 KB of each `SKILL.md` and keeps only the `name` and `description` of its frontmatter,",
     "A picked skill reaches the bot as `/name` at the start of the text the person sends, through the same `chat.send`;",
@@ -465,7 +469,13 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         op = ast.unparse(fns["op_skills_list"])
         self.assertIn("asyncio.to_thread(read_skills, bot['path'])", op)
         self.assertNotIn("conn", op)  # no gateway call: a file read
-        reader = "\n".join(ast.unparse(fns[n]) for n in ("read_skills", "read_skill_head", "_frontmatter_value"))
+        names = ("read_skills", "skill_roots", "_scan_skills", "read_skill_head", "_frontmatter_value")
+        reader = "\n".join(ast.unparse(fns[n]) for n in names)
+        # the profile's own folder first, then the config's skills.external_dirs (parsed, never written)
+        roots = ast.unparse(fns["skill_roots"])
+        self.assertIn("roots = [profile_dir / 'skills']", roots)
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('skills')", roots)
+        self.assertIn("cfg.get('external_dirs')", roots)
         self.assertIn("os.walk(root, followlinks=True)", reader)
         self.assertIn("real = os.path.realpath(dirpath)", reader)
         self.assertIn("if real in seen:", reader)
@@ -474,11 +484,29 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("read_skill_head(skill)", reader)
         self.assertIn("fh.read(SKILL_HEAD_MAX)", reader)
         self.assertIn("SKILL_HEAD_MAX = 8 * 1024", self.source)
-        opens = [c for n in ("read_skills", "read_skill_head", "_frontmatter_value") for c in ast.walk(fns[n])
+        opens = [c for n in names for c in ast.walk(fns[n])
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
         self.assertEqual([ast.unparse(c) for c in opens], ["open(path, 'rb')"])
         for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self."):
             self.assertNotIn(banned, reader, banned)
+
+    def test_the_model_setup_line_only_fills_the_composer(self) -> None:
+        """Rule 19: the one-time line after omher's own install writes into the composer on the person's press
+        (`actions.prefill`) and sends nothing; it runs no program, restarts nothing and asks the shell for nothing."""
+        app = ROOT / "apps" / "omher" / "src" / "onboarding"
+        line = (app / "OmhPromptLine.tsx").read_text(encoding="utf-8")
+        logic = (app / "omhPrompt.ts").read_text(encoding="utf-8")
+        self.assertIn("getStore().actions.prefill(promptText(p.command!))", line)
+        for text in (line, logic):
+            for banned in (".send(", "sendWithFiles", "chat.send", "invoke(", "@tauri-apps", "gateShell", "install("):
+                self.assertNotIn(banned, text, banned)
+        # the command comes from skills.list, never written as a literal
+        self.assertNotIn('"/omh-model-setup"', logic)
+        self.assertIn("getStore().actions.skills(bot, true)", logic)
+        # the plugin check reads the running gateway's list only (rule 25's `list`), never a toggle or an install
+        self.assertIn("getStore().actions.pluginsList(bot)", logic)
+        for banned in ("togglePlugin", "installPlugin", "plugins.toggle", "plugins.install", "updatePlugin", "removePlugin"):
+            self.assertNotIn(banned, logic, banned)
 
     def test_chat_attach_takes_the_main_chat_id_and_bytes_only(self) -> None:
         """Every Hermes attach call is made by `op_chat_attach`, with the main chat's id, and no path."""
