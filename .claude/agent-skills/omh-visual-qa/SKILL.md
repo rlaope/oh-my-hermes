@@ -85,6 +85,7 @@ Quality bar:
 - Set a viewport only through a tool that can, and read the width back before the capture; a width that reads back other than the one requested is not that viewport, and a width nothing could set is a named blocker unless a capture of it is supplied.
 - For animated or simulated output, verify motion continuity through `references/motion-continuity.md`: check entry/spawn position against the declared origin, per-frame displacement against the declared speed, force direction against observed motion (knockback sign), monotonic HP/resource bars, and re-run the full deploy/travel/engage flow in an independent simulation/replay with frames sampled per phase — never infer flow from cost/clear numbers, and record frame indices/timestamps as evidence; a technical pass (build/tests/metrics) is never visual approval.
 - Read the browser console after every navigation and every interaction in scope; a clean console read is console evidence only, never network, accessibility, or visual evidence.
+- For a phone-viewport capture, record in render_capture_manifest/v1 whether touch and mobile user-agent emulation was on; a width-only capture is named as width-only and does not show `(hover: none)`, `(pointer: coarse)` or user-agent branches. Phone-used surfaces also go through `omh-frontend/references/mobile-density-gate.md`.
 
 Required inputs:
 
