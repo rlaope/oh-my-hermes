@@ -50,8 +50,8 @@ export interface SessionHost {
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
   /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code or OmO session id or a Codex thread id to continue;
-   *  `account`: as for `start`). */
-  chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string): Promise<number>;
+   *  `account`: as for `start`; `session`: the SESSIONS id, whose attachment folder a Claude Code chat reads without a card). */
+  chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string): Promise<number>;
   chatInput(id: number, input: ChatInput): Promise<void>;
   chatClose(id: number): Promise<void>;
   /** Save a file the person attached in session `session` under omher's own folder
@@ -100,11 +100,11 @@ export class TauriHost implements SessionHost {
     exit.onmessage = (c) => onExit(c);
     return invoke<number>("session_start", { agent, cwd, resume: resume ?? null, account: account ?? null, cols, rows, onData: data, onExit: exit });
   }
-  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string) {
+  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string) {
     const { invoke, Channel } = await this.core();
     const ch = new Channel<ChatEvent>();
     ch.onmessage = (ev) => onEvent(ev);
-    return invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, account: account ?? null, onEvent: ch });
+    return invoke<number>("chat_start", { agent, cwd, resume: resume ?? null, account: account ?? null, session: session ?? null, onEvent: ch });
   }
   async chatInput(id: number, input: ChatInput) {
     const { invoke } = await this.core();
@@ -253,6 +253,21 @@ export class MockHost implements SessionHost {
           setTimeout(() => s.exit(0), 10);
           return;
         }
+        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]`: the program rings (BEL, or an OSC 9 message),
+        // reports progress (OSC 9;4, not a ring) or ends later, as an agent does while the person looks elsewhere
+        const later = /^after (\d+) (bell|osc9|progress|exit)(?: (\d+))?$/.exec(line);
+        if (later) {
+          s.out(`\r\n${PROMPT}`);
+          setTimeout(() => {
+            if (this.live.get(id) !== s) return;
+            if (later[2] === "bell") return s.out("\x07");
+            if (later[2] === "osc9") return s.out("\x1b]9;Needs your approval\x07");
+            if (later[2] === "progress") return s.out("\x1b]9;4;1;50\x07");
+            this.live.delete(id);
+            s.exit(Number(later[3] ?? 0));
+          }, Number(later[1]));
+          continue;
+        }
         s.out(line ? `\r\n\x1b[2m(mock) you said:\x1b[0m ${line}\r\n${PROMPT}` : `\r\n${PROMPT}`);
       } else if (ch === "\x03") {
         s.line = "";
@@ -282,9 +297,9 @@ export class MockHost implements SessionHost {
 
   // ---- chat: a scripted agent with the same events the Rust adapters emit -------------------
   private chats = new Map<number, MockChat>();
-  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string) {
+  async chatStart(agent: AgentId, cwd: string, onEvent: (ev: ChatEvent) => void, resume?: string, account?: string, session?: string) {
     const id = ++this.next;
-    this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
+    this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}), ...(session ? { session } : {}) });
     const c = new MockChat(agent, onEvent, resume, cwd, {
       noChat: !!this.g.__omherMockNoChat?.includes(agent),
       gone: agent === "codex" && !!resume && !!this.g.__omherMockGoneThreads,

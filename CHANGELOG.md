@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A resumed session no longer shows Hermes' own turns as your prompts.**
+  When `omh --resume` or `/resume` redrew a session, every user-role row in
+  Hermes' history was drawn as a `❯` prompt, including the ones Hermes wrote
+  itself: an async delegation's results (`[ASYNC DELEGATION BATCH COMPLETE
+  …]`), a background process finishing, an internal notice, a resumed turn,
+  a model switch. They now draw as one dim `↳` row with the title Hermes
+  stored for them (`↳ Subagent Tasks Completed: Review the TUI branches`), as
+  Hermes' own TUI draws them. Your own prompts, skill lines and steers are
+  unchanged.
+
+- **A successful shell run in the OMH TUI shows the end of what it printed.**
+  A `terminal` or `execute_code` call that exited 0 (a long build, a test run
+  piped through `tee`) showed its first three lines and cut the summary or
+  the errors at the bottom. It now shows its last three, with `… +N lines`
+  above them, as a failed call already did; every other tool (`read_file`,
+  `search_files`, `web_extract`) still shows its first lines, and Ctrl+O
+  details hold the last 40 lines of a shell run instead of the first 40.
+
 - **Hermes' own terminal opens as Hermes' own when `omh` falls back from
   inside an OMH TUI session.** When the OMH TUI could not start, `omh` handed
   Hermes the shell's whole environment, so an `omh` run from a shell that had
@@ -70,6 +88,17 @@ All notable changes will be documented here.
   protocol messages on one line, no longer gets dropped. On Windows, closing a chat also
   ends the `node.exe` behind the agent's `.cmd` shim.
 
+- **Claude Code in omher reads the files you attach without asking.** A
+  file attached to a Claude Code session is saved in that session's own
+  folder under `~/.omher/session-files`, outside the work folder, so every
+  read of it raised a "Run this command?" card. omher now makes that folder
+  before Claude Code starts and passes it, and only it, as one `--add-dir`
+  argument: the attached file reads with no card, while a read anywhere else
+  outside the work folder still asks. Also fixed: a chat whose history arrived
+  after a turn had started could end that turn early (the e2e flake in
+  `runs.spec.ts`), and a click on the side panel while the app was still
+  loading could be undone.
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt
@@ -118,12 +147,17 @@ All notable changes will be documented here.
   though its session never runs it: it is a Hermes chat in the folder. Without
   `omh` that row now reads Hermes, with Hermes Agent's own mark, and opens the
   same Hermes chat in the picked folder on the bot in view; its Terminal toggle
-  (which would start `omh`) is not shown. With `omh` nothing changes. One quiet
-  "Add oh-my-hermes" line in the menu and a third first-run card, marked
-  recommended, run the first-run screen's own fixed installer and show its
-  output the same way; when it ends well the row reads oh-my-hermes, when it
-  fails the installer's last line and Install again stay. An empty Plans tab
-  says that plans in parts come with oh-my-hermes instead of naming `dag ulw`.
+  (which would start `omh`) is not shown. With `omh` nothing changes. A quiet
+  "!" left of the sidebar's `+` (only without `omh`) opens a small popover that
+  says what oh-my-hermes adds and runs the first-run screen's own fixed
+  installer, its output shown in the app's own colours; when it ends well the
+  "!" goes and the row reads oh-my-hermes, when it fails the installer's last
+  line and Install again stay. "Don't show again" hides the "!"; the `+`
+  menu's quiet "Add oh-my-hermes" line opens the popover again. An empty Plans
+  tab says that plans in parts come with oh-my-hermes instead of naming
+  `dag ulw`. The first-run panel over an empty chat (the Bots and Sessions
+  cards, the Language row and its ×) is gone: an empty chat shows just the
+  chat, and the language still follows the system and is set in Settings.
 
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
@@ -189,6 +223,15 @@ All notable changes will be documented here.
   nothing. A session opened as a terminal ends with its program (an ended line
   and Restart), has no Chat toggle or model control, shows the live dot in the
   list, and after omher restarts comes back not running, waiting for Resume.
+  Every session row ends with a small mark for its view, a speech bubble for a
+  chat and a prompt window for a terminal, so the list says which is which.
+  A row also shows what happened while you looked elsewhere, with a system
+  notification for each: an amber dot when the session waits for you (an
+  approval or question, or its terminal rang its bell or sent an OSC 9 / 777
+  notification), a red dot when it stopped on an error or a non-zero exit, a
+  green dot when it finished an answer or its program ended; opening the
+  session clears the amber and green ones, and a session nothing runs in
+  steps back in the list.
   OpenCode works both ways: its chat is as before, and as a terminal it is the
   person's own OpenCode with their own rules. DSH has no terminal, Grok has no
   chat, and Hermes alone (no `omh`) has only its chat; the choice shows those
@@ -218,6 +261,17 @@ All notable changes will be documented here.
   another can be folded into the node it follows. A run whose only chain is its
   baseline, review and verify steps no longer gets it, nor does a chain of three
   builds beside one other build (3 of 4).
+
+- **omher's session and chat screens say what is happening, once and in full.**
+  A subagent card that is still running counts the way Plans does ("Running ·
+  1 of 2 done"), and a subagent waiting on your approval reads "waiting" in
+  the sidebar's amber until you answer. The activity line and the subagent it
+  names show the same seconds. A session whose agent never answered says why
+  once, beside Restart. A bot's chat header keeps the model name whole from
+  900px up with Plans open, in every language; the places chip drops to its
+  marks first. The SESSIONS + menu fades where its list is cut and keeps a few
+  px from the row above, and a session's / menu is as wide as the composer,
+  with plain command names and skills marked in the accent colour.
 
 - **dag-ulw checks each part of the goal, not only the goal as a whole.** The
   model splits the goal into the outcomes it can check separately (you type
@@ -531,6 +585,15 @@ All notable changes will be documented here.
   `irm https://omher.app/install.ps1 | iex`. The README, its translations, the website and
   docs/INSTALLATION.md show the short form; the install guide keeps the long one as "same as".
 
+- **A pytest run no longer makes `omh update` skip the plugin refresh.** The
+  plugin bundle ships a module named `test_expectation_check.py`, which
+  pytest's assertion rewriting takes for a test file, so a pytest process
+  that imports the installed plugin leaves a
+  `<module>.<tag>-pytest-<version>.pyc` beside it. The refresh read that file
+  as something the person had added and left the plugin directory unchanged.
+  It is now recognised as bytecode of a shipped module, under the same
+  content check as any other cache. Reported by @junjuny0227 (#2791).
+
 - **OMH TUI settings changes say what they did, and do what they say.**
   `/yolo` and `/reasoning <level>` went to Hermes' `slash.exec`, which runs
   them in a worker apart from the live agent: `/reasoning high` said it was
@@ -555,6 +618,15 @@ All notable changes will be documented here.
   label at 120 columns (the context goes first), and the launch look's file
   is named as `~/…`.
 
+- **`omh update` no longer waits forever on a stalled package manager.** The
+  step that runs npm, bun or Homebrew had no time limit and printed nothing
+  while it ran, so a registry that never answered left `[1/2] Updating omh
+  command package...` on screen for good. The step now prints a `still
+  running` line with the seconds passed about every 30 seconds, and after 900
+  seconds it stops the package manager and names the command to run yourself
+  before rerunning `omh update`. `OMH_UPDATE_PACKAGE_TIMEOUT` sets another
+  limit in whole seconds, up to one day; `--json` output is unchanged.
+
 - **omher finds Hermes installed by its package manager.** Hermes installs
   made with the unified package manager have no `venv`, so omher said Hermes
   was not on the computer. omher now starts its bridge on the Python the
@@ -573,6 +645,18 @@ All notable changes will be documented here.
   `/dag`, `/bots`, and the CLI theme, model-chain and setup pickers, and
   Ctrl+N on an empty composer enters the agent list, as Down does; Ctrl+J and
   Ctrl+K keep editing a typed draft. Contributed by @DanRioDev (#2770).
+
+- **Custom identities show up in the model picker, and Space turns one off.**
+  `omh model` and `/omh-model` list each identity from `identities.json`
+  under the built-in categories; left/right and `-`/`+` edit its model chain
+  and Space disables or restores it, without touching its prompt. A disabled
+  identity stays in the picker but is refused by routing, prompt injection
+  and fanout. A new session's system prompt also names the enabled
+  identities, so the main agent can pick one. Saving only the on/off state
+  leaves the stored chain as written, and a document without the new
+  `enabled` field keeps the fingerprint it had, so a conversation already
+  routed under an identity keeps its fallback chain across the update.
+  Contributed by @yqm-307 (#2799).
 
 ## 4.0.7 - 2026-11-09
 
@@ -4209,7 +4293,6 @@ All notable changes will be documented here.
   context) is asked about in the prompt slot, as Hermes' own TUI asks it:
   keeping the session's model is the first choice and the one selected, and
   only "switch anyway" sends the switch again with Hermes' confirmation.
-
 
 - **Byte-identical managed plugin files no longer block setup or update
   (#2300).** A managed plugin file whose current bytes match the incoming
@@ -9724,7 +9807,6 @@ All notable changes will be documented here.
   and a historical capture stay separate classes. The skill line also names
   a spent retrieval budget as a gap reason. OMH still fetches nothing. (#1527)
 
-
 - **`agent-debug` produces a bounded, cited incident report, and sharing it
   is a separate reviewed action.** `omh quality-evidence agent-debug` now
   selects one session by full id, `latest`, or a prefix that names exactly
@@ -11346,7 +11428,6 @@ Highlights of this major release (details in the entries below):
   OMH workflow". The per-skill byte ceiling moves 26,000 -> 26,500 for
   `ultrawork`, with the reason at the entry.
 
-
 - **A Hermes child now receives its prompt.** `omh coding hermes-child
   dispatch` spawned `hermes --oneshot -` and wrote the prompt to stdin, but
   Hermes' `-z/--oneshot` takes the prompt as its positional value and reads no
@@ -11395,7 +11476,6 @@ Highlights of this major release (details in the entries below):
   as invalid JSON. Kanban records are excluded from that padding, which is what
   the padding was always for: diffs, not structured results.
 
-
 - **An engagement nudge now counts what a tool call did, not that it was
   made.** The counters behind the plan and delegation nudges were incremented
   from the fact of a watched tool call, so a write that the host refused, a
@@ -11416,7 +11496,6 @@ Highlights of this major release (details in the entries below):
   while `transform_tool_result` still fires inside it, so a design that watched
   only the post hook would have seen nothing for exactly the calls a delegation
   nudge is about.
-
 
 - **Accepted native work can be resumed from a bounded scope checkpoint, with
   durable verification, review and QA declarations.** `omh_todo` adds
@@ -11971,7 +12050,6 @@ Highlights of this major release (details in the entries below):
   `PROVIDED_TOOLS`, so an install that has not run `omh update` will report the
   new tool as missing until it does.
 
-
 - **The cases that gate OMH's router are now questions anything can answer, so
   a second opinion can be measured on the same ground.** `omh chat
   route-questions export` projects both shipped routing corpora into typed
@@ -12077,7 +12155,6 @@ Highlights of this major release (details in the entries below):
   documented answer keys before it is persisted. No live arm has been run, and
   running one is an operator's call.
 
-
 - **`omh doctor` now says which Jev-class plugins a machine holds, and what
   each one's catalog entry declares.** Jev (TypeSafe System One) is a
   non-generative decision model: it answers typed questions and cannot write
@@ -12143,7 +12220,6 @@ Highlights of this major release (details in the entries below):
   `detail` payload, `None` for every check that carries no structured
   finding, so `observed` keeps its one meaning as a boolean.
 
-
 - **OMH now recognizes a model class it cannot route coding work to, and
   refuses that work by name instead of preparing it.** TypeSafe's Jev answers
   a typed Choice, Score, or Noul over options the caller supplies and its own
@@ -12204,7 +12280,6 @@ Highlights of this major release (details in the entries below):
   the generic discipline applies rather than claiming a model that takes no
   prompt was calibrated.
 
-
 - **The HUD route label drops its parent-equality token.** A lane the tool
   routed to the model the parent session itself runs rendered as
   `category:deep(deepseek-flash:high =parent)`. The token said the dispatch
@@ -12219,7 +12294,6 @@ Highlights of this major release (details in the entries below):
   that was always the model name itself. The `read_omh_hud` payload still
   reports `same_as_parent` for a caller that holds both models; the widget no
   longer reads it, and the widget-pack gate now pins that absence.
-
 
 - **A planning run that starts editing now asks the person first, instead of
   being told not to.** Give `ralplan` a prompt with implementation intent

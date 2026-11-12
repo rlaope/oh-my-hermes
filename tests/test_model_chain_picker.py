@@ -16,7 +16,7 @@ import json
 import os
 from pathlib import Path
 import re
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, TemporaryFile
 import unittest
 from unittest.mock import patch
 
@@ -25,7 +25,7 @@ from _cli_harness import run_cli
 from omh.catalogs.model_chain_table import CHAIN_SURFACE_PURPOSES, MODEL_DISPLAY_LABELS
 from omh.coding.model_contracts import contract_effort_option
 from omh.coding.model_routing import REASONING_EFFORT_LADDER
-from omh.commands.model_chain_picker import CURSOR_MARK, effort_bar, render_frame, run_picker
+from omh.commands.model_chain_picker import CURSOR_MARK, KEY_TOGGLE, effort_bar, render_frame, run_picker
 from omh.commands.theme_picker import (
     ESC,
     KEY_DEFAULT,
@@ -37,6 +37,7 @@ from omh.commands.theme_picker import (
     KEY_PLUS,
     KEY_QUIT,
     KEY_RIGHT,
+    read_terminal_key,
 )
 from omh.plugin_bundle.omh.hermes_delegation import (
     HERMES_MIXTURE_CATEGORY_CHAINS,
@@ -126,11 +127,11 @@ def _drive(payload, keys: list[str], *, use_color: bool = False, width: int = 12
 
 
 def _chains(payload) -> dict[str, tuple[tuple[str, str], ...]]:
-    return {row["category"]: chain_from_entries(row["chain"]) for row in payload["categories"]}
+    return {row.get("key", row["category"]): chain_from_entries(row["chain"]) for row in payload["rows"]}
 
 
 def _row_index(payload, name: str) -> int:
-    return [row["category"] for row in payload["categories"]].index(name)
+    return [row["category"] for row in payload["rows"]].index(name)
 
 
 def _down_to(payload, name: str) -> list[str]:
@@ -414,6 +415,55 @@ class PickerModelTests(unittest.TestCase):
             self.assertEqual(read_override_document(_omh_home(root)), empty)
 
 
+    def test_rows_include_custom_identities_with_type_and_activation_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(
+                root,
+                {
+                    "active-one": {
+                        "prompt": "active",
+                        "model_chain": [{"model_id": "custom-model", "reasoning_effort": "high"}],
+                    },
+                    "disabled-one": {
+                        "prompt": "disabled",
+                        "model_chain": [{"model_id": "deepseek-flash", "reasoning_effort": "low"}],
+                        "enabled": False,
+                    },
+                },
+            )
+            payload = _payload(root)
+        self.assertEqual([row["category"] for row in payload["categories"]], list(HERMES_MIXTURE_CATEGORY_CHAINS))
+        self.assertEqual([row["category"] for row in payload["identities"]], ["active-one", "disabled-one"])
+        self.assertEqual(payload["identities"][0]["type"], "custom")
+        self.assertTrue(payload["identities"][0]["enabled"])
+        self.assertFalse(payload["identities"][1]["enabled"])
+        self.assertIn("custom-model", {row["alias"] for row in payload["models"]})
+
+    def test_custom_identity_picker_change_writes_chain_and_disabled_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(
+                root,
+                {
+                    "custom-one": {
+                        "prompt": "keep this prompt",
+                        "model_chain": [{"model_id": "deepseek-flash", "reasoning_effort": "low"}],
+                    },
+                },
+            )
+            result = apply_picker_changes(_omh_home(root), PickerChanges({"identity:custom-one": {"chain": (("gpt-6.1-sol", "high"),), "enabled": False}}), contract_option=contract_effort_option)
+            document = json.loads((_omh_home(root) / "routing" / "identities.json").read_text(encoding="utf-8"))
+        self.assertEqual(result["identities_changed"], ["custom-one"])
+        self.assertEqual(document["identities"]["custom-one"]["prompt"], "keep this prompt")
+        self.assertEqual(
+            document["identities"]["custom-one"]["model_chain"],
+            [{"model_id": "gpt-6.1-sol", "reasoning_effort": "high"}],
+        )
+        self.assertFalse(document["identities"]["custom-one"]["enabled"])
+
+
+
 class PickerNavigationTests(unittest.TestCase):
     """The command layer, driven through its key and frame seams."""
 
@@ -462,7 +512,7 @@ class PickerNavigationTests(unittest.TestCase):
         quick_index = [row["category"] for row in payload["categories"]].index("quick")
         result, frames = _drive(payload, [KEY_DOWN] * quick_index + [KEY_DEFAULT, KEY_ENTER])
         self.assertEqual(result, {"quick": HERMES_MIXTURE_CATEGORY_CHAINS["quick"]})
-        self.assertIn("◆ override", frames[0])
+        self.assertIn("◆ customized", frames[0])
         self.assertIn("● edited", frames[-1])
         composed = compose_override_document(read_override_document(_omh_home(self.root)), result)
         self.assertEqual(composed["categories"], {})
@@ -522,7 +572,7 @@ class PickerNavigationTests(unittest.TestCase):
         self.assertTrue(row.startswith(f" {CURSOR_MARK} "))
         self.assertIn(f"◂ {MODEL_DISPLAY_LABELS['glm-5.3']} ▸", row)
         self.assertIn(f"− {effort_bar('medium')} +   medium?", row)
-        self.assertTrue(row.rstrip().endswith("◆ override"))
+        self.assertTrue(row.rstrip().endswith("◆ customized"))
         self.assertIn("   chain             glm-5.3:medium, gpt-6-astra:xhigh", lines)
         self.assertIn(
             f"   shipped default   {', '.join(m + ':' + e for m, e in HERMES_MIXTURE_CATEGORY_CHAINS['ultrabrain'])}",
@@ -641,6 +691,54 @@ class PickerNavigationTests(unittest.TestCase):
         lines = render_frame(payload, _chains(payload), 4, use_color=False, width=200)
         self.assertIn(f"  {MODEL_DISPLAY_LABELS['claude-fable-5-2']} !", next(line for line in lines if " ultrabrain " in line))
         self.assertEqual(sum("is not served by" in line for line in lines), 0)
+
+
+    def test_space_toggles_only_a_custom_identity(self) -> None:
+        _write_identities(
+            self.root,
+            {
+                "custom-one": {
+                    "prompt": "custom",
+                    "model_chain": [{"model_id": "deepseek-flash", "reasoning_effort": "low"}],
+                },
+            },
+        )
+        payload = _payload(self.root)
+        custom_index = len(payload["categories"])
+        result, frames = _drive(payload, [KEY_DOWN] * custom_index + [KEY_TOGGLE, KEY_ENTER])
+        change = result["identity:custom-one"]
+        self.assertEqual(change["enabled"], False)
+        self.assertIn("Custom identities", frames[-1])
+        self.assertIn("custom:custom-one", frames[-1])
+        self.assertIn("disabled", frames[-1])
+
+    def test_decoded_cli_and_tui_space_round_trip_identity_enabled(self) -> None:
+        from omh.tui.app import picker_key
+        from omh.tui.keys import CHAR, Key
+
+        with TemporaryFile() as stream:
+            stream.write(b" ")
+            stream.seek(0)
+            cli_space = read_terminal_key(stream)
+        for surface, key in (("cli", cli_space), ("tui", picker_key(Key(CHAR, " ")))):
+            with self.subTest(surface=surface):
+                profile = {"prompt": "Keep this prompt unchanged.", "model_chain": [{"model_id": "deepseek-flash", "reasoning_effort": "low"}]}
+                _write_identities(self.root, {"custom-one": profile})
+                for enabled in (False, True):
+                    payload = _payload(self.root)
+                    builtin, _ = _drive(payload, [key, KEY_ENTER])
+                    self.assertEqual(builtin, {})
+                    changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [key, KEY_ENTER])
+                    self.assertEqual(changes["identity:custom-one"]["enabled"], enabled)
+                    saved = apply_picker_changes(
+                        _omh_home(self.root), changes,
+                        hermes_home=self.root / ".hermes", contract_option=contract_effort_option,
+                    )
+                    self.assertNotIn("error", saved)
+                    document = json.loads((_omh_home(self.root) / "routing" / "identities.json").read_text())
+                    expected = profile if enabled else {**profile, "enabled": False}
+                    self.assertEqual(document["identities"]["custom-one"], expected)
+
 
 
 class EffortPickerTests(unittest.TestCase):
@@ -919,7 +1017,7 @@ class EffortPickerTests(unittest.TestCase):
                     visible = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in colored]
                     self.assertTrue(all(len(line) <= max(width, 80) for line in visible), max(visible, key=len))
                     if width >= 110:
-                        states = {line.index(glyph) for line in lines for glyph in ("· default", "◆ override") if glyph in line}
+                        states = {line.index(glyph) for line in lines for glyph in ("· built-in", "◆ customized") if glyph in line}
                         self.assertEqual(len(states), 1, lines)
 
     def test_a_marked_value_touches_neither_the_handle_nor_the_state(self) -> None:
@@ -932,7 +1030,31 @@ class EffortPickerTests(unittest.TestCase):
             with self.subTest(shown=shown):
                 _write_overrides(self.root, {"swarm": ((model, stored),)})
                 payload = _payload(self.root)
-                self.assertRegex(_row_of(_frame(payload, "swarm", width=120), "swarm"), rf"\+ +{re.escape(shown)} +◆ override")
+                self.assertRegex(_row_of(_frame(payload, "swarm", width=120), "swarm"), rf"\+ +{re.escape(shown)} +◆ customized")
+
+
+    def test_a_custom_identity_row_steps_its_models_override(self) -> None:
+        _write_identities(
+            self.root,
+            {
+                "custom-one": {
+                    "prompt": "custom",
+                    "model_chain": [{"model_id": "my-custom", "reasoning_effort": "low"}],
+                },
+            },
+        )
+        _write_efforts(self.root, {"my-custom": ["low", "max"]})
+        payload = _payload(self.root)
+        by_alias = {row["alias"]: row for row in payload["models"]}
+        self.assertEqual(by_alias["my-custom"]["efforts"], ["low", "max"])
+        self.assertEqual(by_alias["my-custom"]["efforts_source"], "user")
+        index = _row_index(payload, "custom-one")
+        result, frames = _drive(payload, [KEY_DOWN] * index + [KEY_PLUS, KEY_ENTER])
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["identity:custom-one"]["chain"], (("my-custom", "max"),))
+        self.assertTrue(result["identity:custom-one"]["enabled"])
+        self.assertIn("low, max  (user)", frames[-1])
+
 
 
 class EnterStaysOpenTests(unittest.TestCase):
@@ -1262,6 +1384,203 @@ class EffortSaveTests(unittest.TestCase):
         self.assertEqual(self._stored(), [{"model": "deepseek-flash", "reasoning_effort": "medium"}])
 
 
+    def test_untouched_invalid_values_and_enable_only_changes_are_left_alone(self) -> None:
+        _write_overrides(
+            self.root,
+            {
+                "deep": (("kimi-k3.1-pro", "medium"),),
+                "quick": (("claude-haiku-5-5", "low"),),
+            },
+        )
+        _write_identities(
+            self.root,
+            {
+                "custom-one": {
+                    "prompt": "keep this prompt",
+                    "model_chain": [{"model_id": "glm-5.3", "reasoning_effort": "high"}],
+                },
+            },
+        )
+        result = apply_picker_changes(_omh_home(self.root), PickerChanges({
+                "identity:custom-one": {
+                    "chain": (("glm-5.3", "high"),),
+                    "enabled": False,
+                },
+            }), contract_option=contract_effort_option)
+        self.assertNotIn("error", result)
+        identities = json.loads((_omh_home(self.root) / "routing" / "identities.json").read_text(encoding="utf-8"))
+        self.assertEqual(identities["identities"]["custom-one"]["prompt"], "keep this prompt")
+        self.assertFalse(identities["identities"]["custom-one"]["enabled"])
+        # The kimi `medium` historical value is untouched and still there.
+        self.assertEqual(self._stored("deep"), [{"model": "kimi-k3.1-pro", "reasoning_effort": "medium"}])
+        # A valid edit on another row does not revalidate it either.
+        result = apply_picker_changes(_omh_home(self.root), PickerChanges({"quick": (("claude-haiku-5-5", "high"),)}), contract_option=contract_effort_option)
+        self.assertNotIn("error", result)
+        self.assertEqual(self._stored("deep"), [{"model": "kimi-k3.1-pro", "reasoning_effort": "medium"}])
+        self.assertEqual(self._stored("quick"), [{"model": "claude-haiku-5-5", "reasoning_effort": "high"}])
+
+    def test_tui_saves_a_custom_identity_chain_and_enabled_state(self) -> None:
+        _write_identities(
+            self.root,
+            {
+                "custom-one": {
+                    "prompt": "keep this prompt",
+                    "model_chain": [{"model_id": "claude-haiku-5-5", "reasoning_effort": "low"}],
+                },
+            },
+        )
+        from omh.tui.app import run_model_chain_picker
+        from omh.tui.theme import DEFAULT_THEME
+
+        environ = {
+            "OMH_HOME": str(_omh_home(self.root)),
+            "HERMES_HOME": str(self.root / ".hermes"),
+            "NO_COLOR": "1",
+        }
+        changes = PickerChanges({"identity:custom-one": {"chain": (("claude-haiku-5-5", "high"),), "enabled": False}})
+        with patch("omh.commands.model_chain_picker.run_picker", return_value=changes):
+            message = run_model_chain_picker(
+                environ,
+                DEFAULT_THEME,
+                read_key=lambda: "quit",
+                write=lambda _text: None,
+                width=100,
+            )
+        self.assertIn("Saved 1 custom identity", message)
+        document = json.loads((_omh_home(self.root) / "routing" / "identities.json").read_text(encoding="utf-8"))
+        self.assertEqual(document["identities"]["custom-one"]["prompt"], "keep this prompt")
+        self.assertEqual(
+            document["identities"]["custom-one"]["model_chain"],
+            [{"model_id": "claude-haiku-5-5", "reasoning_effort": "high"}],
+        )
+        self.assertFalse(document["identities"]["custom-one"]["enabled"])
+
+    def test_a_model_switch_then_effort_edit_is_checked_against_the_live_ladder(self) -> None:
+        # The review's F1: switch Haiku -> DeepSeek, press `+` in the same
+        # picker session, then restrict DeepSeek before Enter. The edit must
+        # be refused, not saved against the pre-restriction ladder.
+        from omh.tui.app import run_model_chain_picker
+        from omh.tui.theme import DEFAULT_THEME
+
+        for custom in (False, True):
+            with self.subTest(custom=custom):
+                for stale in (_omh_home(self.root) / "routing").glob("*.json"):
+                    stale.unlink()
+                if custom:
+                    _write_identities(
+                        self.root,
+                        {
+                            "custom-one": {
+                                "prompt": "keep this prompt",
+                                "model_chain": [{"model_id": "claude-haiku-5-5", "reasoning_effort": "low"}],
+                            }
+                        },
+                    )
+                    name = "custom-one"
+                    document = _omh_home(self.root) / "routing" / "identities.json"
+                else:
+                    _write_overrides(self.root, {"quick": (("claude-haiku-5-5", "low"),)})
+                    name = "quick"
+                    document = _omh_home(self.root) / "routing" / "model-chains.json"
+                _write_efforts(self.root, {"deepseek-flash": ["low", "high"]})
+                payload = _payload(self.root)
+                row_index = _row_index(payload, name)
+                aliases = [row["alias"] for row in payload["models"]]
+                moves = (aliases.index("deepseek-flash") - aliases.index("claude-haiku-5-5")) % len(
+                    aliases
+                )
+                keys = iter([KEY_DOWN] * row_index + [KEY_RIGHT] * moves + [KEY_PLUS, KEY_ENTER])
+                before = document.read_bytes()
+
+                def read_key() -> str:
+                    key = next(keys)
+                    if key == KEY_ENTER:
+                        _write_efforts(self.root, {"deepseek-flash": ["low"]})
+                    return key
+
+                message = run_model_chain_picker(
+                    {
+                        "OMH_HOME": str(_omh_home(self.root)),
+                        "HERMES_HOME": str(self.root / ".hermes"),
+                        "NO_COLOR": "1",
+                    },
+                    DEFAULT_THEME,
+                    read_key=read_key,
+                    write=lambda _text: None,
+                    width=140,
+                )
+                self.assertIn("/omh-model did not save", message)
+                self.assertIn("not selectable", message)
+                self.assertEqual(document.read_bytes(), before)
+
+    def test_a_malformed_document_at_save_warns_but_permits_enable_only_changes(self) -> None:
+        _write_identities(
+            self.root,
+            {
+                "custom-one": {
+                    "prompt": "keep this prompt",
+                    "model_chain": [{"model_id": "glm-5.3", "reasoning_effort": "high"}],
+                }
+            },
+        )
+        _write_efforts(self.root, {"claude-haiku-5-5": ["low", "high"]})
+        effort_path = _omh_home(self.root) / "routing" / "model-efforts.json"
+        changes = PickerChanges({"identity:custom-one": {"chain": (("glm-5.3", "high"),), "enabled": False}})
+
+        def break_document(*_args, **_kwargs):
+            effort_path.write_text("{", encoding="utf-8")
+            return changes
+
+        base = ["--omh-home", str(_omh_home(self.root))]
+        with (
+            patch("omh.commands.model_chains.picker_available", return_value=True),
+            patch("omh.commands.model_chains.pick_chains_interactively", side_effect=break_document),
+        ):
+            status, stdout, stderr = run_cli(base + ["model-chains"], output_json=False)
+        self.assertEqual(status, 0, stdout)
+        self.assertIn("Saved 1 custom identity", stdout)
+        self.assertIn("model-efforts.json ignored", stderr)
+        identities = json.loads(
+            (_omh_home(self.root) / "routing" / "identities.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(identities["identities"]["custom-one"]["prompt"], "keep this prompt")
+        self.assertFalse(identities["identities"]["custom-one"]["enabled"])
+        self.assertEqual(
+            identities["identities"]["custom-one"]["model_chain"],
+            [{"model_id": "glm-5.3", "reasoning_effort": "high"}],
+        )
+
+        from omh.tui.app import run_model_chain_picker
+        from omh.tui.theme import DEFAULT_THEME
+
+        _write_efforts(self.root, {"claude-haiku-5-5": ["low", "high"]})
+
+        def break_and_return(*_args, **_kwargs):
+            effort_path.write_text("{", encoding="utf-8")
+            return changes
+
+        with patch("omh.commands.model_chain_picker.run_picker", side_effect=break_and_return):
+            message = run_model_chain_picker(
+                {
+                    "OMH_HOME": str(_omh_home(self.root)),
+                    "HERMES_HOME": str(self.root / ".hermes"),
+                    "NO_COLOR": "1",
+                },
+                DEFAULT_THEME,
+                read_key=lambda: KEY_QUIT,
+                write=lambda _text: None,
+                width=100,
+            )
+        self.assertIn("Saved 1 custom identity", message)
+        self.assertIn("Warning: model-efforts.json ignored", message)
+        self.assertFalse(
+            json.loads((_omh_home(self.root) / "routing" / "identities.json").read_text(encoding="utf-8"))[
+                "identities"
+            ]["custom-one"]["enabled"]
+        )
+
+
+
 class PickerCommandTests(unittest.TestCase):
     def test_bare_form_off_a_terminal_prints_show(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -1319,3 +1638,147 @@ class PickerCommandTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PickerSaveRegressionTests(unittest.TestCase):
+
+    def test_cancel_and_round_trip_toggle_preserve_both_documents(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_overrides(root, {"quick": OVERRIDE_QUICK})
+            _write_identities(root, {"review": {"prompt": "same", "enabled": True, "model_chain": [{"model_id": "deepseek-flash"}]}})
+            paths = [_omh_home(root) / "routing" / filename for filename in ("model-chains.json", "identities.json")]
+            before = [p.read_bytes() for p in paths]
+            payload = _payload(root)
+            index = len(payload["categories"])
+            for ending in ([KEY_TOGGLE, KEY_QUIT], [KEY_TOGGLE, KEY_TOGGLE, KEY_ENTER]):
+                changes, _ = _drive(payload, [KEY_DOWN] * index + ending)
+                self.assertFalse(changes)
+                self.assertEqual([p.read_bytes() for p in paths], before)
+
+    def test_an_enable_only_save_leaves_the_stored_chain_as_written(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            chain = [
+                {"model_id": "deepseek-flash", "reasoning_effort": "HIGH", "note": "kept"},
+                {"model_id": "glm-5.3", "reasoning_effort": ""},
+            ]
+            _write_identities(root, {"review": {"prompt": "  same  ", "model_chain": chain}})
+            path = _omh_home(root) / "routing" / "identities.json"
+            for expected_enabled in (False, True):
+                payload = _payload(root)
+                changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [KEY_TOGGLE, KEY_ENTER])
+                result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+                self.assertNotIn("error", result)
+                stored = json.loads(path.read_text(encoding="utf-8"))["identities"]["review"]
+                self.assertEqual(stored["model_chain"], chain)
+                self.assertEqual(stored["prompt"], "  same  ")
+                self.assertEqual(stored.get("enabled", True), expected_enabled)
+
+    def test_a_chain_edit_still_rewrites_the_stored_chain(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "same", "model_chain": [
+                {"model_id": "deepseek-flash", "reasoning_effort": "HIGH", "note": "kept"}]}})
+            payload = _payload(root)
+            changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [KEY_RIGHT, KEY_ENTER])
+            result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+            self.assertNotIn("error", result)
+            stored = json.loads((_omh_home(root) / "routing" / "identities.json").read_text(encoding="utf-8"))
+            head = stored["identities"]["review"]["model_chain"][0]
+            self.assertNotEqual(head["model_id"], "deepseek-flash")
+            self.assertEqual(set(head), {"model_id", "reasoning_effort"})
+
+    def test_a_document_nested_too_deeply_at_save_is_refused_not_raised(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "same", "model_chain": [{"model_id": "deepseek-flash"}]}})
+            payload = _payload(root)
+            changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + [KEY_TOGGLE, KEY_ENTER])
+            path = _omh_home(root) / "routing" / "identities.json"
+            # Rewritten while the picker was open.
+            deep = "[" * 100_000 + "]" * 100_000
+            path.write_text(deep, encoding="utf-8")
+            result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+            self.assertIn("nested too deeply", result["error"])
+            self.assertEqual(path.read_text(encoding="utf-8"), deep)
+
+    def test_identity_edit_preserves_invalid_sibling_and_category_bytes(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_overrides(root, {"quick": OVERRIDE_QUICK})
+            invalid = {"prompt": "bad", "model_chain": [], "unknown": [1, 2]}
+            _write_identities(root, {"review": {"prompt": "same", "model_chain": [{"model_id": "deepseek-flash"}]}, "invalid": invalid})
+            categories = _omh_home(root) / "routing/model-chains.json"
+            before = categories.read_bytes()
+            changes = PickerChanges({"identity:review": {"chain": (("deepseek-flash", ""),), "enabled": False}})
+            result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+            self.assertNotIn("error", result)
+            raw = json.loads((_omh_home(root) / "routing/identities.json").read_text())
+            self.assertEqual(raw["identities"]["invalid"], invalid)
+            self.assertEqual(categories.read_bytes(), before)
+
+    def test_custom_effort_intent_survives_switch_and_round_trip(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "same", "model_chain": [{"model_id": "claude-opus-5-5", "reasoning_effort": "high"}]}})
+            path = _omh_home(root) / "routing/identities.json"
+            before = path.read_bytes()
+            payload = _payload(root)
+            moves = _rights_to(payload, "claude-opus-5-5", "deepseek-flash")
+            changes, _ = _drive(payload, [KEY_DOWN] * len(payload["categories"]) + moves + [KEY_MINUS, KEY_PLUS, KEY_ENTER])
+            self.assertEqual(changes.effort_edits, frozenset({"identity:review"}))
+            _write_efforts(root, {"deepseek-flash": ["low"]})
+            result = apply_picker_changes(_omh_home(root), changes, contract_option=contract_effort_option)
+            self.assertIn("not selectable", result["error"])
+            self.assertEqual(path.read_bytes(), before)
+
+
+    def test_invalid_identity_does_not_save_categories(self):
+        for field, value in (("enabled", "false"), ("chain", [])):
+            with self.subTest(field=field), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _write_identities(root, {"review": {"prompt": "review", "model_chain": [{"model_id": "deepseek-flash"}]}})
+                change = {"chain": (("deepseek-flash", ""),), "enabled": True, field: value}
+                result = apply_picker_changes(_omh_home(root), PickerChanges({"quick": OVERRIDE_QUICK, "identity:review": change}), contract_option=contract_effort_option)
+                self.assertIn("error", result)
+                self.assertFalse((_omh_home(root) / "routing/model-chains.json").exists())
+
+    def test_second_write_failure_reports_saved_categories(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "review", "model_chain": [{"model_id": "deepseek-flash"}]}})
+            with patch("omh.plugin_bundle.omh.model_chain_picker.write_identity_picker_document", side_effect=OSError("injected identity write failure")):
+                result = apply_picker_changes(_omh_home(root), PickerChanges({"quick": OVERRIDE_QUICK, "identity:review": {"chain": (("deepseek-flash", ""),), "enabled": False}}), contract_option=contract_effort_option)
+            self.assertTrue((_omh_home(root) / "routing/model-chains.json").exists())
+            self.assertEqual(result["categories_changed"], ["quick"])
+            self.assertEqual(result["identities_changed"], [])
+            self.assertIn("partially saved", result["error"])
+
+    def test_colliding_review_rows_edit_independently(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_identities(root, {"review": {"prompt": "review", "model_chain": [{"model_id": "deepseek-flash", "reasoning_effort": "low"}]}})
+            payload = _payload(root)
+            builtin_index = next(i for i, row in enumerate(payload["rows"]) if row["category"] == "review" and row["type"] == "builtin")
+            custom_index = next(i for i, row in enumerate(payload["rows"]) if row["category"] == "review" and row["type"] == "custom")
+            for index, key in ((builtin_index, "review"), (custom_index, "identity:review")):
+                with self.subTest(key=key):
+                    changes, _ = _drive(payload, [KEY_DOWN] * index + [KEY_RIGHT, KEY_ENTER])
+                    self.assertEqual(set(changes), {key})
+                    result = apply_picker_changes(_omh_home(root), PickerChanges(changes), contract_option=contract_effort_option)
+                    self.assertNotIn("error", result)
+                    if key == "review":
+                        self.assertEqual(result["identities_changed"], [])
+                    else:
+                        self.assertEqual(result["categories_changed"], [])
+
+
+
+def _write_identities(root: Path, identities: dict[str, dict[str, object]]) -> None:
+    path = _omh_home(root) / "routing" / "identities.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"schema_version": "omh_identity_profiles/v1", "identities": identities}),
+        encoding="utf-8",
+    )

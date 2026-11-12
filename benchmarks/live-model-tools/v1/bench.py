@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
             "--extra-model",
             action="append",
             default=None,
-            help="Additional live model to schedule without editing manifest.json. Format: id=...,provider=...,effort=...,family=... (repeatable).",
+            help="Additional live model to schedule without editing manifest.json. Format: id=...,provider=...,effort=...[,family=...] (repeatable); family defaults to model_family(id).",
         )
         command.add_argument(
             "--templates",
@@ -114,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_object(args.manifest)
         live_models = [item for item in manifest["models"] if item.get("live")]
         if args.extra_model:
+            from omh.coding.model_routing import model_family
+
             for spec in args.extra_model:
                 kv = {}
                 for pair in spec.split(","):
@@ -121,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                         parser.error(f"--extra-model must use key=value pairs: {spec}")
                     k, v = pair.split("=", 1)
                     kv[k.strip()] = v.strip()
-                missing = {"id", "provider", "effort", "family"} - kv.keys()
+                missing = {"id", "provider", "effort"} - kv.keys()
                 if missing:
                     parser.error(f"--extra-model is missing required keys: {', '.join(sorted(missing))}")
                 if any(item["id"] == kv["id"] for item in live_models):
@@ -130,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
                     "id": kv["id"],
                     "provider": kv["provider"],
                     "effort": kv["effort"],
-                    "family": kv["family"],
+                    "family": kv.get("family") or model_family(kv["id"]),
                     "live": True,
                 })
         if args.model:

@@ -2,7 +2,7 @@
 // same Hermes chat in the folder; the offer to add oh-my-hermes runs the shell's one installer, once per press.
 import { describe, expect, it, vi } from "vitest";
 import { AGENTS, agentLabel, hermesOnly, HERMES_LABEL, menuOrder, rowModel, type AgentId, type AgentInfo, type SessionRec } from "./agents";
-import { createAddOmh, failLine } from "./addOmh";
+import { createAddOmh, failLine, HIDE_KEY } from "./addOmh";
 import type { GateShell, InstallEvent } from "../app/BridgeGate";
 
 const info = (installed: AgentId[], omh: "omh" | "hermes" | "none"): AgentInfo[] =>
@@ -85,7 +85,23 @@ describe("adding oh-my-hermes", () => {
     expect(s.install).toHaveBeenCalledTimes(1);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(seen[0]).toBe("running");
-    expect(add.getState()).toEqual({ phase: "idle", lines: [], error: null });
+    expect(add.getState()).toMatchObject({ phase: "idle", lines: [], error: null, open: false });
+  });
+
+  it("Don't show again is kept on this computer; the + menu's line clears it and opens the popover", () => {
+    const kept = new Map<string, string>();
+    const store = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
+    const add = createAddOmh(async () => null, async () => {}, store);
+    expect(add.getState().hidden).toBe(false);
+    add.setOpen(true);
+    add.hide();
+    expect(add.getState()).toMatchObject({ hidden: true, open: false });
+    expect(kept.get(HIDE_KEY)).toBe("1");
+    // a new start reads it back
+    expect(createAddOmh(async () => null, async () => {}, store).getState().hidden).toBe(true);
+    add.offer();
+    expect(add.getState()).toMatchObject({ hidden: false, open: true });
+    expect(kept.has(HIDE_KEY)).toBe(false);
   });
 
   it("keeps the last line on a failed run and runs again on the next press", async () => {

@@ -52,10 +52,26 @@
 .side-sh-row .ss-pop.ui-pop-top {
   bottom: calc(100% + 4px);
 }
+/* ...and keeps a few px of air under the sidebar row above it (MENU_AIR in SessionsSection.tsx): a band of the
+   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows */
+.side-sh-row .ss-pop.ui-pop-top::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: calc(100% + 1px);
+  height: 6px;
+  background: var(--side);
+}
 /* the list scrolls inside the menu when the window is too short for every agent (fitMenu sets its max height) */
 .ss-scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* more agents below the cut: the last rows fade out, so the list reads as one that scrolls; gone at the end */
+.ss-scroll.more {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 /* the first frame, before the menu knows where it fits, is not shown */
 .ss-pop-measuring {
@@ -170,17 +186,6 @@
 .ss-add-omh-b:hover,
 .ss-add-omh-b:focus-visible {
   color: var(--ink);
-}
-.ss-add-omh-err {
-  padding: 0 6px 4px 32px;
-  font-size: 11px;
-  color: var(--danger);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ss-add-omh .gate-log {
-  margin: 4px 0 2px;
 }
 .ss-missing {
   font-size: 10.5px;
@@ -535,6 +540,65 @@
    sidebar and on the selected row in both themes */
 .ss-row .bot-p {
   color: var(--muted);
+}
+/* the mark for the view a row opens to (chat or terminal): at the end of line 2, under the time, in the colour of
+   the line it ends. The terminal's is solid with the prompt cut out in the row's own background, the chat's an
+   outline. The close button takes its place on hover, as it takes the time's. */
+.ss-view {
+  --ss-cut: var(--side);
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  display: grid;
+  place-items: center;
+  height: 17px;
+  color: var(--muted);
+}
+.ss-row.active .ss-view {
+  --ss-cut: var(--active-row);
+}
+/* a solid shape weighs more than an outline of the same colour: the terminal's takes the quieter gray, so a list of
+   terminals is not a column of chips beside the names */
+.ss-view[data-view="terminal"] {
+  color: var(--quiet);
+}
+.ss-row:hover .ss-view {
+  visibility: hidden;
+}
+.ss-row .needs-dot {
+  margin-left: 6px;
+}
+/* the state dot shares the amber dot's place and size. Amber stays "it waits for you"; red is "it stopped on an
+   error"; green is "it finished and you have not looked yet". */
+.ss-row .ss-mark.error {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent);
+}
+/* a finished session does not call for anything: its dot has no halo */
+.ss-row .ss-mark.done {
+  background: var(--ok);
+  box-shadow: none;
+}
+/* the dot's word in the time's place, in the dot's colour ("waiting" is the bot row's amber) */
+.ss-row .bot-t.err {
+  color: var(--danger);
+}
+.ss-row .bot-t.ok {
+  color: var(--ok);
+}
+/* 11px green on the light sidebar: a deeper shade, as the amber has */
+[data-theme="light"] .ss-row .bot-t.ok {
+  color: #17693f;
+}
+/* a session nothing runs in steps back: its agent mark fades and its name is muted, so the running ones lead */
+.ss-row.over .ss-av > * {
+  opacity: 0.5;
+}
+.ss-row.over .bot-n {
+  color: var(--muted);
+}
+.ss-row.over .ss-view {
+  opacity: 0.55;
 }
 /* typing dots end the agent name like they end a bot's live step */
 .ss-row .bot-p.live {

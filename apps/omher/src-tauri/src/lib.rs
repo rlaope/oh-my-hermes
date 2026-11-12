@@ -301,15 +301,22 @@ async fn session_close_all(shell: State<'_, Shell>) -> Result<(), String> {
 
 /// Start allow-listed agent `agent` in folder `cwd` as a chat: its structured mode (the fixed arguments in
 /// the allow-list), with events for the chat view on `on_event` and, once, `{event:"exit", code, error}`.
-/// Only an agent id, a folder, optionally a Claude Code session id or Codex thread id, and optionally the account a
-/// restarted session ran with cross from the UI.
+/// Only an agent id, a folder, optionally a Claude Code session id or Codex thread id, optionally the account a
+/// restarted session ran with, and the SESSIONS id (`s<digits>`, whose attachment folder a Claude Code chat may
+/// read) cross from the UI.
 #[tauri::command]
-async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, account: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
+async fn chat_start(shell: State<'_, Shell>, agent: String, cwd: String, resume: Option<String>, account: Option<String>, session: Option<String>, on_event: Channel<serde_json::Value>) -> Result<u32, String> {
     let chats = shell.chats.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // The same account as a terminal session of this agent: its home variable, or nothing ("This computer").
         let account_env = user_home().map(|h| accounts::session_env_for(&h, &agent, account.as_deref())).unwrap_or_default();
-        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, move |out| {
+        // Claude Code: the session's attachment folder (`s<digits>` under ~/.omher/session-files), made now so its
+        // copies are readable without a card; no folder (a bad id, a link) only means a card per read
+        let files = match (agent.as_str(), session.as_deref()) {
+            ("claude", Some(s)) => user_home().and_then(|h| session_files::session_dir(&h, s)).ok(),
+            _ => None,
+        };
+        chats.start_agent(&agent, std::path::Path::new(&cwd), resume.as_deref(), &account_env, files.as_deref(), move |out| {
             let _ = on_event.send(match out {
                 ChatOut::Event(e) => e,
                 ChatOut::Exit(code, error) => serde_json::json!({"event": "exit", "code": code, "error": error}),

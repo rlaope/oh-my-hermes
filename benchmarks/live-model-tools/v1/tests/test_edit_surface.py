@@ -52,6 +52,17 @@ class EditSurfaceTests(unittest.TestCase):
         )
         self.assertIn("omh_live_model_tool", completed.stdout)
 
+    def test_extra_model_family_is_optional(self) -> None:
+        # The route picks the calibration from the model id, so a spec may leave `family=` out.
+        with TemporaryDirectory() as root:
+            completed = subprocess.run(
+                [sys.executable, str(BASE / "bench.py"), "smoke", "--output", str(Path(root) / "runs.jsonl"),
+                 "--extra-model", "id=mistral-large-latest,provider=og,effort=high"],
+                capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("omh_live_model_tool", completed.stdout)
+
     def test_extra_model_missing_key_rejected(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(BASE / "bench.py"), "smoke", "--extra-model", "id=x/y"],

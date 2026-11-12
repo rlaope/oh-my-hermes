@@ -22,6 +22,7 @@ import { SessionFace } from "./SessionFace";
 import { agentDef, agentLabel, CONTINUES, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
+import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
@@ -695,6 +696,23 @@ export function SessionView() {
   const s = useStore();
   const ss = useSessions();
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
+  // looking at a session sees what its row carried for the person (it rang, it finished): at once when it is opened,
+  // and when the window comes back to it
+  const shown = rec?.id ?? null;
+  const unseen = shown ? ss.unseen[shown] : undefined;
+  useEffect(() => {
+    if (!shown) return;
+    const see = () => {
+      if (windowWatched()) getSessions().seen(shown);
+    };
+    see();
+    window.addEventListener("focus", see);
+    document.addEventListener("visibilitychange", see);
+    return () => {
+      window.removeEventListener("focus", see);
+      document.removeEventListener("visibilitychange", see);
+    };
+  }, [shown, unseen]);
   if (!rec) {
     return (
       <div className="chat-empty" data-testid="session-gone">

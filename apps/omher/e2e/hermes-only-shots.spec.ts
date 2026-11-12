@@ -1,7 +1,8 @@
-// Shots for a person who has Hermes but not oh-my-hermes (`omh`): the SESSIONS + menu, a Hermes session in a folder,
-// the quiet offer to add oh-my-hermes (running), and the first-run cards. The mock host plays "Hermes, no omh" through
-// `__omherMockNoOmh`; `__OMHER_GATE__` stands in for the shell's fixed installer (nothing is installed).
-// One fresh page per shot. Run with OMHER_SHOTS=<dir> OMHER_SHOT_TAG=before|after.
+// Shots for a person who has Hermes but not oh-my-hermes (`omh`), owner design of 13:25 KST: the sidebar's "!" left
+// of the top row's + (at rest), its popover (as it opens, running, done, failed), the SESSIONS + menu with the
+// Hermes row and "Add oh-my-hermes", a Hermes session in a folder, and an empty chat with no first-run panel.
+// The mock host plays "Hermes, no omh" through `__omherMockNoOmh`; `__OMHER_GATE__` stands in for the shell's fixed
+// installer (nothing is installed). One fresh page per shot. Run with OMHER_SHOTS=<dir> OMHER_SHOT_TAG=before|after.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -30,29 +31,44 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 760 });
 });
 
-/** Hermes without omh; the installer stand-in never ends (the running state is what the offer shot shows). */
-async function open(page: Page, theme: string, onboarding = false) {
+type Run = "hold" | "done" | "failed";
+
+/** Hermes without omh. The installer stand-in plays a few lines, then holds (running), exits 0 (`omh` is then found)
+ *  or exits 1 after a failure line. `fresh`: a first launch (no `omher.onboarded`). */
+async function open(page: Page, theme: string, o: { run?: Run; fresh?: boolean } = {}) {
   await page.addInitScript(
-    ([t, onb]) => {
+    ([t, run, fresh]) => {
       const w = window as unknown as Record<string, unknown>;
       localStorage.setItem("omher.theme", t as string);
       localStorage.removeItem("omher.sessions.recent");
-      if (onb) localStorage.removeItem("omher.onboarded");
+      localStorage.removeItem("omher.omhOffer.hidden");
+      if (fresh) localStorage.removeItem("omher.onboarded");
       w.__omherPickFolder = "/Users/you/code/web-app";
       w.__omherMockAgents = ["claude", "codex"];
       w.__omherMockNoOmh = true;
+      const lines =
+        run === "failed"
+          ? ["[hermes] Install Hermes Agent with its official installer (non-interactive)", "      [ok] Hermes Agent", "      [failed] could not reach github.com (curl: (6))"]
+          : ["[hermes] Install Hermes Agent with its official installer (non-interactive)", "      [ok] Hermes Agent", "[1/4] Create isolated Python environment at ~/.local/share/omh/venv"];
       w.__OMHER_GATE__ = {
         status: async () => ({ state: "ready" }),
         retry: async () => {},
         installCommand: async () => "",
         install: async (onEvent: (e: unknown) => void) => {
-          for (const text of ["[ok] Hermes Agent found", "Installing oh-my-hermes 4.9.2", "[ok] omh installed to ~/.local/bin/omh"]) onEvent({ kind: "line", text });
-          await new Promise(() => {});
-          return 0;
+          for (const text of lines) onEvent({ kind: "line", text });
+          if (run === "hold") await new Promise(() => {});
+          await new Promise((r) => setTimeout(r, 150));
+          const code = run === "failed" ? 1 : 0;
+          onEvent({ kind: "exit", code });
+          if (code === 0) {
+            w.__omherMockNoOmh = false;
+            (w.__omherMockAgents as string[]).push("omh");
+          }
+          return code;
         },
       };
     },
-    [theme, onboarding] as const,
+    [theme, o.run ?? "hold", !!o.fresh] as const,
   );
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
@@ -64,25 +80,58 @@ const shot = async (page: Page, what: string, theme: string) => {
   await page.screenshot({ path: join(SHOTS, `hermes-only-${what}-${TAG}-${theme}.png`), animations: "disabled" });
 };
 
+const settle = (page: Page) =>
+  page.waitForFunction(() => [...document.querySelectorAll(".ui-pop")].every((p) => p.getAnimations().every((a) => a.playState !== "running")));
+
+/** Opens the "!" popover (after) or does nothing (before: there is no "!"). */
+async function openNotice(page: Page): Promise<boolean> {
+  const b = page.getByTestId("omh-notice");
+  if (!(await b.count())) return false;
+  await b.click();
+  await expect(page.getByTestId("omh-pop")).toBeVisible();
+  return true;
+}
+
 for (const theme of ["dark", "light"] as const) {
+  test(`header icon ${theme}`, async ({ page }) => {
+    await open(page, theme);
+    await page.waitForTimeout(300);
+    await shot(page, "header-icon", theme);
+  });
+
+  test(`header popover ${theme}`, async ({ page }) => {
+    await open(page, theme);
+    if (await openNotice(page)) await settle(page);
+    await shot(page, "header-popover", theme);
+  });
+
+  for (const run of ["hold", "done", "failed"] as const) {
+    const name = run === "hold" ? "running" : run;
+    test(`header ${name} ${theme}`, async ({ page }) => {
+      await open(page, theme, { run });
+      if (await openNotice(page)) {
+        await page.getByTestId("omh-pop-install").click();
+        if (run === "hold") await expect(page.getByTestId("omh-pop-log")).toContainText("Create isolated");
+        if (run === "done") {
+          await expect(page.getByTestId("omh-notice")).toHaveCount(0);
+          // the + menu's row now reads oh-my-hermes and the offer line is gone
+          await page.getByTestId("session-new").click();
+          await expect(page.getByTestId("session-agent-omh")).toContainText("oh-my-hermes");
+          await expect(page.getByTestId("session-add-omh")).toHaveCount(0);
+        }
+        if (run === "failed") await expect(page.getByTestId("omh-pop-install")).toHaveText("Install again");
+        await settle(page);
+      }
+      await shot(page, `header-${name}`, theme);
+    });
+  }
+
   test(`menu ${theme}`, async ({ page }) => {
     await open(page, theme);
     await page.getByTestId("session-new").click();
     await expect(page.getByTestId("session-menu")).toBeVisible();
+    await settle(page);
     await shot(page, "menu", theme);
-  });
-
-  test(`offer ${theme}`, async ({ page }) => {
-    await open(page, theme);
-    await page.getByTestId("session-new").click();
-    await expect(page.getByTestId("session-menu")).toBeVisible();
-    // before: there is no such line, so the shot is the menu as it was
-    const offer = page.getByTestId("session-add-omh");
-    if (await offer.count()) {
-      await offer.click();
-      await expect(page.getByTestId("session-add-omh-log")).toContainText("omh installed");
-    }
-    await shot(page, "offer", theme);
   });
 
   test(`session ${theme}`, async ({ page }) => {
@@ -108,11 +157,11 @@ for (const theme of ["dark", "light"] as const) {
     await shot(page, "session", theme);
   });
 
-  test(`onboarding ${theme}`, async ({ page }) => {
+  test(`empty chat ${theme}`, async ({ page }) => {
     await mock("mock.clearHistory", { bot: "friren" });
-    await open(page, theme, true);
+    await open(page, theme, { fresh: true });
     await page.getByTestId("bot-friren").click();
-    await expect(page.getByTestId("onboarding")).toBeVisible();
-    await shot(page, "onboarding", theme);
+    await expect(page.locator('[data-pane="friren"]').getByTestId("composer")).toBeVisible();
+    await shot(page, "empty-chat", theme);
   });
 }

@@ -170,6 +170,8 @@ class FamilyPrefixParityTests(unittest.TestCase):
             "gemini-3.8-flash": "gemini",
             "gemini-3.6-flash": "gemini",
             "google/gemini-3.5-flash-lite": "gemini",
+            "gemini-4-carbon": "gemini",
+            "google/gemini-4-carbon": "gemini",
             "glm-5.3-flashx": "glm",
             "z-ai/glm-5.3-flashx": "glm",
             "qwen3.8-max": "qwen",
