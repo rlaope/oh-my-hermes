@@ -151,7 +151,7 @@ for (const theme of ["dark", "light"] as const) {
     const st = all.find((x) => x.op === "chat.start")!;
     expect(st).toMatchObject({ agent: "claude", cwd: "/Users/you/work/api-server" });
     const first = all.find((x) => x.op === "chat.input")!;
-    expect(first.input).toEqual({ kind: "send", text: "run the tests" });
+    expect(first.input).toEqual({ kind: "send", text: "run the tests", id: expect.stringMatching(/^local-/) });
     expect(all.indexOf(st)).toBeLessThan(all.indexOf(first));
     // fixed now: the folder and the agent are read-only, in the same places, the path in the tooltip
     await expect(page.getByTestId("session-folder")).toHaveText("api-server");

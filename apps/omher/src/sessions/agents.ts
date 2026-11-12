@@ -144,6 +144,11 @@ export interface SessionRec {
   /** How the account it started with reads (`as work@…`), when Settings › Accounts picked one other than This
    *  computer: shown under its composer. Display only; `account` is what the shell gets. */
   startedAs?: string;
+  /** The permission mode the person picked (controls.ts MODES); set again when the agent starts after a restart.
+   *  None = the agent's own. */
+  mode?: string;
+  /** The reasoning effort the person picked, likewise. */
+  effort?: string;
 }
 
 /** Live state of a session's chat that the row needs (from the store). */

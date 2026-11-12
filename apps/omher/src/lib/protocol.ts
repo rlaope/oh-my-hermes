@@ -579,7 +579,9 @@ export type BridgeEvent =
     })
   /** A plugin folder appeared in the bot's profile (the bot installed it from chat). */
   | (EventBase & { event: "plugin.added"; name: string; title: string; tools: number; hooks: number; ts: number })
-  | (EventBase & { event: "plugins.update" });
+  | (EventBase & { event: "plugins.update" })
+  // a SESSIONS chat: a message sent while a turn ran waits until the agent takes it (or Stop drops it)
+  | (EventBase & { event: "message.queued" | "message.taken" | "message.dropped"; id: string });
 
 export type EventName = BridgeEvent["event"];
 export type EventOf<K extends EventName> = Extract<BridgeEvent, { event: K }>;

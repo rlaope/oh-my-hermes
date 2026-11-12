@@ -640,6 +640,73 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* the rest of the line under a running chat: the folder's branch, then how full the context is */
+.ss-branch,
+.ss-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.ss-branch > svg {
+  flex: none;
+}
+.ss-branch-n {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.ss-usage {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+/* a small ring, filled to the share of the context in use */
+.ss-ring {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: conic-gradient(var(--muted) var(--p), color-mix(in srgb, var(--ink) 14%, transparent) 0);
+  -webkit-mask: radial-gradient(circle, transparent 3px, #000 3.5px);
+  mask: radial-gradient(circle, transparent 3px, #000 3.5px);
+}
+/* the permission mode in the composer row: a quiet label like the agent's, a menu on click */
+.ss-mode {
+  gap: 4px;
+}
+.ss-mode:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.ss-mode.set {
+  color: var(--ink);
+}
+.ss-dpop .ss-h.ss-h-plain {
+  padding-left: 6px;
+}
+.ss-mode-row {
+  align-items: flex-start;
+  height: auto;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.ss-mode-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.ss-mode-d {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: normal;
+}
 .ss-dpop {
   text-transform: none;
   letter-spacing: 0;
