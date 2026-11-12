@@ -61,7 +61,7 @@ test("a file edit opens to its real change, per file, in mono with its own scrol
     return { font: c.fontFamily, size: c.fontSize, max: c.maxHeight, over: c.overflowY };
   });
   expect(css.font).toMatch(/mono|Menlo/i);
-  expect(css.size).toBe("11.5px");
+  expect(css.size).toBe("12px");
   expect(css.max).toBe("280px");
   expect(css.over).toBe("auto");
   // keyboard: Enter closes it again
@@ -80,9 +80,10 @@ test("the todo list is one checklist that updates in place and stays after the t
   await expect(plan.getByTestId("plan-row").nth(0)).toHaveAttribute("data-status", "completed");
   await expect(page.getByTestId("plan")).toHaveCount(1);
   await page.getByTestId("stop").click();
-  await mock("mock.reset");
+  await expect(page.getByTestId("activity").last()).toHaveAttribute("data-state", "interrupted");
   await page.getByTestId("composer").fill("/work");
   await page.keyboard.press("Enter");
+  await expect(page.getByTestId("activity")).toHaveCount(2);
   await done(page);
   // the finished turn keeps its own list, all done; the stopped one keeps where it stopped
   const lists = page.getByTestId("plan");
@@ -167,6 +168,7 @@ test("no Edit while a turn runs, and none for an agent without its own rewind", 
   await expect(page.getByTestId("plan")).toHaveCount(1);
   await expect(page.getByTestId("bubble-edit")).toHaveCount(0);
   await page.getByTestId("stop").click();
+  await expect(page.getByTestId("activity").last()).toHaveAttribute("data-state", "interrupted");
   await expect(page.getByTestId("bubble-edit")).toHaveCount(1);
   // oh-my-hermes (a Hermes chat in the folder) has no rewind
   await page.goto("/");
@@ -178,6 +180,37 @@ test("no Edit while a turn runs, and none for an agent without its own rewind", 
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("bubble-bot").last()).toBeVisible();
   await expect(page.getByTestId("bubble-edit")).toHaveCount(0);
+});
+
+test("the new parts keep the house sizes: text 12-13px, corners 4-6px, no fill on the controls", async ({ page }) => {
+  await session(page);
+  await done(page);
+  await page.getByTestId("activity-toggle").last().click();
+  await page.getByTestId("activity-step").nth(1).click();
+  await page.getByTestId("thinking-toggle").last().click();
+  await page.getByTestId("bubble-bot").last().hover();
+  const m = await page.evaluate(() => {
+    const q = (sel: string) => document.querySelector(sel) as HTMLElement;
+    const css = (sel: string) => {
+      const c = getComputedStyle(q(sel));
+      return { size: parseFloat(c.fontSize), radius: parseFloat(c.borderTopLeftRadius), bg: c.backgroundColor, border: c.borderTopColor, width: c.borderTopWidth };
+    };
+    return {
+      file: css(".dv-file"), body: css(".dv-body"), path: css(".dv-path"), head: css(".dv-head"),
+      plan: css(".pl"), box: css(".pl-box"), row: css(".pl-row"), think: css(".th-h"), text: css(".th-body"),
+      copy: css(".copy-btn"), edit: css(".msg-edit"),
+    };
+  });
+  for (const k of ["body", "path", "head", "plan", "row", "think", "text", "edit"] as const) {
+    expect(m[k].size, k).toBeGreaterThanOrEqual(12);
+    expect(m[k].size, k).toBeLessThanOrEqual(13);
+  }
+  expect(m.file.radius).toBe(6);
+  expect(m.box.radius).toBe(4);
+  expect(m.copy.radius).toBe(4);
+  // the controls are not filled until hovered: the edit label and the closed thinking line have no background
+  expect(m.edit.bg).toBe("rgba(0, 0, 0, 0)");
+  expect(m.think.bg).toBe("rgba(0, 0, 0, 0)");
 });
 
 test("a long diff and long thinking stay inside their boxes; the chat stays pinned while the answer streams", async ({ page }) => {

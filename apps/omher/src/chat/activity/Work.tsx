@@ -1,7 +1,7 @@
 // What a SESSIONS agent showed of its work inside one turn's activity line: a file edit's change (DiffView), its
 // todo list (PlanList) and its thinking (ThinkingText). The adapters send all three in one agent-neutral shape
 // (`tool.diff`, `plan`, `thinking.text`); an agent that sends none of them shows none of these.
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { DiffFile, PlanItem } from "../../lib/protocol";
 import { t, type Key } from "../../i18n";
 import { ChevronRight } from "../../ui";
@@ -35,10 +35,13 @@ function DiffFileView({ f }: { f: DiffFile }) {
   );
 }
 
-/** A file edit's change, per file. */
+/** A file edit's change, per file. Opened by a click, it scrolls itself into view (only then: never while an
+ *  answer streams). */
 export function DiffView({ files }: { files: DiffFile[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => ref.current?.scrollIntoView?.({ block: "nearest" }), []);
   return (
-    <div className="dv" data-testid="diff-view">
+    <div className="dv" data-testid="diff-view" ref={ref}>
       {files.map((f, i) => (
         <DiffFileView key={`${f.path}-${i}`} f={f} />
       ))}

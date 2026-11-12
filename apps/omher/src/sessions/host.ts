@@ -701,7 +701,8 @@ class MockChat {
         MOCK_WORK.thinking.forEach((t, k) => this.at(30 + k * 20, () => this.emit({ event: "thinking", text: t })));
         this.at(120, () => plan(["pending", "pending", "pending"]));
         this.at(160, () => plan(["in_progress", "pending", "pending"]));
-        MOCK_WORK.edits.forEach((e, k) => {
+        // held: the last edit has not run yet (the list shows it under way)
+        MOCK_WORK.edits.slice(0, hold ? -1 : undefined).forEach((e, k) => {
           const at = 200 + k * 160;
           this.at(at, () => this.emit({ event: "tool.start", tool_id: e.id, name: "patch", detail: e.detail }));
           this.at(at + 10, () => this.emit({ event: "tool.diff", tool_id: e.id, files: [e.file] }));

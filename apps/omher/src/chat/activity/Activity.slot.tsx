@@ -239,7 +239,6 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
         )}
       </button>
       {t.thinking && <ThinkingText text={t.thinking} />}
-      {t.plan && t.plan.length > 0 && <PlanList items={t.plan} />}
       {t.fanouts?.map((f) => (
         <FanoutCard key={f.key} fan={f} live={live || now - f.updatedAt < FANOUT_QUIET_MS} bot={bot} />
       ))}
@@ -250,6 +249,8 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
           ))}
         </div>
       )}
+      {/* the agent's todo list: under the step rows, so a click on the line opens the steps right below it */}
+      {t.plan && t.plan.length > 0 && <PlanList items={t.plan} />}
     </div>
   );
 }

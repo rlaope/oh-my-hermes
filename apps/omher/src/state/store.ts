@@ -798,8 +798,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "tool.diff": {
       const files = Array.isArray(ev.files) ? ev.files.filter((f) => f && typeof f.path === "string" && Array.isArray(f.lines)) : [];
       if (!files.length) return state;
+      // the step's line says the same counts as its change (`calc.py +4`, `a.ts +3 -1, b.ts +1`)
+      const detail = files.map((f) => `${f.path}${f.added ? ` +${f.added}` : ""}${f.removed ? ` -${f.removed}` : ""}`).join(", ");
       return touchChat(state, bot, (c) =>
-        patchTurn(c, (t) => ({ ...t, steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, diff: files } : s)) })),
+        patchTurn(c, (t) => ({ ...t, steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, diff: files, detail } : s)) })),
       );
     }
     case "plan":

@@ -52,9 +52,9 @@ for (const theme of ["dark", "light"] as const) {
     await shot(page, "todo", theme);
     if (await page.getByTestId("stop").isVisible()) await page.getByTestId("stop").click();
     await expect(page.getByTestId("activity").last()).not.toHaveAttribute("data-state", "live");
-    await mock("mock.reset");
     await page.getByTestId("composer").fill("/work");
     await page.keyboard.press("Enter");
+    await expect(page.getByTestId("activity")).toHaveCount(2);
     await expect(page.getByTestId("activity").last()).toHaveAttribute("data-state", "done");
     await page.waitForTimeout(300);
 
