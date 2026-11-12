@@ -197,8 +197,8 @@ test("font size 16 changes how many columns fit, and the program is told the new
   const after = await look(page);
   expect(after?.fontSize).toBe(16);
   expect(after!.rows).toBeLessThan(before!.rows);
-  const resizes = (await calls(page)).filter((c) => c.op === "resize");
-  expect(resizes.at(-1)).toMatchObject({ cols: after!.cols, rows: after!.rows });
+  // the program is told the size once it has stood still (RESIZE_SETTLE_MS in sessions.ts), so not at once
+  await expect.poll(async () => (await calls(page)).filter((c) => c.op === "resize").at(-1)).toMatchObject({ cols: after!.cols, rows: after!.rows });
 
   // padding refits too: less space around the terminal, more columns
   await settings(page);
