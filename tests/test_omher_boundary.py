@@ -236,10 +236,12 @@ class DocPins(unittest.TestCase):
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
         # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
         # boundary on purpose; 26: rule 26 (SESSIONS attachments saved under ~/.omher/session-files) did too; 27:
-        # rule 27 (a session's mode, effort and branch read: only the agent's own switches, never a bypass) as well.
+        # rule 27 (a session's mode, effort and branch read: only the agent's own switches, never a bypass) as well;
+        # 28: rule 28 (a session shows the agent's own diff, todo list and thinking; edit and resend only through
+        # the agent's own rewind).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 27, len(rules))
+        self.assertTrue(6 <= len(rules) <= 28, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -915,7 +917,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertNotIn(".spawn(", body)
         # what the person does in a chat is one of five inputs, never a command line
         inputs = re.search(r"pub enum Input \{(.*?)\n\}", self.chat, re.S).group(1)
-        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort"])
+        self.assertEqual(re.findall(r"^\s+(\w+)", inputs, re.M), ["Send", "Interrupt", "Approve", "Clarify", "Model", "Mode", "Effort", "Rewind"])
         # Send carries text, the paths of saved pictures (rule 26) and the bubble's id only: never bytes or a type
         self.assertIn("Send { text: String, #[serde(default)] images: Vec<Picture>, #[serde(default)] id: String },", inputs)
         self.assertIn('#[serde(from = "String")]\npub struct Picture', self.chat)
@@ -1239,3 +1241,33 @@ class SessionControlsUseOnlyTheAgentsOwnSwitches(unittest.TestCase):
         self.assertIsNotNone(sig)
         self.assertEqual(sig.group(1).strip(), "cwd: String")
         self.assertIn("git_branch::branch(std::path::Path::new(&cwd))", self.lib)
+
+
+class SessionTranscriptComesFromTheAgentsOwnStream(unittest.TestCase):
+    """Rule 28: a session's diffs, todo list and thinking come from the agent's own stream (no project file read,
+    nothing kept on disk); edit and resend goes only through the agent's own rewind, between turns."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.chat = (SHELL / "agent_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        cls.acp = (SHELL / "acp_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.dsh = (SHELL / "dsh_chat.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+
+    def test_diff_plan_and_thinking_read_no_file(self) -> None:
+        for fn in ("fn input_diff(", "fn claude_result_diff(", "fn codex_diff(", "fn plan_event(", "fn thinking_event("):
+            body = self.chat.split(fn, 1)[1].split("\n}\n", 1)[0]
+            for banned in ("fs::", "File::", "read_to_string", "Command::new"):
+                self.assertNotIn(banned, body, f"{fn} {banned}")
+
+    def test_rewind_is_the_agents_own_and_only_between_turns(self) -> None:
+        self.assertIn('json!({"subtype": "rewind_conversation", "target_message_uuid": uuid})', self.chat)
+        self.assertIn('self.call(&mut st, "thread/revert", json!({"threadId": thread, "beforeTurnId": turn}));', self.chat)
+        # both refuse while a turn runs
+        self.assertEqual(self.chat.count('Input::Rewind => {\n                if self.turn {\n                    return Err("wait until the turn ends".into());'), 2)
+        # the others offer none
+        self.assertIn('Input::Rewind => return Err(format!("{} cannot take a message back here", self.label)),', self.chat)
+        self.assertIn("Input::Rewind => return Err(", self.acp)
+        self.assertIn("Input::Rewind => Err(", self.dsh)
+        # no rewind of files: never Claude Code's rewind_files, never a fork that copies the conversation
+        for banned in ("rewind_files", "fork_conversation", "thread/fork", "--resume-session-at", "--rewind-files"):
+            self.assertNotIn(banned, self.chat, banned)

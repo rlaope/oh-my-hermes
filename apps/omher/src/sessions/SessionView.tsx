@@ -138,7 +138,11 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
-      <Timeline bot={bot} face={face} />
+      <Timeline
+        bot={bot}
+        face={face}
+        onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
+      />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
       <Composer
         key={chatKey}

@@ -331,6 +331,23 @@ All notable changes will be documented here.
   conversation; it used to stay open, because the bridge called a gateway
   method Hermes does not have.
 
+- **A session chat in omher shows what the agent did.** A file-edit step opens
+  to the real change: removed and added lines per file, in mono, in a box of
+  its own height with its own scroll (Claude Code's Edit/Write and the change
+  it reports back, Codex's file changes, pi's write/edit). The agent's own todo
+  list (Claude Code's tasks, Codex's plan) is one checklist under the activity
+  line that updates in place and stays after the turn. Thinking text is kept,
+  closed under the activity line until clicked, with `inline code` shown as in
+  the answer; an agent that sends none shows none. Answers and code blocks have
+  a copy control on hover, in the bot chat too. Edit on your last message takes
+  it back through the agent's own rewind (Claude Code's `rewind_conversation`,
+  Codex's `thread/revert`) and puts its text back in the box; files are not
+  undone, and when that turn changed files a quiet line beside Edit says so.
+  Agents without a rewind do not offer it. Tested on real Claude Code 2.1.322
+  runs (a two-file edit with its task list, thinking text, a rewind the next
+  turn no longer remembered) and Codex 0.167's app-server (revert on a real
+  thread; its turns ran out of credit).
+
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
   split a run into parallel lanes now looks only at the build nodes: it comes
   when at least 80% of two or more build nodes sit on one chain, in a run of
