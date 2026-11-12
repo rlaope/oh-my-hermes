@@ -160,6 +160,39 @@ class BundleChainReaderTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.homes = _fresh(self._tmp)
 
+    def test_enabled_validation_and_fingerprint_match_canonical(self):
+        profile = {"prompt": "p", "model_chain": [{"model_id": "deepseek-flash"}]}
+        for enabled in (True, False, "false", 0, None, []):
+            with self.subTest(enabled=enabled):
+                self.homes.write_identities({
+                    "schema_version": "omh_identity_profiles/v1",
+                    "identities": {"one": {**profile, "enabled": enabled}},
+                })
+                canonical = read_identity_profiles_config(self.homes.omh)
+                bundle = read_identity_chains(self.homes.omh)
+                self.assertEqual(bundle["fingerprint"], canonical["fingerprint"] if canonical else None)
+                self.assertEqual(bool(canonical and canonical["identities"]), isinstance(enabled, bool))
+                self.assertEqual(bool(bundle["identities"]), enabled is True)
+                self.assertEqual(bool(read_identity_prompts(self.homes.omh)), enabled is True)
+
+    def test_a_document_without_the_enabled_field_keeps_its_earlier_fingerprint(self):
+        # A route frozen before `enabled` existed carries this digest; the fallback compares it with the
+        # live one, so a moved digest would stop every such conversation with `identity_config_changed`.
+        profile = {"prompt": "review code", "model_chain": [{"model_id": "claude-opus-5-5", "reasoning_effort": "high"}]}
+        digests = {}
+        for label, extra in (("absent", {}), ("true", {"enabled": True}), ("false", {"enabled": False})):
+            self.homes.write_identities({
+                "schema_version": "omh_identity_profiles/v1",
+                "identities": {"reviewer": {**profile, **extra}},
+            })
+            canonical = read_identity_profiles_config(self.homes.omh)["fingerprint"]["digest"]
+            self.assertEqual(read_identity_chains(self.homes.omh)["fingerprint"]["digest"], canonical)
+            digests[label] = canonical
+        # The digest this document had before the field was added.
+        self.assertEqual(digests["absent"], "3048b8b8776e6139")
+        self.assertEqual(digests["true"], digests["absent"])
+        self.assertNotEqual(digests["false"], digests["absent"])
+
     def test_absent_document_reads_empty(self):
         result = read_identity_chains(self.homes.omh)
         self.assertEqual(result["identities"], {})
@@ -316,6 +349,24 @@ class FanoutIdentityContractTest(unittest.TestCase):
             build_fanout_contract(
                 "split",
                 [{"unit_id": "u", "owner": "codex", "file_scope": ["src/"], "identity": "ghost"}],
+            )
+
+    def test_disabled_identity_fails_freeze_as_unavailable(self):
+        config = {
+            "identities": {
+                "disabled": {
+                    "prompt": "p",
+                    "model_chain": ({"model_id": "m"},),
+                    "enabled": False,
+                }
+            },
+            "fingerprint": {"digest": "d"},
+        }
+        with self.assertRaisesRegex(FanoutContractError, "identity 'disabled' is disabled in"):
+            build_fanout_contract(
+                "split",
+                [{"unit_id": "u", "owner": "codex", "file_scope": ["src/"], "identity": "disabled"}],
+                identity_config=config,
             )
 
     def test_malformed_identity_name_fails_freeze(self):
@@ -478,6 +529,23 @@ class DelegateRouteIdentityDefaultBackendTest(unittest.TestCase):
         return json.loads(
             omh_delegate_route_handler({**args, **self.homes.homes()}, **dispatch)
         )
+
+    def test_disabled_identity_cannot_route_or_prepare_cli_work(self):
+        from _cli_harness import run_cli
+        document = json.loads(json.dumps(IDENTITIES_TWO_CHAINS))
+        document["identities"]["alpha"]["enabled"] = False
+        self.homes.write_identities(document)
+        for action in ("set", "fallback"):
+            result = self._call(session="S", task="t1", action=action, identity="alpha")
+            self.assertEqual(result["status"], "choice_required")
+            self.assertNotIn("alpha", result["available_identities"])
+        self.assertEqual(read_delegation_route(self.homes.hermes), {})
+        code, stdout, stderr = run_cli([
+            "--omh-home", str(self.homes.omh), "--hermes-home", str(self.homes.hermes),
+            "coding", "delegate", "implement a script", "--identity", "alpha",
+        ])
+        self.assertNotEqual(code, 0, stdout)
+        self.assertIn("disabled", stdout + stderr)
 
     def test_set_identity_routes_chain_head_and_records_metadata(self):
         result = self._call(session="S", task="t1", action="set", identity="alpha")

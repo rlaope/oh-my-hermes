@@ -457,7 +457,16 @@ def cmd_model_chains_pick(args: argparse.Namespace) -> int:
         return 2
     if result.get("warning"):
         print(f"omh: warning: {result['warning']}", file=sys.stderr)
-    print(f"Saved {len(changes)} categor{'y' if len(changes) == 1 else 'ies'} to {result['path']}.")
+    category_count = len(result.get("categories_changed", []))
+    identity_count = len(result.get("identities_changed", []))
+    if identity_count == 0:
+        print(f"Saved {category_count} categor{'y' if category_count == 1 else 'ies'} to {result['path']}.")
+    else:
+        parts = []
+        if category_count:
+            parts.append(f"{category_count} categor{'y' if category_count == 1 else 'ies'}")
+        parts.append(f"{identity_count} custom identit{'y' if identity_count == 1 else 'ies'}")
+        print(f"Saved {' and '.join(parts)}.")
     _print_state(_state(omh_home, paths.hermes_home))
     return 0
 

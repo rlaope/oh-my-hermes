@@ -1147,7 +1147,7 @@ class TurnEndTests(LoopTestCase):
         )
         flushed = self.step(ev("message.delta", text="\n\n1\n2\n"))
         self.assertEqual(
-            flushed, ["", "┃ ● terminal(seq 1 300)  0.1s", "┃   ⎿  1", "┃      2", "┃      3", "┃      … +3 lines · ctrl+o shows all", "", "┃ ⚚ Hermes", "┃   1", "┃   2"]
+            flushed, ["", "┃ ● terminal(seq 1 300)  0.1s", "┃   ⎿  … +3 lines · ctrl+o shows all", "┃      4", "┃      5", "┃      [trimmed: 295 more lines]", "", "┃ ⚚ Hermes", "┃   1", "┃   2"]
         )
         flushed = self.step(ev("message.complete", text="1\n2", status="interrupted", partial=True))
         self.assertEqual(flushed, ["", "⚠ Interrupted."])
@@ -1553,7 +1553,7 @@ class WithdrawCommandTests(LoopTestCase):
 
 
 class ToolOutputTests(LoopTestCase):
-    """Each tool row shows the first lines of what the tool printed; a failed one, its error's first line."""
+    """Each tool row shows the first lines of what the tool printed (a shell run, its last ones); a failed one, its error's first line."""
 
     def run_tool(self, result: object, name: str = "terminal", **payload: object) -> list[str]:
         self.step(ev("message.start"))
@@ -1561,12 +1561,12 @@ class ToolOutputTests(LoopTestCase):
         self.step(ev("tool.complete", tool_id="t1", name=name, result=result, duration_s=0.06, **payload))
         return self.step(ev("message.complete", text="", status="complete"))
 
-    def test_the_first_three_lines_of_the_output_and_a_count_of_the_rest(self) -> None:
+    def test_the_last_three_lines_of_a_shell_run_and_a_count_of_the_rest(self) -> None:
         # Recorded from Hermes 6c61c3e27d (session fixture, the interrupted turn's `seq 1 300`).
         flushed = self.run_tool({"output": "1\n2\n3\n4\n5\n[trimmed: 295 more lines]", "exit_code": 0, "error": None})
         self.assertEqual(flushed[0], "┃ ● terminal(seq 1 300)  0.1s")
         self.assertEqual(self.taken[-5][:3], (rail_cell(THEME.accent), Span(" ", GUTTER), Span("●", THEME.ok)))
-        self.assertEqual(flushed[1:], ["┃   ⎿  1", "┃      2", "┃      3", "┃      … +3 lines · ctrl+o shows all"])  # under the call
+        self.assertEqual(flushed[1:], ["┃   ⎿  … +3 lines · ctrl+o shows all", "┃      4", "┃      5", "┃      [trimmed: 295 more lines]"])  # under the call
         self.assertEqual(self.taken[-1][-1].style, THEME.faint)
 
     def test_a_failed_tool_shows_its_errors_first_line_in_the_error_colour(self) -> None:

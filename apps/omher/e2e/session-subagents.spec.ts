@@ -203,7 +203,7 @@ test("the chat's card and the session's Plans read the same run the same way at 
     await card.getByTestId("subagent-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-state"))),
   );
   await expect(box.getByTestId("run-progress")).toContainText("1 of 2 done");
-  await expect(card.getByTestId("fanout-summary")).toContainText("1 of 2");
+  await expect(card.getByTestId("fanout-summary")).toContainText("1 of 2 done");
   // the finished one took the same time in both places
   const rowT = secs(await card.getByTestId("subagent-row").nth(0).getByTestId("subagent-time").innerText());
   await expect(box.locator("[data-testid=run-node]").nth(0).getByTestId("node-status")).toContainText(`${rowT}s`);
