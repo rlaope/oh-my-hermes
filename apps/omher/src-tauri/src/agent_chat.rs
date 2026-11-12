@@ -4195,7 +4195,7 @@ mod tests {
         let me2 = me.clone();
         let inside = dir.to_string_lossy().into_owned();
         let id = c
-            .start_agent(&agent, &dir, None, &[], move |x| {
+            .start_agent(&agent, &dir, None, &[], None, move |x| {
                 if let ChatOut::Event(e) = &x {
                     if s(e, "event") == "approval.request" {
                         let ok = s(e, "title").contains("calc.py") || s(e, "title").contains("README.md") || s(e, "command").contains(&inside);
