@@ -116,13 +116,17 @@ async (opts) => {
   // A box is on the page when it reaches below the top and past the start
   // edge, the two sides the page cannot scroll beyond. On a page that starts
   // at the right the start edge is the right one, at `startEdge` in page px;
-  // the left, where such a page overflows, stays reachable. A box fixed to the
+  // the left, where such a page overflows, is reachable as far as the page
+  // scrolls: `farEdge` is the left end of that range in page px, 0 on a page
+  // that does not overflow. Paint alone does not widen it: content under
+  // layout containment is drawn left of page x 0 and cannot be panned to. A box fixed to the
   // viewport is judged by its viewport box: the reader pans the screen over
   // the layout viewport, client x 0 to innerWidth, and the scroll position
   // cannot bring anything outside that band into view.
+  const farEdge = startEdge - scroller.scrollWidth;
   const onPageFromRight = (el, r) => {
     if (fixedToViewport(el)) return r.bottom > 0 && r.left < window.innerWidth && r.right > 0;
-    return r.bottom + sy > 0 && r.left + sx < startEdge;
+    return r.bottom + sy > 0 && r.left + sx < startEdge && r.right + sx > farEdge;
   };
   const onPage = (el) => {
     const r = el.getBoundingClientRect();
@@ -215,9 +219,10 @@ async (opts) => {
   // screen) has no part an observer can report, though scrolling to it renders
   // it. The browser says which boxes those are. What clips such a box shows
   // only once it is rendered, and this script does not move the page to render
-  // it. So it counts when the box that skips it can be reached and its own box
-  // passes the edge test a page that starts at the left gets: below the top
-  // and right of page x 0. A clip inside the skipped content is not seen.
+  // it. So it counts when its own box passes the edge test a page that starts
+  // at the left gets, below the top and right of page x 0, unless the box that
+  // skips it is known to stay off screen: that box cannot be reached and does
+  // not paint past its own edge. A clip inside the skipped content is not seen.
   const rendered = (el) => typeof el.checkVisibility !== 'function'
     || el.checkVisibility({contentVisibilityAuto: true});
   const renderSkipped = (el) => typeof el.checkVisibility === 'function'
@@ -226,6 +231,14 @@ async (opts) => {
     let box = el.parentElement;
     while (box && !rendered(box)) box = box.parentElement;
     return box;
+  };
+  // A box with a positive `overflow-clip-margin` paints what it holds past
+  // its own edge, and the browser renders it when that larger area comes on
+  // screen, so where the box itself lies does not say whether its content can
+  // be reached.
+  const paintsPastItsEdge = (box) => {
+    const margin = /(-?[0-9.]+)px/.exec(getComputedStyle(box).overflowClipMargin || '');
+    return Boolean(margin) && parseFloat(margin[1]) > 0;
   };
   const pastTopAndLeft = (el) => {
     const r = el.getBoundingClientRect();
@@ -268,7 +281,7 @@ async (opts) => {
     if (skipped.length) {
       await settle(Array.from(new Set(skipped.map((item) => item.by).filter(Boolean))));
       for (const {el, by} of skipped) {
-        reach.set(el, Boolean(by) && reach.get(by) === true && pastTopAndLeft(el));
+        reach.set(el, Boolean(by) && (reach.get(by) === true || paintsPastItsEdge(by)) && pastTopAndLeft(el));
       }
     }
     while (pending.length) {

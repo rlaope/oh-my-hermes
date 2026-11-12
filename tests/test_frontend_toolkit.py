@@ -915,8 +915,13 @@ class BrowserTests(Fixture):
                 'content-visibility:auto"><a id="first" href="#"%s>first</a></div>')
         clip = '<div style="position:absolute;top:0;right:0;width:390px;height:100px;overflow:hidden">%s</div>'
         parked = ' style="position:absolute;left:-9999px"'
+        # A box with `overflow-clip-margin` paints past its own edge: the box
+        # lies off the page to the right, its link 500 px to its left is on it.
+        past_edge = ('<div style="position:absolute;top:5000px;right:-500px;width:300px;height:200px;'
+                     'content-visibility:auto;overflow-clip-margin:1000px">'
+                     '<a id="first" href="#" style="position:absolute;left:-500px;top:0">first</a></div>')
         cases = (("reachable", lazy % "", 5000), ("clipped", clip % (lazy % ""), 300),
-                 ("parked-left", lazy % parked, 300))
+                 ("parked-left", lazy % parked, 300), ("painted-past-the-box", past_edge, 5000))
         for label, body, expected in cases:
             with self.subTest(lazy=label):
                 report = self.measure(self.parked_left_page(f"lazy-{label}.html", "", body))
@@ -954,6 +959,17 @@ class BrowserTests(Fixture):
                 report = self.measure(self.parked_left_page(f"reverse-{label}.html", "", body))
                 self.assertEqual(report["first_action_y"], expected)
 
+    def test_rtl_link_painted_left_of_a_page_that_does_not_scroll_there_is_skipped(self):
+        # The box holds its layout (`content-visibility: auto`) and paints past
+        # its edge, so its link is drawn left of page x 0 at y 100 while the page
+        # stays 390 px wide: no pan reaches it, and the button at 300 is first.
+        body = ('<div style="position:absolute;top:-500px;right:-500px;width:300px;height:200px;'
+                'content-visibility:auto;overflow-clip-margin:1000px">'
+                '<a id="first" href="#" style="position:absolute;left:-1000px;top:600px">first</a></div>')
+        report = self.measure(self.parked_left_page("painted-left.html", "", body))
+        self.assertEqual(report["horizontal_overflow_px"], 0)
+        self.assertEqual(report["first_action_y"], 300)
+
     def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
         # The link sits in a reversed scroll box whose listener loads more
         # content on the first scroll. Finding the link must not scroll the box:
@@ -969,6 +985,25 @@ class BrowserTests(Fixture):
         self.assertEqual(report["first_action_y"], 152)
         self.assertEqual(report["small_targets"]["checked"], 2)
         self.assertEqual(report["small_inputs"]["checked"], 0)
+
+    def test_rtl_measuring_calls_no_scroll_and_fires_no_scroll_event(self):
+        # The page reports every scroll call and every scroll event as a
+        # console error. A reversed scroll box that hides the first link is the
+        # case the script once scrolled; a scroll made after the counts are
+        # taken would pass the count assertions and is caught here.
+        body = ('<div id="box" style="position:absolute;top:500px;right:0;width:300px;height:100px;'
+                'overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                '<div style="height:400px;flex:none"></div><a id="first" href="#" style="flex:none">first</a></div>'
+                '<script>for (const [owner, names] of [[window, ["scrollTo", "scrollBy", "scroll"]],'
+                ' [Element.prototype, ["scrollTo", "scrollBy", "scroll", "scrollIntoView"]]]) {'
+                ' for (const name of names) { const native = owner[name];'
+                ' owner[name] = function (...args) { console.error("scroll call " + name);'
+                ' return native.apply(this, args); }; } }'
+                ' for (const type of ["scroll", "scrollend"]) {'
+                ' document.addEventListener(type, () => console.error("event " + type), true); }</script>')
+        report = self.measure(self.parked_left_page("no-scroll.html", "", body))
+        self.assertEqual(report["first_action_y"], 152)
+        self.assertEqual(report["console_errors"], [])
 
     def test_left_to_right_neighbours_are_unchanged(self):
         # These pass on the code before the right-to-left change as well; they
