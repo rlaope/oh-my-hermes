@@ -119,11 +119,17 @@ async (opts) => {
   // the left, where such a page overflows, is reachable as far as the page
   // scrolls: `farEdge` is the left end of that range in page px, 0 on a page
   // that does not overflow. Paint alone does not widen it: content under
-  // layout containment is drawn left of page x 0 and cannot be panned to. A box fixed to the
+  // layout containment is drawn left of page x 0 and cannot be panned to. A
+  // quirks-mode page can have no scrolling element, and then nothing in the
+  // page reports how far it scrolls (the root's scrollWidth stays at the
+  // client width while the page pans). The browser's own content width, read
+  // by the caller before this runs, is used there; without it no far end is
+  // applied. A box fixed to the
   // viewport is judged by its viewport box: the reader pans the screen over
   // the layout viewport, client x 0 to innerWidth, and the scroll position
   // cannot bring anything outside that band into view.
-  const farEdge = startEdge - scroller.scrollWidth;
+  const scrollRange = document.scrollingElement ? scroller.scrollWidth : opts.content_width;
+  const farEdge = typeof scrollRange === 'number' ? startEdge - scrollRange : -Infinity;
   const onPageFromRight = (el, r) => {
     if (fixedToViewport(el)) return r.bottom > 0 && r.left < window.innerWidth && r.right > 0;
     return r.bottom + sy > 0 && r.left + sx < startEdge && r.right + sx > farEdge;
@@ -674,6 +680,20 @@ def write_new_file(value, data):
     return path
 
 
+def content_width(context, page, browser_error):
+    """Width of the page's content as the browser lays it out, in CSS px, or None.
+
+    Read over the DevTools protocol, which changes nothing on the page. The
+    page script needs it only where the page has no scrolling element.
+    """
+    try:
+        metrics = context.new_cdp_session(page).send("Page.getLayoutMetrics")
+    except browser_error:
+        return None
+    width = metrics.get("cssContentSize", {}).get("width")
+    return width if isinstance(width, (int, float)) and not isinstance(width, bool) else None
+
+
 def measure_page(args, plan, emu):
     try:
         from playwright.sync_api import Error as PlaywrightError
@@ -712,6 +732,7 @@ def measure_page(args, plan, emu):
                 page.wait_for_timeout(300)
                 try:
                     raw = page.evaluate(PAGE_SCRIPT, {
+                        "content_width": content_width(context, page, PlaywrightError),
                         "width": emu["width"], "data": args.data, "default_data": DEFAULT_DATA_SELECTOR,
                         "action_selector": ACTION_SELECTOR, "target_selector": TARGET_SELECTOR,
                         "field_selector": FIELD_SELECTOR, "measure": plan["measure"], "list_limit": LIST_LIMIT,

@@ -93,6 +93,11 @@ def fake_playwright(on_goto):
         def new_context(self, **_):
             return self
 
+        def new_cdp_session(self, *_):
+            # No DevTools session here: the script goes on without the
+            # browser's content width, as it does when the protocol refuses.
+            raise error("no protocol session in the stand-in")
+
         def new_page(self):
             return Page()
 
@@ -970,6 +975,35 @@ class BrowserTests(Fixture):
         self.assertEqual(report["horizontal_overflow_px"], 0)
         self.assertEqual(report["first_action_y"], 300)
 
+    def no_scrolling_element_page(self, name, body):
+        # Quirks mode with `overflow-x: auto` on both <html> and <body>: the
+        # browser reports no scrolling element, and the root's scrollWidth stays
+        # 390 however far the page pans.
+        path = self.root / name
+        path.write_text('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
+                        'html,body{direction:rtl;overflow-x:auto} body{margin:0;height:2000px}'
+                        ' a,button{display:block;position:absolute;width:120px;height:48px}'
+                        f' #real{{top:300px;right:0}}</style></head><body>{body}<button id="real">real</button>'
+                        '</body></html>')
+        return path
+
+    def test_rtl_page_with_no_scrolling_element_keeps_a_link_that_is_on_screen(self):
+        # The page loads panned 500 px left and the link's unclipped part is on
+        # screen at y 100; held to the root's width of 390 it was dropped.
+        body = ('<div style="position:absolute;left:-500px;top:100px;width:120px;height:60px;overflow:hidden">'
+                '<a id="first" href="#" style="left:0;top:0;width:700px">first</a></div>')
+        report = self.measure(self.no_scrolling_element_page("no-scroller-on-screen.html", body))
+        self.assertEqual(report["first_action_y"], 100)
+
+    def test_rtl_page_with_no_scrolling_element_still_skips_a_link_painted_past_its_range(self):
+        # Nothing widens this page, so the link a contained box paints left of
+        # page x 0 cannot be panned to: with no far end at all it would count.
+        body = ('<div style="position:absolute;top:-500px;right:-500px;width:300px;height:200px;'
+                'content-visibility:auto;overflow-clip-margin:1000px">'
+                '<a id="first" href="#" style="left:-1000px;top:600px">first</a></div>')
+        report = self.measure(self.no_scrolling_element_page("no-scroller-painted-left.html", body))
+        self.assertEqual(report["first_action_y"], 300)
+
     def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
         # The link sits in a reversed scroll box whose listener loads more
         # content on the first scroll. Finding the link must not scroll the box:
@@ -987,8 +1021,8 @@ class BrowserTests(Fixture):
         self.assertEqual(report["small_inputs"]["checked"], 0)
 
     def test_rtl_measuring_calls_no_scroll_and_fires_no_scroll_event(self):
-        # The page reports every scroll call and every scroll event as a
-        # console error. A reversed scroll box that hides the first link is the
+        # The page reports every scroll call, every write to scrollTop or
+        # scrollLeft and every scroll event as a console error. A reversed scroll box that hides the first link is the
         # case the script once scrolled; a scroll made after the counts are
         # taken would pass the count assertions and is caught here.
         body = ('<div id="box" style="position:absolute;top:500px;right:0;width:300px;height:100px;'
@@ -999,6 +1033,10 @@ class BrowserTests(Fixture):
                 ' for (const name of names) { const native = owner[name];'
                 ' owner[name] = function (...args) { console.error("scroll call " + name);'
                 ' return native.apply(this, args); }; } }'
+                ' for (const name of ["scrollTop", "scrollLeft"]) {'
+                ' const native = Object.getOwnPropertyDescriptor(Element.prototype, name);'
+                ' Object.defineProperty(Element.prototype, name, {get: native.get,'
+                ' set(value) { console.error("scroll set " + name); native.set.call(this, value); }}); }'
                 ' for (const type of ["scroll", "scrollend"]) {'
                 ' document.addEventListener(type, () => console.error("event " + type), true); }</script>')
         report = self.measure(self.parked_left_page("no-scroll.html", "", body))
