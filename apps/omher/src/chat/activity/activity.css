@@ -350,6 +350,10 @@
 .sa-st.queued {
   color: var(--quiet);
 }
+/* its approval or question waits on the person: the sidebar's amber for a waiting session */
+.sa-st.waiting {
+  color: var(--needs-text);
+}
 .sa-t {
   flex: none;
   min-width: 34px;

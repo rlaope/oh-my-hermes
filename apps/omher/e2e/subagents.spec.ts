@@ -40,7 +40,7 @@ test("/delegate: one card, one row per subagent, live then done after the turn e
   const card = page.getByTestId("fanout-card");
   await expect(card).toHaveCount(1);
   await expect(card).toHaveAttribute("data-state", "running");
-  await expect(card.getByTestId("fanout-summary")).toHaveText(/^2 subagents running · 0 of 2 · \d+s$/);
+  await expect(card.getByTestId("fanout-summary")).toHaveText(/^Running · 0 of 2 done · \d+s$/);
   const rows = card.getByTestId("subagent-row");
   await expect(rows).toHaveCount(2);
   // each row: the model's vendor mark, the goal in a few words, the state, the current step, the time
@@ -56,7 +56,7 @@ test("/delegate: one card, one row per subagent, live then done after the turn e
   // the first returns: its result line replaces the step; the count moves in place
   await expect(rows.nth(0)).toHaveAttribute("data-state", "done");
   await expect(rows.nth(0).getByTestId("subagent-line")).toHaveText("The Codex pack is current (12 skills).");
-  await expect(card.getByTestId("fanout-summary")).toHaveText(/ · 1 of 2 · /);
+  await expect(card.getByTestId("fanout-summary")).toHaveText(/ · 1 of 2 done · /);
   // both done: the card folds to its summary
   await expect(card).toHaveAttribute("data-state", "done");
   await expect(card.getByTestId("fanout-summary")).toHaveText(/^Ran 2 subagents · \d+s$/);
