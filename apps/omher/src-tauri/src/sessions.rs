@@ -621,14 +621,14 @@ pub(crate) const COALESCE_WINDOW: Duration = Duration::from_millis(4);
 /// [`FLOW_LOW`] it reads again. What a session can have undrawn is at most `FLOW_HIGH` plus two messages and one
 /// read (the message that crossed the mark, the one being built, the read under way).
 ///
-/// The pair is the smallest in `bench/pty/sweep.json` at which a fast page is fed as fast as with no limit. A
-/// page acknowledges once per slice of drawing (xterm works for 12 ms, then yields), and at 100 MB/s a slice is
-/// 1.2 MB: the high mark has to hold more than one slice or the page runs dry before its acknowledgement is back,
-/// and the low mark has to be within one slice of the high one or a single acknowledgement does not start the
-/// reader again. Measured under `yes`, a page drawing 100 MB/s in slices: 75.5 MB/s here against 75.7 with no
-/// limit, 72.9 at 2 MiB / 512 KiB, 71.3 at 1 MiB / 256 KiB, 38.5 at 256 KiB / 64 KiB. What the size costs is how
-/// much a slow page still has to draw after Ctrl+C: at 20 ms a message, 2.6 s here against 0.7 s at 1 MiB /
-/// 256 KiB and 9.5 s at 8 MiB / 2 MiB (292 s with no limit).
+/// The pair is the smallest in `bench/pty/sweep.json` that feeds a fast page within 0.2% of what no limit does.
+/// Measured under `yes` into a page model that draws 100 MB/s in slices of 12 ms and acknowledges once per slice,
+/// as xterm does: 75.5 MB/s here against 75.7 with no limit, 72.9 at 2 MiB / 512 KiB, 71.3 at 1 MiB / 256 KiB,
+/// 38.5 at 256 KiB / 64 KiB. One slice of that page is 1.2 MB, which is the likely reason: a high mark that holds less
+/// than a slice, or a low mark more than a slice under the high one, leaves the page waiting for the reader.
+/// What the size costs is what a page still has to draw after Ctrl+C: 1.0 to 1.7 MB here (six runs) against
+/// 0.4 MB at 1 MiB / 256 KiB and 6.5 MB at 8 MiB / 2 MiB (220 MB with no limit). How long that takes is the
+/// page's speed (`bench/pty/README.md`).
 pub(crate) const FLOW_HIGH: u64 = 2 * 1024 * 1024;
 pub(crate) const FLOW_LOW: u64 = 1024 * 1024;
 

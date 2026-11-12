@@ -69,6 +69,10 @@ struct Probe {
     msgs: AtomicU64,
     /// bytes the page has drawn
     drawn: AtomicU64,
+    /// messages the page has drawn
+    drawn_msgs: AtomicU64,
+    /// microseconds the page's time per message really took (a machine can stretch a short sleep)
+    page_us: AtomicU64,
     exit: AtomicBool,
     /// when the page last drew
     last: Mutex<Option<Instant>>,
@@ -77,8 +81,24 @@ struct Probe {
 }
 
 impl Probe {
+    /// The page's time for one message: a sleep of `d`, or busy for `d` when `OMHER_PTY_BENCH_BUSY_PAGE` is set
+    /// (a sleep can take several times `d` on a loaded machine; busy time is exact). How long it took is kept.
+    fn sleep(&self, d: Duration) {
+        if d.is_zero() {
+            return;
+        }
+        let t = Instant::now();
+        if std::env::var_os("OMHER_PTY_BENCH_BUSY_PAGE").is_some() {
+            spin(d);
+        } else {
+            thread::sleep(d);
+        }
+        self.page_us.fetch_add(t.elapsed().as_micros() as u64, Ordering::SeqCst);
+    }
+
     fn draw(&self, n: usize) {
         self.drawn.fetch_add(n as u64, Ordering::SeqCst);
+        self.drawn_msgs.fetch_add(1, Ordering::SeqCst);
         *self.last.lock().unwrap() = Some(Instant::now());
     }
 }
@@ -104,11 +124,7 @@ fn start(s: &Arc<Sessions>, argv: &[&str], page: Page, probe: &Arc<Probe>) -> u3
                 while let Some(b) = next {
                     match page {
                         Page::Slices(mb_s) => spin(Duration::from_secs_f64(b.len() as f64 / (mb_s * MB))),
-                        Page::Queued(delay) | Page::Sink(delay) => {
-                            if !delay.is_zero() {
-                                thread::sleep(delay);
-                            }
-                        }
+                        Page::Queued(delay) | Page::Sink(delay) => p.sleep(delay),
                     }
                     p.draw(b.len());
                     owed += b.len();
@@ -133,9 +149,7 @@ fn start(s: &Arc<Sessions>, argv: &[&str], page: Page, probe: &Arc<Probe>) -> u3
                 }
                 match page {
                     Page::Sink(delay) => {
-                        if !delay.is_zero() {
-                            thread::sleep(delay);
-                        }
+                        p.sleep(delay);
                         p.draw(b.len());
                         ack(&s2, id_of(&c2), b.len());
                     }
@@ -223,7 +237,9 @@ fn yes(s: &Arc<Sessions>, page: Page, prefix: &str) -> Value {
 }
 
 /// `yes` for 10 s against a slow page: the most memory the process held, what was read from the PTY and not yet
-/// drawn at the end (all of it is inside this process), and the rate drawn.
+/// drawn at the end (all of it is inside this process), and the rate drawn. The page's time is per message, so the
+/// rate is the mean message size over the time a message took; both are given, and how much of that time was the
+/// page's own.
 fn slow(s: &Arc<Sessions>, page: Page, prefix: &str) -> Value {
     let p = Arc::new(Probe::default());
     start(s, &["/usr/bin/yes"], page, &p);
@@ -231,7 +247,19 @@ fn slow(s: &Arc<Sessions>, page: Page, prefix: &str) -> Value {
     thread::sleep(Duration::from_secs(10));
     let drawn = p.drawn.load(Ordering::SeqCst);
     let queued = PTY_READ_BYTES.load(Ordering::SeqCst).saturating_sub(drawn);
-    named(prefix, &[("10s_peak_rss_mb", peak_rss_mb()), ("10s_queued_mb", queued as f64 / MB), ("10s_drawn_mb_s", drawn as f64 / MB / t.elapsed().as_secs_f64())])
+    let secs = t.elapsed().as_secs_f64();
+    let msgs = p.drawn_msgs.load(Ordering::SeqCst).max(1) as f64;
+    named(
+        prefix,
+        &[
+            ("10s_peak_rss_mb", peak_rss_mb()),
+            ("10s_queued_mb", queued as f64 / MB),
+            ("10s_drawn_mb_s", drawn as f64 / MB / secs),
+            ("10s_mean_message_kb", drawn as f64 / 1024.0 / msgs),
+            ("10s_ms_per_message", secs * 1000.0 / msgs),
+            ("10s_ms_in_page_per_message", p.page_us.load(Ordering::SeqCst) as f64 / 1000.0 / msgs),
+        ],
+    )
 }
 
 /// `yes` against a slow page; after 2 s Ctrl+C is written: the time until the last byte was drawn, and how much
