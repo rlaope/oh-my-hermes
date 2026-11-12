@@ -10467,14 +10467,36 @@ def contract_redline_guard_applies(normalized_query: str) -> bool:
     )
 
 
+# A UI surface is necessary but never sufficient: "화면 공유", "폰 배터리" and
+# "dashboard API" name a surface with a fault that is not visual.
+_FRONTEND_DESIGN_SURFACES = ("대시보드", "화면", "폰", "모바일", "랜딩 페이지", "랜딩페이지", "page", "dashboard", "screen", "mobile")
+# Redesign or layout work on the surface itself.
+_FRONTEND_DESIGN_ACTIONS = ("디자인해", "디자인을 다시", "디자인 다시", "레이아웃", "redesign", "less generic", "layout")
+# A repair reaches frontend only when the message names how the UI looks
+# wrong; the bare "fix it" verb (고쳐) is shared with data, auth, performance
+# and hardware faults. "정렬" alone also means sorting, so only misalignment
+# phrasings count.
+_FRONTEND_VISUAL_SYMPTOMS = (
+    "깨지", "깨져", "깨짐", "가로 스크롤", "겹쳐", "겹침", "잘려", "잘림", "넘쳐", "넘침", "삐져",
+    "정렬이 어긋", "정렬이 안 맞", "여백", "줄바꿈", "반응형",
+    "horizontal scroll", "overlap", "misaligned", "cut off", "overflowing",
+)
+_FRONTEND_REPAIR_VERBS = ("고쳐", "고치", "수정", "잡아", "fix")
+# Question openers, the Apple-platform lane, recorded video, and a cracked
+# physical screen.
+_FRONTEND_DESIGN_BLOCKERS = (*_GREENFIELD_QUESTION_OPENERS, "ios", "영상", "녹화", "video", "액정", "수리")
+
+
 def frontend_design_guard_applies(normalized_query: str) -> bool:
-    """A UI surface plus an appearance or repair action, excluding neighbouring lanes."""
-    surfaces = ("대시보드", "화면", "폰", "랜딩 페이지", "page", "pages")
-    actions = ("디자인해", "디자인을 다시", "고쳐", "레이아웃 다시", "less generic")
-    blockers = (*_GREENFIELD_QUESTION_OPENERS, "스킬", "지표", "분석", "앱 스토어", "ios", "영상", "녹화", "뭐야", "리뷰")
-    return (_contains_phrase(normalized_query, surfaces)
-            and _contains_phrase(normalized_query, actions)
-            and not _contains_phrase(normalized_query, blockers))
+    """A UI surface plus a redesign/layout action or a visual symptom with a repair verb."""
+    if not _contains_phrase(normalized_query, _FRONTEND_DESIGN_SURFACES):
+        return False
+    if _contains_phrase(normalized_query, _FRONTEND_DESIGN_BLOCKERS):
+        return False
+    if _contains_phrase(normalized_query, _FRONTEND_DESIGN_ACTIONS):
+        return True
+    return (_contains_phrase(normalized_query, _FRONTEND_VISUAL_SYMPTOMS)
+            and _contains_phrase(normalized_query, _FRONTEND_REPAIR_VERBS))
 
 
 def game_build_guard_applies(normalized_query: str) -> bool:
