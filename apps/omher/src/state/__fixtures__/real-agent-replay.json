@@ -313,6 +313,21 @@
         "tool_id": "toolu_01JKPV7PJrag9r2r2PxE4qLN"
       },
       {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "add",
+            "lines": [
+              "+hello from qa"
+            ],
+            "path": "notes.txt",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_01JKPV7PJrag9r2r2PxE4qLN"
+      },
+      {
         "event": "tool.end",
         "ms": 0,
         "name": "",
@@ -336,6 +351,22 @@
         "detail": "README.md +1 -1",
         "event": "tool.start",
         "name": "patch",
+        "tool_id": "toolu_01WRJNN6eZcnh6rZnPZtz9fA"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "update",
+            "lines": [
+              "-# tiny",
+              "+# tiny project"
+            ],
+            "path": "README.md",
+            "removed": 1
+          }
+        ],
         "tool_id": "toolu_01WRJNN6eZcnh6rZnPZtz9fA"
       },
       {
@@ -989,6 +1020,1353 @@
         ]
       },
       {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "17cce691-968d-4eeb-b343-395f9e7d331e",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "claude-sonnet-4-6"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "먼저 task"
+      },
+      {
+        "event": "delta",
+        "text": " 도구 "
+      },
+      {
+        "event": "delta",
+        "text": "schema"
+      },
+      {
+        "event": "delta",
+        "text": "를 로"
+      },
+      {
+        "event": "delta",
+        "text": "드합"
+      },
+      {
+        "event": "delta",
+        "text": "니다."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCJNQAdtCTAuM6GkBoC-0",
+        "text": "먼저 task 도구 schema를 로드합니다."
+      },
+      {
+        "detail": "select:TaskCreate,TaskUpdate,TaskList",
+        "event": "tool.start",
+        "name": "ToolSearch",
+        "tool_id": "toolu_01XnSP8ryqPBvFhw2WprXppB"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01XnSP8ryqPBvFhw2WprXppB"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "3"
+      },
+      {
+        "event": "delta",
+        "text": "개"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "task"
+      },
+      {
+        "event": "delta",
+        "text": "를 생"
+      },
+      {
+        "event": "delta",
+        "text": "성합"
+      },
+      {
+        "event": "delta",
+        "text": "니다."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCJjmoX66SXssGoe1Ub-0",
+        "text": "3개 task를 생성합니다."
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "pending",
+            "text": "Add docstring to add() in calc.py"
+          }
+        ]
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "pending",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Add mul(a, b) function to calc.py"
+          }
+        ]
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "pending",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "delta",
+        "text": "현"
+      },
+      {
+        "event": "delta",
+        "text": "재 파"
+      },
+      {
+        "event": "delta",
+        "text": "일 상"
+      },
+      {
+        "event": "delta",
+        "text": "태를 확인합"
+      },
+      {
+        "event": "delta",
+        "text": "니다."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCKUgj4ZgXBzkf3MKWG-0",
+        "text": "현재 파일 상태를 확인합니다."
+      },
+      {
+        "detail": "/w/proj/calc.py",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01VcMVKEsRiF9x5dbLQJeTNy"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01VcMVKEsRiF9x5dbLQJeTNy"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "delta",
+        "text": "Task"
+      },
+      {
+        "event": "delta",
+        "text": " 1 "
+      },
+      {
+        "event": "delta",
+        "text": "시"
+      },
+      {
+        "event": "delta",
+        "text": "작 "
+      },
+      {
+        "event": "delta",
+        "text": "—"
+      },
+      {
+        "event": "delta",
+        "text": " calc"
+      },
+      {
+        "event": "delta",
+        "text": ".py `"
+      },
+      {
+        "event": "delta",
+        "text": "add` doc"
+      },
+      {
+        "event": "delta",
+        "text": "string 추가."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCKhuD5nZZ8ES4LTHoV-0",
+        "text": "Task 1 시작 — calc.py `add` docstring 추가."
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "in_progress",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01Qy1KgvrUkM9F3pSf7LPULd"
+      },
+      {
+        "detail": "calc.py +3 -2",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_018R4VtNV2z7XPnaDe6aHwGj"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 3,
+            "kind": "update",
+            "lines": [
+              "-def add(a, b):",
+              "-    return a + b",
+              "+def add(a, b):",
+              "+    \"\"\"Return the sum of a and b.\"\"\"",
+              "+    return a + b"
+            ],
+            "path": "calc.py",
+            "removed": 2
+          }
+        ],
+        "tool_id": "toolu_018R4VtNV2z7XPnaDe6aHwGj"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "update",
+            "lines": [
+              "@@ -1,4 +1,5 @@",
+              " def add(a, b):",
+              "+    \"\"\"Return the sum of a and b.\"\"\"",
+              "     return a + b",
+              " ",
+              " "
+            ],
+            "path": "calc.py",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_018R4VtNV2z7XPnaDe6aHwGj"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_018R4VtNV2z7XPnaDe6aHwGj"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "completed",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01X8UVCK925Pj8bShvYbkrJ9"
+      },
+      {
+        "event": "delta",
+        "text": "Task"
+      },
+      {
+        "event": "delta",
+        "text": " 2"
+      },
+      {
+        "event": "delta",
+        "text": " 시"
+      },
+      {
+        "event": "delta",
+        "text": "작 — `"
+      },
+      {
+        "event": "delta",
+        "text": "mul("
+      },
+      {
+        "event": "delta",
+        "text": "a, b)` 추"
+      },
+      {
+        "event": "delta",
+        "text": "가."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCLVE17frC1VfMmVEXD-0",
+        "text": "Task 2 시작 — `mul(a, b)` 추가."
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "completed",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "in_progress",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01DS79PtyMgxmqF6gEPzsjRx"
+      },
+      {
+        "detail": "calc.py +6 -2",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01Raz8bNpxDJ6up2p556ENC3"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 6,
+            "kind": "update",
+            "lines": [
+              "-def sub(a, b):",
+              "-    return a - b",
+              "+def sub(a, b):",
+              "+    return a - b",
+              "+",
+              "+",
+              "+def mul(a, b):",
+              "+    return a * b"
+            ],
+            "path": "calc.py",
+            "removed": 2
+          }
+        ],
+        "tool_id": "toolu_01Raz8bNpxDJ6up2p556ENC3"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 4,
+            "kind": "update",
+            "lines": [
+              "@@ -5,3 +5,7 @@",
+              " ",
+              " def sub(a, b):",
+              "     return a - b",
+              "+",
+              "+",
+              "+def mul(a, b):",
+              "+    return a * b"
+            ],
+            "path": "calc.py",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_01Raz8bNpxDJ6up2p556ENC3"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01Raz8bNpxDJ6up2p556ENC3"
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "completed",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "completed",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "pending",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01XzF7JxA3XePECwq8K8Noxj"
+      },
+      {
+        "event": "delta",
+        "text": "Task"
+      },
+      {
+        "event": "delta",
+        "text": " 3 시작 —"
+      },
+      {
+        "event": "delta",
+        "text": " README"
+      },
+      {
+        "event": "delta",
+        "text": "."
+      },
+      {
+        "event": "delta",
+        "text": "md 업"
+      },
+      {
+        "event": "delta",
+        "text": "데이트."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCM1PTqeVubabzifmZa-0",
+        "text": "Task 3 시작 — README.md 업데이트."
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "completed",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "completed",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "in_progress",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01Dm1RynYw3Ccqjqci27eTKn"
+      },
+      {
+        "detail": "README.md +3 -1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01JU4yPuRXR4aeCwrpwoeiCK"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 3,
+            "kind": "update",
+            "lines": [
+              "-Tiny math helpers.",
+              "+Tiny math helpers.",
+              "+",
+              "+Functions: `add(a, b)`, `sub(a, b)`, `mul(a, b)`"
+            ],
+            "path": "README.md",
+            "removed": 1
+          }
+        ],
+        "tool_id": "toolu_01JU4yPuRXR4aeCwrpwoeiCK"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 2,
+            "kind": "update",
+            "lines": [
+              "@@ -1,3 +1,5 @@",
+              " # calc",
+              " ",
+              " Tiny math helpers.",
+              "+",
+              "+Functions: `add(a, b)`, `sub(a, b)`, `mul(a, b)`"
+            ],
+            "path": "README.md",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_01JU4yPuRXR4aeCwrpwoeiCK"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01JU4yPuRXR4aeCwrpwoeiCK"
+      },
+      {
+        "event": "plan",
+        "items": [
+          {
+            "status": "completed",
+            "text": "Add docstring to add() in calc.py"
+          },
+          {
+            "status": "completed",
+            "text": "Add mul(a, b) function to calc.py"
+          },
+          {
+            "status": "completed",
+            "text": "Update README.md with function list"
+          }
+        ]
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01A5csQmJzWmG15Dz4HF1wE1"
+      },
+      {
+        "event": "delta",
+        "text": "3"
+      },
+      {
+        "event": "delta",
+        "text": "개"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "task"
+      },
+      {
+        "event": "delta",
+        "text": " 모"
+      },
+      {
+        "event": "delta",
+        "text": "두 완료."
+      },
+      {
+        "event": "delta",
+        "text": "\n\n**"
+      },
+      {
+        "event": "delta",
+        "text": "calc"
+      },
+      {
+        "event": "delta",
+        "text": ".py**"
+      },
+      {
+        "event": "delta",
+        "text": " —"
+      },
+      {
+        "event": "delta",
+        "text": " `"
+      },
+      {
+        "event": "delta",
+        "text": "add"
+      },
+      {
+        "event": "delta",
+        "text": "`"
+      },
+      {
+        "event": "delta",
+        "text": "에"
+      },
+      {
+        "event": "delta",
+        "text": " doc"
+      },
+      {
+        "event": "delta",
+        "text": "string 추가,"
+      },
+      {
+        "event": "delta",
+        "text": " `mul"
+      },
+      {
+        "event": "delta",
+        "text": "("
+      },
+      {
+        "event": "delta",
+        "text": "a, b)"
+      },
+      {
+        "event": "delta",
+        "text": "` 함수 추가"
+      },
+      {
+        "event": "delta",
+        "text": ".  "
+      },
+      {
+        "event": "delta",
+        "text": "\n**README.md** —"
+      },
+      {
+        "event": "delta",
+        "text": " 함"
+      },
+      {
+        "event": "delta",
+        "text": "수 목록 한"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "줄(`"
+      },
+      {
+        "event": "delta",
+        "text": "add`,"
+      },
+      {
+        "event": "delta",
+        "text": " `sub`, `mul`)"
+      },
+      {
+        "event": "delta",
+        "text": " 추"
+      },
+      {
+        "event": "delta",
+        "text": "가."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCMYJKkLo1xpfaJZLN7-0",
+        "text": "3개 task 모두 완료.\n\n**calc.py** — `add`에 docstring 추가, `mul(a, b)` 함수 추가.  \n**README.md** — 함수 목록 한 줄(`add`, `sub`, `mul`) 추가."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-12-work.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "84e885f4-22d3-44e4-b574-fd063c4d0cd7",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Fable 5.2"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "detail": "todo task list",
+        "event": "tool.start",
+        "name": "ToolSearch",
+        "tool_id": "toolu_01TsV6avU6jBXtLKL8cdxzfx"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01TsV6avU6jBXtLKL8cdxzfx"
+      },
+      {
+        "detail": "/w/proj/calc.py",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01LeNKRvQXck9LZPBaiNuqBy"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01LeNKRvQXck9LZPBaiNuqBy"
+      },
+      {
+        "detail": "/w/proj/README.md",
+        "event": "tool.start",
+        "name": "read_file",
+        "tool_id": "toolu_01VL82Tf8tKtpCBhLYyKo3RU"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01VL82Tf8tKtpCBhLYyKo3RU"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking"
+      },
+      {
+        "event": "thinking",
+        "text": "No"
+      },
+      {
+        "event": "thinking",
+        "text": " todo tool is available,"
+      },
+      {
+        "event": "thinking",
+        "text": " so I'll"
+      },
+      {
+        "event": "thinking",
+        "text": " track the three"
+      },
+      {
+        "event": "thinking",
+        "text": " ste"
+      },
+      {
+        "event": "thinking",
+        "text": "ps inline:"
+      },
+      {
+        "event": "thinking",
+        "text": " add `"
+      },
+      {
+        "event": "thinking",
+        "text": "mul`"
+      },
+      {
+        "event": "thinking",
+        "text": " to calc.py, add a"
+      },
+      {
+        "event": "thinking",
+        "text": " docstring to `add`,"
+      },
+      {
+        "event": "thinking",
+        "text": " and list the functions in README"
+      },
+      {
+        "event": "thinking",
+        "text": ".md."
+      },
+      {
+        "event": "thinking",
+        "text": "\n\n"
+      },
+      {
+        "detail": "calc.py +6 -2",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01C97G3djwbX5f3pj4G37PHo"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 6,
+            "kind": "update",
+            "lines": [
+              "-def sub(a, b):",
+              "-    return a - b",
+              "+def sub(a, b):",
+              "+    return a - b",
+              "+",
+              "+",
+              "+def mul(a, b):",
+              "+    return a * b"
+            ],
+            "path": "calc.py",
+            "removed": 2
+          }
+        ],
+        "tool_id": "toolu_01C97G3djwbX5f3pj4G37PHo"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 4,
+            "kind": "update",
+            "lines": [
+              "@@ -4,3 +4,7 @@",
+              " ",
+              " def sub(a, b):",
+              "     return a - b",
+              "+",
+              "+",
+              "+def mul(a, b):",
+              "+    return a * b"
+            ],
+            "path": "calc.py",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_01C97G3djwbX5f3pj4G37PHo"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01C97G3djwbX5f3pj4G37PHo"
+      },
+      {
+        "detail": "calc.py +3 -2",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01YMxEWc2nt7h7fvoS3oYMot"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 3,
+            "kind": "update",
+            "lines": [
+              "-def add(a, b):",
+              "-    return a + b",
+              "+def add(a, b):",
+              "+    \"\"\"Return the sum of a and b.\"\"\"",
+              "+    return a + b"
+            ],
+            "path": "calc.py",
+            "removed": 2
+          }
+        ],
+        "tool_id": "toolu_01YMxEWc2nt7h7fvoS3oYMot"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "update",
+            "lines": [
+              "@@ -1,4 +1,5 @@",
+              " def add(a, b):",
+              "+    \"\"\"Return the sum of a and b.\"\"\"",
+              "     return a + b",
+              " ",
+              " "
+            ],
+            "path": "calc.py",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_01YMxEWc2nt7h7fvoS3oYMot"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01YMxEWc2nt7h7fvoS3oYMot"
+      },
+      {
+        "detail": "README.md +3 -1",
+        "event": "tool.start",
+        "name": "patch",
+        "tool_id": "toolu_01JehdKp8VpUnNrB8x8tgEJM"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 3,
+            "kind": "update",
+            "lines": [
+              "-Tiny math helpers.",
+              "+Tiny math helpers.",
+              "+",
+              "+Functions: `add(a, b)`, `sub(a, b)`, `mul(a, b)`."
+            ],
+            "path": "README.md",
+            "removed": 1
+          }
+        ],
+        "tool_id": "toolu_01JehdKp8VpUnNrB8x8tgEJM"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 2,
+            "kind": "update",
+            "lines": [
+              "@@ -1,3 +1,5 @@",
+              " # calc",
+              " ",
+              " Tiny math helpers.",
+              "+",
+              "+Functions: `add(a, b)`, `sub(a, b)`, `mul(a, b)`."
+            ],
+            "path": "README.md",
+            "removed": 0
+          }
+        ],
+        "tool_id": "toolu_01JehdKp8VpUnNrB8x8tgEJM"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01JehdKp8VpUnNrB8x8tgEJM"
+      },
+      {
+        "detail": "cd \"/w/proj\" && python3 -c \"import calc; print(calc.add(2,3), calc.sub(5,2), calc.mul(4,3), repr(calc.add.__doc__))\"",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_01NZoigmQBaPqhgfL1NytZHL"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_01NZoigmQBaPqhgfL1NytZHL"
+      },
+      {
+        "event": "delta",
+        "text": "All three edits are in"
+      },
+      {
+        "event": "delta",
+        "text": " and a quick import"
+      },
+      {
+        "event": "delta",
+        "text": " check passes (`add(2"
+      },
+      {
+        "event": "delta",
+        "text": ",3)=5`, `"
+      },
+      {
+        "event": "delta",
+        "text": "sub(5,2)="
+      },
+      {
+        "event": "delta",
+        "text": "3`, `mul(4"
+      },
+      {
+        "event": "delta",
+        "text": ",3)=12`,"
+      },
+      {
+        "event": "delta",
+        "text": " doc"
+      },
+      {
+        "event": "delta",
+        "text": "string present).\n\n- [x"
+      },
+      {
+        "event": "delta",
+        "text": "] 1. Added `m"
+      },
+      {
+        "event": "delta",
+        "text": "ul(a, b)` to"
+      },
+      {
+        "event": "delta",
+        "text": " `calc.py`"
+      },
+      {
+        "event": "delta",
+        "text": ", after"
+      },
+      {
+        "event": "delta",
+        "text": " `sub`\n- [x"
+      },
+      {
+        "event": "delta",
+        "text": "] 2. G"
+      },
+      {
+        "event": "delta",
+        "text": "ave `add` the docstring"
+      },
+      {
+        "event": "delta",
+        "text": " `\"\"\"Return the sum"
+      },
+      {
+        "event": "delta",
+        "text": " of a and b.\"\"\"`"
+      },
+      {
+        "event": "delta",
+        "text": "\n- [x] 3."
+      },
+      {
+        "event": "delta",
+        "text": " Added ``"
+      },
+      {
+        "event": "delta",
+        "text": " Functions: `add(a"
+      },
+      {
+        "event": "delta",
+        "text": ", b)`, `sub"
+      },
+      {
+        "event": "delta",
+        "text": "(a, b)`, `"
+      },
+      {
+        "event": "delta",
+        "text": "mul(a, b)`"
+      },
+      {
+        "event": "delta",
+        "text": ". `` to `README.md"
+      },
+      {
+        "event": "delta",
+        "text": "`\n\nThis session has no todo"
+      },
+      {
+        "event": "delta",
+        "text": " tool, so the list was"
+      },
+      {
+        "event": "delta",
+        "text": " k"
+      },
+      {
+        "event": "delta",
+        "text": "ept in the re"
+      },
+      {
+        "event": "delta",
+        "text": "ply text"
+      },
+      {
+        "event": "delta",
+        "text": " rather than in a t"
+      },
+      {
+        "event": "delta",
+        "text": "ool"
+      },
+      {
+        "event": "delta",
+        "text": ". Nothing is committed"
+      },
+      {
+        "event": "delta",
+        "text": "; both files are still"
+      },
+      {
+        "event": "delta",
+        "text": " untracked."
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxBFDrGgT35eBJH3e57t-0",
+        "text": "All three edits are in and a quick import check passes (`add(2,3)=5`, `sub(5,2)=3`, `mul(4,3)=12`, docstring present).\n\n- [x] 1. Added `mul(a, b)` to `calc.py`, after `sub`\n- [x] 2. Gave `add` the docstring `\"\"\"Return the sum of a and b.\"\"\"`\n- [x] 3. Added `` Functions: `add(a, b)`, `sub(a, b)`, `mul(a, b)`. `` to `README.md`\n\nThis session has no todo tool, so the list was kept in the reply text rather than in a tool. Nothing is committed; both files are still untracked."
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-12-thinking.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "4c517002-db08-45ae-90f8-0626b0cdc3e6",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "claude-sonnet-4-6"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "event": "delta",
+        "text": "ok"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCSwA8PJj4QvieUFGSi-0",
+        "text": "ok"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "rewound",
+        "text": "Remember the word ORCHID. Reply only: ok"
+      },
+      {
+        "event": "session.info",
+        "rewind": false
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "4c517002-db08-45ae-90f8-0626b0cdc3e6",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "claude-sonnet-4-6"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "event": "delta",
+        "text": "NONE"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgxCT5bdoYPECTMphh8D1-0",
+        "text": "NONE"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      }
+    ],
+    "name": "claude-12-rewind.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
         "event": "session.info",
         "model": "Haiku 5.5",
         "model_next": ""
@@ -1548,6 +2926,10 @@
         "event": "turn.start"
       },
       {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
         "event": "delta",
         "text": "2"
       },
@@ -1652,6 +3034,10 @@
       },
       {
         "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "event": "delta",
@@ -1901,6 +3287,10 @@
         "event": "turn.start"
       },
       {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
         "event": "delta",
         "text": "I"
       },
@@ -1964,6 +3354,21 @@
         "tool_id": "exec-52a9e30f-3b40-4d04-bec1-810dd532c4bc"
       },
       {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "add",
+            "lines": [
+              "+hello from qa"
+            ],
+            "path": "notes.txt",
+            "removed": 0
+          }
+        ],
+        "tool_id": "exec-52a9e30f-3b40-4d04-bec1-810dd532c4bc"
+      },
+      {
         "choices": [
           "deny",
           "once",
@@ -1974,6 +3379,21 @@
         "event": "approval.request",
         "request_id": "codex-4",
         "title": "Allow Codex to change notes.txt?"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "add",
+            "lines": [
+              "+hello from qa"
+            ],
+            "path": "notes.txt",
+            "removed": 0
+          }
+        ],
+        "tool_id": "exec-52a9e30f-3b40-4d04-bec1-810dd532c4bc"
       },
       {
         "event": "tool.end",
@@ -2059,6 +3479,10 @@
       },
       {
         "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "choices": [
@@ -2199,6 +3623,10 @@
       },
       {
         "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "event": "delta",
@@ -2373,6 +3801,10 @@
         "event": "turn.start"
       },
       {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
         "event": "status",
         "text": "Reconnecting... 2/5"
       },
@@ -2477,6 +3909,10 @@
       },
       {
         "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "event": "delta",
@@ -2627,6 +4063,10 @@
         "event": "turn.start"
       },
       {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
         "event": "delta",
         "text": "sw"
       },
@@ -2666,6 +4106,10 @@
       {
         "event": "session.info",
         "model": "gpt-6-astra"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "event": "delta",
@@ -2762,6 +4206,10 @@
         "sandbox": "dangerFullAccess"
       },
       {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
         "event": "delta",
         "text": "2"
       },
@@ -2854,10 +4302,12 @@
         "model": "Fable 5.2"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "<removed>"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "<removed>"
       },
       {
         "detail": "Read a.txt first line",
@@ -2962,7 +4412,8 @@
         "summary": "4 Note: Read returned line numbers 1–4, but line 4 is empty (lines 1–3 are `one`, `two`, `three`). If that empty line is only the file's trailing newline, the content line count is 3; I did not check…"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "<removed>"
       },
       {
         "event": "delta",
@@ -3178,52 +4629,68 @@
         "event": "thinking"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "I'm spawning two t"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "asks together"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " in a"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " single batch,"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " running"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " them in the background, and wai"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "ting for their"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " completion notices"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "."
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " Both will use the"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " explore subagent, and"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " each"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " will"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " get"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " the working directory path."
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "\n\n"
       },
       {
         "event": "delta",
@@ -3369,37 +4836,48 @@
         "event": "thinking"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "I'm going"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " to p"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "ivot now"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": ", since the helpers are still"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " running in the background."
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " I'll"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " ask the user"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " a question and set"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " waitForAnswer to"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " true."
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "\n\n"
       },
       {
         "detail": "{\"questions\":[{\"header\":\"Color\",\"multiSelect\":false,\"options\":[{\"label\":\"Red\"},{\"label\":\"Blue\"}],\"question\":\"Which color do you prefer?\"}],\"waitForAnswer\":true}",
@@ -3447,82 +4925,108 @@
         "event": "thinking"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "I'm going"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " to answ"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "er with a"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " single word, \"Blue,\""
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " as"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " the user as"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "ked. Helper 1 "
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "has"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " finished, but"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " helper 2 is still running"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "."
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " The previ"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "ous summary is still pending,"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " and I'm"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " not"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " sure y"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "et whether it"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " needs a"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " m"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "ention. The line-count result com"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "es later, and"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " I'll write"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " the"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " summary after"
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": " that."
       },
       {
-        "event": "thinking"
+        "event": "thinking",
+        "text": "\n\n"
       },
       {
         "event": "delta",
@@ -3649,6 +5153,10 @@
       },
       {
         "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "event": "delta",
@@ -4012,6 +5520,10 @@
       },
       {
         "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
       },
       {
         "event": "delta",
@@ -4505,6 +6017,21 @@
         "tool_id": "call_write_0"
       },
       {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "add",
+            "lines": [
+              "+hello from qa"
+            ],
+            "path": "notes.txt",
+            "removed": 0
+          }
+        ],
+        "tool_id": "call_write_0"
+      },
+      {
         "choices": [
           "deny",
           "once",
@@ -4980,6 +6507,21 @@
         "tool_id": "call_write_0"
       },
       {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "add",
+            "lines": [
+              "+hello from qa"
+            ],
+            "path": "notes.txt",
+            "removed": 0
+          }
+        ],
+        "tool_id": "call_write_0"
+      },
+      {
         "event": "tool.end",
         "ms": 0,
         "name": "",
@@ -4990,6 +6532,22 @@
         "detail": "README.md +1 -1",
         "event": "tool.start",
         "name": "patch",
+        "tool_id": "call_edit_1"
+      },
+      {
+        "event": "tool.diff",
+        "files": [
+          {
+            "added": 1,
+            "kind": "update",
+            "lines": [
+              "-# tiny",
+              "+# tiny project"
+            ],
+            "path": "README.md",
+            "removed": 1
+          }
+        ],
         "tool_id": "call_edit_1"
       },
       {
@@ -5653,5 +7211,423 @@
       }
     ],
     "name": "omo-9-queued.jsonl"
+  },
+  {
+    "agent": "omo",
+    "events": [
+      {
+        "effort": "high",
+        "event": "session.info"
+      },
+      {
+        "agent_session": "01a1c85a-703a-72fe-ae88-c1f9ffb5c249",
+        "effort": "high",
+        "event": "session.info",
+        "model": "Claude Fable 5.1"
+      },
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5",
+            "label": "Claude Fable 5"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-fable-5-1",
+            "label": "Claude Fable 5.1"
+          },
+          {
+            "detail": "anthropic",
+            "id": "anthropic/claude-haiku-4-5",
+            "label": "Claude Haiku 4.5 (latest)"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "status",
+        "retry": {
+          "attempt": 1,
+          "max": 5
+        },
+        "text": "Retrying 1 of 5"
+      },
+      {
+        "error": "Anthropic rejected this conversation's request format, even after retrying without web search replay data. Run /compact or start a new session to continue, and report it if it happens again.",
+        "event": "turn.end",
+        "outcome": "error"
+      }
+    ],
+    "name": "omo-12-retry.jsonl"
+  },
+  {
+    "agent": "codex-late",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Latest workhorse model for coding and everyday work.",
+            "id": "gpt-6.1-sol",
+            "label": "GPT-6.1-Sol"
+          },
+          {
+            "detail": "GPT-6.1 Terra Codex model.",
+            "id": "gpt-6.1-terra",
+            "label": "GPT-6.1 Terra"
+          },
+          {
+            "detail": "Frontier intelligence for the most demanding work.",
+            "id": "gpt-6-astra",
+            "label": "GPT-6-Astra"
+          },
+          {
+            "detail": "Previous generation workhorse model.",
+            "id": "gpt-6-sol",
+            "label": "GPT-6-Sol"
+          },
+          {
+            "detail": "Fast and affordable model for easier tasks.",
+            "id": "gpt-6-luna",
+            "label": "GPT-6-Luna"
+          },
+          {
+            "detail": "Older generation workhorse model.",
+            "id": "gpt-5.6-sol",
+            "label": "GPT-5.6-Sol"
+          },
+          {
+            "detail": "Older balanced model for straightforward work.",
+            "id": "gpt-5.6-terra",
+            "label": "GPT-5.6-Terra"
+          },
+          {
+            "detail": "Older fast and efficient model.",
+            "id": "gpt-5.6-luna",
+            "label": "GPT-5.6-Luna"
+          }
+        ]
+      },
+      {
+        "agent_session": "01a1ca24-1047-7ee0-aac2-faf093d44dbe",
+        "approval": "never",
+        "effort": "xhigh",
+        "event": "session.info",
+        "mode": "",
+        "model": "GPT-6.1-Sol",
+        "sandbox": "dangerFullAccess"
+      },
+      {
+        "event": "session.efforts",
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ]
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 31238
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " in"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " foreground"
+      },
+      {
+        "event": "delta",
+        "text": " and"
+      },
+      {
+        "event": "delta",
+        "text": " wait"
+      },
+      {
+        "event": "delta",
+        "text": " for"
+      },
+      {
+        "event": "delta",
+        "text": " it"
+      },
+      {
+        "event": "delta",
+        "text": " to"
+      },
+      {
+        "event": "delta",
+        "text": " finish"
+      },
+      {
+        "event": "delta",
+        "text": ".\n"
+      },
+      {
+        "event": "message",
+        "id": "msg_0d5f75ad81e44d60016af4433ad9b887d09a92dfdff397ed7e",
+        "text": "I’ll run the command in the foreground and wait for it to finish.\n"
+      },
+      {
+        "detail": "sleep 40; echo late",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43368
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43368
+      },
+      {
+        "event": "turn.end",
+        "outcome": "interrupted"
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "event": "delta",
+        "text": "I"
+      },
+      {
+        "event": "delta",
+        "text": "’ll"
+      },
+      {
+        "event": "delta",
+        "text": " run"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " and"
+      },
+      {
+        "event": "delta",
+        "text": " wait"
+      },
+      {
+        "event": "delta",
+        "text": " for"
+      },
+      {
+        "event": "delta",
+        "text": " its"
+      },
+      {
+        "event": "delta",
+        "text": " output"
+      },
+      {
+        "event": "delta",
+        "text": ".\n"
+      },
+      {
+        "event": "message",
+        "id": "msg_06e385cc77ea6e32016af4434408d487d0992eabcd358b26de",
+        "text": "I’ll run the command and wait for its output.\n"
+      },
+      {
+        "detail": "sleep 12; echo slow",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "exec-cf413606-2ef5-4618-9589-d1258f15f63d"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43551
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43611
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": ".\n"
+      },
+      {
+        "event": "message",
+        "id": "msg_06e385cc77ea6e32016af4434b452487d0964b96aa222f3026",
+        "text": "2 + 2 = 4.\n"
+      },
+      {
+        "event": "tool.end",
+        "ms": 11927,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-cf413606-2ef5-4618-9589-d1258f15f63d"
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43848
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " +"
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "2"
+      },
+      {
+        "event": "delta",
+        "text": " ="
+      },
+      {
+        "event": "delta",
+        "text": " "
+      },
+      {
+        "event": "delta",
+        "text": "4"
+      },
+      {
+        "event": "delta",
+        "text": ";"
+      },
+      {
+        "event": "delta",
+        "text": " the"
+      },
+      {
+        "event": "delta",
+        "text": " command"
+      },
+      {
+        "event": "delta",
+        "text": " output"
+      },
+      {
+        "event": "delta",
+        "text": " was"
+      },
+      {
+        "event": "delta",
+        "text": " `"
+      },
+      {
+        "event": "delta",
+        "text": "slow"
+      },
+      {
+        "event": "delta",
+        "text": "`."
+      },
+      {
+        "event": "message",
+        "id": "msg_06e385cc77ea6e32016af443520a0487d0a686d915975396f7",
+        "text": "2 + 2 = 4; the command output was `slow`."
+      },
+      {
+        "event": "session.usage",
+        "max": 353400,
+        "used": 43926
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "event": "tool.end",
+        "ms": 39887,
+        "name": "",
+        "ok": true,
+        "tool_id": "exec-54fee470-b15c-41fa-bca7-76d78c82fc5c"
+      }
+    ],
+    "name": "codex-12-late-step.jsonl"
   }
 ]

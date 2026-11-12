@@ -1188,6 +1188,24 @@ mod tests {
         }
     }
 
+    /// A New session may open any agent as its terminal (the person picks Chat or Terminal), so `start_agent` takes
+    /// every allow-listed id except `dsh` (DeepSeek Harness ships no terminal profile). The folder is relative, so
+    /// `spawn` refuses it after the program is resolved and no process ever starts, installed or not.
+    #[test]
+    fn start_agent_accepts_every_allow_listed_agent_for_a_terminal_except_dsh() {
+        let s = Sessions::default();
+        for a in AGENTS.iter() {
+            let err = s.start_agent(a.id, Path::new("relative/dir"), None, &[], 80, 24, |_| {}).unwrap_err();
+            if a.id == "dsh" {
+                assert!(err.contains("no terminal view"), "{err}");
+            } else {
+                assert!(!err.contains("unknown agent") && !err.contains("no terminal view"), "{}: {err}", a.id);
+                assert!(err.contains("not installed") || err.contains("not a folder"), "{}: {err}", a.id);
+            }
+        }
+        assert_eq!(s.count(), 0);
+    }
+
     #[test]
     fn start_agent_refuses_an_unknown_id_before_any_process() {
         let s = Sessions::default();

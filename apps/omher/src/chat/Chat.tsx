@@ -4,6 +4,7 @@ import { Header } from "./parts/Header";
 import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
 import { RunsFull } from "../runs/RunsTab";
+import { OmhPromptLine } from "../onboarding/OmhPromptLine";
 import { t } from "../i18n";
 
 /** The selected bot's one main chat: header, timeline, composer. */
@@ -40,6 +41,7 @@ export function Chat() {
       <div className={`pane${s.ui.runsFull ? " has-full" : ""}`} data-pane={bot.name}>
         <Timeline bot={bot} />
         {s.ui.runsFull && <RunsFull bot={bot} />}
+        <OmhPromptLine bot={bot} />
         <Composer
           key={bot.name}
           bot={bot}

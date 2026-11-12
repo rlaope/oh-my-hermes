@@ -1,0 +1,5 @@
+{"method":"thread/tokenUsage/updated","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turnId":"01a1ca26-95c2-7191-8d8c-d57571f05538","tokenUsage":{"total":{"totalTokens":437677,"inputTokens":437082,"cachedInputTokens":392320,"cacheWriteInputTokens":0,"outputTokens":595,"reasoningOutputTokens":120},"last":{"totalTokens":43368,"inputTokens":43308,"cachedInputTokens":43136,"cacheWriteInputTokens":0,"outputTokens":60,"reasoningOutputTokens":0},"modelContextWindow":353400}},"emittedAtMs":1794392894860}
+{"method":"account/rateLimits/updated","params":{"rateLimits":"<removed>"},"emittedAtMs":1794392894860}
+{"id":6,"result":{}}
+{"method":"thread/status/changed","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","status":{"type":"idle"}},"emittedAtMs":1794392894865}
+{"method":"turn/completed","params":{"threadId":"01a1ca24-1047-7ee0-aac2-faf093d44dbe","turn":{"id":"01a1ca26-95c2-7191-8d8c-d57571f05538","rootTurnId":"01a1ca26-95c2-7191-8d8c-d57571f05538","items":[],"itemsView":"notLoaded","status":"interrupted","error":null,"startedAt":1794392888,"completedAt":1794392894,"durationMs":6089}},"emittedAtMs":1794392894865}

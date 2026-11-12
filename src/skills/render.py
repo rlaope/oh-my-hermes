@@ -56,6 +56,8 @@ from .expert_question_rendering import (
     expert_question_reference_lines,
     expert_questions_markdown,
 )
+from .frontend_editorial_layout_reference import editorial_layout_reference
+from .frontend_mobile_density_reference import mobile_density_gate_reference
 from .procedure_rendering import (
     copy_procedure_check_payloads,
     copy_procedure_step_payloads,
@@ -12669,6 +12671,16 @@ def _frontend_design_reference_templates_cached() -> tuple[SkillReferenceTemplat
             "references/forms-and-input.md",
             _forms_and_input_reference(),
         ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/mobile-density-gate.md",
+            mobile_density_gate_reference(),
+        ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/editorial-layout.md",
+            editorial_layout_reference(),
+        ),
     )
 
 
@@ -13949,6 +13961,50 @@ no rendered evidence.
   code but not in `DESIGN.md` is drift: either the contract or the code is
   wrong, and one of them gets fixed.
 
+## Rules the build holds
+
+A rule that lives only in this document is re-broken by whoever did not read
+it, person or agent. The rules below are how a contract gets held by the
+project's own build instead of by memory. The mechanism is fixed here; the
+rules are the project's: which rules a project holds, and their values, come
+from its own contract.
+
+- **A rule judged from source alone becomes a test.** A contract may hold
+  rules that reading source alone can judge, for example corner values outside
+  its set, durations or easings outside the motion profiles, more than one
+  colour per meaning (success, warning, danger), or emoji used as icons. Each
+  such rule the contract holds becomes a check in the project's own test or
+  lint step and runs in its build. A rule that needs a rendered page stays
+  with the visual-QA owner.
+- **One escape marker.** Where a rule has legitimate exceptions, the
+  exception is declared with one named attribute or comment on the element,
+  and the check skips only that element. An exception limited to certain
+  files lists those files inside the check itself. Two ways to opt out
+  means the second one is never audited.
+- **Closed sets, each step tied to a role.** Corners, control heights,
+  durations, easings and heading steps each have a fixed count, and each step
+  names what it is used for. There is no in-between value. Map the
+  framework's size names onto the steps, so a new name cannot create a new
+  value. This complements the one radius knob in Shapes: the knob moves the
+  whole scale, the set decides how many steps the scale has.
+- **Each rule carries its history.** Record the date, what the user asked
+  for, and what went wrong before the rule existed. A rule with no history
+  gets relaxed by the next person who cannot see why it is there.
+- **Decided and open are separate lists.** A variant not yet chosen is not
+  the source of truth, and both variants are not shipped as product options
+  to avoid the choice. The open list names who decides and by when.
+- **Components are the source of truth.** Reuse the control. Re-drawing it by
+  copying classes matches the colour and drifts on corner and height, and
+  the next token change then misses the copy.
+- **A styleguide page built from the real components.** It uses the real
+  components and tokens, so it changes with the code, and each state (data,
+  loading, empty, error) can be opened directly, by address or parameter, for
+  capture. A failed fetch is shown as an error, never as an empty result.
+- **A check counts only when it ran.** Same rule as lint above: a source
+  check that was run, with its findings in hand, is observed evidence; one
+  that was not run is `not_observed`, and reading the code never turns it
+  into a pass.
+
 ## Boundary
 
 `DESIGN.md` is a prepared contract, not rendered evidence: implementation,
@@ -14330,6 +14386,48 @@ Korean, Japanese, and Chinese copy takes the same checks in its own
 register; translate the meaning of an action name, and keep it identical
 across the flow in every locale.
 
+## Screen copy: what the page says about itself
+
+Interface copy covers the controls. This section covers the sentences, numbers,
+and labels a page uses to describe itself; review them against the captured
+screen, not the source.
+
+Review prompts - a stated reason keeps each one:
+
+- **A hero sentence that introduces the product** - does it tell a visitor
+  something they could not infer from the name and the first image, or does it
+  restate them?
+- **A one-line description under every section title** - the section-level
+  version of the eyebrow, title, and description prompt above. Which sections
+  need it to be understood?
+- **A contrast headline of the "not X but Y" shape** - is X something a visitor
+  believed before arriving? A denial of a position nobody held spends the
+  headline on nothing.
+- **A paragraph narrating how a decision was reached** - does the visitor need
+  the history, or only the result? The history belongs in a changelog or a case
+  study.
+
+Reject on sight:
+
+- 01 / 02 / 03 numbering on content that has no order. Numbers promise a
+  sequence; use them only when the reader must take the items in that order.
+- An outcome number with no source.
+
+The test for any number on the page is: "what is this number trying to prove?"
+
+- A comparison measured on the same basis stays, with the basis visible.
+- A configuration or limit value that explains behaviour stays, because it
+  tells the reader what to expect.
+- A boast about improvement goes, or gets its source beside it.
+
+When there is no real content, do not invent sentences, roles, or experience.
+Leave the title and the image slot in place and ask what goes there. An invented
+testimonial or team bio is a claim about real people that nobody made.
+
+After the build, read every string on the captured screen. Components fill in
+numbers and copy on their own, and the placeholder a component ships with is
+easy to leave in.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
@@ -14526,7 +14624,10 @@ work lands.
    counterpart of the TUI's 80x24 and 120x40; add the widths the
    product actually targets. Capture each in every theme the contract
    defines, and once with `prefers-reduced-motion: reduce` for any surface
-   that animates.
+   that animates. Take the 375 capture with touch and mobile-user-agent
+   emulation on when the session can set them; a width-only capture is
+   named as such. A surface people use on a phone also goes through
+   `references/mobile-density-gate.md`.
 3. Compare each capture against the comparison target, side by side.
 4. List every difference — spacing, weight, color, alignment,
    truncation, state treatment — however small. A difference you did
@@ -14636,6 +14737,34 @@ selected, and only its recorded findings enter the contract.
   the visual-fidelity review perspective comparing the rendered result
   against it side by side — and verify the implementation is a reusable
   design-system build, not a screenshot-matched one-off.
+
+## Skeleton versus brand
+
+A reference carries two layers: a skeleton (layout, spacing rhythm,
+component anatomy, motion) and a brand (colour and type). They are taken
+separately.
+
+- **A project that already has a brand or design system** takes skeleton and
+  motion from the reference, and colour and type from its own brand. Taking
+  the reference's colour and type as well would replace the brand with the
+  reference.
+- **Colour and type are extracted too** when no brand exists yet, or when the
+  user asked to match the reference. Record which of the two applied in the
+  Research Log.
+- **Several references** are rebuilt on one spacing unit, one grid and one
+  type scale, with one transition treatment across all borrowed sections.
+  Stacked as they came, they read as several sites on one page.
+- **Drop what only meant something for the reference's owner**: its mascot,
+  its seasonal banner, its menu names.
+
+## Remove traces before it leaves the team
+
+Before a result goes outside the team, search it for traces of the
+reference: its name in titles, comments and metadata, redrawn copies of its
+artwork, and working notes that name it. The search is a command whose
+output is in hand; reading the files does not count. The result's own copy
+does not name the reference either. Keep the Research Log, which stays with
+the team, as the one place the reference is named.
 
 ## Boundary
 

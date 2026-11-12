@@ -1014,6 +1014,8 @@ class Plugins(BridgeCase):
             rows = (await s.req("plugins.list", bot="kami"))["result"]["plugins"]
             self.assertEqual([(r["name"], r["enabled"], r["tier"], r["needs_env"]) for r in rows],
                              [("homeassistant", True, "official", []), ("browserbase", False, "bundled", ["BROWSERBASE_API_KEY"])])
+            # live_tools: what the plugin registered in the running gateway (Hermes' loader record), never the catalog
+            self.assertEqual([r["live_tools"] for r in rows], [2, 0])
             self.assertTrue((await s.req("plugins.toggle", bot="kami", key="homeassistant", enable=False))["ok"])
             self.assertFalse((await s.req("plugins.toggle", bot="kami", key="homeassistant"))["ok"])
             self.assertTrue((await s.req("plugins.update", bot="kami", name="homeassistant"))["ok"])
@@ -1085,8 +1087,9 @@ class ReadOnlyRule(BridgeCase):
         for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
             self.assertIsNone(re.search(rf"\b{re.escape(needle)}\b", src), needle)
 
-    def test_the_only_programs_it_runs_are_read_only_git_and_one_gh_read(self):
-        """BOUNDARY rules 10 and 21: `git` reads in _git, and `gh pr view` in gh_pr_view (RunsPr pins its argv)."""
+    def test_the_only_programs_it_runs_are_read_only_git_one_gh_read_and_hermes_restart(self):
+        """BOUNDARY rules 10, 21 and 29: `git` reads in _git, `gh pr view` in gh_pr_view (RunsPr pins its argv), and
+        Hermes' own `gateway restart` for one bot in run_hermes_restart (RestartArgv pins its argv)."""
         import ast
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         tree = ast.parse(src)
@@ -1097,7 +1100,7 @@ class ReadOnlyRule(BridgeCase):
                     if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "subprocess" \
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
-        self.assertEqual(uses, ["_git", "gh_pr_view"])
+        self.assertEqual(uses, ["_git", "gh_pr_view", "run_hermes_restart"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),
@@ -1884,6 +1887,36 @@ class Skills(BridgeCase):
             with mock.patch.object(ob, "read_skill_head", wraps=ob.read_skill_head) as head:
                 ob.read_skills(skills.parent)
             self.assertEqual(head.call_count, 1)  # three links back into the tree, one read
+
+    async def test_external_dirs_of_the_profile_config_are_listed_after_its_own(self):
+        """oh-my-hermes registers its skills in `skills.external_dirs` (not the profile's own folder): `skills.list`
+        reads those folders too, after the profile's own, as Hermes' skill scan does; a missing folder is skipped."""
+        async with Env() as env:
+            prof = env.home / "profiles" / "kami"
+            own = prof / "skills" / "plan"
+            own.mkdir(parents=True)
+            (own / "SKILL.md").write_text("---\nname: plan\ndescription: the bot's own\n---\n")
+            omh = env.home / "omh-skills"
+            for name, desc in (("omh-model-setup", "Model and provider configuration"), ("plan", "OMH's plan")):
+                (omh / "guide" / name).mkdir(parents=True)
+                (omh / "guide" / name / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {desc}\n---\n")
+            rel = prof / "more"
+            (rel / "x").mkdir(parents=True)
+            (rel / "x" / "SKILL.md").write_text("---\nname: relative-one\n---\n")
+            cfg = prof / "config.yaml"
+            cfg.write_text(cfg.read_text() + f"skills:\n  external_dirs:\n    - {omh}\n    - {env.home}/missing\n    - more\n    - {omh}\n")
+            before = self._tree(env.home)
+            s = await self.open(env)
+            got = {x["name"]: x["description"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(sorted(got), ["omh-model-setup", "plan", "relative-one"])
+            self.assertEqual(got["plan"], "the bot's own")  # the profile's own folder wins, as in Hermes
+            self.assertEqual(got["omh-model-setup"], "Model and provider configuration")
+            self.assertEqual(self._tree(env.home), before)
+            self.assertEqual(env.connects, [])
+            # one entry as a plain string (Hermes reads a scalar too)
+            cfg.write_text(cfg.read_text().split("skills:")[0] + f"skills:\n  external_dirs: {omh}\n")
+            again = {x["name"] for x in (await s.req("skills.list", bot="kami"))["result"]["skills"]}
+            self.assertEqual(again, {"omh-model-setup", "plan"})
 
     async def test_no_skills_folder_and_unknown_bot(self):
         async with Env() as env:
@@ -3005,6 +3038,19 @@ class CliRunsOmo(unittest.TestCase):
             self.assertEqual(cli.list("omo", "/w/elsewhere", 0.0)["runs"], [])
             self.assertEqual(_mtimes(Path(d) / "cli"), before, "reading OmO's records changed a file")
 
+    def test_the_runs_time_is_its_first_subagents_start_to_its_last_ones_end(self):
+        # the chat card's rule (#2800): the fan-out runs from the first subagent's start to the last one's end. On the
+        # real records that is 10:28:41.062 -> 10:28:56.701, the span of the two rows the chat shows (9.9 s and
+        # 15.5 s by OmO's own duration_ms, starting 0.14 s apart)
+        with tempfile.TemporaryDirectory() as d:
+            homes = _cli_home(Path(d))
+            homes["omo"] = Path(d) / "cli" / "omo"
+            run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
+            self.assertEqual(run["started"], min(n["started"] for n in run["nodes"]))
+            self.assertEqual(run["ended"], max(n["ended"] for n in run["nodes"]))
+            self.assertAlmostEqual(run["ended"] - run["started"], 15.639, places=2)
+            self.assertEqual([round(n["ended"] - n["started"], 1) for n in run["nodes"]], [9.9, 15.5])
+
     def test_a_running_record_quiet_for_over_10_minutes_failed_no_result(self):
         with tempfile.TemporaryDirectory() as d:
             homes = _cli_home(Path(d))
@@ -3016,6 +3062,61 @@ class CliRunsOmo(unittest.TestCase):
             run = ob.CliRuns(homes, clock=lambda: FIXED_NOW).get("omo:01a1ca26-77fa-7eeb-a2ba-d23056b97a50")["run"]
             n = next(x for x in run["nodes"] if x["id"] == "st_01a1ca28")
             self.assertEqual((n["state"], n["attempts"][0]["reason"]), ("failed", "no result"))
+
+
+class CliRunsOmoFolder(unittest.TestCase):
+    """O15: OmO keeps a folder's subagent records in that folder (`<folder>/.omo/senpi-task/tasks/`) when they are
+    already there, and OmO 5.0 always does. Real records (redacted: OmO 5.0.0-beta.65, two subagents that failed on
+    their first model and the two retries that answered), stored as `dot-omo/` because the repo ignores `.omo/`."""
+
+    SID = "01a1ce7e-2a44-78c8-9e51-05926dd01556"
+
+    def setUp(self):
+        import shutil
+        self._d = tempfile.TemporaryDirectory()
+        root = Path(self._d.name)
+        self.homes = _cli_home(root)
+        self.homes["omo"] = root / "omo-home"
+        (self.homes["omo"] / "agent" / "projects").mkdir(parents=True)
+        self.folder = root / "omo-folder"
+        shutil.copytree(CLI_FIX / "omo-folder" / "dot-omo", self.folder / ".omo")
+        for p in (self.folder / ".omo" / "senpi-task" / "tasks").glob("*.json"):
+            r = json.loads(p.read_text(encoding="utf-8"))
+            r["spawn_spec"] = {"cwd": str(self.folder)}
+            p.write_text(json.dumps(r), encoding="utf-8")
+
+    def tearDown(self):
+        self._d.cleanup()
+
+    def test_the_sessions_folder_records_are_its_run_with_each_answer(self):
+        before = _mtimes(self.folder)
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        listed = cli.list("omo", str(self.folder), 0.0)["runs"]
+        self.assertEqual([r["id"] for r in listed], [f"omo:{self.SID}"])
+        self.assertEqual(listed[0]["counts"], {"nodes": 4, "done": 2, "running": 0, "failed": 2})
+        run = cli.get(f"omo:{self.SID}")["run"]
+        self.assertEqual([(n["label"], n["state"]) for n in run["nodes"]],
+                         [("Report the first line of a.txt", "failed"), ("Report how many lines b.txt has", "failed"),
+                          ("Report the first line of a.txt", "done"), ("Report how many lines b.txt has", "done")])
+        self.assertIn("alpha line", run["nodes"][2]["summary"])
+        self.assertIn("3 lines", run["nodes"][3]["summary"])
+        self.assertEqual(_mtimes(self.folder), before, "reading OmO's records changed a file")
+
+    def test_another_folders_records_and_links_are_not_read(self):
+        cli = ob.CliRuns(self.homes, clock=lambda: FIXED_NOW)
+        # asked for another folder (or for none), the records inside this one are not read
+        self.assertEqual(cli.list("omo", str(Path(self._d.name) / "elsewhere"), 0.0)["runs"], [])
+        self.assertEqual(cli.list("omo", None, 0.0)["runs"], [])
+        # a linked .omo, or a linked senpi-task inside it, is skipped
+        for link in (".omo", "senpi-task"):
+            other = Path(self._d.name) / f"linked-{link.strip('.')}"
+            other.mkdir()
+            if link == ".omo":
+                (other / ".omo").symlink_to(self.folder / ".omo", target_is_directory=True)
+            else:
+                (other / ".omo").mkdir()
+                (other / ".omo" / "senpi-task").symlink_to(self.folder / ".omo" / "senpi-task", target_is_directory=True)
+            self.assertEqual(ob.CliRuns(self.homes, clock=lambda: FIXED_NOW).list("omo", str(other), 0.0)["runs"], [], link)
 
 
 class ClaudeAnswer(unittest.TestCase):
@@ -3500,3 +3601,222 @@ class VersionTest(unittest.TestCase):
         # hello's version is the app's: a release bump that misses the bridge fails here
         app = json.loads((HERE.parent.parent / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(ob.VERSION, app["version"])
+
+
+STUB_HERMES = r"""#!/bin/sh
+# omher test stub for `hermes`: records its argv, then answers like Hermes' restart does in $STUB_MODE.
+printf '%s\n' "$@" > "$STUB_LOG"
+printf 'HERMES_HOME=%s GW=%s\n' "$HERMES_HOME" "${_HERMES_GATEWAY:-}" >> "$STUB_LOG"
+case "$STUB_MODE" in
+  ok) echo "Profile '$2' restarted by the host gateway."; exit 0 ;;
+  refused)
+    for a in "$@"; do [ "$a" = "--yes" ] && { echo "⚠ --yes: restart proceeds: 2 live session(s) would be interrupted."; exit 0; }; done
+    echo "✗ Refusing to restart the gateway: 3 live session(s) would be interrupted."
+    echo "  • chat turn agent:kami:slack:dm:U1 pid 4242, running 3m [model claude-opus-5-5, tool terminal]"
+    echo "  • cron job a1b2 (PR digest) in-process, running 40s"
+    echo "  • chat turn agent:main:discord:group:C9 pid 4242, running 12s"
+    echo "  Let them finish, or interrupt them deliberately:"
+    echo "    hermes -p $2 gateway restart --yes   # interrupts 2 live session(s)"
+    exit 1 ;;
+  unconfirmed) echo "Profile '$2' restart was not confirmed: host control socket did not answer."; exit 0 ;;
+  *) echo "Starting gateway..."; echo "✗ Gateway service restart failed."; echo "  Fix the service, then retry"; exit 1 ;;
+esac
+"""
+
+
+class RestartArgv(unittest.TestCase):
+    """Rule 29: the restart is Hermes' own command with a fixed argv; the bot is one checked element."""
+
+    def test_fixed_argv_and_yes_only_when_asked(self):
+        self.assertEqual(ob.restart_argv("/h/hermes", "kami", False), ["/h/hermes", "-p", "kami", "gateway", "restart", "--detach"])
+        self.assertEqual(ob.restart_argv("/h/hermes", "kami", True)[-1], "--yes")
+        self.assertNotIn("--yes", ob.restart_argv("/h/hermes", "kami", "true"))  # only the boolean True
+        self.assertEqual(ob.restart_argv("/h/hermes", "default", False)[2], "default")
+
+    def test_names_hermes_would_refuse_are_refused_here(self):
+        for bad in ("Kami", "-p", "--all", "a b", "kami;rm -rf ~", "../x", "", "x" * 65, "kami\n", None, 3):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                ob.restart_argv("/h/hermes", bad, False)
+
+    def test_outcomes_read_from_hermes_text(self):
+        self.assertEqual(ob.restart_outcome(0, "Profile 'kami' restarted by the host gateway.\n"), {"outcome": "ok"})
+        r = ob.restart_outcome(1, "\x1b[31m✗ Refusing to restart the gateway: 1 live session(s) would be interrupted.\x1b[0m\n"
+                                  "  • chat turn s1 pid 9, running 2m\n  Let them finish, or interrupt them deliberately:\n")
+        self.assertEqual(r, {"outcome": "refused", "work": [{"kind": "chat", "name": None, "secs": 120, "bot": None}]})
+        # every shape Hermes' describe_active_work_unit prints, read without ids, pids or brackets
+        for line, want in (
+            ("chat turn agent:kami:slack:dm:U1 pid 4242, running 3m05s [model claude-opus-5-5, tool terminal]", ("chat", None, 185, "kami")),
+            ("chat turn agent:main:discord:group:C9, running 1m", ("chat", None, 60, "default")),
+            ("chat turn agent:main~:x pid 1, running 1s", ("chat", None, 1, "main")),
+            ("cron job a1b2 (PR digest) in-process, running 40s", ("cron", "PR digest", 40, "friren")),
+            ("cron job zz9 in external worker pid 77, running 1m00s", ("cron", None, 60, None)),
+            ("background delegation d9 pid 5, running 12s [fix the flaky test]", ("task", None, 12, None)),
+            ("tui run 20261112_1, running 2m", ("run", "tui", 120, None)),
+            ("webhook run agent:kami:hook:x pid 3, running 5s", ("run", "webhook", 5, "kami")),
+            ("something new from Hermes, running 7s", ("work", None, 7, None)),
+            # a shape Hermes adds later still says whose it is when it names the session; never from a word inside one
+            ("drain wait for agent:main:telegram:dm:9, running 2m", ("work", None, 120, "default")),
+            ("note xagent:kami:y", ("work", None, None, None)),
+            ("??", ("work", None, None, None)),
+        ):
+            u = ob.work_unit(line, {"a1b2": "friren"})
+            self.assertEqual((u["kind"], u["name"], u["secs"], u["bot"]), want, line)
+        r = ob.restart_outcome(0, "Profile 'kami' restart was not confirmed: host operation is still pending.\n")
+        self.assertEqual(r["outcome"], "failed")
+        self.assertIn("not confirmed", r["line"])
+        self.assertEqual(ob.restart_outcome(None, "")["outcome"], "failed")
+        self.assertEqual(ob.restart_outcome(78, "✗ The host gateway already serves profile 'kami'.\n  more\n")["line"],
+                         "The host gateway already serves profile 'kami'.")
+
+    def test_which_gateway_serves_a_bot_and_who_goes_down_with_it(self):
+        with tempfile.TemporaryDirectory() as t:
+            home = Path(t)
+            (home / "config.yaml").write_text("model: m\n")
+            for n, cfg in (("kami", ""), ("solo", "gateway:\n  standalone: true\n"), ("parked", ""), ("friren", ""), ("own", "")):
+                (home / "profiles" / n).mkdir(parents=True)
+                (home / "profiles" / n / "config.yaml").write_text("model: m\n" + cfg)
+            (home / "profiles" / "parked" / "gateway.parked").write_text("")
+            own = home / "profiles" / "own"
+            # a live gateway of its own, as Hermes' gateway.status.live_gateway_pid_for_home proves it
+            with mock.patch.object(ob, "_hermes_gateway_pid", side_effect=lambda h: 4242 if Path(h) == own else None):
+                self.assertEqual([ob.gateway_of(home, n) for n in ("kami", "solo", "default", "own", "ghost")],
+                                 ["default", "solo", "default", "own", "default"])
+                self.assertEqual([o["name"] for o in ob.gateway_bots(home, "default")], ["default", "friren", "kami"])
+                self.assertEqual([o["name"] for o in ob.gateway_bots(home, "solo")], ["solo"])
+            # a live host's own record of what it serves wins over the reading of configs
+            with mock.patch.object(ob, "_hermes_served", return_value=["default", "kami"]):
+                self.assertEqual([o["name"] for o in ob.gateway_bots(home, "default")], ["default", "kami"])
+            # never `-p <served bot>`: that would be one profile's unserve/serve inside the host
+            self.assertEqual(ob.restart_argv("/h/hermes", ob.gateway_of(home, "kami"), False)[2], "default")
+
+    def test_plugin_load_follows_hermes_answer(self):
+        self.assertEqual(ob.plugin_load({"restart_required": False, "gateway_reloaded": True}), "live")
+        self.assertEqual(ob.plugin_load({"restart_required": True, "gateway_reloaded": False}), "reload")
+        self.assertEqual(ob.plugin_load({"restart_required": True, "gateway_reloaded": True,
+                                         "activation": {"missing_dependencies": ["numpy"], "missing_in": ["gateway"]}}), "restart")
+        self.assertEqual(ob.plugin_load({"restart_required": True, "gateway_reloaded": True,
+                                         "activation": {"missing_dependencies": ["numpy"], "missing_in": ["backend"]}}), "live")
+
+
+@unittest.skipIf(os.name == "nt", "the stub `hermes` is a POSIX shell script")
+class RestartThroughStubHermes(BridgeCase):
+    """The real `bots.restart` op against a stub `hermes` on a scratch PATH: ok, refused with live work (then
+    "Restart anyway"), failed. Never a real Hermes."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        d = Path(self.tmp.name)
+        stub = d / "hermes"
+        stub.write_text(STUB_HERMES)
+        stub.chmod(0o755)
+        self.log = d / "argv.txt"
+        self.env = {"PATH": f"{d}{os.pathsep}/usr/bin{os.pathsep}/bin", "STUB_LOG": str(self.log),
+                    "_HERMES_GATEWAY": "1"}
+
+    def argv(self) -> list[str]:
+        return self.log.read_text().splitlines()
+
+    async def restart(self, s, mode, **params):
+        with mock.patch.dict(os.environ, {**self.env, "STUB_MODE": mode}):
+            return await s.req("bots.restart", **params)
+
+    async def test_ok_restarts_the_host_gateway_and_reattaches_every_bot_on_it(self):
+        with mock.patch.object(ob, "RESTART_POLL", 0.01):
+            async with Env(("kami", "friren")) as env:
+                s = await self.open(env)
+                await s.req("chat.open", bot="kami")
+                r = await self.restart(s, "ok", bot="kami")
+                self.assertEqual(r["result"], {"outcome": "ok", "bots": ["default", "friren", "kami"]})
+                argv = self.argv()
+                # kami is served by the host: the host gateway's process restarts, never `-p kami` (unserve/serve)
+                self.assertEqual(argv[:5], ["-p", "default", "gateway", "restart", "--detach"])  # the stub logs "$@"
+                self.assertEqual(len(argv), 6)  # no --yes on the first press
+                self.assertEqual(argv[5], f"HERMES_HOME={env.home} GW=")  # Hermes root, no gateway marker
+                await s.until(lambda ev: {e["bot"] for e in ev if e["event"] == "bot.restarted"} >= {"default", "friren", "kami"})
+                done = sorted(e["bot"] for e in s.events if e["event"] == "bot.restarted" and e["ok"])
+                self.assertEqual(done, ["default", "friren", "kami"])
+                self.assertEqual(env.connects.count("kami"), 2)  # the old connection dropped, a new one attached
+
+    async def test_a_sticky_active_profile_never_changes_which_gateway_restarts(self):
+        # Without -p Hermes follows `<root>/active_profile` (hermes_cli/main.py:525-536); omher names the profile on
+        # every call, so a sticky non-default profile cannot turn the host's restart into kami's unserve/serve.
+        with mock.patch.object(ob, "RESTART_POLL", 0.01):
+            async with Env(("kami", "friren")) as env:
+                (env.home / "active_profile").write_text("kami\n")
+                s = await self.open(env)
+                for bot in ("friren", "default"):
+                    r = await self.restart(s, "ok", bot=bot)
+                    self.assertEqual(r["result"]["outcome"], "ok")
+                    self.assertEqual(self.argv()[:2], ["-p", "default"], bot)
+                    await s.until(lambda ev: sum(e["event"] == "bot.restarted" for e in ev) >= 3)
+                    s.events.clear()
+
+    async def test_a_standalone_bot_restarts_its_own_gateway_alone(self):
+        with mock.patch.object(ob, "RESTART_POLL", 0.01):
+            async with Env(("kami", "solo")) as env:
+                (env.home / "profiles" / "solo" / "config.yaml").write_text("model: m\ngateway:\n  standalone: true\n")
+                s = await self.open(env)
+                r = await self.restart(s, "ok", bot="solo")
+                self.assertEqual(r["result"], {"outcome": "ok", "bots": ["solo"]})
+                self.assertEqual(self.argv()[:5], ["-p", "solo", "gateway", "restart", "--detach"])
+                r = await s.req("bots.restart_scope", bot="solo")
+                self.assertEqual(r["result"], {"gateway": "solo", "bots": [{"name": "solo", "display_name": "Solo"}]})
+
+    async def test_refused_names_the_live_work_then_restart_anyway_adds_yes(self):
+        async with Env(("kami", "friren")) as env:
+            (env.home / "profiles" / "friren" / "cron").mkdir()
+            (env.home / "profiles" / "friren" / "cron" / "jobs.json").write_text('{"jobs": [{"id": "a1b2", "name": "PR digest"}]}')
+            s = await self.open(env)
+            r = await s.req("bots.restart", bot="kami", interrupt=True)
+            self.assertEqual(r["error"]["code"], "bad_request")  # --yes never comes first
+            r = await self.restart(s, "refused", bot="kami")
+            self.assertEqual(r["result"]["outcome"], "refused")
+            # each line says whose it is: a chat by its session key, a cron run by the jobs.json that holds it
+            self.assertEqual(r["result"]["work"], [
+                {"kind": "chat", "name": None, "secs": 180, "bot": "kami"},
+                {"kind": "cron", "name": "PR digest", "secs": 40, "bot": "friren"},
+                {"kind": "chat", "name": None, "secs": 12, "bot": "default"}])
+            self.assertNotIn("lines", r["result"])
+            self.assertNotIn("--yes", self.argv())
+            with mock.patch.object(ob, "RESTART_POLL", 0.01):
+                r = await self.restart(s, "refused", bot="kami", interrupt=True)
+            self.assertEqual(r["result"]["outcome"], "ok")
+            self.assertEqual(self.argv()[5], "--yes")
+            r = await s.req("bots.restart", bot="kami", interrupt=True)
+            self.assertEqual(r["error"]["code"], "bad_request")  # one refusal, one "anyway"
+
+    async def test_failed_shows_hermes_last_line(self):
+        async with Env(("kami",)) as env:
+            s = await self.open(env)
+            r = await self.restart(s, "broken", bot="kami")
+            self.assertEqual(r["result"], {"outcome": "failed", "line": "Gateway service restart failed."})
+            r = await self.restart(s, "unconfirmed", bot="kami")
+            self.assertEqual(r["result"]["outcome"], "failed")
+            self.assertEqual(env.connects, [])  # a failed restart attaches nothing
+
+    async def test_only_known_bots_and_the_default_names_who_goes_down(self):
+        async with Env(("kami", "friren")) as env:
+            s = await self.open(env)
+            self.assertEqual((await self.restart(s, "ok", bot="ghost"))["error"]["code"], "unknown_bot")
+            self.assertFalse(self.log.exists())
+            r = await s.req("bots.restart_scope", bot="default")
+            self.assertEqual(r["result"]["gateway"], "default")
+            self.assertEqual([o["name"] for o in r["result"]["bots"]], ["default", "friren", "kami"])
+            r = await s.req("bots.restart_scope", bot="kami")  # a served bot: the same host, the same bots
+            self.assertEqual((r["result"]["gateway"], [o["name"] for o in r["result"]["bots"]]), ("default", ["default", "friren", "kami"]))
+
+
+class PluginReload(BridgeCase):
+    async def test_reload_reports_live_restart_or_failed(self):
+        answers = {"live": {"reloaded": True, "activations": [{"name": "omh", "key": "omh"}]},
+                   "deps": {"reloaded": True, "activations": [{"name": "omh", "key": "omh", "missing_dependencies": ["numpy"]}]},
+                   "none": None, "refused": {"reloaded": False, "error": "home is not served by this gateway"}}
+        async with Env(("kami",)) as env:
+            s = await self.open(env)
+            for case, want in (("live", "live"), ("deps", "restart"), ("none", "failed"), ("refused", "failed")):
+                with mock.patch.object(ob, "reload_plugins", return_value=answers[case]) as rp:
+                    r = (await s.req("plugins.reload", bot="kami", name="omh"))["result"]
+                self.assertEqual(r["load"], want, case)
+                rp.assert_called_once_with(env.home / "profiles" / "kami", env.home)
+            self.assertEqual(env.connects, [])  # a reload never attaches or restarts

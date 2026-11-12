@@ -3,7 +3,9 @@
 // levels it reported, the commands and skills it reported for the `/` menu, and how full its context is.
 //
 // Events the adapters (src-tauri/src/agent_chat.rs, and the ACP adapter) send for these:
-//   session.info      { mode?, effort? }                                   the mode / effort now in force
+//   session.info      { mode?, effort?, approval?, sandbox? }              the mode / effort now in force, and the
+//                                                                          approval policy and sandbox it reported
+//                                                                          (read by ownSetting.ts, never offered)
 //   session.efforts   { levels: string[] }                                 the reasoning levels it takes
 //   session.commands  { commands: [{name, description, hint, kind: "command"|"skill", prefix: "/"|"$"}] }
 //                     (parsed and matched in src/chat/parts/commands.ts, the composer's `/` menu)

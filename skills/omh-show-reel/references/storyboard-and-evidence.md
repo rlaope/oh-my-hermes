@@ -63,6 +63,25 @@ alternatives. Set a finite iteration count/time budget, a weakest-scene allocati
 review owner and stop rule before production. Do not equate subjective scores
 with measured audience response.
 
+## Decisions every segment shares
+
+Write these two beside the selected concept, before the worksheet:
+
+- The motion theme: one sentence with a verb, taken from how this content
+  arrives on screen (for example "each answer is typed, then replaced by the
+  next"), and under it what breaks it: the entrances, transitions and effects
+  that would read as another film. Adjectives such as "clean" or "dynamic" give
+  a frame nothing to be checked against; a verb does. A film that reads as one
+  work has one theme; a compilation of separate works states one per segment.
+  A segment that needs a listed break records its reason in the movement field.
+- The entity legend: each thing that appears in more than one segment (a
+  product part, an actor in a diagram, a data series) with its name, shape and
+  colour values. Every renderer and medium the film uses draws it from this
+  legend, so a viewer does not have to learn it again after a cut. A deliberate
+  change of form is a transition recorded in the continuity field. The legend
+  fixes the entity only; the segments around it still differ from each other
+  (`references/motion-techniques.md`, Concept first).
+
 ## Segment worksheet: show_reel_storyboard/v1
 
 For every segment record:

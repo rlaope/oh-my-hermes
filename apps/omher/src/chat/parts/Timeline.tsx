@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { RestartAction, RestartLine } from "../../sidebar/RestartLine";
 import type { Bot } from "../../lib/protocol";
 import { selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
@@ -24,7 +25,7 @@ const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" || it?.kind ===
 
 /** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
  *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
-export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
+export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode; onEditLast?: () => void }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
@@ -36,6 +37,12 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const pinned = useRef(true);
   const lastTop = useRef(0);
   const lastBot = useRef<string | null>(null);
+  // the person's last message, when the chat can take it back (a SESSIONS agent's own rewind)
+  const lastUser = onEditLast ? [...items].reverse().find((i) => i.kind === "user") : undefined;
+  // taking it back rewinds the conversation only: when its turn changed files, the Edit control says they stay
+  const lastUserAt = lastUser ? items.indexOf(lastUser) : -1;
+  const keptFiles =
+    lastUserAt >= 0 && items.slice(lastUserAt + 1).some((i) => i.kind === "activity" && i.turn.steps.some((st) => st.diff?.length));
 
   // Stick to the bottom unless the person scrolled up; jump to the bottom on bot switch.
   useLayoutEffect(() => {
@@ -60,7 +67,7 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {
       case "user":
-        return <Bubble item={it} />;
+        return <Bubble item={it} onEdit={it === lastUser && !it.error && !it.wait ? onEditLast : undefined} editKeepsFiles={it === lastUser && keptFiles} />;
       case "assistant":
         // the face shows on the first bot bubble after something else (the user, a day line, a card)
         return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} />;
@@ -112,6 +119,12 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
       {chat?.openError && (
         <div className="day note" data-testid="chat-error">
           {t("tl.unreachable", { bot: bot.display_name, error: chat.openError })}
+        </div>
+      )}
+      {bot.status === "offline" && (
+        <div className="day note rs-note" data-testid="chat-offline">
+          <span>{t("tl.offline", { bot: bot.display_name })}</span> <RestartAction bot={bot} start testId="chat-start" />
+          <RestartLine bot={bot} testId="chat-restart-line" />
         </div>
       )}
       {/* A Hermes installed from the setup screen has no model yet: the first chat screen says where to pick one,

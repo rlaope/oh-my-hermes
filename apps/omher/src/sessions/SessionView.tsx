@@ -17,12 +17,14 @@ import "../chat/model/model.css";
 import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
 import { composing } from "../lib/ime";
 import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, usageText } from "./controls";
+import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, CONTINUES, folderChoices, folderName, hermesOnly, missingNote, parentPath, terminalNote, tildePath, type AgentId, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
+import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
@@ -177,7 +179,11 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
   const face = useMemo(() => <SessionFace chatKey={chatKey} size={28} />, [chatKey]);
   return (
     <div className="pane ss-chat" data-pane={chatKey} data-testid="session-chat">
-      <Timeline bot={bot} face={face} />
+      <Timeline
+        bot={bot}
+        face={face}
+        onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
+      />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
       <Composer
         key={chatKey}
@@ -221,6 +227,55 @@ function AgentFixed({ agent }: { agent: AgentId }) {
     <span className="ss-pick ro" title={label} data-testid="session-agent-fixed">
       <AgentMark agent={agent} size={14} />
       <span className="ss-pick-n">{label}</span>
+    </span>
+  );
+}
+
+/** How a New session opens, a quiet two-word choice beside the agent: Chat (omher's own chat) or Terminal (the agent's
+ *  own program in a terminal). The picked word is gray, the other plain; one the agent does not have is dimmed and its
+ *  tooltip says why. The pick is remembered per agent. */
+function OpenPick({ rec, way }: { rec: SessionRec; way: OpenAs }) {
+  const ss = useSessions();
+  const has = opensAs(rec.agent, ss.agents);
+  const label = agentLabel(rec.agent, ss.agents);
+  const tip = (w: OpenAs): string =>
+    has[w]
+      ? w === "chat"
+        ? t("ss.open.chatTip")
+        : t("ss.open.terminalTip", { agent: label })
+      : w === "terminal"
+        ? t(rec.agent === "dsh" ? "ss.open.noTermDsh" : "ss.open.noTermHermes")
+        : t("ss.open.noChat", { agent: label });
+  return (
+    <span className="ss-way" role="radiogroup" aria-label={t("ss.open.label")} data-testid="session-way">
+      {(["chat", "terminal"] as const).map((w) => (
+        <button
+          key={w}
+          type="button"
+          role="radio"
+          className={`ss-way-o${way === w ? " on" : ""}`}
+          aria-checked={way === w}
+          aria-disabled={!has[w] || undefined}
+          // one Tab stop for the pair; the arrow keys move between the two, as in any radio group
+          tabIndex={way === w ? 0 : -1}
+          title={tip(w)}
+          onClick={() => {
+            if (has[w]) getSessions().setOpen(rec.id, w);
+          }}
+          onKeyDown={(e) => {
+            if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+            e.preventDefault();
+            const other = w === "chat" ? "terminal" : "chat";
+            // the focus moves even to a way the agent lacks, so its reason can be read; only one it has is picked
+            // (picking Chat then hands the focus to the box, as a click on Chat does)
+            e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-testid=session-way-${other}]`)?.focus();
+            if (has[other]) getSessions().setOpen(rec.id, other);
+          }}
+          data-testid={`session-way-${w}`}
+        >
+          {t(w === "chat" ? "ss.open.chat" : "ss.open.terminal")}
+        </button>
+      ))}
     </span>
   );
 }
@@ -342,6 +397,9 @@ function SessionMode({ rec }: { rec: SessionRec }) {
   const [open, setOpen] = useState(false);
   const live = rec.status === "running";
   const cur = ss.live[rec.id]?.mode ?? rec.mode;
+  // the agent's own setting, when it asks for nothing or reaches the whole disk: said where the mode is
+  const own = ownSetting({ ...ss.live[rec.id], mode: cur });
+  const from = t("ctl.own.from", { agent: agentDef(rec.agent).label });
   const pick = (m: string) => {
     setOpen(false);
     if (m !== cur) void getSessions().setMode(rec.id, m);
@@ -350,22 +408,28 @@ function SessionMode({ rec }: { rec: SessionRec }) {
     <span className="ss-pick-w">
       <button
         type="button"
-        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}`}
-        title={t("ctl.mode")}
-        aria-label={`${t("ctl.mode")}: ${modeLabel(cur)}`}
+        className={`ss-pick ss-mode${cur && cur !== "default" && cur !== "ask" ? " set" : ""}${own ? " own" : ""}`}
+        title={own ? `${own} · ${from}` : t("ctl.mode")}
+        aria-label={`${t("ctl.mode")}: ${own ? `${own} · ${from}` : modeLabel(cur)}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={!live}
         onClick={() => setOpen((v) => !v)}
         data-testid="session-mode"
         data-mode={cur ?? ""}
+        {...(own ? { "data-own": "unguarded" } : {})}
       >
-        <span className="ss-pick-n">{modeLabel(cur)}</span>
+        <span className="ss-pick-n">{own ?? modeLabel(cur)}</span>
         <ChevronDown />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} side="top" align="right" width={264} label={t("ctl.mode")} className="ss-dpop">
         <div data-testid="session-mode-menu">
           <div className="ss-h ss-h-plain">{t("ctl.mode")}</div>
+          {own && (
+            <div className="ss-mode-own" data-testid="session-mode-own">
+              {own} · {from}
+            </div>
+          )}
           {modesOf(rec.agent).map((m) => {
             const on = m === cur;
             return (
@@ -389,8 +453,8 @@ function SessionMode({ rec }: { rec: SessionRec }) {
 function DraftPane({ rec }: { rec: SessionRec }) {
   const ss = useSessions();
   const accounts = useAccounts();
-  const def = agentDef(rec.agent);
-  const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
+  const way = draftOpen(rec.agent, ss.agents, ss.opens);
+  const mode = sessionMode(ss.agents, { agent: rec.agent, open: way });
   const terminal = mode === "terminal";
   // until the look-up answers, the agent counts as there (a flash of "not found" would be wrong more often)
   const installed = ss.agents === null || !!ss.agents.find((a) => a.id === rec.agent)?.path;
@@ -433,7 +497,13 @@ function DraftPane({ rec }: { rec: SessionRec }) {
         onSend={(text) => start(text)}
         onSendFiles={mode === "chat" ? startWithFiles : undefined}
         onStop={() => undefined}
-        tools={<AgentFixed agent={rec.agent} />}
+        heldNote={terminal && !!rec.cwd ? t("ss.open.withheld") : undefined}
+        tools={
+          <>
+            <AgentFixed agent={rec.agent} />
+            <OpenPick rec={rec} way={way} />
+          </>
+        }
         action={
           terminal ? (
             <button type="button" className="ss-go" disabled={!ready} onClick={() => start()} data-testid="session-go">
@@ -693,6 +763,23 @@ export function SessionView() {
   const s = useStore();
   const ss = useSessions();
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
+  // looking at a session sees what its row carried for the person (it rang, it finished): at once when it is opened,
+  // and when the window comes back to it
+  const shown = rec?.id ?? null;
+  const unseen = shown ? ss.unseen[shown] : undefined;
+  useEffect(() => {
+    if (!shown) return;
+    const see = () => {
+      if (windowWatched()) getSessions().seen(shown);
+    };
+    see();
+    window.addEventListener("focus", see);
+    document.addEventListener("visibilitychange", see);
+    return () => {
+      window.removeEventListener("focus", see);
+      document.removeEventListener("visibilitychange", see);
+    };
+  }, [shown, unseen]);
   if (!rec) {
     return (
       <div className="chat-empty" data-testid="session-gone">
@@ -700,7 +787,6 @@ export function SessionView() {
       </div>
     );
   }
-  const def = agentDef(rec.agent);
   if (rec.status === "draft") {
     return (
       <>
@@ -718,7 +804,8 @@ export function SessionView() {
   }
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   const chatKey = getSessions().chatKey(rec.id);
-  const mode = ss.agents?.find((a) => a.id === rec.agent)?.mode ?? def.mode;
+  // a session opened as a terminal is one whatever its agent usually does: it has no chat, no model and no toggle
+  const mode = sessionMode(ss.agents, rec);
   const label = agentLabel(rec.agent, ss.agents);
   // DeepSeek Harness ships no terminal profile: a DSH chat has no Terminal view (and its model is set in its own app).
   // A Hermes chat without oh-my-hermes has none either: that view starts `omh`, which is not there.

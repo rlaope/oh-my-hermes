@@ -100,7 +100,7 @@ impl Dsh {
                 self.session = id.clone();
                 vec![ev("session.info", json!({"agent_session": id}))]
             }
-            "thinking" => vec![ev("thinking", json!({}))],
+            "thinking" => vec![crate::agent_chat::thinking_event(&s(&v, "text"))],
             "text" => {
                 let t = s(&v, "text");
                 if t.trim().is_empty() {
@@ -300,6 +300,7 @@ impl DshChat {
             Input::Approve { .. } | Input::Clarify { .. } => Err("DeepSeek Harness asks nothing in this chat".into()),
             Input::Model { .. } => Err("DeepSeek Harness uses the model set in its own app".into()),
             Input::Mode { .. } | Input::Effort { .. } => Err("DeepSeek Harness uses the mode and effort set in its own app".into()),
+            Input::Rewind => Err("DeepSeek Harness cannot take a message back here".into()),
         }
     }
 

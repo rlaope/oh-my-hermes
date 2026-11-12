@@ -43,6 +43,14 @@
       & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta
     `irm | iex` cannot pass an argument, so that form runs the downloaded text
     as a script block with one. Without the argument nothing below changes.
+
+    Remove OMH (install.sh --uninstall's counterpart):
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall [--purge] [--dry-run]
+    It finds the installed omh command (PATH first, then the places this
+    installer puts it) and runs `omh uninstall`, which owns every removal rule;
+    --purge becomes --all. It never downloads or installs anything. A leading
+    single dash (-uninstall) is read the same as --uninstall, because that is
+    the spelling PowerShell users reach for.
 #>
 
 # Pinned rather than `Latest`: this file is fetched from main by URL and run on
@@ -125,6 +133,10 @@ $OmhOmherReleasesUrl  = 'https://api.github.com/repos/rlaope/oh-my-hermes/releas
 $OmhOmherReleasePages = 5
 $OmhOmherSiteUrl      = 'https://omher.app/'
 $OmhOmherBetaOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) omher@beta'
+$OmhUninstallOneLiner = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1))) --uninstall [--purge] [--dry-run]'
+$script:OmhUninstall       = $false
+$script:OmhUninstallPurge  = $false
+$script:OmhUninstallDryRun = $false
 $script:OmhOmherBeta     = $false
 $script:OmhHadOmh        = $false
 $script:OmhHadHermes     = $false
@@ -276,6 +288,8 @@ $OmhMessages = @{
     installed            = 'oh-my-hermes is installed.'
     next_path            = "Next: run 'omh setup' to connect OMH to Hermes, then 'omh doctor' to verify."
     next_command_path    = "Next: run '{0} setup' to connect OMH to Hermes, then '{0} doctor' to verify, or add its directory to PATH."
+    uninstall_not_found  = 'omh installer: no installed omh command was found, so nothing was removed. Looked in: {0}'
+    uninstall_left_over  = 'The OMH home and the Hermes registration may still be there. Manual steps: docs/INSTALLATION.md#uninstall (https://github.com/rlaope/oh-my-hermes/blob/main/docs/INSTALLATION.md#uninstall)'
 }
 
 function Get-OmhMessage {
@@ -813,17 +827,106 @@ function Resolve-OmhLatestReleaseLocation {
 # ---------------------------------------------------------------------------
 
 function Read-OmhInstallerArgs {
-    <#  $true for omher@beta, $false for no argument; anything else stops.  #>
+    <#  $true for omher@beta, $false otherwise. Also sets the --uninstall,
+        --purge and --dry-run switches. Anything else, and any combination the
+        installer does not offer, stops with the usage before any work and exit
+        code 2, the code install.sh uses for a usage refusal.  #>
     param([object[]]$Arguments = @())
     $beta = $false
+    $script:OmhUninstall = $false
+    $script:OmhUninstallPurge = $false
+    $script:OmhUninstallDryRun = $false
     foreach ($argument in @($Arguments)) {
-        if ([string]$argument -eq 'omher@beta') { $beta = $true; continue }
+        $text = [string]$argument
+        if ($text -eq 'omher@beta') { $beta = $true; continue }
+        if ($text -match '^--?uninstall$') { $script:OmhUninstall = $true; continue }
+        if ($text -match '^--?purge$') { $script:OmhUninstallPurge = $true; continue }
+        if ($text -match '^--?dry-run$') { $script:OmhUninstallDryRun = $true; continue }
+        $script:OmhExitCode = 2
         Stop-OmhInstall @(
-            "omh installer: unknown argument '$argument'. The only argument is omher@beta, which adds Hermes (when missing) and the omher desktop app:",
-            "  $OmhOmherBetaOneLiner"
+            "omh installer: unknown argument '$argument'. The arguments are omher@beta (adds Hermes when missing, and the omher desktop app) and --uninstall [--purge] [--dry-run] (removes OMH):",
+            "  $OmhOmherBetaOneLiner",
+            "  $OmhUninstallOneLiner"
+        )
+    }
+    $refusal = ''
+    if ($script:OmhUninstall -and $beta) { $refusal = '--uninstall cannot be combined with omher@beta.' }
+    elseif (-not $script:OmhUninstall -and $script:OmhUninstallPurge) { $refusal = '--purge only works together with --uninstall.' }
+    elseif (-not $script:OmhUninstall -and $script:OmhUninstallDryRun) { $refusal = '--dry-run only works together with --uninstall.' }
+    if ($refusal) {
+        $script:OmhExitCode = 2
+        Stop-OmhInstall @(
+            "omh installer: $refusal",
+            "  $OmhOmherBetaOneLiner",
+            "  $OmhUninstallOneLiner"
         )
     }
     return $beta
+}
+
+# ---------------------------------------------------------------------------
+# --uninstall: hand over to `omh uninstall`
+# ---------------------------------------------------------------------------
+
+function Get-OmhUninstallCandidates {
+    <#  Where this installer puts the command, in the order install.sh --uninstall
+        looks: the bin dir, the active generation's venv under the managed root,
+        the installer's own venv. PATH is checked by the caller first.  #>
+    param([string]$BinDir, [string]$ManagedRoot, [string]$VenvDir)
+    $candidates = @()
+    if ($BinDir) {
+        $candidates += Join-Path $BinDir 'omh.cmd'
+        $candidates += Join-Path $BinDir 'omh.exe'
+    }
+    if ($ManagedRoot) {
+        $candidates += Join-Path $ManagedRoot 'current\venv\Scripts\omh.exe'
+    }
+    if ($VenvDir) {
+        $candidates += Join-Path $VenvDir 'Scripts\omh.exe'
+    }
+    return $candidates
+}
+
+function Get-OmhUninstallArguments {
+    param([bool]$Purge, [bool]$DryRun, [string]$Language = '')
+    $argv = @('uninstall')
+    if ($Purge) { $argv += '--all' }
+    if ($DryRun) { $argv += '--dry-run' }
+    if ($Language) { $argv += @('--language', $Language) }
+    return $argv
+}
+
+function Invoke-OmhUninstall {
+    <#  Returns the exit code to leave behind: omh's own, or 1 when no command
+        was found. Nothing is downloaded or installed on any path.  #>
+    $command = ''
+    $looked = @('PATH')
+    $onPath = Get-OmhCommandOnPath
+    if ($onPath) {
+        $command = [string]$onPath.Source
+    } else {
+        $managedRoot = ''
+        if ($OmhXdgDataHome) { $managedRoot = Join-Path $OmhXdgDataHome 'omh' }
+        elseif ($OmhLocalAppData) { $managedRoot = Join-Path $OmhLocalAppData 'omh' }
+        elseif ($OmhHomeDir) { $managedRoot = Join-Path $OmhHomeDir '.local\share\omh' }
+        foreach ($candidate in (Get-OmhUninstallCandidates -BinDir $OmhBinDir -ManagedRoot $managedRoot -VenvDir $OmhVenvDir)) {
+            $looked += $candidate
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $command = $candidate; break }
+        }
+    }
+    if (-not $command) {
+        Write-OmhLine (Get-OmhMessage 'uninstall_not_found' ($looked -join ', '))
+        Write-OmhLine (Get-OmhMessage 'uninstall_left_over')
+        return 1
+    }
+    $language = if ($OmhLangWasSet) { $script:OmhLang } else { '' }
+    $argv = Get-OmhUninstallArguments -Purge $script:OmhUninstallPurge -DryRun $script:OmhUninstallDryRun -Language $language
+    $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = 0
+    & $command @argv | Out-Host
+    $code = $LASTEXITCODE
+    if ($null -eq $code) { $code = 0 }
+    return [int]$code
 }
 
 function Get-OmhHermesRoot {
@@ -1086,6 +1189,14 @@ $OmhInstallFailed = $false
 try {
     $script:OmhLang = Get-OmhNormalizedLang $OmhLangRaw
     $script:OmhOmherBeta = Read-OmhInstallerArgs $OmhScriptArgs
+    if ($script:OmhUninstall) {
+        # Before the header, the interpreter and every network step: a removal
+        # never installs anything. The sentinel ends the flow without the
+        # failure report below; a nonzero result is carried in the exit code.
+        $script:OmhExitCode = Invoke-OmhUninstall
+        if ($script:OmhExitCode -ne 0) { $OmhInstallFailed = $true }
+        throw 'omh uninstall finished.'
+    }
     if ($script:OmhOmherBeta) {
         $script:OmhHadOmh = Test-OmhOmhPresent
         $script:OmhHadHermes = Test-OmhHermesPresent
@@ -1266,8 +1377,10 @@ try {
         }
     }
 } catch {
-    Write-OmhLine $_.Exception.Message
-    $OmhInstallFailed = $true
+    if ($_.Exception.Message -ne 'omh uninstall finished.') {
+        Write-OmhLine $_.Exception.Message
+        $OmhInstallFailed = $true
+    }
 }
 
 # `exit` only when this file was run as a script, which is what CI does. Under
