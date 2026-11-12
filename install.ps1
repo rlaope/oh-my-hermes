@@ -467,13 +467,25 @@ function Select-OmhPython {
         # mangles embedded double quotes when building a native command line.
         # `-I` keeps a stray PYTHONPATH or a user site-packages out of the
         # answer, as install.sh's probe does.
-        $probe = Invoke-OmhCapture -FilePath $candidate -Arguments @('-I', '-c', 'import sys; print(''%d.%d'' % sys.version_info[:2])')
+        # The second line is the install scheme a venv made by this interpreter
+        # gets. Windows CPython answers `nt` (Scripts\python.exe); an MSYS2 or
+        # MinGW build answers `posix_prefix` (bin\python.exe), and everything
+        # after the venv step looks in Scripts\. Interpreters older than 3.10
+        # have no get_preferred_scheme; they fail the version floor anyway.
+        $probe = Invoke-OmhCapture -FilePath $candidate -Arguments @('-I', '-c', 'import sys, sysconfig; print(''%d.%d'' % sys.version_info[:2]); print(sysconfig.get_preferred_scheme(''prefix'') if hasattr(sysconfig, ''get_preferred_scheme'') else ''nt'')')
         if ($probe.ExitCode -ne 0) { continue }
         # Anchored: this is matched against arbitrary interpreter output, and a
         # wrapper that prints a banner first would otherwise satisfy it.
-        if ($probe.Output.Trim() -notmatch '^(\d+)\.(\d+)$') { continue }
+        if ($probe.Output.Trim() -notmatch '^(\d+)\.(\d+)\r?\n(\w+)$') { continue }
         $major = [int]$Matches[1]
         $minor = [int]$Matches[2]
+        $scheme = $Matches[3]
+        if ($scheme -ne 'nt') {
+            # Keep looking: an MSYS2 python on PATH often sits next to a
+            # Windows CPython that `py` or a later slot finds.
+            $script:OmhRejectedPythons += "$candidate is an MSYS2/MinGW-style Python (venv layout $scheme, not Windows' Scripts\); use a Windows build from python.org"
+            continue
+        }
         if ($major -gt 3 -or ($major -eq 3 -and $minor -ge 11)) {
             $script:OmhSelectedPythonVersion = "$major.$minor"
             return $candidate
