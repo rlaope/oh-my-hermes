@@ -122,7 +122,8 @@
 }
 /* the same output, small, where an offer to add oh-my-hermes runs it (the + menu, the first-run card) */
 .gate-log.gate-log-sm {
-  height: 84px;
+  /* whole lines only, so the newest five read in full and none is cut at the top */
+  height: calc(5 * 1.5em + 12px);
   padding: 5px 7px;
   font-size: 11px;
 }
