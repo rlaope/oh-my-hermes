@@ -51,6 +51,7 @@ KEY_RIGHT = "right"
 KEY_MINUS = "minus"
 KEY_PLUS = "plus"
 KEY_DEFAULT = "default"
+KEY_TOGGLE = " "
 KEY_ENTER = "enter"
 KEY_QUIT = "quit"
 KEY_NONE = ""
@@ -59,6 +60,7 @@ KEY_NONE = ""
 # tokens only and ignores the rest; the chain picker (`model_chain_picker`)
 # steps a row's model with left/right and its effort with -/+.
 _PLAIN_KEYS = {
+    " ": KEY_TOGGLE,
     "\r": KEY_ENTER,
     "\n": KEY_ENTER,
     "q": KEY_QUIT,
