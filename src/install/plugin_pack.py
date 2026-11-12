@@ -571,13 +571,34 @@ def _plugin_unmanaged_entries(manifest: dict[str, Any], plugin_dir: Path) -> lis
     return sorted(unknown)
 
 
+def _bytecode_source(path: Path) -> tuple[Path, str] | None:
+    """The source a `__pycache__` file is the cache of, and the interpreter tag in its name; None when it names neither.
+
+    pytest's assertion rewriting caches a module whose file name matches its test patterns as
+    `<module>.<cache tag>-pytest-<version>.pyc`, which `source_from_cache` refuses for its extra dots. The bundle
+    ships one such module (`test_expectation_check.py`), so a pytest run that imports the installed plugin leaves
+    that cache beside it.
+    """
+    try:
+        return Path(importlib.util.source_from_cache(str(path))), path.name.split(".")[1]
+    except ValueError:
+        pass
+    stem, _, rest = path.name.partition(".")
+    tag, marker, version = rest[: -len(".pyc")].partition("-pytest-")
+    if not (stem and marker and tag and "." not in tag):
+        return None
+    if not (version.isascii() and version[:1].isdigit() and all(char.isalnum() or char in ".+!_-" for char in version)):
+        return None
+    return path.parent.parent / f"{stem}.py", tag
+
+
 def _generated_plugin_bytecode(path: Path, plugin_dir: Path, managed: set[str]) -> bool:
     if path.parent.name != "__pycache__" or path.suffix != ".pyc" or not path.is_file():
         return False
-    try:
-        source = Path(importlib.util.source_from_cache(str(path)))
-    except ValueError:
+    named = _bytecode_source(path)
+    if named is None:
         return False
+    source, tag = named
     if source.relative_to(plugin_dir).as_posix() not in managed:
         return False
     # Parsing marshal data creates a code object but never executes it. Cap
@@ -599,7 +620,7 @@ def _generated_plugin_bytecode(path: Path, plugin_dir: Path, managed: set[str]) 
         # magic and a payload this marshal cannot read. Accept a well-formed
         # header under a foreign cache tag; a foreign magic under our own tag
         # is not something an interpreter writes.
-        return path.name.split(".")[1] != sys.implementation.cache_tag
+        return tag != sys.implementation.cache_tag
     try:
         code = marshal.load(stream)
     except (EOFError, TypeError, ValueError):

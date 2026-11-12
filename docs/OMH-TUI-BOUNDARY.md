@@ -271,8 +271,8 @@ and reads nothing while the board is closed.
 
 It never attaches to a session another runtime owns: when the launcher sets
 `HERMES_TUI_GATEWAY_URL`, it exits and names `hermes`. It writes no transcript,
-attachment, secret or server-request frame to disk or to a log, and prompt text
-in one place only: each line the person sends from the composer is appended to
+attachment, secret or server-request frame to disk or to a log. New conversation
+prompt text goes in one place only: each line the person sends from the composer is appended to
 Hermes' own input history, `$HERMES_HOME/.hermes_history`, the file `hermes
 --tui` reads and writes, in its format (`+`-prefixed lines under a `#`
 timestamp line). It only appends there (opened `O_APPEND` and `O_NOFOLLOW`,
@@ -285,7 +285,15 @@ and `O_NONBLOCK`), keeps its bytes in memory and nowhere else, and has
 Hermes let go of it (`image.detach`). A prompt that goes with the image
 stages those bytes again through Hermes' `image.attach_bytes`, the call
 Hermes' own remote clients use, and nothing else is staged until Hermes has
-taken them. The other files it writes are metadata: the
+taken them. The explicit `/omh-model` save also edits the person's existing
+`routing/identities.json` under the active OMH home: only the chosen identities'
+`model_chain` and `enabled` fields change. Its per-file atomic replacement
+preserves existing prompt strings and unrelated profiles, including invalid
+siblings; it does not create or edit prompts, nor archive conversation text.
+Cancel and no-op saves leave it untouched. Validation precedes either a chains
+or identities write, but the two files are not a transaction: a partial I/O
+failure reports which category edits were already saved. All remaining files
+it writes are metadata: the
 launcher's active-session file (the session id); when `omh` launched it, the
 file `omh` named in `OMH_TUI_SESSION_FILE`, in `omh`'s private 0700 launch
 directory (opened `O_NOFOLLOW`, mode 0600), holding the open session's id, the

@@ -398,8 +398,8 @@ class ToolRow:
     diff_root: str = ""  # the session's working directory, which the diff's file names are shown relative to
     # The parsed diff, kept while the row's group is live (it is drawn again on every change); None otherwise.
     held_lines: tuple[DiffLine, ...] | None = field(default=None, repr=False, compare=False)
-    # The first lines of what the tool printed (`TOOL_OUTPUT_KEEP` at most), and how many more it printed; for a
-    # failed tool, its error's first line.
+    # The first lines of what the tool printed (`TOOL_OUTPUT_KEEP` at most; the last ones for a successful shell run),
+    # and how many more it printed; for a failed tool, its error's first line.
     output: tuple[str, ...] = ()
     output_more: int = 0
     # What the person answered a question this call asked, as (words, notice level), drawn under its row.
@@ -844,11 +844,20 @@ CLARIFY_TOOL = "clarify"  # the Hermes tool a clarify question comes from
 UNANSWERED_OUTCOMES = {"cancelled": "cancelled", "timed_out": "timed out", "undelivered": "not delivered"}
 TOOL_OUTPUT_ROWS = 3  # shown under a tool row; the details view shows up to TOOL_OUTPUT_KEEP
 TOOL_OUTPUT_KEEP = 40
+# The tools whose result is the text a process printed: a run's summary or its errors come last, so a successful
+# call shows its end, as a failed one does (opencode's `collapse-tool-output.ts` collapses shell output to its tail).
+PROCESS_OUTPUT_TOOLS = frozenset({"terminal", "execute_code"})
 
 
-def _tool_output(result: object, status: str, closed_said: bool = False) -> tuple[tuple[str, ...], int]:
+def _shows_tail(name: str, status: str) -> bool:
+    """Whether the rows under a tool's name are the last lines it printed: a failed or denied tool's, or a
+    successful run of a process-printing tool's (`PROCESS_OUTPUT_TOOLS`); every other tool shows its first."""
+    return status in (TOOL_ERROR, TOOL_DENIED) or (status == TOOL_OK and name in PROCESS_OUTPUT_TOOLS)
+
+
+def _tool_output(result: object, status: str, closed_said: bool = False, name: str = "") -> tuple[tuple[str, ...], int]:
     """(lines, how many more) of what a tool printed: its first lines; for a failed or denied tool, one line, its
-    reason's first.
+    reason's first; for a successful `PROCESS_OUTPUT_TOOLS` call, its last lines.
 
     A failed tool whose result names no reason, only what it printed (Hermes' terminal tool reports a non-zero
     exit that way: `output` and `exit_code`, `error` None), gives the end of that instead, blank lines left out:
@@ -877,6 +886,8 @@ def _tool_output(result: object, status: str, closed_said: bool = False) -> tupl
         return tuple(printed[-TOOL_OUTPUT_KEEP:]), max(len(printed) - TOOL_OUTPUT_KEEP, 0)
     if status in (TOOL_ERROR, TOOL_DENIED):
         return tuple(lines[:1]), 0
+    if _shows_tail(name, status):
+        return tuple(lines[-TOOL_OUTPUT_KEEP:]), max(len(lines) - TOOL_OUTPUT_KEEP, 0)
     return tuple(lines[:TOOL_OUTPUT_KEEP]), max(len(lines) - TOOL_OUTPUT_KEEP, 0)
 
 
@@ -1429,7 +1440,7 @@ def _tool_row(tool: ToolRow, width: int, theme: Theme, now: float | None = None,
 def _output_rows(tool: ToolRow, width: int, theme: Theme, expanded: bool, now: float | None = None) -> list[Line]:
     """The tool's printed lines under its name, each cut to the width: three of them, or all kept with `expanded`.
 
-    A failed tool's are its last ones, with the count of the rest above them
+    A failed tool's, and a successful shell run's, are its last ones, with the count of the rest above them
     (`_tool_output`). A denied call whose result gave no reason says
     `denied`, so a denial reads apart from a failure without colour, unless
     an answer under its row already says so (`ToolRow.answer_refused`).
@@ -1439,13 +1450,13 @@ def _output_rows(tool: ToolRow, width: int, theme: Theme, expanded: bool, now: f
     output = tool.output or ((DENIED_LINE,) if tool.status == TOOL_DENIED and not tool.answer_refused() else ())
     if not output:
         return []
-    failed = tool.status in (TOOL_ERROR, TOOL_DENIED)
-    shown = output if expanded else output[-TOOL_OUTPUT_ROWS:] if failed else output[:TOOL_OUTPUT_ROWS]
+    tail = _shows_tail(tool.name, tool.status)
+    shown = output if expanded else output[-TOOL_OUTPUT_ROWS:] if tail else output[:TOOL_OUTPUT_ROWS]
     hidden = len(output) - len(shown) + tool.output_more
     first, rest = _output_leads(theme)  # a failure's lines too: its mark and its rail say it failed
     texts = [Span(line, theme.faint) for line in shown]
     more = [Span(f"… +{hidden} line{'' if hidden == 1 else 's'}{SHOWS_ALL}", theme.faint)] if hidden else []
-    ordered = [*more, *texts] if failed else [*texts, *more]
+    ordered = [*more, *texts] if tail else [*texts, *more]
     swept = _glint_band(tool, now)
     band = None
     if swept is not None:  # it enters at the left of the words and leaves past the end of the longest
@@ -2236,7 +2247,7 @@ class Transcript:
         read = _recall_lines(recall) if recall is not None else (
             _read_summary(row.name, payload.get("result")) if row.status == TOOL_OK else ())
         row.output, row.output_more = (read, 0) if read else _tool_output(
-            payload.get("result"), row.status, closed_said=row.answer_refused()
+            payload.get("result"), row.status, closed_said=row.answer_refused(), name=row.name
         )
         row.inline_diff, row.diff_root = as_text(payload.get("inline_diff")).encode("utf-8", "surrogatepass"), self.cwd
         row.held_lines = None

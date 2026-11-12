@@ -95,6 +95,9 @@ python benchmarks/live-model-tools/v1/bench.py run --harness omp \
   --git-init-workspace --test-env --allow-paid-live --max-paid-calls 12
 ```
 
+`family=` in `--extra-model` is optional: the route picks the calibration from the model id, and a spec
+without the key records the family `model_family(id)` reports.
+
 Before a paid `hermes_current_session` run, set a turn cap in every profile the run uses
 (`hermes -p <profile> config set agent.max_turns 120`). The harness timeout stops only the
 `hermes` client; the gateway keeps running the turn until the cap. Count tokens as well as
