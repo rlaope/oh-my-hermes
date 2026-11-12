@@ -292,6 +292,38 @@ class DefineTests(unittest.TestCase):
                 result = call(action="define", run="feat", nodes=nodes)
                 self.assertEqual((result["status"], result["reason"]), ("refused", reason), result)
 
+    def test_read_only_is_stored_only_when_true_and_refused_beside_a_write_scope(self) -> None:
+        """A read_only node changes nothing but its handoff (`dag_scope_guard`), so a write scope contradicts it."""
+        explore = {**node("explore", label="Explore the parser", role="review"), "read_only": True}
+        with homes() as home:
+            slots_table(home)
+            plain = dag_run.new_record(PARENT, "plain", "", "", [node("explore", label="Explore the parser",
+                                                                      role="review")], 0)
+            sent_false = dag_run.new_record(PARENT, "off", "", "", [
+                {**node("explore", label="Explore the parser", role="review"), "read_only": False}], 0)
+            result = call(action="define", run="feat", nodes=[explore])
+            self.assertEqual(result["status"], "ok", result)
+            stored = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+        self.assertIs(stored["nodes"][0]["read_only"], True)
+        self.assertNotEqual(stored["digest"], plain["digest"])
+        # `read_only: false` is not stored, so the node keeps the digest it had before the field existed.
+        self.assertNotIn("read_only", sent_false["nodes"][0])
+        self.assertEqual(sent_false["digest"], plain["digest"])
+        refused = {
+            "read_only_with_write_scope": {**node("explore", scope=("src/x.py",)), "read_only": True},
+            "invalid_read_only": {**node("explore"), "read_only": "yes"},
+        }
+        for reason, raw in refused.items():
+            with self.subTest(reason=reason), homes():
+                result = call(action="define", run="feat", nodes=[raw])
+                self.assertEqual((result["status"], result["reason"]), ("refused", reason), result)
+                self.assertIn("Node explore", result["say"])
+        # A write scope with read_only false is an ordinary build node.
+        with homes() as home:
+            slots_table(home)
+            ok = call(action="define", run="feat", nodes=[{**node("api", scope=("src/x.py",)), "read_only": False}])
+        self.assertEqual(ok["status"], "ok", ok)
+
     def test_a_label_holding_either_lanes_marker_is_refused(self) -> None:
         """Mutation: refuse only `[dag:`; a leading team key would bind this node's child to a team part."""
         for label in ("[omh-team:t1/a/attempt-1] Fix the parser", "Fix the parser [dag:feat/b]"):
@@ -1070,6 +1102,18 @@ class RepairTests(unittest.TestCase):
         self.assertEqual(done["state"], "done")
         self.assertEqual({row["id"]: row["state"] for row in done["nodes"]}["verify"], "accepted")
 
+    def test_repair_takes_a_read_only_node_and_refuses_one_with_a_scope(self) -> None:
+        with homes() as home:
+            self._failed_verify(home)
+            refused = call(action="repair", run="feat", node="verify", nodes=[
+                {**node("look", role="review", depends_on=("api",), scope=("a.py",)), "read_only": True}])
+            repaired = call(action="repair", run="feat", node="verify", nodes=[
+                {**node("look", role="review", depends_on=("api",), label="Review the fix"), "read_only": True}])
+            record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+        self.assertEqual((refused["status"], refused["reason"]), ("refused", "read_only_with_write_scope"), refused)
+        self.assertEqual(repaired["status"], "ok", repaired)
+        self.assertIs({n["id"]: n for n in record["nodes"]}["look"]["read_only"], True)
+
     def test_two_cycles_then_the_run_stops_and_reports(self) -> None:
         with homes() as home:
             self._failed_verify(home)
@@ -1555,6 +1599,18 @@ class ExtendTests(unittest.TestCase):
         call(action="settle", run="feat", node="api", outcome="accepted")
         handoff(home, "feat", "verify")
         return call(action="settle", run="feat", node="verify", outcome="accepted")
+
+    def test_extend_takes_a_read_only_node_and_refuses_one_with_a_scope(self) -> None:
+        with homes() as home:
+            self._done(home)
+            refused = call(action="extend", run="feat", nodes=[
+                {**node("audit", role="review", depends_on=("api",), scope=("a.py",)), "read_only": True}])
+            extended = call(action="extend", run="feat", nodes=[
+                {**node("audit", role="review", depends_on=("api",), label="Review the export"), "read_only": True}])
+            record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+        self.assertEqual((refused["status"], refused["reason"]), ("refused", "read_only_with_write_scope"), refused)
+        self.assertEqual(extended["status"], "ok", extended)
+        self.assertIs({n["id"]: n for n in record["nodes"]}["audit"]["read_only"], True)
 
     def test_extend_adds_a_round_to_the_same_run_and_records_where_each_node_came_from(self) -> None:
         with homes() as home:
