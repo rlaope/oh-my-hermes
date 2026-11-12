@@ -4064,6 +4064,78 @@ mod tests {
         assert!(all.contains("marigold") && all.contains("cobalt-42"), "{got:?}");
     }
 
+    /// The real check for a session's transcript: the agent (OMHER_REAL_AGENT, default claude) in a temp folder through
+    /// omher's own start, asked for a two-file edit with its todo list; prints what the chat got (each edit's change,
+    /// the todo list, the thinking text), then takes the message back with the agent's own rewind and asks whether it
+    /// remembers it. Approvals for files inside the folder are answered `once`. Spends two short turns:
+    /// `cargo test real_agent_shows_its_work -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_agent_shows_its_work() {
+        let agent = std::env::var("OMHER_REAL_AGENT").unwrap_or_else(|_| "claude".into());
+        let base = std::env::var("OMHER_REAL_DIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir().join(format!("omher-real-work-{agent}-{}", std::process::id())));
+        let dir = base.join("proj");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("calc.py"), "def add(a, b):\n    return a + b\n\n\ndef sub(a, b):\n    return a - b\n").unwrap();
+        std::fs::write(dir.join("README.md"), "# calc\n\nTiny math helpers.\n").unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let c = Arc::new(ChatSessions::default());
+        let out = Arc::new(Mutex::new(Vec::<ChatOut>::new()));
+        let (o, c2, me) = (out.clone(), c.clone(), Arc::new(Mutex::new(0u32)));
+        let me2 = me.clone();
+        let inside = dir.to_string_lossy().into_owned();
+        let id = c
+            .start_agent(&agent, &dir, None, &[], move |x| {
+                if let ChatOut::Event(e) = &x {
+                    if s(e, "event") == "approval.request" {
+                        let ok = s(e, "title").contains("calc.py") || s(e, "title").contains("README.md") || s(e, "command").contains(&inside);
+                        let (c3, rid, id) = (c2.clone(), s(e, "request_id"), *me2.lock().unwrap());
+                        thread::spawn(move || {
+                            let _ = c3.input(id, Input::Approve { request_id: rid, choice: if ok { "once".into() } else { "deny".into() } });
+                        });
+                    }
+                }
+                o.lock().unwrap().push(x);
+            })
+            .unwrap();
+        *me.lock().unwrap() = id;
+        let ends = |out: &Arc<Mutex<Vec<ChatOut>>>| out.lock().unwrap().iter().filter(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "turn.end")).count();
+        let wait = |n: usize| {
+            let deadline = Instant::now() + Duration::from_secs(300);
+            while Instant::now() < deadline && ends(&out) < n {
+                thread::sleep(Duration::from_millis(200));
+            }
+        };
+        let text = "Make a 3-item todo list with your task tools first, then do it, updating each item as you go: in calc.py add a mul(a, b) function and give add a one-line docstring; in README.md add a line listing the functions. Think briefly first.";
+        c.input(id, Input::Send { text: text.into(), images: vec![], id: "local-1".into() }).unwrap();
+        wait(1);
+        thread::sleep(Duration::from_millis(500));
+        // the rewind, then a question about the message it took back
+        let r = c.input(id, Input::Rewind);
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while Instant::now() < deadline && !out.lock().unwrap().iter().any(|x| matches!(x, ChatOut::Event(e) if s(e, "event") == "rewound" || s(e, "event") == "session.error")) {
+            thread::sleep(Duration::from_millis(200));
+        }
+        c.input(id, Input::Send { text: "Did I ask you for anything earlier in this conversation? Answer yes or no, then say what in five words.".into(), images: vec![], id: "local-2".into() }).unwrap();
+        wait(2);
+        let got: Vec<Value> = out.lock().unwrap().iter().filter_map(|x| match x { ChatOut::Event(e) => Some(e.clone()), _ => None }).collect();
+        c.close(id);
+        let dump = base.join("events.jsonl");
+        std::fs::write(&dump, got.iter().map(|e| e.to_string() + "\n").collect::<String>()).unwrap();
+        println!("rewind input: {r:?}; events: {}", dump.display());
+        for e in &got {
+            match s(e, "event").as_str() {
+                "tool.diff" => println!("DIFF {}", e["files"]),
+                "plan" => println!("PLAN {}", e["items"]),
+                "rewound" | "message" | "turn.end" | "session.error" => println!("{e}"),
+                _ => {}
+            }
+        }
+        let thinking: String = got.iter().filter(|e| s(e, "event") == "thinking").map(|e| s(e, "text")).collect();
+        println!("THINKING {thinking:?}");
+        assert!(got.iter().any(|e| s(e, "event") == "tool.diff"), "no diff");
+    }
+
     /// The real check: Claude Code in its chat mode in a temp folder, "reply with the word ok", through the
     /// same allow-list, adapter and pipes a session uses. Needs claude installed and signed in, and spends a
     /// tiny turn: `cargo test real_claude_chat_replies_ok -- --ignored --nocapture`.
