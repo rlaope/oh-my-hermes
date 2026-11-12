@@ -1,0 +1,215 @@
+/* Settings > Terminal: the preview, the theme list, and the small fields its rows use. Selection is gray.
+   The page groups things the way Settings > General does and adds no outline of its own: the preview has the
+   one frame General's preview has, the options sit in General's groups (.st-grp), and the segmented controls
+   are General's. The theme list is rows between two hairlines, not a box; the text fields and the steppers are
+   a quiet fill with no outline. */
+.tm {
+  display: flex;
+  flex-direction: column;
+}
+/* the preview is a terminal's own box: term/look.ts sets the padding and the theme's background on it */
+.term-pv {
+  --term-pad: 16px;
+  /* as .ap-preview on General: without it a theme whose background is the page's has no edge at all */
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  padding: calc(var(--term-pad) * 0.875) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.5) var(--term-pad);
+  background: var(--term-bg, var(--bg));
+  pointer-events: none;
+}
+.term-pv-host {
+  min-height: 150px;
+}
+.term-pv .xterm .xterm-viewport {
+  background-color: transparent;
+}
+.tm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  margin: 10px 0 8px;
+}
+.tm-slot .mseg.sm {
+  width: auto;
+}
+.tm-slot .mseg button {
+  flex: none;
+  padding: 0 10px;
+}
+.tm-q {
+  flex: 1;
+  min-width: 140px;
+  max-width: 220px;
+}
+/* the page's two text fields are a quiet fill with no outline; with the keyboard the fill deepens (as a
+   stepper's number does) */
+.tm-q,
+.tm-q:focus {
+  border-color: transparent;
+}
+.tm-q:focus,
+.tm-font:focus {
+  background: var(--raise2);
+}
+.tm-list {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 2px 0 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.tm-gh {
+  font-size: 10.5px;
+  color: var(--quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 8px 12px 4px;
+}
+.tm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1px 4px;
+}
+.tm-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  height: 28px;
+  /* a row's swatch starts where a group's words do (.st-row) */
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  color: var(--body);
+  text-align: left;
+}
+.tm-row:hover {
+  background: var(--hover);
+}
+.tm-row.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.tm-row svg {
+  flex: none;
+  color: var(--muted);
+}
+/* a theme's own colours: its background, "Aa" in its foreground, then its eight normal ANSI colours */
+.tm-sw {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  /* the one edge a swatch needs: a theme whose background is the page's would otherwise have no shape */
+  border: 1px solid var(--line);
+}
+.tm-sw::before {
+  content: "Aa";
+  margin-right: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+}
+.tm-sw i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  /* a colour equal to the background (black on a dark theme) still shows as a square */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
+}
+.tm-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-none {
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--quiet);
+}
+/* the rows' fields: a font name, and a number with a step either side (the look of the segmented control) */
+.tm-font {
+  height: 28px;
+  width: 200px;
+  min-width: 0;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  border: 0;
+  background: var(--raise);
+  color: var(--ink);
+  font-size: 12px;
+}
+.tm-font:focus {
+  outline: none;
+}
+.tm-step {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r);
+  background: var(--raise);
+}
+.tm-step button {
+  width: 24px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+}
+.tm-step button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--hover);
+}
+.tm-step button:disabled {
+  opacity: 0.4;
+}
+.tm-step input {
+  width: 44px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.tm-step input:focus {
+  outline: none;
+  background: var(--seg-on);
+}
+/* a row's words keep a readable measure (150px): when the control leaves them less, the control goes under them.
+   At 900px wide that is the four-segment Scrollback row only; the others stay side by side. */
+.tm .st-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.tm .st-k {
+  flex: 1 1 150px;
+}
+.tm .st-v {
+  max-width: 100%;
+  margin-left: auto;
+}
+/* as wide as the segmented controls on General, wider when the words need it */
+.tm .st-v .mseg.sm {
+  width: auto;
+  min-width: 200px;
+}
+.tm .st-v .mseg button {
+  flex: 1 0 auto;
+  padding: 0 10px;
+}

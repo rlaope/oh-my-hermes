@@ -1,0 +1,423 @@
+{
+  "label": "final",
+  "engine": "webkit",
+  "engineVersion": "27.2",
+  "machine": "Apple M4 Pro, darwin 25.6.0",
+  "loadAvgAtStart": "4.3",
+  "measuredOn": "Playwright-driven browser against the vite dev server and the mock host (not the Tauri window)",
+  "mb": 20,
+  "runs": 3,
+  "mode": "auto",
+  "scenarios": {
+    "A": {
+      "runs": [
+        {
+          "wallMs": 219,
+          "longFrames": 0,
+          "maxGapMs": 42,
+          "frames": 18,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971548,
+          "bufferLines": 5036,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 194,
+          "longFrames": 0,
+          "maxGapMs": 40,
+          "frames": 16,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971548,
+          "bufferLines": 5036,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 194,
+          "longFrames": 0,
+          "maxGapMs": 41,
+          "frames": 16,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971548,
+          "bufferLines": 5036,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        }
+      ],
+      "wallMs": {
+        "median": 194,
+        "min": 194,
+        "max": 219
+      },
+      "longFrames": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "maxGapMs": {
+        "median": 41,
+        "min": 40,
+        "max": 42
+      },
+      "heapMB": null,
+      "echoP50": null,
+      "echoP95": null
+    },
+    "B": {
+      "runs": [
+        {
+          "wallMs": 396,
+          "longFrames": 1,
+          "maxGapMs": 54,
+          "frames": 22,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971747,
+          "bufferLines": 5036,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 405,
+          "longFrames": 1,
+          "maxGapMs": 54,
+          "frames": 21,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971747,
+          "bufferLines": 5036,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 445,
+          "longFrames": 1,
+          "maxGapMs": 55,
+          "frames": 23,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971747,
+          "bufferLines": 5036,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        }
+      ],
+      "wallMs": {
+        "median": 405,
+        "min": 396,
+        "max": 445
+      },
+      "longFrames": {
+        "median": 1,
+        "min": 1,
+        "max": 1
+      },
+      "maxGapMs": {
+        "median": 54,
+        "min": 54,
+        "max": 55
+      },
+      "heapMB": null,
+      "echoP50": null,
+      "echoP95": null
+    },
+    "C": {
+      "runs": [
+        {
+          "wallMs": 114,
+          "longFrames": 0,
+          "maxGapMs": 34,
+          "frames": 12,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11599428,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 129,
+          "longFrames": 0,
+          "maxGapMs": 37,
+          "frames": 12,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11599428,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 133,
+          "longFrames": 0,
+          "maxGapMs": 36,
+          "frames": 12,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11599428,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        }
+      ],
+      "wallMs": {
+        "median": 129,
+        "min": 114,
+        "max": 133
+      },
+      "longFrames": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "maxGapMs": {
+        "median": 36,
+        "min": 34,
+        "max": 37
+      },
+      "heapMB": null,
+      "echoP50": null,
+      "echoP95": null
+    },
+    "C2": {
+      "runs": [
+        {
+          "wallMs": 119,
+          "longFrames": 0,
+          "maxGapMs": 25,
+          "frames": 14,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11599428,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 131,
+          "longFrames": 0,
+          "maxGapMs": 29,
+          "frames": 14,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11599428,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 134,
+          "longFrames": 0,
+          "maxGapMs": 27,
+          "frames": 14,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11599428,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        }
+      ],
+      "wallMs": {
+        "median": 131,
+        "min": 119,
+        "max": 134
+      },
+      "longFrames": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "maxGapMs": {
+        "median": 27,
+        "min": 25,
+        "max": 29
+      },
+      "heapMB": null,
+      "echoP50": null,
+      "echoP95": null
+    },
+    "C3": {
+      "runs": [
+        {
+          "wallMs": 131,
+          "longFrames": 0,
+          "maxGapMs": 38,
+          "frames": 12,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11553028,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 111,
+          "longFrames": 0,
+          "maxGapMs": 46,
+          "frames": 11,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11553028,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        },
+        {
+          "wallMs": 109,
+          "longFrames": 0,
+          "maxGapMs": 46,
+          "frames": 11,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 11553028,
+          "bufferLines": 40,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": null
+        }
+      ],
+      "wallMs": {
+        "median": 111,
+        "min": 109,
+        "max": 131
+      },
+      "longFrames": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "maxGapMs": {
+        "median": 46,
+        "min": 38,
+        "max": 46
+      },
+      "heapMB": null,
+      "echoP50": null,
+      "echoP95": null
+    },
+    "D": {
+      "runs": [
+        {
+          "wallMs": 431,
+          "longFrames": 1,
+          "maxGapMs": 62,
+          "frames": 22,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971747,
+          "bufferLines": 5036,
+          "echoN": 15,
+          "echoP50": 27,
+          "echoP95": 55,
+          "heapMB": null
+        },
+        {
+          "wallMs": 419,
+          "longFrames": 0,
+          "maxGapMs": 48,
+          "frames": 22,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971747,
+          "bufferLines": 5036,
+          "echoN": 14,
+          "echoP50": 28,
+          "echoP95": 55,
+          "heapMB": null
+        },
+        {
+          "wallMs": 452,
+          "longFrames": 0,
+          "maxGapMs": 46,
+          "frames": 22,
+          "doneInOrder": true,
+          "renderer": "standard",
+          "canvas": false,
+          "bytes": 20971747,
+          "bufferLines": 5036,
+          "echoN": 15,
+          "echoP50": 29,
+          "echoP95": 56,
+          "heapMB": null
+        }
+      ],
+      "wallMs": {
+        "median": 431,
+        "min": 419,
+        "max": 452
+      },
+      "longFrames": {
+        "median": 0,
+        "min": 0,
+        "max": 1
+      },
+      "maxGapMs": {
+        "median": 48,
+        "min": 46,
+        "max": 62
+      },
+      "heapMB": null,
+      "echoP50": {
+        "median": 28,
+        "min": 27,
+        "max": 29
+      },
+      "echoP95": {
+        "median": 55,
+        "min": 55,
+        "max": 56
+      }
+    }
+  }
+}

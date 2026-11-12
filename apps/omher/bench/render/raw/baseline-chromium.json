@@ -1,0 +1,280 @@
+{
+  "label": "baseline",
+  "engine": "chromium",
+  "engineVersion": "158.0.8127.18",
+  "gpuSetting": "off",
+  "machine": "Apple M4 Pro, darwin 25.6.0",
+  "measuredOn": "Playwright-driven browser against the vite dev server and the mock host (not the Tauri window)",
+  "mb": 20,
+  "runs": 3,
+  "scenarios": {
+    "A": {
+      "runs": [
+        {
+          "wallMs": 348,
+          "longFrames": 2,
+          "maxGapMs": 67,
+          "frames": 14,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 9
+        },
+        {
+          "wallMs": 373,
+          "longFrames": 5,
+          "maxGapMs": 67,
+          "frames": 9,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 9
+        },
+        {
+          "wallMs": 372,
+          "longFrames": 1,
+          "maxGapMs": 50,
+          "frames": 13,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 9
+        }
+      ],
+      "wallMs": {
+        "median": 372,
+        "min": 348,
+        "max": 373
+      },
+      "longFrames": {
+        "median": 2,
+        "min": 1,
+        "max": 5
+      },
+      "maxGapMs": {
+        "median": 67,
+        "min": 50,
+        "max": 67
+      },
+      "heapMB": {
+        "median": 9,
+        "min": 9,
+        "max": 9
+      },
+      "echoP50": null,
+      "echoP95": null
+    },
+    "B": {
+      "runs": [
+        {
+          "wallMs": 428,
+          "longFrames": 2,
+          "maxGapMs": 50,
+          "frames": 18,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 9.1
+        },
+        {
+          "wallMs": 416,
+          "longFrames": 1,
+          "maxGapMs": 67,
+          "frames": 12,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 9.1
+        },
+        {
+          "wallMs": 367,
+          "longFrames": 1,
+          "maxGapMs": 83,
+          "frames": 24,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 9.2
+        }
+      ],
+      "wallMs": {
+        "median": 416,
+        "min": 367,
+        "max": 428
+      },
+      "longFrames": {
+        "median": 1,
+        "min": 1,
+        "max": 2
+      },
+      "maxGapMs": {
+        "median": 67,
+        "min": 50,
+        "max": 83
+      },
+      "heapMB": {
+        "median": 9.1,
+        "min": 9.1,
+        "max": 9.2
+      },
+      "echoP50": null,
+      "echoP95": null
+    },
+    "C": {
+      "runs": [
+        {
+          "wallMs": 188,
+          "longFrames": 1,
+          "maxGapMs": 67,
+          "frames": 9,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 8.9
+        },
+        {
+          "wallMs": 183,
+          "longFrames": 2,
+          "maxGapMs": 67,
+          "frames": 7,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 8.9
+        },
+        {
+          "wallMs": 172,
+          "longFrames": 1,
+          "maxGapMs": 67,
+          "frames": 6,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 0,
+          "echoP50": null,
+          "echoP95": null,
+          "heapMB": 8.9
+        }
+      ],
+      "wallMs": {
+        "median": 183,
+        "min": 172,
+        "max": 188
+      },
+      "longFrames": {
+        "median": 1,
+        "min": 1,
+        "max": 2
+      },
+      "maxGapMs": {
+        "median": 67,
+        "min": 67,
+        "max": 67
+      },
+      "heapMB": {
+        "median": 8.9,
+        "min": 8.9,
+        "max": 8.9
+      },
+      "echoP50": null,
+      "echoP95": null
+    },
+    "D": {
+      "runs": [
+        {
+          "wallMs": 420,
+          "longFrames": 4,
+          "maxGapMs": 67,
+          "frames": 14,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 17,
+          "echoP50": 44.8,
+          "echoP95": 92.9,
+          "heapMB": 9.2
+        },
+        {
+          "wallMs": 409,
+          "longFrames": 6,
+          "maxGapMs": 83,
+          "frames": 8,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 17,
+          "echoP50": 57.1,
+          "echoP95": 110.5,
+          "heapMB": 9.1
+        },
+        {
+          "wallMs": 461,
+          "longFrames": 2,
+          "maxGapMs": 67,
+          "frames": 15,
+          "doneInOrder": true,
+          "renderer": null,
+          "canvas": false,
+          "echoN": 18,
+          "echoP50": 38.3,
+          "echoP95": 66.4,
+          "heapMB": 9.2
+        }
+      ],
+      "wallMs": {
+        "median": 420,
+        "min": 409,
+        "max": 461
+      },
+      "longFrames": {
+        "median": 4,
+        "min": 2,
+        "max": 6
+      },
+      "maxGapMs": {
+        "median": 67,
+        "min": 67,
+        "max": 83
+      },
+      "heapMB": {
+        "median": 9.2,
+        "min": 9.1,
+        "max": 9.2
+      },
+      "echoP50": {
+        "median": 44.8,
+        "min": 38.3,
+        "max": 57.1
+      },
+      "echoP95": {
+        "median": 92.9,
+        "min": 66.4,
+        "max": 110.5
+      }
+    }
+  }
+}

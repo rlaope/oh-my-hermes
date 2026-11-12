@@ -1,7 +1,9 @@
 // The colours of a SESSIONS terminal. A catalog of named themes (xterm `ITheme`), and which one a terminal uses:
-// the person's pick for the app theme in force (Settings), else omher's own.
+// the person's pick for the app theme in force (Settings), else omher's own. omher's two come first; the rest are
+// Orca's palettes, carried over by scripts/import-orca-themes.mjs into themes-orca.ts.
 import type { ITheme } from "@xterm/xterm";
 import type { TermSettings } from "./settings";
+import { ORCA_TERM_THEMES } from "./themes-orca";
 
 export interface TermTheme {
   id: string;
@@ -65,12 +67,49 @@ const OMHER_LIGHT: ITheme = {
 export const TERM_THEMES: readonly TermTheme[] = [
   { id: "omher-dark", name: "omher Dark", kind: "dark", theme: OMHER_DARK },
   { id: "omher-light", name: "omher Light", kind: "light", theme: OMHER_LIGHT },
+  ...ORCA_TERM_THEMES,
 ];
+
+/** The eight normal ANSI colours, in their order (a theme's swatch shows them). */
+export const ANSI_NORMAL = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"] as const;
+/** The eight bright ones, in the same order. */
+export const ANSI_BRIGHT = ["brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite"] as const;
 
 export const termThemeById = (id: string): TermTheme | undefined => TERM_THEMES.find((t) => t.id === id);
 
-/** The theme a terminal uses under app theme `mode`: the pick for that mode, else omher's own for it. */
-export function termTheme(mode: "dark" | "light", s: TermSettings): ITheme {
+/** The catalog entry a terminal uses under app theme `mode`: the pick for that mode, else omher's own for it. */
+export function termThemePick(mode: "dark" | "light", s: TermSettings): TermTheme {
   const picked = termThemeById(mode === "light" ? s.themeLight : s.themeDark);
-  return (picked ?? termThemeById(mode === "light" ? "omher-light" : "omher-dark")!).theme;
+  return picked ?? termThemeById(mode === "light" ? "omher-light" : "omher-dark")!;
+}
+
+/** The theme a terminal uses under app theme `mode`. */
+export function termTheme(mode: "dark" | "light", s: TermSettings): ITheme {
+  return termThemePick(mode, s).theme;
+}
+
+/** `#rgb`, `#rrggbb` or `#rrggbbaa` as channels 0..255; null for anything else. */
+function hexRgb(color: string | undefined): [number, number, number] | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec((color ?? "").trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+/** WCAG relative luminance of a hex colour, 0 (black) to 1 (white); null when it is not a hex colour. */
+export function luminance(color: string | undefined): number | null {
+  const rgb = hexRgb(color);
+  if (!rgb) return null;
+  const [r, g, b] = rgb.map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** A light background is one black text contrasts with at least as well as white text does (Orca's rule). A
+ *  colour that cannot be read counts as dark. */
+export function isLightBackground(color: string | undefined): boolean {
+  const l = luminance(color);
+  return l !== null && (l + 0.05) / 0.05 >= 1.05 / (l + 0.05);
 }
