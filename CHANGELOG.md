@@ -600,6 +600,14 @@ All notable changes will be documented here.
     folder. "Not installed" says how to install that CLI.
   - **Needs you.** The collapsed strip names who is asking and their first
     words.
+- **omher can send the next session to the account whose limit resets soonest, and says when quota is about to lapse unused.**
+  Settings › Accounts has a new switch under Auto-switch, off by default and usable only while Auto-switch is on. With it
+  on, when the account in use hits its limit the account whose shortest window resets soonest takes over, and the chat
+  line says so; an account with no known reset time keeps its list position after those that have one, and an account
+  that is not limited is never moved off. Codex, which reports a percentage, also gets one system notification per
+  account and reset time when a window under 50% used resets within the hour (it follows "Notify me"); Claude Code
+  reports no percentage, so it never triggers it. Each CLI's version now shows beside its name, read from its own
+  `--version` (Claude Code and Codex), keeping only the version number.
 - **omher 0.2.0.** Your bots, coding sessions and plans in one window.
   - **Plans.** A dag-ulw run and a coding agent's sub-runs open as a plan. Its
     graph shows each part with the model, effort and category it ran on, the
@@ -730,6 +738,12 @@ All notable changes will be documented here.
   when no node decides the run). Repair and extend rounds do not raise it,
   and the reply leaves it out when the user's `model_map` options have no
   `ultrabrain` option. Like all lint it never refuses a run.
+- **The one-line installer can remove OMH.** `curl -fsSL https://omher.app/install | sh -s -- --uninstall` (and
+  `install.ps1 --uninstall` on Windows) finds the installed `omh` without relying on PATH, runs `omh uninstall`
+  and shows its output and exit code; `--purge` becomes `--all` and `--dry-run` previews. An uninstall run never
+  downloads or installs anything, and with no command found it says where it looked and exits nonzero. The idea of
+  removal through the install one-liner comes from yetone/magpie (MIT, commit 5e933e1; concept only, reimplemented
+  here). `install.ps1` and its test were written without a PowerShell host; CI is their first run.
 - **omher.app shows the real GitHub star count.** The header used to show a
   `4.9k` baked into the page on 2026-10-31 whenever the visitor's own,
   unauthenticated GitHub API call was rate-limited. The Pages deploy now
