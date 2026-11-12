@@ -168,6 +168,15 @@ for (const theme of ["dark", "light"] as const) {
       await page.locator(".st-body").evaluate((el) => el.scrollTo(0, 0));
       // the same page in the smallest window
       await page.setViewportSize({ width: 900, height: 700 });
+      // the preview refits when its box changes size (a ResizeObserver, so a frame later)
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const pv = document.querySelector<HTMLElement>("[data-testid=term-preview]")!;
+            return pv.querySelector<HTMLElement>(".xterm-screen")!.getBoundingClientRect().right <= pv.getBoundingClientRect().right + 0.5;
+          }),
+        )
+        .toBe(true);
       await fits(page, `shot 900x700 ${theme}`);
       await shot(`term-look-settings-900-${theme}`);
       await page.getByTestId("term-gpu-row").scrollIntoViewIfNeeded();
