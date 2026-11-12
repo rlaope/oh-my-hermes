@@ -37,7 +37,7 @@ async function session(page: Page, agent: string, theme: string, first?: string,
     ([t, g]) => {
       localStorage.setItem("omher.theme", t as string);
       localStorage.removeItem("omher.sessions.recent");
-      Object.assign(window, { __omherPickFolder: "/Users/you/code/omher", ...(g as object) });
+      Object.assign(window, { __omherPickFolder: "/Users/you/code/omher", __omherMockAgents: ["claude", "codex", "omo", "omh"], ...(g as object) });
     },
     [theme, globals] as const,
   );
@@ -93,7 +93,7 @@ for (const theme of themes) {
     // Codex says 37 s later that the command finished: the same row says it kept running and how long it ran
     await expect(step).toHaveAttribute("data-late", "done");
     await shot(page, "stopped", theme);
-    await expect(step.getByTestId("activity-step-time")).toHaveText("Stopped · kept running, finished after 39.9s");
+    await expect(step.getByTestId("activity-step-time")).toHaveText("Stopped · kept running, finished after 39s");
     await expect(act).toHaveAttribute("data-state", "interrupted");
     await expect(page.getByTestId("activity")).toHaveCount(1);
   });
@@ -121,7 +121,7 @@ for (const theme of themes) {
     await mode.click();
     await expect(page.getByTestId("session-mode-own")).toHaveText("No approvals · full disk access · from Codex's own config");
     await expect(page.getByTestId("session-mode-opt")).toHaveText([/^Read-only/, /^Ask/, /^Auto in folder/]);
-    await page.getByTestId("session-mode-opt").filter({ hasText: "Ask" }).click();
+    await page.locator('[data-testid=session-mode-opt][data-mode="ask"]').click();
     await expect(mode).toHaveText("Ask");
     await expect(mode).not.toHaveAttribute("data-own", /.+/);
     expect((await calls(page)).filter((c) => c.input?.kind === "mode").map((c) => c.input?.mode)).toEqual(["ask"]);
