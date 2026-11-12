@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { applyLook, termOptions } from "../../sessions/term/look";
-import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, termSample } from "../../sessions/term/look-sample";
+import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, SAMPLE_WIDE_COLS, termSample } from "../../sessions/term/look-sample";
 import type { TermSettings } from "../../sessions/term/settings";
 import type { TermTheme } from "../../sessions/term/themes";
 import { t } from "../../i18n";
@@ -20,6 +20,8 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
   const live = useRef<{ term: Terminal; fit: FitAddon } | null>(null);
   const now = useRef({ theme, settings });
   now.current = { theme, settings };
+  /** Which sample is on screen: the one with the second pane (`true`), the narrow one, or none yet. */
+  const wide = useRef<boolean | null>(null);
 
   /** The look a session's terminal has, except that the cursor keeps its shape: the preview never has the
    *  keyboard, and a terminal without it draws a block cursor as an outline. */
@@ -31,7 +33,16 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
     l.term.options.cursorInactiveStyle = s.cursorStyle;
   };
 
-  /** As many columns as the box is wide, the sample's rows, and the sample's selection (a resize clears it). */
+  /** The sample's selection (a resize and a rewrite both clear it). */
+  const select = () => {
+    const l = live.current;
+    if (!l) return;
+    // wrapped lines (a large font on a narrow page) would put the selection on other text
+    if (l.term.cols >= SAMPLE_COLS) l.term.select(SAMPLE_SELECT.col, SAMPLE_SELECT.row, SAMPLE_SELECT.length);
+    else l.term.clearSelection();
+  };
+
+  /** As many columns as the box is wide, the sample's rows, the sample that suits that width, its selection. */
   const layout = () => {
     const l = live.current;
     if (!l || !host.current?.isConnected) return;
@@ -43,9 +54,12 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
       /* not measurable yet */
     }
     if (cols !== l.term.cols || l.term.rows !== SAMPLE_ROWS) l.term.resize(cols, SAMPLE_ROWS);
-    // wrapped lines (a large font on a narrow page) would put the selection on other text
-    if (cols >= SAMPLE_COLS) l.term.select(SAMPLE_SELECT.col, SAMPLE_SELECT.row, SAMPLE_SELECT.length);
-    else l.term.clearSelection();
+    const w = cols >= SAMPLE_WIDE_COLS;
+    if (wide.current === w) return select();
+    // the other sample: a box that became wide enough for the second pane, or too narrow for it
+    wide.current = w;
+    l.term.reset();
+    l.term.write(termSample(cols) + SHOW_CURSOR, select);
   };
 
   useEffect(() => {
@@ -62,7 +76,6 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
       live.current = { term, fit };
       look();
       layout();
-      term.write(termSample() + SHOW_CURSOR, layout);
       ro = new ResizeObserver(layout);
       ro.observe(el);
     });
@@ -71,6 +84,7 @@ export function TermPreview({ theme, settings }: { theme: TermTheme; settings: T
       ro?.disconnect();
       live.current?.term.dispose();
       live.current = null;
+      wide.current = null;
     };
     // made once; the look follows in the effect below
     // eslint-disable-next-line react-hooks/exhaustive-deps

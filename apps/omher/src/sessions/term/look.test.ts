@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Terminal } from "@xterm/xterm";
 import { applyLook, DARK_BG_MIN_CONTRAST, LIGHT_BG_MIN_CONTRAST, termContrast, termFont, termOptions } from "./look";
-import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, termSample } from "./look-sample";
+import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, SAMPLE_WIDE_COLS, termSample } from "./look-sample";
 import { TERM_DEFAULTS, type TermSettings } from "./settings";
 import { TERM_THEMES, termThemeById } from "./themes";
 
@@ -129,5 +129,30 @@ describe("the preview's sample output", () => {
     expect(rows[SAMPLE_SELECT.row].slice(SAMPLE_SELECT.col, SAMPLE_SELECT.col + SAMPLE_SELECT.length)).toBe("src/theme.ts");
     // no line is wider than the width the preview says it needs
     expect(Math.max(...rows.map((r) => [...r].length))).toBeLessThanOrEqual(SAMPLE_COLS);
+  });
+
+  it("a wide preview gets a second pane beside the same lines: nothing wraps, the selection stays where it was", () => {
+    expect(termSample(SAMPLE_WIDE_COLS - 1)).toBe(sample);
+    const wide = termSample(SAMPLE_WIDE_COLS);
+    const rows = wide.split("\r\n");
+    expect(rows).toHaveLength(SAMPLE_ROWS);
+    const plain = (s: string) => s.replace(/\x1b\[[\d;]*m/g, "").replace(/\x1b[78]/g, "");
+    const narrow = sample.split("\r\n");
+    let widest = 0;
+    for (const [i, row] of rows.entries()) {
+      // the first pane is the narrow sample's line, untouched; the second starts at one fixed column
+      const [left, right, ...more] = row.split(/\x1b\[(?:\d+)G/);
+      expect(more).toEqual([]);
+      expect(left.replace(/\x1b7$/, "")).toBe(narrow[i]);
+      const col = Number(/\x1b\[(\d+)G/.exec(row)![1]);
+      expect(col).toBeGreaterThan(SAMPLE_COLS + 1);
+      expect(plain(right).startsWith("│")).toBe(true);
+      widest = Math.max(widest, col - 1 + [...plain(right)].length);
+    }
+    expect(widest).toBeLessThanOrEqual(SAMPLE_WIDE_COLS);
+    // the second pane uses the width: its longest line ends in the last tenth of the columns it asks for
+    expect(widest).toBeGreaterThanOrEqual(SAMPLE_WIDE_COLS * 0.9);
+    // the cursor is put back on the prompt after the last divider
+    expect(wide.endsWith("\x1b8")).toBe(true);
   });
 });
