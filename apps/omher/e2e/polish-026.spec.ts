@@ -234,15 +234,21 @@ for (const theme of ["dark", "light"] as const) {
         const where = `${width}x${height}`;
         const read = () =>
           page.evaluate(() => {
-            const pop = document.querySelector(".ss-pop")!.getBoundingClientRect();
+            const el = document.querySelector(".ss-pop")!;
+            const pop = el.getBoundingClientRect();
+            // an upward menu's air: a band of the sidebar's colour above its edge, covering the strip between
+            const air = parseFloat(getComputedStyle(el, "::before").height) || 0;
             const list = document.querySelector<HTMLElement>(".ss-scroll")!;
             const cs = getComputedStyle(list);
             const mask = cs.maskImage || (cs as unknown as { webkitMaskImage: string }).webkitMaskImage || "none";
-            // the sidebar rows above the menu's top edge, and how far each is from it
+            // the sidebar rows that begin above the menu and its air: how far the nearest ends from the menu's edge,
+            // and whether any reaches into the air (half a row would show there)
             const rows = [...document.querySelectorAll(".side .bot-list > *, .side .ss-list > *, .side-sec > .side-sh, .side-top")].map((r) => r.getBoundingClientRect());
-            const above = rows.filter((r) => r.top < pop.top && r.height > 0);
+            const above = rows.filter((r) => r.height > 0 && r.top < pop.top - air - 0.5);
             const nearest = above.length ? Math.min(...above.map((r) => pop.top - r.bottom)) : 99;
-            return { cut: list.scrollHeight > list.clientHeight + 1, atEnd: list.scrollTop + list.clientHeight >= list.scrollHeight - 1, mask, nearest };
+            const half = above.filter((r) => r.bottom > pop.top - air + 0.5).length;
+            const shown = list.clientHeight;
+            return { cut: list.scrollHeight > list.clientHeight + 1, atEnd: list.scrollTop + list.clientHeight >= list.scrollHeight - 1, mask, nearest, half, shown };
           });
         if (height === 720 && width === 1280) {
           await page.mouse.move(700, 700);
@@ -252,8 +258,11 @@ for (const theme of ["dark", "light"] as const) {
         expect(a.cut, `the list is cut at ${where}`).toBe(true);
         // a cut list shows a fade at its bottom edge
         expect(a.mask, `fade at ${where}`).toContain("gradient");
-        // a few px of air between the menu and the row above it (no overlap, not 1px)
+        // a few px of air between the menu and the row above it (no overlap, not 1px), no row half in it, and the
+        // list still shows most agents (at least six 30px rows), not a sliver
         expect(a.nearest, `air above at ${where}`).toBeGreaterThanOrEqual(4);
+        expect(a.half, `half a row in the air at ${where}`).toBe(0);
+        expect(a.shown, `rows shown at ${where}`).toBeGreaterThanOrEqual(180);
         // scrolled to the end: no fade over the last row
         await page.locator(".ss-scroll").evaluate((e) => e.scrollTo({ top: e.scrollHeight }));
         await expect.poll(async () => (await read()).mask, { message: `no fade at the end, ${where}` }).toBe("none");
