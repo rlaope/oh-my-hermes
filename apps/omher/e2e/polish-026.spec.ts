@@ -285,7 +285,15 @@ for (const theme of ["dark", "light"] as const) {
       const skill = rows.find((r) => r.dataset.kind === "skill")!;
       const mark = skill.querySelector<HTMLElement>('[data-testid="command-skill"]');
       const cmd = rows.find((r) => r.dataset.kind === "command")!;
+      // the list ends on a row boundary: no row shows half under the menu's bottom edge
+      const el = document.querySelector<HTMLElement>('[data-testid="command-picker"]')!;
+      const inner = el.getBoundingClientRect().top + el.clientTop + el.clientHeight;
+      const half = rows.filter((r) => {
+        const b = r.getBoundingClientRect();
+        return b.top < inner - 0.5 && b.bottom > inner + 0.5;
+      }).length;
       return {
+        half,
         popW: pop.width,
         boxW: box.width,
         cut,
@@ -299,8 +307,9 @@ for (const theme of ["dark", "light"] as const) {
     });
     // as wide as the chat column's composer
     expect(Math.abs(m.popW - m.boxW)).toBeLessThanOrEqual(2);
-    // no description cut among the rows on screen
+    // no description cut among the rows on screen, and no row cut through at the bottom
     expect(m.cut).toBe(0);
+    expect(m.half).toBe(0);
     // the name is plain text: no gray box
     expect(m.nameBg).toBe("rgba(0, 0, 0, 0)");
     // a skill carries a mark a command does not, in the skill colour, at the menu's text size
