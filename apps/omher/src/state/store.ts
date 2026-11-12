@@ -43,6 +43,8 @@ import type {
   InspectResult,
   OpMap,
   PluginRow,
+  DiffFile,
+  PlanItem,
 } from "../lib/protocol";
 import type { AgentRunSummary, CliAgent, NodePr, RunDetail } from "../lib/runs";
 
@@ -59,6 +61,8 @@ export interface Step {
   ok?: boolean;
   /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
   dag?: { run: string; node: string }[];
+  /** A file edit's change, per file (SESSIONS agents), for the step's diff view. */
+  diff?: DiffFile[];
 }
 
 export interface Turn {
@@ -75,6 +79,10 @@ export interface Turn {
   streaming: string;
   /** The fan-outs (delegate_task children) this turn started, as Hermes' subagent events tell them. */
   fanouts?: Fanout[];
+  /** The agent's own todo list as it last stood in this turn (SESSIONS agents). */
+  plan?: PlanItem[];
+  /** What the agent thought, when it sends the text (SESSIONS agents); at most THINKING_MAX characters. */
+  thinking?: string;
 }
 
 /** One subagent of a fan-out, as its latest event left it. */
@@ -345,6 +353,20 @@ export function activityText(name: string, detail: string): string {
 export const WORKING = "Working…";
 /** The status a turn gets from `thinking`, before any tool or status text. */
 export const THINKING = "Thinking…";
+/** How much of a turn's thinking text is kept (the start; the rest is dropped, never shown cut mid-word). */
+export const THINKING_MAX = 20_000;
+
+/** A plan as the agent sent it: rows with text, an unknown status read as pending. */
+export function parsePlan(items: unknown): PlanItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((x) => {
+    if (!x || typeof x !== "object") return [];
+    const { text, status } = x as { text?: unknown; status?: unknown };
+    if (typeof text !== "string" || !text.trim()) return [];
+    const st = status === "in_progress" || status === "completed" ? status : "pending";
+    return [{ text, status: st }];
+  });
+}
 
 export function liveLabel(t: Turn): { verb: string; code?: string } {
   const status = t.status || WORKING;
@@ -358,7 +380,7 @@ export function liveLabel(t: Turn): { verb: string; code?: string } {
 /** Whether a running turn has something for its activity line to say: a tool or skill ran, or the bot sent a
  *  status of its own. Before that (only thinking) the chat shows the typing bubble instead of the line. */
 export function turnHasActivity(t: Turn): boolean {
-  return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== THINKING && t.status !== WORKING);
+  return t.steps.length > 0 || t.skills.length > 0 || !!(t.status && t.status !== THINKING && t.status !== WORKING) || !!t.plan?.length || !!t.thinking;
 }
 
 // ---- state helpers --------------------------------------------------------------------------
@@ -471,6 +493,19 @@ function doneWaiting(c: Chat): Chat {
   if (c.items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(c.items, i))) return c;
   const last = t.steps[t.steps.length - 1];
   return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail) : "" }));
+}
+
+/** The agent took back the person's last message: it and everything after it leave the chat. */
+function rewind(c: Chat): Chat {
+  let at = -1;
+  for (let i = c.items.length - 1; i >= 0; i--) {
+    if (c.items[i].kind === "user") {
+      at = i;
+      break;
+    }
+  }
+  if (at < 0) return c;
+  return { ...withItems(c, c.items.slice(0, at)), lastTurn: c.turn ? c.lastTurn : null };
 }
 
 /** How long a status that came before its turn still opens that turn (Hermes sends it right before). */
@@ -749,7 +784,25 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         c.turn ? patchTurn(c, (t) => ({ ...t, status: ev.text })) : { ...c, early: { text: ev.text, at: now } },
       );
     case "thinking":
-      return touchChat(state, bot, (c) => (c.turn && !c.turn.status ? patchTurn(c, (t) => ({ ...t, status: THINKING })) : c));
+      return touchChat(state, bot, (c) => {
+        if (!c.turn) return c;
+        const text = typeof ev.text === "string" ? ev.text : "";
+        const had = c.turn.thinking ?? "";
+        const kept = text && had.length < THINKING_MAX ? (had + text).slice(0, THINKING_MAX) : had;
+        if (c.turn.status && kept === had) return c;
+        return patchTurn(c, (t) => ({ ...t, ...(t.status ? {} : { status: THINKING }), ...(kept ? { thinking: kept } : {}) }));
+      });
+    case "tool.diff": {
+      const files = Array.isArray(ev.files) ? ev.files.filter((f) => f && typeof f.path === "string" && Array.isArray(f.lines)) : [];
+      if (!files.length) return state;
+      return touchChat(state, bot, (c) =>
+        patchTurn(c, (t) => ({ ...t, steps: t.steps.map((s) => (s.id === ev.tool_id ? { ...s, diff: files } : s)) })),
+      );
+    }
+    case "plan":
+      return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, plan: parsePlan(ev.items) })));
+    case "rewound":
+      return touchChat(state, bot, (c) => rewind(c));
     case "tool.start":
       return touchChat(state, bot, (c) =>
         patchTurn(c, (t) => ({

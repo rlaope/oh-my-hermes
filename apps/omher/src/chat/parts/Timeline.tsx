@@ -24,7 +24,7 @@ const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" || it?.kind ===
 
 /** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
  *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
-export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
+export function Timeline({ bot, face, onEditLast }: { bot: Bot; face?: ReactNode; onEditLast?: () => void }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
   const chat = s.chats[bot.name];
@@ -36,6 +36,8 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const pinned = useRef(true);
   const lastTop = useRef(0);
   const lastBot = useRef<string | null>(null);
+  // the person's last message, when the chat can take it back (a SESSIONS agent's own rewind)
+  const lastUser = onEditLast ? [...items].reverse().find((i) => i.kind === "user") : undefined;
 
   // Stick to the bottom unless the person scrolled up; jump to the bottom on bot switch.
   useLayoutEffect(() => {
@@ -60,7 +62,7 @@ export function Timeline({ bot, face }: { bot: Bot; face?: ReactNode }) {
   const render = (it: TimelineItem, prev?: TimelineItem): ReactNode => {
     switch (it.kind) {
       case "user":
-        return <Bubble item={it} />;
+        return <Bubble item={it} onEdit={it === lastUser && !it.error && !it.wait ? onEditLast : undefined} />;
       case "assistant":
         // the face shows on the first bot bubble after something else (the user, a day line, a card)
         return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} />;

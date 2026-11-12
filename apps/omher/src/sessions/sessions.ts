@@ -85,6 +85,8 @@ export interface AgentLive {
   usage?: { used: number; max: number };
   /** the git branch of its folder ("" = not a repository) */
   branch?: string;
+  /** the agent can take back the person's last message (its own rewind; Claude Code and Codex) */
+  rewind?: boolean;
 }
 
 interface Term {
@@ -303,6 +305,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.background === "number") p.background = ev.background;
         patchRec(id, p);
         const l: Partial<AgentLive> = {};
+        if (typeof ev.rewind === "boolean") l.rewind = ev.rewind;
         if (typeof ev.mode === "string") l.mode = ev.mode;
         if (typeof ev.effort === "string" && ev.effort) l.effort = ev.effort;
         if (Object.keys(l).length) patchLive(id, l);
@@ -354,6 +357,17 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         const code = typeof ev.code === "number" ? ev.code : null;
         const error = proc.noChat ?? (typeof ev.error === "string" ? ev.error.trim() : "");
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
+        return;
+      }
+      case "rewound": {
+        // the agent took the person's last message back: the chat drops it and what came after, and the box offers
+        // its text again (the text the person typed; the agent's own copy when omher has none)
+        const key = keys.get(id);
+        const items = key ? (store().getState().chats[key]?.items ?? []) : [];
+        const last = [...items].reverse().find((i) => i.kind === "user");
+        const text = last && last.kind === "user" ? last.text : typeof ev.text === "string" ? ev.text : "";
+        dispatchChat(id, ev);
+        if (key && text) store().dispatch({ type: "ui.draft", bot: key, text });
         return;
       }
       default:
@@ -1160,6 +1174,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     dropOnTerminal,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
+    /** Edit and resend: the agent takes back the last message (its own rewind), then the box holds its text. */
+    rewind: async (id: string) => {
+      try {
+        await input(id, { kind: "rewind" });
+      } catch (e) {
+        note(id, errText(e));
+      }
+    },
     /** Session `id` has a terminal in this page load (an ended one keeps its output until it is closed). */
     hasTerm: (id: string) => terms.has(id),
     /** Changes each time Restart starts session `id`'s terminal program again. */

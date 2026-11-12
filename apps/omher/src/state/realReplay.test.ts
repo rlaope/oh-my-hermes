@@ -45,6 +45,26 @@ describe("real agent streams through the reducer", () => {
     });
   }
 
+  it("Claude Code's real two-file edit: one todo list all done, each edit with its change, thinking kept", () => {
+    const s = replay(all.find((r) => r.name === "claude-12-work.jsonl")!);
+    const acts = s.chats["agent:s1"].items.filter((i) => i.kind === "activity");
+    expect(acts).toHaveLength(1);
+    const t = acts[0].kind === "activity" ? acts[0].turn : null;
+    expect(t!.plan?.map((p) => p.status)).toEqual(["completed", "completed", "completed"]);
+    const edits = t!.steps.filter((x) => x.name === "patch");
+    expect(edits.map((x) => x.diff?.[0].path)).toEqual(["calc.py", "calc.py", "README.md"]);
+    expect(edits[1].diff?.[0].lines).toContain("+def mul(a, b):");
+    expect(t!.steps.some((x) => /^Task|^Todo/.test(x.name))).toBe(false);
+    const th = replay(all.find((r) => r.name === "claude-12-thinking.jsonl")!);
+    const tt = th.chats["agent:s1"].items.find((i) => i.kind === "activity");
+    expect(tt?.kind === "activity" && tt.turn.thinking).toMatch(/^No todo tool is available/);
+  });
+
+  it("Claude Code's real rewind takes the first message and its answer out of the chat", () => {
+    const r = all.find((x) => x.name === "claude-12-rewind.jsonl")!;
+    expect(r.events.some((e) => e.event === "rewound")).toBe(true);
+  });
+
   const fans = (s: AppState) => s.chats["agent:s1"].items.flatMap((i) => (i.kind === "activity" ? (i.turn.fanouts ?? []) : []));
 
   it("Claude Code's two subagents in parallel: one card, two rows with name, task, steps and their own answer", () => {

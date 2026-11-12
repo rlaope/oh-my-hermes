@@ -6,6 +6,7 @@ import { MediaList } from "./Media";
 import { splitMedia } from "./mediaLines";
 import { SentFiles } from "./Attach";
 import { SkillText } from "./Skills";
+import { CopyButton } from "./Copy";
 import { t } from "../../i18n";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
@@ -19,6 +20,7 @@ export const Bubble = memo(function Bubble({
   face,
   faceEl,
   live,
+  onEdit,
 }: {
   item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "sent" | "wait">;
   streaming?: boolean;
@@ -29,6 +31,8 @@ export const Bubble = memo(function Bubble({
   faceEl?: ReactNode;
   /** The answer being written: its face wears the live ring (the bot is still working). */
   live?: boolean;
+  /** A user bubble the agent can take back (a SESSIONS chat's last message): its Edit control. */
+  onEdit?: () => void;
 }) {
   if (item.kind === "user") {
     return (
@@ -55,6 +59,11 @@ export const Bubble = memo(function Bubble({
           </div>
         )}
         {item.error && <div className="msg-err">{t("bub.notSent", { error: item.error })}</div>}
+        {onEdit && (
+          <button type="button" className="msg-edit" onClick={onEdit} title={t("rw.tip")} data-testid="bubble-edit">
+            {t("rw.edit")}
+          </button>
+        )}
       </div>
     );
   }
@@ -80,6 +89,8 @@ export const Bubble = memo(function Bubble({
         {(text || streaming || paths.length === 0) && (
           <div className="b md">
             <Markdown text={text} />
+            {/* copy the answer: beside the bubble's last line, on hover; it takes no room */}
+            {!streaming && text.trim() && <CopyButton className="msg-copy" text={() => text} testId="copy-answer" />}
           </div>
         )}
         {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}

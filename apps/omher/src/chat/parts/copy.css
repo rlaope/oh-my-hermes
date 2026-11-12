@@ -1,0 +1,83 @@
+/* The copy control: an icon that shows on hover of its answer or code block, quiet until hovered itself. */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  color: var(--quiet);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.copy-btn:hover,
+.copy-btn:focus-visible {
+  color: var(--body);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.copy-btn:focus-visible,
+.copy-btn.done {
+  opacity: 1;
+}
+.copy-btn.done {
+  color: var(--ok);
+}
+
+/* beside a bot answer's last line, outside the bubble; it takes no room, so nothing moves when it shows */
+.msg.a .b.md {
+  position: relative;
+}
+.msg-copy {
+  position: absolute;
+  left: 100%;
+  bottom: 2px;
+  margin-left: 4px;
+}
+.msg.a:hover .msg-copy {
+  opacity: 1;
+}
+[data-bubbles="open"] .msg-copy {
+  left: auto;
+  right: 0;
+  bottom: -22px;
+}
+
+/* a code block's own, in its top right corner */
+.md-pre {
+  position: relative;
+}
+.md-pre-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--page));
+}
+.md-pre:hover > .md-pre-copy {
+  opacity: 1;
+}
+
+/* edit and resend: a quiet label under the person's last message (an agent that can take it back) */
+.msg-edit {
+  margin-top: 3px;
+  padding: 0 4px;
+  height: 18px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--quiet);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.msg.u:hover .msg-edit,
+.msg-edit:focus-visible {
+  opacity: 1;
+}
+.msg-edit:hover {
+  color: var(--body);
+}
+
+@media (hover: none) {
+  .copy-btn,
+  .msg-edit {
+    opacity: 1;
+  }
+}
