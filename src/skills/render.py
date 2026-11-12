@@ -13898,6 +13898,48 @@ no rendered evidence.
   code but not in `DESIGN.md` is drift: either the contract or the code is
   wrong, and one of them gets fixed.
 
+## Rules the build holds
+
+A rule that lives only in this document is re-broken by whoever did not read
+it, person or agent. The rules below are how a contract gets held by the
+project's own build instead of by memory. The kinds of rule are fixed here;
+the values are the project's.
+
+- **A rule judged from source alone becomes a test.** Arbitrary corner
+  values, durations or easings outside the motion profiles, several colours
+  for one meaning (success, warning and danger each have one), and emoji used
+  as icons can all be found by reading source, so they become a check in the
+  project's own test or lint step and run in its build. A rule that needs a
+  rendered page stays with the visual-QA owner.
+- **One escape marker.** Where a rule has legitimate exceptions, the
+  exception is declared with one named attribute or comment on the element,
+  and the check skips only that element. An exception limited to certain
+  files lists those files inside the check itself. Two ways to opt out
+  means the second one is never audited.
+- **Closed sets, each step tied to a role.** Corners, control heights,
+  durations, easings and heading steps each have a fixed count, and each step
+  names what it is used for. There is no in-between value. Map the
+  framework's size names onto the steps, so a new name cannot create a new
+  value. This complements the one radius knob in Shapes: the knob moves the
+  whole scale, the set decides how many steps the scale has.
+- **Each rule carries its history.** Record the date, what the user asked
+  for, and what went wrong before the rule existed. A rule with no history
+  gets relaxed by the next person who cannot see why it is there.
+- **Decided and open are separate lists.** A variant not yet chosen is not
+  the source of truth, and both variants are not shipped as product options
+  to avoid the choice. The open list names who decides and by when.
+- **Components are the source of truth.** Reuse the control. Re-drawing it by
+  copying classes matches the colour and drifts on corner and height, and
+  the next token change then misses the copy.
+- **A styleguide page built from the real components.** It uses the real
+  components and tokens, so it changes with the code, and each state (data,
+  loading, empty, error) can be opened directly, by address or parameter, for
+  capture. A failed fetch is shown as an error, never as an empty result.
+- **A check counts only when it ran.** Same rule as lint above: a source
+  check that was run, with its findings in hand, is observed evidence; one
+  that was not run is `not_observed`, and reading the code never turns it
+  into a pass.
+
 ## Boundary
 
 `DESIGN.md` is a prepared contract, not rendered evidence: implementation,
@@ -14585,6 +14627,34 @@ selected, and only its recorded findings enter the contract.
   the visual-fidelity review perspective comparing the rendered result
   against it side by side — and verify the implementation is a reusable
   design-system build, not a screenshot-matched one-off.
+
+## Skeleton versus brand
+
+A reference carries two layers: a skeleton (layout, spacing rhythm,
+component anatomy, motion) and a brand (colour and type). They are taken
+separately.
+
+- **A project that already has a brand or design system** takes skeleton and
+  motion from the reference, and colour and type from its own brand. Taking
+  the reference's colour and type as well would replace the brand with the
+  reference.
+- **Colour and type are extracted too** when no brand exists yet, or when the
+  user asked to match the reference. Record which of the two applied in the
+  Research Log.
+- **Several references** are rebuilt on one spacing unit, one grid and one
+  type scale, with one transition treatment across all borrowed sections.
+  Stacked as they came, they read as several sites on one page.
+- **Drop what only meant something for the reference's owner**: its mascot,
+  its seasonal banner, its menu names.
+
+## Remove traces before it leaves the team
+
+Before a result goes outside the team, search it for traces of the
+reference: its name in titles, comments and metadata, redrawn copies of its
+artwork, and working notes that name it. The search is a command whose
+output is in hand; reading the files does not count. The result's own copy
+does not name the reference either. Keep the Research Log, which stays with
+the team, as the one place the reference is named.
 
 ## Boundary
 
