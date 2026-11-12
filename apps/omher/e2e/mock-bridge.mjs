@@ -12,6 +12,9 @@
 // at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
 // plugin from its chat: the bridge's poll would emit routines.update + routine.added, or plugin.added + plugins.update),
 // mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
+// mock.restart {bot, outcome: "ok"|"refused"|"failed"|"slow", work?, line?} (what Hermes' restart answers next),
+// mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
+// mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit).
 import http from "node:http";
@@ -523,6 +526,12 @@ let submits = [];
 let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns, cliTitles;
 // Automations and plugins: what the pages read and change (reset with everything else).
 let automations, plugins, inspected, offlineWrites;
+/** bots.restart: what the next restart answers per bot, which bot refused last (for "Restart anyway"). */
+let restartNext, restartRefused, pluginLoadNext;
+const STANDALONE = new Set(["omh-tui"]);
+const gatewayOf = (name) => (STANDALONE.has(name) ? name : "default");
+const gatewayBots = (gw) => Object.values(bots).filter((x) => gatewayOf(x.name) === gw);
+const restartTimers = new Set();
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 /** Timers of subagents still reporting after their turn ended (cleared by mock.reset). */
@@ -675,6 +684,11 @@ function reset() {
     default: structuredClone(PLUGIN_SEED.filter((x) => x.source === "bundled")), "omh-tui": structuredClone(PLUGIN_SEED.filter((x) => x.source === "bundled")) };
   inspected = new Map(); // `<bot>:<catalog name>` -> the sha plugins.inspect handed out
   offlineWrites = new Set();
+  restartNext = new Map();
+  for (const h of restartTimers) clearTimeout(h);
+  restartTimers.clear();
+  restartRefused = new Set();
+  pluginLoadNext = null;
   pending = new Map();
   asked = new Map();
   manual = new Set();
@@ -810,6 +824,13 @@ function needBot(p) {
   const b = bots[p.bot];
   if (!b) throw new OpError("unknown_bot", `no bot named ${p.bot}`);
   if (b.status === "offline") throw new OpError("bot_offline", `${p.bot} is offline`);
+  return b;
+}
+/** A bot by name whatever its status (an offline bot can be started). */
+function needBotAny(p) {
+  if (typeof p.bot !== "string" || !p.bot) throw new OpError("bad_request", "missing bot");
+  const b = bots[p.bot];
+  if (!b) throw new OpError("unknown_bot", `no bot named ${p.bot}`);
   return b;
 }
 function needFolder(p, b) {
@@ -1200,7 +1221,10 @@ const OPS = {
     list.push({ name: entry.name, key: entry.name, title: entry.title === entry.name ? "" : entry.title, version: entry.version, source: "user",
       enabled: entry.requires_env.length === 0, tier: entry.tier, category: entry.category, catalog_name: entry.name, tools: entry.tools.length,
       hooks: entry.hooks.length, update_available: false, needs_env: [...entry.requires_env] });
-    return { name: entry.name, enabled: entry.requires_env.length === 0, restart_required: entry.hooks.length > 0, warnings: [], missing_env: [...entry.requires_env] };
+    const load = pluginLoadNext ?? "live";
+    pluginLoadNext = null;
+    return { name: entry.name, enabled: entry.requires_env.length === 0, restart_required: load !== "live", load, restart_bot: "default",
+      warnings: [], missing_env: [...entry.requires_env] };
   },
   "plugins.toggle": (p) => {
     const row = pluginOf(p, "key");
@@ -1348,6 +1372,80 @@ const OPS = {
       return { name: entry.name };
     }
     throw new OpError("bad_request", "kind is routine or plugin");
+  },
+  // Hermes' own restart of one bot (the real bridge runs `hermes -p <bot> gateway restart`); the mock answers what
+  // mock.restart set, then "attaches again" after a short while (bot.restarted)
+  // which gateway process serves a bot: OMH TUI runs its own (standalone, as on the owner's Mac); the host gateway
+  // (default) serves the others
+  "bots.restart_scope": (p) => {
+    const b = needBotAny(p);
+    const gw = gatewayOf(b.name);
+    return { gateway: gw, bots: gatewayBots(gw).map((x) => ({ name: x.name, display_name: x.display_name })) };
+  },
+  "bots.restart": (p) => {
+    const b = needBotAny(p);
+    const interrupt = p.interrupt === true;
+    const gw = gatewayOf(b.name);
+    if (interrupt && !restartRefused.has(gw)) throw new OpError("bad_request", "Restart anyway follows a refusal for live work");
+    const next = restartNext.get(b.name) ?? { outcome: "ok" };
+    restartRefused.delete(gw);
+    if (next.outcome === "refused" && !interrupt) {
+      restartRefused.add(gw);
+      // the real bridge reads Hermes' unit lines into these plain parts (work_unit): no ids, pids or brackets
+      return { outcome: "refused", work: next.work ?? [{ kind: "chat", name: null, secs: 180, bot: b.name }] };
+    }
+    restartNext.delete(b.name);
+    if (next.outcome === "failed") return { outcome: "failed", line: next.line ?? "Gateway service restart failed." };
+    const takes = gatewayBots(gatewayOf(b.name));
+    const back = () => {
+      for (const x of takes) {
+        x.status = "online";
+        x.running = false;
+        broadcast({ event: "bot.status", bot: x.name, status: "online", running: false });
+        broadcast({ event: "bot.restarted", bot: x.name, ok: true });
+      }
+    };
+    // "slow" holds the restarting state until the test calls mock.restartDone
+    if (next.outcome === "slow") restartNext.set(b.name, { outcome: "held", back });
+    else {
+      const h = setTimeout(() => {
+        restartTimers.delete(h);
+        back();
+      }, 600);
+      restartTimers.add(h);
+    }
+    return { outcome: "ok", bots: takes.map((x) => x.name) };
+  },
+  "plugins.reload": (p) => {
+    const b = needBot(p);
+    const load = pluginLoadNext ?? "live";
+    pluginLoadNext = null;
+    if (load === "failed") return { load: "failed", line: `${b.display_name}'s Hermes did not answer.` };
+    return { load: load === "reload" ? "live" : load, missing: load === "restart" ? ["numpy"] : [], restart_bot: "default" };
+  },
+  "mock.restart": (p) => {
+    needStr(p, "bot");
+    restartNext.set(p.bot, { outcome: p.outcome, work: p.work, line: p.line });
+    return {};
+  },
+  "mock.restartDone": (p) => {
+    const held = restartNext.get(needStr(p, "bot"));
+    if (held?.back) {
+      restartNext.delete(p.bot);
+      held.back();
+    }
+    return {};
+  },
+  "mock.pluginLoad": (p) => {
+    pluginLoadNext = p.load ?? null;
+    return {};
+  },
+  "mock.botStatus": (p) => {
+    const b = bots[needStr(p, "bot")];
+    if (!b) throw new OpError("unknown_bot", p.bot);
+    b.status = p.status;
+    broadcast({ event: "bot.status", bot: b.name, status: p.status, running: false });
+    return {};
   },
   "mock.offline": (p) => {
     needStr(p, "bot");

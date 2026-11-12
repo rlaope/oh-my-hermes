@@ -6,8 +6,11 @@ import { AskLine } from "./Needs";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
 import { fileName, splitMedia } from "../chat/parts/mediaLines";
-import { t } from "../i18n";
+import { listText, t } from "../i18n";
 import { WORKING } from "../state/store";
+import { useRestart } from "./restart";
+import { RestartLine } from "./RestartLine";
+import { useMates } from "./restart";
 
 /** The live step the activity line shows ("Reading gateway.log", "Running pnpm test"); "Thinking…" until there
  *  is one ("Working…" is only the placeholder of a turn found running on open). */
@@ -57,21 +60,28 @@ const flat = (t: string) =>
     .trim();
 
 const MENU_W = 168;
-const MENU_H = 120;
+const MENU_H = 166;
 
 export interface RowMenu {
   pinned: boolean;
   onPin: () => void;
   onEdit: () => void;
+  /** Restart that bot (Start when it is offline), through Hermes' own command; restart.ts holds what follows. */
+  onRestart: () => void;
+  /** The bot is offline: the row reads "Start". */
+  offline?: boolean;
   onHide: () => void;
   /** Present when some bots are hidden: opens the list of them. */
   onShowHidden?: () => void;
 }
 
-/** Right-click or ⋯ menu of a bot row: Pin to top, Edit bot, Hide from sidebar, Show hidden… Nothing that would
- *  create or delete a Hermes profile, and no "New thread" (one chat per bot). */
-function Menu({ menu, onClose, name, at }: { menu: RowMenu; onClose: () => void; name: string; at: { x: number; y: number } }) {
+/** Right-click or ⋯ menu of a bot row: Pin to top, Edit bot, Restart (Start when offline), Hide from sidebar, Show
+ *  hidden… Nothing that would create, stop or delete a Hermes profile, no "restart all", and no "New thread" (one
+ *  chat per bot). */
+function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => void; name: string; bot: string; at: { x: number; y: number } }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Restart restarts the gateway process that serves this bot: say who else goes down with it, before the press
+  const mates = useMates(bot);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const onDown = (e: globalThis.MouseEvent) => {
@@ -87,6 +97,7 @@ function Menu({ menu, onClose, name, at }: { menu: RowMenu; onClose: () => void;
   const items: [string, () => void][] = [
     [menu.pinned ? t("row.unpin") : t("row.pin"), menu.onPin],
     [t("row.edit"), menu.onEdit],
+    [menu.offline ? t("row.start") : t("row.restart"), menu.onRestart],
     [t("row.hide"), menu.onHide],
     ...(menu.onShowHidden ? ([[t("row.showHidden"), menu.onShowHidden]] as [string, () => void][]) : []),
   ];
@@ -111,11 +122,20 @@ function Menu({ menu, onClose, name, at }: { menu: RowMenu; onClose: () => void;
         btns[(at + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length]?.focus();
       }}
     >
-      {items.map(([label, fn], i) => (
-        <button key={label} type="button" role="menuitem" className={`row-mi${i === 3 ? " sep" : ""}`} onClick={run(fn)}>
-          {label}
-        </button>
-      ))}
+      {items.map(([label, fn], i) =>
+        i === 2 && mates.length ? (
+          <button key={label} type="button" role="menuitem" className="row-mi two" onClick={run(fn)} data-testid="row-restart">
+            {label}
+            <span className="row-mi-sub" data-testid="row-restart-with">
+              {t("row.restartWith", { list: listText(mates.map((m) => m.display_name)) })}
+            </span>
+          </button>
+        ) : (
+          <button key={label} type="button" role="menuitem" className={`row-mi${i === 4 ? " sep" : ""}`} onClick={run(fn)} data-testid={i === 2 ? "row-restart" : undefined}>
+            {label}
+          </button>
+        ),
+      )}
     </div>
   );
 }
@@ -151,6 +171,8 @@ export function BotRow({
     setAt({ x: Math.max(6, Math.min(x, right - MENU_W)), y: Math.min(y, window.innerHeight - MENU_H - 6) });
   };
   const p = preview(bot, chat);
+  const rs = useRestart(bot.name);
+  const restarting = rs.step === "restarting";
   const running = bot.running || !!chat?.turn;
   const needs = asks.length;
   const text = needs ? askText(asks[asks.length - 1].item) : p.text;
@@ -173,7 +195,7 @@ export function BotRow({
         data-testid={`bot-${bot.name}`}
       >
         {/* answering: a thin rotating ring around the face; an open ask stops it (the amber dot takes over) */}
-        <LiveRing on={running && !needs} size={34} gap={3.5} label={t("row.answering")} seed={bot.name}>
+        <LiveRing on={(running && !needs) || restarting} size={34} gap={3.5} label={restarting ? t("rs.restarting") : t("row.answering")} seed={bot.name}>
           <Avatar bot={bot.name} size={34} />
         </LiveRing>
         <span className="bot-m">
@@ -182,7 +204,11 @@ export function BotRow({
               {bot.display_name}
               {pinned && <span className="bot-pin" data-testid="pinned" aria-label={t("row.pinned")} title={t("row.pinned")} />}
             </span>
-            {needs > 0 ? (
+            {restarting ? (
+              <span className="bot-t busy" data-testid="bot-time" data-restarting="true">
+                {bot.status === "offline" ? t("rs.starting") : t("rs.restarting")}
+              </span>
+            ) : needs > 0 ? (
               <span className="bot-t wait" data-testid="bot-time">
                 {t("row.waiting")}
               </span>
@@ -238,7 +264,8 @@ export function BotRow({
           </svg>
         </button>
       )}
-      {menu && at && <Menu menu={menu} at={at} name={bot.display_name} onClose={() => setAt(null)} />}
+      {menu && at && <Menu menu={menu} at={at} name={bot.display_name} bot={bot.name} onClose={() => setAt(null)} />}
+      <RestartLine bot={bot} testId={`restart-line-${bot.name}`} pop />
     </div>
   );
 }
