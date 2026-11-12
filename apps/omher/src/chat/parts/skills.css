@@ -93,16 +93,22 @@
   color: var(--quiet);
 }
 
-/* the `/` menu of a session: names in one column so descriptions line up, what a command takes, a quiet tag on a
-   skill; at most a whole number of rows tall */
+/* the `/` menu of a session: as wide as the composer, so descriptions get the chat column's width; the name is plain
+   monospace text (no box) at its own width, what a command takes, the description, and on a skill a "skill" mark in
+   the accent colour at the row's right edge; at most a whole number of rows tall */
 [data-testid="command-picker"] {
-  width: min(560px, 100%);
-  max-height: 244px; /* 8 rows of 29.25px, the padding and the border: no row cut through */
+  width: 100%;
+  max-height: 230px; /* the top padding, 8 rows of 28px and the border: the 9th row starts below the edge */
 }
-[data-testid="command-picker"] .sk-row .sk-pill {
-  width: 30%;
-  max-width: none;
+.sk-name {
   flex: none;
+  max-width: 40%;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sk-hint {
   flex: none;
@@ -116,6 +122,8 @@
 }
 .sk-kind {
   flex: none;
-  font-size: 10.5px;
-  color: var(--quiet);
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 560;
+  color: var(--accent);
 }

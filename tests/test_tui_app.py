@@ -1730,6 +1730,32 @@ class ShellLineTests(unittest.TestCase):
         self.assertEqual(stream.getvalue(), "gateway said: boom link\n")
 
 class ModelChainPickerTests(unittest.TestCase):
+    def test_identity_save_preserves_prompt_and_cancel_and_noop_do_not_write(self) -> None:
+        from omh.plugin_bundle.omh.model_chain_picker import picker_rows
+
+        root = Path(self.enterContext(make_test_tempdir("omh-tui-picker-")))
+        environ = {"OMH_HOME": str(root / "omh"), "HERMES_HOME": str(root / "hermes"), "NO_COLOR": "1"}
+        path = root / "omh" / "routing" / "identities.json"
+        path.parent.mkdir(parents=True)
+        profile = {"prompt": "Existing prompt.\nDo not rewrite it.", "model_chain": [{"model_id": "deepseek-flash", "reasoning_effort": "low"}]}
+        document = {"schema_version": "omh_identity_profiles/v1", "identities": {"review": profile, "broken": {"keep": "me"}}}
+        path.write_text(json.dumps(document), encoding="utf-8")
+        original = path.read_bytes()
+        count = len(picker_rows(root / "omh", hermes_home=root / "hermes")["categories"])
+        for ending in ((Key(ENTER),), (Key(CHAR, " "), Key(ESCAPE)), (Key(CHAR, " "), Key(ENTER))):
+            keys = iter([Key(DOWN)] * count + list(ending))
+            message = run_model_chain_picker(
+                environ, DEFAULT_THEME, read_key=lambda: picker_key(next(keys)), write=lambda _: None, width=120,
+            )
+            if ending[-1].name == ESCAPE or len(ending) == 1:
+                self.assertEqual(path.read_bytes(), original)
+            else:
+                self.assertIn("Saved 1 custom identity", message)
+                self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {
+                    **document, "identities": {"review": {**profile, "enabled": False}, "broken": {"keep": "me"}},
+                })
+        self.assertEqual(sorted(item.name for item in path.parent.iterdir()), ["identities.json"])
+
     def test_tui_keys_map_to_picker_tokens_and_ctrl_c_ctrl_d_esc_cancel(self) -> None:
         cases = {
             Key(UP): "up", Key(DOWN): "down", Key(LEFT): "left", Key(RIGHT): "right", Key(ENTER): "enter",

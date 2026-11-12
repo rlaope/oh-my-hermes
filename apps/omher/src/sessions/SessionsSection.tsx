@@ -86,6 +86,10 @@ const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
 const MENU_GAP = 6;
 /** Space kept between the menu's edge and a sidebar row it stops at. */
 const ROW_CLEAR = 2;
+/** Opened above its row, the menu keeps this much air under the row above it: a band of the sidebar's own colour
+ *  (`.ss-pop.ui-pop-top::before`, the same height) covers what lies there. Sidebar rows stand 2px apart, so the air
+ *  reaches into the next row's empty top padding, which the band hides; no row shows half. */
+export const MENU_AIR = 6;
 
 /** Where the + menu goes and how tall it may be in all (`max`). It opens under its row when the whole list fits above the sidebar's
  *  bottom rows (Automations, Plugins, Settings, You), else on the side with more room, scrolling inside. The edge
@@ -106,7 +110,10 @@ export function fitMenu(
     return { side: "bottom", max: Math.max(0, end - anchor.bottom - gap) };
   }
   let start = Math.max(anchor.top - gap - natural, limits.top);
-  for (let cut; (cut = rows.find((r) => r.top < start && r.bottom > start - ROW_CLEAR && r.bottom <= anchor.top)); ) start = cut.bottom + ROW_CLEAR;
+  // a row that begins above the band must end above it; one that begins in the band is hidden by it and the menu. The
+  // edge lands within a px of `start` (offsets round), so a row within 1px of the band counts as in it, and the menu
+  // then stops 1px further down; with rows 2px apart that never reaches the next row's top.
+  for (let cut; (cut = rows.find((r) => r.top < start - MENU_AIR + 1 && r.bottom > start - MENU_AIR - 1 && r.bottom <= anchor.top)); ) start = cut.bottom + MENU_AIR + 1;
   return { side: "top", max: Math.max(0, anchor.top - gap - start) };
 }
 
@@ -133,7 +140,8 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
       const gap = Math.max(0, pop.classList.contains("ui-pop-bottom") ? pop.offsetTop - anchor.offsetHeight : -pop.offsetTop - pop.offsetHeight);
       const rows = [...(side?.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])].map((r) => r.getBoundingClientRect());
       const f = fitMenu(a, natural, gap, { top: Math.max(top, 0) + MENU_GAP, bottom: Math.min(foot, innerHeight) - MENU_GAP }, rows);
-      setFit({ side: f.side, max: Math.max(0, f.max - chrome) });
+      // whole px down: a fraction up would set the menu's edge into the row it stops at
+      setFit({ side: f.side, max: Math.max(0, Math.floor(f.max - chrome)) });
     };
     measure();
     addEventListener("resize", measure);
@@ -141,6 +149,25 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
     // measured again once placed on its side: the gap to the row differs above and below
   }, [box, ready, fit?.side]);
   return fit;
+}
+
+/** Whether the list `el` has more below what it shows: its bottom edge then fades, saying it scrolls. */
+function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
+  const [more, setMore] = useState(false);
+  useLayoutEffect(() => {
+    const list = el.current;
+    if (!on || !list) return;
+    const read = () => setMore(list.scrollTop + list.clientHeight < list.scrollHeight - 1);
+    read();
+    list.addEventListener("scroll", read, { passive: true });
+    const ro = new ResizeObserver(read);
+    ro.observe(list);
+    return () => {
+      list.removeEventListener("scroll", read);
+      ro.disconnect();
+    };
+  }, [el, on]);
+  return more;
 }
 
 /** The SESSIONS + menu: every agent with its mark and name, the installed ones first (the last one used on top),
@@ -159,6 +186,8 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const fit = useMenuFit(box, ready);
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
+  const list = useRef<HTMLDivElement>(null);
+  const more = useMoreBelow(list, placed);
   useEffect(() => {
     if (placed) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
   }, [placed]);
@@ -190,7 +219,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       >
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
-        <div className="ss-scroll" style={fit ? { maxHeight: fit.max } : undefined}>
+        <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
         {(agents ?? []).map((a) => {
           const label = agentLabel(a.id, ss.agents);
           const account = sessionAccountSuffix(accounts.groups, a.id);

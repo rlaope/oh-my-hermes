@@ -45,8 +45,9 @@ pub fn safe_name(name: &str) -> String {
     }
 }
 
-/// The folder a session's files go in, made when missing. Refuses a symlinked root or session folder.
-fn session_dir(home: &Path, session: &str) -> Result<PathBuf, String> {
+/// The folder a session's files go in, made when missing. Refuses a symlinked root or session folder. A Claude Code
+/// chat gets this one folder as its `--add-dir` (made before the chat starts, so its copies read without a card).
+pub fn session_dir(home: &Path, session: &str) -> Result<PathBuf, String> {
     if !valid_session(session) {
         return Err("bad session id".into());
     }
