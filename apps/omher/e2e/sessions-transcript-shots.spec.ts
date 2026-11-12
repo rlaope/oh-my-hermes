@@ -50,7 +50,8 @@ for (const theme of ["dark", "light"] as const) {
     await page.waitForTimeout(900);
     await page.mouse.move(900, 790);
     await shot(page, "todo", theme);
-    await page.getByTestId("stop").click();
+    if (await page.getByTestId("stop").isVisible()) await page.getByTestId("stop").click();
+    await expect(page.getByTestId("activity").last()).not.toHaveAttribute("data-state", "live");
     await mock("mock.reset");
     await page.getByTestId("composer").fill("/work");
     await page.keyboard.press("Enter");
