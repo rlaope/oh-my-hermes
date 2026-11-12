@@ -21,6 +21,22 @@ describe("find colours come from the terminal's own theme", () => {
     }
   });
 
+  it("every theme: the colour the active match's text is drawn in reads at 4.5:1 on its fill, where the theme's own yellow and green often do not", () => {
+    expect(TERM_THEMES.length).toBeGreaterThanOrEqual(38);
+    let unreadable = 0;
+    for (const th of TERM_THEMES) {
+      const c = findColors(th.theme);
+      expect(c.activeMatchForeground, th.name).toMatch(/^#[0-9a-f]{6}$/);
+      expect(contrastRatio(c.activeMatchForeground, c.activeMatchBackground), `${th.name}: the active match's text on its fill`).toBeGreaterThanOrEqual(4.5);
+      // what a cell's own colour would give: the reason the match names its text colour
+      if (Math.min(contrastRatio(th.theme.yellow!, c.activeMatchBackground), contrastRatio(th.theme.green!, c.activeMatchBackground)) < 4.5) unreadable += 1;
+    }
+    expect(unreadable).toBeGreaterThan(30);
+    // One Light: its yellow is the fill itself
+    const one = TERM_THEMES.find((t) => t.id === "one-light")!;
+    expect(contrastRatio(one.theme.yellow!, findColors(one.theme).activeMatchBackground)).toBeLessThan(1.05);
+  });
+
   it("a match can be told from the background on every theme, the active one more than a plain one", () => {
     for (const th of TERM_THEMES) {
       const c = findColors(th.theme);

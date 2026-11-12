@@ -5,7 +5,9 @@
 // The add-on marks the active match by selecting it, and xterm paints a selection over a decoration's fill: left to
 // itself the active match shows the theme's selection colour (on most themes close to the background) inside an
 // outline, weaker than the filled matches around it. So the active match gets one more decoration here, on the top
-// layer, which xterm paints above the selection: the fill find-colors.ts picked for it, and a heavier outline.
+// layer, which xterm paints above the selection: the fill find-colors.ts picked for it, the text colour that reads
+// on that fill (a decoration's fill leaves the cell's own colour, and a program's yellow can be the fill's colour),
+// and a heavier outline.
 import type { IDecoration, IDisposable, Terminal } from "@xterm/xterm";
 import type { SearchAddon } from "@xterm/addon-search";
 import { findColors, type FindColors } from "./find-colors";
@@ -76,7 +78,7 @@ export function makeFinder(term: Terminal): Finder {
       let d: IDecoration | undefined;
       const marker = term.registerMarker(y - buf.baseY - buf.cursorY);
       try {
-        d = term.registerDecoration({ marker, x, width, backgroundColor: c.activeMatchBackground, layer: "top" });
+        d = term.registerDecoration({ marker, x, width, backgroundColor: c.activeMatchBackground, foregroundColor: c.activeMatchForeground, layer: "top" });
       } catch {
         /* proposed API off: the add-on's own outline is all the active match gets */
       }

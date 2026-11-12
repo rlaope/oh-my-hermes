@@ -2,7 +2,10 @@
 // a match is a quiet tint of the theme's yellow over its background, eased back toward the background until the
 // theme's text is still readable on it. The active match is the one the eye lands on: the theme's yellow at full
 // strength (its hue, saturated), made just light or dark enough for the theme's text to read on it, with the
-// theme's foreground as its outline. (xterm wants plain #rrggbb here, no alpha.)
+// theme's foreground as its outline. A highlight does not recolour the text under it, and a program's yellow or
+// green can sit at 1:1 on that fill, so the active match also names the colour its text is drawn in: the theme's
+// text colour, moved toward black or white until it reads at 4.5:1 on the fill. (xterm wants plain #rrggbb here,
+// no alpha.)
 import type { ITheme } from "@xterm/xterm";
 import { luminance } from "./themes";
 
@@ -10,6 +13,9 @@ export interface FindColors {
   matchBackground: string;
   matchOverviewRuler: string;
   activeMatchBackground: string;
+  /** what the text inside the active match is drawn in, whatever colour its cell had (engine-find.ts applies it;
+   *  the search add-on has no such option and ignores it) */
+  activeMatchForeground: string;
   activeMatchBorder: string;
   activeMatchColorOverviewRuler: string;
 }
@@ -33,6 +39,8 @@ const ACTIVE_SATURATION = 0.85;
 const ACTIVE_LIGHTNESS_UNDER_DARK_TEXT = 0.38;
 /** The least contrast the theme's text keeps on the active match. */
 export const ACTIVE_TEXT_CONTRAST = 3.05;
+/** The least contrast the active match's own text colour keeps on its fill. */
+export const ACTIVE_FOREGROUND_CONTRAST = 4.5;
 
 /** WCAG contrast ratio of two hex colours (1 when either is not a hex colour). */
 export function contrastRatio(a: string, b: string): number {
@@ -85,6 +93,23 @@ function strongFill(hue: [number, number, number], fgHex: string, bgHex: string,
   return null;
 }
 
+/** The colour for the text inside the active match: the theme's text colour when that reads at `target` on the
+ *  fill; otherwise that colour moved toward black or white, first the way it already leans from the fill, until it
+ *  does. One of the two ends always gets there: black and white cannot both be under 4.58:1 on one colour. */
+function readableOn(fill: string, fg: [number, number, number], target: number): string {
+  if (contrastRatio(hex(fg), fill) >= target) return hex(fg);
+  const black: [number, number, number] = [0, 0, 0];
+  const white: [number, number, number] = [255, 255, 255];
+  const textIsDark = (luminance(hex(fg)) ?? 1) < (luminance(fill) ?? 0);
+  for (const end of textIsDark ? [black, white] : [white, black]) {
+    for (let i = 1; i <= 20; i++) {
+      const c = mix(fg, end, i / 20);
+      if (contrastRatio(c, fill) >= target) return c;
+    }
+  }
+  return contrastRatio("#000000", fill) >= contrastRatio("#ffffff", fill) ? "#000000" : "#ffffff";
+}
+
 export function findColors(theme: ITheme): FindColors {
   const bg = rgb(theme.background) ?? [0, 0, 0];
   const fgHex = theme.foreground ?? "#ffffff";
@@ -107,6 +132,7 @@ export function findColors(theme: ITheme): FindColors {
     matchBackground: match,
     matchOverviewRuler: match,
     activeMatchBackground: active,
+    activeMatchForeground: readableOn(active, fg, ACTIVE_FOREGROUND_CONTRAST),
     activeMatchBorder: hex(fg),
     activeMatchColorOverviewRuler: active,
   };
