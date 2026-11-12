@@ -15,6 +15,7 @@ const ALLOWED = new Set([
   "omher",
   "OMH",
   "Hermes",
+  "oh-my-hermes",
   // commands and sample code shown as code
   "/skill",
   "/plan",

@@ -18,6 +18,8 @@ import { PlanHeader } from "./PlanHeader";
 import { runName } from "./format";
 import { withPrs } from "./pr";
 import { isLive, refreshRuns, useBotRuns } from "./live";
+import { hermesOnly } from "../sessions/agents";
+import { useSessions } from "../sessions/sessions";
 import "./runs.css";
 
 const act = () => getStore().actions;
@@ -188,6 +190,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
   // with a run selected the lists fold into the run's header ("All runs ▾"), so its graph starts high in the panel
   const [listOpen, setListOpen] = useState(false);
   const { runs, cli, error } = useRuns(bot.name, n);
+  const omhMissing = hermesOnly(useSessions().agents);
   const nowMs = useNow(!!runs?.some(isLive) || cli.some(isLive));
   if (!runs) return <div className={`pn-empty${error ? " bad" : ""}`}>{error ?? <Spinner size={12} label={t("pn.loading")} />}</div>;
   const selected = pickRun(runs, cli, s.ui.runId);
@@ -216,7 +219,8 @@ export function RunsTab({ bot }: { bot: Bot }) {
         <div className="pn-empty rn-empty" data-testid="plans-empty">
           <div>{t("plans.none")}</div>
           <div>{t("plans.noneHint")}</div>
-          <div>{tx("plans.noneHow", { cmd: <code>dag ulw</code> })}</div>
+          {/* without oh-my-hermes a bot has no `dag ulw`: only its own subagents (delegate_task) show here */}
+          <div data-testid="plans-none-how">{omhMissing ? t("plans.noneHowHermes") : tx("plans.noneHow", { cmd: <code>dag ulw</code> })}</div>
         </div>
       )}
       {lists && runs.length > 0 && (

@@ -176,6 +176,28 @@
   background: none;
   padding: 0;
 }
+/* the + menu's one quiet line for a person with Hermes but not oh-my-hermes: a plain muted row, no border or fill */
+.ss-add-omh {
+  margin-top: 2px;
+}
+.ss-add-omh-b {
+  color: var(--muted);
+}
+.ss-add-omh-b:hover,
+.ss-add-omh-b:focus-visible {
+  color: var(--ink);
+}
+.ss-add-omh-err {
+  padding: 0 6px 4px 32px;
+  font-size: 11px;
+  color: var(--danger);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-add-omh .gate-log {
+  margin: 4px 0 2px;
+}
 .ss-missing {
   font-size: 10.5px;
   color: var(--muted);

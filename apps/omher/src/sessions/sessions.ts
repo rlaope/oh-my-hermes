@@ -25,7 +25,7 @@
 import { useSyncExternalStore } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { agentDef, CONTINUES, draftAgent, draftFolder, INSTALL, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, hermesOnly, INSTALL, parseRecent, pushRecent, RECENT_KEY, type AgentId, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type SessionHost } from "./host";
@@ -602,7 +602,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     setChatRoute(key, {
       // folder first: it tells sessions apart, and a narrow Needs-you row keeps it when the name is cut
-      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentDef(r.agent).label}` : tr("ss.session"),
+      label: r ? `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentLabel(r.agent, state.agents)}` : tr("ss.session"),
       open: () => store().actions.openSession(id),
       send: (text) => send(id, text),
       interrupt: () => input(id, { kind: "interrupt" }),
@@ -913,6 +913,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const setView = async (id: string, view: "chat" | "terminal") => {
     const r = rec(id);
     if (!r || r.view === view || modeOf(state.agents, r.agent) === "terminal") return;
+    // a Hermes chat without oh-my-hermes has no terminal view: that view would start `omh`
+    if (view === "terminal" && r.agent === "omh" && hermesOnly(state.agents)) return;
     if (r.agent === "claude" && r.agentSession) {
       if (view === "terminal") {
         await stopChat(id);
