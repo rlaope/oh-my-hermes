@@ -183,6 +183,15 @@ All notable changes will be documented here.
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
 
+- **An omher left open shows the Update button without a restart.** omher
+  looked for a new version once at launch and then every 6 hours, and a check
+  that failed waited for the next 6-hour turn. A failed check is now tried
+  again after 2 minutes, then less often, at most once an hour; and coming
+  back to the window (shown or focused again) checks when the last good check
+  is 30 minutes old or more, which does not depend on a timer and so also
+  covers a Mac that slept. Still one request at a time, to the same address,
+  and silent when a check fails.
+
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
@@ -888,6 +897,16 @@ All notable changes will be documented here.
   next name, Hermes' own interpreter or uv. A Python running from a venv,
   such as Hermes' own, is still accepted. Reported and first fixed by
   @kinanshihab in #2847.
+
+- **The toolkit scripts refuse a path under an unreadable folder on Python
+  3.14 too.** From 3.14, `Path.is_symlink()` answers "not a link" for an
+  entry inside a folder that cannot be searched, where 3.11 to 3.13 raised.
+  The frontend, biomedical-evidence, geospatial, sprite-forge,
+  molecular-docking and show-reel helpers walked past such a path unchecked
+  on 3.14 and stopped with a bare traceback on older Pythons. Each now
+  checks the entry with `lstat` first and refuses with `path could not be
+  checked`. Missing paths and the symlink rules are unchanged. Reported and
+  first fixed for the frontend helper by @Kenmege in #2855.
 
 ## 4.0.7 - 2026-11-09
 

@@ -86,9 +86,20 @@ def assert_word_motions_pty(testcase):
                                 log = root / "tui_gateway" / "client_frames.jsonl"
                                 raise AssertionError(f"{error}\nRPC: {log.read_text(encoding='utf-8', errors='replace') if log.exists() else ''}\nRAW: {raw.decode('utf-8', 'replace')[-5000:]}") from error
 
+                def settle(quiet=0.5, limit=5.0):
+                    # A lone Escape may wait 0.3s in the production decoder while a
+                    # terminal report can still arrive. The old 0.25s read asserted
+                    # INSERT before that deadline. Wait beyond it and for a quiet draw.
+                    deadline = time.monotonic() + limit
+                    while time.monotonic() < deadline:
+                        before = len(raw)
+                        pump(quiet)
+                        if len(raw) == before:
+                            return
+
                 def send(data):
                     os.write(master, data)
-                    pump()
+                    settle()
 
                 deadline = time.monotonic() + 12
                 while "INSERT" not in "\n".join(screen.lines()) and time.monotonic() < deadline:
@@ -98,7 +109,9 @@ def assert_word_motions_pty(testcase):
                 testcase.assertIn("INSERT", "\n".join(screen.lines()), raw.decode("utf-8", "replace")[-6000:])
                 send(b"\x1b[200~" + TEXT.encode() + b"\x1b[201~")
                 send(b"\x1b")  # separate read: not an Alt chord
-                testcase.assertIn("NORMAL", "\n".join(screen.lines()))
+                frames = root / "tui_gateway" / "client_frames.jsonl"
+                testcase.assertIn("NORMAL", "\n".join(screen.lines()),
+                                  frames.read_text(encoding="utf-8", errors="replace") if frames.exists() else "no frames")
                 for motion, start, expected in CASES:
                     with testcase.subTest(columns=width, motion=motion):
                         send(b"gg0" + b"l" * start)
