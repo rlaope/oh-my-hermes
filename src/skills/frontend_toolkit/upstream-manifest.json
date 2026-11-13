@@ -44,10 +44,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "0057323318254ac09c732bae60337975cd0f76b9706b5f4b32bcb921552e8460",
+      "local_sha256": "a0cb42008ba718f889d3ab1e363cddadcaf076e8212dbc069731e82d24ffd4d2",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/frontend_toolkit/scripts/phone_check.py",
-      "source_sha256": "0057323318254ac09c732bae60337975cd0f76b9706b5f4b32bcb921552e8460",
+      "source_sha256": "a0cb42008ba718f889d3ab1e363cddadcaf076e8212dbc069731e82d24ffd4d2",
       "upstream": []
     }
   },

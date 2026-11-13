@@ -19,7 +19,8 @@ import unittest
 
 from _module_patch import patch_modules
 from _toolkit_path_guard import (COMPOSED_ACCEPTED, COMPOSED_LINKS, COMPOSED_REFUSED, POSIX_ONLY, alias_fixture,
-                                 assert_alias_does_not_exempt_links_below, assert_only_system_aliases_trusted)
+                                 assert_alias_does_not_exempt_links_below, assert_only_system_aliases_trusted,
+                                 assert_unsearchable_directory_is_refused)
 
 ROOT = Path(__file__).resolve().parents[1]
 KIT = ROOT / "src/skills/show_reel_toolkit"
@@ -133,6 +134,13 @@ class LocalProjectTests(unittest.TestCase):
                                     (new_project, "no_links", "symlink input/destination refused")):
             with self.subTest(guard=guard), tempfile.TemporaryDirectory() as td:
                 assert_only_system_aliases_trusted(self, api[guard], api["system_alias"], Path(td), refusal)
+
+    def test_an_unsearchable_directory_is_refused(self):
+        timeline, new_project = self.load("timeline.py"), self.load("new_project.py")
+        for name, guard in (("read_spec", timeline["read_spec"]), ("generated", timeline["generated"]),
+                            ("no_links", lambda path: new_project["no_links"](path, path.parents[2]))):
+            with self.subTest(guard=name), tempfile.TemporaryDirectory() as td:
+                assert_unsearchable_directory_is_refused(self, guard, Path(td))
 
     @POSIX_ONLY
     def test_a_trusted_alias_does_not_exempt_a_link_below_it(self):

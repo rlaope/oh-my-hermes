@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from _module_patch import patch_modules
 from _toolkit_path_guard import (POSIX_ONLY, assert_alias_does_not_exempt_links_below,
-                                 assert_only_system_aliases_trusted)
+                                 assert_only_system_aliases_trusted, assert_unsearchable_directory_is_refused)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "src/skills/molecular_docking_toolkit/scripts/dock.py"
@@ -214,6 +214,10 @@ class PrerequisiteTests(unittest.TestCase):
     @POSIX_ONLY
     def test_a_trusted_alias_does_not_exempt_a_link_below_it(self):
         assert_alias_does_not_exempt_links_below(self, load_helper().checked_path, "symlink paths")
+
+    def test_an_unsearchable_directory_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            assert_unsearchable_directory_is_refused(self, load_helper().checked_path, Path(directory))
 
     def test_malformed_engine_pose_refuses_without_success_manifest(self):
         # Corrupted backend output fixture only: never evidence of native execution.
