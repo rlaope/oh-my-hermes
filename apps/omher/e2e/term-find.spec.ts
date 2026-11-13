@@ -3,7 +3,7 @@
 // has the keyboard again. It does nothing in a chat session or a bot chat, and on Windows and Linux a full-screen
 // program keeps its Ctrl+F (Ctrl+Shift+F is always find).
 import { expect, test, type Page } from "@playwright/test";
-import { feed, mock, modKey, newTerminal, openApp, platformIsMac, settle, typed } from "./term-find-helpers";
+import { feed, mock, modKey, newTerminal, openApp, platformIsMac, pointAt, settle, typed } from "./term-find-helpers";
 
 test.use({ colorScheme: "dark" });
 test.beforeEach(async () => {
@@ -288,6 +288,64 @@ test("a theme that changes while find is open recolours the matches at once, and
   await settle(page);
   expect(await fills(page)).toMatchObject({ cells: 18, active: 6, plain: 12, outlines: 1, selection: "needle" });
   await expect(count(page)).toHaveText(at as string);
+});
+
+test("a click or a selection of your own made while find is open is yours: a theme change keeps it and the active match, and leaving the terminal does not take it", async ({ page }) => {
+  await openApp(page, { theme: "dark", term: { themeDark: "dracula" } });
+  await newTerminal(page);
+  await feed(page, `${LINES}pick selectme here\r\n`);
+  const id = (await page.getByTestId("terminal").getAttribute("data-session")) as string;
+  await find(page);
+  await input(page).fill("needle");
+  await expect(count(page)).toHaveText(/^[123] of 3$/);
+  // on to the last match, so "the first match again" would show as a move
+  for (let i = 0; i < 3 && (await count(page).textContent()) !== "3 of 3"; i++) await page.keyboard.press("Enter");
+  await expect(count(page)).toHaveText("3 of 3");
+  const pick = (themeDark: string) =>
+    page.evaluate(async (t) => {
+      const m = (await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void };
+      m.writeTermSettings({ themeDark: t });
+    }, themeDark);
+  /** The distinct fills on the terminal's rows. xterm fills the cells of a selection too (as one run), so with a
+   *  selection of the person's own there is one more than find's two. */
+  const colours = () =>
+    page.evaluate(() => [...new Set([...document.querySelectorAll<HTMLElement>('[data-testid="terminal"] .xterm-rows span')].filter((x) => /background-color/.test(x.getAttribute("style") ?? "")).map((x) => getComputedStyle(x).backgroundColor))]);
+
+  // a click on an empty part of the terminal drops find's selection; the match is still the third
+  const screen = (await page.locator('[data-testid="terminal"] .xterm-screen').boundingBox())!;
+  await page.mouse.click(screen.x + screen.width - 30, screen.y + screen.height - 20);
+  await expect.poll(async () => (await fills(page)).selection).toBe("");
+  await pick("tango-dark");
+  await expect.poll(() => fills(page), "after a click").toMatchObject({ cells: 18, active: 6, plain: 12, outlines: 1, selection: "" });
+  await expect(count(page)).toHaveText("3 of 3");
+
+  // text the person drags over, with find still open
+  const from = await pointAt(page, "selectme", 0, 0);
+  const to = await pointAt(page, "selectme", 8, 0);
+  await page.mouse.move(from.x + 1, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x - 1, to.y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await fills(page)).selection).toBe("selectme");
+  const before = await colours();
+  expect(before).toHaveLength(3);
+  await pick("one-light");
+  await expect.poll(() => fills(page), "with a selection of their own").toMatchObject({ active: 6, plain: 12, outlines: 1, selection: "selectme" });
+  await expect(count(page)).toHaveText("3 of 3");
+  // the new theme's three fills (active, plain, the selection), and none of the old theme's left
+  const after = await colours();
+  expect(after).toHaveLength(3);
+  expect(after.filter((c) => before.includes(c))).toEqual([]);
+
+  // leaving the terminal clears find and leaves that selection
+  await page.getByTestId("bot-kami").click();
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", id);
+  await expect(bar(page)).toHaveCount(0);
+  await expect.poll(() => fills(page)).toMatchObject({ active: 0, plain: 0, outlines: 0, selection: "selectme" });
+  // what is still filled is the selection alone
+  expect(await colours()).toHaveLength(1);
 });
 
 test("find does not change what a program is sent: typing in the field never reaches the terminal", async ({ page }) => {
