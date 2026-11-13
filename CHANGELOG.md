@@ -86,7 +86,6 @@ All notable changes will be documented here.
   rest under one More agents row, each with its whole install line; a click
   copies it. Continue a conversation stays under that row, there as the menu
   first opens.
-
 - **A dag-ulw node can be read-only.** `omh_dag` define, repair and extend take
   `read_only: true` on a node; its child's `write_file` and `patch` inside the
   run's workspace are blocked, except its own handoff report, with a message
