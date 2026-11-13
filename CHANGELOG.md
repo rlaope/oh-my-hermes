@@ -894,6 +894,21 @@ All notable changes will be documented here.
   checked`. Missing paths and the symlink rules are unchanged. Reported and
   first fixed for the frontend helper by @Kenmege in #2855.
 
+- **`omh update` no longer refuses a config whose webhook route, or any
+  other section, carries its own `skills:`, `memory:`, `plugins:` or
+  `display:` key.** The section shape guard counted every line that named
+  the section as a mapping key, and its pattern let `\s*` eat indentation,
+  so a route's nested `skills:` list read as a second top-level `skills`
+  section and the refresh stopped with `duplicate skills sections are
+  ambiguous`; that profile's OMH skills then went stale. Only a column-0
+  line whose own root key is the section now counts, so plain, quoted,
+  explicit and flow forms of a real top-level section are unchanged, two
+  column-0 sections are still refused as duplicates, a flow or explicit-only
+  section is still noncanonical, and a section key that only ever appears
+  indented stays user-owned. The uninstall report reads its `section.key`
+  presence the same way, so a name inside another root key's flow mapping is
+  no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
