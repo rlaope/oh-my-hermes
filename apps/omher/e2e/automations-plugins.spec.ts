@@ -208,6 +208,23 @@ test("an automation the bot made in chat leaves a card there: run, open, undo", 
 
 // ---- Plugins --------------------------------------------------------------------------------------------------
 
+test("Plugins: Details opens the card without installing and shows the whole description", async ({ page }) => {
+  await openPlugins(page);
+  await page.getByTestId("plug-tab-browse").click();
+  const card = page.getByTestId("plug-card-camofox");
+  await card.getByTestId("plug-details-camofox").click();
+  const sheet = page.getByTestId("install-sheet");
+  await expect(sheet).toBeVisible();
+  const description = sheet.locator(".pl-ds");
+  await expect(description).toContainText("self-hosted anti-detection Firefox as the browser backend.");
+  // the sheet wraps the description instead of clipping it to three lines
+  expect(await description.evaluate((el) => getComputedStyle(el).webkitLineClamp)).toBe("none");
+  expect(await description.evaluate((el) => getComputedStyle(el).overflow)).toBe("visible");
+  // opening Details is not installing
+  await expect(sheet.getByRole("button", { name: "Install" })).toBeVisible();
+  expect(await calls("plugins.manage")).toEqual([]);
+});
+
 test("Plugins: the bot's own, the catalog and the built-in ones in three tabs", async ({ page }) => {
   await openPlugins(page);
   await expect(page.getByTestId("plug-scope")).toHaveText("Kami's plugins");

@@ -277,6 +277,8 @@ export const en = {
   "plug.hook1": "1 hook",
   "plug.channel": "messaging channel",
   "plug.needsKey": "Needs an API key to turn on",
+  "plug.details": "Details",
+  "plug.detailsFor": "Details for {name}",
   "plug.install": "Install",
   "plug.installed": "Installed",
   "plug.update": "Update",

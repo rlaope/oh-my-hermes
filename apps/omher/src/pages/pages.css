@@ -629,9 +629,13 @@
   border-radius: 10px;
   padding: 12px 12px 12px 14px;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  gap: 12px;
+  /* the actions get their own row so a long plugin name keeps the full width */
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px 12px;
   align-items: start;
+}
+.pl-card .pl-pic {
+  grid-row: span 2;
 }
 .pl-pic {
   width: 34px;
@@ -701,9 +705,17 @@
   background: color-mix(in srgb, #c4801c 13%, transparent);
 }
 .pl-ctl {
+  grid-column: 2;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: -2px;
+}
+/* the card's two controls are a matched pair: same box, same weight */
+.pl-ctl .pg-btn {
+  justify-content: center;
+  min-width: 70px;
 }
 .pl-menu {
   position: relative;
@@ -729,9 +741,13 @@
   color: var(--body);
 }
 .pl-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  height: 28px;
   font-size: 12px;
   color: var(--quiet);
-  padding: 4px 2px;
 }
 .pl-browsebar {
   display: flex;
@@ -802,7 +818,9 @@
   font-weight: 650;
 }
 .pl-sheet .pl-ds {
-  -webkit-line-clamp: 3;
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
 }
 .pl-sheet-wait {
   color: var(--muted);
