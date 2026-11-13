@@ -69,7 +69,10 @@ the lists, not the counts.
   `document.scrollingElement`, `IntersectionObserver`) is measured by what
   that returns. A page that reports a link on screen as 500 px above it is
   read without that link; a quirks-mode page that defines its own
-  `scrollingElement` is read as having one. A right-start page is read
+  `scrollingElement` is read as having one, and then gets the right-start
+  rule on numbers such a page reports wrong: one measured page of that kind
+  (its `<body>` scrolls by itself) is read without a link a touch reaches,
+  where the edge test alone finds it. A right-start page is read
   through more of these than a left-start one.
 - **Width alone misses touch rules.** A desktop window resized to 390 px keeps
   hover and a fine pointer, so hover-only controls look fine and a 30 px button

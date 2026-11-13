@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "7c0d8c13d2fcaf76e19fbcb48d07b0a1a79bf05851f6692862838ebdb2c5f586",
+  "catalog_revision": "691262f0ee833b3fdf6076ce90d0f56c923d0f9325383b37cb11ebc0dbbfc406",
   "files": {
     "omh-accessibility-audit/SKILL.md": "0f8c1bf1646144ee1b8abadf21f1fc9f6560f00823c3a1f4a3ba56386be79963",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -116,11 +116,11 @@
     "omh-frontend/references/tui-craft.md": "e2fe6f7a7b5d0025ea8bd3a61b9afc6d3c1298550ed64967d12c2c33ae81e335",
     "omh-frontend/references/web-vitals-budgets.md": "7905f7913ff835eb84e7b9bd88059d52d7ede370312f2e24df8cb7ebf407a29b",
     "omh-frontend/toolkit/LICENSE.upstream": "63c08b48f0c8ada3b1b82329d94c9583089ad5b9d511418ac084de0f48a3eb64",
-    "omh-frontend/toolkit/README.md": "d22bcdc7bdbd8e0baf1c78b8e8f0e57064074dec44ea54527f1ff1a26495f857",
+    "omh-frontend/toolkit/README.md": "208b39dcb93d50f0fc332d3dc0befb65f6b7850a1eea650cf5010cc58ebadab7",
     "omh-frontend/toolkit/examples/phone-clean.html": "97540f64b7b35faeddf96e3aaa2c61e761164fd8e1eba9e91da3c83f3a3e8465",
     "omh-frontend/toolkit/examples/phone-overflow.html": "be1d24b1f07e0e9c06cb5599f0cc401f83292182c3c7fef78664b81a88920903",
     "omh-frontend/toolkit/scripts/phone_check.py": "9cb0656bee76134be015def6fbe57cea72adb7794ece5532f8c0d733c32522be",
-    "omh-frontend/toolkit/upstream-manifest.json": "0e6f26e30564bc599dba2d1a90aec709c5a306dc5ee94afcb977f1e75bcd284a",
+    "omh-frontend/toolkit/upstream-manifest.json": "cbd7fa93c90d6e1b22b038fa489651ab3b211204f9329d4c5d1cfb6e02f5ac63",
     "omh-geospatial-analysis/SKILL.md": "b53a13faa13352f9b30150e24640e7808fb921533e24c5e1ffab727db076009f",
     "omh-geospatial-analysis/references/execution-and-qa.md": "2b656aa288b825b6c4806b71e57d034fb3454bb545150e216c10c9a816c67b16",
     "omh-geospatial-analysis/references/full-contract.md": "077c75e80856bb2c5db5e5a3427ffc8f2b5587ef8e246d4573cf753589e3c91d",
