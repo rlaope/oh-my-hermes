@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::acp_chat::{acp_agent, is_acp_session_id, Acp, RuleProbe, NO_RULES};
+use crate::acp_chat::{acp_agent, is_acp_session_id, no_rules, Acp, RuleProbe};
 use crate::dsh_chat::DshChat;
 use crate::session_files;
 use crate::sessions::{agent, chat_args, cmd_path_arg, coalesce, is_uuid, launch_for, layout, resume_args, signal_group, unrecognized_program, Mode, ProcessTree, COALESCE_BYTES, COALESCE_WINDOW, INPUT_QUEUE};
@@ -3223,13 +3223,13 @@ const RULES_DEADLINE: Duration = Duration::from_secs(30);
 /// pipes with no input, with the same `PATH` and account variable the chat gets; `probe.build` turns its output into
 /// the value, and a second listing with the value set must satisfy `probe.kept`. Any doubt (the variable already set
 /// in omher's own environment, a failed or slow listing, output it cannot read, rules that did not hold) is
-/// [`NO_RULES`], and the chat does not start.
-fn agent_rules(probe: &RuleProbe, argv: &[OsString], cwd: &Path, path_env: &OsString, account_env: &[(String, String)]) -> Result<(String, String), String> {
+/// [`no_rules`] (with the agent's name, `label`), and the chat does not start.
+fn agent_rules(probe: &RuleProbe, label: &str, argv: &[OsString], cwd: &Path, path_env: &OsString, account_env: &[(String, String)]) -> Result<(String, String), String> {
     if !cwd.is_absolute() || !cwd.is_dir() {
         return Err(format!("not a folder: {}", cwd.display()));
     }
     if std::env::var_os(probe.var).is_some() {
-        return Err(NO_RULES.into());
+        return Err(no_rules(label));
     }
     let mut argv = argv.to_vec();
     argv.extend(probe.args.iter().map(OsString::from));
@@ -3253,12 +3253,13 @@ fn agent_rules(probe: &RuleProbe, argv: &[OsString], cwd: &Path, path_env: &OsSt
             _ => None,
         }
     };
-    let value = list(account_env).and_then(|l| (probe.build)(&l)).ok_or(NO_RULES)?;
+    let first = list(account_env).ok_or_else(|| no_rules(label))?;
+    let value = (probe.build)(&first).ok_or_else(|| no_rules(label))?;
     let mut env = account_env.to_vec();
     env.push((probe.var.to_string(), value.clone()));
     match list(&env) {
-        Some(again) if (probe.kept)(&value, &again) => Ok((probe.var.to_string(), value)),
-        _ => Err(NO_RULES.into()),
+        Some(again) if (probe.kept)(&first, &value, &again) => Ok((probe.var.to_string(), value)),
+        _ => Err(no_rules(label)),
     }
 }
 
@@ -3314,11 +3315,12 @@ impl ChatSessions {
         if let Some(dir) = files.filter(|_| agent_id == "claude") {
             argv.extend(add_dir_args(&argv[0], dir));
         }
-        // an agent whose own default runs tools unasked (OpenCode) gets ask rules built from its own resolved rules,
-        // so nothing the person allows runs unasked and nothing they deny becomes askable; or it does not start
+        // an agent whose own default runs tools unasked (OpenCode, Kilo Code) gets ask rules built from its own
+        // resolved rules, so nothing the person allows runs unasked and nothing they deny becomes askable; or it does
+        // not start
         let mut env = account_env.to_vec();
-        if let Some(probe) = acp.and_then(|a| a.rules.as_ref()) {
-            env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);
+        if let Some((probe, label)) = acp.and_then(|a| a.rules.as_ref().map(|r| (r, a.label))) {
+            env.push(agent_rules(probe, label, &program, cwd, &path_env, account_env)?);
         }
         self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)
     }
@@ -3608,13 +3610,13 @@ mod tests {
         fn build(l: &str) -> Option<String> {
             l.strip_prefix("rules:").map(|r| r.trim().to_string())
         }
-        fn kept(rules: &str, again: &str) -> bool {
+        fn kept(_first: &str, rules: &str, again: &str) -> bool {
             again.trim() == format!("kept {rules}")
         }
         let probe = RuleProbe { args: &[], var: "OMHER_TEST_RULES_VAR", build, kept };
         let tmp = std::env::temp_dir().canonicalize().unwrap();
         let argv: Vec<OsString> = vec!["/bin/sh".into(), "-c".into(), script.into()];
-        agent_rules(&probe, &argv, &tmp, &std::env::var_os("PATH").unwrap(), &[])
+        agent_rules(&probe, "OpenCode", &argv, &tmp, &std::env::var_os("PATH").unwrap(), &[])
     }
 
     #[test]
@@ -3629,7 +3631,7 @@ mod tests {
             r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then echo "kept other"; else echo "rules: R1"; fi"#, // not kept
             r#"if [ -n "$OMHER_TEST_RULES_VAR" ]; then exit 1; else echo "rules: R1"; fi"#,           // second listing failed
         ] {
-            assert_eq!(rules_with(bad), Err(NO_RULES.to_string()), "{bad}");
+            assert_eq!(rules_with(bad), Err(crate::acp_chat::NO_RULES.to_string()), "{bad}");
         }
     }
 
@@ -3943,7 +3945,7 @@ mod tests {
 
     #[test]
     fn only_chat_agents_have_adapters() {
-        for id in ["claude", "codex", "omo", "pi", "omp", "opencode"] {
+        for id in ["claude", "codex", "omo", "pi", "omp", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"] {
             assert!(adapter_for(id, "/w", None).is_some(), "{id}");
         }
         // DSH has no adapter: its chat is a run per message (dsh_chat)

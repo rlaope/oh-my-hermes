@@ -207,6 +207,23 @@
   text-overflow: ellipsis;
   flex: none;
 }
+/* "More agents": a plain row like the agents, its chevron in the mark's place and the count at its end */
+.ss-more {
+  color: var(--muted);
+}
+.ss-more:hover,
+.ss-more:focus-visible {
+  color: var(--ink);
+}
+.ss-more-ic {
+  font-size: 13px;
+  line-height: 1;
+}
+/* a folded agent's install line under its name: the text that is copied, small and quiet */
+.ss-install {
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
 .ss-sep {
   height: 1px;
   background: var(--line);

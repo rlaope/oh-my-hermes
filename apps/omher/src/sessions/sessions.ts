@@ -96,6 +96,8 @@ export interface AgentLive {
   branch?: string;
   /** the agent can take back the person's last message (its own rewind; Claude Code and Codex) */
   rewind?: boolean;
+  /** it ended because it is not signed in: the command that signs it in, run by the person in a terminal */
+  signin?: string;
 }
 
 interface Term {
@@ -128,6 +130,8 @@ interface ChatProc {
   stopping?: boolean;
   /** the program never spoke its chat protocol (an old version, a hung start): the reason its turn and exit carry */
   noChat?: string;
+  /** it is not signed in (an Agent Client Protocol agent's `-32000`): omher ends it with `noChat` as the reason */
+  signedOut?: boolean;
 }
 
 const readRecent = () => {
@@ -160,7 +164,8 @@ const titleKey = (r: SessionRec) => (r.agentSession ? `${r.agent}:${r.agentSessi
 /** Agents whose own session files carry a conversation title the bridge can read (`cli.title`). */
 const TITLED: readonly AgentId[] = ["claude", "codex"];
 
-/** The shell's own words when it will not start OpenCode (`NO_RULES` in acp_chat.rs, kept equal by a test). */
+/** The shell's own words when it will not start OpenCode (`NO_RULES` in acp_chat.rs, kept equal by a test); for Kilo
+ *  Code the same sentence names Kilo Code (`no_rules`). */
 export const NO_RULES = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
 
 const errText = (e: unknown) =>
@@ -342,6 +347,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       store().dispatch({ type: "event", ev: { event: "prompt.expired", bot: key, request_id: a.item.request_id, reason: "cancelled" } as BridgeEvent, now: Date.now() });
   };
 
+  /** An agent that is not signed in: omher stops it and the session ends with that one line (`proc.noChat`), said once
+   *  beside Restart; the turn it failed keeps no second copy. */
+  const endSignedOut = (id: string, proc: ChatProc) => {
+    if (procs.get(id) !== proc) return;
+    const error = proc.noChat ?? "";
+    proc.stopping = true;
+    procs.delete(id);
+    endLiveTurn(id, "ended");
+    if (proc.hostId !== undefined) void host.chatClose(proc.hostId).catch(() => undefined);
+    patchRec(id, { status: "exited", exitCode: null, error });
+    const key = keys.get(id);
+    if (key) store().dispatch({ type: "turn.reasonMoved", bot: key, error });
+    tellEnd(id, "ended", { code: null, error });
+  };
+
   const onAgentEvent = (id: string, proc: ChatProc) => (ev: ChatEvent) => {
     if (procs.get(id) !== proc && ev.event !== "exit") return; // an old process of this session (Terminal toggle)
     switch (ev.event) {
@@ -388,6 +408,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (typeof ev.used === "number" && typeof ev.max === "number" && ev.max > 0) patchLive(id, { usage: { used: ev.used, max: ev.max } });
         return;
       case "session.error":
+        if (ev.kind === "signed_out") {
+          // not signed in: one line in the person's words with the agent's own sign-in command (its row in
+          // acp_chat.rs), then the session ends; a turn already started fails with it first
+          const agent = rec(id)?.agent ?? "claude";
+          const login = typeof ev.login === "string" ? ev.login : "";
+          proc.noChat = tr("ss.signedOut", { agent: agentDef(agent).label, cmd: login });
+          proc.signedOut = true;
+          patchLive(id, { signin: login });
+          const key = keys.get(id);
+          if (!key || !store().getState().chats[key]?.turn) endSignedOut(id, proc);
+          return;
+        }
         if (ev.kind === "no_chat_mode") {
           // the shell ends this session: say why in the person's words, with the line that updates the agent
           const agent = rec(id)?.agent ?? "claude";
@@ -432,6 +464,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       default:
         if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
+        if (ev.event === "turn.end" && proc.signedOut) {
+          endSignedOut(id, proc);
+          return;
+        }
         // the agent may have titled the conversation during the turn
         // a new turn: the finished one its row still showed is behind it
         if (ev.event === "turn.start" && state.unseen[id] === "end") seen(id);
@@ -465,6 +501,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (state.live[id]?.rewind) patchLive(id, { rewind: false });
     try {
       proc.hostId = await host.chatStart(r.agent, r.cwd, onAgentEvent(id, proc), resume, accountOf(r), id);
+      // it said it is not signed in before omher knew its id: it is ended already, so only the process goes
+      if (proc.signedOut) {
+        void host.chatClose(proc.hostId).catch(() => undefined);
+        return;
+      }
       if (procs.get(id) !== proc) {
         // closed while starting
         void host.chatClose(proc.hostId).catch(() => undefined);
@@ -480,7 +521,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (procs.get(id) === proc) procs.delete(id);
       // the shell's refusal to start an agent whose ask rules it could not prove (acp_chat.rs NO_RULES), translated
       const why = errText(e);
-      const error = why === NO_RULES ? tr("ss.noRules") : why;
+      const label = agentDef(r.agent).label;
+      const error = why === NO_RULES ? tr("ss.noRules") : why === NO_RULES.replaceAll("OpenCode", label) ? tr("ss.noRulesAgent", { agent: label }) : why;
       patchRec(id, { status: "failed", error });
       tellEnd(id, "failed", { error });
     }
@@ -1167,6 +1209,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (procs.has(id) || sessionMode(state.agents, r) !== "chat") return;
     const resume = CONTINUES.includes(r.agent) && r.agentSession ? r.agentSession : undefined;
     patchRec(id, { status: "starting", error: undefined, exitCode: null, view: "chat", paused: undefined });
+    patchLive(id, { signin: undefined });
     note(id, null);
     await startAgentChat(id, resume);
   };

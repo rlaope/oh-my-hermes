@@ -1,5 +1,7 @@
 //! One chat adapter for every agent that speaks the Agent Client Protocol (ACP: JSON-RPC 2.0, one object per
-//! line on stdio), plus a table row per agent ([`ACP_AGENTS`]). OpenCode (`opencode acp`) is the first row.
+//! line on stdio), plus a table row per agent ([`ACP_AGENTS`]): OpenCode (`opencode acp`), Kilo Code (`kilo acp`),
+//! Gemini CLI (`gemini --acp`), Qwen Code (`qwen --acp`), Kimi Code (`kimi acp`), Copilot CLI (`copilot --acp`) and
+//! Cline (`cline --acp`).
 //!
 //! - start: `initialize` with the client's file-system and terminal capabilities OFF, so the agent uses its
 //!   own tools and omher reads and writes nothing new; then `session/resume` when the agent offers it and omher
@@ -11,10 +13,14 @@
 //! - `session/request_permission` -> an approval card offering only what the request offers. `allow_always`
 //!   is never offered: OpenCode saves it as a permanent project rule, which is not omher's "for this session".
 //!   A Stop while a card is open answers `cancelled` and expires the card.
+//! - An agent that is not signed in (`-32000` on `session/new`) ends in one `session.error` of kind `signed_out`
+//!   with the sign-in line from its row; omher never calls `authenticate` (Cline's opens a browser by itself).
 //! - An unknown request from the agent gets a JSON-RPC error answer so the agent never waits on omher; unknown
 //!   notifications, fields and lines are ignored and nothing raw reaches the chat.
 //!
-//! Checked against OpenCode 1.19.5 (`tests/fixtures/acp/opencode-*.jsonl`, recorded from real runs).
+//! Checked against OpenCode 1.19.5 and Kilo Code 7.8.27 (`tests/fixtures/acp/opencode-*.jsonl`, `kilo-*.jsonl`,
+//! recorded from real runs); Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110 and Cline
+//! 3.0.74 up to their signed-out `session/new` (`<agent>-signed-out.jsonl`).
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -71,8 +77,8 @@ fn emit(st: &mut Step, e: Event) {
 pub struct AcpAgent {
     pub id: &'static str,
     pub label: &'static str,
-    /// The sign-in line omher shows when the agent answers `-32000` (auth required). Fixed here: never the
-    /// command the agent itself suggests.
+    /// The command a person runs in a terminal to sign the agent in, shown when it answers `-32000` (auth
+    /// required). Fixed here: never the command the agent itself suggests, and omher never runs it.
     pub login: &'static str,
     /// The agent's own tool that loads a skill (its `tool_call` title), whose `rawInput.name` names the skill.
     pub skill_tool: Option<&'static str>,
@@ -83,27 +89,48 @@ pub struct AcpAgent {
 
 /// An agent whose own default runs tools without asking. Before the chat starts, the shell runs the agent's fixed
 /// rule listing (`args`) in the session folder with the environment the chat gets, sets `var` to what `build` makes
-/// of it, lists again with `var` set and starts the chat only when `kept` says the agent took the rules as meant.
+/// of it, lists again with `var` set and starts the chat only when `kept` (first listing, rules, second listing) says
+/// the agent took the rules as meant.
 /// Anything else (the listing fails, times out or does not parse, the rules did not hold, or `var` is already set
-/// in omher's own environment) refuses the chat with [`NO_RULES`].
+/// in omher's own environment) refuses the chat with [`no_rules`].
 #[derive(Debug)]
 pub struct RuleProbe {
     pub args: &'static [&'static str],
     pub var: &'static str,
     pub build: fn(&str) -> Option<String>,
-    pub kept: fn(&str, &str) -> bool,
+    pub kept: fn(&str, &str, &str) -> bool,
 }
 
-/// Why an agent with a [`RuleProbe`] did not start (the UI shows it translated, `ss.noRules`).
+/// Why OpenCode did not start (the UI shows it translated, `ss.noRules`).
 pub const NO_RULES: &str = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
 
-pub const ACP_AGENTS: [AcpAgent; 1] = [AcpAgent {
-    id: "opencode",
-    label: "OpenCode",
-    login: "opencode auth login",
-    skill_tool: Some("skill"),
-    rules: Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept }),
-}];
+/// Why an agent with a [`RuleProbe`] did not start: [`NO_RULES`] for OpenCode, the same sentence for any other.
+pub fn no_rules(label: &str) -> String {
+    NO_RULES.replace("OpenCode", label)
+}
+
+pub const ACP_AGENTS: [AcpAgent; 7] = [
+    AcpAgent {
+        id: "opencode",
+        label: "OpenCode",
+        login: "opencode auth login",
+        skill_tool: Some("skill"),
+        rules: Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept }),
+    },
+    // Kilo Code is an OpenCode fork: the same rule listing, its own variable, and `code` as its default agent
+    AcpAgent {
+        id: "kilo",
+        label: "Kilo Code",
+        login: "kilo auth login",
+        skill_tool: None,
+        rules: Some(RuleProbe { args: &["agent", "list"], var: "KILO_CONFIG_CONTENT", build: kilo_ask, kept: kilo_kept }),
+    },
+    AcpAgent { id: "gemini", label: "Gemini CLI", login: "gemini", skill_tool: None, rules: None },
+    AcpAgent { id: "qwen", label: "Qwen Code", login: "qwen", skill_tool: None, rules: None },
+    AcpAgent { id: "kimi", label: "Kimi Code", login: "kimi login", skill_tool: None, rules: None },
+    AcpAgent { id: "copilot", label: "Copilot CLI", login: "copilot login", skill_tool: None, rules: None },
+    AcpAgent { id: "cline", label: "Cline", login: "cline auth", skill_tool: None, rules: None },
+];
 
 /// OpenCode's `permission` / `pattern` match (`Wildcard.match`, 1.19.5): `*` any run, `?` one character, `\\` read
 /// as `/`, and a pattern ending in `" *"` also matches without that tail.
@@ -127,11 +154,17 @@ fn wildcard(text: &str, pattern: &str) -> bool {
 /// come after an ask); `"bash *"` matches the tool `bash` and nothing else.
 const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];
 
-/// Each agent's rules for `bash` and `edit` as OpenCode resolved them, from what `opencode agent list` printed
-/// (each agent's name and mode on its own line, then its ruleset as JSON, where the last matching rule decides):
-/// per tool, each pattern once at its last place with its action, in order. `None` when the listing has no `build`
-/// agent or holds a line or rule this does not know.
-fn resolved(listing: &str) -> Option<Vec<(String, Vec<Vec<(String, String)>>)>> {
+/// Kilo Code's: OpenCode's two, and `write`, which Kilo's image tool asks under (its file tools ask under `edit`), each
+/// under the tool's own key. Kilo 7.8.27 merges these after the person's own rules (checked against nine configs,
+/// `kilo-rules.json`); the `" *"` keys OpenCode needs would let Kilo's own plan-file allows outrank a person's
+/// blanket deny.
+const KILO_ASKED: [(&str, &str); 3] = [("bash", "bash"), ("edit", "edit"), ("write", "write")];
+
+/// Each agent's rules for each of `asked` as the agent resolved them, from what its `agent list` printed (each
+/// agent's name and mode on its own line, then its ruleset as JSON, where the last matching rule decides): per
+/// tool, each pattern once at its last place with its action, in order. `None` when the listing has no `primary`
+/// agent (the default one: OpenCode's `build`, Kilo's `code`) or holds a line or rule this does not know.
+fn resolved(listing: &str, primary: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<Vec<(String, String)>>)>> {
     let mut agents: Vec<(String, String)> = Vec::new();
     for line in listing.lines() {
         let head = !line.starts_with([' ', '\t', '[', ']', '{', '}']) && line.ends_with(')') && line.contains(" (");
@@ -143,14 +176,14 @@ fn resolved(listing: &str) -> Option<Vec<(String, Vec<Vec<(String, String)>>)>> 
             last.1.push('\n');
         }
     }
-    if !agents.iter().any(|(n, _)| n == "build") {
+    if !agents.iter().any(|(n, _)| n == primary) {
         return None;
     }
     let mut out = Vec::new();
     for (name, body) in agents {
         let rules: Vec<Value> = serde_json::from_str(&body).ok()?;
         let mut per = Vec::new();
-        for (tool, _) in ASKED {
+        for (tool, _) in asked {
             let mut seen: Vec<(String, String)> = Vec::new();
             for r in rules.iter().rev() {
                 let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
@@ -169,16 +202,15 @@ fn resolved(listing: &str) -> Option<Vec<(String, Vec<Vec<(String, String)>>)>> 
     Some(out)
 }
 
-/// The ask rules for an OpenCode chat, from what `opencode agent list` printed without them: for every agent and
-/// each of `bash` and `edit`, the person's own resolved rules repeated after theirs, in the same order, with allow
-/// turned into ask. What they allow asks, what asks still asks, what they deny stays denied, for blanket and
-/// pattern rules alike.
-pub fn opencode_ask(listing: &str) -> Option<String> {
+/// The ask rules for a chat, from what the agent's `agent list` printed without them: for every agent and each of
+/// `asked`, the person's own resolved rules repeated after theirs, in the same order, with allow turned into ask.
+/// What they allow asks, what asks still asks, what they deny stays denied, for blanket and pattern rules alike.
+fn ask_rules(listing: &str, primary: &str, asked: &[(&str, &str)]) -> Option<String> {
     let q = |v: &str| Value::String(v.into()).to_string();
-    let agents = resolved(listing)?
+    let agents = resolved(listing, primary, asked)?
         .iter()
         .map(|(name, per)| {
-            let tools = ASKED
+            let tools = asked
                 .iter()
                 .zip(per)
                 .map(|((_, key), rules)| {
@@ -192,12 +224,97 @@ pub fn opencode_ask(listing: &str) -> Option<String> {
     Some(format!("{{\"agent\":{{{}}}}}", agents.join(",")))
 }
 
-/// Whether OpenCode, listed again with `rules` set (`listing`), took them as meant: no agent lets `bash` or `edit`
-/// run unasked anywhere, and its rules are exactly the ones `rules` was built from. A later config layer that
-/// put an allow back after them fails this, and the chat does not start.
-pub fn opencode_kept(rules: &str, listing: &str) -> bool {
-    resolved(listing).is_some_and(|agents| agents.iter().all(|(_, per)| per.iter().flatten().all(|(_, a)| a != "allow")))
-        && opencode_ask(listing).as_deref() == Some(rules)
+/// Whether the agent, listed again with `rules` set (`listing`), took them as meant: no agent lets any of `asked`
+/// run unasked anywhere, and its rules are exactly the ones `rules` was built from. A later config layer that put
+/// an allow back after them fails this, and the chat does not start.
+fn rules_kept(rules: &str, listing: &str, primary: &str, asked: &[(&str, &str)]) -> bool {
+    no_allow(listing, primary, asked) && ask_rules(listing, primary, asked).as_deref() == Some(rules)
+}
+
+/// No agent of `listing` lets any of `asked` run unasked for any pattern.
+fn no_allow(listing: &str, primary: &str, asked: &[(&str, &str)]) -> bool {
+    resolved(listing, primary, asked).is_some_and(|agents| agents.iter().all(|(_, per)| per.iter().flatten().all(|(_, a)| a != "allow")))
+}
+
+/// OpenCode's ask rules (`OPENCODE_CONFIG_CONTENT`) for `bash` and `edit`, from `opencode agent list`.
+pub fn opencode_ask(listing: &str) -> Option<String> {
+    ask_rules(listing, "build", &ASKED)
+}
+
+/// Whether OpenCode kept [`opencode_ask`]'s rules: listed again it resolves exactly them.
+pub fn opencode_kept(_first: &str, rules: &str, listing: &str) -> bool {
+    rules_kept(rules, listing, "build", &ASKED)
+}
+
+/// Kilo Code's ask rules (`KILO_CONFIG_CONTENT`) for `bash`, `edit` and `write`, from `kilo agent list`.
+pub fn kilo_ask(listing: &str) -> Option<String> {
+    ask_rules(listing, "code", &KILO_ASKED)
+}
+
+/// Each agent's rules for the tools in `asked` (permission, pattern, action), in order, from an `agent list`.
+fn rulesets(listing: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<(String, String, String)>)>> {
+    let mut agents: Vec<(String, String)> = Vec::new();
+    for line in listing.lines() {
+        if !line.starts_with([' ', '\t', '[', ']', '{', '}']) && line.ends_with(')') && line.contains(" (") {
+            agents.push((line[..line.rfind(" (")?].to_string(), String::new()));
+        } else {
+            let last = agents.last_mut()?;
+            last.1.push_str(line);
+            last.1.push('\n');
+        }
+    }
+    agents
+        .into_iter()
+        .map(|(name, body)| {
+            let rules: Vec<Value> = serde_json::from_str(&body).ok()?;
+            let mut out = Vec::new();
+            for r in &rules {
+                let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
+                if asked.iter().any(|(t, _)| wildcard(t, perm)) {
+                    out.push((perm.to_string(), pattern.to_string(), action.to_string()));
+                }
+            }
+            Some((name, out))
+        })
+        .collect()
+}
+
+/// What an agent decides for `tool` on `input` under `rules` (the last rule whose permission and pattern match, else
+/// ask), as OpenCode and Kilo evaluate.
+fn decide(rules: &[(String, String, String)], tool: &str, input: &str) -> &'static str {
+    match rules.iter().rev().find(|(p, pat, _)| wildcard(tool, p) && wildcard(input, pat)).map(|r| r.2.as_str()) {
+        Some("allow") => "allow",
+        Some("deny") => "deny",
+        _ => "ask",
+    }
+}
+
+/// Whether Kilo Code kept [`kilo_ask`]'s rules, judged by what it decides rather than by the rules' order (Kilo
+/// 7.8.27 moves some of a person's denies later and appends its own built-in rules after omher's): for every agent,
+/// each of `bash`, `edit` and `write`, and an input for every pattern either listing names (plus one no pattern
+/// names), Kilo with the rules never decides more loosely than without them, and never lets one run unasked. The one
+/// thing it keeps unasked is its own: `plan`'s writes to its plan files (`.kilo/plans/*.md` and the like), which Kilo
+/// appends after every config layer; that is kept only where the person's own rules allowed it too, so a person whose
+/// rules deny it (a blanket `"*": "deny"`) gets no Kilo chat rather than a looser one.
+pub fn kilo_kept(first: &str, rules: &str, listing: &str) -> bool {
+    let (Some(before), Some(after)) = (rulesets(first, &KILO_ASKED), rulesets(listing, &KILO_ASKED)) else { return false };
+    let rank = |d: &str| match d {
+        "deny" => 0,
+        "ask" => 1,
+        _ => 2,
+    };
+    kilo_ask(first).as_deref() == Some(rules)
+        && before.len() == after.len()
+        && before.iter().zip(&after).all(|((n1, b), (n2, a))| {
+            n1 == n2
+                && KILO_ASKED.iter().all(|(tool, _)| {
+                    let inputs = b.iter().chain(a.iter()).filter(|r| wildcard(tool, &r.0)).map(|r| r.1.replace('*', "x")).chain(["x".to_string()]);
+                    inputs.into_iter().all(|i| {
+                        let (was, now) = (decide(b, tool, &i), decide(a, tool, &i));
+                        rank(now) <= rank(was) && (now != "allow" || (n1 == "plan" && *tool == "edit"))
+                    })
+                })
+        })
 }
 
 pub fn acp_agent(id: &str) -> Option<&'static AcpAgent> {
@@ -269,6 +386,8 @@ pub struct Acp {
     can_resume: bool,
     can_load: bool,
     msg_seq: u64,
+    /// the agent refused to open a conversation because it is not signed in: nothing more can be sent
+    signed_out: bool,
 }
 
 impl Acp {
@@ -292,6 +411,7 @@ impl Acp {
             can_resume: false,
             can_load: false,
             msg_seq: 0,
+            signed_out: false,
         }
     }
 
@@ -303,7 +423,26 @@ impl Acp {
     }
 
     fn signed_out(&self) -> String {
-        format!("{} is not signed in. Open Terminal and run `{}`, then Restart.", self.agent.label, self.agent.login)
+        format!("{} is not signed in. Run `{}` in a terminal and sign in.", self.agent.label, self.agent.login)
+    }
+
+    /// The turn's end for an agent that is not signed in: the one line, and what the UI needs to say it in the
+    /// person's language (the agent's sign-in command from its row).
+    fn end_signed_out(&mut self, st: &mut Step) {
+        let e = self.signed_out();
+        self.queued.clear();
+        self.end(st, "error", Some(e));
+        if let Some(last) = st.events.last_mut().filter(|e| s(e, "event") == "turn.end") {
+            last["signed_out"] = Value::Bool(true);
+            last["login"] = Value::String(self.agent.login.into());
+        }
+    }
+
+    /// Whether an error the agent answered says it needs a sign-in: `-32000`, or a message that says so (Kilo Code
+    /// answers a prompt to a model that needs its account with `-32603 "… You need to sign in to use this model."`).
+    fn needs_sign_in(code: i64, msg: &str) -> bool {
+        let low = msg.to_ascii_lowercase();
+        code == -32000 || low.contains("sign in to use") || low.contains("authentication required")
     }
 
     fn prompt(&mut self, st: &mut Step, text: String) {
@@ -557,11 +696,12 @@ impl Acp {
             let msg = clip(&s(err, "message"), 200);
             match what {
                 Call::Open if code == -32000 => {
-                    emit(st, ev("session.error", json!({"message": self.signed_out()})));
+                    // one plain line built from the row, never the agent's own text or its `authenticate`: the shell
+                    // ends the session, and the person signs in in a terminal
+                    self.signed_out = true;
+                    emit(st, ev("session.error", json!({"kind": "signed_out", "message": self.signed_out(), "login": self.agent.login})));
                     if self.turn {
-                        let e = self.signed_out();
-                        self.queued.clear();
-                        self.end(st, "error", Some(e));
+                        self.end_signed_out(st);
                     }
                 }
                 Call::Open => {
@@ -578,10 +718,8 @@ impl Acp {
                         }
                     }
                 }
-                Call::Prompt => {
-                    let e = if code == -32000 { self.signed_out() } else { msg };
-                    self.end(st, "error", Some(e));
-                }
+                Call::Prompt if Acp::needs_sign_in(code, &msg) => self.end_signed_out(st),
+                Call::Prompt => self.end(st, "error", Some(msg)),
                 Call::Config => emit(st, ev("session.error", json!({"message": msg}))),
                 Call::Initialize => emit(st, ev("session.error", json!({"message": msg}))),
             }
@@ -706,6 +844,9 @@ impl Adapter for Acp {
                 }
                 if self.turn {
                     return Err(format!("{} is still answering; Stop first", self.agent.label));
+                }
+                if self.signed_out {
+                    return Err(self.signed_out());
                 }
                 self.turn = true;
                 emit(&mut st, ev("turn.start", json!({})));
@@ -1026,8 +1167,8 @@ mod tests {
         let all: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
         assert_eq!(rules, s(&all[case], "env_sent"), "{case}");
         // OpenCode, started with these rules, resolved exactly them, and nothing in bash or edit is allowed unasked
-        assert!(opencode_kept(&rules, &in_omher), "{case}");
-        assert!(!opencode_kept(&rules, &base), "{case}: without the rules OpenCode runs tools unasked");
+        assert!(opencode_kept(&base, &rules, &in_omher), "{case}");
+        assert!(!opencode_kept(&base, &rules, &base), "{case}: without the rules OpenCode runs tools unasked");
         for agent in ["build", "general", "plan", "explore"] {
             for (tool, input, own, inside) in want {
                 if agent == "build" {
@@ -1096,8 +1237,8 @@ mod tests {
         assert_eq!(opencode_ask(&base.replacen("\"action\": \"allow\"", "\"action\": \"maybe\"", 1)), None);
         // rules OpenCode did not keep (a later layer put an allow back) refuse the start
         let rules = opencode_ask(&base).unwrap();
-        assert!(!opencode_kept(&rules, &base));
-        assert!(!opencode_kept(&rules, ""));
+        assert!(!opencode_kept(&base, &rules, &base));
+        assert!(!opencode_kept(&base, &rules, ""));
     }
 
     #[test]
@@ -1168,6 +1309,202 @@ mod tests {
         assert_eq!(written(&a.on_line(&init(json!({"loadSession": true, "sessionCapabilities": {"resume": {}}}))))[0]["method"], "session/new");
     }
 
+    /// Each of the five agents without a free model, as recorded on a Mac where nobody signed it in (scratch HOME):
+    /// its real `initialize`, then its real `-32000` to `session/new`. The person sees one line with the row's sign-in
+    /// command, the session is marked signed out (the UI ends it), nothing raw reaches the chat, `authenticate` is
+    /// never sent, and a second message is refused with the same line.
+    #[test]
+    fn real_signed_out_agents_end_in_one_line_with_their_own_sign_in() {
+        for (id, file, line, raw) in [
+            ("gemini", "gemini-signed-out.jsonl", "Gemini CLI is not signed in. Run `gemini` in a terminal and sign in.", "Gemini API key is missing"),
+            ("qwen", "qwen-signed-out.jsonl", "Qwen Code is not signed in. Run `qwen` in a terminal and sign in.", "Use /auth"),
+            ("kimi", "kimi-signed-out.jsonl", "Kimi Code is not signed in. Run `kimi login` in a terminal and sign in.", "--login"),
+            ("copilot", "copilot-signed-out.jsonl", "Copilot CLI is not signed in. Run `copilot login` in a terminal and sign in.", "copilot-darwin-arm64"),
+            ("cline", "cline-signed-out.jsonl", "Cline is not signed in. Run `cline auth` in a terminal and sign in.", "Call authenticate"),
+        ] {
+            let mut a = Acp::new(acp_agent(id).unwrap(), "/w/proj", None);
+            // the person's first message goes in at once, as a draft's first send does; the conversation never opens
+            let mut st = a.start();
+            st.events.extend(a.on_input(Input::send("Add a dark mode toggle")).unwrap().events);
+            for l in real(file) {
+                let s2 = a.on_line(&l);
+                st.write.extend(s2.write);
+                st.events.extend(s2.events);
+            }
+            let w = written(&st);
+            assert_eq!(w.iter().map(|x| s(x, "method")).collect::<Vec<_>>(), ["initialize", "session/new"], "{id}");
+            assert!(!w.iter().any(|x| s(x, "method") == "authenticate"), "{id}");
+            let err = of(&st.events, "session.error");
+            assert_eq!(err.len(), 1, "{id}");
+            assert_eq!((s(err[0], "kind"), s(err[0], "message"), s(err[0], "login")), ("signed_out".to_string(), line.to_string(), acp_agent(id).unwrap().login.to_string()), "{id}");
+            let end = of(&st.events, "turn.end");
+            assert_eq!((s(end[0], "outcome"), s(end[0], "error")), ("error".to_string(), line.to_string()), "{id}");
+            assert_eq!(end[0]["signed_out"], true, "{id}");
+            one_clean_turn(&st.events);
+            // never the agent's own words, its JSON or its terminal-auth command
+            let all = format!("{:?}", st.events);
+            assert!(!all.contains("-32000") && !all.contains(raw), "{id}: {all}");
+            assert_eq!(a.on_input(Input::send("again")).unwrap_err(), line, "{id}");
+        }
+    }
+
+    /// Kilo Code 7.8.27 opens a conversation without a sign-in (scratch HOME): its real `session/new` with 407 models,
+    /// flat; omher lists every one with its own name, and the current one is the model shown.
+    #[test]
+    fn real_kilo_new_lists_its_407_models() {
+        let mut a = Acp::new(acp_agent("kilo").unwrap(), "/w/proj", None);
+        let mut st = Step::default();
+        a.start();
+        for l in real("kilo-1-new.jsonl") {
+            let s2 = a.on_line(&l);
+            st.events.extend(s2.events);
+            st.write.extend(s2.write);
+        }
+        assert_eq!(s(of(&st.events, "session.info")[0], "agent_session"), "ses_e2d9961a8ffe6pwTlM4aAUbsu1");
+        let models = of(&st.events, "session.models")[0]["options"].as_array().unwrap().clone();
+        assert_eq!(models.len(), 407);
+        assert!(models.iter().any(|m| m == &json!({"id": "kilo/kilo-auto/free", "label": "Kilo Gateway/Auto Free", "detail": ""})));
+        assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).find(|m| !m.is_empty()).unwrap(), "Kilo Gateway/Google: Nano Banana Pro (Gemini 3 Pro Image)");
+        assert!(!of(&st.events, "session.commands")[0]["commands"].as_array().unwrap().is_empty());
+        // continued by session/resume (it offers resume and load)
+        let mut b = Acp::new(acp_agent("kilo").unwrap(), "/w/proj", Some("ses_e2d9961a8ffe6pwTlM4aAUbsu1"));
+        b.start();
+        assert_eq!(written(&b.on_line(&real("kilo-1-new.jsonl")[0]))[0]["method"], "session/resume");
+    }
+
+    /// A Kilo Code prompt to a model that needs Kilo's account answers `-32603 "Internal error: You need to sign in to
+    /// use this model."` (recorded): the turn ends with the sign-in line, not that text.
+    #[test]
+    fn kilo_a_model_that_needs_its_account_says_sign_in() {
+        let mut a = Acp::new(acp_agent("kilo").unwrap(), "/w/proj", None);
+        a.start();
+        for l in &real("kilo-1-new.jsonl")[..2] {
+            a.on_line(l);
+        }
+        a.on_input(Input::send("hi")).unwrap();
+        let st = a.on_line(r#"{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Internal error: You need to sign in to use this model.","data":{"service":"session","errorName":"APIError"}}}"#);
+        let end = of(&st.events, "turn.end");
+        assert_eq!(s(end[0], "error"), "Kilo Code is not signed in. Run `kilo auth login` in a terminal and sign in.");
+        assert_eq!(end[0]["signed_out"], true);
+        // the conversation itself is open: the next message goes out (another model may need no account)
+        assert!(a.on_input(Input::send("again")).is_ok());
+    }
+
+    /// `kilo agent list` from Kilo Code 7.8.27 (scratch HOME, `kilo-rules.json`, trimmed to the agents `code`, `explore`
+    /// and `plan` and the rules for `bash`, `edit`, `write` and `*`) for one person's config.
+    fn kilo_case(case: &str) -> (String, String, String) {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("acp").join("kilo-rules.json");
+        let all: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let c = &all[case];
+        (s(c, "agent_list"), s(c, "agent_list_in_omher"), s(c, "env_sent"))
+    }
+
+    fn check_kilo(case: &str, want: &[(&str, &str, &str, &str)]) {
+        let (base, in_omher, sent) = kilo_case(case);
+        let rules = kilo_ask(&base).unwrap();
+        assert_eq!(rules, sent, "{case}");
+        // Kilo, started with these rules, decides nothing more loosely than the person's own rules and lets nothing in
+        // bash, edit or write run unasked but its own plan files
+        assert!(kilo_kept(&base, &rules, &in_omher), "{case}");
+        // without them, Kilo runs something the person allows unasked (unless they deny everything already)
+        if want.iter().any(|w| w.2 == "allow") {
+            assert!(!kilo_kept(&base, &rules, &base), "{case}: without the rules Kilo runs tools unasked");
+        }
+        for agent in ["code", "explore", "plan"] {
+            for (tool, input, own, inside) in want {
+                let got = decides(&in_omher, agent, tool, input);
+                let never_looser = match decides(&base, agent, tool, input).as_str() {
+                    "deny" => got == "deny",
+                    _ => got == "ask" || got == "deny",
+                };
+                assert!(never_looser, "{case} {agent} {tool} {input}: {got}");
+                if agent == "code" {
+                    assert_eq!(decides(&base, agent, tool, input), *own, "{case} code {tool} {input}: the person's own rule");
+                    assert_eq!(got, *inside, "{case} code {tool} {input}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn real_kilo_rules_a_blanket_deny_stays_deny_and_its_own_allows_ask() {
+        // `"permission": {"bash": "deny"}`: Kilo's own `cat *` allow is under it, so cat is denied too
+        check_kilo("string-deny", &[("bash", "echo hi", "deny", "deny"), ("bash", "cat a.txt", "deny", "deny"), ("edit", "a.md", "allow", "ask"), ("write", "a.png", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_kilo_rules_a_star_deny_stays_deny() {
+        check_kilo("star-deny", &[("bash", "echo hi", "deny", "deny"), ("edit", "a.md", "deny", "deny"), ("write", "a.png", "deny", "deny")]);
+    }
+
+    #[test]
+    fn real_kilo_rules_a_pattern_deny_stays_deny_and_the_rest_asks() {
+        check_kilo("pattern-deny", &[("bash", "rm -rf x", "deny", "deny"), ("bash", "cat a.txt", "allow", "ask"), ("bash", "make", "ask", "ask"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_kilo_rules_an_agent_level_allow_asks_and_its_deny_stays() {
+        // `"agent": {"code": {"permission": {"bash": {"*": "allow", "rm *": "deny"}}}}`
+        check_kilo("agent-level", &[("bash", "make", "allow", "ask"), ("bash", "rm -rf x", "deny", "deny"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_kilo_rules_an_allow_becomes_ask() {
+        check_kilo("allow", &[("bash", "make", "allow", "ask"), ("edit", "a.md", "allow", "ask")]);
+    }
+
+    #[test]
+    fn real_kilo_rules_with_nothing_set_its_own_allows_ask() {
+        // Kilo's own default lets `cat`, `ls`, `mkdir`, `cp`, `mv`… run unasked in `code`: inside omher each asks
+        check_kilo("none", &[("bash", "cat a.txt", "allow", "ask"), ("bash", "mv a b", "allow", "ask"), ("bash", "make", "ask", "ask"), ("edit", "a.md", "allow", "ask"), ("write", "a.png", "allow", "ask")]);
+    }
+
+    #[test]
+    fn kilo_rules_refuse_what_they_cannot_read_or_did_not_hold() {
+        let (base, in_omher, _) = kilo_case("none");
+        assert_eq!(kilo_ask(""), None);
+        assert_eq!(kilo_ask(&base.replace("code (primary)", "coder (primary)")), None);
+        let rules = kilo_ask(&base).unwrap();
+        // a later layer put an allow back after omher's rules: refused
+        let code = in_omher.find("code (primary)\n[").unwrap() + "code (primary)\n[".len();
+        let mut loose = in_omher.clone();
+        let tail = in_omher[code..].find('\n').unwrap() + code - 1;
+        loose.insert_str(tail, r#",{"permission":"bash","pattern":"curl *","action":"allow"}"#);
+        assert!(!kilo_kept(&base, &rules, &loose));
+        // without the rules Kilo runs `cat` unasked in `code`: refused
+        assert!(!kilo_kept(&base, &rules, &base));
+        assert!(!kilo_kept(&base, "{}", &in_omher));
+        assert!(!kilo_kept("", &rules, &in_omher));
+        let probe = acp_agent("kilo").unwrap().rules.as_ref().unwrap();
+        assert_eq!((probe.args, probe.var), (&["agent", "list"][..], "KILO_CONFIG_CONTENT"));
+        // the rules go under each tool's own key, so they merge after the person's own and outrank Kilo's plan allows
+        assert!(rules.contains(r#""code":{"permission":{"bash":{"#) && !rules.contains(r#""bash *""#));
+        assert_eq!(no_rules("Kilo Code"), "Kilo Code did not start because omher could not confirm it would keep your own Kilo Code permission rules.");
+    }
+
+    /// The six rows: ids, sign-in lines from each agent's own help, and only OpenCode and Kilo (whose defaults run
+    /// tools unasked) carry a rule probe.
+    #[test]
+    fn the_seven_rows() {
+        let rows: Vec<(&str, &str, &str, bool)> = ACP_AGENTS.iter().map(|a| (a.id, a.label, a.login, a.rules.is_some())).collect();
+        assert_eq!(
+            rows,
+            [
+                ("opencode", "OpenCode", "opencode auth login", true),
+                ("kilo", "Kilo Code", "kilo auth login", true),
+                ("gemini", "Gemini CLI", "gemini", false),
+                ("qwen", "Qwen Code", "qwen", false),
+                ("kimi", "Kimi Code", "kimi login", false),
+                ("copilot", "Copilot CLI", "copilot login", false),
+                ("cline", "Cline", "cline auth", false),
+            ]
+        );
+        for a in &ACP_AGENTS {
+            assert_eq!(crate::sessions::agent(a.id).map(|x| x.label), Some(a.label), "{}", a.id);
+            assert!(crate::sessions::chat_args(a.id).is_some(), "{}", a.id);
+        }
+    }
+
     #[test]
     fn signed_out_names_the_tables_login_line_not_the_agents() {
         // the survey's real Kimi answer to session/new (`-32000`), with a terminal-auth hint omher must not use
@@ -1176,7 +1513,7 @@ mod tests {
         a.on_line(r#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{},"authMethods":[{"id":"x","_meta":{"terminal-auth":{"command":"rm","args":["-rf","/"]}}}]}}"#);
         a.on_input(Input::send("hi")).unwrap();
         let st = a.on_line(r#"{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Authentication required"}}"#);
-        let want = "OpenCode is not signed in. Open Terminal and run `opencode auth login`, then Restart.";
+        let want = "OpenCode is not signed in. Run `opencode auth login` in a terminal and sign in.";
         assert_eq!(s(of(&st.events, "session.error")[0], "message"), want);
         assert_eq!(s(of(&st.events, "turn.end")[0], "error"), want);
         assert!(!format!("{:?}", st.events).contains("-rf"));

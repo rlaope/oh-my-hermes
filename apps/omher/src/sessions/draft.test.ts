@@ -2,7 +2,7 @@
 // that the first message becomes the agent's first prompt in the folder chosen, and that closing a draft starts
 // nothing.
 import { describe, expect, it } from "vitest";
-import { AGENTS, draftAgent, draftFolder, folderChoices, INSTALL, lastAgent, menuOrder, missingNote, rowModel, type AgentInfo, type Recent, type SessionRec } from "./agents";
+import { AGENTS, draftAgent, draftFolder, folderChoices, INSTALL, lastAgent, menuOrder, menuParts, missingNote, rowModel, type AgentInfo, type Recent, type SessionRec } from "./agents";
 import { MockHost, type MockCall } from "./host";
 import { createSessions } from "./sessions";
 import { createStore, type BridgeLike } from "../state/store";
@@ -31,10 +31,10 @@ describe("draft defaults", () => {
   it("the + menu: installed agents first with the last one used on top, then the missing ones, in list order", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
     const all = info(["claude", "codex", "omo", "dsh"]);
-    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
-    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("dsh", "/b", 3)]))).toEqual(["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode"]);
+    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("dsh", "/b", 3)]))).toEqual(["dsh", "claude", "codex", "omo", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // the last one used is no longer installed: it stays with the missing ones
-    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode"]);
+    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
     // the install lines of the two new harnesses
     expect(INSTALL.omo).toBe("npm i -g omo-ai");
     expect(missingNote("omo")).toBe("omo was not found on this computer · install: npm i -g omo-ai");
@@ -42,6 +42,30 @@ describe("draft defaults", () => {
     expect(INSTALL.dsh).toBe("npm i -g @deepseek-ai/dsh");
     expect(missingNote("dsh")).toBe("DeepSeek Harness (dsh) was not found on this computer · install: npm i -g @deepseek-ai/dsh (or the DeepSeek Harness app, which carries it)");
     expect(missingNote("dsh")).not.toMatch(/deepseek-bot/);
+  });
+
+  it("the + menu folds the agents that are not installed behind one row, and shows every agent when none is", () => {
+    const ids = (l: AgentInfo[]) => l.map((a) => a.id);
+    // four installed, eleven folded: the menu shows the four (last used on top), the rest in list order behind "More"
+    const p = menuParts(info(["claude", "codex", "omh", "kilo"]), [rec("kilo", "/a", 2)]);
+    expect(ids(p.shown)).toEqual(["kilo", "claude", "codex", "omh"]);
+    expect(ids(p.more)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    // a new agent that gets installed moves up out of the fold
+    expect(ids(menuParts(info(["claude", "gemini"]), []).shown)).toEqual(["claude", "gemini"]);
+    // nothing installed: nothing to fold behind, every agent shows with its install line
+    const none = menuParts(info([]), []);
+    expect(none.shown).toHaveLength(15);
+    expect(none.more).toEqual([]);
+    // the six ACP agents' install lines are their own READMEs' npm lines
+    expect([INSTALL.kilo, INSTALL.gemini, INSTALL.qwen, INSTALL.kimi, INSTALL.copilot, INSTALL.cline]).toEqual([
+      "npm install -g @kilocode/cli",
+      "npm install -g @google/gemini-cli",
+      "npm install -g @qwen-code/qwen-code@latest",
+      "npm install -g @moonshot-ai/kimi-code",
+      "npm install -g @github/copilot",
+      "npm install -g cline",
+    ]);
+    expect(missingNote("gemini")).toBe("gemini was not found on this computer · install: npm install -g @google/gemini-cli");
   });
 
   it("the folder: the last folder used, else home, else nothing yet", () => {

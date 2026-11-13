@@ -530,12 +530,19 @@ function againTip(rec: SessionRec): string {
  *  and account. */
 function Ended({ rec }: { rec: SessionRec }) {
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
+  // an agent that is not signed in: its line says what to run, and the person's own terminal opens in the folder
+  const signin = useSessions().live[rec.id]?.signin;
   return (
     <div className="ss-ended" role="status" data-testid="session-ended">
       <span className="ss-ended-t" title={why || undefined}>
-        {rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
-        {why ? ` · ${why}` : ""}
+        {signin ? why : rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
+        {!signin && why ? ` · ${why}` : ""}
       </span>
+      {signin && rec.cwd && (
+        <button type="button" className="ss-restart" onClick={() => void getSessions().openTerminal(rec.id)} data-testid="session-signin-terminal">
+          {tr("ss.menu.terminal")}
+        </button>
+      )}
       <button type="button" className="ss-restart" onClick={() => void getSessions().restart(rec.id)} title={againTip(rec)} data-testid="session-restart">
         {tr("ss.restart")}
       </button>

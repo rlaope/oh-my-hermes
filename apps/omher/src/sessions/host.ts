@@ -242,6 +242,12 @@ const BANNER: Record<AgentId, string> = {
   omp: "\x1b[1mπ oh-my-pi\x1b[0m \x1b[2m(mock)\x1b[0m",
   grok: "\x1b[1m𝕏 Grok\x1b[0m \x1b[2m(mock)\x1b[0m",
   opencode: "\x1b[1mopencode\x1b[0m \x1b[2m(mock)\x1b[0m",
+  kilo: "\x1b[1mkilo\x1b[0m \x1b[2m(mock)\x1b[0m",
+  gemini: "\x1b[1mgemini\x1b[0m \x1b[2m(mock)\x1b[0m",
+  qwen: "\x1b[1mqwen\x1b[0m \x1b[2m(mock)\x1b[0m",
+  kimi: "\x1b[1mkimi\x1b[0m \x1b[2m(mock)\x1b[0m",
+  copilot: "\x1b[1mcopilot\x1b[0m \x1b[2m(mock)\x1b[0m",
+  cline: "\x1b[1mcline\x1b[0m \x1b[2m(mock)\x1b[0m",
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
@@ -257,6 +263,8 @@ type MockGlobals = {
   __omherBranches?: Record<string, string>;
   /** e2e: these agents are an old version that never answers in chat mode (the shell's start deadline ends them) */
   __omherMockNoChat?: AgentId[];
+  /** ACP agents the mock host treats as signed in (the others of MOCK_SIGNED_OUT answer -32000). */
+  __omherMockSignedIn?: AgentId[];
   /** e2e: the Codex thread a chat resumes is gone (deleted or archived): the shell starts a new one */
   __omherMockGoneThreads?: boolean;
   /** e2e: Codex's own config runs without approvals and with full disk access (its thread reports
@@ -387,6 +395,8 @@ export class MockHost implements SessionHost {
     this.log({ op: "chat.start", id, agent, cwd, ...(resume ? { resume } : {}), ...(account ? { account } : {}), ...(session ? { session } : {}) });
     const c = new MockChat(agent, onEvent, resume, cwd, {
       noChat: !!this.g.__omherMockNoChat?.includes(agent),
+      // the six more ACP agents are signed out on the mock host unless a test signs them in, as on a fresh Mac
+      signedOut: MOCK_SIGNED_OUT.includes(agent) && !this.g.__omherMockSignedIn?.includes(agent),
       gone: agent === "codex" && !!resume && !!this.g.__omherMockGoneThreads,
       unguarded: agent === "codex" && !!this.g.__omherMockCodexUnguarded,
     });
@@ -482,7 +492,20 @@ const MOCK_MODELS: Record<string, { id: string; label: string; provider?: string
     { id: "opencode/big-pickle", label: "OpenCode/Big Pickle" },
     { id: "opencode/beam-free", label: "OpenCode/Beam Free" },
   ],
+  // the shape of Kilo Code 7.8.27's list (407 models through its own gateway, flat, "Kilo Gateway/<vendor>: <name>")
+  kilo: [
+    { id: "kilo/kilo-auto/free", label: "Kilo Gateway/Auto Free" },
+    ...Array.from({ length: 60 }, (_, i) => ({ id: `kilo/vendor-${i}/model-${i}`, label: `Kilo Gateway/Vendor ${i}: Model ${i}` })),
+    { id: "kilo/reflection/beam-free", label: "Kilo Gateway/Reflection: Beam 1.0 (Free)" },
+  ],
 };
+
+/** The agents on the Agent Client Protocol adapter: their cards offer Deny and Allow once only. */
+const ACP_IDS: AgentId[] = ["opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
+/** The ACP agents with no free model: what a real one answers on a Mac where nobody signed it in (acp_chat.rs). */
+const MOCK_SIGNED_OUT: AgentId[] = ["gemini", "qwen", "kimi", "copilot", "cline"];
+/** Each one's sign-in command, as its acp_chat.rs row has it. */
+const MOCK_LOGIN: Partial<Record<AgentId, string>> = { gemini: "gemini", qwen: "qwen", kimi: "kimi login", copilot: "copilot login", cline: "cline auth" };
 
 /** What each mock agent reports about its controls, as the real CLIs do (see agent_chat.rs). */
 const MOCK_CONTROLS: Partial<Record<AgentId, { mode?: string; efforts: string[]; effort: string; commands: { name: string; description: string; hint: string; kind: "command" | "skill"; prefix: "/" | "$" }[]; max: number }>> = {
@@ -578,7 +601,7 @@ class MockChat {
     private emit: (ev: ChatEvent) => void,
     resume?: string,
     private cwd = "",
-    private how: { noChat?: boolean; gone?: boolean; unguarded?: boolean } = {},
+    private how: { noChat?: boolean; gone?: boolean; unguarded?: boolean; signedOut?: boolean } = {},
   ) {
     this.model = MOCK_MODELS[agent]?.[0]?.label ?? agentDef(agent).label;
     this.session = resume ?? `${agent}-mock-${Math.random().toString(16).slice(2, 10)}-0000-0000-000000000000`;
@@ -609,6 +632,19 @@ class MockChat {
           this.emit({ event: "exit", code: null, error: why });
         }, 600),
       );
+      return;
+    }
+    if (this.how.signedOut) {
+      // `session/new` answered -32000: acp_chat.rs says so once, with the row's sign-in command; omher ends it
+      this.at(40, () => {
+        const why = `${agentDef(this.agent).label} is not signed in. Run \`${MOCK_LOGIN[this.agent]}\` in a terminal and sign in.`;
+        this.emit({ event: "session.error", kind: "signed_out", message: why, login: MOCK_LOGIN[this.agent] ?? "" });
+        if (this.turn) {
+          this.turn = false;
+          this.emit({ event: "turn.end", outcome: "error", error: why, signed_out: true, login: MOCK_LOGIN[this.agent] ?? "" });
+        }
+        this.dead = true;
+      });
       return;
     }
     this.at(20, () => {
@@ -710,7 +746,7 @@ class MockChat {
         this.at(140, () => {
           this.waiting = rid;
           // an ACP agent (OpenCode) offers Deny and Allow once only: its "always" is a saved project rule
-          const choices = this.agent === "opencode" ? ["deny", "once"] : ["deny", "once", "session"];
+          const choices = ACP_IDS.includes(this.agent) ? ["deny", "once"] : ["deny", "once", "session"];
           this.emit({ event: "approval.request", request_id: rid, title: "Run this command?", command: "rm -rf ./build", cwd: this.cwd, choices });
         });
         return;

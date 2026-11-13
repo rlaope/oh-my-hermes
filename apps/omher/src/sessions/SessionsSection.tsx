@@ -20,7 +20,7 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, menuOrder, missingNote, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftOpen, folderChoices, folderName, hermesOnly, INSTALL, menuParts, missingNote, rowModel, tildePath, type AgentId, type ChatLive, type RowContext, type RowMark, type SessionRec, type Unseen } from "./agents";
 import { getHost, type PastChat } from "./host";
 import { getSessions, useSessions } from "./sessions";
 import { pickTitle } from "./titles";
@@ -113,8 +113,9 @@ export function fitMenu(
   return { side: "top", max: Math.max(0, anchor.top - gap - start) };
 }
 
-/** Measure the open menu `box` (its list scrolls in `.ss-scroll`) against the sidebar, and again on resize. */
-function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
+/** Measure the open menu `box` (its list scrolls in `.ss-scroll`) against the sidebar, and again on resize and
+ *  whenever `shape` changes (the folded agents opened or closed). */
+function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape = "") {
   const [fit, setFit] = useState<{ side: "top" | "bottom"; max: number } | null>(null);
   useLayoutEffect(() => {
     if (!ready) return;
@@ -143,7 +144,7 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean) {
     addEventListener("resize", measure);
     return () => removeEventListener("resize", measure);
     // measured again once placed on its side: the gap to the row differs above and below
-  }, [box, ready, fit?.side]);
+  }, [box, ready, fit?.side, shape]);
   return fit;
 }
 
@@ -166,9 +167,10 @@ function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
   return more;
 }
 
-/** The SESSIONS + menu: every agent with its mark and name, the installed ones first (the last one used on top),
- *  the missing ones dimmed with their install line in the tooltip. Picking one opens its New session chat at once
- *  (the folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
+/** The SESSIONS + menu: the installed agents with their mark and name (the last one used on top), then one "More
+ *  agents" row that opens the agents that are not installed, dimmed, each with its install line as text (picking one
+ *  copies that line; omher installs nothing). Picking an installed one opens its New session chat at once (the
+ *  folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
 function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: RefObject<HTMLButtonElement | null> }) {
   const ss = useSessions();
   const accounts = useAccounts();
@@ -176,10 +178,14 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const agents = ss.agents ? menuOrder(ss.agents, ss.recent) : null;
+  const parts = ss.agents ? menuParts(ss.agents, ss.recent) : null;
+  const agents = parts ? [...parts.shown, ...parts.more] : null;
+  // the agents that are not installed stay folded until the person opens them
+  const [unfold, setUnfold] = useState(false);
+  const [copied, setCopied] = useState<AgentId | null>(null);
   // the first row takes the focus once the list is there (installed first, so it is the one Enter should pick)
   const ready = agents !== null;
-  const fit = useMenuFit(box, ready);
+  const fit = useMenuFit(box, ready, unfold ? "open" : "folded");
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
@@ -194,6 +200,48 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const pick = (id: AgentId) => {
     close("pick");
     getSessions().draft(id);
+  };
+  // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
+  const copyInstall = (id: AgentId) => {
+    void navigator.clipboard?.writeText(INSTALL[id]).then(
+      () => setCopied(id),
+      () => undefined,
+    );
+  };
+  const row = (a: NonNullable<typeof agents>[number]) => {
+    const label = agentLabel(a.id, ss.agents);
+    const account = sessionAccountSuffix(accounts.groups, a.id);
+    const missing = !a.path;
+    return (
+      <button
+        key={a.id}
+        type="button"
+        role="menuitem"
+        className={`ss-item${missing ? " off" : ""}`}
+        aria-disabled={missing || undefined}
+        title={a.path ?? missingNote(a.id)}
+        onClick={() => (missing ? copyInstall(a.id) : pick(a.id))}
+        data-testid={`session-agent-${a.id}`}
+      >
+        <span className="ss-ic">
+          <AgentMark agent={a.id} />
+        </span>
+        <span className="ss-n ss-n-as" title={account ? `${label} ${account}` : label}>
+          <span className="ss-l">{label}</span>
+          {account && !missing && (
+            <span className="ss-as" data-testid={`session-account-${a.id}`}>
+              {account}
+            </span>
+          )}
+          {missing && (
+            <span className="ss-as ss-install" data-testid={`session-install-${a.id}`}>
+              {INSTALL[a.id]}
+            </span>
+          )}
+        </span>
+        {missing && <span className="ss-missing">{copied === a.id ? t("ss.copiedInstall") : t("sessions.notInstalled")}</span>}
+      </button>
+    );
   };
   // the second step: one agent's past conversations
   const [past, setPast] = useState<PastAgent | null>(null);
@@ -225,38 +273,24 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
         <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
-        {(agents ?? []).map((a) => {
-          const label = agentLabel(a.id, ss.agents);
-          const account = sessionAccountSuffix(accounts.groups, a.id);
-          const missing = !a.path;
-          return (
-            <button
-              key={a.id}
-              type="button"
-              role="menuitem"
-              className={`ss-item${missing ? " off" : ""}`}
-              aria-disabled={missing || undefined}
-              title={a.path ?? missingNote(a.id)}
-              onClick={() => {
-                if (!missing) pick(a.id);
-              }}
-              data-testid={`session-agent-${a.id}`}
-            >
-              <span className="ss-ic">
-                <AgentMark agent={a.id} />
-              </span>
-              <span className="ss-n ss-n-as" title={account ? `${label} ${account}` : label}>
-                <span className="ss-l">{label}</span>
-                {account && (
-                  <span className="ss-as" data-testid={`session-account-${a.id}`}>
-                    {account}
-                  </span>
-                )}
-              </span>
-              {missing && <span className="ss-missing">{t("sessions.notInstalled")}</span>}
-            </button>
-          );
-        })}
+        {(parts?.shown ?? []).map(row)}
+        {parts && parts.more.length > 0 && (
+          <button
+            type="button"
+            role="menuitem"
+            className="ss-item ss-more"
+            aria-expanded={unfold}
+            onClick={() => setUnfold((v) => !v)}
+            data-testid="session-more"
+          >
+            <span className="ss-ic ss-more-ic" aria-hidden="true">
+              {unfold ? "⌄" : "›"}
+            </span>
+            <span className="ss-n">{t("ss.moreAgents")}</span>
+            <span className="ss-missing">{parts.more.length}</span>
+          </button>
+        )}
+        {unfold && parts?.more.map(row)}
         {keeps.length > 0 && (
           <>
             <div className="ss-sep" />
@@ -414,7 +448,7 @@ function AddOmhLine({ onPick }: { onPick: () => void }) {
 }
 
 /** The coding agents the New session tooltip names: the CLIs a person launches to code with (omh stays in the + menu). */
-const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode"];
+const CODING: AgentId[] = ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 /** The empty section: one "New session" row built like the sidebar's nav rows, opening the same + menu under it.
  *  What it does and the installed coding agents sit in its tooltip; nothing else shows, nothing is centred or boxed. */
