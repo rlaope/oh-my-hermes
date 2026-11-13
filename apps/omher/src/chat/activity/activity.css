@@ -217,7 +217,8 @@
   .act-tick-t.out {
     display: none;
   }
-  .act-chev {
+  .act-chev,
+  .sa-chev {
     transition: none;
   }
 }
@@ -333,6 +334,33 @@
   color: var(--body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* a subagent's file edit: a borderless row that opens to its diff, its chevron turning as an activity step's does */
+.sa-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sa-edit:hover code {
+  color: var(--ink);
+}
+.sa-chev {
+  display: inline-flex;
+  color: var(--quiet);
+  flex: none;
+  transition: transform 0.2s;
+}
+.sa-edit.open .sa-chev {
+  transform: rotate(90deg);
 }
 .sa-ans {
   color: var(--body);

@@ -220,9 +220,10 @@ pub trait Adapter: Send {
     fn on_input(&mut self, input: Input) -> Result<Step, String>;
     /// Whether a turn is running (so an exit mid-turn ends it as an error).
     fn in_turn(&self) -> bool;
-    /// The line to show for an exit reason (the program's stderr), e.g. a missing login in plain words.
+    /// The line to show for an exit reason, from the useful lines of the program's stderr ([`exit_why`]): a missing
+    /// login in plain words, else the last line.
     fn explain(&self, err: &str) -> String {
-        err.to_string()
+        last_line(err).to_string()
     }
     /// The agent's name in a sentence ("Claude Code did not answer …").
     fn name(&self) -> &str {
@@ -391,6 +392,11 @@ impl Subagents {
     /// A step the subagent runs now.
     fn step(&self, st: &mut Step, id: &str, tool: &str, step: &str) {
         st.events.extend(self.event(id, "running", json!({"tool": tool, "step": clip(step, 120)})));
+    }
+    /// A file edit the subagent runs now, with its change per file (`tool.diff`'s shape): the row's step opens to it.
+    /// Said again with the same step when the edit has run, so the change shown is what it finally was.
+    fn edit(&self, st: &mut Step, id: &str, step: &str, files: Vec<Value>) {
+        st.events.extend(self.event(id, "running", json!({"tool": "patch", "step": clip(step, 120), "diff": files})));
     }
     /// Ends `id` once: done (its answer, else its last message), failed (the error) or cancelled.
     fn end(&mut self, st: &mut Step, id: &str, state: &str, answer: &str, secs: Option<f64>) {
@@ -642,17 +648,45 @@ pub(crate) fn exit_turn_end(code: Option<i32>, err: &str) -> Value {
     ev("turn.end", json!({"outcome": "error", "error": e}))
 }
 
-/// The first useful line of what a program wrote to stderr: colour codes removed, warnings dropped (`Warning: …`,
-/// a `WARN`/`INFO` log line, Codex's "ignoring 1 unrecognized configuration setting"), then the first line that
-/// is not a log line (`2026-11-10T05:09:59Z ERROR …`), else the last log line, else nothing.
-pub(crate) fn exit_reason(tail: &str) -> String {
+/// The useful lines of what a program wrote to stderr, in order: colour codes removed; warnings dropped
+/// (`Warning: …`, `note: …`, a `WARN`/`INFO` log line, Codex's "ignoring 1 unrecognized configuration setting"), and
+/// so are indented lines (the file a start-up warning names under it, a stack's frames, a list under a heading) and
+/// help text (`Usage: …`, "For more information …", a heading ending in `:`). Each is at most 200 characters.
+fn exit_lines(tail: &str) -> Vec<String> {
     let is_log = |l: &str| l.len() > 11 && l.as_bytes()[..4].iter().all(u8::is_ascii_digit) && l.as_bytes()[4] == b'-' && l.as_bytes()[10] == b'T';
-    let warning = |l: &str| {
+    let skip = |l: &str| {
         let low = l.to_ascii_lowercase();
-        low.starts_with("warning:") || low.starts_with("warn:") || (is_log(l) && [" WARN ", " INFO ", " DEBUG ", " TRACE "].iter().any(|w| l.contains(w))) || low.contains("unrecognized configuration setting")
+        low.starts_with("warning:")
+            || low.starts_with("warn:")
+            || low.starts_with("note:")
+            || (is_log(l) && [" WARN ", " INFO ", " DEBUG ", " TRACE "].iter().any(|w| l.contains(w)))
+            || low.contains("unrecognized configuration setting")
+            || low.starts_with("usage:")
+            || low.starts_with("for more information")
+            || l.ends_with(':')
     };
-    let lines: Vec<String> = tail.lines().map(|l| strip_ansi(l).trim().to_string()).filter(|l| !l.is_empty() && !warning(l)).collect();
-    lines.iter().find(|l| !is_log(l)).or(lines.last()).map(|l| clip(l, 200)).unwrap_or_default()
+    tail.lines().map(strip_ansi).filter(|l| !l.starts_with([' ', '\t'])).map(|l| l.trim().to_string()).filter(|l| !l.is_empty() && !skip(l)).map(|l| clip(&l, 200)).collect()
+}
+
+/// The reason in a program's stderr: its last useful line ([`exit_lines`]), else nothing.
+pub(crate) fn exit_reason(tail: &str) -> String {
+    exit_lines(tail).pop().unwrap_or_default()
+}
+
+/// What an exit's stderr says about why the program failed, for [`Adapter::explain`]: every useful line, so a
+/// sign-in hint anywhere in it is found (the reason shown is the last one). Nothing when the program ended with
+/// code 0: an orderly close, where a warning it printed at start is not why it ended.
+pub(crate) fn exit_why(code: Option<i32>, tail: &str) -> String {
+    if code == Some(0) {
+        String::new()
+    } else {
+        exit_lines(tail).join("\n")
+    }
+}
+
+/// The last non-empty line of `text`.
+pub(crate) fn last_line(text: &str) -> &str {
+    text.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
 }
 
 /// The protocol messages on one line of an agent's stdout, in order: a leading byte-order mark is dropped, and a line
@@ -720,17 +754,29 @@ fn strip_ansi(text: &str) -> String {
 /// What a tool call is about, for the progress line and the approval card: the command, path, pattern,
 /// query or URL from its arguments, else a short JSON.
 fn tool_detail(input: &Value) -> String {
+    if let Some(d) = known_detail(input) {
+        return d;
+    }
+    match input {
+        Value::Object(m) if m.is_empty() => String::new(),
+        Value::Null => String::new(),
+        other => clip(&other.to_string(), 160),
+    }
+}
+
+/// The command, path, pattern, query or URL a tool call's arguments name, when they name one.
+fn known_detail(input: &Value) -> Option<String> {
     for k in ["command", "cmd", "file_path", "path", "notebook_path", "pattern", "query", "url", "code", "description", "prompt"] {
         if let Some(v) = input.get(k) {
             if let Some(t) = v.as_str() {
                 if !t.trim().is_empty() {
-                    return clip(t, 160);
+                    return Some(clip(t, 160));
                 }
             }
             if let Some(a) = v.as_array() {
                 let parts: Vec<String> = a.iter().filter_map(|x| x.as_str().map(String::from)).collect();
                 if !parts.is_empty() {
-                    return clip(&parts.join(" "), 160);
+                    return Some(clip(&parts.join(" "), 160));
                 }
             }
         }
@@ -740,14 +786,44 @@ fn tool_detail(input: &Value) -> String {
         let first = t.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
         let first = first.trim_start_matches('[').split('#').next().unwrap_or(first).trim_end_matches(']');
         if !first.is_empty() {
-            return clip(first, 160);
+            return Some(clip(first, 160));
         }
     }
-    match input {
-        Value::Object(m) if m.is_empty() => String::new(),
-        Value::Null => String::new(),
-        other => clip(&other.to_string(), 160),
+    None
+}
+
+/// How much of a plan (`ExitPlanMode`) the approval card gets; a longer one is cut there.
+const PLAN_CHARS: usize = 20_000;
+
+/// The line an approval card shows for a tool that is neither a command nor a file edit: the skill's name (and
+/// its arguments) for `Skill`, the command / path / query when the input has one ([`tool_detail`]'s keys), else each
+/// top-level field as `name: value`, joined with ` · ` (a nested value as compact JSON), never the whole input as
+/// one JSON string.
+fn ask_detail(name: &str, input: &Value) -> String {
+    if name == "Skill" {
+        let line = [s(input, "skill"), s(input, "args")].into_iter().filter(|x| !x.trim().is_empty()).collect::<Vec<_>>().join(" ");
+        if !line.is_empty() {
+            return clip(&line, 160);
+        }
     }
+    if let Some(d) = known_detail(input) {
+        return d;
+    }
+    let Value::Object(m) = input else { return tool_detail(input) };
+    let parts: Vec<String> = m
+        .iter()
+        .filter_map(|(k, v)| {
+            let t = match v {
+                Value::Null => return None,
+                Value::String(t) if t.trim().is_empty() => return None,
+                Value::String(t) => t.clone(),
+                Value::Array(a) if a.iter().all(Value::is_string) => a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "),
+                other => other.to_string(),
+            };
+            Some(format!("{k}: {t}"))
+        })
+        .collect();
+    clip(&parts.join(" · "), 160)
 }
 
 /// The bot chat's tool names for the verbs on the progress line ("Running", "Reading", "Editing" …).
@@ -1318,16 +1394,25 @@ impl Adapter for Claude {
                         }
                     }
                     let shown = if s(req, "display_name").is_empty() { name.clone() } else { s(req, "display_name") };
+                    // plan mode's end: the plan the agent wrote (markdown, whole), asked as one yes or no; Claude Code
+                    // offers no rule to keep for it, so there is no "for session"
+                    let plan = if name == "ExitPlanMode" { input.get("plan").and_then(Value::as_str).map(|p| p.chars().take(PLAN_CHARS).collect::<String>()) } else { None };
                     let (title, command) = match tool_kind(&name) {
+                        _ if plan.is_some() => ("Start working on this plan?".to_string(), String::new()),
                         "terminal" => ("Run this command?".to_string(), tool_detail(&input)),
                         "patch" => {
                             let path = ["file_path", "path", "notebook_path"].iter().map(|k| s(&input, k)).find(|p| !p.is_empty()).unwrap_or_default();
                             (format!("Allow {shown} to change {}?", if path.is_empty() { "files".to_string() } else { rel(&path, &self.cwd) }), String::new())
                         }
-                        _ => (format!("Allow {shown}?"), tool_detail(&input)),
+                        _ => (format!("Allow {shown}?"), ask_detail(&name, &input)),
                     };
                     self.pending.insert(rid.clone(), ClaudeAsk::Tool(name, input, req.get("permission_suggestions").cloned().unwrap_or(Value::Null)));
-                    st.emit(ev("approval.request", with_cwd(json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES}), &self.cwd)));
+                    let mut f = json!({"request_id": rid, "title": title, "command": command, "choices": CHOICES});
+                    if let Some(p) = plan {
+                        f["plan"] = Value::String(p);
+                        f["choices"] = json!(["deny", "once"]);
+                    }
+                    st.emit(ev("approval.request", with_cwd(f, &self.cwd)));
                     // asked inside a subagent (`agent_id`): the card says which one
                     if let Some(id) = self.sub_of(req) {
                         let name = self.subs.subs.get(&id).map(|x| if x.goal.is_empty() { x.name.clone() } else { x.goal.clone() }).unwrap_or_default();
@@ -1837,10 +1922,24 @@ impl Codex {
                     return self.helper_activity(st, &item, false);
                 }
                 if let Some((tool, step)) = self.item_step(&item) {
-                    self.helpers.step(st, thread, &tool, &step);
+                    // its file change carries the patch, as the session's own does: the step opens to it
+                    let files = if s(&item, "type") == "fileChange" { codex_diff(&item, &self.cwd) } else { vec![] };
+                    if files.is_empty() {
+                        self.helpers.step(st, thread, &tool, &step);
+                    } else {
+                        self.helpers.edit(st, thread, &step, files);
+                    }
                 }
             }
             "item/completed" => match s(&item, "type").as_str() {
+                // what the change finally was (it may differ from what it asked)
+                "fileChange" => {
+                    let files = codex_diff(&item, &self.cwd);
+                    if !files.is_empty() {
+                        let step = self.file_changes(&item);
+                        self.helpers.edit(st, thread, &step, files);
+                    }
+                }
                 "agentMessage" => {
                     let t = s(&item, "text");
                     if !t.trim().is_empty() {
@@ -2691,7 +2790,7 @@ impl Pi {
         if err.contains("No API key") || err.contains("/login") || err.contains("No default model") {
             return format!("{who} is not signed in. Open Terminal and run /login, then Restart.");
         }
-        let line = err.lines().find(|l| !l.trim().is_empty()).unwrap_or(err);
+        let line = last_line(err);
         clip(&provider_message(line).unwrap_or_else(|| line.to_string()), 200)
     }
     /// What OmO said after a run that ended with `failure`, while its end waits (`held`). True when the line was
@@ -3489,11 +3588,14 @@ impl ChatSessions {
                 }
                 let (mid_turn, err, said) = {
                     let a = adapter.lock().unwrap();
-                    let raw = exit_reason(&tail.lock().unwrap());
+                    // code 0 is an orderly close: what it printed at start (a config warning) is no reason
+                    let raw = exit_why(code, &tail.lock().unwrap());
                     match verdict.lock().unwrap().take() {
                         // the start deadline ended it, and already said so
                         Some(why) => (a.in_turn(), why, true),
                         // it never spoke its protocol and refused omher's chat-mode arguments: an old version
+                        // an orderly close (code 0) failed nothing: no reason, whatever it printed
+                        None if code == Some(0) => (a.in_turn(), String::new(), true),
                         None if !answered.load(Ordering::SeqCst) && !a.unrecognized() && refused_chat_mode(&raw) => (a.in_turn(), no_chat_mode(a.name()), false),
                         None => (a.in_turn(), a.explain(&raw), true),
                     }
@@ -5769,6 +5871,12 @@ mod tests {
         // Codex 0.167 (audit O11/O13): its own config runs without approvals and with full disk access; Stop during
         // `sleep 40`, the next turn, then the stopped command's end 37 s after Stop
         out.push(("codex-12-late-step.jsonl", "codex-late", vec![Send, File("codex-12-late-step.jsonl"), Stop, File("codex-12-late-step-stopped.jsonl"), Send, File("codex-12-late-step-after.jsonl")]));
+        // Claude Code 2.1.323 in plan mode: the plan's approval (ExitPlanMode), denied (Claude asks what to change) and
+        // allowed (plan mode ends; the edits after it are approved here)
+        out.push(("claude-14-plan-deny.jsonl", "claude", turn("claude-14-plan-deny.jsonl")));
+        out.push(("claude-14-plan-allow.jsonl", "claude", turn("claude-14-plan-allow.jsonl")));
+        // Codex 0.167: the edit handed to a sub-agent, whose own thread carries the patch
+        out.push(("codex-15-sub-edit.jsonl", "codex-sub-edit", turn("codex-15-sub-edit.jsonl")));
         out
     }
 
@@ -5782,6 +5890,7 @@ mod tests {
             "codex-helpers" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-9-helpers-init.jsonl"]),
             "codex-helper-stop" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-10-helper-stop-init.jsonl"]),
             "codex-late" => (Box::new(Codex::new("/w/proj", Some("01a1ca24-1047-7ee0-aac2-faf093d44dbe"))), vec!["codex-12-late-step-init.jsonl"]),
+            "codex-sub-edit" => (Box::new(Codex::new("/w/proj", None)), vec!["codex-15-sub-edit-init.jsonl"]),
             "omo" => (Box::new(omo_pi()), vec!["omo-init.jsonl"]),
             "omo-batch" => (Box::new(omo_pi()), vec!["omo-13-batch-init.jsonl"]),
             "omo-single" => (Box::new(omo_pi()), vec!["omo-13-single-init.jsonl"]),
@@ -6391,6 +6500,124 @@ mod tests {
         assert_eq!(exit_reason(omo), "");
         assert_eq!(exit_reason(&format!("{omo}\nError: model not found")), "Error: model not found");
         assert_eq!(exit_turn_end(Some(0), &exit_reason(omo)), json!({"event": "turn.end", "outcome": "ended"}));
+    }
+
+    /// Codex 0.167's stderr at start (recorded with codex-15): a coloured config warning and, indented under it,
+    /// the file it names. An orderly close (code 0) has no reason; a failure gives its last line, not that warning.
+    const CODEX_START_WARNING: &str = "\u{1b}[2m2026-11-13T01:15:36.955056Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m \u{1b}[2mcodex_app_server\u{1b}[0m\u{1b}[2m:\u{1b}[0m Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  user (/Users/me/.codex/config.toml): `mcp_servers.playwright.type` is ignored.\n";
+
+    #[test]
+    fn a_start_up_warning_is_not_why_a_session_ended() {
+        // before: the indented line under the warning came through as the reason of a clean close
+        assert_eq!(exit_reason(CODEX_START_WARNING), "");
+        assert_eq!(exit_why(Some(0), CODEX_START_WARNING), "");
+        assert_eq!(exit_why(Some(0), &format!("{CODEX_START_WARNING}Error: boom")), "", "code 0 failed nothing");
+        // a real failure: its last line, not the warning at the top
+        let failed = format!("{CODEX_START_WARNING}2026-11-13T01:16:00Z ERROR codex_api: failed to connect\nError: stream disconnected before completion");
+        assert_eq!(exit_reason(&failed), "Error: stream disconnected before completion");
+        assert_eq!(Codex::new("/w", None).explain(&exit_why(Some(1), &failed)), "Error: stream disconnected before completion");
+        // help text after the reason is not the reason (clap: error, blank, Usage, For more information)
+        assert_eq!(exit_reason("error: unexpected argument 'app-server' found\n\nUsage: codex [OPTIONS]\n\nFor more information, try '--help'."), "error: unexpected argument 'app-server' found");
+        // a sign-in hint above other lines is still found: oh-my-pi's signed-out exit (code 1)
+        let omp = "No default model selected. Use /login, set an API key environment variable, or select a local model with /model or --model.\n\nSet an API key environment variable:\n  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.\n\nOr create /Users/me/.omp/agent/models.yml";
+        assert_eq!(Pi::new("/w", "oh-my-pi").explain(&exit_why(Some(1), omp)), "oh-my-pi is not signed in. Open Terminal and run /login, then Restart.");
+    }
+
+    /// claude-14-plan-*: Claude Code 2.1.323 in plan mode ends its plan with `ExitPlanMode {plan, planFilePath}` and
+    /// no rule to keep. The card asks in plain words, carries the plan's markdown whole, and offers Deny and Allow once.
+    #[test]
+    fn the_plan_approval_shows_the_plan_as_text() {
+        let mut c = Claude::new("/w/proj");
+        let st = replay(&mut c, &["claude-14-plan-deny.jsonl"], &["deny"]);
+        let card = of(&st.events, "approval.request")[0];
+        assert_eq!(s(card, "title"), "Start working on this plan?");
+        assert_eq!(s(card, "command"), "", "no JSON string on the card");
+        let plan = s(card, "plan");
+        assert!(plan.starts_with("# Plan: calc.py에 mul(a, b) 추가\n\n1. `calc.py`"), "{plan}");
+        assert!(plan.contains("\n2. `README.md`"), "the whole plan, line breaks kept: {plan}");
+        assert_eq!(card["choices"], json!(["deny", "once"]));
+        // denied: Claude Code asks what to change (a question card), the turn ends done
+        assert_eq!(of(&st.events, "clarify.request").len(), 1);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        // allowed: the plan goes back as Claude Code sent it, plan mode ends
+        let mut c = Claude::new("/w/proj");
+        let lines = real("claude-14-plan-allow.jsonl");
+        let at = lines.iter().position(|l| l.contains("\"ExitPlanMode\"") && l.contains("can_use_tool")).unwrap();
+        let st = run(&mut c, &lines[..=at]);
+        let card = of(&st.events, "approval.request")[0].clone();
+        let w = c.on_input(Input::Approve { request_id: s(&card, "request_id"), choice: "once".into() }).unwrap();
+        let sent: Value = serde_json::from_str(&w.write[0]).unwrap();
+        let input: Value = serde_json::from_str(&lines[at]).unwrap();
+        assert_eq!(sent["response"]["response"], json!({"behavior": "allow", "updatedInput": input["request"]["input"]}));
+        let st = run(&mut c, &lines[at + 1..]);
+        assert!(st.events.iter().any(|e| s(e, "event") == "session.info" && s(e, "mode") == "default"), "plan mode ended");
+    }
+
+    /// A tool that is neither a command nor a file edit gets one readable line on its card, never its input as JSON.
+    #[test]
+    fn other_tools_ask_in_readable_lines() {
+        let card = |name: &str, input: Value| {
+            let mut c = Claude::new("/w/proj");
+            let req = json!({"type": "control_request", "request_id": "r1", "request": {"subtype": "can_use_tool", "tool_name": name, "input": input}});
+            let st = c.on_line(&req.to_string());
+            let e = of(&st.events, "approval.request")[0].clone();
+            (s(&e, "title"), s(&e, "command"))
+        };
+        assert_eq!(card("Skill", json!({"skill": "omh-plan", "args": "a todo app"})), ("Allow Skill?".into(), "omh-plan a todo app".into()));
+        assert_eq!(card("WebFetch", json!({"url": "https://example.com", "prompt": "title"})), ("Allow WebFetch?".into(), "https://example.com".into()));
+        assert_eq!(card("EnterWorktree", json!({"name": "fix-a"})), ("Allow EnterWorktree?".into(), "name: fix-a".into()));
+        assert_eq!(card("CronCreate", json!({"cron": "0 9 * * *", "recurring": true})), ("Allow CronCreate?".into(), "cron: 0 9 * * * · recurring: true".into()));
+        assert_eq!(card("mcp__x__y", json!({"ids": [1, 2], "opts": {"a": 1}})), ("Allow mcp__x__y?".into(), "ids: [1,2] · opts: {\"a\":1}".into()));
+    }
+
+    /// codex-15-sub-edit: Codex 0.167 hands the edit to a sub-agent; the main thread has no file change, the
+    /// sub-agent's thread has one with its patch. The sub-agent's row gets that step with its change per file.
+    #[test]
+    fn an_edit_codex_hands_to_its_subagent_has_its_diff() {
+        let (mut a, init) = adapter_up("codex-sub-edit");
+        for f in init {
+            run(a.as_mut(), &real(f));
+        }
+        a.on_input(Input::send("go")).unwrap();
+        let st = run(a.as_mut(), &real("codex-15-sub-edit.jsonl"));
+        assert!(of(&st.events, "tool.diff").is_empty(), "the main thread edited nothing");
+        let edits: Vec<&Event> = of(&st.events, "subagent").into_iter().filter(|e| s(e, "tool") == "patch").collect();
+        assert!(!edits.is_empty());
+        let last = edits.last().unwrap();
+        assert_eq!(s(last, "step"), "README.md +2, calc.py +4");
+        let files = last["diff"].as_array().unwrap();
+        let paths: Vec<String> = files.iter().map(|f| s(f, "path")).collect();
+        assert_eq!(paths, ["README.md", "calc.py"]);
+        assert_eq!(files[1]["lines"], json!(["@@ -6 +6,5 @@", "     return a - b", "+", "+", "+def mul(a, b):", "+    return a * b"]));
+        assert_eq!((files[1]["added"].as_u64(), files[1]["removed"].as_u64()), (Some(4), Some(0)));
+        assert!(edits.iter().all(|e| e["diff"].is_array()), "every edit step carries its change");
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+    }
+
+    /// The same through the real exit path, for every chat agent's adapter: a program that printed a start-up warning
+    /// and closed in order ends with no reason; one that failed ends with its last line.
+    #[cfg(unix)]
+    #[test]
+    fn every_chat_agent_ends_a_clean_close_without_a_reason() {
+        let tmp = std::env::temp_dir().canonicalize().unwrap();
+        let warn = "printf '\\033[31mERROR\\033[0m Codex is ignoring 1 unrecognized configuration setting.\\n  user (~/.codex/config.toml): `mcp_servers.playwright.type` is ignored.\\n' >&2";
+        let adapters: Vec<(&str, fn() -> Box<dyn Adapter>)> = vec![
+            ("claude", || Box::new(Claude::new("/w"))),
+            ("codex", || Box::new(Codex::new("/w", None))),
+            ("omo", || Box::new(Pi::new("/w", "OmO"))),
+            ("pi", || Box::new(Pi::new("/w", "pi"))),
+            ("opencode", || adapter_for("opencode", "/w", None).unwrap()),
+        ];
+        for (name, make) in adapters {
+            for (script, code, want) in [(format!("{warn}; exit 0"), 0, String::new()), (format!("{warn}; echo 'Error: it broke' >&2; exit 3"), 3, "Error: it broke".to_string())] {
+                let c = ChatSessions::default();
+                let (out, sink) = collect();
+                c.spawn(vec!["/bin/sh".into(), "-c".into(), script.into()], &tmp, None, &[], make(), sink).unwrap();
+                assert!(wait_for(|| out.lock().unwrap().iter().any(|o| matches!(o, ChatOut::Exit(..))), 10), "{name}");
+                let got = out.lock().unwrap().clone();
+                assert!(got.iter().any(|o| matches!(o, ChatOut::Exit(Some(c), e) if *c == code && *e == want)), "{name} exit {code}: {got:?}");
+            }
+        }
     }
 
     #[test]

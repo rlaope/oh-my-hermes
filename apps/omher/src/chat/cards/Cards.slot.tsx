@@ -12,6 +12,7 @@ import { askOpen, getStore, useStore, type ApprovalItem, type AskExpiry, type Cl
 import { answerOf, EMPTY, type Pick } from "./answers";
 import { riskOf } from "./risk";
 import { t, type Key } from "../../i18n";
+import { Markdown } from "../parts/Markdown";
 import { holdImeEnter } from "../../lib/ime";
 
 export const slot = "cards";
@@ -114,6 +115,8 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
   };
 
   const risks = riskOf(item.command || "");
+  // plan mode's end asks one thing in plain words: start on the plan below
+  const title = item.plan ? t("card.startPlan") : item.title || t("card.approvalNeeded");
   return (
     <div
       ref={ref}
@@ -121,12 +124,12 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       className={`card${risks.length ? " risky" : ""}`}
       data-testid="card-approval"
       role="group"
-      aria-label={item.title}
+      aria-label={title}
       aria-keyshortcuts={shown.map((b) => b.key).join(" ")}
       onKeyDown={onKey}
     >
       <AskedBy who={item.subagent} />
-      <div className="card-title">{item.title || t("card.approvalNeeded")}</div>
+      <div className="card-title">{title}</div>
       {risks.length > 0 && (
         <div className="card-risk" data-testid="card-risk" role="note">
           <span className="card-risk-ic" aria-hidden="true">!</span>
@@ -134,6 +137,12 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
         </div>
       )}
       {item.command && <pre className="card-cmd">{item.command}</pre>}
+      {/* plan mode's plan: the agent's markdown as an answer reads, whole, scrolling inside the card */}
+      {item.plan && (
+        <div className="card-plan md" data-testid="card-plan">
+          <Markdown text={item.plan} />
+        </div>
+      )}
       {item.cwd && (
         <div className="card-cwd" title={item.cwd} data-testid="card-cwd">
           {t("card.inCwd", { cwd: item.cwd })}

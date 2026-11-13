@@ -551,6 +551,16 @@ const MOCK_WORK = {
   answer: "Done. `add` has a docstring, `mul(a, b)` is in calc.py, and README.md lists the functions:\n\n```python\ndef mul(a, b):\n    return a * b\n```",
 };
 
+/** The plan Claude Code 2.1.323 wrote in plan mode (claude-14-plan-deny.jsonl), in English here. */
+const MOCK_PLAN =
+  "# Plan: add mul(a, b) to calc.py\n\n1. In `calc.py`, add `def mul(a, b): return a * b` below `sub`, two blank lines apart as the others are.\n2. In `README.md`, list the functions (`add`, `sub`, `mul`) under \"Tiny math helpers.\"\n\nCheck: `python3 -c \"from calc import mul; assert mul(3, 4) == 12\"`";
+
+/** The change a Codex 0.167 sub-agent made (codex-15-sub-edit.jsonl), as the adapter's `diff` gives it. */
+const MOCK_SUB_EDIT = [
+  { path: "README.md", kind: "update" as const, lines: ["@@ -3 +3,3 @@", " Tiny math helpers.", "+", "+Functions: add, sub, mul"], added: 2, removed: 0 },
+  { path: "calc.py", kind: "update" as const, lines: ["@@ -6 +6,5 @@", "     return a - b", "+", "+", "+def mul(a, b):", "+    return a * b"], added: 4, removed: 0 },
+];
+
 class MockChat {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private turn = false;
@@ -558,6 +568,8 @@ class MockChat {
   private waiting: string | null = null;
   /** the open approval is a subagent's (/subask) */
   private subWaiting = false;
+  /** the open approval is plan mode's plan (/plan) */
+  private planAsk = false;
   /** the open approval is a background subagent's, asked after the turn ended (/lateask) */
   private lateAsk = false;
   /** "/subagents hold": the second subagent is still out */
@@ -702,6 +714,42 @@ class MockChat {
           this.end("ended");
           this.emit({ event: "exit", code: 0, error: "" });
         });
+        return;
+      }
+      if (text === "/quit") {
+        // codex-15 (Codex 0.167): the person's own config makes Codex print a warning at start; the program then
+        // closes in order (code 0). Before omher 0.2.7 the shell sent that warning as the exit's reason.
+        this.at(30, () => {
+          this.end("ended");
+          this.dead = true;
+          this.emit({ event: "exit", code: 0, error: "user (~/.codex/config.toml): `mcp_servers.playwright.type` is ignored." });
+        });
+        return;
+      }
+      if (text.startsWith("/plan")) {
+        // claude-14-plan-deny.jsonl as the Claude adapter emits it: plan mode's end (ExitPlanMode) with the plan the
+        // agent wrote; Claude Code offers no rule to keep for it, so Deny and Allow once only
+        const rid = `req-${++this.seq}`;
+        this.at(60, () => {
+          this.waiting = rid;
+          this.planAsk = true;
+          this.emit({ event: "approval.request", request_id: rid, title: "Start working on this plan?", command: "", cwd: this.cwd, choices: ["deny", "once"], plan: MOCK_PLAN });
+        });
+        return;
+      }
+      if (text.startsWith("/subedit")) {
+        // codex-15-sub-edit.jsonl as the Codex adapter emits it: the edit runs in a sub-agent's own thread, whose file
+        // change carries its patch; the main thread edits nothing
+        const sub = (extra: Record<string, unknown>) =>
+          this.emit({ event: "subagent", id: "thr-sub", agent: this.agent, name: "add mul", goal: "", delegation: "codex-turn-1", index: 0, count: 1, state: "running", model: "gpt-6.1-sol", ...extra });
+        const step = MOCK_SUB_EDIT.map((f) => `${f.path} +${f.added}`).join(", ");
+        this.at(40, () => sub({}));
+        this.at(120, () => sub({ tool: "terminal", step: "cat calc.py README.md" }));
+        this.at(200, () => sub({ tool: "patch", step, diff: MOCK_SUB_EDIT }));
+        this.at(260, () => sub({ tool: "patch", step, diff: MOCK_SUB_EDIT }));
+        this.at(400, () => sub({ state: "done", summary: "Added mul(a, b) to calc.py and listed the functions in README.md.", seconds: 18.2 }));
+        this.say("The sub-agent added mul(a, b) to calc.py and listed the functions in README.md.", 480);
+        this.at(800, () => this.end("done"));
         return;
       }
       if (text.startsWith("/approve")) {
@@ -950,6 +998,15 @@ class MockChat {
           this.say(done ? "The subagent finished and reported WROTE." : "The subagent could not write c.txt.", 20);
           this.at(400, () => this.end("done"));
         });
+      } else if (this.planAsk) {
+        // allowed: plan mode ends and the work starts; denied: the agent asks what to change
+        this.planAsk = false;
+        if (i.choice === "deny") this.say("What should change in the plan?", 60);
+        else {
+          this.at(30, () => this.emit({ event: "session.info", mode: "default" }));
+          this.say("Starting on the plan.", 60);
+        }
+        this.at(400, () => this.end("done"));
       } else if (i.request_id.startsWith("req-") && this.subWaiting) {
         // the subagent's command ran (or was refused); the subagent hands back, then the agent answers
         this.subWaiting = false;

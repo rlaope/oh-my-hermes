@@ -557,6 +557,8 @@ export type BridgeEvent =
       /** The tool it is running and that tool's line, or its batched progress. */
       tool?: string;
       step?: string;
+      /** A file edit step's change per file (as `tool.diff` gives it for the session's own edits). */
+      diff?: DiffFile[];
       /** Its result line (done) or error (failed). */
       summary?: string;
       seconds?: number;
@@ -578,6 +580,8 @@ export type BridgeEvent =
       cwd?: string;
       /** Seconds the gateway waits before giving up on it, when it says. */
       timeout_s?: number;
+      /** The plan the agent asks to start on (Claude Code's plan mode), as the markdown it wrote. */
+      plan?: string;
     })
   | (EventBase & {
       event: "clarify.request";

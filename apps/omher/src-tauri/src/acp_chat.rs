@@ -21,7 +21,7 @@ use std::time::Instant;
 
 use serde_json::{json, Map, Value};
 
-use crate::agent_chat::{Adapter, Event, Input, Step};
+use crate::agent_chat::{last_line, Adapter, Event, Input, Step};
 
 fn ev(name: &str, fields: Value) -> Event {
     let mut m = Map::new();
@@ -662,7 +662,7 @@ impl Adapter for Acp {
         if low.contains("auth") && (low.contains("required") || low.contains("login")) {
             return self.signed_out();
         }
-        err.to_string()
+        last_line(err).to_string()
     }
 
     fn on_line(&mut self, line: &str) -> Step {
