@@ -115,7 +115,10 @@ Typing echo (D), median feed-to-frame ms / p95, and JS heap after the run:
 - **GPU renderer (`on`) in WebKit, the macOS engine**: 4% to 8% faster on streaming text (A, B, D), but 2.2 to 3.4
   times slower on a full-screen redraw with many colours (C: 112 -> 379 ms, C2: 98 -> 212 ms), with frames over 50
   ms where the standard renderer has none, and 29% slower with a TUI-sized palette (C3). The lane's own run of the
-  same bench had 2.9 and 2.3 times for C and C2.
+  same bench had 2.9 and 2.3 times for C and C2. Those are this run's numbers. Two later runs on the same machine,
+  whose raw files are not kept here, had 3.0, 1.7 and 1.2 times for C, C2 and C3, then 2.05, 2.03 and 1.03 times:
+  the full-screen redraw is slower in every run, by an amount that moves from run to run, and the six-colour
+  case (C3) was within the spread in the last one.
 - **Chromium on Metal**: `on` is 1.4 to 1.7 times slower on C and C2, and from -12% to +16% on the rest.
   **Chromium's headless shell** (software WebGL): `on` is 1.4 to 2.6 times slower in every scenario.
 - **`gpu: "auto"` is the standard renderer on every platform** (`decidePlatform` in `engine-policy.ts`): on macOS

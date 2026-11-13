@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher's terminal find reads at a glance, follows a theme change and leaves nothing behind.** Five fixes to
+  the session terminal that shipped in omher 0.2.7. The text inside find's active match now reads at 7:1 on its
+  fill on all 38 themes (it was 4.5:1). Korean text, whose thin strokes draw lighter than their colour on a 1x
+  screen, measured 3.9 to 4.4 by its darkest pixel and now measures 6.4 to 6.7 (the lowest of three words on six
+  themes, Chromium, standard renderer).
+  The fill is the theme's own yellow in a shade dark text reads on, on dark and light themes alike, outlined in
+  that text's colour (on a 2x screen the old colours already measured what they were picked for). A terminal
+  theme that changes while find is open recolours the matches at once; they kept the old theme's colours until
+  the next Enter. Leaving a terminal with find open (another session, Settings, a bot) clears its highlights, so
+  none are left on a terminal that shows no bar to close them with. With the app theme on System, an open
+  terminal follows the OS when it turns light or dark; it kept the colours the app started with while the rest
+  of the page changed. And on Solarized Dark and Light, bold coloured text keeps its colour: those themes hold
+  greys in their bright slots, so a program's bold green, yellow, blue and cyan showed as grey. (#2860)
 - **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
   OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
   and blinking on a 4-second loop, with one line of copy in English, Korean, Japanese and Chinese and one
