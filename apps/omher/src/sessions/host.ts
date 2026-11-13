@@ -26,6 +26,24 @@ export type ChatInput =
  *  `exit`. */
 export type ChatEvent = { event: string; [k: string]: unknown };
 
+/** A conversation Claude Code or Codex keeps for a folder (src-tauri/src/past_chats.rs), listed read-only so it can be
+ *  continued here. `at`: last change, seconds since the epoch. `named`: the title is a name, not the first words. */
+export interface PastChat {
+  agent: "claude" | "codex";
+  id: string;
+  cwd: string;
+  title: string;
+  named: boolean;
+  at: number;
+}
+
+/** One message of such a conversation (what the person typed, or the agent's answer text). */
+export interface PastMsg {
+  role: "user" | "assistant";
+  text: string;
+  ts: number;
+}
+
 export interface SessionHost {
   readonly kind: "tauri" | "mock";
   /** Stop anything an earlier page load left running (a webview reload keeps the shell alive). */
@@ -68,6 +86,16 @@ export interface SessionHost {
   /** The git branch checked out in `cwd` (read from its `.git/HEAD`; no program runs), "" when it is not a
    *  repository, a short commit id when detached. */
   branch(cwd: string): Promise<string>;
+  /** Show folder `cwd` in the file manager. */
+  reveal(cwd: string): Promise<void>;
+  /** Open the person's own system terminal in folder `cwd` (their shell; nothing typed into it). */
+  openTerminal(cwd: string): Promise<void>;
+  /** The recent conversations `agent` keeps for `cwds`, newest first (read-only). */
+  pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
+  /** The last messages of `agent`'s conversation `id` in `cwd`. */
+  pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
+  /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
+  badge(count: number): Promise<void>;
 }
 
 // ---- Tauri ----------------------------------------------------------------------------------
@@ -137,6 +165,26 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     return invoke<string>("session_branch", { cwd });
   }
+  async reveal(cwd: string) {
+    const { invoke } = await this.core();
+    await invoke("session_reveal", { cwd });
+  }
+  async openTerminal(cwd: string) {
+    const { invoke } = await this.core();
+    await invoke("session_open_terminal", { cwd });
+  }
+  async pastChats(agent: "claude" | "codex", cwds: string[]) {
+    const { invoke } = await this.core();
+    return invoke<PastChat[]>("past_chats_list", { agent, cwds });
+  }
+  async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
+    const { invoke } = await this.core();
+    return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
+  }
+  async badge(count: number) {
+    const { invoke } = await this.core();
+    await invoke("asks_badge", { count });
+  }
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -154,7 +202,20 @@ export class TauriHost implements SessionHost {
 // ---- mock (browser, e2e) --------------------------------------------------------------------
 
 export interface MockCall {
-  op: "reset" | "start" | "write" | "resize" | "close" | "chat.start" | "chat.input" | "chat.close" | "file.save" | "file.remove" | "file.prune";
+  op:
+    | "reset"
+    | "start"
+    | "write"
+    | "resize"
+    | "close"
+    | "chat.start"
+    | "chat.input"
+    | "chat.close"
+    | "file.save"
+    | "file.remove"
+    | "file.prune"
+    | "reveal"
+    | "terminal";
   id?: number;
   agent?: string;
   cwd?: string;
@@ -201,6 +262,25 @@ type MockGlobals = {
   /** e2e: Codex's own config runs without approvals and with full disk access (its thread reports
    *  `approvalPolicy: never`, `sandbox: dangerFullAccess`, as codex-12-late-step-init.jsonl) */
   __omherMockCodexUnguarded?: boolean;
+  /** e2e: the conversations Claude Code and Codex keep (none = the built-in ones) */
+  __omherPastChats?: PastChat[];
+  /** e2e: reads of those conversations, apart from the session calls (opening the + menu lists them) */
+  __omherPastReads?: { op: "list" | "read"; agent: string; cwds?: string[]; id?: string; cwd?: string }[];
+  /** e2e: the Dock / taskbar count omher last set */
+  __omherBadge?: number;
+};
+
+/** The mock's past conversations: two Claude Code and one Codex conversation in the e2e folders. */
+const MOCK_PAST: PastChat[] = [
+  { agent: "claude", id: "aaaaaaaa-1111-4222-8333-444444444444", cwd: "/Users/you/code/web-app", title: "Fix the login redirect", named: true, at: Date.now() / 1000 - 3_600 },
+  { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/Users/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: Date.now() / 1000 - 3 * 86_400 },
+  { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/Users/you/code/web-app", title: "Add a dark theme", named: true, at: Date.now() / 1000 - 600 },
+];
+const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
+  "bbbbbbbb-1111-4222-8333-444444444444": [
+    { role: "user", text: "Remember the word MARIGOLD for later", ts: Date.now() / 1000 - 3 * 86_400 },
+    { role: "assistant", text: "Noted: MARIGOLD.", ts: Date.now() / 1000 - 3 * 86_400 + 5 },
+  ],
 };
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
@@ -353,6 +433,26 @@ export class MockHost implements SessionHost {
   async branch(cwd: string) {
     const b = this.g.__omherBranches ?? { "/Users/you/code/omher": "feat/session-controls" };
     return b[cwd] ?? "";
+  }
+  async reveal(cwd: string) {
+    this.log({ op: "reveal", cwd });
+  }
+  async openTerminal(cwd: string) {
+    this.log({ op: "terminal", cwd });
+  }
+  async pastChats(agent: "claude" | "codex", cwds: string[]) {
+    (this.g.__omherPastReads ??= []).push({ op: "list", agent, cwds });
+    const all = this.g.__omherPastChats ?? MOCK_PAST;
+    return all.filter((c) => c.agent === agent && cwds.includes(c.cwd)).sort((a, b) => b.at - a.at);
+  }
+  async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
+    (this.g.__omherPastReads ??= []).push({ op: "read", agent, id, cwd });
+    const c = (this.g.__omherPastChats ?? MOCK_PAST).find((x) => x.agent === agent && x.id === id && x.cwd === cwd);
+    if (!c) throw new Error("no such conversation");
+    return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
+  }
+  async badge(count: number) {
+    this.g.__omherBadge = count;
   }
 }
 

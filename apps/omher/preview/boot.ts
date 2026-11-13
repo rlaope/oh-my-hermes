@@ -32,9 +32,10 @@ try {
   /* read-only in this browser */
 }
 // The SESSIONS mock host lists every agent as installed, so the + menu shows none dimmed as Not installed. Chat
-// agents answer their first message with the preview note, DSH and Grok open a mock terminal, and oh-my-hermes
-// opens a folder chat of the bot you are on (host.ts folder.open; the story answers it).
-w.__omherMockAgents = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok"];
+// agents (OpenCode and DSH included, from 0.2.6) answer their first message with the preview note, and oh-my-hermes
+// opens a folder chat of the bot you are on (host.ts folder.open; the story answers it). A session in the agent's
+// own terminal is held back with a note (guard.ts).
+w.__omherMockAgents = ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"];
 // Every BridgeClient the app makes (the store's and the add-bot popover's) talks to the in-page host.
 w.WebSocket = FakeSocket;
 document.documentElement.dataset.preview = "1";

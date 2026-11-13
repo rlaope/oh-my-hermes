@@ -327,6 +327,11 @@ const OPS: Record<string, (p: Json) => unknown> = {
     return { prs };
   },
   "automations.list": () => ({ automations: automations.map(automationRow) }),
+  // each staged bot runs its own gateway, so a restart would name only that bot (the press itself is refused below)
+  "bots.restart_scope": (p) => {
+    const b = need(p);
+    return { gateway: b.name, bots: [{ name: b.name, display_name: b.display_name }] };
+  },
   "plugins.list": (p) => ({ plugins: structuredClone(plugins[need(p).name] ?? BUILTIN) }),
   "plugins.catalog": (p) => {
     need(p);
@@ -372,7 +377,7 @@ const OPS: Record<string, (p: Json) => unknown> = {
 for (const op of [
   "bots.rename", "bots.set_avatar", "chat.attach", "accounts.add", "accounts.set_active", "accounts.label", "accounts.remove", "accounts.discard",
   "automations.add", "automations.pause", "automations.resume", "automations.remove",
-  "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove",
+  "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove", "plugins.reload", "bots.restart",
 ])
   OPS[op] = () => {
     throw new OpError("preview", "This is a preview: download omher to do this for real.");

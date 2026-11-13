@@ -266,10 +266,12 @@ class DocPins(unittest.TestCase):
         # rule 27 (a session's mode, effort and branch read: only the agent's own switches, never a bypass) as well;
         # 28: rule 28 (a session shows the agent's own diff, todo list and thinking; edit and resend only through
         # the agent's own rewind); 29: rule 29 (Restart one bot through Hermes' own `gateway restart`, `--yes` only
-        # after a refusal; plugin loads through its `reload-plugins`).
+        # after a refusal; plugin loads through its `reload-plugins`); 30: rule 30 (continue a Claude Code or Codex
+        # conversation from its own files, read-only; a row's folder in the file manager or the system terminal; the
+        # asks count on the Dock).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 29, len(rules))
+        self.assertTrue(6 <= len(rules) <= 30, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -352,9 +354,10 @@ class TheOneInstaller(unittest.TestCase):
         # installer; agent_chat.rs starts a chat session's allow-listed agent (rule 11); accounts.rs runs the
         # CLIs' fixed status / sign-in argv (rule 18); hermes_auth.rs opens the system terminal with
         # `hermes auth add <id> --type api-key` (rule 23); dsh_chat.rs runs a DSH chat's message through DeepSeek
-        # Harness's headless profile (rule 11). Terminal sessions start theirs through the PTY's
+        # Harness's headless profile (rule 11); folder_open.rs opens the person's own system terminal in a session's
+        # folder with no command (rule 30). Terminal sessions start theirs through the PTY's
         # `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -770,8 +773,9 @@ class AccountsNeverCarryAToken(unittest.TestCase):
                 spawns[path.name] = n
         # bridge.rs starts the bridge with Hermes' Python; accounts.rs runs the CLIs' fixed status / sign-in argv;
         # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11); hermes_auth.rs opens the
-        # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+        # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11);
+        # folder_open.rs opens the system terminal in a session's folder with no command (rule 30).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
 
 
 class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
@@ -955,11 +959,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
         rule 12), once in agent_chat.rs (the chat spawner), in accounts.rs (rule 18's fixed status /
-        sign-in argv) and in hermes_auth.rs (rule 23's terminal); `spawn_command` only in sessions.rs."""
+        sign-in argv), in hermes_auth.rs (rule 23's terminal) and in folder_open.rs (rule 30's terminal in a session's
+        folder); `spawn_command` only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
@@ -1383,3 +1388,71 @@ class RestartOneBotOnAPress(unittest.TestCase):
         owners = {n for n, f in self.fns.items() if any(isinstance(c, ast.Name) and c.id == "reload_plugins" for c in ast.walk(f))}
         self.assertEqual(owners, {"op_plugins_reload"})
         self.assertNotIn("restart", self._body("op_plugins_reload").replace("restart_bot", "").replace("'restart' if", ""))
+
+
+class PastConversationsAreOnlyRead(unittest.TestCase):
+    """Rule 30: the conversations Claude Code and Codex keep are listed and shown read-only, from their own files only,
+    with links and paths outside the CLI's home refused; a row's folder opens in the file manager or the person's own
+    terminal with no command; the asks count goes through Tauri's window calls."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.past = (SHELL / "past_chats.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.open = (SHELL / "folder_open.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+
+    def test_the_conversation_files_are_never_written_and_nothing_else_is_read(self) -> None:
+        code = "\n".join(l for l in self.past.splitlines() if not l.lstrip().startswith("//"))
+        for banned in ("fs::write", "File::create", "OpenOptions", "remove_file", "remove_dir", "fs::rename", "fs::copy",
+                       "create_dir", "set_permissions", "Command::new", "TcpStream", "spawn"):
+            self.assertNotIn(banned, code, banned)
+        # no login, token or config file of either CLI
+        for banned in ("auth.json", ".credentials", "credentials.json", "config.toml", "settings.json", ".claude.json", "oauth", "token"):
+            self.assertNotIn(banned, code.lower(), banned)
+        # only these names under the CLI's home
+        self.assertEqual(sorted(set(re.findall(r'\.join\("([a-z_.]+)"\)', code))), ["projects", "session_index.jsonl", "sessions"])
+
+    def test_links_and_paths_outside_the_home_are_refused_and_reads_are_bounded(self) -> None:
+        inside = self.past.split("pub fn inside(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("symlink_metadata(p)", "is_symlink()", "let real = p.canonicalize().ok()?;",
+                       "let base = root.canonicalize().ok()?;", "real.starts_with(&base).then_some(real)"):
+            self.assertIn(needle, inside)
+        self.assertIn("std::fs::symlink_metadata(p).map(|m| m.is_dir())", self.past)
+        self.assertIn("const HEAD: u64 = 256 * 1024;", self.past)
+        self.assertIn("const TAIL: u64 = 1024 * 1024;", self.past)
+        self.assertIn("pub const MSG_MAX: usize = 40;", self.past)
+        # every file read goes through inside(): the listing and the messages
+        for fn in ("pub fn claude_list(", "pub fn claude_messages(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names("):
+            body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("inside(root, ", body, fn)
+        # an id is a UUID before it names a file
+        for fn in ("pub fn claude_messages(", "pub fn codex_messages("):
+            body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("if !is_uuid(id) {", body, fn)
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("It refuses a symlink anywhere under those folders and any file that is not inside that home once its links are resolved", text)
+        self.assertIn("never opens a credential, token or config file of either CLI", text)
+
+    def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
+        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+                            ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
+                            ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
+            sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
+            self.assertIsNotNone(sig, cmd)
+            self.assertEqual(sig.group(1).strip(), params, cmd)
+        self.assertIn('matches!(agent, "claude" | "codex")', self.past)
+
+    def test_the_system_terminal_runs_no_command_and_the_folder_is_no_shell_string(self) -> None:
+        self.assertEqual(self.open.count("Command::new("), 1)
+        launch = self.open.split("pub fn launchers(", 1)[1].split("\n}\n", 1)[0]
+        for banned in ('"-e"', '"-x"', '"--command"', '"/k"', '"-c"', '"sh"', '"bash"', "osascript", "format!("):
+            self.assertNotIn(banned, launch, banned)
+        self.assertIn('vec!["/c".into(), "start".into(), "".into(), "cmd".into()]', launch)
+        self.assertIn(".current_dir(&dir).stdin(Stdio::null())", self.open)
+        # the folder must exist and be absolute before anything runs
+        for fn in ("pub fn open_terminal(", "pub fn reveal("):
+            body = self.open.split(fn, 1)[1]
+            self.assertTrue(body.split("{\n", 1)[1].lstrip().startswith("let dir = folder(cwd)?;"), fn)
+        folder = self.open.split("pub fn folder(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("!p.is_absolute()", folder)
+        self.assertIn("real.is_dir()", folder)
