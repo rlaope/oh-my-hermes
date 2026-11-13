@@ -60,7 +60,14 @@ async (opts) => {
     ? style.writingMode.endsWith('-rl') : style.direction === 'rtl';
   const startRight = startsRight(principal);
   const scroller = document.scrollingElement || doc;
-  const startEdge = scroller.clientWidth;
+  // A quirks-mode page can have no scrolling element. The root element then
+  // reports its own box, not the page's: its scrollWidth stays at its client
+  // width while the page pans, and a zoom, a width or a border on the root
+  // changes its clientWidth while the page still starts at the viewport's
+  // edge. The browser's own content box, read by the caller before this runs,
+  // gives both ends there in the px that client rects use.
+  const pageBox = document.scrollingElement ? null : opts.content_box;
+  const startEdge = pageBox ? pageBox.left + sx + pageBox.width : scroller.clientWidth;
   const r1 = (v) => Math.round(v * 10) / 10;
   const shown = (el) => {
     const r = el.getBoundingClientRect();
@@ -119,17 +126,15 @@ async (opts) => {
   // the left, where such a page overflows, is reachable as far as the page
   // scrolls: `farEdge` is the left end of that range in page px, 0 on a page
   // that does not overflow. Paint alone does not widen it: content under
-  // layout containment is drawn left of page x 0 and cannot be panned to. A
-  // quirks-mode page can have no scrolling element, and then nothing in the
-  // page reports how far it scrolls (the root's scrollWidth stays at the
-  // client width while the page pans). The browser's own content width, read
-  // by the caller before this runs, is used there; without it no far end is
-  // applied. A box fixed to the
+  // layout containment is drawn left of page x 0 and cannot be panned to. On
+  // a page with no scrolling element the far end is the left side of the
+  // browser's content box; without that box no far end is applied. A box
+  // fixed to the
   // viewport is judged by its viewport box: the reader pans the screen over
   // the layout viewport, client x 0 to innerWidth, and the scroll position
   // cannot bring anything outside that band into view.
-  const scrollRange = document.scrollingElement ? scroller.scrollWidth : opts.content_width;
-  const farEdge = typeof scrollRange === 'number' ? startEdge - scrollRange : -Infinity;
+  const farEdge = document.scrollingElement ? startEdge - scroller.scrollWidth
+    : pageBox ? pageBox.left + sx : -Infinity;
   const onPageFromRight = (el, r) => {
     if (fixedToViewport(el)) return r.bottom > 0 && r.left < window.innerWidth && r.right > 0;
     return r.bottom + sy > 0 && r.left + sx < startEdge && r.right + sx > farEdge;
@@ -680,18 +685,28 @@ def write_new_file(value, data):
     return path
 
 
-def content_width(context, page, browser_error):
-    """Width of the page's content as the browser lays it out, in CSS px, or None.
+def content_box(context, page, browser_error):
+    """The page's content box as the browser lays it out, or None.
 
-    Read over the DevTools protocol, which changes nothing on the page. The
-    page script needs it only where the page has no scrolling element.
+    `left` is where the content starts, measured from the layout viewport's
+    left side, and `width` how wide it is, both in the CSS px that client
+    rects use. Read over the DevTools protocol, which changes nothing on the
+    page. The page script needs it only where the page has no scrolling
+    element.
     """
     try:
         metrics = context.new_cdp_session(page).send("Page.getLayoutMetrics")
     except browser_error:
         return None
-    width = metrics.get("cssContentSize", {}).get("width")
-    return width if isinstance(width, (int, float)) and not isinstance(width, bool) else None
+
+    def number(group, key):
+        value = metrics.get(group, {}).get(key) if isinstance(metrics.get(group), dict) else None
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    x, width, page_x = number("cssContentSize", "x"), number("cssContentSize", "width"), number("cssLayoutViewport", "pageX")
+    if x is None or width is None or page_x is None:
+        return None
+    return {"left": x - page_x, "width": width}
 
 
 def measure_page(args, plan, emu):
@@ -732,7 +747,7 @@ def measure_page(args, plan, emu):
                 page.wait_for_timeout(300)
                 try:
                     raw = page.evaluate(PAGE_SCRIPT, {
-                        "content_width": content_width(context, page, PlaywrightError),
+                        "content_box": content_box(context, page, PlaywrightError),
                         "width": emu["width"], "data": args.data, "default_data": DEFAULT_DATA_SELECTOR,
                         "action_selector": ACTION_SELECTOR, "target_selector": TARGET_SELECTOR,
                         "field_selector": FIELD_SELECTOR, "measure": plan["measure"], "list_limit": LIST_LIMIT,
