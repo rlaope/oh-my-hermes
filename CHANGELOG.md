@@ -884,6 +884,16 @@ All notable changes will be documented here.
   such as Hermes' own, is still accepted. Reported and first fixed by
   @kinanshihab in #2847.
 
+- **The toolkit scripts refuse a path under an unreadable folder on Python
+  3.14 too.** From 3.14, `Path.is_symlink()` answers "not a link" for an
+  entry inside a folder that cannot be searched, where 3.11 to 3.13 raised.
+  The frontend, biomedical-evidence, geospatial, sprite-forge,
+  molecular-docking and show-reel helpers walked past such a path unchecked
+  on 3.14 and stopped with a bare traceback on older Pythons. Each now
+  checks the entry with `lstat` first and refuses with `path could not be
+  checked`. Missing paths and the symlink rules are unchanged. Reported and
+  first fixed for the frontend helper by @Kenmege in #2855.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

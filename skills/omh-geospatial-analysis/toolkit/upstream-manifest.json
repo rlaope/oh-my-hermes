@@ -44,10 +44,10 @@
       "classification": "original_omh",
       "copyright": "Copyright (c) 2026 oh-my-hermes contributors",
       "license": "MIT",
-      "local_sha256": "d29291221131f012f5a05bb9f35a769ff189f423d2f6e648113dec651b1e80b9",
+      "local_sha256": "57d70c98a0e837172c8b1c64258be7b95dd3066b28e71fbb1fbfde24ebdea043",
       "modification_notice": "Original OMH helper, synthetic example or guidance; no upstream source copied.",
       "source_path": "src/skills/geospatial_analysis_toolkit/scripts/analyze.py",
-      "source_sha256": "d29291221131f012f5a05bb9f35a769ff189f423d2f6e648113dec651b1e80b9",
+      "source_sha256": "57d70c98a0e837172c8b1c64258be7b95dd3066b28e71fbb1fbfde24ebdea043",
       "upstream": []
     }
   },
