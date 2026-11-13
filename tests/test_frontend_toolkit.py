@@ -500,7 +500,7 @@ class PureHelperTests(unittest.TestCase):
         self.assertTrue(api.starts_at_right("sideways-rl", "ltr"))
         self.assertFalse(api.starts_at_right("vertical-lr", "rtl"))
         # The page script reads the start side from <body>, not from <html>.
-        self.assertIn("getComputedStyle(document.body || doc)", api.PAGE_SCRIPT)
+        self.assertIn("getComputedStyle(pageBody || pageRoot)", api.PAGE_SCRIPT)
 
     def test_a_page_that_starts_at_the_right_is_reachable_leftward(self):
         # Client 0..120 on an RTL page scrolled to -130 is page -130..-10: on
@@ -516,7 +516,7 @@ class PureHelperTests(unittest.TestCase):
         self.assertFalse(api.in_document_area(bottom=48, right=-1))
         # The page script applies that rule only where the page has a
         # scrolling element to report its start edge and scroll range.
-        self.assertIn("const reachFromRight = startRight && Boolean(document.scrollingElement);", api.PAGE_SCRIPT)
+        self.assertIn("const reachFromRight = startRight && Boolean(pageScroller);", api.PAGE_SCRIPT)
         self.assertIn("if (reachFromRight) return onPageFromRight(el, r);", api.PAGE_SCRIPT)
 
     def test_past_edge_note_names_the_left_side_on_a_right_start_page(self):
@@ -1033,6 +1033,43 @@ class BrowserTests(Fixture):
                                 f' #real{{top:300px;right:0}}</style></head><body>{body}<button id="real">real</button>'
                                 '</body></html>', encoding="utf-8")
                 self.assertEqual(self.measure(path)["first_action_y"], expected)
+
+    def test_rtl_named_markup_cannot_replace_the_browser_scrolling_element(self):
+        # A browser-supported named property, not a page-authored accessor:
+        # a hidden form/image/object supplies a false zero width; an iframe
+        # supplies a Window and duplicate names supply a collection.
+        first = '<a id="first" href="#" style="top:100px;right:0">first</a>'
+        for mode in ("quirks", "standards"):
+            for tag in ("form", "img", "object", "embed", "iframe", "two-forms"):
+                with self.subTest(mode=mode, tag=tag):
+                    markup = ('<form name="scrollingElement" style="display:none"></form>' * 2 if tag == "two-forms"
+                              else f'<{tag} name="scrollingElement" style="display:none"></{tag}>')
+                    path = self.no_scrolling_element_page(f"named-{mode}-{tag}.html", markup + first)
+                    if mode == "standards":
+                        path.write_text("<!doctype html>" + path.read_text(encoding="utf-8"), encoding="utf-8")
+                    report = self.measure(path)
+                    self.assertEqual(report["first_action_y"], 100)
+                    self.assertEqual(report["horizontal_overflow_px"], 0)
+
+    def test_rtl_scrolling_form_sizes_are_not_named_controls(self):
+        # A hidden input shadows its form's scrollHeight/clientHeight. The
+        # link at y900 can be scrolled into the form; the fallback is y300.
+        for name in ("scrollHeight", "clientHeight", "scrollTop", "checkVisibility"):
+            with self.subTest(name=name):
+                body = ('<form style="position:absolute;top:500px;right:0;width:300px;height:100px;overflow-y:auto">'
+                        f'<input type="hidden" name="{name}"><div style="height:400px"></div>'
+                        '<a id="first" href="#" style="position:static">first</a></form>')
+                report = self.measure(self.parked_left_page(f"named-size-{name}.html", "", body))
+                self.assertEqual(report["first_action_y"], 900)
+
+    def test_ltr_body_named_form_does_not_change_the_start_side(self):
+        path = self.root / "named-body-ltr.html"
+        path.write_text('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'
+                        '<style>body{margin:0;height:2000px}a,button{position:absolute;width:120px;height:48px}</style>'
+                        '<form name="body" dir="rtl" style="display:none"></form>'
+                        '<a href="#" style="top:100px;left:500px">first</a>'
+                        '<button style="top:300px;left:0">real</button>', encoding="utf-8")
+        self.assertEqual(self.measure(path)["first_action_y"], 100)
 
     def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
         # The link sits in a reversed scroll box whose listener loads more

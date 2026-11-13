@@ -63,17 +63,24 @@ the lists, not the counts.
   read from its writing mode, direction and flex flow, not found by scrolling
   it: a scroll runs the page's own listeners, and what they add would be
   counted. `--shot` with `--scroll` scrolls only after the numbers are taken.
-- **The page is read through its own DOM.** The script runs in the page and
-  asks the page: a page script that redefines a property or method the
-  measurement reads (`getBoundingClientRect`, `getComputedStyle`,
-  `document.scrollingElement`, `IntersectionObserver`) is measured by what
-  that returns. A page that reports a link on screen as 500 px above it is
-  read without that link; a quirks-mode page that defines its own
-  `scrollingElement` is read as having one, and then gets the right-start
-  rule on numbers such a page reports wrong: one measured page of that kind
-  (its `<body>` scrolls by itself) is read without a link a touch reaches,
-  where the edge test alone finds it. A right-start page is read
-  through more of these than a left-start one.
+- **Named markup is not a browser measurement.** A hidden `<form
+  name="scrollingElement">` can replace `document.scrollingElement` with that
+  form through the browser's named-property lookup, without any page script.
+  The additional start-side and right-start reach inputs (root, body,
+  scrolling element, ancestor links and scroll-box sizes) are read through
+  their interface prototypes, so named markup cannot replace those reads.
+  This does not protect the older DOM reads shared with the left-start path.
+- **Page scripts can still corrupt measurements.** This is an in-page helper,
+  not an isolated-world measurement. A page script that changes a prototype,
+  `getBoundingClientRect`, `getComputedStyle` or `IntersectionObserver` can
+  make it omit or misplace a control. In one measured page, a real y100 link
+  reported its rectangle at y-500: the left-start path omitted it and
+  returned the y300 fallback, while the right-start path kept it through the
+  observer and reported -500. An observer wrapper that reports an empty
+  intersection can likewise hide a touched link on the right-start path;
+  the left-start path does not consume that observer. The prototype reads
+  above also bypass a page-authored own `document.scrollingElement` getter,
+  but do not protect every API the helper reads.
 - **Width alone misses touch rules.** A desktop window resized to 390 px keeps
   hover and a fine pointer, so hover-only controls look fine and a 30 px button
   passes by eye. The touch and mobile flags are what make the pointer media

@@ -55,7 +55,23 @@ async (opts) => {
   // at the right. A page that starts at its right edge holds that edge at the
   // scrolling box's client width in page px, cannot scroll past it, and
   // overflows to the left instead (scrollX goes negative).
-  const principal = getComputedStyle(document.body || doc);
+  // Markup alone can shadow a built-in: <form name="scrollingElement"> makes
+  // `document.scrollingElement` that form, with no script on the page, and
+  // <input name="scrollHeight"> does the same on its <form>. What decides how
+  // a right-start page is read is taken through the interface prototypes,
+  // which a named element cannot shadow. The lines shared with the left-start
+  // path read `document` as they always did.
+  const own = (proto, name) => {
+    const get = Object.getOwnPropertyDescriptor(proto, name).get;
+    return (node) => get.call(node);
+  };
+  const pageRoot = own(Document.prototype, 'documentElement')(document);
+  const pageBody = own(Document.prototype, 'body')(document);
+  const pageScroller = own(Document.prototype, 'scrollingElement')(document);
+  const parentOf = own(Node.prototype, 'parentElement');
+  const sizeOf = Object.fromEntries(['scrollWidth', 'scrollHeight', 'clientWidth', 'clientHeight', 'scrollLeft', 'scrollTop']
+    .map((name) => [name, own(Element.prototype, name)]));
+  const principal = getComputedStyle(pageBody || pageRoot);
   const startsRight = (style) => /^(vertical|sideways)-/.test(style.writingMode)
     ? style.writingMode.endsWith('-rl') : style.direction === 'rtl';
   const startRight = startsRight(principal);
@@ -66,11 +82,9 @@ async (opts) => {
   // far it scrolls: the root's scrollWidth stays at its client width while
   // the page pans, a zoom or a width on the root moves its clientWidth, and
   // <body> reports the viewport's size as its own. It gets the edge test a
-  // page that starts at the left gets, nothing more. The property is read as
-  // the page exposes it: a page that defines its own `scrollingElement` is
-  // taken at its word, like every other DOM value this script reads.
-  const reachFromRight = startRight && Boolean(document.scrollingElement);
-  const scroller = document.scrollingElement || doc;
+  // page that starts at the left gets, nothing more.
+  const reachFromRight = startRight && Boolean(pageScroller);
+  const scroller = pageScroller || pageRoot;
   const startEdge = scroller.clientWidth;
   const r1 = (v) => Math.round(v * 10) / 10;
   const shown = (el) => {
@@ -167,8 +181,8 @@ async (opts) => {
   //   and it stops at the layout viewport, client x 0 to innerWidth, the band
   //   a box fixed to the viewport is judged by.
   const offersScroll = (value) => value === 'auto' || value === 'scroll';
-  const rootStyle = getComputedStyle(doc);
-  const viewportFromBody = Boolean(document.body)
+  const rootStyle = getComputedStyle(pageRoot);
+  const viewportFromBody = Boolean(pageBody)
     && rootStyle.overflowX === 'visible' && rootStyle.overflowY === 'visible';
   const viewportOverflow = (viewportFromBody ? principal : rootStyle).overflowX;
   const pageScrolls = viewportOverflow === 'visible' || offersScroll(viewportOverflow);
@@ -234,13 +248,14 @@ async (opts) => {
   // at the left gets, below the top and right of page x 0, unless the box that
   // skips it is known to stay off screen: that box cannot be reached and does
   // not paint past its own edge. A clip inside the skipped content is not seen.
-  const rendered = (el) => typeof el.checkVisibility !== 'function'
-    || el.checkVisibility({contentVisibilityAuto: true});
-  const renderSkipped = (el) => typeof el.checkVisibility === 'function'
-    && el.checkVisibility() && !rendered(el);
+  const checkVisibility = Element.prototype.checkVisibility;
+  const rendered = (el) => typeof checkVisibility !== 'function'
+    || checkVisibility.call(el, {contentVisibilityAuto: true});
+  const renderSkipped = (el) => typeof checkVisibility === 'function'
+    && checkVisibility.call(el) && !rendered(el);
   const skippedBy = (el) => {
-    let box = el.parentElement;
-    while (box && !rendered(box)) box = box.parentElement;
+    let box = parentOf(el);
+    while (box && !rendered(box)) box = parentOf(box);
     return box;
   };
   // A box with a positive `overflow-clip-margin` paints what it holds past
@@ -256,15 +271,15 @@ async (opts) => {
     return r.bottom + sy > 0 && r.right + sx > 0;
   };
   const scrollBoxAbove = (node) => {
-    for (let box = node; box && box !== doc; box = box.parentElement) {
-      if (box === document.body && viewportFromBody) continue;
+    for (let box = node; box && box !== pageRoot; box = parentOf(box)) {
+      if (box === pageBody && viewportFromBody) continue;
       const style = getComputedStyle(box);
-      const dx = offersScroll(style.overflowX) ? Math.max(0, box.scrollWidth - box.clientWidth) : 0;
-      const dy = offersScroll(style.overflowY) ? Math.max(0, box.scrollHeight - box.clientHeight) : 0;
+      const dx = offersScroll(style.overflowX) ? Math.max(0, sizeOf.scrollWidth(box) - sizeOf.clientWidth(box)) : 0;
+      const dy = offersScroll(style.overflowY) ? Math.max(0, sizeOf.scrollHeight(box) - sizeOf.clientHeight(box)) : 0;
       if (!dx && !dy) continue;
       const corner = startCorner(style);
-      const [left, right] = travel(box.scrollLeft, dx, corner.right);
-      const [up, down] = travel(box.scrollTop, dy, corner.bottom);
+      const [left, right] = travel(sizeOf.scrollLeft(box), dx, corner.right);
+      const [up, down] = travel(sizeOf.scrollTop(box), dy, corner.bottom);
       return {node: box, grown: [up, right, down, left].map((px) => px + 'px').join(' ')};
     }
     return null;
@@ -287,7 +302,7 @@ async (opts) => {
       const part = parts.get(el);
       if (hasArea(part) && inReach(el, part)) reach.set(el, true);
       else if (renderSkipped(el)) skipped.push({el, by: skippedBy(el)});
-      else pending.push({el, box: scrollBoxAbove(el.parentElement)});
+      else pending.push({el, box: scrollBoxAbove(parentOf(el))});
     }
     if (skipped.length) {
       await settle(Array.from(new Set(skipped.map((item) => item.by).filter(Boolean))));
@@ -310,7 +325,7 @@ async (opts) => {
       batches.forEach((batch, i) => {
         for (const el of batch.els) {
           if (hasArea(seen[i].get(el)) && reach.get(batch.box.node)) reach.set(el, true);
-          else pending.push({el, box: scrollBoxAbove(batch.box.node.parentElement)});
+          else pending.push({el, box: scrollBoxAbove(parentOf(batch.box.node))});
         }
       });
     }

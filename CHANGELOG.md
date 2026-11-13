@@ -825,7 +825,12 @@ All notable changes will be documented here.
   page for which the browser reports no scrolling element (it can get there
   with `overflow-x` auto, scroll or hidden on both `<html>` and `<body>`)
   does not report where it starts or how far it scrolls; its first control
-  is still found by the edge test used before. Measured in
+  is still found by the edge test used before. The extra start-side and
+  reach inputs use interface-prototype getters, so a hidden form, image or
+  iframe named `scrollingElement` cannot replace the browser's value, and
+  a form control named `scrollHeight` cannot replace its scroll-box size.
+  Page scripts can still corrupt other measurement APIs; the toolkit README
+  describes the omitted or misplaced controls this can produce. Measured in
   Chromium only.
 
 - **frontend names the layout before it builds a new page, and reviews
