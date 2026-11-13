@@ -948,6 +948,25 @@
   font-size: 11.5px;
   color: var(--muted);
 }
+/* its Stop: a quiet word after the label, set apart by colour and an underline, never a boxed button */
+.ss-head-stop {
+  flex: none;
+  padding: 0 2px;
+  margin-left: -4px;
+  border: 0;
+  background: none;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--body);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+  cursor: pointer;
+}
+.ss-head-stop:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
 .ss-plans-rows {
   padding: 4px 2px;
 }

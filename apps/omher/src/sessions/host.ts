@@ -562,6 +562,10 @@ class MockChat {
   private lateAsk = false;
   /** "/subagents hold": the second subagent is still out */
   private holding = false;
+  /** work Claude Code says still runs in the background (`background_tasks_changed`), and the background subagent
+   *  among it (/lateask) */
+  private bg = 0;
+  private bgSub = false;
   private model: string;
   /** a model picked while a turn ran (Claude Code): the next turn's init confirms it */
   private next = "";
@@ -658,6 +662,10 @@ class MockChat {
         this.input({ kind: "send", text: first.text, images: first.images });
       });
     }
+  }
+  private background(n: number) {
+    this.bg = n;
+    this.emit({ event: "session.info", background: n });
   }
   private say(text: string, at: number) {
     const parts = [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))];
@@ -838,10 +846,13 @@ class MockChat {
         // Claude Code's own turn tells of it
         const rid = `req-${++this.seq}`;
         const sub = (extra: Record<string, unknown>) =>
-          this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "running", ...extra });
+          this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "running", model: "claude-opus-5-5", ...extra });
         this.at(40, () => this.emit({ event: "tool.start", tool_id: "sa-4", name: "delegate_task", detail: "Write gamma to c.txt" }));
-        this.at(50, () => sub({}));
-        this.at(60, () => this.emit({ event: "session.info", background: 1 }));
+        this.at(50, () => {
+          this.bgSub = true;
+          sub({ model: "claude-opus-5-5" });
+        });
+        this.at(60, () => this.background(1));
         this.at(80, () => this.emit({ event: "tool.end", tool_id: "sa-4", name: "", ok: true, ms: 0 }));
         this.say("started", 100);
         this.at(500, () => {
@@ -874,12 +885,14 @@ class MockChat {
       }
       if (text.startsWith("/background")) {
         // the turn ends with a command still running in the background (Claude background_tasks_changed, OmO
-        // waiting_background): the header says so until it ends
-        this.at(40, () => this.emit({ event: "session.info", background: 1 }));
+        // waiting_background): the header says so until it ends. "hold": it runs on until Stop; "busy": the turn
+        // itself goes on too
+        this.at(40, () => this.background(1));
         this.say("started", 80);
+        if (text.includes("busy")) return;
         this.at(400, () => {
           this.end("done"); // clears the pending timers: the background's end is scheduled after it
-          this.at(1100, () => this.emit({ event: "session.info", background: 0 }));
+          if (!text.includes("hold")) this.at(1100, () => this.background(0));
         });
         return;
       }
@@ -925,6 +938,20 @@ class MockChat {
         this.emit({ event: "session.info", rewind: this.sent > 0 });
       });
     } else if (i.kind === "interrupt") {
+      if (!this.turn && this.agent === "claude" && (this.bg > 0 || this.lateAsk)) {
+        // claude-13-late-ask-stop / claude-14-background-stop.jsonl: no turn runs; Claude Code withdraws the late ask,
+        // stops its background subagent and command, and says nothing is left in the background
+        this.stop();
+        this.at(20, () => {
+          if (this.lateAsk && this.waiting) this.emit({ event: "prompt.expired", request_id: this.waiting, reason: "cancelled" });
+          this.lateAsk = false;
+          this.waiting = null;
+          if (this.bgSub) this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "cancelled", model: "claude-opus-5-5" });
+          this.bgSub = false;
+          this.background(0);
+        });
+        return;
+      }
       if (!this.turn) throw new Error("nothing is running");
       this.at(20, () => {
         // as the Claude adapter does: a subagent still out when the turn stops is cancelled with it
@@ -942,8 +969,11 @@ class MockChat {
         // no turn runs: the subagent goes on, ends, the background count drops, and Claude Code's own turn says so
         this.lateAsk = false;
         const done = i.choice !== "deny";
-        this.at(300, () => this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "done", summary: done ? "WROTE" : "The command was not allowed.", seconds: 7.4 }));
-        this.at(320, () => this.emit({ event: "session.info", background: 0 }));
+        this.at(300, () => {
+          this.bgSub = false;
+          this.emit({ event: "subagent", id: "sa-4", agent: this.agent, name: "general-purpose", goal: "Write gamma to c.txt", delegation: "claude-msg_3", index: 0, count: 1, state: "done", summary: done ? "WROTE" : "The command was not allowed.", seconds: 7.4, model: "claude-opus-5-5" });
+        });
+        this.at(320, () => this.background(0));
         this.at(400, () => {
           this.turn = true;
           this.emit({ event: "turn.start" });

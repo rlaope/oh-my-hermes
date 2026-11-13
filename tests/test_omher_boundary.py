@@ -24,6 +24,8 @@ DOCS_INDEX = ROOT / "docs" / "README.md"
 
 RULES = (
     "omher never patches Hermes.",
+    "Stop sends only the agent's own interrupt, and for Claude Code with no turn running also its own `stop_task`",
+    "omher never signals or kills an agent's process or the work it started.",
     "omher never writes to Slack, Discord or any other elsewhere session.",
     "omher may pass a thread reference to the bot; the bot posts with its own tools and approvals.",
     "omher sends, answers and interrupts only in the bot's main chat, the session titled `Bot Chat`,",
