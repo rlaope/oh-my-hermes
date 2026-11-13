@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from _local_package import load_local_package
 from _module_patch import patch_modules
+from _toolkit_path_guard import assert_unsearchable_directory_is_refused
 
 load_local_package()
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +55,9 @@ class ForgeFixture(unittest.TestCase):
 
 
 class OfflineCliTests(ForgeFixture):
+    def test_an_unsearchable_directory_is_refused(self):
+        assert_unsearchable_directory_is_refused(self, helper_api().safe_path, self.root)
+
     def test_help_works_without_site_packages(self):
         result = subprocess.run([sys.executable, "-I", "-S", str(SCRIPT), "--help"],
                                 capture_output=True, text=True, timeout=30)

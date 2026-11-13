@@ -293,6 +293,21 @@ class OfflineCliTests(Fixture):
         self.refused([CLEAN, "--shot", locked / "inner" / "shot.png"], "path could not be checked")
 
     @POSIX_ONLY
+    def test_unsearchable_directory_is_refused_when_is_symlink_swallows_errors(self):
+        # Python 3.14's Path.is_symlink() returns False instead of raising, so the
+        # refusal must not depend on it raising; pin that on every Python.
+        if os.geteuid() == 0:
+            self.skipTest("root can search every directory")
+        api = helper_api()
+        locked = self.root / "locked"
+        (locked / "inner").mkdir(parents=True)
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o700)
+        with mock.patch.object(Path, "is_symlink", lambda self: False), \
+                self.assertRaisesRegex(ValueError, "path could not be checked"):
+            api.safe_path(locked / "inner" / "shot.png")
+
+    @POSIX_ONLY
     def test_directory_walk_keeps_one_descriptor_and_none_when_refused(self):
         api = helper_api()
         live = set()  # descriptor numbers are reused, so track what is open now

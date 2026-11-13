@@ -4502,17 +4502,38 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertIn("omh setup", hero)
         # Every image the landing page loads ships inside site/assets. Two
-        # product captures are <video>s: the omher app film in the top block's
-        # window slot, and the real /dag-ulw TUI recording transcoded from
-        # assets/omh-dag-ulw-tui.gif.
+        # three <video>s: the omher app film in the top block's window slot,
+        # the faces loop in the band under it, and the real /dag-ulw TUI
+        # recording transcoded from assets/omh-dag-ulw-tui.gif.
         for src in re.findall(r'<img[^>]*\ssrc="([^"]+)"', site):
             with self.subTest(img=src):
                 self.assertTrue(src.startswith("assets/"), src)
                 self.assertTrue((Path("site") / src).is_file(), src)
         self.assertEqual(site.count('src="assets/sponsors/opengateway.svg"'), 1)
-        self.assertEqual(site.count("<video"), 2)
+        self.assertEqual(site.count("<video"), 3)
         self.assertEqual(site.count('src="assets/omher-app.webm"'), 1)
         self.assertEqual(site.count('src="assets/omher-app.mp4"'), 1)
+        self.assertEqual(site.count('src="assets/omher-faces.webm"'), 1)
+        self.assertEqual(site.count('src="assets/omher-faces.mp4"'), 1)
+        self.assertEqual(site.count('poster="assets/omher-faces.webp"'), 1)
+        # The faces band sits between the omher block and the OMH hero, its
+        # copy is translated, and its one link is a real download link that
+        # the page's own script points at the visitor's build.
+        order = [site.index(mark) for mark in ('<section class="omher"', '<section class="faces"', '<section class="hero hero--center"')]
+        self.assertEqual(order, sorted(order))
+        faces = site.split('<section class="faces"', 1)[1].split("</section>", 1)[0]
+        self.assertEqual(faces.count("<a "), 1)
+        self.assertIn('href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-main', faces)
+        translations = Path("site/i18n.js").read_text(encoding="utf-8")
+        for key in re.findall(r'data-i18n="(faces\.[^"]+)"', faces):
+            with self.subTest(i18n=key):
+                block = translations.split(f'"{key}": {{', 1)[1].split("}", 1)[0]
+                for lang in ("en", "ko", "ja", "zh"):
+                    self.assertRegex(block, rf'\b{lang}: "[^"]+"')
+        self.assertEqual(len(re.findall(r'data-i18n="faces\.', faces)), 3)
+        for src in ("omher-faces.webm", "omher-faces.mp4", "omher-faces.webp"):
+            with self.subTest(faces=src):
+                self.assertTrue((Path("site") / "assets" / src).is_file(), src)
         for src in ("omher-app.webm", "omher-app.mp4", "omh-dag-ulw-tui.webm", "omh-dag-ulw-tui.mp4"):
             with self.subTest(video=src):
                 self.assertTrue((Path("site") / "assets" / src).is_file(), src)

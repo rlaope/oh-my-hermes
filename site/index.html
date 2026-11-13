@@ -607,8 +607,29 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .rail{transition:opacity var(--base) var(--ease)}
 body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
 /* the OMH hero keeps its content; it now starts right under the omher block instead of centring in a full screen */
-.omher + .hero{align-items:flex-start;padding-top:88px}
-.omher + .hero::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;z-index:1;pointer-events:none;background:linear-gradient(var(--bg),rgba(12,10,18,0))}
+.faces + .hero{align-items:flex-start;padding-top:88px}
+.faces + .hero::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;z-index:1;pointer-events:none;background:linear-gradient(var(--bg),rgba(12,10,18,0))}
+/* the faces band, between the omher block and the OMH hero: soft 3D characters in the style of omher's built-in bot faces,
+   as a 4 s loop over its poster (the loop's first frame). Wide screens set the copy on the sky; phones stack it above. */
+.faces{position:relative;z-index:3;padding:0 var(--gut) clamp(72px,11vh,128px)}
+/* as wide as the app window above it (the first two terms of .omher's --ww), so the two share their left and right edges */
+.faces__in{position:relative;display:flex;flex-direction:column;width:min(1180px,74.5vw);margin:0 auto}
+.faces__in::before{content:"";position:absolute;left:6%;right:6%;top:-110px;height:220px;z-index:-1;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,95,162,.2),rgba(224,76,224,.07) 62%,transparent)}
+@media (min-width:761px){.faces{margin-top:-64px}}
+.faces__pic{position:relative;aspect-ratio:16 / 9;border-radius:10px;overflow:hidden;background:#f3b6d4 url("assets/omher-faces.webp") center/cover no-repeat;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 0 150px -50px rgba(255,95,162,.55)}
+.faces__pic > video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+.faces__copy{position:absolute;left:0;right:0;top:12%;display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 20px;text-align:center}
+.faces__t{margin:0;min-height:0;font:650 clamp(28px,3.4vw,48px)/1.06 var(--sans);letter-spacing:-.04em;color:#1b1020}
+.faces__d{margin:0;font:450 clamp(15px,1.35vw,19px)/1.35 var(--sans);letter-spacing:-.005em;color:rgba(27,16,32,.8)}
+.faces__go{display:inline-flex;align-items:center;gap:8px;height:42px;margin-top:8px;padding:0 18px 0 15px;border-radius:999px;background:#1b1020;color:#f4f1f8;font:600 14px var(--sans);
+  transition:transform var(--fast),background var(--fast)}
+.faces__go:hover{background:#000;transform:translateY(-1px)}
+.faces__go svg{width:15px;height:15px;flex:none}
+@media (max-width:760px){.faces{padding:0 20px 56px}.faces__in{width:100%}.faces__in::before{display:none}.faces__copy{position:static;order:-1;padding:0 0 22px}.faces__t{color:var(--ink)}.faces__d{color:var(--ink-2)}
+  .faces__go{background:var(--ink);color:#0c0a12}.faces__go:hover{background:#fff}}
+@media (prefers-reduced-motion:reduce){.faces__pic > video{display:none}.faces__go{transition:none}}
 @media (max-width:600px){.omher__shot{--win-l:.03611;--win-t:.01625;--win-w:.92917;--win-h:.9675;--win-ar:669 / 774}}
 @media (max-width:760px){.omher__rim{display:none}}
 @media (max-width:760px){.omher{min-height:0;padding:96px 20px 40px;--ww:min(350px,100%)}.omher__stage{position:static;margin-top:150px}.omher__act{margin-top:0}.omher__shot{margin:0 auto;transform:none!important;opacity:1!important;will-change:auto}.omher__meta{gap:10px}.omher__win{border-radius:6px}.omher__cmd{border-radius:10px}.omher__cmd > div{padding:10px 28px 10px 18px}.omher__d{font-size:16px;max-width:330px}.osbtn{height:42px;justify-content:center}.omher + .hero{padding-top:72px}.omher__get{flex-direction:column;align-items:stretch;gap:10px;width:min(350px,100%);max-width:none;margin:28px auto 12px}.omher__cmd{width:min(350px,100%)}.omher__cmd > div{padding-right:28px}}
@@ -709,6 +730,17 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
   </div>
   <div class="omher__cmd" data-omher-cmd><div><span class="p">$</span><code>curl -fsSL https://omher.app/omher | sh</code></div><button class="copy" data-copy-text="curl -fsSL https://omher.app/omher | sh">Copy</button></div>
   </div>
+  </div>
+</section>
+
+<section class="faces" id="faces" aria-labelledby="faces-t" data-faces>
+  <div class="faces__in">
+    <div class="faces__pic"><video data-faces-film muted loop playsinline preload="none" poster="assets/omher-faces.webp" width="1920" height="1080" aria-label="Soft 3D characters in the style of omher's bot faces, bouncing and blinking on lilac dunes under a pink sky: a clover, a star, a heart, a ghost, a cloud and four round blobs."><source src="assets/omher-faces.webm" type="video/webm"><source src="assets/omher-faces.mp4" type="video/mp4"></video></div>
+    <div class="faces__copy">
+      <h2 class="faces__t" id="faces-t" data-i18n="faces.title">A face for every bot.</h2>
+      <p class="faces__d" data-i18n="faces.desc">Built in, or use your own picture.</p>
+      <a class="faces__go" href="https://github.com/rlaope/oh-my-hermes/releases?q=omher" data-dl-main><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="faces.cta">Download omher</span></a>
+    </div>
   </div>
 </section>
 
@@ -1826,9 +1858,22 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
   document.addEventListener('visibilitychange', sync);
   still.addEventListener('change', sync); phone.addEventListener('change', sync);
 })();
+/* the faces loop: no autoplay and preload="none", so the film is fetched only once the band comes on screen. It plays
+   while the band is on screen and the tab is visible, and stays a still (the poster) under reduced motion. */
+(() => {
+  const v = document.querySelector('[data-faces-film]'); if (!v) return;
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  if (still.matches) { v.remove(); return; }
+  let seen = false;
+  const sync = () => { if (seen && !document.hidden && !still.matches) { const p = v.play(); if (p) p.catch(() => {}); } else v.pause(); };
+  new IntersectionObserver(es => { seen = es[0].isIntersecting; sync(); }, {threshold: .05}).observe(v);
+  document.addEventListener('visibilitychange', sync);
+  still.addEventListener('change', sync);
+})();
 /* omher at the top. Downloads: newest omher-v* release from the GitHub API; the button for this OS goes first and
    becomes the primary one (Apple silicon vs Intel where the browser says); the releases page when the API fails.
-   The beam, the shot's tilt and glare, and the rail visibility live in beam.js. */
+   The faces band's one link ([data-dl-main]) follows the primary button. The beam, the shot's tilt and glare, and the
+   rail visibility live in beam.js. */
 (() => {
   const REL = 'https://github.com/rlaope/oh-my-hermes/releases?q=omher';
   const row = document.querySelector('[data-dl]'); if (!row) return;
@@ -1841,11 +1886,14 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
     if (!first) return;
     row.prepend(btn(first)); btn(first).classList.add('osbtn--main');
   }
+  const main = document.querySelector('[data-dl-main]');
+  const syncMain = () => { const b = row.querySelector('.osbtn--main'); if (main && b && os !== 'other') main.href = b.href; };
   order(os === 'win' ? 'win-exe' : os === 'mac' ? 'mac-arm' : os === 'linux' ? 'linux' : null);
   if (os === 'other') btn('mac-arm').classList.add('osbtn--main');
   const cmd = document.querySelector('[data-omher-cmd]');
   if (cmd && os === 'win'){ const ps = 'irm https://omher.app/omher.ps1 | iex'; cmd.querySelector('code').textContent = ps; cmd.querySelector('.copy').dataset.copyText = ps; cmd.querySelector('.p').textContent = 'PS>'; }
-  if (os === 'mac' && uad && uad.getHighEntropyValues) uad.getHighEntropyValues(['architecture']).then(h => { if (h.architecture === 'x86') order('mac-x64'); }).catch(() => {});
+  if (os === 'mac' && uad && uad.getHighEntropyValues) uad.getHighEntropyValues(['architecture']).then(h => { if (h.architecture === 'x86') { order('mac-x64'); syncMain(); } }).catch(() => {});
+  syncMain();
   const key = t => { const m = /^omher-v(\d+)\.(\d+)\.(\d+)(-.+)?$/.exec(t) || []; return [+m[1] || 0, +m[2] || 0, +m[3] || 0, m[4] ? 0 : 1]; };
   const newer = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
   fetch('https://api.github.com/repos/rlaope/oh-my-hermes/releases?per_page=100', {headers:{Accept:'application/vnd.github+json'}})
@@ -1857,6 +1905,7 @@ $$('[data-comm] a').forEach(a => a.addEventListener('pointermove', e => { const 
       const file = {'mac-arm':`omher-${v}-macos-arm64.dmg`,'mac-x64':`omher-${v}-macos-x64.dmg`,'win-exe':`omher-${v}-windows-x64-setup.exe`,'linux':`omher-${v}-linux-x64.AppImage`};
       for (const k in file){ const a = assets.find(x => x.name === file[k]); btn(k).href = a ? a.browser_download_url : (rel.html_url || REL); }
       row.dataset.version = v;
+      syncMain();
     }).catch(() => {});
 })();
 </script>

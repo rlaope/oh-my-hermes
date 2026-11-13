@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
+  OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
+  and blinking on a 4-second loop, with one line of copy in English, Korean, Japanese and Chinese and one
+  `Download omher` link. The link downloads the build for the visitor's system, the same file as the first
+  download button above it, and opens the releases page when the system is unknown. The loop pauses while it is
+  off screen or the tab is hidden, and shows a still picture under reduced motion. On phones the copy sits above
+  the picture. Four of the nine faces ship in the app today (blob, ghost, mochi, star); the other five are in
+  the picture only.
 - **The OMH TUI sends its desktop notification only while the terminal window is not in front.** A turn that ran 10 s
   or more, a question and a finished background process each rang the bell and, in iTerm2, WezTerm, Ghostty, foot
   and rxvt, raised a notification (OSC 9 or 777) even with the window focused, where the person already sees it.
@@ -160,6 +168,15 @@ All notable changes will be documented here.
   The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
+
+- **An omher left open shows the Update button without a restart.** omher
+  looked for a new version once at launch and then every 6 hours, and a check
+  that failed waited for the next 6-hour turn. A failed check is now tried
+  again after 2 minutes, then less often, at most once an hour; and coming
+  back to the window (shown or focused again) checks when the last good check
+  is 30 minutes old or more, which does not depend on a timer and so also
+  covers a Mac that slept. Still one request at a time, to the same address,
+  and silent when a check fails.
 
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
@@ -899,6 +916,16 @@ All notable changes will be documented here.
   next name, Hermes' own interpreter or uv. A Python running from a venv,
   such as Hermes' own, is still accepted. Reported and first fixed by
   @kinanshihab in #2847.
+
+- **The toolkit scripts refuse a path under an unreadable folder on Python
+  3.14 too.** From 3.14, `Path.is_symlink()` answers "not a link" for an
+  entry inside a folder that cannot be searched, where 3.11 to 3.13 raised.
+  The frontend, biomedical-evidence, geospatial, sprite-forge,
+  molecular-docking and show-reel helpers walked past such a path unchecked
+  on 3.14 and stopped with a bare traceback on older Pythons. Each now
+  checks the entry with `lstat` first and refuses with `path could not be
+  checked`. Missing paths and the symlink rules are unchanged. Reported and
+  first fixed for the frontend helper by @Kenmege in #2855.
 
 ## 4.0.7 - 2026-11-09
 

@@ -90,3 +90,26 @@ def assert_alias_does_not_exempt_links_below(test, guard, refusal):
         for path in COMPOSED_REFUSED:
             with test.subTest(composed=path), test.assertRaisesRegex(ValueError, refusal):
                 guard(path)
+
+
+def assert_unsearchable_directory_is_refused(test, guard, root):
+    """A path under a directory that cannot be searched is refused, not walked past.
+
+    From Python 3.14, `Path.is_symlink()` returns False there instead of raising,
+    so a guard that only asks it would accept a path it never checked. Patching it
+    to that behaviour pins the refusal on every Python the suite runs.
+    """
+    if os.name != "posix":
+        test.skipTest("directory search permission is a POSIX mode bit")
+    if os.geteuid() == 0:
+        test.skipTest("root can search every directory")
+    locked = root / "locked"
+    (locked / "inner").mkdir(parents=True)
+    locked.chmod(0)
+    # Restored here, not by addCleanup: a caller's TemporaryDirectory is removed first.
+    try:
+        with mock.patch.object(Path, "is_symlink", lambda self: False), \
+                test.assertRaisesRegex(ValueError, "path could not be checked"):
+            guard(locked / "inner" / "input.json")
+    finally:
+        locked.chmod(0o700)
