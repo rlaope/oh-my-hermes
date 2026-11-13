@@ -521,7 +521,8 @@ impl Acp {
         let pick = |k: &str| raw.get(k).and_then(Value::as_str).map(str::trim).filter(|x| !x.is_empty()).map(String::from);
         let d = match kind {
             "terminal" => pick("command"),
-            "patch" | "read_file" => pick("filePath").or_else(|| pick("path")).or_else(|| pick("file_path")).map(|p| rel(&p, &self.cwd)),
+            // Kilo Code's permission request names it `filepath`
+            "patch" | "read_file" => pick("filePath").or_else(|| pick("path")).or_else(|| pick("file_path")).or_else(|| pick("filepath")).map(|p| rel(&p, &self.cwd)),
             "search_files" => pick("pattern").or_else(|| pick("query")),
             "web_extract" => pick("url"),
             "web_search" => pick("query"),
@@ -1370,6 +1371,51 @@ mod tests {
         let mut b = Acp::new(acp_agent("kilo").unwrap(), "/w/proj", Some("ses_e2d9961a8ffe6pwTlM4aAUbsu1"));
         b.start();
         assert_eq!(written(&b.on_line(&real("kilo-1-new.jsonl")[0]))[0]["method"], "session/resume");
+    }
+
+    /// A real Kilo Code write on its free model (`kilo/kilo-auto/free`, no sign-in, scratch HOME): one step, the card
+    /// with Deny and Allow once (Kilo offers once / always / reject), answered once; Kilo also asks omher to write the
+    /// file (`fs/write_text_file`, though omher said at `initialize` it offers no file writing), omher refuses, and
+    /// Kilo writes it with its own tool.
+    #[test]
+    fn real_kilo_2_a_write_asks_and_allow_once_writes() {
+        let lines = real("kilo-2-write-once.jsonl");
+        let mut a = Acp::new(acp_agent("kilo").unwrap(), "/w/proj", None);
+        let mut all = a.start();
+        let feed = |a: &mut Acp, l: &str, all: &mut Step| {
+            let st = a.on_line(l);
+            all.write.extend(st.write);
+            for e in st.events {
+                if s(&e, "event") == "approval.request" {
+                    let w = a.on_input(Input::Approve { request_id: s(&e, "request_id"), choice: "once".into() }).unwrap();
+                    all.write.extend(w.write);
+                }
+                all.events.push(e);
+            }
+        };
+        feed(&mut a, &lines[0], &mut all);
+        feed(&mut a, &lines[1], &mut all);
+        all.write.extend(a.on_input(Input::Model { model: "kilo/kilo-auto/free".into() }).unwrap().write);
+        feed(&mut a, &lines[2], &mut all);
+        let w = a.on_input(Input::send("Use your write tool to create the file hello3.txt containing hi, then reply done.")).unwrap();
+        all.write.extend(w.write);
+        all.events.extend(w.events);
+        for l in &lines[3..] {
+            feed(&mut a, l, &mut all);
+        }
+        one_clean_turn(&all.events);
+        let card = of(&all.events, "approval.request")[0];
+        assert_eq!(card["choices"], json!(["deny", "once"]));
+        assert_eq!(s(card, "title"), "Allow Kilo Code to change hello3.txt?");
+        let w = written(&all);
+        assert!(w.iter().any(|x| x["id"] == 0 && x["result"] == json!({"outcome": {"outcome": "selected", "optionId": "once"}})));
+        // omher writes nothing for it
+        assert!(w.iter().any(|x| x["id"] == 1 && x["error"]["code"] == -32601));
+        let tools: Vec<(String, String)> = of(&all.events, "tool.start").iter().map(|e| (s(e, "name"), s(e, "detail"))).collect();
+        assert_eq!(tools, [("patch".to_string(), "hello3.txt".to_string())]);
+        assert_eq!(of(&all.events, "tool.end")[0]["ok"], true);
+        assert_eq!(of(&all.events, "message").iter().map(|e| s(e, "text").trim().to_string()).collect::<Vec<_>>(), ["done"]);
+        assert_eq!(s(of(&all.events, "turn.end")[0], "outcome"), "done");
     }
 
     /// A Kilo Code prompt to a model that needs Kilo's account answers `-32603 "Internal error: You need to sign in to
