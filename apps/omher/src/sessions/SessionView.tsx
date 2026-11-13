@@ -7,7 +7,7 @@
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { selectAsks, useStore, type OutFile } from "../state/store";
-import { resolveTheme } from "../app/theme";
+import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
@@ -50,7 +50,7 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   const s = useStore();
   const box = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const mode = resolveTheme(s.ui.theme);
+  const mode = useResolvedTheme(s.ui.theme);
   // Cmd/Ctrl+F in this terminal: the engine says so with an event, the bar opens for that terminal only
   const [find, setFind] = useState<FindRequest | null>(null);
   useEffect(() => {

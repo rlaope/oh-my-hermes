@@ -27,6 +27,9 @@ export function FindBar({ req, onClose }: { req: FindRequest; onClose: () => voi
   });
   const [res, setRes] = useState<FindResults>({ index: -1, count: 0, capped: false });
   useEffect(() => finder.onResults(setRes), [finder]);
+  // The bar goes with its terminal's view (another session, Settings, a bot): the highlights go with the bar, so
+  // none are left on a terminal that shows no bar to close them with.
+  useEffect(() => () => finder.clear(), [finder]);
   useEffect(() => {
     input.current?.focus();
     input.current?.select();

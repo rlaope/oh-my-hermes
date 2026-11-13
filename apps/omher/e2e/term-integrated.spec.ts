@@ -339,15 +339,15 @@ for (const th of THEMES) {
       expect(active.map((c) => c.text).length, JSON.stringify(p.cells.map((c) => c.bg))).toBe(6);
       expect(plain).toHaveLength(12);
       expect(p.picked.activeMatchBackground).not.toBe(p.selection);
-      // readable: the text on a match keeps 4.5:1, or a little under the theme's own ratio when that is lower; on
-      // the active match 3:1, and that one is outlined in the theme's text colour
+      // readable: the text on a match keeps 4.5:1, or a little under the theme's own ratio when that is lower; the
+      // active match draws its text in its own colour (7:1, term-find-colors.spec.ts) and is outlined in it
       const target = Math.min(4.5, p.own - 0.6);
       for (const c of plain) expect(c.text, `text on a match (${th.id})`).toBeGreaterThanOrEqual(target - 0.05);
       for (const c of active) expect(c.text, `text on the active match (${th.id})`).toBeGreaterThanOrEqual(3);
       // the most visible: the active fill stands further from the page than a plain match does, and apart from it
       expect(active[0].page).toBeGreaterThan(plain[0].page);
       expect(plain[0].page).toBeGreaterThan(1.1);
-      // and it alone carries the heavier outline, in the theme's text colour
+      // and it alone carries the heavier outline
       const outlines = await page.locator(".xterm-decoration-container .tfind-active").evaluateAll((els) => els.map((e) => ({ width: getComputedStyle(e).outlineWidth, style: getComputedStyle(e).outlineStyle })));
       expect(outlines).toEqual([{ width: "2px", style: "solid" }]);
 

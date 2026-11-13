@@ -20,9 +20,24 @@ describe("a terminal's look", () => {
       allowProposedApi: true,
       scrollback: 5000,
       minimumContrastRatio: 4.5,
+      drawBoldTextInBrightColors: true,
       macOptionIsMeta: true,
       theme: dark,
     });
+  });
+
+  it("bold text takes the theme's bright colour, except on a theme whose bright slots are greys (Solarized), where it keeps its own", () => {
+    for (const th of TERM_THEMES) {
+      const keeps = th.id === "solarized-dark" || th.id === "solarized-light";
+      expect(termOptions(th.theme, TERM_DEFAULTS).drawBoldTextInBrightColors, th.name).toBe(!keeps);
+    }
+    // an open terminal takes it with the theme
+    const options: Record<string, unknown> = {};
+    const term = { options } as unknown as Terminal;
+    applyLook(term, termThemeById("solarized-light")!.theme, TERM_DEFAULTS);
+    expect(options.drawBoldTextInBrightColors).toBe(false);
+    applyLook(term, termThemeById("dracula")!.theme, TERM_DEFAULTS);
+    expect(options.drawBoldTextInBrightColors).toBe(true);
   });
 
   it("maps every setting to its xterm option", () => {
@@ -92,6 +107,7 @@ describe("a terminal's look", () => {
       cursorInactiveStyle: "underline",
       cursorBlink: false,
       minimumContrastRatio: 4.5,
+      drawBoldTextInBrightColors: true,
       macOptionIsMeta: false,
     });
     applyLook(term, dark, { ...s, contrast: "auto" });

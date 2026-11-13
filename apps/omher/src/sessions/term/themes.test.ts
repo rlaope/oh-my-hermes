@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TERM_DEFAULTS } from "./settings";
-import { ANSI_BRIGHT, ANSI_NORMAL, isLightBackground, luminance, TERM_THEMES, termTheme, termThemeById, termThemePick } from "./themes";
+import { ANSI_BRIGHT, ANSI_NORMAL, brightIsBrighter, isLightBackground, luminance, TERM_THEMES, termTheme, termThemeById, termThemePick } from "./themes";
 import { ORCA_TERM_THEMES } from "./themes-orca";
 
 // Every palette in Orca's five theme files (in its catalog's order), then the five its GitHub theme plugin names.
@@ -107,5 +107,16 @@ describe("terminal theme catalog", () => {
     expect(isLightBackground("#777777")).toBe(true);
     expect(isLightBackground("#757575")).toBe(false);
     expect(isLightBackground(undefined)).toBe(false);
+  });
+
+  it("knows the themes whose bright colours are not their normal ones, brighter: the two Solarized, and no other", () => {
+    expect(TERM_THEMES.filter((t) => !brightIsBrighter(t.theme)).map((t) => t.id)).toEqual(["solarized-dark", "solarized-light"]);
+    // Solarized's bright green is a grey; Dracula's is a brighter green
+    expect(termThemeById("solarized-light")!.theme.brightGreen).toBe("#586e75");
+    // one grey bright slot is not enough (Gruvbox Dark's bright blue, Kanagawa's bright magenta)
+    expect(brightIsBrighter(termThemeById("gruvbox-dark")!.theme)).toBe(true);
+    expect(brightIsBrighter(termThemeById("kanagawa")!.theme)).toBe(true);
+    // a theme with no palette at all draws bold as xterm always did
+    expect(brightIsBrighter({})).toBe(true);
   });
 });

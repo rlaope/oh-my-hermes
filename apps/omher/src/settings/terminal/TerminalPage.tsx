@@ -4,7 +4,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import "./terminal.css";
 import { useStore } from "../../state/store";
-import { resolveTheme } from "../../app/theme";
+import { useResolvedTheme } from "../../app/theme";
 import { Seg } from "../../chat/model/Seg";
 import { CheckIcon } from "../../chat/model/CheckIcon";
 import { locale, t, type Key } from "../../i18n";
@@ -118,7 +118,7 @@ function ThemeRow({ theme, on, onPick }: { theme: TermTheme; on: boolean; onPick
 export function TerminalPage() {
   const s = useStore();
   const term = useTermSettings();
-  const appMode = resolveTheme(s.ui.theme);
+  const appMode = useResolvedTheme(s.ui.theme);
   // the pick being made: for the app theme in force until the person looks at the other one
   const [slot, setSlot] = useState<Mode>(appMode);
   useEffect(() => setSlot(appMode), [appMode]);

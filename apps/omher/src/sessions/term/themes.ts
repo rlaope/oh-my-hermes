@@ -107,6 +107,31 @@ export function luminance(color: string | undefined): number | null {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** How much colour a hex colour has, 0 (a grey) to 1 (HSL saturation); 0 when it is not a hex colour. */
+function saturation(color: string | undefined): number {
+  const rgb = hexRgb(color);
+  if (!rgb) return 0;
+  const [r, g, b] = rgb.map((c) => c / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  return max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+}
+
+const HUES = ["Red", "Green", "Yellow", "Blue", "Magenta", "Cyan"] as const;
+/** Below this a colour reads as a grey. */
+const GREY_BELOW = 0.25;
+
+/** Whether a theme's bright colours are its normal ones, brighter. In Solarized they are not: four of its six
+ *  bright slots hold the theme's grey tones (its green's bright slot is a grey). A terminal that draws bold text in
+ *  the bright slot, as xterm does by default, then shows a program's bold green as grey. False when half or more
+ *  of the six coloured slots have a grey in their bright slot. */
+export function brightIsBrighter(theme: ITheme): boolean {
+  const t = theme as Record<string, string | undefined>;
+  const greys = HUES.filter((h) => saturation(t[h.toLowerCase()]) >= GREY_BELOW && saturation(t[`bright${h}`]) < GREY_BELOW);
+  return greys.length < HUES.length / 2;
+}
+
 /** A light background is one black text contrasts with at least as well as white text does (Orca's rule). A
  *  colour that cannot be read counts as dark. */
 export function isLightBackground(color: string | undefined): boolean {
