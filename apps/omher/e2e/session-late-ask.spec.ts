@@ -45,7 +45,8 @@ async function lateAsk(page: Page, theme: "dark" | "light", shot = false) {
   await page.getByTestId("composer").fill("/lateask");
   await page.keyboard.press("Enter");
   // the turn ends first ("started", Ready) with the subagent still out in the background
-  await expect(page.getByTestId("session-background")).toHaveText("1 still running in the background");
+  // (it reads "1 still running in the background" until the subagent asks, then "1 waiting in the background")
+  await expect(page.getByTestId("session-background")).toHaveText(/^1 (still running|waiting) in the background$/);
   // the subagent's ask has come (as a live card, or as the closed line omher 0.2.5 drew)
   await expect(page.locator("[data-testid=card-approval], [data-testid=card-line]").filter({ hasText: "echo gamma > c.txt" })).toBeVisible();
   if (shot && SHOTS) {

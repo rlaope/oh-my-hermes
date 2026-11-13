@@ -1,6 +1,7 @@
 // Work a coding agent left running in the background after its turn ended can be stopped (Claude Code 2.1.323,
 // the event order of src-tauri/tests/fixtures/real/claude-13-late-ask-stop.jsonl and claude-14-background-stop.jsonl,
-// mock host `/lateask` and `/background`): a quiet "Stop" beside "1 still running in the background" while no turn
+// mock host `/lateask` and `/background`): a quiet "Stop" beside the background label ("1 still running in the
+// background", or "1 waiting in the background" while its only subagent waits on the person) while no turn
 // runs, never while one runs (the composer's Stop is the turn's), only for an agent whose own Stop reaches that work;
 // pressing it sends the agent's own interrupt, the subagent row ends stopped, the count goes, an open late ask reads
 // "Not answered" and the header is Ready. Esc keeps stopping a running turn only. Also: the fan-out card and the
@@ -57,8 +58,9 @@ test.beforeEach(async () => {
 for (const theme of SHOTS ? (["dark", "light"] as const) : (["dark"] as const)) {
   test(`with no turn running, Stop beside the background label stops the background subagent and its ask (${theme})`, async ({ page }) => {
     await session(page, "claude", "/lateask", theme);
-    await expect(page.getByTestId("session-background")).toHaveText("1 still running in the background");
     await expect(page.getByTestId("card-approval")).toBeVisible();
+    // its only background subagent waits on that ask: the label says so (session-background-header.spec.ts)
+    await expect(page.getByTestId("session-background")).toHaveText("1 waiting in the background");
     if (SHOTS) {
       // before any assertion on the new parts, so the same spec on the unfixed tree writes the before shots
       mkdirSync(SHOTS, { recursive: true });
@@ -67,7 +69,7 @@ for (const theme of SHOTS ? (["dark", "light"] as const) : (["dark"] as const)) 
     }
     const stop = page.getByTestId("session-background-stop");
     await expect(stop).toHaveText("Stop");
-    await expect(stop).toHaveAttribute("title", "Stop what still runs in the background");
+    await expect(stop).toHaveAttribute("title", "Stop what waits in the background");
     // a quiet word, not a boxed button: no border, no fill, the label's size
     const look = await stop.evaluate((e) => {
       const c = getComputedStyle(e);

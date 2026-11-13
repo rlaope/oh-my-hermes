@@ -96,6 +96,18 @@ All notable changes will be documented here.
   reminder no longer applies. Image turns count too: there the reminder is
   read after the ask Hermes stamps on the turn, so a quoted reminder never
   does. The `omh_active_workflow` metadata still comes with every call.
+- **An omher session's header says "waiting" about background work that waits
+  for you, and keeps its name and model whole.** While a background subagent
+  only waited for your approval, the header read "1 still running in the
+  background" though its row, its card and the sidebar said "waiting". When
+  every background subagent omher knows of waits on an open approval or
+  question, the header now reads "1 waiting in the background" (four
+  languages); a count that holds a background command, or a subagent still
+  running, keeps the old words. With that label and its Stop showing, a narrow
+  chat (a 900 or 1100px window, the right panel open) cut the model name to
+  "Opu…" or the session's name to nothing: the label now takes a short form
+  ("1 waiting", the sentence in its tooltip) and goes under the name with Stop
+  when the line is tight, and the path gives way first.
 - **A toolcall rule can ask you instead of blocking.** With `"effect": "ask"`,
   a matching call goes to Hermes' approval prompt with the rule's message,
   keyed `omh-toolcall-rule:<name>` so `[a]lways` covers that one rule. Where

@@ -942,7 +942,8 @@
   filter: brightness(1.08);
 }
 
-/* "1 still running in the background": a quiet label after the status, never a button or a chip */
+/* "1 still running in the background" (or "1 waiting in the background"): a quiet label after the status, never a
+   button or a chip */
 .ss-head-bg {
   flex: 0 1 auto;
   min-width: 0;
@@ -970,6 +971,75 @@
 .ss-head-stop:hover {
   color: var(--ink);
   text-decoration-color: currentColor;
+}
+/* The name, the path, the status, the label and its Stop sit in two boxes that are not there on a wide header, so
+   that line is laid out as it always was. With background work a narrower header gives way in steps, by its own
+   width (the `chathead` container, elsewhere.css), so that the name, the count, Stop and the model's name stay whole:
+   - under 780px the label says it in fewer words ("1 waiting"; the whole sentence is its tooltip) and the first box
+     takes what the controls leave (basis 0, so it never presses on them: the model's name is as long as without
+     background work). It wraps: when the name and the status do not fit side by side, the status, the label and
+     Stop go under the name. The path takes only what its line has left.
+   - under 680px the path goes (it would be a few letters) and the name may take the whole line.
+   - under 470px the agent's mark goes (the composer names the agent), and under 430px the status is its dot
+     alone (its word is the dot's tooltip). */
+.ss-head-id,
+.ss-head-now {
+  display: contents;
+}
+.ss-head-bg.short {
+  display: none;
+}
+@container chathead (max-width: 779px) {
+  .ss-head-bg:not(.short) {
+    display: none;
+  }
+  .ss-head-bg.short {
+    display: block;
+  }
+  .ss-head-id.bg {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: center;
+    gap: 2px 10px;
+    flex: 1 1 0;
+    min-width: 0;
+    line-height: 1.3;
+  }
+  .ss-head-id.bg > .ss-head-path {
+    flex: 1 1 0;
+    max-width: max-content;
+  }
+  .ss-head-id.bg > .ss-head-now {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ss-head-id.bg .ss-head-st {
+    margin-left: 0;
+  }
+}
+@container chathead (max-width: 679px) {
+  .ss-head-id.bg > .head-title[data-testid="session-title"] {
+    max-width: 100%;
+  }
+  .ss-head-id.bg > .ss-head-path {
+    display: none;
+  }
+}
+@container chathead (max-width: 469px) {
+  .head:has(> .ss-head-id.bg) > .ss-head-mark {
+    display: none;
+  }
+}
+@container chathead (max-width: 429px) {
+  /* the word is still read out, and is the dot's tooltip */
+  .ss-head-id.bg .ss-head-st.running {
+    font-size: 0;
+    gap: 0;
+  }
 }
 .ss-plans-rows {
   padding: 4px 2px;
