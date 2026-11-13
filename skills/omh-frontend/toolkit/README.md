@@ -26,10 +26,10 @@ ran.
 
 | field | meaning |
 |---|---|
-| `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0 |
-| `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width |
+| `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0; on a page that starts at its right edge (body writing mode `vertical-rl` / `sideways-rl`, or horizontal text with `direction: rtl`) the scrolling element's `scrollWidth` is used, because in quirks mode the root's misses an absolutely placed box overflowing to the left. A quirks-mode page can have no scrolling element (`overflow-x: hidden` on both `<html>` and `<body>` gives none, `clip` on both keeps `<body>`); the root's number is used there and can read 0 while the screen still pans |
+| `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width. On a page that starts at its right edge the overflowing side is the left: the same key then lists elements whose left edge lies left of page x 0, each with `left` (page px, negative) instead of `right`, and the `note` says so. Page x 0 is a document coordinate, not the left edge of the screen at load: under the phone emulation an overflowing page can load with a listed element already on screen |
 | `first_data_y` | top of the first visible match of `--data`, in document px (a match fixed to the viewport is placed by its viewport box); without `--data` the guess is `table tbody tr, [role=row], li, article`, and `"not_found"` plus a hint means pass `--data` |
-| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped, and a control fixed to the viewport is judged and placed by its viewport box, so one parked above the screen stays skipped after the page scrolls. `position: fixed` under an ancestor with a transform, a filter or paint containment is fixed to that ancestor, scrolls with the page and is measured in document px like any other control |
+| `first_action_y` | geometric top of the first visible `a[href]` or `button` in DOM order whose box reaches below the top and right of document x 0, on either start side. A control fixed to the viewport is judged and placed by its viewport box; `position: fixed` under a containing ancestor (a transform, filter or paint containment) scrolls with that ancestor and is placed in document px. This keeps the earlier edge test, not an activation test. It skips controls wholly in the left overflow of a right-start page even when the phone loads panned to them; it can count a control a container clips away, one under an overlay, a disabled control, or one a scroll box cannot reach. It sends no tap, scroll or focus to discover whether a control really acts, and does not predict `:active` / `:hover` changes or event delivery into a nested document |
 | `small_targets` | visible `a, button, [role=button], input, select, summary` under 44 px in either dimension: count and first 20 |
 | `small_inputs` | visible text-entry controls (`textarea`, `select`, and `input` other than checkbox, radio, button, submit, reset, file, image, range, color and hidden) whose computed font size is under 16 px: count and first 20; `checked` counts only these |
 | `console_errors` | `console.error` messages and uncaught page errors during load |
@@ -49,6 +49,52 @@ the lists, not the counts.
 - **An element in the past-right list may be clipped.** A child inside an
   `overflow: hidden` ancestor can sit past the edge without scrolling the page.
   The verdict is `horizontal_overflow_px`; the list points at where to look.
+- **A right-to-left page overflows to the left.** A page that starts at its
+  right edge and is too wide scrolls into negative `scrollX`, and the reader
+  pans left to reach the rest. Under the phone emulation it loads already
+  there (`scrollX` -210 for a 600 px row at 390 px); a `--desktop --width 320`
+  run of the same page loads at `scrollX` 0 and scrolls to -280. The script
+  reads the start side from `<body>`, writing mode before direction, so
+  `<html dir="rtl"><body dir="ltr">` is measured as a left-to-right page,
+  `body{direction:rtl}` as a right-to-left one, and a `vertical-lr` body as a
+  left-start page even under `direction: rtl`.
+- **Measuring writes nothing to the page.** The script does not tap, scroll,
+  focus or write to the page to find a control: those actions run the page's
+  own listeners and may change its state. `first_action_y` keeps the earlier
+  geometric edge test rather than predicting activation. `--shot` with
+  `--scroll` scrolls only after the numbers are taken.
+- **Named markup is not a browser measurement.** A hidden `<form
+  name="scrollingElement">` can replace `document.scrollingElement` with that
+  form through the browser's named-property lookup, without any page script.
+  The start side, the root, body and scrolling element, and
+  every step up the tree (`parentElement`, `offsetParent`, the node kind)
+  are read through their interface prototypes,
+  so named markup cannot replace those reads. A `<form>` holding `<input
+  name="parentElement">` used to send the walk that asks whether a control is
+  fixed to the viewport round in a circle until the time limit.
+  The other reads are as the page exposes them, on either start side. Three
+  measured consequences, the same before this script read right-start pages:
+  a form control named `getBoundingClientRect`, or an element named
+  `querySelector` or `querySelectorAll` on `document`, ends the run with exit
+  2 and no report; a hidden `<form name="documentElement">` reports
+  `client_width` 0.
+- **Geometry is not activation.** The RTL change fixes overflow reporting,
+  not `first_action_y` reachability. An attempted hit-test addition counted
+  links wrapping an iframe, object or embed even when the nested document
+  took the tap. A hit test also cannot predict a `:hover` or `:active` style
+  that changes the control when touched. That addition was withdrawn; both
+  start sides keep the same geometric edge test and its existing misses.
+  A control wholly left of document x 0 stays skipped even if it is on screen.
+  A control to its right stays eligible even if a scroll box, shadow tree,
+  `::details-content` box or overlay prevents interaction.
+- **Page scripts can still corrupt measurements.** This is an in-page helper,
+  not an isolated-world measurement. A page script that changes a prototype,
+  `getBoundingClientRect` or `getComputedStyle` can
+  make it omit or misplace a control. In one measured page, a real y100 link
+  reported its rectangle at y-500: both start sides omitted it and returned
+  the y300 fallback. The prototype reads
+  above also bypass a page-authored own `document.scrollingElement` getter,
+  but do not protect every API the helper reads.
 - **Width alone misses touch rules.** A desktop window resized to 390 px keeps
   hover and a fine pointer, so hover-only controls look fine and a 30 px button
   passes by eye. The touch and mobile flags are what make the pointer media

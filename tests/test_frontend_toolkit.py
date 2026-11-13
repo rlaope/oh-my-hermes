@@ -398,10 +398,18 @@ class OfflineCliTests(Fixture):
         self.assertGreater(len(set(lines[:last + 1])), 6, lines)
         for stop_at in range(last + 1):
             with self.subTest(statement=stop_at, line=lines[stop_at] - first_line):
-                with self.assertRaises(KeyboardInterrupt):
-                    walk(stop_at)
-                self.assertEqual(live, set())
-                live.clear()
+                # Whatever this pass left open is closed before it is judged, so
+                # one leak is one failure and nothing stays open after the test.
+                left = None
+                try:
+                    with self.assertRaises(KeyboardInterrupt):
+                        walk(stop_at)
+                    left = set(live)
+                finally:
+                    for descriptor in live:
+                        real_close(descriptor)
+                    live.clear()
+                self.assertEqual(left, set())
 
     def test_shot_is_written_once_when_the_path_stays_new(self):
         shot = self.root / "shot.png"
@@ -497,7 +505,42 @@ class PureHelperTests(unittest.TestCase):
         # A control fixed to the viewport is judged by its viewport box, not by box plus scroll.
         self.assertIn("if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;", api.PAGE_SCRIPT)
         # `position: fixed` under a containing ancestor is not fixed to the viewport.
-        self.assertIn("if (!node.offsetParent) return true;", api.PAGE_SCRIPT)
+        self.assertIn("const holder = offsetParentOf(node);", api.PAGE_SCRIPT)
+        self.assertIn("if (!holder) return true;", api.PAGE_SCRIPT)
+
+    def test_start_side_follows_the_principal_writing_mode(self):
+        api = helper_api()
+        self.assertFalse(api.starts_at_right("horizontal-tb", "ltr"))
+        self.assertTrue(api.starts_at_right("horizontal-tb", "rtl"))
+        self.assertTrue(api.starts_at_right("vertical-rl", "ltr"))
+        self.assertTrue(api.starts_at_right("sideways-rl", "ltr"))
+        self.assertFalse(api.starts_at_right("vertical-lr", "rtl"))
+        # The page script reads the start side from <body>, not from <html>.
+        self.assertIn("getComputedStyle(pageBody || pageRoot)", api.PAGE_SCRIPT)
+
+    def test_both_start_sides_keep_the_geometric_first_action_test(self):
+        api = helper_api()
+        self.assertIn("out.first_action_y = top(firstOnPage(opts.action_selector));", api.PAGE_SCRIPT)
+        for absent in ("firstFromRight", "tapLands", "elementFromPoint", "IntersectionObserver",
+                       "scrollTo", "scrollBy", "scrollIntoView"):
+            self.assertNotIn(absent, api.PAGE_SCRIPT)
+
+    def test_past_edge_note_names_the_left_side_on_a_right_start_page(self):
+        api = helper_api()
+        args = api.parser().parse_args([str(CLEAN)])
+        plan = api.validate(args)
+        raw = {"viewport_meta": None, "scroll_width": 520, "client_width": 390, "inner_width": 520,
+               "document_height": 844, "past_right": [{"path": "div", "left": -130}], "past_right_total": 1,
+               "data_selector": ".row", "first_data_y": None, "first_action_y": 50, "targets_total": 0,
+               "small_targets_total": 0, "small_targets": [], "fields_total": 0, "small_inputs_total": 0,
+               "small_inputs": [], "measure": [], "start_right": True}
+        report = api.build_report(args, plan, api.emulation(args), raw, [])
+        self.assertEqual(report["horizontal_overflow_px"], 130)
+        self.assertEqual(report["elements_past_right_edge"]["note"], api.PAST_LEFT_EDGE_NOTE)
+        self.assertIn("left edge", api.PAST_LEFT_EDGE_NOTE)
+        raw["start_right"] = False
+        report = api.build_report(args, plan, api.emulation(args), raw, [])
+        self.assertEqual(report["elements_past_right_edge"]["note"], api.PAST_EDGE_NOTE)
 
     def test_page_script_takes_thresholds_and_list_limit_as_arguments(self):
         api = helper_api()
@@ -731,6 +774,559 @@ class BrowserTests(Fixture):
                         '<div style="position:fixed;top:10px;left:0"><a href="#x">Pinned</a></div></div>'
                         '<script>addEventListener("load", () => scrollTo(0, 200))</script>')
         self.assertEqual(self.measure(page)["first_action_y"], 40)
+
+    def page(self, name, root_attrs, style, body):
+        path = self.root / name
+        path.write_text(f'<html {root_attrs}><head><meta name="viewport" content="width=device-width,'
+                        'initial-scale=1"><style>body{margin:0;height:2000px} a,button{display:block;'
+                        f'width:120px;height:48px;box-sizing:border-box}} {style}</style></head>{body}</html>')
+        return path
+
+    def left_overflow_page(self, name, root_attrs='dir="rtl"', body_attrs="", first="right:400px",
+                           scroll=""):
+        # A 520 px absolutely placed row on a page that starts at the right
+        # overflows 130 px to the left; Chromium starts it at scrollX -130.
+        # `#first` at right 400 px sits inside that left overflow at y 50.
+        script = f'<script>addEventListener("load", () => scrollTo({scroll}))</script>' if scroll else ""
+        return self.page(name, root_attrs,
+                         ".wide{position:absolute;top:0;right:0;width:520px;height:10px}"
+                         f" #first{{position:absolute;top:50px;{first}}}"
+                         " #real{position:absolute;top:300px;right:0}",
+                         f'<body {body_attrs}><div class="wide"></div><button id="first">first</button>'
+                         f'<button id="real">real</button>{script}</body>')
+
+    def test_rtl_page_overflowing_left_is_measured_where_the_reader_pans(self):
+        # Overflow is corrected (the root used to report 0), but first_action_y
+        # deliberately keeps the original geometric edge test. The control
+        # wholly in the left overflow stays skipped even when on screen.
+        cases = (("plain", "right:400px", "", 300), ("scrolled", "right:400px", "-130, 200", 300),
+                 ("visible-first", "right:0", "-130, 200", 50))
+        for label, first, scroll, action in cases:
+            with self.subTest(case=label):
+                report = self.measure(self.left_overflow_page(f"rtl-{label}.html", first=first, scroll=scroll),
+                                      "--data", "#first")
+                self.assertEqual(report["first_action_y"], action)
+                self.assertEqual(report["first_data_y"], 50)
+                self.assertEqual(report["horizontal_overflow_px"], 130)
+                past = report["elements_past_right_edge"]
+                self.assertIn({"path": "body > div", "left": -130}, past["first"])
+                self.assertIn("left edge", past["note"])
+
+    def test_the_start_side_is_read_from_body(self):
+        # <body dir="rtl"> and body{direction:rtl} start at the right while
+        # <html> still computes ltr; <html dir="rtl"><body dir="ltr"> starts at
+        # the left and is measured exactly as a left-to-right page.
+        for label, root, body in (("body-dir", "", 'dir="rtl"'), ("body-css", "", 'style="direction:rtl"')):
+            with self.subTest(case=label):
+                report = self.measure(self.left_overflow_page(f"{label}.html", root, body))
+                self.assertEqual((report["first_action_y"], report["horizontal_overflow_px"]), (300, 130))
+        ltr_body = self.page("ltr-body.html", 'dir="rtl"',
+                             ".wide{position:absolute;top:0;left:0;width:520px;height:10px}"
+                             " #first{position:absolute;top:50px;left:400px}",
+                             '<body dir="ltr"><div class="wide"></div><button id="first">first</button></body>')
+        report = self.measure(ltr_body)
+        self.assertEqual((report["first_action_y"], report["horizontal_overflow_px"]), (50, 0))
+        self.assertEqual(report["elements_past_right_edge"]["first"][0], {"path": "body > div", "right": 520})
+
+    def test_rtl_control_parked_past_the_right_edge_is_still_counted(self):
+        # An RTL page cannot scroll past its right edge, so a link parked
+        # 200 px beyond it is off the page, and the button at 150 is what the
+        # reader meets. The edge test counts the link, as it did before this
+        # script read right-start pages, and a control that test counts is
+        # never dropped: a stated limit, with or without a left overflow.
+        parked = "#parked{position:absolute;top:20px;right:-200px} #real{position:absolute;top:150px;right:0}"
+        body = '<a id="parked" href="#">Parked</a><button id="real">real</button>'
+        wide = '<div style="position:absolute;top:0;right:0;width:520px;height:10px"></div>'
+        for label, extra in (("no-overflow", ""), ("left-overflow", wide)):
+            with self.subTest(case=label):
+                report = self.measure(self.page(f"parked-{label}.html", 'dir="rtl"', parked, extra + body))
+                self.assertEqual(report["first_action_y"], 20)
+
+    def test_rtl_scrolled_page_keeps_the_fixed_skip_link_skipped(self):
+        # Scrolled down 200 px: a fixed skip link parked above stays skipped.
+        # The left-overflow control is skipped by the unchanged geometric test;
+        # the fallback at 600 is first, not the control visible at 250.
+        page = self.page("rtl-fixed.html", 'dir="rtl"',
+                         ".wide{position:absolute;top:0;right:0;width:520px;height:10px}"
+                         " #skip{position:fixed;top:-100px;right:0} #pinned{position:fixed;top:400px;left:0}"
+                         " #first{position:absolute;top:250px;right:400px}"
+                         " #real{position:absolute;top:600px;right:0}",
+                         '<div class="wide"></div><a id="skip" href="#">Skip</a>'
+                         '<button id="pinned">left of the screen</button><button id="first">first</button>'
+                         '<button id="real">real</button>'
+                         '<script>addEventListener("load", () => scrollTo(0, 200))</script>')
+        report = self.measure(page)
+        self.assertEqual(report["first_action_y"], 600)
+        self.assertEqual(report["horizontal_overflow_px"], 130)
+
+    def test_vertical_rl_page_starts_at_the_right(self):
+        # Vertical-rl text starts at the right edge: its overflow is measured
+        # on the left. The only control lies in that overflow and stays skipped
+        # by the original geometric first_action_y test.
+        page = self.page("vertical.html", 'style="writing-mode:vertical-rl"',
+                         "body{height:auto} .wide{width:520px;height:10px}",
+                         '<div class="wide"></div><button id="first">first</button>')
+        report = self.measure(page)
+        self.assertEqual(report["first_action_y"], "not_found")
+        self.assertEqual(report["horizontal_overflow_px"], 250)
+
+    def parked_left_page(self, name, style, body):
+        # Standards mode, right-to-left: a skip link parked at left:-9999px,
+        # y 20, the way a left-to-right site hides one, and the control the
+        # reader meets first at y 300.
+        path = self.root / name
+        path.write_text('<!doctype html><html dir="rtl"><head><meta name="viewport" content="width=device-width,'
+                        'initial-scale=1"><style>body{margin:0;height:2000px} a,button{display:block;'
+                        'width:120px;height:48px;box-sizing:border-box}'
+                        ' #skip{position:absolute;top:20px;left:-9999px} #real{position:absolute;top:300px;right:0}'
+                        f' {style}</style></head><body>{body}<button id="real">real</button></body></html>')
+        return path
+
+    def test_rtl_link_parked_left_inside_a_clipping_box_is_not_the_first_action(self):
+        # No scroll or pan shows a link clipped away by its container, so the
+        # reachable button at 300 is first; counting every box left of the
+        # start edge reported the link at 20. The same link in a box the
+        # reader can scroll needs that scroll first: it is not on screen as
+        # the page loads and is not counted either, a stated limit.
+        box = ".box{position:absolute;top:0;right:0;width:390px;height:100px;overflow-x:%s}"
+        body = '<div class="box"><a id="skip" href="#">Skip</a></div>'
+        for overflow, expected in (("hidden", 300), ("auto", 300)):
+            with self.subTest(overflow=overflow):
+                report = self.measure(self.parked_left_page(f"box-{overflow}.html", box % overflow, body))
+                self.assertEqual(report["first_action_y"], expected)
+                self.assertEqual(report["horizontal_overflow_px"], 0)
+
+    def test_rtl_link_parked_left_of_a_held_viewport_is_not_the_first_action(self):
+        # With overflow-x hidden on the root the pan stops 1170 px out, far
+        # short of the link. Without it the same link is 9999 px of real left
+        # overflow the reader can pan to, but it is not on screen as the page
+        # loads, so it is not counted: a stated limit.
+        body = '<a id="skip" href="#">Skip</a>'
+        for label, style, expected in (("held", "html,body{overflow-x:hidden}", 300), ("open", "", 300)):
+            with self.subTest(viewport=label):
+                report = self.measure(self.parked_left_page(f"viewport-{label}.html", style, body))
+                self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_left_overflow_keeps_the_edge_test_beside_a_clipped_link(self):
+        # One page with both: both links wholly in the left overflow stay
+        # skipped. Overflow is 130; first_action_y keeps the fallback at 300.
+        page = self.parked_left_page(
+            "both.html",
+            ".box{position:absolute;top:0;right:0;width:390px;height:100px;overflow:hidden}"
+            " .wide{position:absolute;top:0;right:0;width:520px;height:10px}"
+            " #first{position:absolute;top:50px;right:400px}",
+            '<div class="wide"></div><div class="box"><a id="skip" href="#">Skip</a></div>'
+            '<button id="first">first</button>')
+        report = self.measure(page)
+        self.assertEqual(report["first_action_y"], 300)
+        self.assertEqual(report["horizontal_overflow_px"], 130)
+
+    def test_rtl_link_the_browser_has_not_rendered_yet_counts_when_scrolling_reaches_it(self):
+        # `content-visibility: auto` leaves off-screen content unrendered.
+        # Scrolling down renders the link at 5000; the edge test counts it, so
+        # it is the first action. A link parked far left inside such a box is
+        # skipped by the edge test and no tap lands on it: the button at 300
+        # is first. The same box inside a container that clips it away is
+        # never rendered, but its link passes the edge test and is counted at
+        # 5000, as before this script read right-start pages: a stated limit.
+        lazy = ('<div style="position:absolute;top:5000px;right:0;width:300px;height:200px;'
+                'content-visibility:auto"><a id="first" href="#"%s>first</a></div>')
+        clip = '<div style="position:absolute;top:0;right:0;width:390px;height:100px;overflow:hidden">%s</div>'
+        parked = ' style="position:absolute;left:-9999px"'
+        # A box with `overflow-clip-margin` paints past its own edge: the box
+        # lies off the page to the right, its link 500 px to its left is on it.
+        past_edge = ('<div style="position:absolute;top:5000px;right:-500px;width:300px;height:200px;'
+                     'content-visibility:auto;overflow-clip-margin:1000px">'
+                     '<a id="first" href="#" style="position:absolute;left:-500px;top:0">first</a></div>')
+        cases = (("reachable", lazy % "", 5000), ("clipped", clip % (lazy % ""), 5000),
+                 ("parked-left", lazy % parked, 300), ("painted-past-the-box", past_edge, 5000))
+        for label, body, expected in cases:
+            with self.subTest(lazy=label):
+                report = self.measure(self.parked_left_page(f"lazy-{label}.html", "", body))
+                self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_link_inside_a_scroll_box_is_read_by_the_edge_test_alone(self):
+        # Whether a scroll box can bring its link into view is not inferred:
+        # which way a box scrolls depends on its writing mode, direction and
+        # flex flow, and every rule that read those met a box it got wrong.
+        # A link in a box is counted where the edge test counts it and
+        # nowhere else, as before this script read right-start pages. So a
+        # link the reader scrolls a reversed line to is found above the
+        # scrollport (152) and missed left of it (300, where a reader gets
+        # 500), and a link parked on the side a box cannot scroll toward is
+        # counted (800 and 500, where a reader gets 300). Stated limits.
+        box = "position:absolute;top:500px;right:0;width:300px;height:100px;"
+        tall = '<div style="height:400px;flex:none"></div>'
+        wide = '<div style="width:600px;flex:none"></div>'
+        link = '<a id="first" href="#" style="flex:none">first</a>'
+        cases = (
+            ("column-reverse", f'<div style="{box}overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                               f'{tall}{link}</div>', 152),
+            ("column-reverse-below", f'<div style="{box}overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                                     '<div style="height:448px;flex:none"></div>'
+                                     '<a id="first" href="#" style="position:absolute;top:300px;right:0">first</a></div>',
+             800),
+            ("row-reverse", f'<div dir="ltr" style="{box}overflow-x:auto;display:flex;flex-direction:row-reverse">'
+                            f'{wide}{link}</div>', 300),
+            ("row-left-parked", f'<div dir="ltr" style="{box}overflow-x:auto">'
+                                '<a id="first" href="#" style="position:absolute;left:-200px;top:0">first</a>'
+                                '<div style="width:720px;height:10px"></div></div>', 500),
+            ("legacy-box-reverse", f'<div dir="ltr" style="{box}overflow:auto;display:-webkit-box;'
+                                   '-webkit-box-direction:reverse"><div style="width:600px;height:20px"></div>'
+                                   '<a id="first" href="#">first</a></div>', 300),
+            ("vertical-lr", f'<div style="{box}overflow:auto;writing-mode:vertical-lr">'
+                            '<div style="width:600px;height:50px"></div><a id="first" href="#">first</a></div>', 552),
+        )
+        for label, body, expected in cases:
+            with self.subTest(box=label):
+                report = self.measure(self.parked_left_page(f"reverse-{label}.html", "", body))
+                self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_link_painted_left_of_a_page_that_does_not_scroll_there_is_skipped(self):
+        # The box holds its layout (`content-visibility: auto`) and paints past
+        # its edge, so its link is drawn left of page x 0 at y 100 while the page
+        # stays 390 px wide: no pan reaches it, and the button at 300 is first.
+        body = ('<div style="position:absolute;top:-500px;right:-500px;width:300px;height:200px;'
+                'content-visibility:auto;overflow-clip-margin:1000px">'
+                '<a id="first" href="#" style="position:absolute;left:-1000px;top:600px">first</a></div>')
+        report = self.measure(self.parked_left_page("painted-left.html", "", body))
+        self.assertEqual(report["horizontal_overflow_px"], 0)
+        self.assertEqual(report["first_action_y"], 300)
+
+    def no_scrolling_element_page(self, name, body, rules=""):
+        # Quirks mode with `overflow-x: auto` on both <html> and <body>: the
+        # browser reports no scrolling element. The root's scrollWidth then
+        # stays at its client width however far the page pans, a zoom or a
+        # width on the root moves its clientWidth, and <body> reports the
+        # viewport's size as its own.
+        path = self.root / name
+        path.write_text('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
+                        f'html,body{{direction:rtl;overflow-x:auto}} body{{margin:0;height:2000px}} {rules}'
+                        ' a,button{display:block;position:absolute;width:120px;height:48px}'
+                        f' #real{{top:300px;right:0}}</style></head><body>{body}<button id="real">real</button>'
+                        '</body></html>', encoding="utf-8")
+        return path
+
+    def test_rtl_page_with_no_scrolling_element_is_read_without_its_own_numbers(self):
+        # Earlier reach rules trusted numbers such pages can report wrong.
+        # These fixtures retain their pre-PR geometric edge answers; no
+        # reachability is inferred from a fallback scrolling element.
+        clipped = ('<div style="position:absolute;left:-500px;top:100px;width:120px;height:60px;overflow:hidden">'
+                   '<a id="first" href="#" style="left:0;top:0;width:700px">first</a></div>')
+        painted = ('<div style="position:absolute;left:0;top:100px;width:300px;height:200px;contain:layout">'
+                   '<a id="first" href="#" style="left:-200px;top:0">first</a></div>')
+        small = '<a id="first" href="#" style="top:100px;right:0;width:60px">first</a>'
+        cases = [
+            # The page loads panned 500 px left with the link on screen; the
+            # root's scrollWidth of 390 put it out of range (300).
+            ("on-screen", clipped, "", (), 100),
+            ("on-screen-desktop", clipped, "", ("--desktop", "--width", "390"), 100),
+            # A zoom on the root moves its clientWidth to 780 (150).
+            ("zoomed-out-root", clipped, "html{zoom:.5}", (), 50),
+            # A root 200 px wide: a link at the start edge lay past it (not_found).
+            ("narrow-root", small, "html{width:200px}", (), 100),
+            # <body> scrolls by itself 500 px, and reports the viewport's 390
+            # as its client width, which left 310 px of travel (600).
+            ("body-scrolls", clipped, "body{position:absolute;width:200px;right:-100px;zoom:2}", (), 200),
+            # A link painted left of a page that does not scroll: a far end
+            # mixing the root's width at zoom 2 with the page's counted it (200).
+            ("painted-left", painted, "html{zoom:2}", (), 600),
+        ]
+        for name, body, rules, extra, expected in cases:
+            with self.subTest(page=name):
+                page = self.no_scrolling_element_page(f"no-scroller-{name}.html", body, rules)
+                self.assertEqual(self.measure(page, *extra)["first_action_y"], expected)
+
+    def test_rtl_quirks_page_is_read_the_same_with_or_without_a_scrolling_element(self):
+        # The link lies wholly left of document x 0 and stays skipped, with
+        # or without a scrolling element. This is the pre-PR edge answer,
+        # not a claim that the on-screen link cannot be tapped.
+        body = '<a id="first" href="#" style="top:100px;left:-300px">first</a>'
+        for value, expected in (("clip", 300), ("auto", 300), ("hidden", 300)):
+            with self.subTest(overflow_x=value):
+                path = self.root / f"quirks-{value}.html"
+                path.write_text('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
+                                f'html,body{{overflow-x:{value}}} body{{direction:rtl;margin:0;height:2000px}}'
+                                ' a,button{display:block;position:absolute;width:120px;height:48px}'
+                                f' #real{{top:300px;right:0}}</style></head><body>{body}<button id="real">real</button>'
+                                '</body></html>', encoding="utf-8")
+                self.assertEqual(self.measure(path)["first_action_y"], expected)
+
+    def test_rtl_named_markup_cannot_replace_the_browser_scrolling_element(self):
+        # A browser-supported named property, not a page-authored accessor:
+        # a hidden form/image/object supplies a false zero width; an iframe
+        # supplies a Window and duplicate names supply a collection.
+        first = '<a id="first" href="#" style="top:100px;right:0">first</a>'
+        for mode in ("quirks", "standards"):
+            for tag in ("form", "img", "object", "embed", "iframe", "two-forms"):
+                with self.subTest(mode=mode, tag=tag):
+                    markup = ('<form name="scrollingElement" style="display:none"></form>' * 2 if tag == "two-forms"
+                              else f'<{tag} name="scrollingElement" style="display:none"></{tag}>')
+                    path = self.no_scrolling_element_page(f"named-{mode}-{tag}.html", markup + first)
+                    if mode == "standards":
+                        path.write_text("<!doctype html>" + path.read_text(encoding="utf-8"), encoding="utf-8")
+                    report = self.measure(path)
+                    self.assertEqual(report["first_action_y"], 100)
+                    self.assertEqual(report["horizontal_overflow_px"], 0)
+
+    def measure_in_a_child(self, page, *extra):
+        # The script's own time limit ends the process, so a page that may
+        # hang it is measured in a child: a hang fails the test, it does not
+        # end the test run.
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join(item for item in sys.path if item))
+        result = subprocess.run([sys.executable, str(SCRIPT), str(page), "--timeout", "15", *extra],
+                                capture_output=True, text=True, encoding="utf-8", timeout=90, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def rtl_page(self, name, body, rules=""):
+        path = self.root / name
+        path.write_text('<!doctype html><html dir="rtl"><head><meta name="viewport" content="width=device-width,'
+                        f'initial-scale=1"><style>body{{margin:0;height:2000px}} a,button{{display:block;'
+                        f'width:120px;height:48px;box-sizing:border-box}} {rules}</style></head><body>{body}'
+                        '<button id="real" style="position:absolute;top:1300px;right:0">real</button></body></html>',
+                        encoding="utf-8")
+        return path
+
+    def test_rtl_control_the_edge_test_counts_is_never_dropped(self):
+        # The link sits 400 px down a scroll box, at page y 900, and the
+        # reader scrolls the box to it. The box is not on the link's own
+        # ancestor chain: it is the `::details-content` box of a <details>, or
+        # a box in a shadow tree the link is slotted into. An earlier rule
+        # that inferred reach from the ancestor chain found no way to the link
+        # and dropped it for the button at 1300. A control the edge test
+        # counts is never dropped now.
+        spacer = '<div style="height:400px"></div>'
+        at = 'position:absolute;top:500px;right:0;width:300px'
+        cases = (
+            ("details-content", "details::details-content{height:100px;overflow-y:auto}",
+             f'<details open style="{at}"><summary style="height:0;overflow:hidden">s</summary>'
+             f'{spacer}<a href="#">first</a></details>'),
+            ("shadow-tree", "",
+             f'<div style="{at}"><template shadowrootmode="open"><div style="height:100px;overflow-y:auto">'
+             f'{spacer}<slot></slot></div></template><a href="#">first</a></div>'),
+        )
+        for name, rules, body in cases:
+            with self.subTest(box=name):
+                report = self.measure(self.rtl_page(f"flat-{name}.html", body, rules))
+                self.assertEqual(report["first_action_y"], 900)
+
+    def test_rtl_deeply_nested_scroll_boxes_do_not_cost_the_time_limit(self):
+        # 250 scroll boxes one inside the other, each to be scrolled before the
+        # link shows. An earlier rule walked them with one observer round per
+        # box and the run ended on its time limit. Nothing is walked now. With
+        # the link where the edge test counts it, it is read (25100). With the
+        # link in the left overflow, where the edge test skips it and no tap
+        # lands on it as the page loads, the button at 1300 stands.
+        def nested(depth):
+            inner = '<a href="#">first</a>'
+            for _ in range(depth):
+                inner = f'<div style="height:100px;overflow-y:auto"><div style="height:100px"></div>{inner}</div>'
+            return inner
+
+        counted = f'<div style="position:absolute;top:100px;right:0;width:300px">{nested(250)}</div>'
+        skipped = ('<div style="width:990px;height:20px"></div>'
+                   f'<div style="position:absolute;top:100px;left:-600px;width:300px">{nested(250)}</div>')
+        for name, body, expected in (("counted", counted, 25100), ("skipped", skipped, 1300)):
+            with self.subTest(link=name):
+                report = self.measure_in_a_child(self.rtl_page(f"deep-{name}.html", body))
+                self.assertEqual(report["first_action_y"], expected)
+
+    def test_rtl_left_overflow_keeps_the_geometric_edge_test(self):
+        # First action is a geometric measurement, not an activation test.
+        # The left overflow stays skipped on RTL pages regardless of whether
+        # a control takes a tap; the mirrored LTR control stays eligible.
+        at = "position:absolute;top:100px;left:%dpx"
+        cover = ('<a href="#" style="{at}">first</a><div style="position:absolute;top:0;left:{under}px;'
+                 'width:400px;height:250px;background:#888;z-index:5%s"></div>')
+        cases = (("covered", cover % ""),
+                 ("covered-by-a-box-that-paints-nothing", cover % ";opacity:0"),
+                 ("covered-by-a-box-that-lets-taps-through", cover % ";pointer-events:none"),
+                 ("see-through", '<a href="#" style="{at};opacity:0">first</a>'),
+                 ("disabled", '<button disabled style="{at}">first</button>'),
+                 ("no-pointer-events", '<a href="#" style="{at};pointer-events:none">first</a>'),
+                 ("visibility-collapse", '<a href="#" style="{at};visibility:collapse">first</a>'),
+                 ("inert", '<div inert style="{at}"><a href="#">first</a></div>'))
+        for side, edge, far in (("ltr", "left", 500), ("rtl", "right", -300)):
+            for name, body in cases:
+                expected = 100 if side == "ltr" else 300
+                with self.subTest(side=side, link=name):
+                    path = self.root / f"untappable-{side}-{name}.html"
+                    path.write_text(f'<!doctype html><html dir="{side}"><head><meta name="viewport" '
+                                    'content="width=device-width,initial-scale=1"><style>body{margin:0;height:2000px}'
+                                    ' a,button{display:block;width:120px;height:48px;box-sizing:border-box}'
+                                    '</style></head><body>'
+                                    f'<div style="position:absolute;top:0;{edge}:0;width:700px;height:10px"></div>'
+                                    f'{body.format(at=at % far, under=far - 100)}'
+                                    f'<button style="position:absolute;top:300px;{edge}:0">real</button></body></html>',
+                                    encoding="utf-8")
+                    self.assertEqual(self.measure(path)["first_action_y"], expected)
+
+    def test_rtl_nested_documents_and_touch_styles_do_not_add_an_action(self):
+        # A hit on a descendant says nothing about link activation. Nested
+        # documents can take the tap, and :active / :hover can change the hit.
+        # Withdraw the addition instead of guessing these cases. Even the
+        # plain link and pointer-events:none frame stay at the prior answer:
+        # this is the edge test, not a claim that every skipped link is inert.
+        fill = 'display:block;width:120px;height:48px;border:0'
+        svg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="120" height="48"/%3E'
+        cases = (
+            ("plain", "first", ""),
+            ("frame", f'<iframe srcdoc="inner" style="{fill}"></iframe>', ""),
+            ("frame-through", f'<iframe srcdoc="inner" style="{fill};pointer-events:none"></iframe>', ""),
+            ("object", f"<object type='image/svg+xml' data='{svg}' style='{fill}'></object>", ""),
+            ("embed", f"<embed type='image/svg+xml' src='{svg}' style='{fill}'>", ""),
+            ("disabled-child", f'<button disabled style="{fill}">inner</button>', ""),
+            ("active-hides", "first", "#first:active{visibility:hidden}"),
+            ("hover-refuses", "first", "#first:hover{pointer-events:none}"),
+        )
+        for name, inside, rules in cases:
+            with self.subTest(case=name):
+                path = self.rtl_page(f"edge-only-{name}.html",
+                                     '<a id="first" href="#hit" style="position:absolute;top:100px;left:-300px">'
+                                     f'{inside}</a>', rules)
+                self.assertEqual(self.measure(path)["first_action_y"], 1300)
+
+    def test_rtl_link_that_needs_a_scroll_first_is_not_counted(self):
+        # The link sits 100 px down a scroll box in the left overflow. The
+        # reader scrolls the box and taps it (page y 200), but as the page
+        # loads no part of it is on screen, and nothing is scrolled to look:
+        # the button at 1300 stands, as before this script read right-start
+        # pages. A stated limit.
+        body = ('<div style="width:990px;height:20px"></div>'
+                '<div style="position:absolute;top:100px;left:-600px;width:300px">'
+                '<div style="height:100px;overflow-y:auto"><div style="height:100px"></div>'
+                '<a href="#">first</a></div></div>')
+        self.assertEqual(self.measure(self.rtl_page("one-scroll-away.html", body))["first_action_y"], 1300)
+
+    def test_rtl_page_with_a_form_control_named_after_a_tree_link_is_measured(self):
+        # <input name="parentElement"> makes its <form> answer `parentElement`
+        # with that input, whose parent is the form again. The walk that asks
+        # whether a control is fixed to the viewport climbed that loop until
+        # the time limit. A right-start page asks about every control, so one
+        # such form after the first link was enough; a left-start page stops
+        # at the first control and never met it.
+        first = '<a id="first" href="#" style="position:absolute;top:100px;right:0">first</a>'
+        real = '<button id="real" style="position:absolute;top:300px;right:0">real</button>'
+        hidden = '<input type="hidden" name="parentElement">'
+        box = 'position:absolute;top:600px;right:0;width:200px'
+        cases = [
+            ("link", "<!doctype html>", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<a href="#">later</a></form>', 100),
+            ("button", "<!doctype html>", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<button>go</button></form>', 100),
+            ("nested", "<!doctype html>", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<div><span><a href="#">deep</a></span></div></form>', 100),
+            ("quirks", "", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<a href="#">later</a></form>', 100),
+            ("vertical-rl", "<!doctype html>", "body{writing-mode:vertical-rl}",
+             first + f'<form style="{box}">{hidden}<a href="#">later</a></form>', 100),
+            # The same loop through `offsetParent`, which the walk takes from a fixed box.
+            ("fixed-form", "<!doctype html>", "html{direction:rtl}",
+             first + '<form style="position:fixed;bottom:0;right:0;width:200px;height:80px">'
+             '<input type="hidden" name="offsetParent"><a href="#">later</a></form>', 100),
+            # The first link itself sits in such a form, in a box that scrolls
+            # to it: the left-start path hung on this one as well.
+            ("first-link", "<!doctype html>", "html{direction:rtl}",
+             '<form style="position:absolute;top:500px;right:0;width:300px;height:100px;overflow-y:auto">'
+             f'{hidden}<div style="height:400px"></div><a id="first" href="#" style="position:static">first</a></form>',
+             900),
+        ]
+        for name, doctype, rules, body, expected in cases:
+            with self.subTest(page=name):
+                path = self.root / f"tree-link-{name}.html"
+                path.write_text(f'{doctype}<html><head><meta name="viewport" content="width=device-width,'
+                                f'initial-scale=1"><style>{rules} body{{margin:0;height:2000px}}'
+                                ' a,button{display:block;width:120px;height:48px;box-sizing:border-box}'
+                                f'</style></head><body>{body}{real}</body></html>', encoding="utf-8")
+                self.assertEqual(self.measure_in_a_child(path)["first_action_y"], expected)
+
+    def test_listed_path_follows_the_tree_past_a_form_control_named_after_a_tree_link(self):
+        # The path listed for a small target climbed the same exposed names:
+        # under <input name="parentElement"> it read "form > input > form >
+        # div > button", and under <input name="nodeType"> it stopped at the
+        # form ("div > button"). On either start side.
+        for side, edge in (("rtl", "right"), ("ltr", "left")):
+            for name in ("parentElement", "nodeType"):
+                with self.subTest(side=side, name=name):
+                    path = self.root / f"tree-path-{side}-{name}.html"
+                    path.write_text(f'<!doctype html><html dir="{side}"><head><meta name="viewport" '
+                                    'content="width=device-width,initial-scale=1"><style>body{margin:0;height:2000px}'
+                                    ' a{display:block;width:120px;height:48px}</style></head><body>'
+                                    f'<a href="#" style="position:absolute;top:100px;{edge}:0">first</a>'
+                                    f'<form style="position:absolute;top:600px;{edge}:0;width:200px">'
+                                    f'<input type="hidden" name="{name}">'
+                                    '<div><button style="width:30px;height:30px">s</button></div></form></body></html>',
+                                    encoding="utf-8")
+                    report = self.measure_in_a_child(path)
+                    self.assertEqual(report["first_action_y"], 100)
+                    self.assertEqual([item["path"] for item in report["small_targets"]["first"]],
+                                     ["body > form > div > button"])
+
+    def test_ltr_body_named_form_does_not_change_the_start_side(self):
+        path = self.root / "named-body-ltr.html"
+        path.write_text('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'
+                        '<style>body{margin:0;height:2000px}a,button{position:absolute;width:120px;height:48px}</style>'
+                        '<form name="body" dir="rtl" style="display:none"></form>'
+                        '<a href="#" style="top:100px;left:500px">first</a>'
+                        '<button style="top:300px;left:0">real</button>', encoding="utf-8")
+        self.assertEqual(self.measure(path)["first_action_y"], 100)
+
+    def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
+        # The link sits in a reversed scroll box whose listener loads more
+        # content on the first scroll. Finding the link must not scroll the box:
+        # the input and button the listener adds were counted as the page's own.
+        body = ('<div id="box" style="position:absolute;top:500px;right:0;width:300px;height:100px;'
+                'overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                '<div style="height:400px;flex:none"></div><a id="first" href="#" style="flex:none">first</a></div>'
+                '<script>document.getElementById("box").addEventListener("scroll", () => {'
+                'const more = document.createElement("article");'
+                'more.innerHTML = "<input style=\'font-size:12px\'><button>loaded</button>";'
+                'document.body.prepend(more); }, {once: true});</script>')
+        report = self.measure(self.parked_left_page("scroll-listener.html", "", body))
+        self.assertEqual(report["first_action_y"], 152)
+        self.assertEqual(report["small_targets"]["checked"], 2)
+        self.assertEqual(report["small_inputs"]["checked"], 0)
+
+    def test_rtl_measuring_calls_no_scroll_and_fires_no_scroll_event(self):
+        # The page reports every scroll call, every focus call (focusing
+        # scrolls), every write to scrollTop or
+        # scrollLeft and every scroll event as a console error. A reversed scroll box that hides the first link is the
+        # case the script once scrolled; a scroll made after the counts are
+        # taken would pass the count assertions and is caught here.
+        body = ('<div id="box" style="position:absolute;top:500px;right:0;width:300px;height:100px;'
+                'overflow-y:auto;display:flex;flex-direction:column-reverse">'
+                '<div style="height:400px;flex:none"></div><a id="first" href="#" style="flex:none">first</a></div>'
+                '<script>for (const [owner, names] of [[window, ["scrollTo", "scrollBy", "scroll"]],'
+                ' [Element.prototype, ["scrollTo", "scrollBy", "scroll", "scrollIntoView", "scrollIntoViewIfNeeded"]],'
+                ' [HTMLElement.prototype, ["focus"]]]) {'
+                ' for (const name of names) { const native = owner[name];'
+                ' owner[name] = function (...args) { console.error("scroll call " + name);'
+                ' return native.apply(this, args); }; } }'
+                ' for (const name of ["scrollTop", "scrollLeft"]) {'
+                ' const native = Object.getOwnPropertyDescriptor(Element.prototype, name);'
+                ' Object.defineProperty(Element.prototype, name, {get: native.get,'
+                ' set(value) { console.error("scroll set " + name); native.set.call(this, value); }}); }'
+                ' for (const type of ["scroll", "scrollend"]) {'
+                ' document.addEventListener(type, () => console.error("event " + type), true); }</script>')
+        report = self.measure(self.parked_left_page("no-scroll.html", "", body))
+        self.assertEqual(report["first_action_y"], 152)
+        self.assertEqual(report["console_errors"], [])
+
+    def test_left_to_right_neighbours_are_unchanged(self):
+        # These pass on the code before the right-to-left change as well; they
+        # pin the left-to-right numbers the change must not move.
+        parked = self.page("ltr-parked.html", "",
+                           "#parked{position:absolute;top:20px;left:-200px} #real{position:absolute;top:150px;left:0}",
+                           '<a id="parked" href="#">Parked</a><button id="real">real</button>')
+        self.assertEqual(self.measure(parked)["first_action_y"], 150)
+        hidden = self.page("hidden.html", 'style="overflow-x:hidden"',
+                           "body{overflow-x:hidden} .wide{width:600px;height:20px}",
+                           '<div class="wide"></div><button>b</button>')
+        clip = self.page("clip.html", "", "body{overflow-x:clip} .wide{width:600px;height:20px}",
+                         '<div class="wide"></div><button>b</button>')
+        self.assertEqual(self.measure(hidden)["horizontal_overflow_px"], 0)
+        self.assertEqual(self.measure(clip)["horizontal_overflow_px"], 210)
 
     def test_bad_selector_is_exit_2(self):
         self.refused([str(CLEAN), "--data", "li["], "measuring failed")

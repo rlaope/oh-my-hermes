@@ -840,6 +840,29 @@ All notable changes will be documented here.
   is `not_observed`. `visual-qa` records in the capture manifest whether
   emulation was on.
 
+- **`phone_check.py` measures horizontal overflow from the page's start
+  side and survives named HTML tree links.** On a page whose `<body>` is
+  `direction: rtl`, or in a `-rl` vertical writing mode, the overflowing
+  side is the left. The script reads that start side from `<body>`, writing
+  mode before direction, takes overflow from the scrolling element (with
+  the root as the fallback when none exists), and lists elements left of
+  document x 0 under `elements_past_right_edge`, each with `left`.
+  `first_action_y` deliberately keeps the earlier geometric edge test on
+  both start sides: it neither adds a link in the left overflow nor predicts
+  whether a tap activates one. A hit-test addition was withdrawn after it
+  counted links whose iframe, object or embed took the event, and controls
+  changed by `:hover` / `:active` when touched. The existing misses remain,
+  including a control wholly in the left overflow or one a container clips.
+  The start side, root, body, scrolling element and every tree-walk step
+  use interface-prototype reads, so named forms or controls cannot replace
+  those values or loop a walk through `parentElement` or `offsetParent`.
+  A left-start page keeps its prior output except where these named tree
+  links formerly hung the script, misplaced a control under a fixed ancestor,
+  or corrupted a listed path. Measurement sends no tap, scroll or focus.
+  Page scripts can still corrupt other measurement APIs; the toolkit README
+  describes the omitted or misplaced controls this can produce. Measured in
+  Chromium only.
+
 - **frontend names the layout before it builds a new page, and reviews
   what the page says about itself.** A new `references/editorial-layout.md`
   asks for one value and one reason per axis (skeleton, first screen,

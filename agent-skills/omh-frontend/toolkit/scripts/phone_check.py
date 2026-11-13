@@ -37,6 +37,11 @@ ACTION_SELECTOR = "a[href], button"
 NON_TEXT_INPUT_TYPES = ("checkbox", "radio", "button", "submit", "reset", "file", "image", "range",
                         "color", "hidden")
 NO_DATA_HINT = "no row-like element found; pass --data '<css selector>' for the first data row"
+PAST_EDGE_NOTE = ("an element clipped by an overflow:hidden ancestor can appear here; "
+                  "the overflow number above is the verdict, this list only points")
+PAST_LEFT_EDGE_NOTE = ("this page starts at its right edge and overflows to the left, so this lists elements "
+                       "whose left edge lies left of page x 0, a document coordinate and not the screen's "
+                       "left edge at load; " + PAST_EDGE_NOTE)
 
 # One fixed script; every user string reaches it as a plain argument, never as code.
 # It classifies every shown element in the page and returns a count over all of
@@ -45,6 +50,41 @@ PAGE_SCRIPT = """
 (opts) => {
   const doc = document.documentElement;
   const sx = window.scrollX, sy = window.scrollY;
+  // The page's start side comes from the writing mode and direction of
+  // <body>, the principal writing mode: <html dir="rtl"><body dir="ltr">
+  // starts at the left, body{direction:rtl} at the right, a vertical-rl page
+  // at the right. A page that starts at its right edge holds that edge at the
+  // scrolling box's client width in page px, cannot scroll past it, and
+  // overflows to the left instead (scrollX goes negative).
+  // Markup alone can shadow a built-in: <form name="scrollingElement"> makes
+  // `document.scrollingElement` that form, with no script on the page, and
+  // a form control's name does the same on its <form>. What decides how
+  // a right-start page is read is taken through the interface prototypes,
+  // which a named element cannot shadow, and so is every step up the tree:
+  // <input name="parentElement"> makes its <form> answer with that input,
+  // whose parent is the form again, and a walk that trusts it never ends.
+  // The other reads shared with the left-start path are as they always were.
+  const own = (proto, name) => {
+    const get = Object.getOwnPropertyDescriptor(proto, name).get;
+    return (node) => get.call(node);
+  };
+  const pageRoot = own(Document.prototype, 'documentElement')(document);
+  const pageBody = own(Document.prototype, 'body')(document);
+  const pageScroller = own(Document.prototype, 'scrollingElement')(document);
+  const parentOf = own(Node.prototype, 'parentElement');
+  const kindOf = own(Node.prototype, 'nodeType');
+  // Only an HTML element has an offsetParent; anything else keeps its own
+  // answer (none), and has no named controls to shadow it.
+  const htmlOffsetParent = own(HTMLElement.prototype, 'offsetParent');
+  const offsetParentOf = (node) => node instanceof HTMLElement ? htmlOffsetParent(node) : node.offsetParent;
+  const principal = getComputedStyle(pageBody || pageRoot);
+  const startsRight = (style) => /^(vertical|sideways)-/.test(style.writingMode)
+    ? style.writingMode.endsWith('-rl') : style.direction === 'rtl';
+  const startRight = startsRight(principal);
+  // A quirks-mode page can have no scrolling element (`overflow-x` auto,
+  // scroll or hidden on both <html> and <body> is one way to get there); the
+  // root then stands in for the width reported below.
+  const scroller = pageScroller || pageRoot;
   const r1 = (v) => Math.round(v * 10) / 10;
   const shown = (el) => {
     const r = el.getBoundingClientRect();
@@ -55,15 +95,15 @@ PAGE_SCRIPT = """
   const path = (el) => {
     const parts = [];
     let node = el;
-    while (node && node.nodeType === 1 && parts.length < 5) {
+    while (node && kindOf(node) === 1 && parts.length < 5) {
       let part = node.localName;
       if (node.id) { parts.unshift(part + '#' + CSS.escape(node.id)); break; }
-      const same = node.parentElement
-        ? Array.from(node.parentElement.children).filter((c) => c.localName === node.localName) : [];
+      const above = parentOf(node);
+      const same = above ? Array.from(above.children).filter((c) => c.localName === node.localName) : [];
       if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(node) + 1) + ')';
       parts.unshift(part);
       if (node === document.body) break;
-      node = node.parentElement;
+      node = above;
     }
     return parts.join(' > ');
   };
@@ -83,12 +123,13 @@ PAGE_SCRIPT = """
   // on from the ancestor, which may itself be fixed to the viewport.
   const fixedToViewport = (el) => {
     let node = el;
-    while (node && node.nodeType === 1) {
+    while (node && kindOf(node) === 1) {
       if (getComputedStyle(node).position === 'fixed') {
-        if (!node.offsetParent) return true;
-        node = node.offsetParent;
+        const holder = offsetParentOf(node);
+        if (!holder) return true;
+        node = holder;
       } else {
-        node = node.parentElement;
+        node = parentOf(node);
       }
     }
     return false;
@@ -97,6 +138,9 @@ PAGE_SCRIPT = """
     if (!el) return null;
     return r1(el.getBoundingClientRect().top + (fixedToViewport(el) ? 0 : sy));
   };
+  // Keep the legacy geometric edge test: below the top and right of page
+  // x 0. It is not a reachability or activation test on either start side.
+  // A box fixed to the viewport is judged by its viewport box.
   const onPage = (el) => {
     const r = el.getBoundingClientRect();
     if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;
@@ -108,11 +152,20 @@ PAGE_SCRIPT = """
     }
     return null;
   };
+  // first_action_y keeps the original geometric edge test on both start sides.
+  // A hit target is not proof that a control acts: nested documents take
+  // the event, and :active / :hover styles can change it when touched.
+  // No tap is sent to find out, since measurement must not change the page.
   const textEntry = (el) => el.localName !== 'input' || !opts.non_text_types.includes(el.type);
   const out = {};
   const meta = document.querySelector('meta[name=viewport]');
   out.viewport_meta = meta ? meta.getAttribute('content') : null;
-  out.scroll_width = doc.scrollWidth;
+  // On a page that starts at its right edge the root's own scrollWidth misses
+  // an absolutely placed box overflowing to the left; the scrolling element's
+  // scrollWidth is the width the reader pans over. Left-to-right pages keep
+  // the root's number.
+  out.start_right = startRight;
+  out.scroll_width = startRight ? scroller.scrollWidth : doc.scrollWidth;
   out.client_width = doc.clientWidth;
   out.inner_width = window.innerWidth;
   out.document_height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
@@ -122,6 +175,17 @@ PAGE_SCRIPT = """
   for (const el of document.querySelectorAll('body, body *')) {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) continue;
+    if (startRight) {
+      // Mirror of the rule below: the overflowing side is the left. At the
+      // requested width such a page runs from page x 0 to the start edge, so
+      // a box whose left edge is below page x 0 lies in the left overflow.
+      const left = r.left + sx;
+      if (left < -0.5) {
+        out.past_right_total += 1;
+        if (out.past_right.length < opts.list_limit) out.past_right.push({path: path(el), left: r1(left)});
+      }
+      continue;
+    }
     const right = r.right + sx;
     if (right > opts.width + 0.5) {
       out.past_right_total += 1;
@@ -194,13 +258,26 @@ def is_text_entry(local_name, input_type=""):
     return local_name != "input" or input_type.lower() not in NON_TEXT_INPUT_TYPES
 
 
+def starts_at_right(writing_mode, direction):
+    """True when a page with this principal (body) writing mode starts at its right edge.
+
+    Horizontal text starts at the right under `direction: rtl`; vertical text
+    starts at the right in the `-rl` modes whatever the direction.
+    """
+    if writing_mode.startswith(("vertical-", "sideways-")):
+        return writing_mode.endswith("-rl")
+    return direction == "rtl"
+
+
 def in_document_area(bottom, right):
-    """True when a box reaches into the area the reader can get to.
+    """Mirror the page script's geometric edge test, not control reachability.
 
     A skip link parked above or left of the page (negative top and left) is
     not where the first action sits; the page script skips such controls. The
     box is in page coordinates, except for a control fixed to the viewport,
-    whose box is its viewport rectangle whatever the scroll position.
+    whose box is its viewport rectangle whatever the scroll position. This
+    geometric edge test is used on both start sides; it does not test whether
+    a control is reachable or acts when tapped.
     """
     return bottom > 0 and right > 0
 
@@ -515,8 +592,7 @@ def build_report(args, plan, emu, raw, errors):
         "inner_width": raw["inner_width"],
         "elements_past_right_edge": {
             **finding(raw["past_right_total"], raw["past_right"]),
-            "note": "an element clipped by an overflow:hidden ancestor can appear here; "
-                    "the overflow number above is the verdict, this list only points",
+            "note": PAST_LEFT_EDGE_NOTE if raw.get("start_right") else PAST_EDGE_NOTE,
         },
         "data_selector": raw["data_selector"],
         "first_data_y": first_data if first_data is not None else "not_found",
