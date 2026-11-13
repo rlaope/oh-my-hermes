@@ -19,6 +19,12 @@
 html .window.panel-open:has(.pn-wide[data-tab="runs"]) {
   --panel-w: 552px;
 }
+/* A session's Plans (0.2.6) is a list of its subagents, not the graph, and shares the class: at 552px a session draft's
+   composer (agent, Chat | Terminal, send) left its text box 0-30px wide. It takes the tool tabs' 400px, so the
+   session chat gets 552px. */
+html .window.panel-open:has(.ss-view):has(.pn-wide[data-tab="runs"]) {
+  --panel-w: 400px;
+}
 /* In that 400px chat the places chip gives way to the model name by the app's own rule (elsewhere.css). */
 /* That leaves the subagent card's head ~290px in the 400px chat: a running card's line ("Running · 1 of 2 done
    · 2m 48s") and its run name fit side by side with a slightly tighter gap. */
