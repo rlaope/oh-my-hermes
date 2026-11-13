@@ -1,11 +1,11 @@
 // Colours for the matches find highlights, taken from the terminal's own theme so they read on every one of them:
 // a match is a quiet tint of the theme's yellow over its background, eased back toward the background until the
-// theme's text is still readable on it. The active match is the one the eye lands on: the theme's yellow at full
-// strength (its hue, saturated), made just light or dark enough for the theme's text to read on it, with the
-// theme's foreground as its outline. A highlight does not recolour the text under it, and a program's yellow or
-// green can sit at 1:1 on that fill, so the active match also names the colour its text is drawn in: the theme's
-// text colour, moved toward black or white until it reads at 4.5:1 on the fill. (xterm wants plain #rrggbb here,
-// no alpha.)
+// theme's text is still readable on it. The active match is the one the eye lands on: the theme's yellow (its hue,
+// saturated) in the deepest shade near-black text reads on at 7:1. A highlight does not recolour the text under
+// it, and a program's yellow or green can sit at 1:1 on that fill, so the active match also names the colour its
+// text is drawn in: the theme's text colour, moved toward black until it reads at 7:1 on the fill. Its outline is
+// that same colour, which stands out from the fill on every theme (the theme's own text colour does not: on a dark
+// theme it is a light grey close to the amber). (xterm wants plain #rrggbb here, no alpha.)
 import type { ITheme } from "@xterm/xterm";
 import { luminance } from "./themes";
 
@@ -35,12 +35,13 @@ const mix = (base: [number, number, number], top: [number, number, number], amou
 const PLAIN_AMOUNT = 0.22;
 /** The active match's fill is at least this saturated, whatever the theme's yellow is. */
 const ACTIVE_SATURATION = 0.85;
-/** Under dark text (a light theme) the active fill is no darker than this: a deep amber, not a brown. */
-const ACTIVE_LIGHTNESS_UNDER_DARK_TEXT = 0.38;
-/** The least contrast the theme's text keeps on the active match. */
+/** The least contrast the theme's text keeps on the active match of a theme whose yellow is a grey (no colour to
+ *  build a fill from: the fill is then a mix toward that grey). */
 export const ACTIVE_TEXT_CONTRAST = 3.05;
-/** The least contrast the active match's own text colour keeps on its fill. */
-export const ACTIVE_FOREGROUND_CONTRAST = 4.5;
+/** The least contrast the active match's own text colour keeps on its fill. 7:1, not 4.5:1: the thin strokes of
+ *  Korean (and other CJK) text are mostly antialiased pixels at 1x, and their darkest pixel measured about 0.6
+ *  under the colour's own ratio (3.9 where the colour had 4.5). */
+export const ACTIVE_FOREGROUND_CONTRAST = 7;
 
 /** WCAG contrast ratio of two hex colours (1 when either is not a hex colour). */
 export function contrastRatio(a: string, b: string): number {
@@ -77,25 +78,24 @@ function hsl(h: number, s: number, l: number): string {
   return hex([r, g, b].map((v) => (v + m) * 255));
 }
 
-/** The strongest fill of `hue`'s own colour the theme's text reads on at `target`: saturated, and as far from the
- *  background as the text allows. It starts as a deep amber under dark text and at the colour's full strength under
- *  light text, and moves away from the text only as far as the text needs to read. Null when the hue is a grey,
- *  which has no colour to strengthen. */
-function strongFill(hue: [number, number, number], fgHex: string, bgHex: string, target: number): string | null {
+/** The active fill: `hue`'s own colour, saturated, in the deepest shade black text reads on at `target`. The same
+ *  shade on a dark and on a light theme: a ground for dark text, which is how a find highlight is read everywhere.
+ *  (A fill light text reads on at that ratio is a brown close to a dark theme's background.) Null when the hue is
+ *  a grey, which has no colour to strengthen, or when no shade of it gets there. */
+function strongFill(hue: [number, number, number], target: number): string | null {
   const { h, s } = hueOf(hue);
   if (s < 0.15) return null;
   const sat = Math.max(s, ACTIVE_SATURATION);
-  const textIsDark = (luminance(fgHex) ?? 1) < (luminance(bgHex) ?? 0);
-  for (let i = 0; i <= 55; i++) {
-    const c = hsl(h, sat, textIsDark ? ACTIVE_LIGHTNESS_UNDER_DARK_TEXT + i / 100 : 0.5 - i / 100);
-    if (contrastRatio(fgHex, c) >= target) return c;
+  for (let i = 25; i <= 85; i++) {
+    const c = hsl(h, sat, i / 100);
+    if (contrastRatio("#000000", c) >= target) return c;
   }
   return null;
 }
 
 /** The colour for the text inside the active match: the theme's text colour when that reads at `target` on the
  *  fill; otherwise that colour moved toward black or white, first the way it already leans from the fill, until it
- *  does. One of the two ends always gets there: black and white cannot both be under 4.58:1 on one colour. */
+ *  does. When neither end gets there (a grey fill near the middle), the end that reads better. */
 function readableOn(fill: string, fg: [number, number, number], target: number): string {
   if (contrastRatio(hex(fg), fill) >= target) return hex(fg);
   const black: [number, number, number] = [0, 0, 0];
@@ -120,20 +120,20 @@ export function findColors(theme: ITheme): FindColors {
   const target = Math.min(4.5, Math.max(1, contrastRatio(fgHex, hex(bg)) - 0.6));
   // a plain match is a quiet tint (there can be hundreds on a screen, and dim text has to read on it too)
   const m = readableAmount(bg, hue, fgHex, PLAIN_AMOUNT, 0.08, target);
-  // the active match: the strongest fill the theme's text still reads on (3:1, large-text contrast: it is one
-  // word, outlined), so it stands out from the other matches instead of sitting among them; outlined in the
-  // theme's text colour (which stands out from both fills on any theme). A theme with no colour in its yellow
-  // gets the strongest mix instead.
+  // the active match: the yellow's own colour in the shade dark text reads on at 7:1, so it stands out from the
+  // other matches instead of sitting among them and its text reads at a glance; outlined in its text's colour.
+  // A theme with no colour in its yellow gets the strongest mix the theme's text reads on instead.
   const activeTarget = Math.min(ACTIVE_TEXT_CONTRAST, target);
   const a = readableAmount(bg, hue, fgHex, Math.min(0.95, m + 0.5), m + 0.08, activeTarget);
   const match = mix(bg, hue, m);
-  const active = strongFill(hue, fgHex, hex(bg), activeTarget) ?? mix(bg, hue, a);
+  const active = strongFill(hue, ACTIVE_FOREGROUND_CONTRAST) ?? mix(bg, hue, a);
+  const activeText = readableOn(active, fg, ACTIVE_FOREGROUND_CONTRAST);
   return {
     matchBackground: match,
     matchOverviewRuler: match,
     activeMatchBackground: active,
-    activeMatchForeground: readableOn(active, fg, ACTIVE_FOREGROUND_CONTRAST),
-    activeMatchBorder: hex(fg),
+    activeMatchForeground: activeText,
+    activeMatchBorder: activeText,
     activeMatchColorOverviewRuler: active,
   };
 }

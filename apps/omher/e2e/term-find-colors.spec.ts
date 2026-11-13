@@ -1,7 +1,8 @@
 // The text inside find's active match (mock host, the engine's real feed()): a highlight's fill does not recolour
 // the cell under it, and a program's yellow or green can be the fill's own colour (One Light: 1.00:1). The active
-// match names its text colour, so whatever colour or strength the cell had, the text on the fill reads at 4.5:1,
-// with the Minimum contrast setting at "As the theme" as well as at "High".
+// match names its text colour, so whatever colour or strength the cell had, the text on the fill reads at 7:1,
+// with the Minimum contrast setting at "As the theme" as well as at "High". (7:1, not 4.5:1: the thin strokes of
+// Korean text are mostly antialiased pixels, which measured about 0.6 under the colour's own ratio.)
 // Chromium, the standard (DOM) renderer; the colour read is the one the page computed for the cell.
 import { expect, test, type Page } from "@playwright/test";
 import { feed, mock, modKey, newTerminal, openApp } from "./term-find-helpers";
@@ -73,7 +74,7 @@ for (const th of THEMES) {
     test.describe(`${th.id}, minimum contrast "${contrast}"`, () => {
       test.use({ colorScheme: th.app });
 
-      test(`yellow, green and dim text inside the active match reads at 4.5:1 on ${th.id}; so does a match over two rows and one in Korean`, async ({ page }) => {
+      test(`yellow, green and dim text inside the active match reads at 7:1 on ${th.id}; so does a match over two rows and one in Korean`, async ({ page }) => {
         await openApp(page, { theme: th.app, term: { [th.app === "light" ? "themeLight" : "themeDark"]: th.id, contrast } });
         await newTerminal(page);
         const cols = await page.evaluate(() => {
@@ -91,7 +92,7 @@ for (const th of THEMES) {
           const last = seen.at(-1)?.row;
           await expect.poll(async () => { const a = await active(page); return a && a.row !== last ? a.text : ""; }).toBe("needle");
           const a = (await active(page))!;
-          expect(a.least, `"${a.line.slice(0, 24)}" on the active fill ${a.fill} (${th.id}, ${contrast})`).toBeGreaterThanOrEqual(4.5);
+          expect(a.least, `"${a.line.slice(0, 24)}" on the active fill ${a.fill} (${th.id}, ${contrast})`).toBeGreaterThanOrEqual(7);
           // one colour for the whole match, the one find-colors.ts picked, whatever the cells had
           expect(a.colours).toEqual([a.picked]);
           seen.push(a);
@@ -104,7 +105,7 @@ for (const th of THEMES) {
         await expect(page.getByTestId("term-find-count")).toHaveText("1 of 1");
         await expect.poll(async () => (await active(page))?.text).toBe("바늘");
         const ko = (await active(page))!;
-        expect(ko.least, `Korean text on the active fill (${th.id}, ${contrast})`).toBeGreaterThanOrEqual(4.5);
+        expect(ko.least, `Korean text on the active fill (${th.id}, ${contrast})`).toBeGreaterThanOrEqual(7);
         expect(ko.colours).toEqual([ko.picked]);
       });
     });
