@@ -1285,9 +1285,12 @@ def _section_shape_guard(lines: list[str], section: str) -> str:
     (`references_top_level_section`) is a top-level section, so a `skills:`
     a webhook route carries for itself, a block-scalar content line, and a
     column-0 flow mapping of another section are not second sections (#2829).
-    A `section:` key that only ever appears indented is still refused: this
-    editor locates sections by their column-0 line, so it cannot tell the
-    person's structure from the indent alone.
+    A document whose root mapping is itself indented (no key at column 0) is
+    still refused when it names `section`: there an indented `section:` IS
+    the root key, and this editor locates sections by their column-0 line.
+    When the root sits at column 0, an indented `section:` is some other
+    section's child, so a profile with no `skills:` yet and a webhook route
+    carrying one still gets its first block.
     """
     top_level = [line for line in lines if references_top_level_section(line, section)]
     section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
@@ -1295,9 +1298,10 @@ def _section_shape_guard(lines: list[str], section: str) -> str:
         return f"duplicate {section} sections are ambiguous; leaving them alone"
     if top_level and not section_indices:
         return f"noncanonical {section} configuration is user-owned; leaving it alone"
-    if not top_level and any(
-        line[:1].isspace() for line in lines if _references_mapping_key(line, section)
-    ):
+    root_is_indented = not any(
+        line.strip() and not line[:1].isspace() and not line.startswith("#") for line in lines
+    )
+    if not top_level and root_is_indented and any(_references_mapping_key(line, section) for line in lines):
         return f"noncanonical {section} configuration is user-owned; leaving it alone"
     return ""
 

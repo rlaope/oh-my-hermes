@@ -329,9 +329,10 @@ class NestedSectionGuardTests(unittest.TestCase):
     duplicate top-level sections, so `omh update` refused a valid config and
     left that profile's OMH skills stale.
 
-    Each positive below was refused on the parent commit. Each carries its
-    section as a real top-level block, which is the shape the guard is about:
-    a `section:` key that only ever appears indented stays user-owned.
+    Each positive below was refused on the parent commit. A `section:` key
+    that appears only indented is a child of another section when the root
+    mapping sits at column 0; only a document whose whole root is indented
+    stays user-owned.
     """
 
     ISSUE_CONFIG = """skills:
@@ -445,8 +446,26 @@ webhooks: {routes: {a: {skills: [x]}}}
             section_edit_guard(["skills: {external_dirs: []}"], "skills"),
         )
 
-    def test_an_indented_only_section_stays_refused(self) -> None:
-        self.assertNotEqual(section_edit_guard(["tools:", "  skills:", "    - a"], "skills"), "")
+    def test_an_indented_root_document_stays_refused(self) -> None:
+        # With no key at column 0 the whole root mapping is indented, so an
+        # indented `skills:` is the root key itself and this editor cannot
+        # locate it by its column-0 line.
+        self.assertNotEqual(section_edit_guard(["  model: x", "  skills:", "    e: []"], "skills"), "")
+
+    def test_a_profile_without_skills_gets_its_first_block_beside_a_route_skills_list(self) -> None:
+        # The other half of #2829: no top-level `skills:` yet, and a webhook
+        # route carries its own. The nested key is the route's child, not a
+        # noncanonical `skills`, so the writer appends the first block.
+        text = "model: x\nwebhooks:\n  routes:\n    a:\n      skills:\n        - github\n"
+        self.assertEqual(section_edit_guard(text.splitlines(), "skills"), "")
+        change = ensure_external_dir(text, "/home/u/.omh/skills/omh")
+        self.assertTrue(change.changed)
+        self.assertEqual(external_dirs(change.text), ["/home/u/.omh/skills/omh"])
+        self.assertTrue(change.text.startswith(text))
+        for section in ("memory", "plugins", "display", "auxiliary"):
+            nested = f"model: x\nwebhooks:\n  routes:\n    a:\n      {section}:\n        - x\n"
+            with self.subTest(section=section):
+                self.assertEqual(section_edit_guard(nested.splitlines(), section), "")
 
     def test_a_column_zero_explicit_key_stays_refused(self) -> None:
         text = "skills:\n  external_dirs:\n    - /a\n? skills\n: {external_dirs: [/b]}\n"
