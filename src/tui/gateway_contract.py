@@ -47,7 +47,7 @@ DRIFT_ERROR_CODES = frozenset({PARAM_REJECTED, METHOD_NOT_FOUND})
 # rename or delete a row of the session picker: a Hermes without them says so on the row.
 OPTIONAL_METHODS = frozenset({
     "commands.catalog", "config.get", "image.render", "model.options", "session.delete", "session.list",
-    "session.title", "skills.reload",
+    "session.title", "session.transcript", "skills.reload",
 })
 
 # Methods the TUI calls, with the only keys it ever sends. Sending a key outside
@@ -74,7 +74,9 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "config.set": frozenset({"key", "value", "session_id", "confirm_expensive_model"}),
     # `title`: an exact-title lookup, which `/sessions <title>` asks after a shared gateway refused the title as an id;
     # a gateway that does not know it answers with its normal listing, which the TUI scans the same way.
-    "session.list": frozenset({"limit", "title"}),
+    # `scope` and `picker`: a listing of the owner's stored history, with the row previews its picker shows. Both
+    # are the owner's own fields; one that does not know them answers its normal live listing.
+    "session.list": frozenset({"limit", "title", "scope", "picker"}),
     # The session picker's Ctrl+R and second Ctrl+D, on the person's keys only (docs/OMH-TUI-BOUNDARY.md). The
     # stdio entry renames a session by its live id and deletes a stored one it does not hold open; attached to a
     # shared gateway the gateway child sends either as the owner's revision-fenced `session.mutate`.
@@ -97,6 +99,9 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "prompt.submit": frozenset({"session_id", "text", "queued", "truncate_before_row_id", "confirm_truncate"}),
     # The durable display transcript with row ids: what the rewind picker lists and redraws from.
     "session.history": frozenset({"session_id"}),
+    # Read-only history of a session no runtime holds open (`owner_runtime: "other"`, `resumable: false`): the
+    # newest messages, which the picker shows in a pager instead of resuming the session. It writes nothing.
+    "session.transcript": frozenset({"session_id", "order", "limit"}),
     # Attachments: the gateway resolves and stages the file the TUI names by its path; the TUI then reads the bytes
     # of the file Hermes staged and has it let go of it (`image.detach`), until a prompt stages them again below.
     "image.attach": frozenset({"session_id", "path"}),

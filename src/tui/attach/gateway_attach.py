@@ -109,6 +109,8 @@ import threading
 from typing import Any
 import uuid
 
+_PICKER_SOURCE_LIMIT = 200
+
 TO_CLIENT = "client"
 TO_OWNER = "owner"
 Action = tuple[str, dict[str, Any]]
@@ -200,6 +202,57 @@ DRAIN_SECONDS = 1.5
 def _whole(value: object) -> bool:
     """An int that is not a bool, as a JSON integer arrives."""
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+# What names the same conversation across the owner's live and stored answers: the id the row is listed under, the
+# id it resolves to, and the root of the lineage it belongs to (a compressed session is listed by its tip).
+CONVERSATION_IDS = ("id", "resolved_id", "_lineage_root_id")
+
+# What one listing row's latest activity is, in the order the answers name it: an owner that fills its picker
+# answers `activity_at`, and a live row is timed by when it started.
+ACTIVITY_FIELDS = ("activity_at", "last_active_at", "last_active", "started_at")
+
+
+def _activity_at(row: dict[str, Any]) -> float:
+    """The row's latest activity in seconds (one given in milliseconds is scaled down); 0 when it names none."""
+    for name in ACTIVITY_FIELDS:
+        value = row.get(name)
+        if isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
+            number = float(value)
+            return number / 1000 if number > 1e11 else number
+    return 0.0
+
+
+def _same_conversations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per conversation: rows sharing an id, a resolved id or a lineage root are merged, newest activity
+    first. What only one of them carries is kept -- a stored row's title and preview, a live row's running state --
+    and a row either half calls not resumable stays that way, since that says who owns it."""
+    merged: list[dict[str, Any]] = []
+    by_id: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        names = [row[field] for field in CONVERSATION_IDS if isinstance(row.get(field), str) and row[field]]
+        found = next((by_id[name] for name in names if name in by_id), None)
+        if found is None:
+            found = dict(row)
+            merged.append(found)
+        else:
+            for field in ("title", "preview", "source", "workspace", "cwd", "model", "git_branch"):
+                if not found.get(field) and row.get(field):
+                    found[field] = row[field]
+            if isinstance(row.get("message_count"), int) and row["message_count"] > (found.get("message_count") or 0):
+                found["message_count"] = row["message_count"]
+            if row.get("running"):
+                found["running"] = True
+            if row.get("resumable") is False:
+                found["resumable"] = False
+            if row.get("owner_runtime") and not found.get("owner_runtime"):
+                found["owner_runtime"] = row["owner_runtime"]
+            if max(_activity_at(found), _activity_at(row)):
+                found["activity_at"] = max(_activity_at(found), _activity_at(row))
+        for name in names:
+            by_id[name] = found
+    merged.sort(key=_activity_at, reverse=True)
+    return merged
 
 
 def _truthy(value: str | None) -> bool:
@@ -531,6 +584,7 @@ class Adapter:
         self.files = files or HermesFiles()
         self.new_id = new_id
         self.contract: dict[str, Any] | None = None  # `runtime.describe`'s session_create, once answered
+        self.capabilities: frozenset[str] = frozenset()  # what `runtime.describe` says the owner's listing knows
         self.held: list[dict[str, Any]] = []  # session.create calls that wait for it
         self.sessions: dict[str, _Session] = {}
         self.current = ""  # the session the TUI last opened
@@ -549,6 +603,9 @@ class Adapter:
     def _on_described(self, frame: dict[str, Any]) -> list[Action]:
         result = frame.get("result")
         contract = result.get("session_create") if isinstance(result, dict) else None
+        capabilities = result.get("capabilities") if isinstance(result, dict) else None
+        self.capabilities = frozenset(name for name in capabilities if isinstance(name, str)) \
+            if isinstance(capabilities, list) else frozenset()
         if isinstance(contract, dict):
             self.contract = contract
         else:
@@ -811,11 +868,22 @@ class Adapter:
         return [self._forward(request_id, "shell.exec", params, translated=False)]
 
     def _list(self, request_id: object, params: dict[str, Any]) -> list[Action]:
-        """The owner's live sessions, then its stored ones, as one answer (Ink's resume picker reads both).
+        """The owner's live sessions and its stored ones, as one answer (Ink's resume picker reads both).
+
+        One conversation is one row: a session the owner holds open and the stored row it would resume are merged by
+        the ids that name the same lineage, the fields only one of them carries are kept, and the merged rows are
+        ordered by the latest activity of the conversation before the limit is applied -- so a listing never spends
+        its page on a row the other half of the same session already answered. `picker` asks the owner for the
+        previews its own picker draws, which a live row has not otherwise.
 
         A `title` lookup is one call: the owner answers it from its whole store, and refuses it with a scope.
         """
+        if "title" in params:
+            return [self._forward(request_id, "session.list", params, translated=False)]
         limit = params.get("limit")
+        asked = {**params, "limit": _PICKER_SOURCE_LIMIT}
+        if "session-list-picker-v1" in self.capabilities:
+            asked["picker"] = True
 
         def on_live(live: dict[str, Any]) -> list[Action]:
             if not isinstance(live.get("result"), dict) or "title" in params:
@@ -824,16 +892,16 @@ class Adapter:
 
             def on_stored(stored: dict[str, Any]) -> list[Action]:
                 result = stored.get("result")
-                seen = {row.get("id") for row in rows}
                 for row in (result.get("sessions") or []) if isinstance(result, dict) else []:
-                    if isinstance(row, dict) and row.get("id") not in seen:
+                    if isinstance(row, dict):
                         rows.append(row)
-                kept = rows[:limit] if _whole(limit) and limit > 0 else rows
+                kept = _same_conversations(rows)
+                kept = kept[:limit] if isinstance(limit, int) and limit > 0 else kept
                 return [_reply(request_id, {"sessions": kept})]
 
-            return [self._call("session.list", {**params, "scope": "stored"}, on_stored)]
+            return [self._call("session.list", {**asked, "scope": "stored"}, on_stored)]
 
-        return [self._call("session.list", params, on_live)]
+        return [self._call("session.list", asked, on_live)]
 
     def _rename(self, request_id: object, params: dict[str, Any]) -> list[Action]:
         """`session.title` with a title is the owner's `session.mutate rename`, at the revision a `session.resume`
