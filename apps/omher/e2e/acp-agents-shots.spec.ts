@@ -64,8 +64,9 @@ for (const theme of ["dark", "light"]) {
     const more = page.getByTestId("session-more");
     if (await more.count()) {
       await more.click();
-      // the new agents that are not installed, from the first of them: their whole install lines are in view
-      await page.getByTestId("session-agent-qwen").evaluate((e) => e.scrollIntoView({ block: "start" }));
+      // three of the new agents that are not installed, their whole install lines in view and clear of the fade at
+      // the list's cut edge (a line there reads dimmer than the others), then "Continue a conversation" under them
+      await page.getByTestId("session-agent-kimi").evaluate((e) => e.scrollIntoView({ block: "start" }));
     } else {
       await page.getByTestId("session-menu-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
     }
