@@ -2,7 +2,7 @@
 // a terminal that is already open (a theme switch, a changed setting).
 import type { ITerminalOptions, ITheme, Terminal } from "@xterm/xterm";
 import type { TermContrast, TermSettings } from "./settings";
-import { isLightBackground } from "./themes";
+import { brightIsBrighter, isLightBackground } from "./themes";
 
 const appMono = () => (typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--mono").trim()) || "monospace";
 
@@ -48,6 +48,9 @@ export function termOptions(theme: ITheme, s: TermSettings): ITerminalOptions {
     scrollback: s.scrollback,
     // text colours near the background are lifted; dim (SGR 2) text is not held to this (xterm halves its target)
     minimumContrastRatio: termContrast(theme.background, s.contrast),
+    // bold text takes the theme's bright colour, as most terminals draw it, unless the theme keeps other colours
+    // in its bright slots (Solarized: greys), where bold text keeps its own colour
+    drawBoldTextInBrightColors: brightIsBrighter(theme),
     macOptionIsMeta: s.optionIsMeta,
     theme,
   };
@@ -74,6 +77,8 @@ function expose(term: Terminal): void {
 export function applyLook(term: Terminal, theme: ITheme, s: TermSettings): void {
   const next = termOptions(theme, s);
   const o = term.options;
+  // before the theme: setting the theme is what redraws the rows
+  o.drawBoldTextInBrightColors = next.drawBoldTextInBrightColors;
   o.theme = theme;
   o.fontFamily = next.fontFamily;
   o.fontSize = next.fontSize;

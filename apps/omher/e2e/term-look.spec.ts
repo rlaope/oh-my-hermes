@@ -183,6 +183,41 @@ test("a light app theme uses the light pick, a dark one the dark pick", async ({
   await expect.poll(async () => (await look(page))?.background).toBe("#282a36");
 });
 
+/** The colour a word in the open terminal is drawn in (#rrggbb), as the page computed it. */
+const wordColour = (page: Page, word: string) =>
+  page.evaluate((w) => {
+    const host = document.querySelector('[data-testid="terminal"] .xterm')!;
+    const span = [...host.querySelectorAll<HTMLElement>(".xterm-rows span")].find((s) => (s.textContent ?? "").trim() === w);
+    if (!span) return null;
+    const m = /rgba?\((\d+), (\d+), (\d+)/.exec(getComputedStyle(span).color)!;
+    return `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, "0")).join("")}`;
+  }, word);
+
+test("bold green stays green on Solarized, whose bright slots are greys; on Dracula it takes the bright green", async ({ page }) => {
+  await open(page);
+  const pick = (themeDark: string) =>
+    page.evaluate(async (id) => {
+      const m = (await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void };
+      // "As the theme": no colour is lifted, so what is read is the theme's own
+      m.writeTermSettings({ themeDark: id, contrast: "theme" });
+    }, themeDark);
+  await pick("solarized-light");
+  await terminalClaude(page);
+  await feed(page, "\r\n\x1b[32mplainword\x1b[0m \x1b[1;32mboldword\x1b[0m \x1b[1;33mboldyellow\x1b[0m\r\n");
+  // Solarized's green and yellow, not its bright slots (#586e75 and #657b83, two greys)
+  await expect.poll(() => wordColour(page, "boldword")).toBe("#859900");
+  expect(await wordColour(page, "plainword")).toBe("#859900");
+  expect(await wordColour(page, "boldyellow")).toBe("#b58900");
+  expect(await page.locator(".xterm-rows span", { hasText: "boldword" }).evaluate((el) => Number(getComputedStyle(el).fontWeight))).toBeGreaterThanOrEqual(600);
+
+  // an open terminal takes the other rule with the theme: Dracula's bold green is its bright green
+  await pick("dracula");
+  await expect.poll(() => wordColour(page, "boldword")).toBe("#69ff94");
+  expect(await wordColour(page, "plainword")).toBe("#50fa7b");
+  await pick("solarized-dark");
+  await expect.poll(() => wordColour(page, "boldword")).toBe("#859900");
+});
+
 test("font size 16 changes how many columns fit, and the program is told the new size", async ({ page }) => {
   await open(page);
   await terminalClaude(page);
