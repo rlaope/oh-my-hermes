@@ -4,19 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher's terminal find reads at a glance, follows a theme change and leaves nothing behind.** Five fixes to
-  the session terminal that shipped in omher 0.2.7. The text inside find's active match now reads at 7:1 on its
-  fill on all 38 themes (it was 4.5:1). Korean text, whose thin strokes draw lighter than their colour on a 1x
-  screen, measured 3.9 to 4.4 by its darkest pixel and now measures 6.4 to 6.7 (the lowest of three words on six
-  themes, Chromium, standard renderer).
-  The fill is the theme's own yellow in a shade dark text reads on, on dark and light themes alike, outlined in
-  that text's colour (on a 2x screen the old colours already measured what they were picked for). A terminal
-  theme that changes while find is open recolours the matches at once; they kept the old theme's colours until
-  the next Enter. Leaving a terminal with find open (another session, Settings, a bot) clears its highlights, so
-  none are left on a terminal that shows no bar to close them with. With the app theme on System, an open
-  terminal follows the OS when it turns light or dark; it kept the colours the app started with while the rest
-  of the page changed. And on Solarized Dark and Light, bold coloured text keeps its colour: those themes hold
-  greys in their bright slots, so a program's bold green, yellow, blue and cyan showed as grey. (#2860)
 - **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
   OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
   and blinking on a 4-second loop, with one line of copy in English, Korean, Japanese and Chinese and one
@@ -93,24 +80,6 @@ All notable changes will be documented here.
   attached to a shared gateway, the gateway child sends them as the owner's
   revision-fenced `session.mutate rename` / `delete`, as Hermes' Ink TUI does.
   A refusal is said on the row.
-- **omher runs six more coding agents in SESSIONS.** Kilo Code, Gemini CLI,
-  Qwen Code, Kimi Code, Copilot CLI and Cline open as session chats through
-  the same Agent Client Protocol adapter as OpenCode: answers stream, tool
-  steps show, and each approval is a card with Deny and Allow once. Kilo Code
-  starts only with ask rules built from its own `kilo agent list`, so nothing
-  you allow runs unasked and nothing you deny becomes askable; its free
-  models need no account. Both Kilo Code and OpenCode check every permission
-  and each agent's mode, refuse file/env tokens before listing again, and
-  compare rules as Windows does there. Rules are read at session start;
-  a deny added later applies from the next session. An agent that is
-  installed but not signed in ends
-  in one line with its own sign-in command (Gemini CLI is not signed in. Run
-  `gemini` in a terminal and sign in.) and Open in Terminal; omher never
-  signs in for it, never sends the protocol's `authenticate` and never takes
-  a key. The + menu lists the agents installed on this computer and folds the
-  rest under one More agents row, each with its whole install line; a click
-  copies it. Continue a conversation stays under that row, there as the menu
-  first opens.
 - **A dag-ulw node can be read-only.** `omh_dag` define, repair and extend take
   `read_only: true` on a node; its child's `write_file` and `patch` inside the
   run's workspace are blocked, except its own handoff report, with a message
@@ -127,18 +96,6 @@ All notable changes will be documented here.
   reminder no longer applies. Image turns count too: there the reminder is
   read after the ask Hermes stamps on the turn, so a quoted reminder never
   does. The `omh_active_workflow` metadata still comes with every call.
-- **An omher session's header says "waiting" about background work that waits
-  for you, and keeps its name and model whole.** While a background subagent
-  only waited for your approval, the header read "1 still running in the
-  background" though its row, its card and the sidebar said "waiting". When
-  every background subagent omher knows of waits on an open approval or
-  question, the header now reads "1 waiting in the background" (four
-  languages); a count that holds a background command, or a subagent still
-  running, keeps the old words. With that label and its Stop showing, a narrow
-  chat (a 900 or 1100px window, the right panel open) cut the model name to
-  "Opu…" or the session's name to nothing: the label now takes a short form
-  ("1 waiting", the sentence in its tooltip) and goes under the name with Stop
-  when the line is tight, and the path gives way first.
 - **A toolcall rule can ask you instead of blocking.** With `"effect": "ask"`,
   a matching call goes to Hermes' approval prompt with the rule's message,
   keyed `omh-toolcall-rule:<name>` so `[a]lways` covers that one rule. Where
@@ -211,15 +168,6 @@ All notable changes will be documented here.
   The wheel opens the transcript view as it did with `OMH_TUI_MOUSE=1`;
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
-
-- **An omher left open shows the Update button without a restart.** omher
-  looked for a new version once at launch and then every 6 hours, and a check
-  that failed waited for the next 6-hour turn. A failed check is now tried
-  again after 2 minutes, then less often, at most once an hour; and coming
-  back to the window (shown or focused again) checks when the last good check
-  is 30 minutes old or more, which does not depend on a timer and so also
-  covers a Mac that slept. Still one request at a time, to the same address,
-  and silent when a check fails.
 
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
@@ -318,6 +266,55 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.8.** Six more coding agents in SESSIONS, update checks that
+  recover after a failed request or sleep, and a session header that says
+  when background work is waiting for you, with clearer terminal find.
+  - **Six more agents in SESSIONS.** Kilo Code, Gemini CLI, Qwen Code,
+    Kimi Code, Copilot CLI and Cline open as session chats through the ACP
+    adapter: answers stream, tool steps show, and approvals offer Deny and
+    Allow once. Installed agents come first in the + menu; More agents
+    unfolds the rest with whole install commands that copy on click.
+    Continue a conversation stays reachable when the menu first opens; the
+    folded menu keeps its text clear and shows a scrollbar when it needs one.
+    An installed agent that is signed out ends with its own sign-in command,
+    Open in Terminal and Restart, not raw protocol output; omher never signs
+    in, sends `authenticate`, or takes a key. (#2858)
+  - **Kilo Code and OpenCode check the rules they will start with.** omher
+    builds ask rules from each CLI's own agent listing and starts only when
+    its conservative comparison accepts the listed permissions and agent
+    modes. Unsupported changes are refused; file/env substitution tokens
+    are refused before a second listing. Windows matching is handled with
+    its own case rules. Rules are a session-start snapshot: a deny added
+    later applies from the next session. Private prompt/model metadata not
+    exposed by the listing is not preserved by that comparison. Actual
+    Windows CLI behavior and the other five agents after sign-in were not
+    verified for this release. (#2858)
+  - **An omher left open finds updates without a restart.** A failed check
+    retries after 2 minutes, backs off to at most once an hour, and stays
+    silent on failure. Showing or focusing the window checks again when the
+    last good check is at least 30 minutes old, including after sleep.
+    There is still only one request at a time, to the same updater feed.
+    This retry behavior starts once 0.2.8 is installed; a 0.2.7 app keeps
+    its old launch/6-hour schedule until it updates. (#2857)
+  - **The session header says "waiting" about background work that waits
+    for you.** If every known background subagent waits on an approval or
+    question, the header uses waiting rather than running in all four
+    languages. A live command or running subagent still reads running.
+    In a narrow chat the label shortens and wraps with Stop under the name,
+    while the path gives way first so the session and model stay readable.
+    (#2862)
+  - **Terminal find stays readable and follows the theme.** The active
+    match's text and fill have stronger contrast on all 38 themes, including
+    thin Korean strokes on a 1x screen. Changing the terminal theme recolours
+    open matches at once; leaving a terminal clears highlights when its find
+    bar is no longer shown. An open terminal now follows an OS light/dark
+    change when Appearance is System. Solarized Dark and Light keep bold
+    green, yellow, blue and cyan in their colours instead of turning them
+    grey. (#2860)
+  - **omher.app's preview.** The live preview is pinned to omher 0.2.7;
+    Show in Finder and Open in Terminal explain their preview-only limits
+    rather than touching a real profile. (#2853)
+
 - **omher 0.2.7.** Find and continue sessions, choose how their terminals look,
   answer and stop background work, read a plan before allowing it, and open
   a Codex subagent's file change to its diff.

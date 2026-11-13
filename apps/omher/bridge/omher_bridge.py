@@ -41,7 +41,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-VERSION = "0.2.7"
+VERSION = "0.2.8"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
