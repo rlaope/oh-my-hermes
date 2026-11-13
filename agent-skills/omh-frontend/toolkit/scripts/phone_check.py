@@ -59,12 +59,16 @@ async (opts) => {
   const startsRight = (style) => /^(vertical|sideways)-/.test(style.writingMode)
     ? style.writingMode.endsWith('-rl') : style.direction === 'rtl';
   const startRight = startsRight(principal);
-  // A quirks-mode page with `overflow-x` on both <html> and <body> has no
-  // scrolling element, and then the page does not say where it starts or how
+  // A quirks-mode page can have no scrolling element; `overflow-x` auto,
+  // scroll or hidden on both <html> and <body> is one way to get there, and
+  // `clip` or visible on <body> keeps <body>. What decides is the property,
+  // not the CSS. Such a page does not say where it starts or how
   // far it scrolls: the root's scrollWidth stays at its client width while
   // the page pans, a zoom or a width on the root moves its clientWidth, and
-  // <body> reports the viewport's size as its own. Such a page gets the edge
-  // test a page that starts at the left gets, nothing more.
+  // <body> reports the viewport's size as its own. It gets the edge test a
+  // page that starts at the left gets, nothing more. The property is read as
+  // the page exposes it: a page that defines its own `scrollingElement` is
+  // taken at its word, like every other DOM value this script reads.
   const reachFromRight = startRight && Boolean(document.scrollingElement);
   const scroller = document.scrollingElement || doc;
   const startEdge = scroller.clientWidth;

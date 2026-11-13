@@ -1017,6 +1017,23 @@ class BrowserTests(Fixture):
                 page = self.no_scrolling_element_page(f"no-scroller-{name}.html", body, rules)
                 self.assertEqual(self.measure(page, *extra)["first_action_y"], expected)
 
+    def test_rtl_quirks_page_is_sorted_by_the_scrolling_element_not_by_its_css(self):
+        # The link is parked past the right edge, where no scroll or pan goes.
+        # With `overflow-x: clip` on both root elements the browser keeps
+        # <body> as the scrolling element and the link is skipped. With auto
+        # or hidden on both it reports none, the page gets the edge test a
+        # left-start page gets, and that test counts the link: a stated limit.
+        body = '<a id="first" href="#" style="top:100px;right:-600px">first</a>'
+        for value, expected in (("clip", 300), ("auto", 100), ("hidden", 100)):
+            with self.subTest(overflow_x=value):
+                path = self.root / f"quirks-{value}.html"
+                path.write_text('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
+                                f'html,body{{overflow-x:{value}}} body{{direction:rtl;margin:0;height:2000px}}'
+                                ' a,button{display:block;position:absolute;width:120px;height:48px}'
+                                f' #real{{top:300px;right:0}}</style></head><body>{body}<button id="real">real</button>'
+                                '</body></html>', encoding="utf-8")
+                self.assertEqual(self.measure(path)["first_action_y"], expected)
+
     def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
         # The link sits in a reversed scroll box whose listener loads more
         # content on the first scroll. Finding the link must not scroll the box:

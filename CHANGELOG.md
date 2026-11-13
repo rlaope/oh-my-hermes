@@ -793,9 +793,10 @@ All notable changes will be documented here.
   takes the overflow from the scrolling element, and lists under
   `elements_past_right_edge` the elements left of page x 0, each with
   `left`. A left-to-right page gives the same output as before. A quirks-mode
-  page with `overflow-x` set on both `<html>` and `<body>` has no scrolling
-  element and does not report where it starts or how far it scrolls; its
-  first control is still found by the edge test used before. Measured in
+  page for which the browser reports no scrolling element (it can get there
+  with `overflow-x` auto, scroll or hidden on both `<html>` and `<body>`)
+  does not report where it starts or how far it scrolls; its first control
+  is still found by the edge test used before. Measured in
   Chromium only.
 
 - **frontend names the layout before it builds a new page, and reviews
