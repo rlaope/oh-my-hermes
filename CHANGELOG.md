@@ -161,6 +161,15 @@ All notable changes will be documented here.
   `OMH_TUI_MOUSE=0` gives the wheel and native selection back to the
   terminal.
 
+- **An omher left open shows the Update button without a restart.** omher
+  looked for a new version once at launch and then every 6 hours, and a check
+  that failed waited for the next 6-hour turn. A failed check is now tried
+  again after 2 minutes, then less often, at most once an hour; and coming
+  back to the window (shown or focused again) checks when the last good check
+  is 30 minutes old or more, which does not depend on a timer and so also
+  covers a Mac that slept. Still one request at a time, to the same address,
+  and silent when a check fails.
+
 - **The Desktop pane stays on the focused chat and folds large DAGs by
   layer.** The yolo chip follows the focused chat instead of whichever
   session's hook ticked last (a subagent or a cron run); where OMH holds no
