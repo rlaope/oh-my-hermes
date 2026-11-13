@@ -3368,13 +3368,13 @@ class ModeReplayTests(AppTestCase):
         )
         terminal = run.terminal
 
-        def running() -> bool:
-            return terminal.running()
-
         terminal.script(
-            Step(b"Write the numbers from 1 to 300, one per line, nothing else.\r", when=terminal.idle, label="idle"),
+            # Type ahead in one read, before the gateway can report message.start: these prompts queue while the
+            # first turn is pending. Once it has started, Enter steers instead; waiting only for the working row
+            # raced that event (the row is shown while the turn is pending too).
             # The replay holds this turn open until it sees session.interrupt.
-            Step(TYPED_AHEAD + b"second prompt\rthird prompt\r", when=running, label="running"),
+            Step(TYPED_AHEAD + b"Write the numbers from 1 to 300, one per line, nothing else.\r"
+                 b"second prompt\rthird prompt\r", when=terminal.idle, label="idle"),
             Step(b"\x1b[A", when=terminal.shows("⧗ third prompt"), capture="queued", label="queued"),
             Step(b"\x03", when=terminal.shows("❯ second prompt"), capture="recalled", label="recalled"),
             Step(b"\x03", when=lambda: not terminal.shows("third prompt")(), label="cleared"),
