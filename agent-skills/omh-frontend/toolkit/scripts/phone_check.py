@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import json
 import os
 from pathlib import Path
@@ -247,13 +248,25 @@ def system_alias(part):
         return False
 
 
+def is_link(part):
+    # From Python 3.14, Path.is_symlink() swallows every OSError, so an entry
+    # under a directory that cannot be searched reads as "not a link". lstat it
+    # first: a missing entry is fine, any other error means it cannot be checked.
+    try:
+        os.lstat(part)
+    except OSError as exc:
+        if exc.errno not in (errno.ENOENT, errno.ENOTDIR):
+            raise
+    return part.is_symlink()
+
+
 def safe_path(value):
     path = Path(value)
     if ".." in path.parts:
         raise ValueError("path traversal is not accepted")
     path = path.absolute()
     try:
-        linked = any(part.is_symlink() and not system_alias(part) for part in (path, *path.parents))
+        linked = any(is_link(part) and not system_alias(part) for part in (path, *path.parents))
     except OSError as exc:
         # A directory that cannot be searched cannot be checked either; refuse it as a bad path.
         raise ValueError(f"path could not be checked: {exc.strerror}") from exc
