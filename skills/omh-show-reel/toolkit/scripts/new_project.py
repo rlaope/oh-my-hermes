@@ -14,7 +14,7 @@ import re
 import shutil
 import struct
 
-from timeline import settings, system_alias
+from timeline import is_link, settings, system_alias
 
 KIT = Path(__file__).resolve().parents[1]
 ENGINE = KIT / "assets/engine"
@@ -43,7 +43,7 @@ def no_links(path, root=None):
         raise ValueError(f"path escapes its root: {path}")
     chain = [root.parent, root, *(p for p in reversed(path.parents) if root in p.parents), path]
     for component in chain:
-        if component.is_symlink() and not system_alias(component):
+        if is_link(component) and not system_alias(component):
             raise ValueError(f"symlink input/destination refused: {component}")
     return path
 
