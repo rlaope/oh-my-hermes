@@ -1,0 +1,294 @@
+{
+  "what": "seam shell and integrated head run alternately, each run its own process; the page's time is busy time",
+  "shells": {
+    "seam": "f9fab5d17 (the seam commit's shell, unchanged) + the bench",
+    "head": "3f0f41947"
+  },
+  "order": "alternating; seam first in rounds 0, 2 and 4",
+  "programs_sha256_16": {
+    "seam": "a3867c16c5e1b00c",
+    "head": "6dd8763ce39b1def"
+  },
+  "runs": [
+    {
+      "round": 0,
+      "shell": "seam",
+      "scenario": "echo",
+      "load": 11.3,
+      "echo_200_median_ms": 32.879,
+      "echo_200_p95_ms": 35.968
+    },
+    {
+      "round": 0,
+      "shell": "head",
+      "scenario": "echo",
+      "load": 8.83,
+      "echo_200_median_ms": 31.093,
+      "echo_200_p95_ms": 35.813
+    },
+    {
+      "round": 0,
+      "shell": "seam",
+      "scenario": "slice_interrupt",
+      "load": 8.52,
+      "slice_interrupt_mb_after_key": 64.643,
+      "slice_interrupt_ms_to_last_byte": 855.155
+    },
+    {
+      "round": 0,
+      "shell": "head",
+      "scenario": "slice_interrupt",
+      "load": 8.52,
+      "slice_interrupt_mb_after_key": 0.876,
+      "slice_interrupt_ms_to_last_byte": 12.68
+    },
+    {
+      "round": 0,
+      "shell": "seam",
+      "scenario": "page_slow_20ms",
+      "load": 8.61,
+      "page_slow_20ms_10s_drawn_mb_s": 3.121,
+      "page_slow_20ms_10s_mean_message_kb": 64.046,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.001,
+      "page_slow_20ms_10s_ms_per_message": 20.041,
+      "page_slow_20ms_10s_peak_rss_mb": 1191.391,
+      "page_slow_20ms_10s_queued_mb": 1048.644
+    },
+    {
+      "round": 0,
+      "shell": "head",
+      "scenario": "page_slow_20ms",
+      "load": 7.67,
+      "page_slow_20ms_10s_drawn_mb_s": 2.958,
+      "page_slow_20ms_10s_mean_message_kb": 60.626,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.002,
+      "page_slow_20ms_10s_ms_per_message": 20.013,
+      "page_slow_20ms_10s_peak_rss_mb": 15.234,
+      "page_slow_20ms_10s_queued_mb": 1.814
+    },
+    {
+      "round": 1,
+      "shell": "head",
+      "scenario": "echo",
+      "load": 6.61,
+      "echo_200_median_ms": 30.189,
+      "echo_200_p95_ms": 35.979
+    },
+    {
+      "round": 1,
+      "shell": "seam",
+      "scenario": "echo",
+      "load": 5.08,
+      "echo_200_median_ms": 31.752,
+      "echo_200_p95_ms": 36.073
+    },
+    {
+      "round": 1,
+      "shell": "head",
+      "scenario": "slice_interrupt",
+      "load": 5.0,
+      "slice_interrupt_mb_after_key": 1.294,
+      "slice_interrupt_ms_to_last_byte": 16.381
+    },
+    {
+      "round": 1,
+      "shell": "seam",
+      "scenario": "slice_interrupt",
+      "load": 5.0,
+      "slice_interrupt_mb_after_key": 45.411,
+      "slice_interrupt_ms_to_last_byte": 599.568
+    },
+    {
+      "round": 1,
+      "shell": "head",
+      "scenario": "page_slow_20ms",
+      "load": 4.53,
+      "page_slow_20ms_10s_drawn_mb_s": 2.958,
+      "page_slow_20ms_10s_mean_message_kb": 60.629,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.002,
+      "page_slow_20ms_10s_ms_per_message": 20.016,
+      "page_slow_20ms_10s_peak_rss_mb": 15.281,
+      "page_slow_20ms_10s_queued_mb": 1.752
+    },
+    {
+      "round": 1,
+      "shell": "seam",
+      "scenario": "page_slow_20ms",
+      "load": 4.52,
+      "page_slow_20ms_10s_drawn_mb_s": 3.123,
+      "page_slow_20ms_10s_mean_message_kb": 64.046,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.002,
+      "page_slow_20ms_10s_ms_per_message": 20.028,
+      "page_slow_20ms_10s_peak_rss_mb": 1198.484,
+      "page_slow_20ms_10s_queued_mb": 1052.954
+    },
+    {
+      "round": 2,
+      "shell": "seam",
+      "scenario": "echo",
+      "load": 5.4,
+      "echo_200_median_ms": 31.161,
+      "echo_200_p95_ms": 35.83
+    },
+    {
+      "round": 2,
+      "shell": "head",
+      "scenario": "echo",
+      "load": 5.58,
+      "echo_200_median_ms": 31.334,
+      "echo_200_p95_ms": 36.082
+    },
+    {
+      "round": 2,
+      "shell": "seam",
+      "scenario": "slice_interrupt",
+      "load": 5.53,
+      "slice_interrupt_mb_after_key": 67.439,
+      "slice_interrupt_ms_to_last_byte": 887.154
+    },
+    {
+      "round": 2,
+      "shell": "head",
+      "scenario": "slice_interrupt",
+      "load": 5.65,
+      "slice_interrupt_mb_after_key": 0.9,
+      "slice_interrupt_ms_to_last_byte": 11.727
+    },
+    {
+      "round": 2,
+      "shell": "seam",
+      "scenario": "page_slow_20ms",
+      "load": 5.68,
+      "page_slow_20ms_10s_drawn_mb_s": 3.12,
+      "page_slow_20ms_10s_mean_message_kb": 64.046,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.001,
+      "page_slow_20ms_10s_ms_per_message": 20.045,
+      "page_slow_20ms_10s_peak_rss_mb": 1201.234,
+      "page_slow_20ms_10s_queued_mb": 1052.27
+    },
+    {
+      "round": 2,
+      "shell": "head",
+      "scenario": "page_slow_20ms",
+      "load": 5.27,
+      "page_slow_20ms_10s_drawn_mb_s": 2.958,
+      "page_slow_20ms_10s_mean_message_kb": 60.633,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.002,
+      "page_slow_20ms_10s_ms_per_message": 20.015,
+      "page_slow_20ms_10s_peak_rss_mb": 15.25,
+      "page_slow_20ms_10s_queued_mb": 1.751
+    },
+    {
+      "round": 3,
+      "shell": "head",
+      "scenario": "echo",
+      "load": 4.24,
+      "echo_200_median_ms": 30.711,
+      "echo_200_p95_ms": 36.048
+    },
+    {
+      "round": 3,
+      "shell": "seam",
+      "scenario": "echo",
+      "load": 3.46,
+      "echo_200_median_ms": 30.314,
+      "echo_200_p95_ms": 35.881
+    },
+    {
+      "round": 3,
+      "shell": "head",
+      "scenario": "slice_interrupt",
+      "load": 3.99,
+      "slice_interrupt_mb_after_key": 1.126,
+      "slice_interrupt_ms_to_last_byte": 14.795
+    },
+    {
+      "round": 3,
+      "shell": "seam",
+      "scenario": "slice_interrupt",
+      "load": 3.99,
+      "slice_interrupt_mb_after_key": 65.563,
+      "slice_interrupt_ms_to_last_byte": 865.263
+    },
+    {
+      "round": 3,
+      "shell": "head",
+      "scenario": "page_slow_20ms",
+      "load": 4.23,
+      "page_slow_20ms_10s_drawn_mb_s": 2.953,
+      "page_slow_20ms_10s_mean_message_kb": 60.624,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.002,
+      "page_slow_20ms_10s_ms_per_message": 20.051,
+      "page_slow_20ms_10s_peak_rss_mb": 15.172,
+      "page_slow_20ms_10s_queued_mb": 1.877
+    },
+    {
+      "round": 3,
+      "shell": "seam",
+      "scenario": "page_slow_20ms",
+      "load": 4.39,
+      "page_slow_20ms_10s_drawn_mb_s": 3.124,
+      "page_slow_20ms_10s_mean_message_kb": 64.046,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.001,
+      "page_slow_20ms_10s_ms_per_message": 20.019,
+      "page_slow_20ms_10s_peak_rss_mb": 1204.859,
+      "page_slow_20ms_10s_queued_mb": 1054.706
+    },
+    {
+      "round": 4,
+      "shell": "seam",
+      "scenario": "echo",
+      "load": 3.75,
+      "echo_200_median_ms": 31.737,
+      "echo_200_p95_ms": 35.895
+    },
+    {
+      "round": 4,
+      "shell": "head",
+      "scenario": "echo",
+      "load": 3.95,
+      "echo_200_median_ms": 33.295,
+      "echo_200_p95_ms": 35.959
+    },
+    {
+      "round": 4,
+      "shell": "seam",
+      "scenario": "slice_interrupt",
+      "load": 3.71,
+      "slice_interrupt_mb_after_key": 66.158,
+      "slice_interrupt_ms_to_last_byte": 873.936
+    },
+    {
+      "round": 4,
+      "shell": "head",
+      "scenario": "slice_interrupt",
+      "load": 3.71,
+      "slice_interrupt_mb_after_key": 1.001,
+      "slice_interrupt_ms_to_last_byte": 13.594
+    },
+    {
+      "round": 4,
+      "shell": "seam",
+      "scenario": "page_slow_20ms",
+      "load": 4.14,
+      "page_slow_20ms_10s_drawn_mb_s": 3.123,
+      "page_slow_20ms_10s_mean_message_kb": 64.046,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.001,
+      "page_slow_20ms_10s_ms_per_message": 20.025,
+      "page_slow_20ms_10s_peak_rss_mb": 1202.922,
+      "page_slow_20ms_10s_queued_mb": 1052.945
+    },
+    {
+      "round": 4,
+      "shell": "head",
+      "scenario": "page_slow_20ms",
+      "load": 4.13,
+      "page_slow_20ms_10s_drawn_mb_s": 2.958,
+      "page_slow_20ms_10s_mean_message_kb": 60.633,
+      "page_slow_20ms_10s_ms_in_page_per_message": 20.002,
+      "page_slow_20ms_10s_ms_per_message": 20.019,
+      "page_slow_20ms_10s_peak_rss_mb": 15.484,
+      "page_slow_20ms_10s_queued_mb": 1.751
+    }
+  ]
+}
