@@ -268,7 +268,7 @@ for (const [id, label, cmd] of [
   ["copilot", "Copilot CLI", "copilot login"],
   ["cline", "Cline", "cline auth"],
 ] as const) {
-  test(`${label} installed but not signed in: one plain line with \`${cmd}\` and Open in Terminal`, async ({ page }) => {
+  test(`${label} installed but not signed in: one plain line with ${cmd} as inline code and Open in Terminal`, async ({ page }) => {
     await open(page, ["claude", id]);
     await plus(page);
     await page.getByTestId(`session-agent-${id}`).click();
@@ -278,14 +278,26 @@ for (const [id, label, cmd] of [
     await page.keyboard.press("Enter");
     const ended = page.getByTestId("session-ended");
     await expect(ended).toBeVisible({ timeout: 10_000 });
-    const line = `${label} is not signed in. Run \`${cmd}\` in a terminal and sign in.`;
+    const line = `${label} is not signed in. Run ${cmd} in a terminal and sign in.`;
     await expect(ended).toContainText(line);
+    // the command is drawn as inline code, not between backtick characters
+    await expect(ended.locator("code")).toHaveText(cmd);
+    expect(await ended.locator("code").evaluate((e) => getComputedStyle(e).fontFamily)).toMatch(/mono|Menlo|Consolas/i);
     await expect(page.getByTestId("chat-offline")).toHaveCount(0);
     await expect(page.getByTestId("chat-start")).toHaveCount(0);
     // the line is said once (the failed turn does not repeat it), never as raw JSON or a code
     const text = await page.getByTestId("session-chat").innerText();
     expect(text.split(line).length - 1).toBe(1);
     expect(text).not.toMatch(/-32000|jsonrpc|Authentication required|API key/);
+    // no backtick anywhere a person reads it: the chat, the line's tooltip, the sidebar row and its sign's tooltip
+    expect(text).not.toContain("`");
+    expect(await ended.locator(".ss-ended-t").getAttribute("title")).toBe(line);
+    const row = page.locator("[data-testid=session-list] .ss-row").first();
+    expect(await row.innerText()).not.toContain("`");
+    const sign = row.getByTestId("session-mark");
+    await expect(sign).toHaveAttribute("title", line);
+    await expect(sign).toHaveAttribute("aria-label", line);
+    expect(await page.locator("[data-testid=sidebar] [title], [data-testid=session-chat] [title]").evaluateAll((els) => els.map((e) => e.getAttribute("title")!).filter((t) => t.includes("`")))).toEqual([]);
     // no field anywhere that takes a key or a password
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
     // Open in Terminal opens the person's own terminal in the session's folder; Restart is there too
@@ -295,17 +307,27 @@ for (const [id, label, cmd] of [
   });
 }
 
-test("the not-signed-in line is in the person's language", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
-  await open(page, ["claude", "gemini"]);
-  await page.getByTestId("session-new").click();
-  await page.getByTestId("session-agent-gemini").click();
-  await page.getByTestId("session-folder").click();
-  await page.getByTestId("session-choose").click();
-  await page.getByTestId("composer").fill("hi");
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("session-ended")).toContainText("Gemini CLI 로그인이 안 되어 있어요. 터미널에서 `gemini`를 실행해 로그인하세요.", { timeout: 10_000 });
-});
+for (const [lang, line] of [
+  ["ko", "Gemini CLI 로그인이 안 되어 있어요. 터미널에서 gemini를 실행해 로그인하세요."],
+  ["ja", "Gemini CLI にサインインしていません。ターミナルで gemini を実行してサインインしてください。"],
+  ["zh", "Gemini CLI 尚未登录。请在终端中运行 gemini 并登录。"],
+] as const) {
+  test(`the not-signed-in line is in the person's language, the command as inline code (${lang})`, async ({ page }) => {
+    await page.addInitScript((l) => localStorage.setItem("omher.lang", l), lang);
+    await open(page, ["claude", "gemini"]);
+    await page.getByTestId("session-new").click();
+    await page.getByTestId("session-agent-gemini").click();
+    await page.getByTestId("session-folder").click();
+    await page.getByTestId("session-choose").click();
+    await page.getByTestId("composer").fill("hi");
+    await page.keyboard.press("Enter");
+    const ended = page.getByTestId("session-ended");
+    await expect(ended).toContainText(line, { timeout: 10_000 });
+    await expect(ended.locator("code")).toHaveText("gemini");
+    expect(await page.getByTestId("session-chat").innerText()).not.toContain("`");
+    await expect(page.locator("[data-testid=session-list] .ss-row").first().getByTestId("session-mark")).toHaveAttribute("title", line);
+  });
+}
 
 test("Kilo Code signed in (its free models need no account): a chat with its long model list searchable", async ({ page }) => {
   await open(page, ["claude", "kilo"], "dark", ["kilo"]);

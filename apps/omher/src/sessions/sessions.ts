@@ -187,14 +187,27 @@ const TITLED: readonly AgentId[] = ["claude", "codex"];
  *  Code the same sentence names Kilo Code (`no_rules`). */
 export const NO_RULES = "OpenCode did not start because omher could not confirm it would keep your own OpenCode permission rules.";
 
+/** The shell's own sentence for an Agent Client Protocol agent that is not signed in (`signed_out` in acp_chat.rs,
+ *  the command between backticks; a test keeps the two equal). */
+const SIGNED_OUT = /^(.+) is not signed in\. Run `([^`]+)` in a terminal and sign in\.$/;
+
+/** `text` as a person reads it: the shell's not-signed-in sentence is said in their language with the command as
+ *  plain words (no backticks); anything else is returned as it is. */
+export const signedOutSaid = (text: string): string => {
+  const m = SIGNED_OUT.exec(text.trim());
+  return m ? tr("ss.signedOut", { agent: m[1], cmd: m[2] }) : text;
+};
+
 const errText = (e: unknown) =>
-  typeof e === "string"
-    ? e
-    : e instanceof Error
-      ? e.message
-      : typeof e === "object" && e && "message" in e
-        ? String((e as { message: unknown }).message)
-        : String(e);
+  signedOutSaid(
+    typeof e === "string"
+      ? e
+      : e instanceof Error
+        ? e.message
+        : typeof e === "object" && e && "message" in e
+          ? String((e as { message: unknown }).message)
+          : String(e),
+  );
 
 const readOpens = () => {
   try {
@@ -445,7 +458,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           proc.noChat = tr("ss.noChatMode", { agent: agentDef(agent).label, install: INSTALL[agent] });
           return;
         }
-        note(id, String(ev.message ?? ""));
+        note(id, signedOutSaid(String(ev.message ?? "")));
         return;
       case "session.note":
         // something the agent's side did on its own that the person should know (Codex: a new conversation in place
@@ -461,7 +474,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         endLiveTurn(id, "ended");
         const code = typeof ev.code === "number" ? ev.code : null;
         // code 0 is an orderly close: whatever the program printed (a start-up warning) is not why it ended
-        const error = proc.noChat ?? (code !== 0 && typeof ev.error === "string" ? ev.error.trim() : "");
+        const error = proc.noChat ?? (code !== 0 && typeof ev.error === "string" ? signedOutSaid(ev.error.trim()) : "");
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
         // the turn the exit failed says "Failed after 0s"; its reason is the Ended line's, said once beside Restart
         const key = keys.get(id);
@@ -482,6 +495,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         return;
       }
       default:
+        // a turn that failed because the agent is not signed in (a model that needs its account): the shell's
+        // sentence, said in the person's language
+        if (ev.event === "turn.end" && typeof ev.error === "string") ev = { ...ev, error: signedOutSaid(ev.error) };
         if (ev.event === "turn.end" && proc.noChat && ev.outcome === "error") ev = { ...ev, error: proc.noChat };
         dispatchChat(id, ev);
         if (ev.event === "turn.end" && proc.signedOut) {
