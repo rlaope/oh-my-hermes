@@ -11,7 +11,7 @@ const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 const TAG = process.env.OMHER_SHOT_TAG || "after";
 
-async function mock(op: string): Promise<void> {
+async function mock(op: string, args: Record<string, unknown> = {}): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
   await new Promise<void>((res, rej) => {
     ws.onopen = () => res();
@@ -19,7 +19,7 @@ async function mock(op: string): Promise<void> {
   });
   await new Promise<void>((res) => {
     ws.onmessage = () => res();
-    ws.send(JSON.stringify({ id: "x1", op }));
+    ws.send(JSON.stringify({ id: "x1", op, ...args }));
   });
   ws.close();
 }
@@ -27,6 +27,7 @@ async function mock(op: string): Promise<void> {
 test.beforeEach(async ({ page }) => {
   test.skip(!SHOTS, "set OMHER_SHOTS to take the shots");
   await mock("mock.reset");
+  await mock("bots.rename", { bot: "default", name: "Milo" });
   await page.setViewportSize({ width: 900, height: 600 });
 });
 
@@ -63,7 +64,7 @@ for (const theme of ["dark", "light"]) {
     const more = page.getByTestId("session-more");
     if (await more.count()) {
       await more.click();
-      await expect(page.getByTestId("session-agent-cline")).toBeVisible();
+      await page.getByTestId("session-agent-cline").evaluate((e) => e.scrollIntoView({ block: "nearest" }));
     } else {
       await page.getByTestId("session-menu-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
     }

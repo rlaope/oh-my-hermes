@@ -129,11 +129,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   ask rules built from them: what you allow asks first, what you deny stays denied. If omher cannot confirm OpenCode
   kept them, it does not start OpenCode. Kilo Code (`kilo acp`) gets the same from `kilo agent list`, for `bash`,
   `edit` and `write`. Gemini CLI (`gemini --acp`), Qwen Code (`qwen --acp`), Kimi Code (`kimi acp`), Copilot CLI
-  (`copilot --acp`) and Cline (`cline --acp`) need no rules: they ask by default. An agent that is not signed in
+  (`copilot --acp`) and Cline (`cline --acp`) use their own approval requests, with no permission override from
+  omher. Their signed-in turns have not been tested. An agent that is not signed in
   ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, ...) and
   Open in Terminal; omher never signs in for it and never takes a key.
 - **The + menu stays short.** It lists the agents installed on this computer; the rest fold under one More agents
-  row, each with its install line (a click copies it).
+  row, each with its install line (a click copies it). Continue a conversation is under that same row.
 
 Rules the code keeps:
 

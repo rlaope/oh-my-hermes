@@ -65,11 +65,12 @@ const geometry = (page: Page) =>
       w: innerWidth,
       footTop: foot.top,
       rows: list.querySelectorAll("[role=menuitem]").length,
+      scroll: list.scrollHeight > list.clientHeight + 1,
     };
   });
 
 for (const theme of ["dark", "light"]) {
-  test(`the + menu at 900x600: installed agents, then one More agents row, nine rows in all, in the window (${theme})`, async ({ page }) => {
+  test(`the + menu at 900x600: installed agents, then one More agents row, seven rows in all, in the window (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
     await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
     await plus(page);
@@ -84,9 +85,10 @@ for (const theme of ["dark", "light"]) {
     for (const a of ["qwen", "kimi", "copilot", "cline", "pi"]) await expect(menu.getByTestId(`session-agent-${a}`)).toHaveCount(0);
     // the new rows carry their own marks, never a letter
     for (const a of ["kilo", "gemini"]) await expect(menu.getByTestId(`session-agent-${a}`).locator('svg[data-agent]:not([data-agent="letter"])')).toHaveCount(1);
-    // nine rows for fifteen agents (six, More, and the two past conversations), in the window, above the bottom rows
+    // Six installed rows + More fit without scrolling. Past conversations share the disclosure.
     const g = await geometry(page);
-    expect(g.rows).toBe(9);
+    expect(g.rows).toBe(7);
+    expect(g.scroll).toBe(false);
     expect(g.top).toBeGreaterThanOrEqual(0);
     expect(g.bottom).toBeLessThanOrEqual(g.footTop);
     // a borderless left-aligned row, 12-13px, no box: the same look as the agent rows
@@ -176,6 +178,8 @@ for (const [id, label, cmd] of [
     await expect(ended).toBeVisible({ timeout: 10_000 });
     const line = `${label} is not signed in. Run \`${cmd}\` in a terminal and sign in.`;
     await expect(ended).toContainText(line);
+    await expect(page.getByTestId("chat-offline")).toHaveCount(0);
+    await expect(page.getByTestId("chat-start")).toHaveCount(0);
     // the line is said once (the failed turn does not repeat it), never as raw JSON or a code
     const text = await page.getByTestId("session-chat").innerText();
     expect(text.split(line).length - 1).toBe(1);

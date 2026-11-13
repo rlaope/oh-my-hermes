@@ -74,6 +74,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.getByTestId("bot-kami").click();
     await page.getByTestId("session-new").click();
     await expect(page.getByTestId("session-menu")).toBeVisible();
+    await page.getByTestId("session-more").click();
     const pastRow = page.getByTestId("session-past-claude");
     if (await pastRow.count()) {
       await pastRow.click();

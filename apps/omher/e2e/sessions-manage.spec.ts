@@ -156,6 +156,7 @@ test("continue a Claude Code conversation made in its CLI: the list, then the se
   await page.getByTestId("session-new").click();
   const menu = page.getByTestId("session-menu");
   // the + menu ends with one row per agent that keeps conversations
+  await menu.getByTestId("session-more").click();
   await expect(menu.getByTestId("session-past-claude")).toBeVisible();
   await expect(menu.getByTestId("session-past-codex")).toBeVisible();
   await menu.getByTestId("session-past-claude").click();
@@ -198,6 +199,7 @@ test("an agent with no conversations in these folders says so", async ({ page })
   await open(page, [{ agent: "codex", cwd: "/Users/you/code/empty", at: 1 }]);
   await page.evaluate(() => ((window as unknown as { __omherPastChats: unknown[] }).__omherPastChats = []));
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-more").click();
   await page.getByTestId("session-past-codex").click();
   await expect(page.getByTestId("session-past-none")).toHaveText("No Codex conversations in these folders");
   await page.getByTestId("session-past-back").click();

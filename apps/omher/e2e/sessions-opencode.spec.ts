@@ -39,6 +39,7 @@ async function open(page: Page, installed: string[]) {
 test("OpenCode not installed: the + menu row is dimmed and its tooltip names OpenCode's own install line", async ({ page }) => {
   await open(page, ["claude"]);
   await page.getByTestId("session-new").click();
+  await page.getByTestId("session-more").click();
   const row = page.getByTestId("session-menu").getByTestId("session-agent-opencode");
   await expect(row).toContainText("OpenCode");
   await expect(row).toContainText("Not installed");

@@ -219,7 +219,10 @@ for (const theme of ["dark", "light"] as const) {
 async function plusMenu(page: Page, height: number, width = 1280) {
   await page.setViewportSize({ width, height });
   await page.getByTestId("session-new").click();
+  await expect(page.getByTestId("session-more")).toHaveAttribute("aria-expanded", "false");
+  await page.getByTestId("session-more").click();
   await expect(page.getByTestId("session-agent-grok")).toBeAttached();
+  await page.keyboard.press("Home");
   await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
 }
 

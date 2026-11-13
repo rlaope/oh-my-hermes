@@ -84,7 +84,8 @@ All notable changes will be documented here.
   signs in for it, never sends the protocol's `authenticate` and never takes
   a key. The + menu lists the agents installed on this computer and folds the
   rest under one More agents row, each with its install line; a click copies
-  it.
+  it. Continue a conversation is under that same row, so the folded menu
+  stays short.
 
 - **A dag-ulw node can be read-only.** `omh_dag` define, repair and extend take
   `read_only: true` on a node; its child's `write_file` and `patch` inside the

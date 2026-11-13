@@ -141,6 +141,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
       <Timeline
         bot={bot}
         face={face}
+        connectionNotice={false}
         onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
       />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}

@@ -20,6 +20,7 @@ async function open(page: Page, theme: string) {
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("session-new").click();
   await expect(page.getByTestId("session-menu")).toBeVisible();
+  await page.getByTestId("session-more").click();
 }
 
 test("a missing agent's row names the install line from that agent's own docs", async ({ page }) => {

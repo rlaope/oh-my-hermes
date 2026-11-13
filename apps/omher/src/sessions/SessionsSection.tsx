@@ -149,7 +149,7 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape
 }
 
 /** Whether the list `el` has more below what it shows: its bottom edge then fades, saying it scrolls. */
-function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
+function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean, shape: boolean) {
   const [more, setMore] = useState(false);
   useLayoutEffect(() => {
     const list = el.current;
@@ -163,7 +163,7 @@ function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
       list.removeEventListener("scroll", read);
       ro.disconnect();
     };
-  }, [el, on]);
+  }, [el, on, shape]);
   return more;
 }
 
@@ -189,7 +189,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
-  const more = useMoreBelow(list, placed);
+  const more = useMoreBelow(list, placed, unfold);
   useEffect(() => {
     if (placed) box.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus({ preventScroll: true });
   }, [placed]);
@@ -291,7 +291,8 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           </button>
         )}
         {unfold && parts?.more.map(row)}
-        {keeps.length > 0 && (
+        {/* Past-conversation choices share the disclosure, keeping the first menu to installed agents + More. */}
+        {keeps.length > 0 && (unfold || !parts?.more.length) && (
           <>
             <div className="ss-sep" />
             <div className="ss-h">{t("ss.past.head")}</div>
