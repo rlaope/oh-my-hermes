@@ -71,6 +71,13 @@
 .card:has(.card-plan) {
   width: 76%;
 }
+/* the plan's own headings stay under the card's question */
+.card-plan h1,
+.card-plan h2,
+.card-plan h3,
+.card-plan h4 {
+  font-size: 12.5px;
+}
 .card-who {
   margin-bottom: 2px;
   font-size: 11.5px;
