@@ -26,10 +26,10 @@ ran.
 
 | field | meaning |
 |---|---|
-| `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0; on a page that starts at its right edge (see `first_action_y`) the scrolling element's `scrollWidth` is used, because in quirks mode the root's misses an absolutely placed box overflowing to the left. A quirks-mode page can have no scrolling element (`overflow-x: hidden` on both `<html>` and `<body>` gives none, `clip` on both keeps `<body>`); the root's number is used there and can read 0 while the screen still pans |
+| `horizontal_overflow_px` | document `scrollWidth` minus the requested viewport width, never below 0; on a page that starts at its right edge (body writing mode `vertical-rl` / `sideways-rl`, or horizontal text with `direction: rtl`) the scrolling element's `scrollWidth` is used, because in quirks mode the root's misses an absolutely placed box overflowing to the left. A quirks-mode page can have no scrolling element (`overflow-x: hidden` on both `<html>` and `<body>` gives none, `clip` on both keeps `<body>`); the root's number is used there and can read 0 while the screen still pans |
 | `elements_past_right_edge` | count and up to 20 elements whose right edge passes the viewport width. On a page that starts at its right edge the overflowing side is the left: the same key then lists elements whose left edge lies left of page x 0, each with `left` (page px, negative) instead of `right`, and the `note` says so. Page x 0 is a document coordinate, not the left edge of the screen at load: under the phone emulation an overflowing page can load with a listed element already on screen |
 | `first_data_y` | top of the first visible match of `--data`, in document px (a match fixed to the viewport is placed by its viewport box); without `--data` the guess is `table tbody tr, [role=row], li, article`, and `"not_found"` plus a hint means pass `--data` |
-| `first_action_y` | top of the first visible `a[href]` or `button` whose box reaches into the page; a control parked off-screen (a skip link above the page) is skipped, and a control fixed to the viewport is judged and placed by its viewport box, so one parked above the screen stays skipped after the page scrolls. `position: fixed` under an ancestor with a transform, a filter or paint containment is fixed to that ancestor, scrolls with the page and is measured in document px like any other control. The edge the page cannot scroll past is its start edge, read from `<body>`, writing mode first: a `vertical-*` or `sideways-*` mode starts at the right when it ends in `-rl` and at the left when it ends in `-lr`, whatever the direction, and horizontal text starts at the right only under `direction: rtl`. On a right-start page the same edge test (below the top, right of page x 0) applies, and a control it counts is never dropped. That test skips everything in the left overflow, which is where such a page overflows, so a control it skips also counts when part of it is on screen as the page loads and the browser's hit test on that part returns it (`elementFromPoint`, at nine points): a tap lands on it. Under the phone emulation an overflowing right-start page loads already panned into its left overflow, so a first control there is found. Nothing is inferred from layout and nothing is scrolled to look further, so a control that needs a scroll or a pan first is not counted: one in the left overflow of a `--desktop` run (which loads at `scrollX` 0), one further left than the screen at load, one inside a scroll box that has to be scrolled, one above the screen on a page that scrolled itself at load. Those read as they did before this script read right-start pages. A control under a box that takes the tap, one with `pointer-events: none`, one inside `inert` and one with `visibility: collapse` are not returned by the hit test and are not counted in the left overflow; a see-through control is. The hit test says where a tap lands, not whether the control acts on it: a disabled button counts, as it does on a left-start page. What the edge test counts wrongly stays counted, on either start side: a control parked past the right edge of a right-start page, one a container clips away, one in a scroll box that cannot scroll to it, and, since that test never asks where a tap lands, one under an opaque box. A page with no scrolling element (a quirks-mode page can get there with `overflow-x` auto, scroll or hidden on both `<html>` and `<body>`) is read the same way: the hit test uses no number the page reports about itself. A left-start page gets the edge test only |
+| `first_action_y` | geometric top of the first visible `a[href]` or `button` in DOM order whose box reaches below the top and right of document x 0, on either start side. A control fixed to the viewport is judged and placed by its viewport box; `position: fixed` under a containing ancestor (a transform, filter or paint containment) scrolls with that ancestor and is placed in document px. This keeps the earlier edge test, not an activation test. It skips controls wholly in the left overflow of a right-start page even when the phone loads panned to them; it can count a control a container clips away, one under an overlay, a disabled control, or one a scroll box cannot reach. It sends no tap, scroll or focus to discover whether a control really acts, and does not predict `:active` / `:hover` changes or event delivery into a nested document |
 | `small_targets` | visible `a, button, [role=button], input, select, summary` under 44 px in either dimension: count and first 20 |
 | `small_inputs` | visible text-entry controls (`textarea`, `select`, and `input` other than checkbox, radio, button, submit, reset, file, image, range, color and hidden) whose computed font size is under 16 px: count and first 20; `checked` counts only these |
 | `console_errors` | `console.error` messages and uncaught page errors during load |
@@ -58,15 +58,15 @@ the lists, not the counts.
   `<html dir="rtl"><body dir="ltr">` is measured as a left-to-right page,
   `body{direction:rtl}` as a right-to-left one, and a `vertical-lr` body as a
   left-start page even under `direction: rtl`.
-- **Measuring writes nothing to the page.** The script does not scroll, focus
-  or write to the page to find a control: a scroll runs the page's own
-  listeners, and what they add would be counted. That is why a control that
-  needs a scroll first is not counted on a right-start page. `--shot` with
+- **Measuring writes nothing to the page.** The script does not tap, scroll,
+  focus or write to the page to find a control: those actions run the page's
+  own listeners and may change its state. `first_action_y` keeps the earlier
+  geometric edge test rather than predicting activation. `--shot` with
   `--scroll` scrolls only after the numbers are taken.
 - **Named markup is not a browser measurement.** A hidden `<form
   name="scrollingElement">` can replace `document.scrollingElement` with that
   form through the browser's named-property lookup, without any page script.
-  The start side, the root, body and scrolling element, the hit test and
+  The start side, the root, body and scrolling element, and
   every step up the tree (`parentElement`, `offsetParent`, the node kind)
   are read through their interface prototypes,
   so named markup cannot replace those reads. A `<form>` holding `<input
@@ -78,16 +78,18 @@ the lists, not the counts.
   `querySelector` or `querySelectorAll` on `document`, ends the run with exit
   2 and no report; a hidden `<form name="documentElement">` reports
   `client_width` 0.
-- **The right-start reading does not follow scroll boxes.** Earlier forms of
-  it inferred from layout whether a scroll could bring a control into view,
-  and each met a page it could not see: a scroll box in a shadow tree, the
-  `::details-content` box of a `<details>`, a box reversed by its flex flow,
-  250 boxes one inside the other. It now asks the browser where a tap lands
-  as the page loads and nothing else, which finds less and gets no page
-  wrong that the edge test alone gets right, on the pages measured.
+- **Geometry is not activation.** The RTL change fixes overflow reporting,
+  not `first_action_y` reachability. An attempted hit-test addition counted
+  links wrapping an iframe, object or embed even when the nested document
+  took the tap. A hit test also cannot predict a `:hover` or `:active` style
+  that changes the control when touched. That addition was withdrawn; both
+  start sides keep the same geometric edge test and its existing misses.
+  A control wholly left of document x 0 stays skipped even if it is on screen.
+  A control to its right stays eligible even if a scroll box, shadow tree,
+  `::details-content` box or overlay prevents interaction.
 - **Page scripts can still corrupt measurements.** This is an in-page helper,
   not an isolated-world measurement. A page script that changes a prototype,
-  `getBoundingClientRect`, `getComputedStyle` or `elementFromPoint` can
+  `getBoundingClientRect` or `getComputedStyle` can
   make it omit or misplace a control. In one measured page, a real y100 link
   reported its rectangle at y-500: both start sides omitted it and returned
   the y300 fallback. The prototype reads

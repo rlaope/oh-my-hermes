@@ -828,35 +828,25 @@ All notable changes will be documented here.
   is `not_observed`. `visual-qa` records in the capture manifest whether
   emulation was on.
 
-- **`phone_check.py` measures a right-to-left page from the edge it starts
-  at.** On a page whose `<body>` is `direction: rtl`, or in a `-rl` vertical
-  writing mode, and that is too wide for the phone, the script skipped a
-  first control that sat in the left overflow and reported a later one; on
-  such a page in quirks mode it also reported a horizontal overflow of 0. It
-  now reads the start side from `<body>`, writing mode before direction,
-  keeps the first control the earlier edge test counts, and also counts a
-  control that test skips when part of it is on screen as the page loads
-  and the browser's hit test returns it, so a tap lands on it. Under the
-  phone emulation an overflowing right-to-left page loads already panned
-  into its left overflow, so a first control there is found. It takes the
-  overflow from the scrolling element, and lists under
-  `elements_past_right_edge` the elements left of page x 0, each with
-  `left`. Nothing is inferred from layout and nothing is scrolled: a
-  control that needs a scroll or a pan first (a `--desktop` run, a control
-  further left than the screen, one inside a scroll box) is not counted
-  and reads as before, and what the edge test counted wrongly on such a
-  page it still counts (a control parked past the right edge, one a
-  container clips away). A left-to-right page gives the same output as
-  before, except where a form control is named `parentElement`,
-  `offsetParent` or `nodeType`: a page the script could not finish before
-  (such a form around its first link) is now measured, a control under a
-  fixed ancestor on a page scrolled at load is placed by its viewport box,
-  and the element paths listed there follow the real tree. The start side,
-  the root, body and scrolling element, the hit test and every step up the
-  tree use interface-prototype getters, so a hidden form, image or iframe
-  named `scrollingElement` cannot replace the browser's value, and a form
-  control named `parentElement` or `offsetParent` cannot send the script
-  round in a circle until its time limit.
+- **`phone_check.py` measures horizontal overflow from the page's start
+  side and survives named HTML tree links.** On a page whose `<body>` is
+  `direction: rtl`, or in a `-rl` vertical writing mode, the overflowing
+  side is the left. The script reads that start side from `<body>`, writing
+  mode before direction, takes overflow from the scrolling element (with
+  the root as the fallback when none exists), and lists elements left of
+  document x 0 under `elements_past_right_edge`, each with `left`.
+  `first_action_y` deliberately keeps the earlier geometric edge test on
+  both start sides: it neither adds a link in the left overflow nor predicts
+  whether a tap activates one. A hit-test addition was withdrawn after it
+  counted links whose iframe, object or embed took the event, and controls
+  changed by `:hover` / `:active` when touched. The existing misses remain,
+  including a control wholly in the left overflow or one a container clips.
+  The start side, root, body, scrolling element and every tree-walk step
+  use interface-prototype reads, so named forms or controls cannot replace
+  those values or loop a walk through `parentElement` or `offsetParent`.
+  A left-start page keeps its prior output except where these named tree
+  links formerly hung the script, misplaced a control under a fixed ancestor,
+  or corrupted a listed path. Measurement sends no tap, scroll or focus.
   Page scripts can still corrupt other measurement APIs; the toolkit README
   describes the omitted or misplaced controls this can produce. Measured in
   Chromium only.

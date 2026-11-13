@@ -138,9 +138,9 @@ PAGE_SCRIPT = """
     if (!el) return null;
     return r1(el.getBoundingClientRect().top + (fixedToViewport(el) ? 0 : sy));
   };
-  // The edge test: a box is on the page when it reaches below the top and
-  // right of page x 0, the two sides a page that starts at the left cannot
-  // scroll beyond. A box fixed to the viewport is judged by its viewport box.
+  // Keep the legacy geometric edge test: below the top and right of page
+  // x 0. It is not a reachability or activation test on either start side.
+  // A box fixed to the viewport is judged by its viewport box.
   const onPage = (el) => {
     const r = el.getBoundingClientRect();
     if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;
@@ -152,39 +152,10 @@ PAGE_SCRIPT = """
     }
     return null;
   };
-  // A page that starts at the right overflows to the left, where the edge
-  // test skips everything, a real first control included. Whether a reader
-  // gets to such a control is not inferred from layout: every rule that tried
-  // met a page it could not see. The browser is asked instead. A control the
-  // edge test skips is the first action when part of it is on screen as the
-  // page loads and a hit test there returns it, so a tap lands on it. Under
-  // the phone emulation an overflowing right-start page loads already panned
-  // into its left overflow. Nothing is scrolled to look further: a control
-  // that needs a scroll or a pan first is not added, and the answer is the
-  // edge test's. A control the edge test counts is never dropped.
-  const fromPoint = Document.prototype.elementFromPoint;
-  const holds = Node.prototype.contains;
-  const tapLands = (el) => {
-    const vv = window.visualViewport
-      || {offsetLeft: 0, offsetTop: 0, width: window.innerWidth, height: window.innerHeight};
-    const r = el.getBoundingClientRect();
-    const x0 = Math.max(r.left, vv.offsetLeft), x1 = Math.min(r.right, vv.offsetLeft + vv.width);
-    const y0 = Math.max(r.top, vv.offsetTop), y1 = Math.min(r.bottom, vv.offsetTop + vv.height);
-    if (x1 - x0 < 1 || y1 - y0 < 1) return false;
-    for (const fx of [0.5, 0.15, 0.85]) {
-      for (const fy of [0.5, 0.15, 0.85]) {
-        const at = fromPoint.call(document, x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy);
-        if (at && (at === el || holds.call(el, at))) return true;
-      }
-    }
-    return false;
-  };
-  const firstFromRight = (selector) => {
-    for (const el of document.querySelectorAll(selector)) {
-      if (shown(el) && (onPage(el) || tapLands(el))) return el;
-    }
-    return null;
-  };
+  // first_action_y keeps the original geometric edge test on both start sides.
+  // A hit target is not proof that a control acts: nested documents take
+  // the event, and :active / :hover styles can change it when touched.
+  // No tap is sent to find out, since measurement must not change the page.
   const textEntry = (el) => el.localName !== 'input' || !opts.non_text_types.includes(el.type);
   const out = {};
   const meta = document.querySelector('meta[name=viewport]');
@@ -226,8 +197,7 @@ PAGE_SCRIPT = """
   const data = firstShown(dataSelector);
   out.data_selector = dataSelector;
   out.first_data_y = top(data);
-  out.first_action_y = top(startRight ? firstFromRight(opts.action_selector)
-    : firstOnPage(opts.action_selector));
+  out.first_action_y = top(firstOnPage(opts.action_selector));
 
   out.targets_total = 0;
   out.small_targets_total = 0;
@@ -300,15 +270,14 @@ def starts_at_right(writing_mode, direction):
 
 
 def in_document_area(bottom, right):
-    """True when a box reaches into the area the reader can get to.
+    """Mirror the page script's geometric edge test, not control reachability.
 
     A skip link parked above or left of the page (negative top and left) is
     not where the first action sits; the page script skips such controls. The
     box is in page coordinates, except for a control fixed to the viewport,
-    whose box is its viewport rectangle whatever the scroll position. On a
-    page that starts at the right the page script also counts a control this
-    test skips when a tap lands on it as the page loads; that needs the
-    browser and has no mirror here.
+    whose box is its viewport rectangle whatever the scroll position. This
+    geometric edge test is used on both start sides; it does not test whether
+    a control is reachable or acts when tapped.
     """
     return bottom > 0 and right > 0
 
