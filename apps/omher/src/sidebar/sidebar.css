@@ -753,16 +753,19 @@ button.upd:hover {
 
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
    Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. A subagent row in the
-   chat that waits on the person (.sa-row) says "waiting" in the same amber. */
+   chat that waits on the person (.sa-row) says "waiting" in the same amber, and so does its card's head when every
+   row still out waits (.sa-head). */
 .side,
-.sa-row {
+.sa-row,
+.sa-head {
   --needs: #e9a23b;
   --needs-ink: #1b1204;
   --needs-soft: rgba(233, 162, 59, 0.12);
   --needs-text: #e9a23b;
 }
 [data-theme="light"] .side,
-[data-theme="light"] .sa-row {
+[data-theme="light"] .sa-row,
+[data-theme="light"] .sa-head {
   --needs: #e39a2a;
   --needs-ink: #1b1204;
   --needs-soft: rgba(227, 154, 42, 0.14);
@@ -848,6 +851,10 @@ button.upd:hover {
 .needs-who {
   font-weight: 400;
   color: var(--body);
+}
+/* " · " and the word after it: one box, so a cut line never ends on a lone separator */
+.needs-sep {
+  display: inline-block;
 }
 .needs-k {
   font-size: 10.5px;

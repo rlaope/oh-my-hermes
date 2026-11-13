@@ -140,6 +140,15 @@ All notable changes will be documented here.
   subagent ends, Claude Code withdraws it (Stop), or the session's program
   ends. A Codex subagent's approval follows the same rule.
 
+- **You can stop what a Claude Code session still runs in the background after its turn.** While no turn
+  runs, the session header's "1 still running in the background" now ends with a quiet "Stop". It sends Claude
+  Code's own interrupt and, for a background command, its own `stop_task`: the subagent's row reads "stopped",
+  the count goes, an open late ask reads "Not answered" and the header is Ready. Esc still stops a running turn
+  only, and the composer keeps Send. Codex, OmO, OpenCode and DSH get no such Stop, because their own Stop does
+  nothing to that work. Also: the subagent card and its ask end at one right edge; a card whose rows all wait on
+  you says "Waiting", not "Running"; the needs strip no longer ends on a lone "·"; and a background subagent's row
+  shows its model.
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt
