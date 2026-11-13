@@ -6,7 +6,6 @@
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ITheme } from "@xterm/xterm";
 import { selectAsks, useStore, type OutFile } from "../state/store";
 import { resolveTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
@@ -21,68 +20,18 @@ import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, CONTINUES, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
+import { FindBar } from "./term/find-bar";
+import { FIND_EVENT, type FindRequest } from "./term/engine-find";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
 import { workingSubagents } from "./SessionPlans";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
-
-// Matched to omher's tokens (--bg, --body, --ink) so the terminal reads as part of the page.
-const DARK: ITheme = {
-  background: "#0b090d",
-  foreground: "#dcd6de",
-  cursor: "#f3eff4",
-  cursorAccent: "#0b090d",
-  selectionBackground: "#3d364066",
-  selectionInactiveBackground: "#3d364044",
-  black: "#1b181e",
-  red: "#f08a8a",
-  green: "#7fd6a4",
-  yellow: "#eaaf55",
-  blue: "#8cbcff",
-  magenta: "#e48fd0",
-  cyan: "#7fd1d6",
-  white: "#dcd6de",
-  brightBlack: "#6f6872",
-  brightRed: "#ffa3a3",
-  brightGreen: "#9be6b9",
-  brightYellow: "#f5c779",
-  brightBlue: "#a9ccff",
-  brightMagenta: "#f0a8de",
-  brightCyan: "#9de2e6",
-  brightWhite: "#f3eff4",
-};
-const LIGHT: ITheme = {
-  background: "#ffffff",
-  foreground: "#2c2630",
-  cursor: "#19151b",
-  cursorAccent: "#ffffff",
-  selectionBackground: "#cbc4cf88",
-  selectionInactiveBackground: "#cbc4cf55",
-  black: "#19151b",
-  red: "#c0392b",
-  green: "#1f8a52",
-  yellow: "#a86a00",
-  blue: "#1d5fd1",
-  magenta: "#a8327a",
-  cyan: "#0f7f86",
-  white: "#e9e5eb",
-  brightBlack: "#756d7a",
-  brightRed: "#d9534f",
-  brightGreen: "#28a065",
-  brightYellow: "#c08000",
-  brightBlue: "#3a78e0",
-  brightMagenta: "#c4367f",
-  brightCyan: "#1b97a0",
-  brightWhite: "#ffffff",
-};
-
-export const termTheme = (mode: "dark" | "light") => (mode === "light" ? LIGHT : DARK);
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -96,6 +45,15 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   const box = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const mode = resolveTheme(s.ui.theme);
+  // Cmd/Ctrl+F in this terminal: the engine says so with an event, the bar opens for that terminal only
+  const [find, setFind] = useState<FindRequest | null>(null);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const on = (e: Event) => setFind((e as CustomEvent<FindRequest>).detail);
+    el.addEventListener(FIND_EVENT, on);
+    return () => el.removeEventListener(FIND_EVENT, on);
+  }, []);
   // A file dropped on the terminal, or a picture pasted there, is saved and its path typed at the prompt (as a
   // system terminal types a dropped file's path). Plain text pastes stay xterm's own.
   useEffect(() => {
@@ -133,16 +91,17 @@ function TerminalPane({ rec }: { rec: SessionRec }) {
   }, [rec.id]);
   useEffect(() => {
     if (!box.current) return;
-    return getSessions().attach(rec.id, box.current, termTheme(mode));
-    // re-attach only when the session changes; theme changes go through setTheme below
+    return getSessions().attach(rec.id, box.current, mode);
+    // re-attach only when the session changes; theme changes go through setLook below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rec.id]);
   useEffect(() => {
-    getSessions().setTheme(termTheme(mode));
+    getSessions().setLook(mode);
   }, [mode]);
   return (
     <div className="term-wrap" ref={wrap} data-testid="terminal" data-session={rec.id}>
       <div className="term-box" ref={box} />
+      {find && <FindBar req={find} onClose={() => setFind(null)} />}
     </div>
   );
 }
@@ -866,6 +825,19 @@ export function SessionView() {
           <span className="ss-head-bg" data-testid="session-background" title={tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}>
             {tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}
           </span>
+        )}
+        {/* no turn runs, so the composer offers Send: the background work's own Stop sits beside the words that say
+            it runs, and sends the agent's own interrupt (Esc keeps stopping a running turn only) */}
+        {showChat && !!rec.background && !turn && rec.status === "running" && STOPS_BACKGROUND.includes(rec.agent) && (
+          <button
+            type="button"
+            className="ss-head-stop"
+            title={tr("ss.stopBackground")}
+            onClick={() => void getSessions().interrupt(rec.id)}
+            data-testid="session-background-stop"
+          >
+            {tr("ss.stopBackgroundShort")}
+          </button>
         )}
         {showRight && (
           <div className="head-right ss-head-right" data-testid="head-right">
