@@ -251,46 +251,6 @@ pub fn kilo_ask(listing: &str) -> Option<String> {
     ask_rules(listing, "code", &KILO_ASKED)
 }
 
-/// Each agent's rules for the tools in `asked` (permission, pattern, action), in order, from an `agent list`.
-#[cfg(test)]
-fn rulesets(listing: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<(String, String, String)>)>> {
-    let mut agents: Vec<(String, String)> = Vec::new();
-    for line in listing.lines() {
-        if !line.starts_with([' ', '\t', '[', ']', '{', '}']) && line.ends_with(')') && line.contains(" (") {
-            agents.push((line[..line.rfind(" (")?].to_string(), String::new()));
-        } else {
-            let last = agents.last_mut()?;
-            last.1.push_str(line);
-            last.1.push('\n');
-        }
-    }
-    agents
-        .into_iter()
-        .map(|(name, body)| {
-            let rules: Vec<Value> = serde_json::from_str(&body).ok()?;
-            let mut out = Vec::new();
-            for r in &rules {
-                let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
-                if asked.iter().any(|(t, _)| wildcard(t, perm)) {
-                    out.push((perm.to_string(), pattern.to_string(), action.to_string()));
-                }
-            }
-            Some((name, out))
-        })
-        .collect()
-}
-
-/// What an agent decides for `tool` on `input` under `rules` (the last rule whose permission and pattern match, else
-/// ask), as OpenCode and Kilo evaluate.
-#[cfg(test)]
-fn decide(rules: &[(String, String, String)], tool: &str, input: &str) -> &'static str {
-    match rules.iter().rev().find(|(p, pat, _)| wildcard(tool, p) && wildcard(input, pat)).map(|r| r.2.as_str()) {
-        Some("allow") => "allow",
-        Some("deny") => "deny",
-        _ => "ask",
-    }
-}
-
 /// A cheap, conservative disjointness proof for two glob languages. Different literal prefixes cannot
 /// overlap. Anything less obvious is treated as overlapping (including `?` and the optional trailing `" *"`).
 fn may_overlap(a: &str, b: &str) -> bool {
@@ -930,6 +890,46 @@ impl Adapter for Acp {
 mod tests {
     use super::*;
     use std::path::Path;
+
+/// Each agent's rules for the tools in `asked` (permission, pattern, action), in order, from an `agent list`.
+fn rulesets(listing: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<(String, String, String)>)>> {
+    let mut agents: Vec<(String, String)> = Vec::new();
+    for line in listing.lines() {
+        if !line.starts_with([' ', '\t', '[', ']', '{', '}']) && line.ends_with(')') && line.contains(" (") {
+            agents.push((line[..line.rfind(" (")?].to_string(), String::new()));
+        } else {
+            let last = agents.last_mut()?;
+            last.1.push_str(line);
+            last.1.push('\n');
+        }
+    }
+    agents
+        .into_iter()
+        .map(|(name, body)| {
+            let rules: Vec<Value> = serde_json::from_str(&body).ok()?;
+            let mut out = Vec::new();
+            for r in &rules {
+                let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
+                if asked.iter().any(|(t, _)| wildcard(t, perm)) {
+                    out.push((perm.to_string(), pattern.to_string(), action.to_string()));
+                }
+            }
+            Some((name, out))
+        })
+        .collect()
+}
+
+/// What an agent decides for `tool` on `input` under `rules` (the last rule whose permission and pattern match, else
+/// ask), as OpenCode and Kilo evaluate.
+fn decide(rules: &[(String, String, String)], tool: &str, input: &str) -> &'static str {
+    match rules.iter().rev().find(|(p, pat, _)| wildcard(tool, p) && wildcard(input, pat)).map(|r| r.2.as_str()) {
+        Some("allow") => "allow",
+        Some("deny") => "deny",
+        _ => "ask",
+    }
+}
+
+
 
     fn real(name: &str) -> Vec<String> {
         let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join("acp").join(name);

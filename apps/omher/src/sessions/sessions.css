@@ -207,6 +207,11 @@
   text-overflow: ellipsis;
   flex: none;
 }
+/* Seven single-line choices at 900x600 fit above the anchor without a 6px scroll/fade. Two-line account
+   rows keep their full height; expanded install rows keep the regular 40px. */
+.ss-folded .ss-item:not(:has(.ss-as)) {
+  height: 28px;
+}
 /* "More agents": a plain row like the agents, its chevron in the mark's place and the count at its end */
 .ss-more {
   color: var(--muted);

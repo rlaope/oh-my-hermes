@@ -272,7 +272,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       >
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
-        <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
+        <div ref={list} className={`ss-scroll${more ? " more" : ""}${unfold ? "" : " ss-folded"}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
         {(parts?.shown ?? []).map(row)}
         {parts && parts.more.length > 0 && (
           <button

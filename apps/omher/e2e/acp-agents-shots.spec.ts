@@ -65,6 +65,8 @@ for (const theme of ["dark", "light"]) {
     if (await more.count()) {
       await more.click();
       await page.getByTestId("session-agent-cline").evaluate((e) => e.scrollIntoView({ block: "nearest" }));
+      // Keep all four new missing names clear of the scroll cue; the past-conversation rows remain below.
+      await page.getByTestId("session-menu-list").evaluate((e) => (e.scrollTop += 32));
     } else {
       await page.getByTestId("session-menu-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
     }
