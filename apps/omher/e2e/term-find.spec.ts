@@ -201,6 +201,95 @@ test("Windows/Linux: Ctrl+F at a prompt opens find and is not sent to the progra
   expect((await typed(page)).slice(before.length)).not.toContain("\x06");
 });
 
+/** The cells find has filled in the shown terminal (their fills), what find-colors.ts picks for its theme now, and
+ *  what the terminal has selected. */
+const fills = (page: Page) =>
+  page.evaluate(async () => {
+    type T = { element?: HTMLElement; options: { theme?: object }; getSelection(): string };
+    const host = document.querySelector('[data-testid="terminal"] .xterm')!;
+    const term = [...((window as unknown as { __omherTerms?: Set<T> }).__omherTerms ?? [])].find((t) => t.element === host)!;
+    const { findColors } = (await import("/src/sessions/term/find-colors.ts" as string)) as { findColors: (t: unknown) => { matchBackground: string; activeMatchBackground: string } };
+    const hex = (rgb: string) => {
+      const m = /rgba?\((\d+), (\d+), (\d+)/.exec(rgb);
+      return m ? `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, "0")).join("")}` : rgb;
+    };
+    const bg = [...host.querySelectorAll<HTMLElement>(".xterm-rows span")].filter((x) => /background-color/.test(x.getAttribute("style") ?? "")).map((x) => hex(getComputedStyle(x).backgroundColor));
+    const picked = findColors(term.options.theme ?? {});
+    return {
+      cells: bg.length,
+      active: bg.filter((c) => c === picked.activeMatchBackground).length,
+      plain: bg.filter((c) => c === picked.matchBackground).length,
+      outlines: host.querySelectorAll(".tfind-active").length,
+      selection: term.getSelection(),
+    };
+  });
+
+test("leaving the terminal with find open takes the highlights with the bar: back on it, nothing is filled and nothing selected", async ({ page }) => {
+  await terminalWithText(page);
+  const id = (await page.getByTestId("terminal").getAttribute("data-session")) as string;
+  const back = async () => {
+    await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+    await expect(page.getByTestId("terminal")).toHaveAttribute("data-session", id);
+  };
+  const search = async () => {
+    await find(page);
+    await input(page).fill("needle");
+    await expect(count(page)).toHaveText(/^[123] of 3$/);
+    await expect.poll(async () => (await fills(page)).cells).toBe(18); // 3 matches of 6 cells
+  };
+
+  // to a bot's chat and back
+  await search();
+  await page.getByTestId("bot-kami").click();
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
+  await back();
+  await expect(bar(page)).toHaveCount(0);
+  await expect.poll(() => fills(page)).toEqual({ cells: 0, active: 0, plain: 0, outlines: 0, selection: "" });
+
+  // to Settings and back
+  await search();
+  await page.getByTestId("nav-settings").click();
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
+  await back();
+  await expect(bar(page)).toHaveCount(0);
+  await expect.poll(() => fills(page)).toEqual({ cells: 0, active: 0, plain: 0, outlines: 0, selection: "" });
+
+  // find still works on the terminal afterwards
+  await search();
+  expect((await fills(page)).active).toBe(6);
+});
+
+test("a theme that changes while find is open recolours the matches at once, and the active match stays where it was", async ({ page }) => {
+  await openApp(page, { theme: "dark", term: { themeDark: "dracula" } });
+  await newTerminal(page);
+  await feed(page, LINES);
+  await find(page);
+  await input(page).fill("needle");
+  await page.keyboard.press("Enter");
+  await expect(count(page)).toHaveText(/^[123] of 3$/);
+  await expect.poll(() => fills(page)).toMatchObject({ cells: 18, active: 6, plain: 12, outlines: 1 });
+  const at = await count(page).textContent();
+
+  for (const theme of ["one-light", "tango-dark"]) {
+    await page.evaluate(async (themeDark) => {
+      const m = (await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void };
+      m.writeTermSettings({ themeDark });
+    }, theme);
+    // every fill is the new theme's (none of the old theme's is left), with no key pressed
+    await expect.poll(() => fills(page), theme).toMatchObject({ cells: 18, active: 6, plain: 12, outlines: 1, selection: "needle" });
+    await expect(count(page)).toHaveText(at as string);
+  }
+  // a setting that is no colour and no size (the cursor's blink) leaves find as it is. A size is another matter:
+  // xterm drops the selection when the terminal's grid changes, and the add-on then finds again from the bottom
+  await page.evaluate(async () => {
+    const m = (await import("/src/sessions/term/settings.ts" as string)) as { writeTermSettings(p: object): void };
+    m.writeTermSettings({ cursorBlink: false });
+  });
+  await settle(page);
+  expect(await fills(page)).toMatchObject({ cells: 18, active: 6, plain: 12, outlines: 1, selection: "needle" });
+  await expect(count(page)).toHaveText(at as string);
+});
+
 test("find does not change what a program is sent: typing in the field never reaches the terminal", async ({ page }) => {
   await terminalWithText(page);
   await find(page);

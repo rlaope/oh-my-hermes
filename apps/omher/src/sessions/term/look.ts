@@ -3,6 +3,7 @@
 import type { ITerminalOptions, ITheme, Terminal } from "@xterm/xterm";
 import type { TermContrast, TermSettings } from "./settings";
 import { brightIsBrighter, isLightBackground } from "./themes";
+import { finderOf } from "./engine-find";
 
 const appMono = () => (typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--mono").trim()) || "monospace";
 
@@ -96,5 +97,7 @@ export function applyLook(term: Terminal, theme: ITheme, s: TermSettings): void 
     if (theme.background) wrap.style.setProperty(TERM_BG_VAR, theme.background);
     else wrap.style.removeProperty(TERM_BG_VAR);
   }
+  // find's highlights are the theme's colours
+  finderOf(term)?.restyle();
   expose(term);
 }

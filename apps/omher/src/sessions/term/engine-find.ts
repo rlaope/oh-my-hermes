@@ -8,6 +8,9 @@
 // layer, which xterm paints above the selection: the fill find-colors.ts picked for it, the text colour that reads
 // on that fill (a decoration's fill leaves the cell's own colour, and a program's yellow can be the fill's colour),
 // and a heavier outline.
+//
+// The colours are the theme's, so a terminal whose theme changes while find is open (the app follows the system
+// from light to dark) is told to take them again: `restyle()`, which look.ts calls with the new look.
 import type { IDecoration, IDisposable, Terminal } from "@xterm/xterm";
 import type { SearchAddon } from "@xterm/addon-search";
 import { findColors, type FindColors } from "./find-colors";
@@ -35,6 +38,8 @@ export interface Finder {
   search(text: string, direction: "next" | "previous", incremental?: boolean): void;
   /** Drop the highlights and the selection that find made. */
   clear(): void;
+  /** The terminal's theme may have changed: the matches and the active one take its colours, where they are. */
+  restyle(): void;
   onResults(fn: (r: FindResults) => void): () => void;
   dispose(): void;
 }
@@ -48,6 +53,12 @@ const loadSearch = () =>
       throw e;
     },
   ));
+
+const finders = new WeakMap<Terminal, Finder>();
+/** The finder of a terminal that has one (a session's terminal; the Settings preview has none). */
+export const finderOf = (term: Terminal): Finder | undefined => finders.get(term);
+
+const sameColors = (a: FindColors, b: FindColors) => (Object.keys(a) as (keyof FindColors)[]).every((k) => a[k] === b[k]);
 
 export function makeFinder(term: Terminal): Finder {
   let addon: SearchAddon | null = null;
@@ -97,6 +108,8 @@ export function makeFinder(term: Terminal): Finder {
   };
   /** The colours in use, so a result the add-on finds again by itself (new output, a resize) is marked the same. */
   let colors: FindColors | null = null;
+  /** What is being looked for ("" when nothing is). */
+  let wanted = "";
 
   const ready = (): Promise<SearchAddon | null> =>
     (loading ??= loadSearch().then(
@@ -119,6 +132,7 @@ export function makeFinder(term: Terminal): Finder {
     ));
 
   const run = (text: string, direction: "next" | "previous", incremental: boolean) => {
+    wanted = text;
     if (!text) {
       unmark();
       addon?.clearDecorations();
@@ -127,7 +141,8 @@ export function makeFinder(term: Terminal): Finder {
       return;
     }
     void ready().then((a) => {
-      if (!a || gone) return;
+      // closed, or looking for something else by now (the add-on's chunk loads on the first search)
+      if (!a || gone || wanted !== text) return;
       colors = findColors(term.options.theme ?? {});
       const opts = { incremental, decorations: colors };
       const found = direction === "next" ? a.findNext(text, opts) : a.findPrevious(text, opts);
@@ -139,13 +154,34 @@ export function makeFinder(term: Terminal): Finder {
     });
   };
 
-  return {
+  const finder: Finder = {
     search: run,
     clear() {
+      wanted = "";
+      // the bar can outlive its terminal by a moment (a session that ended while find was open)
+      if (gone) return;
       unmark();
       addon?.clearDecorations();
       term.clearSelection();
       emit({ index: -1, count: 0, capped: false });
+    },
+    restyle() {
+      const a = addon;
+      if (!a || gone || !wanted || !colors) return;
+      const next = findColors(term.options.theme ?? {});
+      // a font size or a padding is a new look too, and no new colour
+      if (sameColors(next, colors)) return;
+      colors = next;
+      // the add-on keeps the fills of a text it has searched: drop them, then find the same match again
+      // (incremental: from where the selection is, which is the active match). A person who scrolled away from
+      // the match stays where they are.
+      const at = term.buffer.active.viewportY;
+      a.clearDecorations();
+      if (!a.findNext(wanted, { incremental: true, decorations: colors })) {
+        unmark();
+        emit({ index: -1, count: 0, capped: false });
+      }
+      if (term.buffer.active.viewportY !== at) term.scrollToLine(at);
     },
     onResults(fn) {
       listeners.add(fn);
@@ -154,6 +190,7 @@ export function makeFinder(term: Terminal): Finder {
     },
     dispose() {
       gone = true;
+      finders.delete(term);
       unmark();
       listeners.clear();
       try {
@@ -164,4 +201,6 @@ export function makeFinder(term: Terminal): Finder {
       addon = null;
     },
   };
+  finders.set(term, finder);
+  return finder;
 }
