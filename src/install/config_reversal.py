@@ -72,6 +72,7 @@ from .config_adapter import (
     plugin_enablement_is_readable,
     plugin_omh_home_setting,
     references_mapping_key,
+    references_top_level_section,
     childless_containers,
     remove_childless_containers,
     revert_display_scalar,
@@ -801,7 +802,12 @@ def _names_section_key(config_text: str, section: str, key: str) -> bool:
         if not line.startswith(" "):
             if references_mapping_key(line, dotted):
                 return True
-            in_section = references_mapping_key(line, section)
+            # Only a column-0 line whose own root key is `section` opens it.
+            # The wider `references_mapping_key` also matches `section` named
+            # inside another root key's flow mapping, which would read
+            # `webhooks: {routes: {a: {skills: [x]}}}` as opening `skills`
+            # and report a `skills.<key>` that no root block carries (#2829).
+            in_section = references_top_level_section(line, section)
             # A flow mapping carries the child on the section's own line, so
             # `display: {skin: omh}` names `display.skin` without ever
             # opening a block. The editors refuse that shape; the report
