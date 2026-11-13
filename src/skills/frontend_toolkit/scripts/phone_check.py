@@ -46,7 +46,7 @@ PAST_LEFT_EDGE_NOTE = ("this page starts at its right edge and overflows to the 
 # It classifies every shown element in the page and returns a count over all of
 # them; only the listed examples stop at `list_limit`, so output stays bounded.
 PAGE_SCRIPT = """
-async (opts) => {
+(opts) => {
   const doc = document.documentElement;
   const sx = window.scrollX, sy = window.scrollY;
   // The page's start side comes from the writing mode and direction of
@@ -57,7 +57,7 @@ async (opts) => {
   // overflows to the left instead (scrollX goes negative).
   // Markup alone can shadow a built-in: <form name="scrollingElement"> makes
   // `document.scrollingElement` that form, with no script on the page, and
-  // <input name="scrollHeight"> does the same on its <form>. What decides how
+  // a form control's name does the same on its <form>. What decides how
   // a right-start page is read is taken through the interface prototypes,
   // which a named element cannot shadow, and so is every step up the tree:
   // <input name="parentElement"> makes its <form> answer with that input,
@@ -76,23 +76,14 @@ async (opts) => {
   // answer (none), and has no named controls to shadow it.
   const htmlOffsetParent = own(HTMLElement.prototype, 'offsetParent');
   const offsetParentOf = (node) => node instanceof HTMLElement ? htmlOffsetParent(node) : node.offsetParent;
-  const sizeOf = Object.fromEntries(['scrollWidth', 'scrollHeight', 'clientWidth', 'clientHeight', 'scrollLeft', 'scrollTop']
-    .map((name) => [name, own(Element.prototype, name)]));
   const principal = getComputedStyle(pageBody || pageRoot);
   const startsRight = (style) => /^(vertical|sideways)-/.test(style.writingMode)
     ? style.writingMode.endsWith('-rl') : style.direction === 'rtl';
   const startRight = startsRight(principal);
-  // A quirks-mode page can have no scrolling element; `overflow-x` auto,
-  // scroll or hidden on both <html> and <body> is one way to get there, and
-  // `clip` or visible on <body> keeps <body>. What decides is the property,
-  // not the CSS. Such a page does not say where it starts or how
-  // far it scrolls: the root's scrollWidth stays at its client width while
-  // the page pans, a zoom or a width on the root moves its clientWidth, and
-  // <body> reports the viewport's size as its own. It gets the edge test a
-  // page that starts at the left gets, nothing more.
-  const reachFromRight = startRight && Boolean(pageScroller);
+  // A quirks-mode page can have no scrolling element (`overflow-x` auto,
+  // scroll or hidden on both <html> and <body> is one way to get there); the
+  // root then stands in for the width reported below.
   const scroller = pageScroller || pageRoot;
-  const startEdge = scroller.clientWidth;
   const r1 = (v) => Math.round(v * 10) / 10;
   const shown = (el) => {
     const r = el.getBoundingClientRect();
@@ -146,24 +137,11 @@ async (opts) => {
     if (!el) return null;
     return r1(el.getBoundingClientRect().top + (fixedToViewport(el) ? 0 : sy));
   };
-  // A box is on the page when it reaches below the top and past the start
-  // edge, the two sides the page cannot scroll beyond. On a page that starts
-  // at the right the start edge is the right one, at `startEdge` in page px;
-  // the left, where such a page overflows, is reachable as far as the page
-  // scrolls: `farEdge` is the left end of that range in page px, 0 on a page
-  // that does not overflow. Paint alone does not widen it: content under
-  // layout containment is drawn left of page x 0 and cannot be panned to. A box fixed to the
-  // viewport is judged by its viewport box: the reader pans the screen over
-  // the layout viewport, client x 0 to innerWidth, and the scroll position
-  // cannot bring anything outside that band into view.
-  const farEdge = startEdge - scroller.scrollWidth;
-  const onPageFromRight = (el, r) => {
-    if (fixedToViewport(el)) return r.bottom > 0 && r.left < window.innerWidth && r.right > 0;
-    return r.bottom + sy > 0 && r.left + sx < startEdge && r.right + sx > farEdge;
-  };
+  // The edge test: a box is on the page when it reaches below the top and
+  // right of page x 0, the two sides a page that starts at the left cannot
+  // scroll beyond. A box fixed to the viewport is judged by its viewport box.
   const onPage = (el) => {
     const r = el.getBoundingClientRect();
-    if (reachFromRight) return onPageFromRight(el, r);
     if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;
     return r.bottom + sy > 0 && r.right + sx > 0;
   };
@@ -173,175 +151,38 @@ async (opts) => {
     }
     return null;
   };
-  // The edge test above is all a page that starts at the left gets. On a page
-  // that starts at the right the far side is the left, where a site built
-  // left-to-right parks its skip link (left: -9999px), so there a box counts
-  // only when a scroll or a pan can put part of it on screen. Two things say
-  // so, and neither is a list of properties that clip:
-  // - IntersectionObserver reports the part of a box left after every
-  //   ancestor's clip, wherever on the page that part is: the root margin
-  //   takes the screen's own edges out of the answer.
-  // - Content moves under the reader's hand only in a box that offers a
-  //   scroll: `overflow` auto or scroll, and the viewport unless hidden or
-  //   clip reached it from <html>, or from <body> when <html> leaves both axes
-  //   visible. A page whose viewport is held reports the same scrollX,
-  //   innerWidth and scrollWidth as one that scrolls; only the pan differs,
-  //   and it stops at the layout viewport, client x 0 to innerWidth, the band
-  //   a box fixed to the viewport is judged by.
-  const offersScroll = (value) => value === 'auto' || value === 'scroll';
-  const rootStyle = getComputedStyle(pageRoot);
-  const viewportFromBody = Boolean(pageBody)
-    && rootStyle.overflowX === 'visible' && rootStyle.overflowY === 'visible';
-  const viewportOverflow = (viewportFromBody ? principal : rootStyle).overflowX;
-  const pageScrolls = viewportOverflow === 'visible' || offersScroll(viewportOverflow);
-  const anywhere = '10000000px';
-  // One observer round takes a frame however many boxes it watches, so boxes
-  // are asked about together, never one by one.
-  const partLeft = (els, root, rootMargin) => new Promise((resolve) => {
-    const observer = new IntersectionObserver((entries) => {
-      observer.disconnect();
-      resolve(new Map(entries.map((entry) => [entry.target, entry.intersectionRect])));
-    }, {root, rootMargin});
-    for (const el of els) observer.observe(el);
-  });
-  const hasArea = (rect) => Boolean(rect) && rect.width > 0 && rect.height > 0;
-  // `part` is what is left of a box that scrolls with the page: where the
-  // viewport scrolls it is held to the start edge like the box itself, and
-  // where the viewport is held, to the band the screen pans over.
-  const inReach = (el, part) => pageScrolls ? onPageFromRight(el, part)
-    : part.bottom + sy > 0 && part.left < window.innerWidth && part.right > 0;
-  // The nearest box at or above `node` that offers a scroll and has somewhere
-  // to scroll to, with its scrollport grown by how far it still scrolls each
-  // way: what the reader can bring into it. <body> is not such a box while
-  // the viewport has taken its overflow.
-  // How far a box still scrolls toward lower and toward higher positions. It
-  // scrolls from 0 up to `d`, or from -`d` up to 0. Away from 0 the sign of
-  // the position says which. At 0 the box's start corner does: a box scrolls
-  // away from the corner its content starts in, which is block-start and
-  // inline-start, or main-start and cross-start for a flex container, the
-  // legacy `-webkit-box` included (CSS Overflow, on unreachable scrollable
-  // overflow). This reads the box's
-  // writing mode, direction and flex flow and moves nothing: scrolling the box
-  // to ask runs the page's own scroll listeners in the middle of a
-  // measurement, and what they add is then counted.
-  const across = {left: 'right', right: 'left', top: 'bottom', bottom: 'top'};
-  const startCorner = (style) => {
-    const mode = style.writingMode;
-    const rtl = style.direction === 'rtl';
-    let block = 'top', inline = rtl ? 'right' : 'left';
-    if (/^(vertical|sideways)-/.test(mode)) {
-      block = mode.endsWith('-rl') ? 'right' : 'left';
-      inline = (mode === 'sideways-lr') !== rtl ? 'bottom' : 'top';
-    }
-    let sides = [block, inline];
-    const legacy = style.display === '-webkit-box' || style.display === '-webkit-inline-box';
-    if (legacy || style.display === 'flex' || style.display === 'inline-flex') {
-      const column = legacy ? style.webkitBoxOrient === 'vertical' : style.flexDirection.startsWith('column');
-      const reverse = legacy ? style.webkitBoxDirection === 'reverse' : style.flexDirection.endsWith('-reverse');
-      let main = column ? block : inline, cross = column ? inline : block;
-      if (reverse) main = across[main];
-      if (!legacy && style.flexWrap === 'wrap-reverse') cross = across[cross];
-      sides = [main, cross];
-    }
-    return {right: sides.includes('right'), bottom: sides.includes('bottom')};
-  };
-  const travel = (at, d, fromEnd) => at > 0 ? [Math.min(d, at), Math.max(0, d - at)]
-    : at < 0 ? [Math.max(0, d + at), Math.min(d, -at)]
-    : fromEnd ? [d, 0] : [0, d];
-  // Content the browser has not rendered yet (`content-visibility: auto`, off
-  // screen) has no part an observer can report, though scrolling to it renders
-  // it. The browser says which boxes those are. What clips such a box shows
-  // only once it is rendered, and this script does not move the page to render
-  // it. So it counts when its own box passes the edge test a page that starts
-  // at the left gets, below the top and right of page x 0, unless the box that
-  // skips it is known to stay off screen: that box cannot be reached and does
-  // not paint past its own edge. A clip inside the skipped content is not seen.
-  const checkVisibility = Element.prototype.checkVisibility;
-  const rendered = (el) => typeof checkVisibility !== 'function'
-    || checkVisibility.call(el, {contentVisibilityAuto: true});
-  const renderSkipped = (el) => typeof checkVisibility === 'function'
-    && checkVisibility.call(el) && !rendered(el);
-  const skippedBy = (el) => {
-    let box = parentOf(el);
-    while (box && !rendered(box)) box = parentOf(box);
-    return box;
-  };
-  // A box with a positive `overflow-clip-margin` paints what it holds past
-  // its own edge, and the browser renders it when that larger area comes on
-  // screen, so where the box itself lies does not say whether its content can
-  // be reached.
-  const paintsPastItsEdge = (box) => {
-    const margin = /(-?[0-9.]+)px/.exec(getComputedStyle(box).overflowClipMargin || '');
-    return Boolean(margin) && parseFloat(margin[1]) > 0;
-  };
-  const pastTopAndLeft = (el) => {
+  // A page that starts at the right overflows to the left, where the edge
+  // test skips everything, a real first control included. Whether a reader
+  // gets to such a control is not inferred from layout: every rule that tried
+  // met a page it could not see. The browser is asked instead. A control the
+  // edge test skips is the first action when part of it is on screen as the
+  // page loads and a hit test there returns it, so a tap lands on it. Under
+  // the phone emulation an overflowing right-start page loads already panned
+  // into its left overflow. Nothing is scrolled to look further: a control
+  // that needs a scroll or a pan first is not added, and the answer is the
+  // edge test's. A control the edge test counts is never dropped.
+  const fromPoint = Document.prototype.elementFromPoint;
+  const holds = Node.prototype.contains;
+  const tapLands = (el) => {
+    const vv = window.visualViewport
+      || {offsetLeft: 0, offsetTop: 0, width: window.innerWidth, height: window.innerHeight};
     const r = el.getBoundingClientRect();
-    return r.bottom + sy > 0 && r.right + sx > 0;
+    const x0 = Math.max(r.left, vv.offsetLeft), x1 = Math.min(r.right, vv.offsetLeft + vv.width);
+    const y0 = Math.max(r.top, vv.offsetTop), y1 = Math.min(r.bottom, vv.offsetTop + vv.height);
+    if (x1 - x0 < 1 || y1 - y0 < 1) return false;
+    for (const fx of [0.5, 0.15, 0.85]) {
+      for (const fy of [0.5, 0.15, 0.85]) {
+        const at = fromPoint.call(document, x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy);
+        if (at && (at === el || holds.call(el, at))) return true;
+      }
+    }
+    return false;
   };
-  const scrollBoxAbove = (node) => {
-    for (let box = node; box && box !== pageRoot; box = parentOf(box)) {
-      if (box === pageBody && viewportFromBody) continue;
-      const style = getComputedStyle(box);
-      const dx = offersScroll(style.overflowX) ? Math.max(0, sizeOf.scrollWidth(box) - sizeOf.clientWidth(box)) : 0;
-      const dy = offersScroll(style.overflowY) ? Math.max(0, sizeOf.scrollHeight(box) - sizeOf.clientHeight(box)) : 0;
-      if (!dx && !dy) continue;
-      const corner = startCorner(style);
-      const [left, right] = travel(sizeOf.scrollLeft(box), dx, corner.right);
-      const [up, down] = travel(sizeOf.scrollTop(box), dy, corner.bottom);
-      return {node: box, grown: [up, right, down, left].map((px) => px + 'px').join(' ')};
+  const firstFromRight = (selector) => {
+    for (const el of document.querySelectorAll(selector)) {
+      if (shown(el) && (onPage(el) || tapLands(el))) return el;
     }
     return null;
-  };
-  // A box clipped where it stands may still be brought in by an ancestor that
-  // scrolls, when that ancestor is reachable itself; the grown scrollport
-  // keeps every clip between the two.
-  const reach = new Map();
-  const settle = async (els) => {
-    const moving = [];
-    for (const el of els) {
-      if (reach.has(el)) continue;
-      if (fixedToViewport(el)) reach.set(el, onPage(el)); else moving.push(el);
-    }
-    if (!moving.length) return;
-    const parts = await partLeft(moving, null, anywhere);
-    let pending = [];
-    const skipped = [];
-    for (const el of moving) {
-      const part = parts.get(el);
-      if (hasArea(part) && inReach(el, part)) reach.set(el, true);
-      else if (renderSkipped(el)) skipped.push({el, by: skippedBy(el)});
-      else pending.push({el, box: scrollBoxAbove(parentOf(el))});
-    }
-    if (skipped.length) {
-      await settle(Array.from(new Set(skipped.map((item) => item.by).filter(Boolean))));
-      for (const {el, by} of skipped) {
-        reach.set(el, Boolean(by) && (reach.get(by) === true || paintsPastItsEdge(by)) && pastTopAndLeft(el));
-      }
-    }
-    while (pending.length) {
-      const groups = new Map();
-      for (const item of pending) {
-        if (!item.box) { reach.set(item.el, false); continue; }
-        if (!groups.has(item.box.node)) groups.set(item.box.node, {box: item.box, els: []});
-        groups.get(item.box.node).els.push(item.el);
-      }
-      const batches = Array.from(groups.values());
-      const seen = await Promise.all(batches.map((batch) => partLeft(batch.els, batch.box.node, batch.box.grown)));
-      await settle(batches.filter((batch, i) => batch.els.some((el) => hasArea(seen[i].get(el))))
-        .map((batch) => batch.box.node));
-      pending = [];
-      batches.forEach((batch, i) => {
-        for (const el of batch.els) {
-          if (hasArea(seen[i].get(el)) && reach.get(batch.box.node)) reach.set(el, true);
-          else pending.push({el, box: scrollBoxAbove(parentOf(batch.box.node))});
-        }
-      });
-    }
-  };
-  const firstReachable = async (selector) => {
-    const els = Array.from(document.querySelectorAll(selector)).filter(shown);
-    await settle(els);
-    return els.find((el) => reach.get(el)) || null;
   };
   const textEntry = (el) => el.localName !== 'input' || !opts.non_text_types.includes(el.type);
   const out = {};
@@ -384,7 +225,7 @@ async (opts) => {
   const data = firstShown(dataSelector);
   out.data_selector = dataSelector;
   out.first_data_y = top(data);
-  out.first_action_y = top(reachFromRight ? await firstReachable(opts.action_selector)
+  out.first_action_y = top(startRight ? firstFromRight(opts.action_selector)
     : firstOnPage(opts.action_selector));
 
   out.targets_total = 0;
@@ -457,30 +298,17 @@ def starts_at_right(writing_mode, direction):
     return direction == "rtl"
 
 
-def in_document_area(bottom, right, left=None, start_edge=None, fixed=False):
+def in_document_area(bottom, right):
     """True when a box reaches into the area the reader can get to.
 
-    A skip link parked above or before the page's start edge is not where the
-    first action sits; the page script skips such controls. On a page that
-    starts at the left the start edge is x 0 and the box must reach past it
-    (`right > 0`). On a page that starts at the right, pass the box's `left`
-    and the `start_edge` (the scrolling box's client width): the box must
-    reach left of that edge, which the page cannot scroll past, while the
-    left side it overflows to stays reachable. The box is in page
-    coordinates, except for a control fixed to the viewport (`fixed`), whose
-    box is its viewport rectangle whatever the scroll position. On a page that
-    starts at the right such a box must lie across the band the reader pans
-    over, client x 0 to the layout viewport width; pass that width as
-    `start_edge`.
-
-    On a page that starts at the right the page script applies this to the
-    part of a box that its ancestors do not clip away, and to the same band
-    (`fixed`) when the viewport itself cannot scroll sideways; a box with no
-    such part counts only through an ancestor the reader can scroll. That
-    needs the browser and has no mirror here.
+    A skip link parked above or left of the page (negative top and left) is
+    not where the first action sits; the page script skips such controls. The
+    box is in page coordinates, except for a control fixed to the viewport,
+    whose box is its viewport rectangle whatever the scroll position. On a
+    page that starts at the right the page script also counts a control this
+    test skips when a tap lands on it as the page loads; that needs the
+    browser and has no mirror here.
     """
-    if start_edge is not None:
-        return bottom > 0 and left < start_edge and (not fixed or right > 0)
     return bottom > 0 and right > 0
 
 

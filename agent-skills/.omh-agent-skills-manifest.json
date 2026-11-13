@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "533ed74074d1037504c0fe27f99f9fb8c7c47be4701a4545b33edfbad805d1ba",
+  "catalog_revision": "0949180f080898e8c6769e0db8356508994d0a08d972096a21c91478b35d8765",
   "files": {
     "omh-accessibility-audit/SKILL.md": "7f48005d7fd6e9e1b2b30f03eb412145e09971fcc629393a27c1a3c5e29d6cef",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -116,11 +116,11 @@
     "omh-frontend/references/tui-craft.md": "e2fe6f7a7b5d0025ea8bd3a61b9afc6d3c1298550ed64967d12c2c33ae81e335",
     "omh-frontend/references/web-vitals-budgets.md": "7905f7913ff835eb84e7b9bd88059d52d7ede370312f2e24df8cb7ebf407a29b",
     "omh-frontend/toolkit/LICENSE.upstream": "63c08b48f0c8ada3b1b82329d94c9583089ad5b9d511418ac084de0f48a3eb64",
-    "omh-frontend/toolkit/README.md": "43e7a236f4402a5f430214783026e2212ae94201f3488eeda9f2ce433dafd722",
+    "omh-frontend/toolkit/README.md": "a18828a14abd7e8d0dd12aa629730c4eedf9cb1e98d9c59b354423eb06fa9c31",
     "omh-frontend/toolkit/examples/phone-clean.html": "97540f64b7b35faeddf96e3aaa2c61e761164fd8e1eba9e91da3c83f3a3e8465",
     "omh-frontend/toolkit/examples/phone-overflow.html": "be1d24b1f07e0e9c06cb5599f0cc401f83292182c3c7fef78664b81a88920903",
-    "omh-frontend/toolkit/scripts/phone_check.py": "01f52551b6cb67331acf1f90b4117fdd3f393e6803c6e12c83d246989ed566c8",
-    "omh-frontend/toolkit/upstream-manifest.json": "7b2b10dc06e4858ff8bda0c99b52c2b3bbd7a864c07bd7df8515feafb923fe37",
+    "omh-frontend/toolkit/scripts/phone_check.py": "c73f18c625ee46b5ba99619b8bc73fb8db8e8cac683f7c5965f7038cf04546f3",
+    "omh-frontend/toolkit/upstream-manifest.json": "479269ea00f15e5de81e75d86553258d3a2220dfa05e321b0bd484f0c5d0f47f",
     "omh-geospatial-analysis/SKILL.md": "6e4aa851eb7200d730f8b87791482c4a100cfb7babac5c5a27b8af013dd1129a",
     "omh-geospatial-analysis/references/execution-and-qa.md": "2b656aa288b825b6c4806b71e57d034fb3454bb545150e216c10c9a816c67b16",
     "omh-geospatial-analysis/references/full-contract.md": "077c75e80856bb2c5db5e5a3427ffc8f2b5587ef8e246d4573cf753589e3c91d",

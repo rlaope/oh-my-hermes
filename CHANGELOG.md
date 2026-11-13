@@ -817,23 +817,29 @@ All notable changes will be documented here.
   first control that sat in the left overflow and reported a later one; on
   such a page in quirks mode it also reported a horizontal overflow of 0. It
   now reads the start side from `<body>`, writing mode before direction,
-  counts a control when a scroll or a pan can put part of it on screen (a
-  skip link parked at `left: -9999px` inside a clipping box stays skipped),
-  takes the overflow from the scrolling element, and lists under
+  keeps the first control the earlier edge test counts, and also counts a
+  control that test skips when part of it is on screen as the page loads
+  and the browser's hit test returns it, so a tap lands on it. Under the
+  phone emulation an overflowing right-to-left page loads already panned
+  into its left overflow, so a first control there is found. It takes the
+  overflow from the scrolling element, and lists under
   `elements_past_right_edge` the elements left of page x 0, each with
-  `left`. A left-to-right page gives the same output as before, except
-  where a form control is named `parentElement` or `nodeType`: a page the
-  script could not finish before (such a form around its first link) is now
-  measured, and the element paths listed there follow the real tree. A quirks-mode
-  page for which the browser reports no scrolling element (it can get there
-  with `overflow-x` auto, scroll or hidden on both `<html>` and `<body>`)
-  does not report where it starts or how far it scrolls; its first control
-  is still found by the edge test used before. The start-side and reach
-  inputs and every step up the tree use interface-prototype getters, so a
-  hidden form, image or iframe named `scrollingElement` cannot replace the
-  browser's value, a form control named `scrollHeight` cannot replace its
-  scroll-box size, and one named `parentElement` or `offsetParent` cannot
-  send the script round in a circle until its time limit.
+  `left`. Nothing is inferred from layout and nothing is scrolled: a
+  control that needs a scroll or a pan first (a `--desktop` run, a control
+  further left than the screen, one inside a scroll box) is not counted
+  and reads as before, and what the edge test counted wrongly on such a
+  page it still counts (a control parked past the right edge, one a
+  container clips away). A left-to-right page gives the same output as
+  before, except where a form control is named `parentElement`,
+  `offsetParent` or `nodeType`: a page the script could not finish before
+  (such a form around its first link) is now measured, a control under a
+  fixed ancestor on a page scrolled at load is placed by its viewport box,
+  and the element paths listed there follow the real tree. The start side,
+  the root, body and scrolling element, the hit test and every step up the
+  tree use interface-prototype getters, so a hidden form, image or iframe
+  named `scrollingElement` cannot replace the browser's value, and a form
+  control named `parentElement` or `offsetParent` cannot send the script
+  round in a circle until its time limit.
   Page scripts can still corrupt other measurement APIs; the toolkit README
   describes the omitted or misplaced controls this can produce. Measured in
   Chromium only.
