@@ -183,6 +183,27 @@ test("a light app theme uses the light pick, a dark one the dark pick", async ({
   await expect.poll(async () => (await look(page))?.background).toBe("#282a36");
 });
 
+test("with the app theme on System, an open terminal follows the OS when it goes light or dark", async ({ page }) => {
+  await open(page);
+  // nothing stored: the app theme is System, and the OS is dark
+  expect(await page.evaluate(() => localStorage.getItem("omher.theme"))).toBeNull();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await terminalClaude(page);
+  expect((await look(page))?.background).toBe("#0b090d");
+
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect.poll(async () => (await look(page))?.background).toBe("#ffffff");
+  expect((await look(page))?.wrapBg).toBe("rgb(255, 255, 255)");
+  // and Settings > Terminal shows the pick for the theme now in force
+  await settings(page);
+  await expect(page.getByTestId("term-slot").getByRole("radio", { name: "Light app theme" })).toHaveAttribute("aria-checked", "true");
+  await session(page);
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect.poll(async () => (await look(page))?.background).toBe("#0b090d");
+});
+
 /** The colour a word in the open terminal is drawn in (#rrggbb), as the page computed it. */
 const wordColour = (page: Page, word: string) =>
   page.evaluate((w) => {
