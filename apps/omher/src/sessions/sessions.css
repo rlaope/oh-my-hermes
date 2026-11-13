@@ -79,6 +79,14 @@
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
+/* A folded list can end on More agents: keep that entry at full contrast. A persistent thin scrollbar, rather
+   than a fade over its text, says there are more rows below. The expanded list keeps the edge fade. */
+.ss-scroll.more:has(.ss-more[aria-expanded="false"]) {
+  mask-image: none;
+  -webkit-mask-image: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
 /* the first frame, before the menu knows where it fits, is not shown */
 .ss-pop-measuring {
   visibility: hidden;

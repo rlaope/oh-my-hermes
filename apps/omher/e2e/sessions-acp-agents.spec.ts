@@ -71,6 +71,7 @@ const geometry = (page: Page) =>
       footTop: foot.top,
       rows: rows.length,
       scroll: list.scrollHeight > list.clientHeight + 1,
+      scrollbar: cs.scrollbarWidth === "thin" && cs.scrollbarColor !== "auto",
       fade: (cs.maskImage || (cs as unknown as { webkitMaskImage: string }).webkitMaskImage || "none").includes("gradient"),
       inView: rows
         .filter((r) => {
@@ -110,9 +111,26 @@ for (const theme of ["dark", "light"]) {
     expect(g.rows).toBe(9);
     // every row holding one line is the usual 30px, folded as opened
     expect(g.oneLine).toEqual([30]);
-    // this short window cuts the list: it scrolls inside the menu and says so with the fade at its cut edge
+    // More agents stays at full contrast on the first open. A visible scrollbar still says the list scrolls;
+    // the text is wholly in view (the row's padding can be cut), never under a mask or another ancestor's opacity.
     expect(g.scroll).toBe(true);
-    expect(g.fade).toBe(true);
+    expect(g.fade).toBe(false);
+    expect(g.scrollbar).toBe(true);
+    const contrast = await more.locator(".ss-n").evaluate((el) => {
+      const list = el.closest(".ss-scroll")!;
+      const text = el.getBoundingClientRect(), box = list.getBoundingClientRect();
+      const ancestors = [];
+      for (let node: Element | null = el; node && node !== list.parentElement; node = node.parentElement) {
+        const cs = getComputedStyle(node);
+        ancestors.push({ opacity: cs.opacity, mask: cs.maskImage });
+      }
+      return { bottom: text.bottom, limit: box.bottom, ancestors };
+    });
+    expect(contrast.bottom).toBeLessThanOrEqual(contrast.limit + 0.5);
+    for (const cs of contrast.ancestors) {
+      expect(cs.opacity).toBe("1");
+      expect(cs.mask).toBe("none");
+    }
     expect(g.inView.slice(0, 6)).toEqual(["claude", "codex", "omh", "opencode", "kilo", "gemini"].map((a) => `session-agent-${a}`));
     // End reaches the last past-conversation row without More agents being opened
     await page.keyboard.press("End");
