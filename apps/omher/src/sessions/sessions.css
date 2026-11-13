@@ -979,8 +979,9 @@
      takes what the controls leave (basis 0, so it never presses on them: the model's name is as long as without
      background work). It wraps: when the name and the status do not fit side by side, the status, the label and
      Stop go under the name. The path takes only what its line has left.
-   - under 600px the path goes and the name may take the whole line.
-   - under 470px the agent's mark goes (the composer names the agent) and the status is its dot alone. */
+   - under 680px the path goes (it would be a few letters) and the name may take the whole line.
+   - under 470px the agent's mark goes (the composer names the agent), and under 430px the status is its dot
+     alone (its word is the dot's tooltip). */
 .ss-head-id,
 .ss-head-now {
   display: contents;
@@ -1020,7 +1021,7 @@
     margin-left: 0;
   }
 }
-@container chathead (max-width: 599px) {
+@container chathead (max-width: 679px) {
   .ss-head-id.bg > .head-title[data-testid="session-title"] {
     max-width: 100%;
   }
@@ -1032,6 +1033,8 @@
   .head:has(> .ss-head-id.bg) > .ss-head-mark {
     display: none;
   }
+}
+@container chathead (max-width: 429px) {
   /* the word is still read out, and is the dot's tooltip */
   .ss-head-id.bg .ss-head-st.running {
     font-size: 0;

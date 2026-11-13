@@ -243,6 +243,9 @@ for (const theme of ["dark", "light"] as const) {
         expect(shown.length, `one label at ${where}`).toBe(1);
         expect(shown[0].text, where).toMatch(/1/);
         expect(shown[0].scroll, `label whole at ${where}`).toBeLessThanOrEqual(shown[0].client);
+        // the status keeps its word from a 430px header up (under that it is its dot, the word in its tooltip)
+        expect(p.status.scroll, `status whole at ${where}`).toBeLessThanOrEqual(p.status.client);
+        if (p.header.width >= 430) expect(p.status.width, `status word at ${where}`).toBeGreaterThan(30);
         // Stop is whole, after the label, before the controls and inside the header
         const stop = p.stop!;
         expect(stop.scroll, `Stop whole at ${where}`).toBeLessThanOrEqual(stop.client);
