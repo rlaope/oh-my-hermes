@@ -20,8 +20,13 @@
   const meta = q('[data-omher] .omher__meta') || q('[data-omher] .omher__t');
   if (!cv || !pill || !sec || !shot) return;
 
-  // the 01-08 section rail belongs to the OMH sections, not to the omher block
-  new IntersectionObserver(es => document.body.classList.toggle('rail-off', es[0].isIntersecting), {rootMargin: '0px 0px -60% 0px'}).observe(sec);
+  // the 01-08 section rail belongs to the OMH sections, not to the omher block or the faces band under it
+  const above = new Set();
+  const railIO = new IntersectionObserver(es => {
+    es.forEach(e => e.isIntersecting ? above.add(e.target) : above.delete(e.target));
+    document.body.classList.toggle('rail-off', above.size > 0);
+  }, {rootMargin: '0px 0px -60% 0px'});
+  [sec, q('[data-faces]')].forEach(el => el && railIO.observe(el));
 
   const PROF = /[?&]beamprof\b/.test(location.search);
   const stats = window.__beam = {mode: '', frames: 0, cpu: [], gpu: [], lean: []};
