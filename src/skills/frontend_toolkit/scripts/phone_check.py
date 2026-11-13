@@ -59,8 +59,10 @@ async (opts) => {
   // `document.scrollingElement` that form, with no script on the page, and
   // <input name="scrollHeight"> does the same on its <form>. What decides how
   // a right-start page is read is taken through the interface prototypes,
-  // which a named element cannot shadow. The lines shared with the left-start
-  // path read `document` as they always did.
+  // which a named element cannot shadow, and so is every step up the tree:
+  // <input name="parentElement"> makes its <form> answer with that input,
+  // whose parent is the form again, and a walk that trusts it never ends.
+  // The other reads shared with the left-start path are as they always were.
   const own = (proto, name) => {
     const get = Object.getOwnPropertyDescriptor(proto, name).get;
     return (node) => get.call(node);
@@ -69,6 +71,11 @@ async (opts) => {
   const pageBody = own(Document.prototype, 'body')(document);
   const pageScroller = own(Document.prototype, 'scrollingElement')(document);
   const parentOf = own(Node.prototype, 'parentElement');
+  const kindOf = own(Node.prototype, 'nodeType');
+  // Only an HTML element has an offsetParent; anything else keeps its own
+  // answer (none), and has no named controls to shadow it.
+  const htmlOffsetParent = own(HTMLElement.prototype, 'offsetParent');
+  const offsetParentOf = (node) => node instanceof HTMLElement ? htmlOffsetParent(node) : node.offsetParent;
   const sizeOf = Object.fromEntries(['scrollWidth', 'scrollHeight', 'clientWidth', 'clientHeight', 'scrollLeft', 'scrollTop']
     .map((name) => [name, own(Element.prototype, name)]));
   const principal = getComputedStyle(pageBody || pageRoot);
@@ -96,15 +103,15 @@ async (opts) => {
   const path = (el) => {
     const parts = [];
     let node = el;
-    while (node && node.nodeType === 1 && parts.length < 5) {
+    while (node && kindOf(node) === 1 && parts.length < 5) {
       let part = node.localName;
       if (node.id) { parts.unshift(part + '#' + CSS.escape(node.id)); break; }
-      const same = node.parentElement
-        ? Array.from(node.parentElement.children).filter((c) => c.localName === node.localName) : [];
+      const above = parentOf(node);
+      const same = above ? Array.from(above.children).filter((c) => c.localName === node.localName) : [];
       if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(node) + 1) + ')';
       parts.unshift(part);
       if (node === document.body) break;
-      node = node.parentElement;
+      node = above;
     }
     return parts.join(' > ');
   };
@@ -124,12 +131,13 @@ async (opts) => {
   // on from the ancestor, which may itself be fixed to the viewport.
   const fixedToViewport = (el) => {
     let node = el;
-    while (node && node.nodeType === 1) {
+    while (node && kindOf(node) === 1) {
       if (getComputedStyle(node).position === 'fixed') {
-        if (!node.offsetParent) return true;
-        node = node.offsetParent;
+        const holder = offsetParentOf(node);
+        if (!holder) return true;
+        node = holder;
       } else {
-        node = node.parentElement;
+        node = parentOf(node);
       }
     }
     return false;

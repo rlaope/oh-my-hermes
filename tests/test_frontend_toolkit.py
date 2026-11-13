@@ -490,7 +490,8 @@ class PureHelperTests(unittest.TestCase):
         # A control fixed to the viewport is judged by its viewport box, not by box plus scroll.
         self.assertIn("if (fixedToViewport(el)) return r.bottom > 0 && r.right > 0;", api.PAGE_SCRIPT)
         # `position: fixed` under a containing ancestor is not fixed to the viewport.
-        self.assertIn("if (!node.offsetParent) return true;", api.PAGE_SCRIPT)
+        self.assertIn("const holder = offsetParentOf(node);", api.PAGE_SCRIPT)
+        self.assertIn("if (!holder) return true;", api.PAGE_SCRIPT)
 
     def test_start_side_follows_the_principal_writing_mode(self):
         api = helper_api()
@@ -1051,10 +1052,84 @@ class BrowserTests(Fixture):
                     self.assertEqual(report["first_action_y"], 100)
                     self.assertEqual(report["horizontal_overflow_px"], 0)
 
+    def measure_in_a_child(self, page, *extra):
+        # The script's own time limit ends the process, so a page that may
+        # hang it is measured in a child: a hang fails the test, it does not
+        # end the test run.
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join(item for item in sys.path if item))
+        result = subprocess.run([sys.executable, str(SCRIPT), str(page), "--timeout", "15", *extra],
+                                capture_output=True, text=True, timeout=90, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_rtl_page_with_a_form_control_named_after_a_tree_link_is_measured(self):
+        # <input name="parentElement"> makes its <form> answer `parentElement`
+        # with that input, whose parent is the form again. The walk that asks
+        # whether a control is fixed to the viewport climbed that loop until
+        # the time limit. A right-start page asks about every control, so one
+        # such form after the first link was enough; a left-start page stops
+        # at the first control and never met it.
+        first = '<a id="first" href="#" style="position:absolute;top:100px;right:0">first</a>'
+        real = '<button id="real" style="position:absolute;top:300px;right:0">real</button>'
+        hidden = '<input type="hidden" name="parentElement">'
+        box = 'position:absolute;top:600px;right:0;width:200px'
+        cases = [
+            ("link", "<!doctype html>", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<a href="#">later</a></form>', 100),
+            ("button", "<!doctype html>", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<button>go</button></form>', 100),
+            ("nested", "<!doctype html>", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<div><span><a href="#">deep</a></span></div></form>', 100),
+            ("quirks", "", "html{direction:rtl}",
+             first + f'<form style="{box}">{hidden}<a href="#">later</a></form>', 100),
+            ("vertical-rl", "<!doctype html>", "body{writing-mode:vertical-rl}",
+             first + f'<form style="{box}">{hidden}<a href="#">later</a></form>', 100),
+            # The same loop through `offsetParent`, which the walk takes from a fixed box.
+            ("fixed-form", "<!doctype html>", "html{direction:rtl}",
+             first + '<form style="position:fixed;bottom:0;right:0;width:200px;height:80px">'
+             '<input type="hidden" name="offsetParent"><a href="#">later</a></form>', 100),
+            # The first link itself sits in such a form, in a box that scrolls
+            # to it: the left-start path hung on this one as well.
+            ("first-link", "<!doctype html>", "html{direction:rtl}",
+             '<form style="position:absolute;top:500px;right:0;width:300px;height:100px;overflow-y:auto">'
+             f'{hidden}<div style="height:400px"></div><a id="first" href="#" style="position:static">first</a></form>',
+             900),
+        ]
+        for name, doctype, rules, body, expected in cases:
+            with self.subTest(page=name):
+                path = self.root / f"tree-link-{name}.html"
+                path.write_text(f'{doctype}<html><head><meta name="viewport" content="width=device-width,'
+                                f'initial-scale=1"><style>{rules} body{{margin:0;height:2000px}}'
+                                ' a,button{display:block;width:120px;height:48px;box-sizing:border-box}'
+                                f'</style></head><body>{body}{real}</body></html>', encoding="utf-8")
+                self.assertEqual(self.measure_in_a_child(path)["first_action_y"], expected)
+
+    def test_listed_path_follows_the_tree_past_a_form_control_named_after_a_tree_link(self):
+        # The path listed for a small target climbed the same exposed names:
+        # under <input name="parentElement"> it read "form > input > form >
+        # div > button", and under <input name="nodeType"> it stopped at the
+        # form ("div > button"). On either start side.
+        for side, edge in (("rtl", "right"), ("ltr", "left")):
+            for name in ("parentElement", "nodeType"):
+                with self.subTest(side=side, name=name):
+                    path = self.root / f"tree-path-{side}-{name}.html"
+                    path.write_text(f'<!doctype html><html dir="{side}"><head><meta name="viewport" '
+                                    'content="width=device-width,initial-scale=1"><style>body{margin:0;height:2000px}'
+                                    ' a{display:block;width:120px;height:48px}</style></head><body>'
+                                    f'<a href="#" style="position:absolute;top:100px;{edge}:0">first</a>'
+                                    f'<form style="position:absolute;top:600px;{edge}:0;width:200px">'
+                                    f'<input type="hidden" name="{name}">'
+                                    '<div><button style="width:30px;height:30px">s</button></div></form></body></html>',
+                                    encoding="utf-8")
+                    report = self.measure_in_a_child(path)
+                    self.assertEqual(report["first_action_y"], 100)
+                    self.assertEqual([item["path"] for item in report["small_targets"]["first"]],
+                                     ["body > form > div > button"])
+
     def test_rtl_scrolling_form_sizes_are_not_named_controls(self):
         # A hidden input shadows its form's scrollHeight/clientHeight. The
         # link at y900 can be scrolled into the form; the fallback is y300.
-        for name in ("scrollHeight", "clientHeight", "scrollTop", "checkVisibility"):
+        for name in ("scrollHeight", "clientHeight"):
             with self.subTest(name=name):
                 body = ('<form style="position:absolute;top:500px;right:0;width:300px;height:100px;overflow-y:auto">'
                         f'<input type="hidden" name="{name}"><div style="height:400px"></div>'

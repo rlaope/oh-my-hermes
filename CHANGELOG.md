@@ -821,14 +821,19 @@ All notable changes will be documented here.
   skip link parked at `left: -9999px` inside a clipping box stays skipped),
   takes the overflow from the scrolling element, and lists under
   `elements_past_right_edge` the elements left of page x 0, each with
-  `left`. A left-to-right page gives the same output as before. A quirks-mode
+  `left`. A left-to-right page gives the same output as before, except
+  where a form control is named `parentElement` or `nodeType`: a page the
+  script could not finish before (such a form around its first link) is now
+  measured, and the element paths listed there follow the real tree. A quirks-mode
   page for which the browser reports no scrolling element (it can get there
   with `overflow-x` auto, scroll or hidden on both `<html>` and `<body>`)
   does not report where it starts or how far it scrolls; its first control
-  is still found by the edge test used before. The extra start-side and
-  reach inputs use interface-prototype getters, so a hidden form, image or
-  iframe named `scrollingElement` cannot replace the browser's value, and
-  a form control named `scrollHeight` cannot replace its scroll-box size.
+  is still found by the edge test used before. The start-side and reach
+  inputs and every step up the tree use interface-prototype getters, so a
+  hidden form, image or iframe named `scrollingElement` cannot replace the
+  browser's value, a form control named `scrollHeight` cannot replace its
+  scroll-box size, and one named `parentElement` or `offsetParent` cannot
+  send the script round in a circle until its time limit.
   Page scripts can still corrupt other measurement APIs; the toolkit README
   describes the omitted or misplaced controls this can produce. Measured in
   Chromium only.

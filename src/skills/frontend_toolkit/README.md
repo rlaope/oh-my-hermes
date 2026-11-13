@@ -66,10 +66,17 @@ the lists, not the counts.
 - **Named markup is not a browser measurement.** A hidden `<form
   name="scrollingElement">` can replace `document.scrollingElement` with that
   form through the browser's named-property lookup, without any page script.
-  The additional start-side and right-start reach inputs (root, body,
-  scrolling element, ancestor links and scroll-box sizes) are read through
-  their interface prototypes, so named markup cannot replace those reads.
-  This does not protect the older DOM reads shared with the left-start path.
+  The start side, the right-start reach inputs (root, body, scrolling
+  element and scroll-box sizes) and every step up the tree (`parentElement`,
+  `offsetParent`, the node kind) are read through their interface prototypes,
+  so named markup cannot replace those reads. A `<form>` holding `<input
+  name="parentElement">` used to send the walk that asks whether a control is
+  fixed to the viewport round in a circle until the time limit.
+  The other reads are as the page exposes them, on either start side. Three
+  measured consequences, the same before this script read right-start pages:
+  a form control named `getBoundingClientRect`, or an element named
+  `querySelector` or `querySelectorAll` on `document`, ends the run with exit
+  2 and no report; `<form name="documentElement">` reports `client_width` 0.
 - **Page scripts can still corrupt measurements.** This is an in-page helper,
   not an isolated-world measurement. A page script that changes a prototype,
   `getBoundingClientRect`, `getComputedStyle` or `IntersectionObserver` can
