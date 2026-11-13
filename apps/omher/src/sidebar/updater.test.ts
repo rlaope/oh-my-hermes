@@ -178,6 +178,16 @@ describe("an app left open keeps looking for a newer release", () => {
     stop();
   });
 
+  it("a check that answers after the button is gone reports nothing and plans no further check", async () => {
+    const stop = open(["hold"]);
+    await pass(0);
+    stop();
+    release();
+    await pass(7 * HOUR);
+    expect(found).toEqual([]);
+    expect(askedAt()).toEqual([0]);
+  });
+
   it("gives the shell's own check a time limit, so one that never answers cannot hold back the next", async () => {
     vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
     await updateHost()!.check();
@@ -195,7 +205,9 @@ describe("an app left open keeps looking for a newer release", () => {
     focus();
     await pass(0);
     expect(askedAt()).toEqual([31]);
+    const gone = [vi.spyOn(window, "removeEventListener"), vi.spyOn(document, "removeEventListener")];
     stop();
+    expect(gone.map((g) => g.mock.calls.map((c) => c[0]))).toEqual([["focus"], ["visibilitychange"]]);
     await pass(7 * HOUR);
     focus();
     shown();
