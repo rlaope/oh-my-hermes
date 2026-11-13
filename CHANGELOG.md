@@ -128,47 +128,6 @@ All notable changes will be documented here.
   user-scope one is also refreshed by `omh update`). `tools/claude_context_skills.py`
   counts the skill rows of a saved `/context` output.
 
-- **A subagent's approval that comes after its turn ended reaches you in omher.**
-  When Claude Code ran a subagent in the background, the turn ended first and
-  the subagent asked afterwards (or asked during the turn and the turn ended
-  with the ask open). omher showed that ask as "Not answered" with no buttons,
-  left it out of Needs you and kept the header on Ready, while the subagent
-  waited for an answer nobody could give. Now it is a live card with Deny,
-  Allow once and Allow for session, the session reads "Needs you" in its
-  header and its sidebar row, and the answer reaches Claude Code with no turn
-  running; the subagent then finishes. The ask reads "Not answered" once its
-  subagent ends, Claude Code withdraws it (Stop), or the session's program
-  ends. A Codex subagent's approval follows the same rule.
-
-- **You can stop what a Claude Code session still runs in the background after its turn.** While no turn
-  runs, the session header's "1 still running in the background" now ends with a quiet "Stop". It sends Claude
-  Code's own interrupt and, for a background command, its own `stop_task`: the subagent's row reads "stopped",
-  the count goes, an open late ask reads "Not answered" and the header is Ready. Esc still stops a running turn
-  only, and the composer keeps Send. Codex, OmO, OpenCode and DSH get no such Stop, because their own Stop does
-  nothing to that work. Also: the subagent card and its ask end at one right edge; a card whose rows all wait on
-  you says "Waiting", not "Running"; the needs strip no longer ends on a lone "·"; and a background subagent's row
-  shows its model.
-
-- **An omher session that closed normally no longer gives a warning as why it
-  ended.** A Codex session you closed showed "Ended · user (~/.codex/config.toml):
-  `mcp_servers.playwright.type` is ignored.", a line Codex prints at start about
-  your own config. A session whose program ends with code 0 now reads only
-  "Ended", for every chat agent. A program that really fails shows the last line
-  it printed about the failure, not a warning from its start.
-
-- **Claude Code's plan-mode card shows the plan as text.** When Claude Code
-  finished a plan in plan mode, omher asked "Allow ExitPlanMode?" over a cut-off
-  JSON string. The card now asks "Start working on this plan?" and shows the
-  whole plan the way an answer reads, scrolling inside the card, with Deny and
-  Allow once (Claude Code offers nothing to keep for the session there). Other
-  tools that are neither a command nor a file edit (a skill, a web fetch, MCP
-  tools) show one readable line instead of their input as JSON.
-
-- **An edit Codex hands to its subagent opens to its diff.** The subagent's row
-  showed the edit only as a line like `README.md +2, calc.py +4`. Opening that
-  step now shows the removed and added lines per file, as an edit Codex makes
-  itself does.
-
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt
@@ -265,52 +224,6 @@ All notable changes will be documented here.
   side and keeps a small follow-on step in the node it follows, so a run starts
   fewer children; a job with nothing to run side by side still runs as a graph.
 
-- **omher's session terminals take Orca's themes and options, find, links and
-  bounded output.** Settings › Terminal is a new page: 38 themes (omher's own
-  two and 36 carried over from Orca, their MIT notices in
-  `apps/omher/THIRD_PARTY_NOTICES.md`, which now ships inside the app), one
-  picked for the dark app theme and one for the light, with a search field and
-  a live preview drawn by the real terminal; font, size, line height, cursor
-  shape and blink, scrollback, minimum contrast, padding, Option as Meta on
-  macOS, and the renderer. A change reaches every open terminal at once, one
-  that is hidden when it is shown again, and the settings are one record on
-  this computer.
-  In a terminal, Cmd+F (Ctrl+F on Windows and Linux at a prompt, Ctrl+Shift+F
-  anywhere) finds in the scrollback, with a count and the active match as the
-  strongest thing on the screen in colours taken from the terminal's own
-  theme. A web address in the output opens in the browser on Cmd+click or
-  Ctrl+click, and a hint beside the pointer names the key; a hyperlink the
-  program marks itself (OSC 8) follows the same rule and no longer goes
-  through a confirm dialog. Copy on select and Right-click pastes are two
-  switches, both off by default.
-  The shell now reads a program only 2 MiB ahead of what the terminal has
-  drawn, so a runaway program no longer fills memory and Ctrl+C is answered at
-  once. Measured against a model of the page written in Rust, not the app's
-  window: with a page that needs 20 ms a message, ten seconds of `yes` held 15
-  MB instead of 1,211 MB, and Ctrl+C stopped the output in under half a second
-  instead of 69 s; with a page that draws 100 MB/s, after 14 ms instead of 865
-  ms. A session that is not the one on screen keeps drawing, so a background
-  agent is not held at that mark.
-  What did not get faster, as measured: throughput against the 100 MB/s page
-  is unchanged (75.6 and 75.7 MB/s), a keystroke's echo is unchanged (31.7 and
-  31.1 ms run alternately), and a page that needs 20 ms for every message
-  draws 5.3% fewer bytes a second because its messages are smaller. The GPU
-  renderer is 1.2 to 3.4 times slower than the standard one on a full-screen
-  redraw in WebKit, over two measurement runs (2.2, 3.4 and 1.3 times in one;
-  1.7, 3.0 and 1.2 in the other), so Auto uses the standard renderer on every
-  platform (nothing was measured on Windows or Linux) and On still tries the
-  GPU. No number here was taken in the Tauri window; the tables are in
-  `apps/omher/bench/render/README.md` and `apps/omher/bench/pty/README.md`.
-
-- **omher sessions are easy to find, reopen and switch.** A session row's right-click menu now holds Rename,
-  Show in Finder / Explorer, Open in Terminal (your own system terminal in that folder), Copy conversation id,
-  New session here and Close session. The sidebar search also filters sessions by name and folder. The SESSIONS
-  `+` menu ends with "Continue a conversation" for Claude Code and Codex: their recent conversations in your recent
-  folders and home, read-only from their own files, and picking one continues it in omher with its last messages
-  shown. ⌘N (Ctrl+N) opens the `+` menu and ⌘⇧] / ⌘⇧[ move to the next and previous session. The Dock shows how
-  many approvals and questions wait (Linux launchers that show counts too; Windows gets a dot on the taskbar
-  button). BOUNDARY rule 30.
-
 - **dag-ulw stops telling a parallel plan to split further.** Its advice to
   split a run into parallel lanes now looks only at the build nodes: it comes
   when at least 80% of two or more build nodes sit on one chain, in a run of
@@ -345,6 +258,93 @@ All notable changes will be documented here.
   refused; a plain-HTTP ask never goes through `HTTP_PROXY`, so the key is not
   sent in clear to a proxy; and `typesafe_model` never applies to TypeSafe's
   own host however it is spelled. Thanks @brentkearney. (#2716)
+- **omher 0.2.7.** Find and continue sessions, choose how their terminals look,
+  answer and stop background work, read a plan before allowing it, and open
+  a Codex subagent's file change to its diff.
+  - **A subagent's approval that comes after its turn ended reaches you in omher.**
+    When Claude Code ran a subagent in the background, the turn ended first and
+    the subagent asked afterwards (or asked during the turn and the turn ended
+    with the ask open). omher showed that ask as "Not answered" with no buttons,
+    left it out of Needs you and kept the header on Ready, while the subagent
+    waited for an answer nobody could give. Now it is a live card with Deny,
+    Allow once and Allow for session, the session reads "Needs you" in its
+    header and its sidebar row, and the answer reaches Claude Code with no turn
+    running; the subagent then finishes. The ask reads "Not answered" once its
+    subagent ends, Claude Code withdraws it (Stop), or the session's program
+    ends. A Codex subagent's approval follows the same rule. (#2845)
+  - **You can stop what a Claude Code session still runs in the background after its turn.** While no turn
+    runs, the session header's "1 still running in the background" now ends with a quiet "Stop". It sends Claude
+    Code's own interrupt and, for a background command, its own `stop_task`: the subagent's row reads "stopped",
+    the count goes, an open late ask reads "Not answered" and the header is Ready. Esc still stops a running turn
+    only, and the composer keeps Send. Codex, OmO, OpenCode and DSH get no such Stop, because their own Stop does
+    nothing to that work. Also: the subagent card and its ask end at one right edge; a card whose rows all wait on
+    you says "Waiting", not "Running"; the needs strip no longer ends on a lone "·"; and a background subagent's row
+    shows its model. (#2849)
+  - **An omher session that closed normally no longer gives a warning as why it
+    ended.** A Codex session you closed showed "Ended · user (~/.codex/config.toml):
+    `mcp_servers.playwright.type` is ignored.", a line Codex prints at start about
+    your own config. A session whose program ends with code 0 now reads only
+    "Ended", for every chat agent. A program that really fails shows the last line
+    it printed about the failure, not a warning from its start. (#2850)
+  - **Claude Code's plan-mode card shows the plan as text.** When Claude Code
+    finished a plan in plan mode, omher asked "Allow ExitPlanMode?" over a cut-off
+    JSON string. The card now asks "Start working on this plan?" and shows the
+    whole plan the way an answer reads, scrolling inside the card, with Deny and
+    Allow once (Claude Code offers nothing to keep for the session there). Other
+    tools that are neither a command nor a file edit (a skill, a web fetch, MCP
+    tools) show one readable line instead of their input as JSON. (#2850)
+  - **An edit Codex hands to its subagent opens to its diff.** The subagent's row
+    showed the edit only as a line like `README.md +2, calc.py +4`. Opening that
+    step now shows the removed and added lines per file, as an edit Codex makes
+    itself does. (#2850)
+  - **omher's session terminals take Orca's themes and options, find, links and
+    bounded output.** Settings › Terminal is a new page: 38 themes (omher's own
+    two and 36 carried over from Orca, their MIT notices in
+    `apps/omher/THIRD_PARTY_NOTICES.md`, which now ships inside the app), one
+    picked for the dark app theme and one for the light, with a search field and
+    a live preview drawn by the real terminal; font, size, line height, cursor
+    shape and blink, scrollback, minimum contrast, padding, Option as Meta on
+    macOS, and the renderer. A change reaches every open terminal at once, one
+    that is hidden when it is shown again, and the settings are one record on
+    this computer.
+    In a terminal, Cmd+F (Ctrl+F on Windows and Linux at a prompt, Ctrl+Shift+F
+    anywhere) finds in the scrollback, with a count and the active match as the
+    strongest thing on the screen in colours taken from the terminal's own
+    theme. A web address in the output opens in the browser on Cmd+click or
+    Ctrl+click, and a hint beside the pointer names the key; a hyperlink the
+    program marks itself (OSC 8) follows the same rule and no longer goes
+    through a confirm dialog. Copy on select and Right-click pastes are two
+    switches, both off by default.
+    The shell now reads a program only 2 MiB ahead of what the terminal has
+    drawn, so a runaway program no longer fills memory and Ctrl+C is answered at
+    once. Measured against a model of the page written in Rust, not the app's
+    window: with a page that needs 20 ms a message, ten seconds of `yes` held 15
+    MB instead of 1,211 MB, and Ctrl+C stopped the output in under half a second
+    instead of 69 s; with a page that draws 100 MB/s, after 14 ms instead of 865
+    ms. A session that is not the one on screen keeps drawing, so a background
+    agent is not held at that mark.
+    What did not get faster, as measured: throughput against the 100 MB/s page
+    is unchanged (75.6 and 75.7 MB/s), a keystroke's echo is unchanged (31.7 and
+    31.1 ms run alternately), and a page that needs 20 ms for every message
+    draws 5.3% fewer bytes a second because its messages are smaller. The GPU
+    renderer is 1.2 to 3.4 times slower than the standard one on a full-screen
+    redraw in WebKit, over two measurement runs (2.2, 3.4 and 1.3 times in one;
+    1.7, 3.0 and 1.2 in the other), so Auto uses the standard renderer on every
+    platform (nothing was measured on Windows or Linux) and On still tries the
+    GPU. No number here was taken in the Tauri window; the tables are in
+    `apps/omher/bench/render/README.md` and `apps/omher/bench/pty/README.md`. (#2841)
+  - **omher sessions are easy to find, reopen and switch.** A session row's right-click menu now holds Rename,
+    Show in Finder / Explorer, Open in Terminal (your own system terminal in that folder), Copy conversation id,
+    New session here and Close session. The sidebar search also filters sessions by name and folder. The SESSIONS
+    `+` menu ends with "Continue a conversation" for Claude Code and Codex: their recent conversations in your recent
+    folders and home, read-only from their own files, and picking one continues it in omher with its last messages
+    shown. ⌘N (Ctrl+N) opens the `+` menu and ⌘⇧] / ⌘⇧[ move to the next and previous session. The Dock shows how
+    many approvals and questions wait (Linux launchers that show counts too; Windows gets a dot on the taskbar
+    button). BOUNDARY rule 30. (#2839)
+  - **omher.app's preview.** The hero preview runs omher 0.2.6; restart,
+    terminal and rewind controls explain their preview-only limits instead
+    of acting on a real profile. (#2846)
+
 - **omher 0.2.6.** A session chat shows what its agent did and the subagents
   it starts, a session can run in the agent's own terminal, OpenCode joins
   SESSIONS, a bot restarts with one press, and omher works without
