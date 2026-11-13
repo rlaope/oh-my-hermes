@@ -269,13 +269,17 @@ fn may_overlap(a: &str, b: &str) -> bool {
 /// fine; an ordering we cannot prove safe refuses the chat. Missing rules default to ask, not allow.
 fn not_weaker(before: &[(String, String)], after: &[(String, String)], plan_edit: bool) -> bool {
     let rank = |a: &str| match a { "deny" => 0, "ask" => 1, _ => 2 };
+    // A later blanket rule shadows every earlier rule for every input, including Kilo's built-in allows.
+    // Compare only the effective suffix; a new ask may also narrow the original blanket allow/ask.
+    let before = &before[before.iter().rposition(|(p, _)| p == "*").unwrap_or(0)..];
+    let after = &after[after.iter().rposition(|(p, _)| p == "*").unwrap_or(0)..];
     before.iter().filter(|(_, a)| a == "deny").all(|(p, _)| after.iter().any(|(q, a)| q == p && a == "deny"))
         && after.iter().enumerate().all(|(j, (p, action))| {
             if action == "deny" { return true; }
             // Kilo's only unasked exception is the plan agent's own Markdown plan files, never arbitrary edits.
             if action == "allow" && !(plan_edit && (p == "plans/*.md" || p == ".plans/*.md" || p.ends_with("/plans/*.md"))
                 && !p.strip_suffix("*.md").unwrap_or(p).contains(['*', '?'])) { return false; }
-            let Some(i) = before.iter().position(|(q, _)| q == p) else { return false };
+            let Some(i) = before.iter().position(|(q, _)| q == p).or_else(|| before.iter().position(|(q, _)| q == "*")) else { return false };
             if rank(&before[i].1) < rank(action) { return false; }
             before[i + 1..].iter().all(|(q, restriction)| {
                 rank(restriction) >= rank(action) || !may_overlap(p, q)
