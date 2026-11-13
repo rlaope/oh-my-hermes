@@ -237,7 +237,8 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu).toHaveAttribute("role", "menu");
   // no chat opens until an agent is picked
   await expect(page.getByTestId("session-chat")).toHaveCount(0);
-  const items = menu.locator("[role=menuitem]");
+  // the agent rows ("Continue a conversation" follows them)
+  const items = menu.locator("[role=menuitem][data-testid^=session-agent-]");
   // the first row has the focus, so Enter picks the agent on top
   await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
   expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
@@ -282,6 +283,10 @@ test("the + menu: installed agents first (the last one used on top), missing one
   await expect(menu.getByTestId("session-agent-dsh")).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  // up from the top wraps to the menu's last row: "Continue a conversation" with Codex, under the agents
+  await expect(menu.getByTestId("session-past-codex")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
   await expect(menu.getByTestId("session-agent-opencode")).toBeFocused();

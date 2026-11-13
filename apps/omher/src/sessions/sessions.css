@@ -9,6 +9,11 @@
   display: flex;
   flex-direction: column;
 }
+/* A search that leaves BOTS with only its "No bot named …" line: that line's height, SESSIONS right under it. */
+.side-sec.side-sec-fit {
+  flex-grow: 0;
+  min-height: 0;
+}
 .side-sec + .side-sec {
   margin-top: 6px;
   padding-top: 10px;
@@ -206,6 +211,28 @@
   height: 1px;
   background: var(--line);
   margin: 6px 0 4px;
+}
+/* the + menu's "Continue a conversation" rows end with a quiet chevron; the list they open starts with ‹ back */
+.ss-chev {
+  color: var(--muted);
+  font-size: 13px;
+  flex: none;
+}
+.ss-past-back {
+  color: var(--body);
+  font-weight: 500;
+}
+.ss-past-back > .ss-ic:first-child {
+  width: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+/* a past conversation: its title over its folder and age, each one line */
+.ss-past {
+  max-height: 260px;
+}
+.ss-past-row {
+  height: 40px;
 }
 /* step 2 of the menu: ← and the agent picked, over its folder choices */
 .ss-agent {
@@ -440,12 +467,16 @@
 .ss-head-st.failed {
   color: var(--danger);
 }
+/* The space around a terminal and its colour come from Settings > Terminal (term/look.ts sets both on this box):
+   --term-pad is the left side, and the top, right and bottom keep the proportions of the 14 6 8 16 it always had;
+   --term-bg is the picked theme's background, so the space is the terminal's colour and not the page's. */
 .term-wrap {
+  --term-pad: 16px;
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 14px 6px 8px 16px;
-  background: var(--bg);
+  padding: calc(var(--term-pad) * 0.875) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.5) var(--term-pad);
+  background: var(--term-bg, var(--bg));
 }
 .term-box {
   flex: 1;
@@ -920,6 +951,25 @@
   white-space: nowrap;
   font-size: 11.5px;
   color: var(--muted);
+}
+/* its Stop: a quiet word after the label, set apart by colour and an underline, never a boxed button */
+.ss-head-stop {
+  flex: none;
+  padding: 0 2px;
+  margin-left: -4px;
+  border: 0;
+  background: none;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--body);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+  cursor: pointer;
+}
+.ss-head-stop:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
 }
 .ss-plans-rows {
   padding: 4px 2px;

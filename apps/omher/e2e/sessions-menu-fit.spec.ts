@@ -69,14 +69,16 @@ for (const height of [600, 720, 820]) {
         .map((r) => [r.top, r.bottom]);
     }, pop);
     expect(cut).toEqual([]);
-    // every agent is listed, the installed ones first
-    const ids = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("session-agent-", "")));
+    // every agent is listed, the installed ones first (then the "Continue a conversation" rows)
+    const all = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
+    const ids = all.filter((t) => t.startsWith("session-agent-")).map((t) => t.replace("session-agent-", ""));
     expect([...ids].sort()).toEqual([...ALL].sort());
     expect(ids.slice(0, 4)).toEqual(["claude", "codex", "omh", "opencode"]);
+    expect(all.slice(ids.length)).toEqual(["session-past-claude", "session-past-codex"]);
     // each row can be reached: scrolled into the menu's own box it is wholly inside the window
     const list = await box(page, "[data-testid=session-menu]");
-    for (const id of ids) {
-      const row = page.getByTestId(`session-agent-${id}`);
+    for (const id of all) {
+      const row = page.getByTestId(id);
       await row.evaluate((e) => e.scrollIntoView({ block: "nearest" }));
       const r = await row.boundingBox();
       expect(r!.y).toBeGreaterThanOrEqual(list.top - 0.5);
@@ -89,20 +91,21 @@ test("arrow keys scroll the focused row into view, End reaches the last agent, H
   await open(page, 600);
   const list = await box(page, "[data-testid=session-menu]");
   const inView = async (id: string) => {
-    const r = await page.getByTestId(`session-agent-${id}`).boundingBox();
+    const r = await page.getByTestId(id).boundingBox();
     return r!.y >= list.top - 0.5 && r!.y + r!.height <= list.bottom + 0.5;
   };
   await expect(page.getByTestId("session-agent-claude")).toBeFocused();
-  const ids = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("session-agent-", "")));
+  // every row of the menu: the agents, then "Continue a conversation"
+  const ids = await page.getByTestId("session-menu").locator("[role=menuitem]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
   for (const id of ids.slice(1)) {
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByTestId(`session-agent-${id}`)).toBeFocused();
+    await expect(page.getByTestId(id)).toBeFocused();
     expect(await inView(id)).toBe(true);
   }
   await page.keyboard.press("Home");
   await expect(page.getByTestId("session-agent-claude")).toBeFocused();
-  expect(await inView("claude")).toBe(true);
+  expect(await inView("session-agent-claude")).toBe(true);
   await page.keyboard.press("End");
-  await expect(page.getByTestId(`session-agent-${ids.at(-1)}`)).toBeFocused();
+  await expect(page.getByTestId(ids.at(-1)!)).toBeFocused();
   expect(await inView(ids.at(-1)!)).toBe(true);
 });

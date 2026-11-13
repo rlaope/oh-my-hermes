@@ -29,7 +29,7 @@ describe("real agent streams through the reducer", () => {
   const all = replays as Replay[];
 
   it("covers every agent", () => {
-    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "codex-late", "omo", "omo-batch", "omo-single", "omp", "pi", "pi-noauth"]));
+    expect(new Set(all.map((r) => r.agent))).toEqual(new Set(["claude", "codex", "codex-resume", "codex-resume-gone", "codex-helpers", "codex-helper-stop", "codex-late", "codex-sub-edit", "omo", "omo-batch", "omo-single", "omp", "pi", "pi-noauth"]));
     expect(all.length).toBeGreaterThanOrEqual(43);
   });
 
@@ -116,7 +116,13 @@ describe("real agent streams through the reducer", () => {
     const s = replay(r);
     const it = s.chats["agent:s1"].items.find((i) => i.kind === "approval");
     expect(it?.kind === "approval" && it.expired).toBe("cancelled");
-    expect(fans(s).flatMap((x) => x.subs).map((x) => x.state)).toEqual(["cancelled"]);
+    expect(fans(s).flatMap((x) => x.subs).map((x) => [x.state, x.model])).toEqual([["cancelled", "claude-opus-5-5"]]);
+  });
+
+  it("Stop with no turn running: a background command Claude Code stopped leaves the chat idle", () => {
+    const s = replay(all.find((x) => x.name === "claude-14-background-stop.jsonl")!);
+    expect(s.chats["agent:s1"].turn).toBeNull();
+    expect(selectAsks(s).filter((a) => a.bot === "agent:s1")).toHaveLength(0);
   });
 
   it("OmO's two background subagents: one card, each with its own answer", () => {

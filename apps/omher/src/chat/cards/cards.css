@@ -56,6 +56,28 @@
   max-height: 160px;
   overflow-y: auto;
 }
+/* plan mode's plan: rendered as an answer is, in its own scroll; the card keeps its width */
+.card-plan {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--body);
+  background: var(--bg);
+  border-radius: var(--r-sm);
+  padding: 7px 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.card:has(.card-plan) {
+  width: 76%;
+}
+/* the plan's own headings stay under the card's question */
+.card-plan h1,
+.card-plan h2,
+.card-plan h3,
+.card-plan h4 {
+  font-size: 12.5px;
+}
 .card-who {
   margin-bottom: 2px;
   font-size: 11.5px;
