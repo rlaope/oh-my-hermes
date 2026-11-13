@@ -174,8 +174,8 @@ fn wildcard(text: &str, pattern: &str, fold: bool) -> bool {
 /// The tools omher's approval card stands for, and the key their ask rules go under. OpenCode files a write or a
 /// patch under `edit`. The key is not the tool's own name, so OpenCode's config merge cannot fold these rules into
 /// the person's own `bash` / `edit` entry (which would keep the person's key order and let their `"*": "allow"`
-/// come after an ask); `"bash *"` matches `bash` and also names beginning `bash `, whose denies
-/// [`same_but_asked`] checks cannot be shadowed by it.
+/// come after an ask); `"bash *"` matches `bash`. It also matches names beginning `bash `: extra denies
+/// ([`guard_keys`]) keep those other permissions from becoming askable.
 const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];
 
 /// Kilo Code's: OpenCode's two, and `write`, which Kilo's image tool asks under (its file tools ask under `edit`), each
@@ -196,6 +196,7 @@ struct Listed {
     /// Every rule (permission, pattern, action) under a key omher does not write (`asked`'s keys), in order, without
     /// the rules a later one replaces for every input: what decides every other permission.
     rest: Vec<(String, String, String)>,
+    rules: Vec<(String, String, String)>,
 }
 
 /// `rules` without each one that a later rule replaces for every input: the later rule has the same permission key
@@ -249,11 +250,27 @@ fn resolved(listing: &str, primary: &str, asked: &[(&str, &str)], fold: bool) ->
             seen.reverse();
             tools.push(seen);
         }
-        let rest = effective(rules.into_iter().filter(|(perm, _, _)| !asked.iter().any(|(_, key)| key == perm)).collect());
-        out.push(Listed { name, mode, tools, rest });
+        let rest = effective(rules.iter().filter(|(perm, _, _)| !asked.iter().any(|(_, key)| key == perm || guard_keys(key).contains(perm))).cloned().collect());
+        out.push(Listed { name, mode, tools, rest, rules });
     }
     Some(out)
 }
+
+/// OpenCode's `bash *` key also matches names beginning `bash `, not just `bash`. Those are not the tool omher
+/// asks about: deny them, rather than let its wildcard ask override a restriction for another permission. Kilo's
+/// exact keys need no such guard. The two guards cover the empty suffix and every nonempty suffix.
+fn guard_keys(key: &str) -> Vec<String> {
+    key.strip_suffix(" *").map(|tool| vec![format!("{tool} "), format!("{tool} ?*")]).unwrap_or_default()
+}
+
+/// The guards are blanket denies, and no later non-deny could match their permission names. This also checks a
+/// later config layer cannot undo them; conservative overlap is enough, and any uncertainty refuses the chat.
+fn guards_kept(agent: &Listed, asked: &[(&str, &str)], fold: bool) -> bool {
+    asked.iter().flat_map(|(_, key)| guard_keys(key)).all(|guard| {
+        agent.rules.iter().rposition(|(p, q, a)| *p == guard && q == "*" && a == "deny").is_some_and(|at| {
+            agent.rules[at + 1..].iter().all(|(p, _, a)| a == "deny" || !may_overlap(p, &guard, fold))
+        })
+    })
 
 /// The ask rules for a chat, from what the agent's `agent list` printed without them: for every agent and each of
 /// `asked`, the person's own resolved rules repeated after theirs, in the same order, with allow turned into ask.
@@ -269,7 +286,9 @@ fn ask_rules(listing: &str, primary: &str, asked: &[(&str, &str)], fold: bool) -
                 .zip(&agent.tools)
                 .map(|((_, key), rules)| {
                     let pairs: Vec<String> = rules.iter().map(|(p, a)| format!("{}:{}", q(p), q(if a == "deny" { "deny" } else { "ask" }))).collect();
-                    format!("{}:{{{}}}", q(key), pairs.join(","))
+                    let mut entries = vec![format!("{}:{{{}}}", q(key), pairs.join(","))];
+                    entries.extend(guard_keys(key).iter().map(|g| format!("{}:{{\"*\":\"deny\"}}", q(g))));
+                    entries.join(",")
                 })
                 .collect::<Vec<_>>();
             format!("{}:{{\"permission\":{{{}}}}}", q(&agent.name), tools.join(","))
@@ -294,15 +313,7 @@ fn same_but_asked(first: &str, rules: &str, listing: &str, primary: &str, asked:
     let (before, after) = (resolved(first, primary, asked, fold)?, resolved(listing, primary, asked, fold)?);
     let same = ask_rules(first, primary, asked, fold).as_deref() == Some(rules)
         && before.len() == after.len()
-        && before.iter().zip(&after).all(|(b, a)| {
-            b.name == a.name && b.mode == a.mode && b.rest == a.rest
-                // OpenCode's `bash *` key matches `bash`, but also permission names beginning `bash `.
-                // A deny for such another name is not in the rules resolved for the tool `bash`: refuse if
-                // omher's key could overlap it, rather than let the new ask shadow that other permission's deny.
-                && asked.iter().all(|(tool, key)| b.rest.iter().all(|(perm, _, action)| {
-                    !key.contains(['*', '?']) || action != "deny" || wildcard(tool, perm, fold) || !may_overlap(perm, key, fold)
-                }))
-        });
+        && before.iter().zip(&after).all(|(b, a)| b.name == a.name && b.mode == a.mode && b.rest == a.rest && guards_kept(a, asked, fold));
     same.then_some((before, after))
 }
 
@@ -1642,7 +1653,15 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
 
     /// A listing: each agent's `name (mode)` line, then its rules.
     fn listing(agents: &[(&str, &[String])]) -> String {
-        agents.iter().map(|(head, rules)| format!("{head}\n[{}]\n", rules.join(","))).collect()
+        agents.iter().map(|(head, rules)| {
+            let mut rules = rules.to_vec();
+            for key in ["bash *", "edit *"] {
+                if rules.iter().any(|r| serde_json::from_str::<Value>(r).unwrap()["permission"] == key) {
+                    rules.extend(guard_keys(key).iter().map(|g| rule(g, "*", "deny")));
+                }
+            }
+            format!("{head}\n[{}]\n", rules.join(","))
+        }).collect()
     }
 
     /// Kilo reads a person's `agent.build` entry as `code`, and omher's `agent.code` then replaces it whole: their
@@ -1705,7 +1724,12 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
                 let first = listing(&[("build (primary)", &person)]);
                 let rules = opencode_ask_on(&first, fold).unwrap();
                 let after = listing(&[("build (primary)", &[&person[..], &[rule("bash *", "*", "ask"), rule("edit *", "*", "ask")]].concat())]);
-                assert!(!opencode_kept_on(&first, &rules, &after, fold), "{permission}, folding {fold}");
+                assert!(opencode_kept_on(&first, &rules, &after, fold), "{permission}, folding {fold}");
+                let unguarded = after.lines().map(|line| if line.starts_with('[') {
+                    let rs: Vec<Value> = serde_json::from_str(line).unwrap();
+                    serde_json::to_string(&rs.into_iter().filter(|r| !["bash ", "bash ?*", "edit ", "edit ?*"].contains(&r["permission"].as_str().unwrap())).collect::<Vec<_>>()).unwrap()
+                } else { line.to_string() }).collect::<Vec<_>>().join("\n");
+                assert!(!opencode_kept_on(&first, &rules, &unguarded, fold));
             }
         }
     }
@@ -1776,8 +1800,8 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
         let person = [rule("*", "*", "allow"), rule("Bash", "*", "deny"), rule("Edit", "*", "allow"), rule("Edit", "*.key", "deny")];
         let first = listing(&[("build (primary)", &person)]);
         let rules = opencode_ask_on(&first, true).unwrap();
-        assert_eq!(rules, r#"{"agent":{"build":{"permission":{"bash *":{"*":"deny"},"edit *":{"*":"ask","*.key":"deny"}}}}}"#);
-        assert_eq!(opencode_ask_on(&first, false).unwrap(), r#"{"agent":{"build":{"permission":{"bash *":{"*":"ask"},"edit *":{"*":"ask"}}}}}"#);
+        assert_eq!(rules, r#"{"agent":{"build":{"permission":{"bash *":{"*":"deny"},"bash ":{"*":"deny"},"bash ?*":{"*":"deny"},"edit *":{"*":"ask","*.key":"deny"},"edit ":{"*":"deny"},"edit ?*":{"*":"deny"}}}}}"#);
+        assert_eq!(opencode_ask_on(&first, false).unwrap(), r#"{"agent":{"build":{"permission":{"bash *":{"*":"ask"},"bash ":{"*":"deny"},"bash ?*":{"*":"deny"},"edit *":{"*":"ask"},"edit ":{"*":"deny"},"edit ?*":{"*":"deny"}}}}}"#);
         let own = |fold: bool| if fold { vec![rule("bash *", "*", "deny"), rule("edit *", "*", "ask"), rule("edit *", "*.key", "deny")] } else { vec![rule("bash *", "*", "ask"), rule("edit *", "*", "ask")] };
         for fold in [true, false] {
             let rules = opencode_ask_on(&first, fold).unwrap();
@@ -1946,12 +1970,11 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
                         .zip(&mine)
                         .map(|((head, rules), agent)| {
                             let own = asked.iter().zip(&agent.tools).flat_map(|((_, key), tool)| tool.iter().map(|(p, a)| (key.to_string(), p.clone(), (if a == "deny" { "deny" } else { "ask" }).to_string())));
-                            (head.clone(), rules.iter().cloned().chain(own).collect())
+                            let guards = asked.iter().flat_map(|(_, key)| guard_keys(key)).map(|p| (p, "*".to_string(), "deny".to_string()));
+                            (head.clone(), rules.iter().cloned().chain(own).chain(guards).collect())
                         })
                         .collect();
                     let faithful = listed(&second);
-                    // A conservative proof may refuse a faithful merge too (for example an unknown permission
-                    // overlapping OpenCode's `bash *` key). Defaults are acceptance controls in the real fixtures.
                     let changes = g.below(3);
                     for _ in 0..changes {
                         let at = g.below(second.len());
