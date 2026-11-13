@@ -1714,8 +1714,8 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
     }
 
     /// OpenCode's injected `bash *` and `edit *` keys also match other permission names starting with `bash ` or
-    /// `edit `. A deny for such a name need not match the tool omher resolves: keep it denied by refusing a rewrite
-    /// whose key might overlap that permission. This is part of checking *every* permission, not just known tools.
+    /// `edit `. A deny for such a name need not match the tool omher resolves: fixed suffix denies keep those
+    /// permissions denied too, and a listing without those guards refuses. Check every permission, not only tools.
     #[test]
     fn opencode_does_not_shadow_a_deny_for_another_permission_matching_its_key() {
         for fold in [false, true] {
