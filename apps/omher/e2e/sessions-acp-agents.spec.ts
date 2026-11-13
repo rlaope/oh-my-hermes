@@ -1,10 +1,12 @@
 // Six more coding agents on the Agent Client Protocol adapter (Kilo Code, Gemini CLI, Qwen Code, Kimi Code, Copilot
 // CLI, Cline), on the mock host (the browser build's MockHost sends what acp_chat.rs sends for the real CLIs: signed
 // out for the five without a free model). The + menu shows the installed agents and folds the rest behind one "More
-// agents" row; folded or opened it fits a 900x600 window. A missing agent's row gives its install line as copyable
-// text. An installed agent that is not signed in ends in one plain line with its own sign-in command and Open in
-// Terminal, never a raw error or a field that takes a key.
+// agents" row, with "Continue a conversation" under it from the first view; folded or opened it stays inside a
+// 900x600 window (its list scrolls there) and at 1280x820 the first view needs no scrolling. A missing agent's row
+// gives its whole install line as copyable text. An installed agent that is not signed in ends in one plain line
+// with its own sign-in command and Open in Terminal, never a raw error or a field that takes a key.
 import { expect, test, type Page } from "@playwright/test";
+import { INSTALL, type AgentId } from "../src/sessions/agents";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
@@ -52,25 +54,41 @@ async function plus(page: Page) {
   await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
 }
 
-/** The menu's box, its list's scroll state, and how many rows it holds. */
+/** The menu's box, its list's scroll state and fade, how many rows it holds, and which of them are wholly in view. */
 const geometry = (page: Page) =>
   page.evaluate(() => {
     const pop = document.querySelector(".ss-pop")!.getBoundingClientRect();
     const list = document.querySelector<HTMLElement>("[data-testid=session-menu-list]")!;
+    const box = list.getBoundingClientRect();
     const foot = document.querySelector(".side-foot")!.getBoundingClientRect();
+    const cs = getComputedStyle(list);
+    const rows = [...list.querySelectorAll<HTMLElement>("[role=menuitem]")];
     return {
       top: pop.top,
       bottom: pop.bottom,
       right: pop.right,
       w: innerWidth,
       footTop: foot.top,
-      rows: list.querySelectorAll("[role=menuitem]").length,
+      rows: rows.length,
       scroll: list.scrollHeight > list.clientHeight + 1,
+      fade: (cs.maskImage || (cs as unknown as { webkitMaskImage: string }).webkitMaskImage || "none").includes("gradient"),
+      inView: rows
+        .filter((r) => {
+          const b = r.getBoundingClientRect();
+          return b.top >= box.top - 0.5 && b.bottom <= box.bottom + 0.5;
+        })
+        .map((r) => r.dataset.testid!),
+      // the height of every row that holds one line (an agent with no second line, More agents, a past-conversation row)
+      oneLine: [...new Set(rows.filter((r) => !r.querySelector(".ss-as")).map((r) => r.getBoundingClientRect().height))],
     };
   });
 
+/** The agents that are not installed in these tests' usual set. */
+const MISSING: AgentId[] = ["omo", "dsh", "pi", "omp", "grok", "qwen", "kimi", "copilot", "cline"];
+const PAST = ["session-past-claude", "session-past-codex"];
+
 for (const theme of ["dark", "light"]) {
-  test(`the + menu at 900x600: installed agents, then one More agents row, seven rows in all, in the window (${theme})`, async ({ page }) => {
+  test(`the + menu at 900x600: installed agents, one More agents row, then Continue a conversation, in the window (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
     await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
     await plus(page);
@@ -85,10 +103,22 @@ for (const theme of ["dark", "light"]) {
     for (const a of ["qwen", "kimi", "copilot", "cline", "pi"]) await expect(menu.getByTestId(`session-agent-${a}`)).toHaveCount(0);
     // the new rows carry their own marks, never a letter
     for (const a of ["kilo", "gemini"]) await expect(menu.getByTestId(`session-agent-${a}`).locator('svg[data-agent]:not([data-agent="letter"])')).toHaveCount(1);
-    // Six installed rows + More fit without scrolling. Past conversations share the disclosure.
+    // "Continue a conversation" is in the menu as first opened, under More agents, which stays closed
+    await expect(menu.locator(".ss-h").last()).toHaveText("Continue a conversation");
+    expect(await menu.locator("[role=menuitem]").evaluateAll((els) => els.slice(-3).map((e) => e.getAttribute("data-testid")))).toEqual(["session-more", ...PAST]);
     const g = await geometry(page);
-    expect(g.rows).toBe(7);
-    expect(g.scroll).toBe(false);
+    expect(g.rows).toBe(9);
+    // every row holding one line is the usual 30px, folded as opened
+    expect(g.oneLine).toEqual([30]);
+    // this short window cuts the list: it scrolls inside the menu and says so with the fade at its cut edge
+    expect(g.scroll).toBe(true);
+    expect(g.fade).toBe(true);
+    expect(g.inView.slice(0, 6)).toEqual(["claude", "codex", "omh", "opencode", "kilo", "gemini"].map((a) => `session-agent-${a}`));
+    // End reaches the last past-conversation row without More agents being opened
+    await page.keyboard.press("End");
+    await expect(menu.getByTestId("session-past-codex")).toBeFocused();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    expect((await geometry(page)).inView.slice(-2)).toEqual(PAST);
     expect(g.top).toBeGreaterThanOrEqual(0);
     expect(g.bottom).toBeLessThanOrEqual(g.footTop);
     // a borderless left-aligned row, 12-13px, no box: the same look as the agent rows
@@ -101,6 +131,78 @@ for (const theme of ["dark", "light"]) {
     expect(look.border).toBe("0px");
     expect(look.align).toBe("left");
   });
+
+  test(`the + menu at 1280x820 as first opened: More agents and both Continue a conversation rows, no scrolling (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
+    await plus(page);
+    const menu = page.getByTestId("session-menu");
+    await expect(menu.getByTestId("session-more")).toHaveAttribute("aria-expanded", "false");
+    await expect(menu.locator(".ss-h").last()).toHaveText("Continue a conversation");
+    const g = await geometry(page);
+    expect(g.rows).toBe(9);
+    expect(g.scroll).toBe(false);
+    expect(g.fade).toBe(false);
+    // all nine rows are wholly in view: six agents, More agents, and the two past-conversation rows
+    expect(g.inView).toHaveLength(9);
+    expect(g.inView.slice(-3)).toEqual(["session-more", ...PAST]);
+    expect(g.oneLine).toEqual([30]);
+    expect(g.top).toBeGreaterThanOrEqual(0);
+    expect(g.bottom).toBeLessThanOrEqual(g.footTop);
+    // no sidebar row shows half above the menu: each is wholly clear of it or wholly under it and its band of air
+    const half = await page.evaluate(() => {
+      const el = document.querySelector(".ss-pop")!;
+      const pop = el.getBoundingClientRect();
+      const top = pop.top - (parseFloat(getComputedStyle(el, "::before").height) || 0);
+      return [...document.querySelectorAll(".side-top, .side > .search, .bot-list > *, .side-sh, .ss-list > *")]
+        .map((r) => r.getBoundingClientRect())
+        .filter((r) => r.height > 0 && r.top < top - 0.5 && r.bottom > top + 0.5).length;
+    });
+    expect(half).toBe(0);
+    // a past-conversation row opens its list straight from here
+    await menu.getByTestId("session-past-claude").click();
+    await expect(page.getByTestId("session-past-menu")).toBeVisible();
+  });
+
+  for (const [width, height] of [
+    [900, 600],
+    [1280, 820],
+  ] as const) {
+    test(`every missing agent shows its whole install line, none cut and no two alike, at ${width}x${height} (${theme})`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await open(page, ["claude", "codex", "omh", "opencode", "kilo", "gemini"], theme);
+      await plus(page);
+      const menu = page.getByTestId("session-menu");
+      await menu.getByTestId("session-more").click();
+      const seen: string[] = [];
+      const colours = new Set<string>();
+      for (const a of MISSING) {
+        const line = menu.getByTestId(`session-install-${a}`);
+        await line.evaluate((e) => e.scrollIntoView({ block: "nearest" }));
+        await expect(line).toHaveText(INSTALL[a]);
+        const m = await line.evaluate((e) => {
+          const el = e as HTMLElement;
+          const cs = getComputedStyle(el);
+          return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, shown: el.innerText.replace(/\s+/g, " ").trim(), overflow: cs.textOverflow, colour: cs.color, opacity: cs.opacity };
+        });
+        // nothing of the line lies outside its box, and what is drawn is the line itself (no ellipsis)
+        expect(m.scrollWidth, `${a}: ${m.shown}`).toBeLessThanOrEqual(m.clientWidth);
+        expect(m.shown, a).toBe(INSTALL[a]);
+        expect(m.shown).not.toContain("…");
+        seen.push(m.shown);
+        colours.add(`${m.colour} ${m.opacity}`);
+        // the row is as tall as its lines: the install line ends inside it
+        const row = (await menu.getByTestId(`session-agent-${a}`).boundingBox())!;
+        const box = (await line.boundingBox())!;
+        expect(box.y + box.height, a).toBeLessThanOrEqual(row.y + row.height + 0.5);
+      }
+      expect(new Set(seen).size).toBe(MISSING.length);
+      // every install line is drawn in the one muted colour
+      expect([...colours]).toHaveLength(1);
+      // one-line rows keep their height with the fold open
+      expect((await geometry(page)).oneLine).toEqual([30]);
+    });
+  }
 
   test(`More agents opens the missing ones with their install lines, and the menu still fits at 900x600 (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });

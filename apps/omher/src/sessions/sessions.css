@@ -58,14 +58,15 @@
   bottom: calc(100% + 4px);
 }
 /* ...and keeps a few px of air under the sidebar row above it (MENU_AIR in SessionsSection.tsx): a band of the
-   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows */
+   sidebar's colour over the strip between, so the empty top of the next row (rows stand 2px apart) never shows.
+   fitMenu makes it taller (--ss-air) when a list that fits whole would otherwise end part-way down a row */
 .side-sh-row .ss-pop.ui-pop-top::before {
   content: "";
   position: absolute;
   left: -1px;
   right: -1px;
   bottom: calc(100% + 1px);
-  height: 6px;
+  height: var(--ss-air, 6px);
   background: var(--side);
 }
 /* the list scrolls inside the menu when the window is too short for every agent (fitMenu sets its max height) */

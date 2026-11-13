@@ -82,35 +82,45 @@ const MENU_W = "min(240px, calc(var(--side-w) - 16px))";
 const MENU_GAP = 6;
 /** Space kept between the menu's edge and a sidebar row it stops at. */
 const ROW_CLEAR = 2;
-/** Opened above its row, the menu keeps this much air under the row above it: a band of the sidebar's own colour
- *  (`.ss-pop.ui-pop-top::before`, the same height) covers what lies there. Sidebar rows stand 2px apart, so the air
- *  reaches into the next row's empty top padding, which the band hides; no row shows half. */
+/** Opened above its row, the menu keeps at least this much air under the row above it: a band of the sidebar's own
+ *  colour (`.ss-pop.ui-pop-top::before`, the same height) covers what lies there. Sidebar rows stand 2px apart, so the
+ *  air reaches into the next row's empty top padding, which the band hides; no row shows half. */
 export const MENU_AIR = 6;
 
-/** Where the + menu goes and how tall it may be in all (`max`). It opens under its row when the whole list fits above the sidebar's
- *  bottom rows (Automations, Plugins, Settings, You), else on the side with more room, scrolling inside. The edge
- *  that lies over the sidebar stops on a row boundary, so no row shows half under it. */
+/** Where the + menu goes, how tall it may be in all (`max`) and, opened above its row, how tall the band of air over
+ *  it is (`air`). It opens under its row when the whole list fits above the sidebar's bottom rows (Automations,
+ *  Plugins, Settings, You), else on the side with more room. A list that fits whole above its row is never cut: the
+ *  sidebar row its top edge would cross is hidden whole by the band instead. A list that does not fit scrolls
+ *  inside, and its edge stops on a row boundary. Either way no row shows half. */
 export function fitMenu(
   anchor: { top: number; bottom: number },
   natural: number,
   gap: number,
   limits: { top: number; bottom: number },
   rows: { top: number; bottom: number }[],
-): { side: "top" | "bottom"; max: number } {
+): { side: "top" | "bottom"; max: number; air: number } {
   const below = limits.bottom - (anchor.bottom + gap);
   const above = anchor.top - gap - limits.top;
   if (natural <= below || below >= above) {
     let end = Math.min(anchor.bottom + gap + natural, limits.bottom);
     // pull the edge back past every row it would cross (moving it can reach the row before)
     for (let cut; (cut = rows.find((r) => r.top < end + ROW_CLEAR && r.bottom > end && r.top >= anchor.bottom)); ) end = cut.top - ROW_CLEAR;
-    return { side: "bottom", max: Math.max(0, end - anchor.bottom - gap) };
+    return { side: "bottom", max: Math.max(0, end - anchor.bottom - gap), air: 0 };
   }
-  let start = Math.max(anchor.top - gap - natural, limits.top);
+  const whole = anchor.top - gap - natural;
+  if (whole >= limits.top) {
+    // the band grows up to the top of each row it would cross (rows stand 2px apart: it ends 1px under the row
+    // before); never over the sidebar's own top rows, where the list is cut as below
+    let air = MENU_AIR;
+    for (let cut; (cut = rows.find((r) => r.top < whole - air + 1 && r.bottom > whole - air - 1 && r.bottom <= anchor.top)); ) air = whole - cut.top + 1;
+    if (whole - air >= limits.top - MENU_GAP) return { side: "top", max: natural, air };
+  }
+  let start = Math.max(whole, limits.top);
   // a row that begins above the band must end above it; one that begins in the band is hidden by it and the menu. The
   // edge lands within a px of `start` (offsets round), so a row within 1px of the band counts as in it, and the menu
   // then stops 1px further down; with rows 2px apart that never reaches the next row's top.
   for (let cut; (cut = rows.find((r) => r.top < start - MENU_AIR + 1 && r.bottom > start - MENU_AIR - 1 && r.bottom <= anchor.top)); ) start = cut.bottom + MENU_AIR + 1;
-  return { side: "top", max: Math.max(0, anchor.top - gap - start) };
+  return { side: "top", max: Math.max(0, anchor.top - gap - start), air: MENU_AIR };
 }
 
 /** Measure the open menu `box` (its list scrolls in `.ss-scroll`) against the sidebar, and again on resize and
@@ -119,9 +129,9 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape
   const [fit, setFit] = useState<{ side: "top" | "bottom"; max: number } | null>(null);
   useLayoutEffect(() => {
     if (!ready) return;
+    const pop = box.current?.closest<HTMLElement>(".ss-pop");
     const measure = () => {
       const menu = box.current;
-      const pop = menu?.closest<HTMLElement>(".ss-pop");
       const list = menu?.querySelector<HTMLElement>(".ss-scroll");
       // the row the menu is placed against (its positioned container)
       const anchor = pop?.offsetParent;
@@ -137,12 +147,18 @@ function useMenuFit(box: RefObject<HTMLDivElement | null>, ready: boolean, shape
       const gap = Math.max(0, pop.classList.contains("ui-pop-bottom") ? pop.offsetTop - anchor.offsetHeight : -pop.offsetTop - pop.offsetHeight);
       const rows = [...(side?.querySelectorAll(".bot-list > *, .ss-list > *, .side-sec > .side-sh, .side > :not(.side-sec)") ?? [])].map((r) => r.getBoundingClientRect());
       const f = fitMenu(a, natural, gap, { top: Math.max(top, 0) + MENU_GAP, bottom: Math.min(foot, innerHeight) - MENU_GAP }, rows);
+      // the band above an upward menu (`.ss-pop.ui-pop-top::before`) is as tall as the air it keeps
+      pop.style.setProperty("--ss-air", `${f.air}px`);
       // whole px down: a fraction up would set the menu's edge into the row it stops at
       setFit({ side: f.side, max: Math.max(0, Math.floor(f.max - chrome)) });
     };
     measure();
     addEventListener("resize", measure);
-    return () => removeEventListener("resize", measure);
+    return () => {
+      removeEventListener("resize", measure);
+      // the next thing shown in this box (an agent's past conversations) keeps the plain band
+      pop?.style.removeProperty("--ss-air");
+    };
     // measured again once placed on its side: the gap to the row differs above and below
   }, [box, ready, fit?.side, shape]);
   return fit;
@@ -186,7 +202,9 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
   const [copied, setCopied] = useState<AgentId | null>(null);
   // the first row takes the focus once the list is there (installed first, so it is the one Enter should pick)
   const ready = agents !== null;
-  const fit = useMenuFit(box, ready, unfold ? "open" : "folded");
+  // the second step: one agent's past conversations (its own list: this menu is not measured while it shows)
+  const [past, setPast] = useState<PastAgent | null>(null);
+  const fit = useMenuFit(box, ready && !past, unfold ? "open" : "folded");
   // once placed (a hidden menu cannot take focus)
   const placed = fit !== null;
   const list = useRef<HTMLDivElement>(null);
@@ -257,8 +275,6 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       </button>
     );
   };
-  // the second step: one agent's past conversations
-  const [past, setPast] = useState<PastAgent | null>(null);
   const keeps = (agents ?? []).filter((a) => a.path && PAST_AGENTS.includes(a.id as PastAgent)).map((a) => a.id as PastAgent);
   if (past)
     return (
