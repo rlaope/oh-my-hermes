@@ -856,6 +856,17 @@ All notable changes will be documented here.
   person; and every name the kit's checkers print maps to an edit. The
   skill body is unchanged.
 
+- **The Windows installer skips an MSYS2 or MinGW Python instead of failing
+  halfway.** When `python` on PATH was MSYS2's mingw64 build, the one-liner
+  and omher's Install button built `%LOCALAPPDATA%\omh\venv` with it and
+  stopped at "Install OMH package" with `...\venv\Scripts\python.exe is not
+  recognized`: that build puts a venv's `python.exe` in `bin\`. The
+  installer now asks each candidate where its venvs put `python.exe`, skips
+  one that answers `bin` with a line saying why, and moves on to `py`, the
+  next name, Hermes' own interpreter or uv. A Python running from a venv,
+  such as Hermes' own, is still accepted. Reported and first fixed by
+  @kinanshihab in #2847.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with
