@@ -904,8 +904,9 @@ All notable changes will be documented here.
   line whose own root key is the section now counts, so plain, quoted,
   explicit and flow forms of a real top-level section are unchanged, two
   column-0 sections are still refused as duplicates, a flow or explicit-only
-  section is still noncanonical, and a section key that only ever appears
-  indented stays user-owned. The uninstall report reads its `section.key`
+  section is still noncanonical, and only a document whose whole root is
+  indented stays user-owned. A profile with no `skills:` yet beside a
+  route's own `skills:` list now gets its first block. The uninstall report reads its `section.key`
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
 
