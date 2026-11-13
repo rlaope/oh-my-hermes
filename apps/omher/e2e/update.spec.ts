@@ -13,6 +13,9 @@ type Plan = {
   version: string | null;
   /** The check itself throws (offline). */
   checkFails?: boolean;
+  /** What the first checks answer, in order, before `version` applies: "fail" throws, "none" finds no update,
+   *  "hold" stays unanswered until `window.__updCheckGo()` and then answers with `version`. */
+  first?: ("fail" | "none" | "hold")[];
   /** Install throws this message after the progress steps. */
   installFails?: string;
   /** Install waits for `window.__updGo()` before finishing, so the test can see the progress. */
@@ -27,10 +30,16 @@ async function stub(page: Page, plan: Plan) {
     let go: () => void = () => {};
     const gate = new Promise<void>((r) => (go = r));
     w.__updGo = () => go();
+    const first = [...(plan.first ?? [])];
+    let checkGo: () => void = () => {};
+    w.__updCheckGo = () => checkGo();
     w.__omherUpdateHost = {
       check: async () => {
         calls.push("check");
-        if (plan.checkFails) throw new Error("network down");
+        const how = first.shift();
+        if (plan.checkFails || how === "fail") throw new Error("network down");
+        if (how === "none") return null;
+        if (how === "hold") await new Promise<void>((r) => (checkGo = r));
         if (!plan.version) return null;
         return {
           version: plan.version,
@@ -117,4 +126,73 @@ test("a failed install says why and offers a retry", async ({ page }) => {
   await expect(page.getByTestId("update-confirm")).toBeVisible();
   await page.getByTestId("update-go").click();
   await expect.poll(() => calls(page)).toEqual(["check", "install", "install"]);
+});
+
+// An app that is left open. The page's clock is held by the test, so a jump stands in for the hours an open app
+// (or a Mac that slept) lets pass, and a focus or visibility event for the person coming back to the window.
+const MIN = 60_000;
+
+async function leftOpen(page: Page) {
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.getByTestId("me")).toBeVisible();
+  await expect.poll(() => calls(page)).toEqual(["check"]);
+}
+
+const comesBack = (page: Page, how: "focus" | "visible") =>
+  page.evaluate((how) => {
+    if (how === "focus") window.dispatchEvent(new Event("focus"));
+    else document.dispatchEvent(new Event("visibilitychange"));
+  }, how);
+
+test("a check that failed is tried again within minutes, and the button appears", async ({ page }) => {
+  await stub(page, { version: "0.2.8", first: ["fail"] });
+  await leftOpen(page);
+  await expect(page.getByTestId("update-btn")).toHaveCount(0);
+  await page.clock.fastForward(5 * MIN);
+  await expect(page.getByTestId("update-btn")).toHaveText("Update to 0.2.8");
+  expect(await calls(page)).toEqual(["check", "check"]);
+  await expect(page.getByTestId("update-error")).toHaveCount(0);
+});
+
+test("a version published after launch shows when the window gets focus 31 minutes later", async ({ page }) => {
+  await stub(page, { version: "0.2.8", first: ["none"] });
+  await leftOpen(page);
+  await page.clock.fastForward(31 * MIN);
+  // no timer was due in that half hour: it is the return to the window that asks
+  expect(await calls(page)).toEqual(["check"]);
+  await expect(page.getByTestId("update-btn")).toHaveCount(0);
+  await comesBack(page, "focus");
+  await expect(page.getByTestId("update-btn")).toHaveText("Update to 0.2.8");
+  expect(await calls(page)).toEqual(["check", "check"]);
+});
+
+test("coming back 5 minutes after a good check asks nothing; after 31 minutes it asks once", async ({ page }) => {
+  await stub(page, { version: null });
+  await leftOpen(page);
+  await page.clock.fastForward(5 * MIN);
+  await comesBack(page, "focus");
+  await comesBack(page, "visible");
+  expect(await calls(page)).toEqual(["check"]);
+  await page.clock.fastForward(26 * MIN);
+  await comesBack(page, "visible");
+  await expect.poll(() => calls(page)).toEqual(["check", "check"]);
+  // that one was a good check as well, so the half hour starts again
+  await page.clock.fastForward(5 * MIN);
+  await comesBack(page, "focus");
+  expect(await calls(page)).toEqual(["check", "check"]);
+});
+
+test("coming back twice while a check is in flight sends one request", async ({ page }) => {
+  await stub(page, { version: "0.2.8", first: ["none", "hold"] });
+  await leftOpen(page);
+  await page.clock.fastForward(31 * MIN);
+  await comesBack(page, "focus");
+  await comesBack(page, "visible");
+  await comesBack(page, "focus");
+  expect(await calls(page)).toEqual(["check", "check"]);
+  await expect(page.getByTestId("update-btn")).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as { __updCheckGo: () => void }).__updCheckGo());
+  await expect(page.getByTestId("update-btn")).toHaveText("Update to 0.2.8");
+  expect(await calls(page)).toEqual(["check", "check"]);
 });

@@ -116,6 +116,9 @@ class StampSiteCountsTests(unittest.TestCase):
             urllib.error.URLError(f"no route ({TOKEN})"),
             TimeoutError("timed out"),
         )
+        # HTTPError wraps a temporary file; left open, its finalizer warns into whichever
+        # later test happens to be capturing stderr when the garbage collector runs.
+        self.addCleanup(failures[0].close)
         for failure in failures:
             with self.subTest(type(failure).__name__), tempfile.TemporaryDirectory() as tmp:
                 site = self._site(tmp)

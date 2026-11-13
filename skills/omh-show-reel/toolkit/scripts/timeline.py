@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import array
+import errno
 import json
 import math
 import os
@@ -37,10 +38,22 @@ def system_alias(part):
         return False
 
 
+def is_link(part):
+    # From Python 3.14, Path.is_symlink() swallows every OSError, so an entry
+    # under a directory that cannot be searched reads as "not a link". lstat it
+    # first: a missing entry is fine, any other error means it cannot be checked.
+    try:
+        os.lstat(part)
+    except OSError as exc:
+        if exc.errno not in (errno.ENOENT, errno.ENOTDIR):
+            raise ValueError(f"path could not be checked: {exc.strerror}") from exc
+    return part.is_symlink()
+
+
 def read_spec(path, expected=dict):
     path = Path(path).absolute()
     # The file, its folder and that folder's parent; above is the operator's own layout.
-    if any(p.is_symlink() and not system_alias(p) for p in (path, path.parent, path.parent.parent)) or not path.is_file() or path.stat().st_size > 1_048_576:
+    if any(is_link(p) and not system_alias(p) for p in (path, path.parent, path.parent.parent)) or not path.is_file() or path.stat().st_size > 1_048_576:
         raise ValueError("spec must be a regular symlink-free UTF-8 JSON file <=1 MiB")
     def invalid_constant(value):
         raise ValueError(f"nonfinite JSON constant: {value}")
@@ -137,7 +150,7 @@ def envelope(path, dt, db_floor=None, ffmpeg="ffmpeg"):
 def generated(path):
     """timeline.json and reel/timeline.js are regenerated on every run; never through a link."""
     path = Path(path).absolute()
-    if any(p.is_symlink() and not system_alias(p) for p in (path, path.parent, path.parent.parent)):
+    if any(is_link(p) and not system_alias(p) for p in (path, path.parent, path.parent.parent)):
         raise ValueError(f"generated output refuses symlink: {path}")
     return path
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import errno
 import hashlib
 import json
 import math
@@ -35,11 +36,23 @@ def system_alias(candidate):
         return False
 
 
+def is_link(part):
+    # From Python 3.14, Path.is_symlink() swallows every OSError, so an entry
+    # under a directory that cannot be searched reads as "not a link". lstat it
+    # first: a missing entry is fine, any other error means it cannot be checked.
+    try:
+        os.lstat(part)
+    except OSError as exc:
+        if exc.errno not in (errno.ENOENT, errno.ENOTDIR):
+            raise ValueError(f"path could not be checked: {exc.strerror}") from exc
+    return part.is_symlink()
+
+
 def checked_path(value):
     """Reject symlink components before resolving an explicit local path."""
     path = Path(value).absolute()
     for candidate in (path, *path.parents):
-        if candidate.is_symlink() and not system_alias(candidate):
+        if is_link(candidate) and not system_alias(candidate):
             raise ValueError("symlink paths are not accepted")
     return path
 

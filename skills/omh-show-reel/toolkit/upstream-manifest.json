@@ -207,7 +207,7 @@
     "scripts/new_project.py": {
       "classification": "modified_derivative",
       "license": "MIT",
-      "local_sha256": "63f326fdb4502bc555ab4878f6d3bea898b374b06d6637b3bdb271cba3ff4eee",
+      "local_sha256": "e788a58b81932bff00b74ab788c923a3e2750acd13b2420faf3f52c550437ed5",
       "modification_notice": "Upstream folder layout and engine template; explicit local fonts with family/weight read from the font, no download or npm setup, existing project refused",
       "upstream": [
         {
@@ -279,7 +279,7 @@
     "scripts/timeline.py": {
       "classification": "modified_derivative",
       "license": "MIT",
-      "local_sha256": "595ba11069d52668c04ca17e85c7a5aa1e80b9d0c338aa7c58896ac1ab667313",
+      "local_sha256": "7bacdb971c2d02c1c2ebf604ef81e0fc39bd8033175de0fd70e367df2358c7dc",
       "modification_notice": "Explicit cue graph plus the upstream script.json composition with a stdlib envelope; music.dropN cues from the analysis",
       "upstream": [
         {
