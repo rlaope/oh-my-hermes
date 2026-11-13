@@ -64,9 +64,8 @@ for (const theme of ["dark", "light"]) {
     const more = page.getByTestId("session-more");
     if (await more.count()) {
       await more.click();
-      await page.getByTestId("session-agent-cline").evaluate((e) => e.scrollIntoView({ block: "nearest" }));
-      // Keep all four new missing names clear of the scroll cue; the past-conversation rows remain below.
-      await page.getByTestId("session-menu-list").evaluate((e) => (e.scrollTop += 32));
+      // the new agents that are not installed, from the first of them: their whole install lines are in view
+      await page.getByTestId("session-agent-qwen").evaluate((e) => e.scrollIntoView({ block: "start" }));
     } else {
       await page.getByTestId("session-menu-list").evaluate((el) => (el.scrollTop = el.scrollHeight));
     }

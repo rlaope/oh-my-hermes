@@ -12,7 +12,7 @@
 // dot. A session that no longer runs steps back.
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it.
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { selectAsks, useStore, type AppState } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -169,8 +169,9 @@ function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean, shape: 
 
 /** The SESSIONS + menu: the installed agents with their mark and name (the last one used on top), then one "More
  *  agents" row that opens the agents that are not installed, dimmed, each with its install line as text (picking one
- *  copies that line; omher installs nothing). Picking an installed one opens its New session chat at once (the
- *  folder is the chip under that chat's composer). Arrow keys move, Enter picks, Esc closes. */
+ *  copies that line; omher installs nothing), then "Continue a conversation", there as the menu first opens. Picking
+ *  an installed agent opens its New session chat at once (the folder is the chip under that chat's composer). Arrow
+ *  keys move, Enter picks, Esc closes. */
 function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: RefObject<HTMLButtonElement | null> }) {
   const ss = useSessions();
   const accounts = useAccounts();
@@ -227,19 +228,32 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           <AgentMark agent={a.id} />
         </span>
         <span className="ss-n ss-n-as" title={account ? `${label} ${account}` : label}>
-          <span className="ss-l">{label}</span>
+          {missing ? (
+            // the state word shares the name's line, so the install line under them has the whole width
+            <span className="ss-head">
+              <span className="ss-l">{label}</span>
+              <span className="ss-missing">{copied === a.id ? t("ss.copiedInstall") : t("sessions.notInstalled")}</span>
+            </span>
+          ) : (
+            <span className="ss-l">{label}</span>
+          )}
           {account && !missing && (
             <span className="ss-as" data-testid={`session-account-${a.id}`}>
               {account}
             </span>
           )}
           {missing && (
+            // whole, on as many lines as it needs; it breaks between its words before it breaks inside one
             <span className="ss-as ss-install" data-testid={`session-install-${a.id}`}>
-              {INSTALL[a.id]}
+              {INSTALL[a.id].split(" ").map((word, i) => (
+                <Fragment key={i}>
+                  {i > 0 && " "}
+                  <span className="ss-tok">{word}</span>
+                </Fragment>
+              ))}
             </span>
           )}
         </span>
-        {missing && <span className="ss-missing">{copied === a.id ? t("ss.copiedInstall") : t("sessions.notInstalled")}</span>}
       </button>
     );
   };
@@ -272,7 +286,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
       >
         <div className="ss-h">{t("sessions.new")}</div>
         {agents === null && <div className="ss-empty">{t("ss.lookingAgents")}</div>}
-        <div ref={list} className={`ss-scroll${more ? " more" : ""}${unfold ? "" : " ss-folded"}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
+        <div ref={list} className={`ss-scroll${more ? " more" : ""}`} style={fit ? { maxHeight: fit.max } : undefined} data-testid="session-menu-list">
         {(parts?.shown ?? []).map(row)}
         {parts && parts.more.length > 0 && (
           <button
@@ -291,8 +305,7 @@ function NewSessionMenu({ onClose, trigger }: { onClose: () => void; trigger: Re
           </button>
         )}
         {unfold && parts?.more.map(row)}
-        {/* Past-conversation choices share the disclosure, keeping the first menu to installed agents + More. */}
-        {keeps.length > 0 && (unfold || !parts?.more.length) && (
+        {keeps.length > 0 && (
           <>
             <div className="ss-sep" />
             <div className="ss-h">{t("ss.past.head")}</div>

@@ -207,11 +207,6 @@
   text-overflow: ellipsis;
   flex: none;
 }
-/* Seven single-line choices at 900x600 fit above the anchor without a 6px scroll/fade. Two-line account
-   rows keep their full height; expanded install rows keep the regular 40px. */
-.ss-folded .ss-item:not(:has(.ss-as)) {
-  height: 28px;
-}
 /* "More agents": a plain row like the agents, its chevron in the mark's place and the count at its end */
 .ss-more {
   color: var(--muted);
@@ -224,10 +219,41 @@
   font-size: 13px;
   line-height: 1;
 }
-/* a folded agent's install line under its name: the text that is copied, small and quiet */
-.ss-install {
+/* a missing agent's row: its name with "Not installed" (or "Copied") at the line's end, and under them the install
+   line, the text that is copied, small and quiet. The line is never cut: it takes as many lines as it needs, and
+   the row grows with it. A word of it (a package name, a flag) stays on one line unless it is longer than the row */
+.ss-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.ss-head .ss-l {
+  flex: 1;
+  min-width: 0;
+}
+.ss-item:has(.ss-install) {
+  height: auto;
+  min-height: 40px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.ss-item:has(.ss-install) > .ss-ic {
+  /* beside the name, not the middle of a row of several lines */
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.ss-as.ss-install {
   font-family: var(--mono);
   font-size: 10.5px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+.ss-tok {
+  display: inline-block;
+  max-width: 100%;
 }
 .ss-sep {
   height: 1px;
@@ -567,6 +593,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+/* the command to run, as inline code the way an answer shows one */
+.ss-ended-t code {
+  font-size: 11px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
 }
 .ss-restart {
   flex: none;

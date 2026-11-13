@@ -22,7 +22,7 @@ import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
 import { agentDef, agentLabel, CONTINUES, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
-import { t as tr, type Key } from "../i18n";
+import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { FindBar } from "./term/find-bar";
@@ -490,12 +490,13 @@ function againTip(rec: SessionRec): string {
  *  and account. */
 function Ended({ rec }: { rec: SessionRec }) {
   const why = rec.error ? rec.error.trim().split("\n").pop() : "";
-  // an agent that is not signed in: its line says what to run, and the person's own terminal opens in the folder
+  // an agent that is not signed in: its line says what to run (the command as inline code), and the person's own
+  // terminal opens in the folder
   const signin = useSessions().live[rec.id]?.signin;
   return (
     <div className="ss-ended" role="status" data-testid="session-ended">
       <span className="ss-ended-t" title={why || undefined}>
-        {signin ? why : rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
+        {signin ? tx("ss.signedOut", { agent: agentDef(rec.agent).label, cmd: <code>{signin}</code> }) : rec.status === "failed" ? tr("ss.couldNotStart") : tr("ss.ended")}
         {!signin && why ? ` · ${why}` : ""}
       </span>
       {signin && rec.cwd && (

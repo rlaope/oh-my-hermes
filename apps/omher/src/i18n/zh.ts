@@ -1019,7 +1019,7 @@ export const zh: Record<Key, string> = {
   "ss.open.withheld": "终端将不带这段文字和这些文件启动",
   "ss.couldNotStartWhy": "{agent} 无法启动 · {error}",
   "ss.noRules": "omher 无法确认 OpenCode 会保留你自己设置的权限规则，因此没有启动 OpenCode。",
-  "ss.signedOut": "{agent} 尚未登录。请在终端中运行 `{cmd}` 并登录。",
+  "ss.signedOut": "{agent} 尚未登录。请在终端中运行 {cmd} 并登录。",
   "ss.moreAgents": "更多代理",
   "ss.copiedInstall": "已复制",
   "ss.noRulesAgent": "omher 无法确认 {agent} 会保留你自己设置的权限规则，因此没有启动 {agent}。",
