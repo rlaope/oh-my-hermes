@@ -680,6 +680,7 @@ export const ko: Record<Key, string> = {
   "card.allowSession": "이 세션 동안 허용",
   "card.approvalNeeded": "승인이 필요해요",
   "card.inCwd": "{cwd}에서",
+  "card.startPlan": "이 계획대로 작업을 시작할까요?",
   "card.notSent": "보내지 못함 · {error}",
   "card.answerOpt": "답변 (선택)",
   "card.answerN": "답변 {n}",

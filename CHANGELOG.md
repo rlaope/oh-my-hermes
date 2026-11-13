@@ -149,6 +149,26 @@ All notable changes will be documented here.
   you says "Waiting", not "Running"; the needs strip no longer ends on a lone "·"; and a background subagent's row
   shows its model.
 
+- **An omher session that closed normally no longer gives a warning as why it
+  ended.** A Codex session you closed showed "Ended · user (~/.codex/config.toml):
+  `mcp_servers.playwright.type` is ignored.", a line Codex prints at start about
+  your own config. A session whose program ends with code 0 now reads only
+  "Ended", for every chat agent. A program that really fails shows the last line
+  it printed about the failure, not a warning from its start.
+
+- **Claude Code's plan-mode card shows the plan as text.** When Claude Code
+  finished a plan in plan mode, omher asked "Allow ExitPlanMode?" over a cut-off
+  JSON string. The card now asks "Start working on this plan?" and shows the
+  whole plan the way an answer reads, scrolling inside the card, with Deny and
+  Allow once (Claude Code offers nothing to keep for the session there). Other
+  tools that are neither a command nor a file edit (a skill, a web fetch, MCP
+  tools) show one readable line instead of their input as JSON.
+
+- **An edit Codex hands to its subagent opens to its diff.** The subagent's row
+  showed the edit only as a line like `README.md +2, calc.py +4`. Opening that
+  step now shows the removed and added lines per file, as an edit Codex makes
+  itself does.
+
 - **The OMH TUI no longer pins `↳ you: …` above the composer.** While a
   long turn ran, the prompt you sent was echoed as a `↳ you:` row over the
   working row once it had scrolled off; the owner found it noise. The prompt

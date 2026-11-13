@@ -97,8 +97,9 @@ export interface SubagentRow {
   /** Which agent reported it (a session's CLI) and its name or type, when the agent gives them. */
   agent?: string;
   name?: string;
-  /** Its recent steps, oldest first (at most SUB_STEPS): what the row shows when opened. */
-  steps?: { tool?: string; text: string }[];
+  /** Its recent steps, oldest first (at most SUB_STEPS): what the row shows when opened. A file edit carries its
+   *  change per file. */
+  steps?: { tool?: string; text: string; diff?: DiffFile[] }[];
   model?: string;
   dag?: { run: string; node: string };
   state: SubagentState;
@@ -171,6 +172,8 @@ export type ApprovalItem = {
   choices: ApprovalChoice[];
   /** The folder the command runs in, when the agent says. */
   cwd?: string;
+  /** The plan the agent asks to start on (plan mode), as markdown. */
+  plan?: string;
   /** Asked inside a subagent: which one. */
   subagent?: AskSubagent;
   /** Asked while no turn ran in a coding-agent session (a background subagent after the turn's end): no turn's end
@@ -552,6 +555,15 @@ const SUB_DONE: SubagentState[] = ["done", "failed", "cancelled"];
 export const SUB_STEPS = 8;
 export const subagentEnded = (s: Pick<SubagentRow, "state">) => SUB_DONE.includes(s.state);
 
+/** A subagent's steps with the step `ev` names: a new one is added (the oldest dropped past SUB_STEPS); the same
+ *  step said again (an edit that has run) takes its final change. */
+function withStep(steps: NonNullable<SubagentRow["steps"]>, ev: EventOf<"subagent">): NonNullable<SubagentRow["steps"]> {
+  const diff = Array.isArray(ev.diff) ? ev.diff.filter((f) => f && typeof f.path === "string" && Array.isArray(f.lines)) : [];
+  const last = steps.at(-1);
+  if (last && last.text === ev.step) return diff.length ? [...steps.slice(0, -1), { ...last, diff }] : steps;
+  return [...steps, { tool: ev.tool, text: ev.step ?? "", ...(diff.length ? { diff } : {}) }].slice(-SUB_STEPS);
+}
+
 /** A subagent event into its fan-out. A fan-out is named by its delegation id once Hermes gives one; the turn that
  *  already shows that delegation takes the event. Otherwise the running turn takes it, and with none running, the
  *  latest turn whose fan-out holds that subagent still out, else the latest turn that ran a delegate_task (a
@@ -589,7 +601,7 @@ function withSubagent(chat: Chat, ev: EventOf<"subagent">, now: number): Chat {
       ...(ev.model ? { model: ev.model } : {}),
       ...(ev.agent ? { agent: ev.agent } : {}),
       ...(ev.name ? { name: ev.name } : {}),
-      ...(ev.step && ev.step !== old?.steps?.at(-1)?.text ? { steps: [...(old?.steps ?? []), { tool: ev.tool, text: ev.step }].slice(-SUB_STEPS) } : {}),
+      ...(ev.step ? { steps: withStep(old?.steps ?? [], ev) } : {}),
       ...(ev.dag ? { dag: ev.dag } : {}),
       // the step line is the current tool's; it goes when the child ends (its result line takes its place)
       ...(ev.step !== undefined ? { step: ev.step, tool: ev.tool } : {}),
@@ -897,6 +909,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
           command: ev.command,
           choices: ev.choices,
           ...(ev.cwd ? { cwd: ev.cwd } : {}),
+          ...(typeof ev.plan === "string" && ev.plan.trim() ? { plan: ev.plan } : {}),
           ...(ev.subagent?.id ? { subagent: ev.subagent } : {}),
           ...(c.turn || !bot.startsWith("agent:") ? {} : { outside: true }),
         };

@@ -770,4 +770,20 @@ describe("subagent events: one fan-out per delegate_task, one row per subagent",
     const s0 = run(initialState(), [{ event: "message", bot, id: "m0", text: "hi" }]);
     expect(run(s0, [sub("sa-9", 0, "x", "running", d)])).toBe(s0);
   });
+
+  it("a subagent's file edit keeps its change per file; said again when it ran, it takes the final change", () => {
+    const file = (lines: string[]) => ({ path: "calc.py", kind: "update" as const, lines, added: lines.filter((l) => l[0] === "+").length, removed: 0 });
+    const asked = file(["@@ -6 +6,3 @@", "     return a - b", "+def mul(a, b):"]);
+    const ran = file(["@@ -6 +6,5 @@", "     return a - b", "+", "+", "+def mul(a, b):", "+    return a * b"]);
+    const s = run(initialState(), [
+      ...turn.slice(0, 9),
+      sub("sa-1", 1, g1, "running", { ...d, tool: "patch", step: "calc.py +4", diff: [asked] }),
+      sub("sa-1", 1, g1, "running", { ...d, tool: "patch", step: "calc.py +4", diff: [ran] }),
+    ]);
+    const steps = fanouts(s)[0].subs[1].steps ?? [];
+    expect(steps.map((x) => [x.text, x.diff?.[0]?.lines.length])).toEqual([
+      ["uname -s", undefined],
+      ["calc.py +4", 6],
+    ]);
+  });
 });

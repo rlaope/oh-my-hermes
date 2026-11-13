@@ -680,6 +680,7 @@ export const zh: Record<Key, string> = {
   "card.allowSession": "本会话内允许",
   "card.approvalNeeded": "需要批准",
   "card.inCwd": "位于 {cwd}",
+  "card.startPlan": "按这个计划开始工作吗？",
   "card.notSent": "未发送 · {error}",
   "card.answerOpt": "你的回答（可选）",
   "card.answerN": "回答 {n}",

@@ -682,6 +682,7 @@ export const en = {
   "card.allowSession": "Allow for session",
   "card.approvalNeeded": "Approval needed",
   "card.inCwd": "in {cwd}",
+  "card.startPlan": "Start working on this plan?",
   "card.notSent": "Not sent · {error}",
   "card.answerOpt": "Your answer (optional)",
   "card.answerN": "Answer {n}",
