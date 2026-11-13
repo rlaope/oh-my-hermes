@@ -9,7 +9,7 @@
 # into a temporary folder next to apps/omher's node_modules (pnpm install there first). Nothing in the repo is
 # changed except site/app-preview/.
 set -eu
-OMHER_PREVIEW_APP=798a953c2f68c2d96cd142f07da753e41072221b   # omher v0.2.6 (#2843): bot restart, session diffs and subagents, Chat | Terminal, OpenCode
+OMHER_PREVIEW_APP=cf6f4141962484877749df92feefc66603ebb5bf   # omher v0.2.7 (#2851): session row menu, Continue a conversation, Settings > Terminal, plan card
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=${1:-$OMHER_PREVIEW_APP}
 NM=${OMHER_NODE_MODULES:-$ROOT/apps/omher/node_modules}
