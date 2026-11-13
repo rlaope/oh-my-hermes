@@ -4,7 +4,9 @@
 #   MSYS2/MinGW python : its venvs put python.exe in bin\, and the installer then
 #                        stopped with "Scripts\python.exe is not recognized".
 #                        It is rejected with a reason, and the next candidate wins.
-#   Windows python     : venv scheme nt, 3.11+, chosen.
+#   Windows python     : venvs use Scripts\, 3.11+, chosen.
+#   venv python        : Hermes' own interpreter or an OMH_PYTHON venv; it lives
+#                        in a venv and its venvs use Scripts\, so it is chosen.
 #   old python         : rejected by version, as before.
 # -InjectRegression evaluates the pre-fix selector (version only); the MSYS2 case
 # must catch it.
@@ -22,9 +24,9 @@ function Assert-Omh {
 }
 
 function New-OmhStubPython {
-    param([string]$Dir, [string]$Name, [string]$Version, [string]$Scheme)
+    param([string]$Dir, [string]$Name, [string]$Version, [string]$VenvScripts)
     $path = Join-Path $Dir "$Name.cmd"
-    [System.IO.File]::WriteAllText($path, "@echo off`r`necho $Version`r`necho $Scheme`r`n")
+    [System.IO.File]::WriteAllText($path, "@echo off`r`necho $Version`r`necho $VenvScripts`r`n")
     return $path
 }
 
@@ -36,7 +38,7 @@ try {
     $installerText = [System.IO.File]::ReadAllText($installerPath)
     if ($InjectRegression) {
         # The selector as it was: the scheme line is never read.
-        $installerText = $installerText.Replace("if (`$scheme -ne 'nt') {", "if (`$false) {")
+        $installerText = $installerText.Replace("if (`$venvScripts -ne 'Scripts') {", "if (`$false) {")
     }
     $installerAst = [System.Management.Automation.Language.Parser]::ParseInput($installerText, [ref]$null, [ref]$errors)
     if ($errors) { throw "install.ps1 does not parse: $($errors[0].Message)" }
@@ -49,18 +51,23 @@ try {
         Invoke-Expression $definition.Extent.Text
     }
 
-    $msys = New-OmhStubPython $stubDir 'msys-python' '3.14' 'posix_prefix'
-    $windows = New-OmhStubPython $stubDir 'win-python' '3.12' 'nt'
-    $old = New-OmhStubPython $stubDir 'old-python' '3.9' 'nt'
+    $msys = New-OmhStubPython $stubDir 'msys-python' '3.14' 'bin'
+    $windows = New-OmhStubPython $stubDir 'win-python' '3.12' 'Scripts'
+    $venvPython = New-OmhStubPython $stubDir 'venv-python' '3.11' 'Scripts'
+    $old = New-OmhStubPython $stubDir 'old-python' '3.9' 'Scripts'
 
     $script:OmhRejectedPythons = @()
     $chosen = Select-OmhPython @($msys, $windows)
     Assert-Omh 'an MSYS2 python first on the list is skipped for a Windows one' $chosen $windows
-    Assert-Omh 'the skip names the MSYS2 python and its layout' ([bool]($script:OmhRejectedPythons -match 'MSYS2/MinGW-style Python \(venv layout posix_prefix')) $true
+    Assert-Omh 'the skip names the MSYS2 python and its layout' ([bool]($script:OmhRejectedPythons -match 'MSYS2/MinGW-style Python \(its venvs put python\.exe in bin\\')) $true
 
     $script:OmhRejectedPythons = @()
     $chosen = Select-OmhPython @($msys)
     Assert-Omh 'an MSYS2 python alone is not chosen' $chosen ''
+
+    $script:OmhRejectedPythons = @()
+    $chosen = Select-OmhPython @($msys, $venvPython)
+    Assert-Omh 'a python running from a venv (Hermes'' own) is chosen' $chosen $venvPython
 
     $script:OmhRejectedPythons = @()
     $chosen = Select-OmhPython @($old, $windows)
