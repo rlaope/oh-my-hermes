@@ -1,5 +1,5 @@
 //! Agent sessions: omher starts one agent program from a FIXED list (`claude`, `codex`, `omo`, `dsh`, `omh`,
-//! `pi`, `omp`, `grok`, `opencode`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
+//! `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`) in a pseudo-terminal (its own terminal UI) or, for a chat, through [`crate::agent_chat`], in a folder the person picked, and stops it when the session is closed or
 //! the app quits.
 //!
 //! The UI only ever names an agent id. The program, its path and its arguments are decided here: an id that
@@ -48,7 +48,7 @@ pub enum Mode {
 }
 
 /// The whole allow-list. Adding a program here is a boundary change (docs/OMHER-BOUNDARY.md rule 11).
-pub const AGENTS: [Agent; 9] = [
+pub const AGENTS: [Agent; 15] = [
     Agent { id: "claude", program: "claude", label: "Claude Code", mode: Mode::Chat },
     Agent { id: "codex", program: "codex", label: "Codex", mode: Mode::Chat },
     // OmO (`omo-ai`, oh-my-openagent on the senpi engine) speaks pi's RPC: `omo --mode rpc`, checked against omo
@@ -66,6 +66,14 @@ pub const AGENTS: [Agent; 9] = [
     Agent { id: "grok", program: "grok", label: "Grok", mode: Mode::Terminal },
     // OpenCode (`opencode-ai`) speaks the Agent Client Protocol (`opencode acp`, crate::acp_chat), checked against 1.19.5.
     Agent { id: "opencode", program: "opencode", label: "OpenCode", mode: Mode::Chat },
+    // Six more Agent Client Protocol agents on the same adapter (crate::acp_chat): Kilo Code 7.8.27 (`kilo acp`, an
+    // OpenCode fork), Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110 and Cline 3.0.74.
+    Agent { id: "kilo", program: "kilo", label: "Kilo Code", mode: Mode::Chat },
+    Agent { id: "gemini", program: "gemini", label: "Gemini CLI", mode: Mode::Chat },
+    Agent { id: "qwen", program: "qwen", label: "Qwen Code", mode: Mode::Chat },
+    Agent { id: "kimi", program: "kimi", label: "Kimi Code", mode: Mode::Chat },
+    Agent { id: "copilot", program: "copilot", label: "Copilot CLI", mode: Mode::Chat },
+    Agent { id: "cline", program: "cline", label: "Cline", mode: Mode::Chat },
 ];
 
 /// Claude Code's structured mode: one long-lived `-p` process reading and writing stream-json, with tool
@@ -93,7 +101,8 @@ pub fn chat_args(id: &str) -> Option<&'static [&'static str]> {
             "claude" => &CLAUDE_CHAT_ARGS[..],
             "codex" => &["app-server"][..],
             "pi" | "omp" | "omo" => &["--mode", "rpc"][..],
-            "opencode" => &["acp"][..],
+            "opencode" | "kilo" | "kimi" => &["acp"][..],
+            "gemini" | "qwen" | "copilot" | "cline" => &["--acp"][..],
             _ => return None,
         }),
         _ => None,
@@ -1289,9 +1298,9 @@ mod tests {
     }
 
     #[test]
-    fn allow_list_is_exactly_the_nine_agents() {
+    fn allow_list_is_exactly_the_fifteen_agents() {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
-        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
+        assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
         for a in &AGENTS {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
         }
@@ -1311,7 +1320,13 @@ mod tests {
                 ("pi", Mode::Chat),
                 ("omp", Mode::Chat),
                 ("grok", Mode::Terminal),
-                ("opencode", Mode::Chat)
+                ("opencode", Mode::Chat),
+                ("kilo", Mode::Chat),
+                ("gemini", Mode::Chat),
+                ("qwen", Mode::Chat),
+                ("kimi", Mode::Chat),
+                ("copilot", Mode::Chat),
+                ("cline", Mode::Chat)
             ]
         );
         assert_eq!(
@@ -1323,6 +1338,11 @@ mod tests {
         assert_eq!(chat_args("omp").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("omo").unwrap(), ["--mode", "rpc"]);
         assert_eq!(chat_args("opencode").unwrap(), ["acp"]);
+        // the six more ACP agents, each with the one argument that starts its ACP server (Gemini's
+        // `--experimental-acp` is deprecated)
+        for (id, arg) in [("kilo", "acp"), ("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp")] {
+            assert_eq!(chat_args(id).unwrap(), [arg], "{id}");
+        }
         // DSH's chat takes its arguments per message (dsh_turn_args), not here
         for none in ["omh", "grok", "dsh", "sh", "", "claude -p"] {
             assert!(chat_args(none).is_none(), "{none}");
@@ -1369,7 +1389,7 @@ mod tests {
             }
         }
         // OpenCode continues over its protocol (session/resume), never by an argument
-        for agent in ["pi", "omp", "grok", "omh", "opencode"] {
+        for agent in ["pi", "omp", "grok", "omh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"] {
             assert!(resume_args(agent, id).is_err(), "{agent}");
         }
         let s = Sessions::default();

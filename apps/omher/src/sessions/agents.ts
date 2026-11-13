@@ -6,7 +6,7 @@ import { t } from "../i18n";
 // `mode` says how a new session opens: `chat` = the agent's structured mode shown as an omher chat,
 // `hermes` = a Hermes chat in the folder (oh-my-hermes, through the bridge), `terminal` = its own TUI.
 
-export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode";
+export type AgentId = "claude" | "codex" | "omo" | "dsh" | "omh" | "pi" | "omp" | "grok" | "opencode" | "kilo" | "gemini" | "qwen" | "kimi" | "copilot" | "cline";
 
 export type AgentMode = "chat" | "hermes" | "terminal";
 
@@ -28,6 +28,12 @@ export const AGENTS: readonly AgentDef[] = [
   { id: "omp", program: "omp", label: "oh-my-pi", mode: "chat" },
   { id: "grok", program: "grok", label: "Grok", mode: "terminal" },
   { id: "opencode", program: "opencode", label: "OpenCode", mode: "chat" },
+  { id: "kilo", program: "kilo", label: "Kilo Code", mode: "chat" },
+  { id: "gemini", program: "gemini", label: "Gemini CLI", mode: "chat" },
+  { id: "qwen", program: "qwen", label: "Qwen Code", mode: "chat" },
+  { id: "kimi", program: "kimi", label: "Kimi Code", mode: "chat" },
+  { id: "copilot", program: "copilot", label: "Copilot CLI", mode: "chat" },
+  { id: "cline", program: "cline", label: "Cline", mode: "chat" },
 ];
 
 /** Tooltip on the session header's Terminal toggle: whether the terminal view continues the same
@@ -41,7 +47,8 @@ export function terminalNote(agent: AgentId): string {
 /** The install line for an agent's CLI, shown as text in the new-session menu's "Not installed" tooltip (omher
  *  never runs it), each as that product's own docs give it: pi's npm package moved to @earendil-works (its README's
  *  npm line), oh-my-pi's npm build needs Bun so its line is the installer from its README, Grok's is the one-line
- *  installer from docs.x.ai. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
+ *  installer from docs.x.ai; the six Agent Client Protocol agents (Kilo Code, Gemini CLI, Qwen Code, Kimi Code, Copilot CLI,
+ *  Cline) take the npm line of their own READMEs. Codex also notes that the copy inside the ChatGPT (or Codex) desktop app on macOS is
  *  detected. The lines of the agents with an install layout are repeated in `LAYOUTS` (src-tauri/src/sessions.rs),
  *  which names them when the program found does not look like the agent; a Rust test keeps the two the same. */
 export const INSTALL: Record<AgentId, string> = {
@@ -54,6 +61,12 @@ export const INSTALL: Record<AgentId, string> = {
   omp: "curl -fsSL https://omp.sh/install | sh",
   grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
   opencode: "npm install -g opencode-ai",
+  kilo: "npm install -g @kilocode/cli",
+  gemini: "npm install -g @google/gemini-cli",
+  qwen: "npm install -g @qwen-code/qwen-code@latest",
+  kimi: "npm install -g @moonshot-ai/kimi-code",
+  copilot: "npm install -g @github/copilot",
+  cline: "npm install -g cline",
 };
 
 /** Tooltip of an agent that is not installed: what is missing, then how to install it. DSH names DeepSeek Harness
@@ -67,9 +80,9 @@ export const isAgentId = (v: unknown): v is AgentId => typeof v === "string" && 
 
 /** Agents whose Restart (and Resume) continues the conversation, all of them chats: Claude Code `--resume`, Codex
  *  `thread/resume`, OmO `--session`, DSH `--session-id` (DeepSeek Harness's own session),
- *  OpenCode `session/resume`. pi, oh-my-pi and Grok (a
+ *  OpenCode and the other Agent Client Protocol agents `session/resume` (or `session/load`). pi, oh-my-pi and Grok (a
  *  terminal) start a new one. */
-export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode"];
+export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"];
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
 
@@ -389,6 +402,15 @@ export function menuOrder(agents: AgentInfo[], list: Recent[]): AgentInfo[] {
   const rank = (a: AgentInfo) => (a.path ? (a.id === last ? 0 : 1) : 2);
   const at = (a: AgentInfo) => AGENTS.findIndex((d) => d.id === a.id);
   return agents.filter((a) => isAgentId(a.id)).sort((a, b) => rank(a) - rank(b) || at(a) - at(b));
+}
+
+/** The + menu in two parts: the rows it always shows (the installed agents, in [menuOrder]), and the agents that are
+ *  not installed, folded behind one "More agents" row that opens them with their install lines. With nothing
+ *  installed yet every agent shows, so the menu is never just that one row. */
+export function menuParts(agents: AgentInfo[], list: Recent[]): { shown: AgentInfo[]; more: AgentInfo[] } {
+  const all = menuOrder(agents, list);
+  const shown = all.filter((a) => !!a.path);
+  return shown.length ? { shown, more: all.filter((a) => !a.path) } : { shown: all, more: [] };
 }
 
 /** The agent a New session chat starts on: the last one used if it is installed, else the first installed (menu

@@ -93,6 +93,24 @@ All notable changes will be documented here.
   attached to a shared gateway, the gateway child sends them as the owner's
   revision-fenced `session.mutate rename` / `delete`, as Hermes' Ink TUI does.
   A refusal is said on the row.
+- **omher runs six more coding agents in SESSIONS.** Kilo Code, Gemini CLI,
+  Qwen Code, Kimi Code, Copilot CLI and Cline open as session chats through
+  the same Agent Client Protocol adapter as OpenCode: answers stream, tool
+  steps show, and each approval is a card with Deny and Allow once. Kilo Code
+  starts only with ask rules built from its own `kilo agent list`, so nothing
+  you allow runs unasked and nothing you deny becomes askable; its free
+  models need no account. Both Kilo Code and OpenCode check every permission
+  and each agent's mode, refuse file/env tokens before listing again, and
+  compare rules as Windows does there. Rules are read at session start;
+  a deny added later applies from the next session. An agent that is
+  installed but not signed in ends
+  in one line with its own sign-in command (Gemini CLI is not signed in. Run
+  `gemini` in a terminal and sign in.) and Open in Terminal; omher never
+  signs in for it, never sends the protocol's `authenticate` and never takes
+  a key. The + menu lists the agents installed on this computer and folds the
+  rest under one More agents row, each with its whole install line; a click
+  copies it. Continue a conversation stays under that row, there as the menu
+  first opens.
 - **A dag-ulw node can be read-only.** `omh_dag` define, repair and extend take
   `read_only: true` on a node; its child's `write_file` and `patch` inside the
   run's workspace are blocked, except its own handoff report, with a message

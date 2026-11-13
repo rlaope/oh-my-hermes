@@ -138,6 +138,7 @@ test("U14: a missing agent's Not installed tooltip carries its install line, as 
     grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
     opencode: "npm install -g opencode-ai",
   };
+  await page.getByTestId("session-more").click();
   for (const [agent, line] of Object.entries(lines)) {
     const row = page.getByTestId(`session-agent-${agent}`);
     await expect(row).toHaveAttribute("aria-disabled", "true");

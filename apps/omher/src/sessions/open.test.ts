@@ -43,6 +43,12 @@ describe("opensAs", () => {
       omp: { chat: true, terminal: true },
       grok: { chat: false, terminal: true },
       opencode: { chat: true, terminal: true },
+      kilo: { chat: true, terminal: true },
+      gemini: { chat: true, terminal: true },
+      qwen: { chat: true, terminal: true },
+      kimi: { chat: true, terminal: true },
+      copilot: { chat: true, terminal: true },
+      cline: { chat: true, terminal: true },
     });
     expect(opensAs("claude")).toEqual({ chat: true, terminal: true });
   });

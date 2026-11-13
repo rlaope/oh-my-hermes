@@ -19,13 +19,13 @@ import {
 import { MockHost } from "./host";
 
 describe("session agents", () => {
-  it("is the fixed list of nine, in menu order, matching the Rust allow-list", () => {
-    expect(AGENTS.map((a) => a.id)).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
-    expect(AGENTS.map((a) => a.label)).toEqual(["Claude Code", "Codex", "OmO", "DSH", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode"]);
+  it("is the fixed list of fifteen, in menu order, matching the Rust allow-list", () => {
+    expect(AGENTS.map((a) => a.id)).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(AGENTS.map((a) => a.label)).toEqual(["Claude Code", "Codex", "OmO", "DSH", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode", "Kilo Code", "Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline"]);
     for (const a of AGENTS) expect(a.program).toBe(a.id);
   });
 
-  it("opens claude, codex, omo, dsh, pi, omp and opencode as chats, omh as a Hermes chat, grok as a terminal (same as the Rust list)", () => {
+  it("opens claude, codex, omo, dsh, pi, omp, opencode and the six more ACP agents as chats, omh as a Hermes chat, grok as a terminal (same as the Rust list)", () => {
     expect(AGENTS.map((a) => [a.id, a.mode])).toEqual([
       ["claude", "chat"],
       ["codex", "chat"],
@@ -36,6 +36,12 @@ describe("session agents", () => {
       ["omp", "chat"],
       ["grok", "terminal"],
       ["opencode", "chat"],
+      ["kilo", "chat"],
+      ["gemini", "chat"],
+      ["qwen", "chat"],
+      ["kimi", "chat"],
+      ["copilot", "chat"],
+      ["cline", "chat"],
     ]);
     // the Terminal toggle says whether the terminal view continues the conversation or starts fresh
     expect(terminalNote("claude")).toMatch(/continuing this conversation/);
@@ -44,7 +50,7 @@ describe("session agents", () => {
   });
 
   it("accepts only those ids", () => {
-    for (const id of ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]) expect(isAgentId(id)).toBe(true);
+    for (const id of ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]) expect(isAgentId(id)).toBe(true);
     for (const bad of ["", "sh", "/bin/sh", "claude --yolo", "Claude", " claude", null, 1, {}]) expect(isAgentId(bad)).toBe(false);
   });
 
@@ -215,10 +221,10 @@ describe("mock session host", () => {
     expect(ops.filter((o) => o === "start")).toHaveLength(0); // a chat never starts a terminal
   });
 
-  it("reports claude, codex and omh installed and omo, dsh, pi, omp, grok, opencode missing", async () => {
+  it("reports claude, codex and omh installed and the twelve others missing", async () => {
     const list = await new MockHost({}).agents();
     expect(list.filter((a) => a.path).map((a) => a.id)).toEqual(["claude", "codex", "omh"]);
-    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode"]);
-    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "chat", "hermes", "chat", "chat", "terminal", "chat"]);
+    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "chat", "hermes", "chat", "chat", "terminal", "chat", "chat", "chat", "chat", "chat", "chat", "chat"]);
   });
 });
