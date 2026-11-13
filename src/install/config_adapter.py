@@ -1182,6 +1182,34 @@ def _references_mapping_key(line: str, key: str) -> bool:
     )
 
 
+def references_top_level_section(line: str, section: str) -> bool:
+    """Whether `line` declares `section` as its own root mapping key, at column 0.
+
+    `references_mapping_key` answers the wider question -- is this key used as
+    a mapping key anywhere on the line -- and its `\\s*` before the token eats
+    indentation, so a `skills:` nested under `webhooks` counted as a second
+    top-level section: `omh update` refused a config whose webhook route
+    carries its own `skills:` list (#2829). Only a line that starts at column
+    0 and whose own root key is `section` opens a top-level section, in any of
+    its forms: plain, quoted, explicit (`? section`) or a flow
+    `section: {...}`. An indented line at any depth, a block-scalar content
+    line, and a column-0 line of another root key that merely names `section`
+    inside its braces are not top-level sections.
+
+    A leading tab is YAML's forbidden indentation, so such a line either
+    fails to parse or, read leniently, sits at the root; counting it keeps
+    that file user-owned instead of edited.
+    """
+    if line.startswith(" "):
+        return False
+    escaped = re.escape(section)
+    token = rf"""(?:{escaped}|"{escaped}"|'{escaped}')"""
+    return (
+        re.match(rf"^\t*{token}\s*:", line) is not None
+        or re.match(rf"^\t*\?\s*{token}\s*$", line) is not None
+    )
+
+
 def _contains_potential_quoted_mapping_key(line: str) -> bool:
     return (
         re.match(r"""^\s*(?:\?\s*)?["']""", line) is not None
@@ -1251,12 +1279,29 @@ def _document_syntax_guard(lines: list[str]) -> str:
 
 
 def _section_shape_guard(lines: list[str], section: str) -> str:
-    """Refusals about one top-level section's own shape."""
-    section_lines = [line for line in lines if _references_mapping_key(line, section)]
+    """Refusals about one top-level section's own shape.
+
+    Only a column-0 line whose own root key is `section`
+    (`references_top_level_section`) is a top-level section, so a `skills:`
+    a webhook route carries for itself, a block-scalar content line, and a
+    column-0 flow mapping of another section are not second sections (#2829).
+    A document whose root mapping is itself indented (no key at column 0) is
+    still refused when it names `section`: there an indented `section:` IS
+    the root key, and this editor locates sections by their column-0 line.
+    When the root sits at column 0, an indented `section:` is some other
+    section's child, so a profile with no `skills:` yet and a webhook route
+    carrying one still gets its first block.
+    """
+    top_level = [line for line in lines if references_top_level_section(line, section)]
     section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
-    if len(section_lines) > 1:
+    if len(top_level) > 1:
         return f"duplicate {section} sections are ambiguous; leaving them alone"
-    if section_lines and not section_indices:
+    if top_level and not section_indices:
+        return f"noncanonical {section} configuration is user-owned; leaving it alone"
+    root_is_indented = not any(
+        line.strip() and not line[:1].isspace() and not line.startswith("#") for line in lines
+    )
+    if not top_level and root_is_indented and any(_references_mapping_key(line, section) for line in lines):
         return f"noncanonical {section} configuration is user-owned; leaving it alone"
     return ""
 
