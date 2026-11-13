@@ -2944,6 +2944,18 @@
         "tool_id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r"
       },
       {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgyggpp3EqhfNDz1bU9Pm",
+        "event": "subagent",
+        "goal": "Write gamma to c.txt",
+        "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
+        "index": 0,
+        "model": "claude-opus-5-5",
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
         "event": "delta",
         "text": "started"
       },
@@ -2964,6 +2976,7 @@
         "goal": "Write gamma to c.txt",
         "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
         "index": 0,
+        "model": "claude-opus-5-5",
         "name": "general-purpose",
         "state": "running",
         "step": "echo gamma > c.txt",
@@ -2993,6 +3006,7 @@
         "goal": "Write gamma to c.txt",
         "id": "toolu_01D7x4wmuhUBFnuUfs5h5t4r",
         "index": 0,
+        "model": "claude-opus-5-5",
         "name": "general-purpose",
         "seconds": 10.5,
         "state": "done",
@@ -3109,6 +3123,18 @@
         "tool_id": "toolu_01PjNxPpcdixv7tMY1cdcnXg"
       },
       {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011Cgygjb68Ug5QhSjEehySG",
+        "event": "subagent",
+        "goal": "Write d.txt file",
+        "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
+        "index": 0,
+        "model": "claude-opus-5-5",
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
         "detail": "sleep 25",
         "event": "tool.start",
         "name": "terminal",
@@ -3129,6 +3155,7 @@
         "goal": "Write d.txt file",
         "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
         "index": 0,
+        "model": "claude-opus-5-5",
         "name": "general-purpose",
         "state": "running",
         "step": "echo delta > d.txt",
@@ -3171,6 +3198,7 @@
         "goal": "Write d.txt file",
         "id": "toolu_01PjNxPpcdixv7tMY1cdcnXg",
         "index": 0,
+        "model": "claude-opus-5-5",
         "name": "general-purpose",
         "seconds": 26.0,
         "state": "done",
@@ -3287,6 +3315,18 @@
         "tool_id": "toolu_01X4ibyYU7gga75eg53Nfr37"
       },
       {
+        "agent": "claude",
+        "count": 1,
+        "delegation": "claude-msg_011CgygoXmKAaKF9BXVTQiDx",
+        "event": "subagent",
+        "goal": "Write e.txt via echo",
+        "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
+        "index": 0,
+        "model": "claude-opus-5-5",
+        "name": "general-purpose",
+        "state": "running"
+      },
+      {
         "event": "delta",
         "text": "started"
       },
@@ -3307,6 +3347,7 @@
         "goal": "Write e.txt via echo",
         "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
         "index": 0,
+        "model": "claude-opus-5-5",
         "name": "general-purpose",
         "state": "running",
         "step": "echo eps > e.txt",
@@ -3341,6 +3382,7 @@
         "goal": "Write e.txt via echo",
         "id": "toolu_01X4ibyYU7gga75eg53Nfr37",
         "index": 0,
+        "model": "claude-opus-5-5",
         "name": "general-purpose",
         "state": "cancelled",
         "summary": "Write e.txt via echo"
@@ -3351,6 +3393,107 @@
       }
     ],
     "name": "claude-13-late-ask-stop.jsonl"
+  },
+  {
+    "agent": "claude",
+    "events": [
+      {
+        "event": "session.models",
+        "options": [
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "default",
+            "label": "Default (recommended)"
+          },
+          {
+            "detail": "Opus 5.5 · Best for everyday, complex tasks",
+            "id": "opus",
+            "label": "Opus"
+          },
+          {
+            "detail": "Fable 5.1 · Most capable for your hardest and longest-running tasks",
+            "id": "claude-fable-5-1[1m]",
+            "label": "Fable"
+          },
+          {
+            "detail": "Fable 5.2 · Most capable for your hardest and longest-running tasks",
+            "id": "fable",
+            "label": "Fable"
+          },
+          {
+            "detail": "Sonnet 5.5 · Efficient for routine tasks",
+            "id": "sonnet",
+            "label": "Sonnet"
+          },
+          {
+            "detail": "Haiku 5.5 · Fastest for quick answers",
+            "id": "haiku",
+            "label": "Haiku"
+          }
+        ]
+      },
+      {
+        "event": "turn.start"
+      },
+      {
+        "agent_session": "d8b680ad-0288-4cce-ae83-b658c006b59c",
+        "approval": "default",
+        "event": "session.info",
+        "mode": "default",
+        "model": "Opus 5.5"
+      },
+      {
+        "event": "session.info",
+        "rewind": true
+      },
+      {
+        "detail": "sleep 45; echo late > y.txt",
+        "event": "tool.start",
+        "name": "terminal",
+        "tool_id": "toolu_017ziwU5LiHWrEb3vmsmrbqu"
+      },
+      {
+        "choices": [
+          "deny",
+          "once",
+          "session"
+        ],
+        "command": "sleep 45; echo late > y.txt",
+        "cwd": "/w/proj",
+        "event": "approval.request",
+        "request_id": "1fa392fd-aefd-429f-9339-5459ec7eaf7d",
+        "title": "Run this command?"
+      },
+      {
+        "background": 1,
+        "event": "session.info"
+      },
+      {
+        "event": "tool.end",
+        "ms": 0,
+        "name": "",
+        "ok": true,
+        "tool_id": "toolu_017ziwU5LiHWrEb3vmsmrbqu"
+      },
+      {
+        "event": "delta",
+        "text": "started"
+      },
+      {
+        "event": "message",
+        "id": "msg_011CgyyXP2yRPP9F5kk2tNf5-0",
+        "text": "started"
+      },
+      {
+        "event": "turn.end",
+        "outcome": "done"
+      },
+      {
+        "background": 0,
+        "event": "session.info"
+      }
+    ],
+    "name": "claude-14-background-stop.jsonl"
   },
   {
     "agent": "codex",

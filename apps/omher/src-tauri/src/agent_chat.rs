@@ -974,6 +974,10 @@ pub struct Claude {
     agent_ids: HashMap<String, String>,
     /// background tasks Claude Code says are still running (`background_tasks_changed`)
     background: usize,
+    /// the background commands among them (`task_type` `local_bash`), by task id: Stop with no turn running asks
+    /// Claude Code to stop each (`stop_task`); its `interrupt` alone stops the subagents at once but a command only
+    /// about ten seconds later (claude-14-background-stop.jsonl)
+    bg_commands: Vec<String>,
     /// subagents that run in the background: their task notification ends them (a foreground one ends with its
     /// tool result, which carries its own words and model)
     bg_subs: std::collections::HashSet<String>,
@@ -1220,7 +1224,9 @@ impl Adapter for Claude {
                 }
             }
             "system" if s(&v, "subtype") == "background_tasks_changed" => {
-                let n = v.get("tasks").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+                let tasks = v.get("tasks").and_then(Value::as_array).cloned().unwrap_or_default();
+                self.bg_commands = tasks.iter().filter(|t| s(t, "task_type") == "local_bash").map(|t| s(t, "task_id")).filter(|id| !id.is_empty()).collect();
+                let n = tasks.len();
                 if n != self.background {
                     self.background = n;
                     st.emit(ev("session.info", json!({"background": n})));
@@ -1550,6 +1556,12 @@ impl Adapter for Claude {
                         // a background one only launched here and ends with its task notification
                         if self.subs.has(&tid) && matches!(s(&tur, "status").as_str(), "async_launched" | "teammate_spawned") {
                             self.bg_subs.insert(tid.clone());
+                            // its launch names the model it runs on (a foreground one names it in its hand-back)
+                            let model = s(&tur, "resolvedModel");
+                            if let Some(x) = self.subs.subs.get_mut(&tid).filter(|x| !model.is_empty() && x.model != model) {
+                                x.model = model;
+                                st.events.extend(self.subs.event(&tid, "running", json!({})));
+                            }
                         } else if self.subs.has(&tid) {
                             let answer = claude_answer(&tur, b);
                             let secs = tur.get("totalDurationMs").and_then(Value::as_u64).map(|ms| ms as f64 / 1000.0);
@@ -1620,7 +1632,16 @@ impl Adapter for Claude {
                 st.out(json!({"type": "user", "session_id": "", "parent_tool_use_id": null,
                               "message": {"role": "user", "content": content}}));
             }
-            Input::Interrupt => self.control(&mut st, "interrupt", json!({"subtype": "interrupt"})),
+            Input::Interrupt => {
+                self.control(&mut st, "interrupt", json!({"subtype": "interrupt"}));
+                // no turn runs: what is left is background work, and Stop is meant for it (the header's Stop beside
+                // "1 still running in the background"); a background command stops at once only by its own stop_task
+                if !self.turn {
+                    for id in self.bg_commands.clone() {
+                        self.control(&mut st, "stoptask", json!({"subtype": "stop_task", "task_id": id}));
+                    }
+                }
+            }
             Input::Approve { request_id, choice } => {
                 let Some(ClaudeAsk::Tool(name, input, suggestions)) = self.pending.remove(&request_id) else { return Err("no such request".into()) };
                 self.ask_subs.remove(&request_id);
@@ -4753,6 +4774,37 @@ mod tests {
         assert_eq!(of(&rest.events, "prompt.expired")[0]["request_id"], rid_of(&lines[14]).as_str());
     }
 
+    #[test]
+    fn real_claude_stop_after_the_turn_stops_its_background_command() {
+        // claude-14-background-stop.jsonl (Claude Code 2.1.323): `sleep 45; …` runs in the background, the turn ends,
+        // then Stop: Claude Code's own interrupt plus its stop_task for that command; the command ends at once
+        let mut c = claude_up();
+        let lines = real("claude-14-background-stop.jsonl");
+        c.on_input(Input::send("start it")).unwrap();
+        let st = run(&mut c, &lines[..35]);
+        assert_eq!(ends(&st.events), [("done".into(), "".into())]);
+        assert!(st.events.iter().any(|e| s(e, "event") == "session.info" && e["background"] == 1));
+        let w = written(&c.on_input(Input::Interrupt).unwrap());
+        assert_eq!(w.iter().map(|x| x["request"].clone()).collect::<Vec<_>>(), [json!({"subtype": "interrupt"}), json!({"subtype": "stop_task", "task_id": "be81yjkbr"})]);
+        let rest = run(&mut c, &lines[35..]);
+        assert_eq!(rest.events, [json!({"event": "session.info", "background": 0})]);
+        assert!(!c.in_turn());
+        // while a turn runs, Stop is that turn's interrupt only
+        c.on_input(Input::send("again")).unwrap();
+        assert_eq!(written(&c.on_input(Input::Interrupt).unwrap()).len(), 1);
+    }
+
+    #[test]
+    fn real_claude_background_subagent_row_names_its_model() {
+        // claude-13-late-ask-stop.jsonl: the Agent call's launch result says `resolvedModel` (a foreground subagent's
+        // hand-back says it too); the row carries it from then on
+        let mut c = claude_up();
+        c.on_input(Input::send("start one")).unwrap();
+        let st = run(&mut c, &real("claude-13-late-ask-stop.jsonl")[..15]);
+        let rows = of(&st.events, "subagent");
+        assert_eq!(s(rows.last().unwrap(), "model"), "claude-opus-5-5", "{rows:?}");
+    }
+
     fn rid_of(line: &str) -> String {
         s(&serde_json::from_str::<Value>(line).unwrap(), "request_id")
     }
@@ -5830,6 +5882,8 @@ mod tests {
         out.push(("claude-13-late-ask-inside.jsonl", "claude", vec![Send, Held("claude-13-late-ask-inside.jsonl", 0, 21), Answer, Lines("claude-13-late-ask-inside.jsonl", 21, 31)]));
         // a late ask, then Stop with no turn running: Claude Code withdraws the ask and stops the subagent
         out.push(("claude-13-late-ask-stop.jsonl", "claude", vec![Send, Held("claude-13-late-ask-stop.jsonl", 0, 15), Stop, Lines("claude-13-late-ask-stop.jsonl", 15, 21)]));
+        // a background command still runs after the turn; Stop with no turn running stops it (Claude Code 2.1.323)
+        out.push(("claude-14-background-stop.jsonl", "claude", vec![Send, Lines("claude-14-background-stop.jsonl", 0, 35), Stop, Lines("claude-14-background-stop.jsonl", 35, 40)]));
         for f in ["codex-1-plain.jsonl", "codex-2-approvals.jsonl", "codex-3-edit.jsonl", "codex-5-question.jsonl", "codex-6-error.jsonl", "codex-signed-out.jsonl"] {
             out.push((f, "codex", turn(f)));
         }

@@ -131,14 +131,25 @@ export function FanoutCard({ fan, live, bot }: { fan: Fanout; live: boolean; bot
   const ends = subs.map((s) => s.endedAt ?? s.startedAt + rowMs(s, now));
   const span = elapsed(Math.max((running ? now : Math.max(begun, ...ends)) - begun, ...subs.map((s) => rowMs(s, now))));
   const failed = subs.filter((s) => s.state === "failed").length;
+  // every row still out waits on the person (its approval or question is open): the head says so, not "Running"
+  const out = subs.filter((s) => !subagentEnded(s));
+  const waits = running && out.length > 0 && out.length === total - done && out.every((s) => waiting.has(s.id));
   const run = subs.find((s) => s.dag)?.dag?.run ?? null;
   const open = () => getStore().actions.openRun(run ?? (fan.delegation ? `delegate:${fan.delegation}` : null));
   return (
-    <div className="sa-card" data-testid="fanout-card" data-state={running ? "running" : "done"} data-delegation={fan.delegation}>
+    <div className="sa-card" data-testid="fanout-card" data-state={running ? "running" : "done"} data-waiting={waits || undefined} data-delegation={fan.delegation}>
       <div className="sa-head">
-        {running ? <Spinner size={10} label={t("ui.working")} /> : <span className={`sa-ic${failed ? " failed" : ""}`} aria-hidden="true" />}
-        <span className="sa-sum" data-testid="fanout-summary">
-          {running
+        {waits ? (
+          <span className="sa-ic waiting" aria-hidden="true" />
+        ) : running ? (
+          <Spinner size={10} label={t("ui.working")} />
+        ) : (
+          <span className={`sa-ic${failed ? " failed" : ""}`} aria-hidden="true" />
+        )}
+        <span className={`sa-sum${waits ? " waiting" : ""}`} data-testid="fanout-summary">
+          {waits
+            ? t("sub.waitingDone", { n: total, done, t: span })
+            : running
             ? t("sub.runningDone", { n: total, done, t: span })
             : t(total === 1 ? "sub.ran1" : "sub.ranN", { n: total, t: span }) + (failed ? ` · ${t("sub.nfailed", { n: failed })}` : "")}
         </span>
