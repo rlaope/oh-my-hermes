@@ -93,11 +93,6 @@ def fake_playwright(on_goto):
         def new_context(self, **_):
             return self
 
-        def new_cdp_session(self, *_):
-            # No DevTools session here: the script goes on without the
-            # browser's content width, as it does when the protocol refuses.
-            raise error("no protocol session in the stand-in")
-
         def new_page(self):
             return Page()
 
@@ -519,7 +514,10 @@ class PureHelperTests(unittest.TestCase):
         self.assertTrue(api.in_document_area(bottom=98, right=390, left=270, start_edge=520, fixed=True))
         # The left-to-right rule is unchanged.
         self.assertFalse(api.in_document_area(bottom=48, right=-1))
-        self.assertIn("if (startRight) return onPageFromRight(el, r);", api.PAGE_SCRIPT)
+        # The page script applies that rule only where the page has a
+        # scrolling element to report its start edge and scroll range.
+        self.assertIn("const reachFromRight = startRight && Boolean(document.scrollingElement);", api.PAGE_SCRIPT)
+        self.assertIn("if (reachFromRight) return onPageFromRight(el, r);", api.PAGE_SCRIPT)
 
     def test_past_edge_note_names_the_left_side_on_a_right_start_page(self):
         api = helper_api()
@@ -975,60 +973,49 @@ class BrowserTests(Fixture):
         self.assertEqual(report["horizontal_overflow_px"], 0)
         self.assertEqual(report["first_action_y"], 300)
 
-    def no_scrolling_element_page(self, name, body, root=""):
+    def no_scrolling_element_page(self, name, body, rules=""):
         # Quirks mode with `overflow-x: auto` on both <html> and <body>: the
-        # browser reports no scrolling element, and the root's scrollWidth stays
-        # 390 however far the page pans.
+        # browser reports no scrolling element. The root's scrollWidth then
+        # stays at its client width however far the page pans, a zoom or a
+        # width on the root moves its clientWidth, and <body> reports the
+        # viewport's size as its own.
         path = self.root / name
         path.write_text('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
-                        f'html,body{{direction:rtl;overflow-x:auto}} body{{margin:0;height:2000px}} {root}'
+                        f'html,body{{direction:rtl;overflow-x:auto}} body{{margin:0;height:2000px}} {rules}'
                         ' a,button{display:block;position:absolute;width:120px;height:48px}'
                         f' #real{{top:300px;right:0}}</style></head><body>{body}<button id="real">real</button>'
                         '</body></html>', encoding="utf-8")
         return path
 
-    def test_rtl_page_with_no_scrolling_element_and_a_zoomed_root_keeps_its_edges(self):
-        # A zoom on the root changes the root's clientWidth (195 at zoom 2, 780
-        # at 0.5) while the page still starts at the viewport's right edge, so
-        # an edge taken from the root is off by the zoom. At zoom 2 a link a
-        # contained box paints left of a page that does not scroll was counted
-        # (200); at zoom 0.5 a link on screen was dropped (150).
+    def test_rtl_page_with_no_scrolling_element_gets_the_edge_test_a_left_start_page_gets(self):
+        # Each page below was read wrong by one earlier form of the rule that
+        # asks whether a scroll can show a control, because of a number such a
+        # page reports wrong. The rule is not applied there any more.
+        clipped = ('<div style="position:absolute;left:-500px;top:100px;width:120px;height:60px;overflow:hidden">'
+                   '<a id="first" href="#" style="left:0;top:0;width:700px">first</a></div>')
         painted = ('<div style="position:absolute;left:0;top:100px;width:300px;height:200px;contain:layout">'
                    '<a id="first" href="#" style="left:-200px;top:0">first</a></div>')
-        report = self.measure(self.no_scrolling_element_page("zoom-painted-left.html", painted, "html{zoom:2}"))
-        self.assertEqual(report["first_action_y"], 600)
-        on_screen = ('<div style="position:absolute;left:-500px;top:100px;width:120px;height:60px;overflow:hidden">'
-                     '<a id="first" href="#" style="left:0;top:0;width:700px">first</a></div>')
-        report = self.measure(self.no_scrolling_element_page("zoom-on-screen.html", on_screen, "html{zoom:.5}"))
-        self.assertEqual(report["first_action_y"], 50)
-
-    def test_rtl_page_with_no_scrolling_element_and_a_narrow_root_keeps_its_start_edge(self):
-        # A width on the root shrinks its clientWidth to 200 while the page
-        # still starts at x 390: a small link at the start edge lay "past" an
-        # edge taken from the root and was dropped.
-        body = '<a id="first" href="#" style="top:100px;right:0;width:60px">first</a>'
-        report = self.measure(self.no_scrolling_element_page("narrow-root.html", body, "html{width:200px}"))
-        self.assertEqual(report["first_action_y"], 100)
-
-    def test_rtl_page_with_no_scrolling_element_keeps_a_link_that_is_on_screen(self):
-        # The page loads panned 500 px left and the link's unclipped part is on
-        # screen at y 100; held to the root's width of 390 it was dropped.
-        body = ('<div style="position:absolute;left:-500px;top:100px;width:120px;height:60px;overflow:hidden">'
-                '<a id="first" href="#" style="left:0;top:0;width:700px">first</a></div>')
-        page = self.no_scrolling_element_page("no-scroller-on-screen.html", body)
-        self.assertEqual(self.measure(page)["first_action_y"], 100)
-        # Without the phone emulation the same page loads unpanned, and the
-        # browser reports its content box 500 px left of the layout viewport.
-        self.assertEqual(self.measure(page, "--desktop", "--width", "390")["first_action_y"], 100)
-
-    def test_rtl_page_with_no_scrolling_element_still_skips_a_link_painted_past_its_range(self):
-        # Nothing widens this page, so the link a contained box paints left of
-        # page x 0 cannot be panned to: with no far end at all it would count.
-        body = ('<div style="position:absolute;top:-500px;right:-500px;width:300px;height:200px;'
-                'content-visibility:auto;overflow-clip-margin:1000px">'
-                '<a id="first" href="#" style="left:-1000px;top:600px">first</a></div>')
-        report = self.measure(self.no_scrolling_element_page("no-scroller-painted-left.html", body))
-        self.assertEqual(report["first_action_y"], 300)
+        small = '<a id="first" href="#" style="top:100px;right:0;width:60px">first</a>'
+        cases = [
+            # The page loads panned 500 px left with the link on screen; the
+            # root's scrollWidth of 390 put it out of range (300).
+            ("on-screen", clipped, "", (), 100),
+            ("on-screen-desktop", clipped, "", ("--desktop", "--width", "390"), 100),
+            # A zoom on the root moves its clientWidth to 780 (150).
+            ("zoomed-out-root", clipped, "html{zoom:.5}", (), 50),
+            # A root 200 px wide: a link at the start edge lay past it (not_found).
+            ("narrow-root", small, "html{width:200px}", (), 100),
+            # <body> scrolls by itself 500 px, and reports the viewport's 390
+            # as its client width, which left 310 px of travel (600).
+            ("body-scrolls", clipped, "body{position:absolute;width:200px;right:-100px;zoom:2}", (), 200),
+            # A link painted left of a page that does not scroll: a far end
+            # mixing the root's width at zoom 2 with the page's counted it (200).
+            ("painted-left", painted, "html{zoom:2}", (), 600),
+        ]
+        for name, body, rules, extra, expected in cases:
+            with self.subTest(page=name):
+                page = self.no_scrolling_element_page(f"no-scroller-{name}.html", body, rules)
+                self.assertEqual(self.measure(page, *extra)["first_action_y"], expected)
 
     def test_rtl_measuring_runs_no_scroll_listener_of_the_page(self):
         # The link sits in a reversed scroll box whose listener loads more
