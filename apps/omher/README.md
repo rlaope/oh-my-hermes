@@ -134,7 +134,8 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, ...) and
   Open in Terminal; omher never signs in for it and never takes a key.
 - **The + menu stays short.** It lists the agents installed on this computer; the rest fold under one More agents
-  row, each with its install line (a click copies it). Continue a conversation is under that same row.
+  row, each with its whole install line (a click copies it). Continue a conversation stays under that row, there as
+  the menu first opens.
 
 Rules the code keeps:
 
