@@ -41,6 +41,24 @@ window.OMH_I18N = {
       ja: "Hermes のボットとコーディングエージェントを、ひとつの窓で。",
       zh: "你的 Hermes 机器人和编码智能体，尽在一个窗口。"
     },
+    "faces.title": {
+      en: "A face for every bot.",
+      ko: "봇마다 얼굴 하나.",
+      ja: "ボットごとに、ひとつの顔。",
+      zh: "每个机器人，都有一张脸。"
+    },
+    "faces.desc": {
+      en: "Built in, or use your own picture.",
+      ko: "기본 얼굴을 쓰거나, 내 사진으로 바꾸세요.",
+      ja: "標準の顔でも、自分の画像でも。",
+      zh: "用内置的，或换成你自己的图片。"
+    },
+    "faces.cta": {
+      en: "Download omher",
+      ko: "omher 다운로드",
+      ja: "omher をダウンロード",
+      zh: "下载 omher"
+    },
     "nav.docs": {
       en: "Docs",
       ko: "문서",

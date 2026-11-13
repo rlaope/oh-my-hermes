@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
+  OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
+  and blinking on a 4-second loop, with one line of copy in English, Korean, Japanese and Chinese and one
+  `Download omher` link. The link downloads the build for the visitor's system, the same file as the first
+  download button above it, and opens the releases page when the system is unknown. The loop pauses while it is
+  off screen or the tab is hidden, and shows a still picture under reduced motion. On phones the copy sits above
+  the picture. Four of the nine faces ship in the app today (blob, ghost, mochi, star); the other five are in
+  the picture only.
 - **The OMH TUI sends its desktop notification only while the terminal window is not in front.** A turn that ran 10 s
   or more, a question and a finished background process each rang the bell and, in iTerm2, WezTerm, Ghostty, foot
   and rxvt, raised a notification (OSC 9 or 777) even with the window focused, where the person already sees it.
