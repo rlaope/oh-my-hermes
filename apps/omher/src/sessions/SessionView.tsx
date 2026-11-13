@@ -30,10 +30,16 @@ import { FIND_EVENT, type FindRequest } from "./term/engine-find";
 import { sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
 import { workingSubagents } from "./SessionPlans";
+import { waitingSubs } from "../chat/activity/Subagents";
+import { subagentEnded } from "../state/store";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
+
+/** Agents whose count of what is left in the background holds their background subagents (Claude Code's
+ *  `background_tasks_changed` lists them beside its background commands). OmO counts commands only. */
+const COUNTS_BACKGROUND_SUBAGENTS: readonly AgentId[] = ["claude"];
 
 const isWindows = () => typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
 
@@ -787,6 +793,22 @@ export function SessionView() {
   const turn = !!c?.turn;
   // an approval or question of this chat is still open (the Needs-you model: answered, expired or its turn over closes it)
   const needs = !!chatKey && selectAsks(s).some((a) => a.bot === chatKey);
+  // What the agent says is left in the background. Its count can hold a command, which has no row, so nothing is
+  // guessed about which task waits: the header says "waiting" only when the background subagents omher has rows
+  // for are as many as the agent counts and each one's approval or question is open. Otherwise "running".
+  const bg = showChat ? (rec.background ?? 0) : 0;
+  const bgSubs = (c?.items ?? []).flatMap((i) =>
+    i.kind === "activity"
+      ? (i.turn.fanouts ?? [])
+          .flatMap((f) => f.subs)
+          // a background subagent: still out though its turn is over, or though the call that started it has
+          // returned (Claude Code's Agent call returns at once for one it runs in the background)
+          .filter((x) => !subagentEnded(x) && (i.turn.endedAt !== undefined || i.turn.steps.some((st) => st.id === x.id && st.endedAt !== undefined)))
+      : [],
+  );
+  const asked = waitingSubs(c?.items);
+  const bgWaits = bg > 0 && COUNTS_BACKGROUND_SUBAGENTS.includes(rec.agent) && bgSubs.length === bg && bgSubs.every((x) => asked.has(x.id));
+  const bgText = tr(bgWaits ? (bg === 1 ? "ss.backgroundWaiting1" : "ss.backgroundWaitingN") : bg === 1 ? "ss.background1" : "ss.backgroundN", { n: bg });
   const status = rec.paused
     ? t("resume.pausedShort")
     : rec.view === "terminal" && canToggle
@@ -808,39 +830,52 @@ export function SessionView() {
         <span className="ss-head-mark">
           <AgentMark agent={rec.agent} size={18} />
         </span>
-        <span className="head-title" data-testid="session-title" title={name}>
-          {name}
-        </span>
-        {/* the same order as the row's second line: where, then which agent */}
-        <span className="ss-head-path" title={rec.cwd}>
-          <span data-testid="session-cwd">{tildePath(rec.cwd, ss.home)}</span>
-          {" · "}
-          <span data-testid="session-agent">{label}</span>
-        </span>
-        <span
-          className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
-          data-testid="session-status"
-        >
-          {status}
-        </span>
-        {showChat && !!rec.background && (
-          <span className="ss-head-bg" data-testid="session-background" title={tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}>
-            {tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}
+        {/* two boxes that are not there on a wide header (display: contents): on a narrow one with background work
+            they let the status, the label and its Stop go under the name (sessions.css) */}
+        <span className={`ss-head-id${bg ? " bg" : ""}`}>
+          <span className="head-title" data-testid="session-title" title={name}>
+            {name}
           </span>
-        )}
-        {/* no turn runs, so the composer offers Send: the background work's own Stop sits beside the words that say
-            it runs, and sends the agent's own interrupt (Esc keeps stopping a running turn only) */}
-        {showChat && !!rec.background && !turn && rec.status === "running" && STOPS_BACKGROUND.includes(rec.agent) && (
-          <button
-            type="button"
-            className="ss-head-stop"
-            title={tr("ss.stopBackground")}
-            onClick={() => void getSessions().interrupt(rec.id)}
-            data-testid="session-background-stop"
-          >
-            {tr("ss.stopBackgroundShort")}
-          </button>
-        )}
+          {/* the same order as the row's second line: where, then which agent */}
+          <span className="ss-head-path" title={rec.cwd}>
+            <span data-testid="session-cwd">{tildePath(rec.cwd, ss.home)}</span>
+            {" · "}
+            <span data-testid="session-agent">{label}</span>
+          </span>
+          <span className="ss-head-now">
+            <span
+              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
+              title={status}
+              data-testid="session-status"
+            >
+              {status}
+            </span>
+            {bg > 0 && (
+              <>
+                <span className="ss-head-bg" data-testid="session-background" title={bgText}>
+                  {bgText}
+                </span>
+                {/* the same in fewer words, shown in its place when the line is tight */}
+                <span className="ss-head-bg short" data-testid="session-background-short" title={bgText}>
+                  {tr(bgWaits ? "ss.backgroundWaitingShort" : "ss.backgroundShort", { n: bg })}
+                </span>
+              </>
+            )}
+            {/* no turn runs, so the composer offers Send: the background work's own Stop sits beside the words that
+                say it is there, and sends the agent's own interrupt (Esc keeps stopping a running turn only) */}
+            {bg > 0 && !turn && rec.status === "running" && STOPS_BACKGROUND.includes(rec.agent) && (
+              <button
+                type="button"
+                className="ss-head-stop"
+                title={tr(bgWaits ? "ss.stopBackgroundWaiting" : "ss.stopBackground")}
+                onClick={() => void getSessions().interrupt(rec.id)}
+                data-testid="session-background-stop"
+              >
+                {tr("ss.stopBackgroundShort")}
+              </button>
+            )}
+          </span>
+        </span>
         {showRight && (
           <div className="head-right ss-head-right" data-testid="head-right">
             {canToggle && (

@@ -110,6 +110,18 @@ All notable changes will be documented here.
   reminder no longer applies. Image turns count too: there the reminder is
   read after the ask Hermes stamps on the turn, so a quoted reminder never
   does. The `omh_active_workflow` metadata still comes with every call.
+- **An omher session's header says "waiting" about background work that waits
+  for you, and keeps its name and model whole.** While a background subagent
+  only waited for your approval, the header read "1 still running in the
+  background" though its row, its card and the sidebar said "waiting". When
+  every background subagent omher knows of waits on an open approval or
+  question, the header now reads "1 waiting in the background" (four
+  languages); a count that holds a background command, or a subagent still
+  running, keeps the old words. With that label and its Stop showing, a narrow
+  chat (a 900 or 1100px window, the right panel open) cut the model name to
+  "Opu…" or the session's name to nothing: the label now takes a short form
+  ("1 waiting", the sentence in its tooltip) and goes under the name with Stop
+  when the line is tight, and the path gives way first.
 - **A toolcall rule can ask you instead of blocking.** With `"effect": "ask"`,
   a matching call goes to Hermes' approval prompt with the rule's message,
   keyed `omh-toolcall-rule:<name>` so `[a]lways` covers that one rule. Where
@@ -907,6 +919,22 @@ All notable changes will be documented here.
   checks the entry with `lstat` first and refuses with `path could not be
   checked`. Missing paths and the symlink rules are unchanged. Reported and
   first fixed for the frontend helper by @Kenmege in #2855.
+
+- **`omh update` no longer refuses a config whose webhook route, or any
+  other section, carries its own `skills:`, `memory:`, `plugins:` or
+  `display:` key.** The section shape guard counted every line that named
+  the section as a mapping key, and its pattern let `\s*` eat indentation,
+  so a route's nested `skills:` list read as a second top-level `skills`
+  section and the refresh stopped with `duplicate skills sections are
+  ambiguous`; that profile's OMH skills then went stale. Only a column-0
+  line whose own root key is the section now counts, so plain, quoted,
+  explicit and flow forms of a real top-level section are unchanged, two
+  column-0 sections are still refused as duplicates, a flow or explicit-only
+  section is still noncanonical, and only a document whose whole root is
+  indented stays user-owned. A profile with no `skills:` yet beside a
+  route's own `skills:` list now gets its first block. The uninstall report reads its `section.key`
+  presence the same way, so a name inside another root key's flow mapping is
+  no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
 
 ## 4.0.7 - 2026-11-09
 

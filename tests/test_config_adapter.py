@@ -18,8 +18,10 @@ from omh.config_adapter import (
     external_dirs,
     memory_provider_selection,
     remove_external_dir,
+    section_edit_guard,
     set_memory_provider,
 )
+from omh.install.config_reversal import config_names_key
 
 
 class ConfigAdapterTests(unittest.TestCase):
@@ -315,3 +317,186 @@ class ExternalDirRegistrationTests(unittest.TestCase):
     def test_a_textual_match_needs_no_directory_on_disk(self) -> None:
         self.assertTrue(external_dir_registered(["/nowhere/skills"], "/nowhere/skills"))
         self.assertFalse(external_dir_registered(["/nowhere/skills"], "/elsewhere/skills"))
+
+
+class NestedSectionGuardTests(unittest.TestCase):
+    """A nested `skills:` is not a second top-level `skills` section (#2829).
+
+    The shape guard counted every line whose text mentioned the section as a
+    mapping key, and its pattern let `\\s*` eat indentation. A webhook route
+    carrying its own `skills:` list, a block-scalar prompt line that reads
+    like one, and a column-0 flow mapping of another section were all read as
+    duplicate top-level sections, so `omh update` refused a valid config and
+    left that profile's OMH skills stale.
+
+    Each positive below was refused on the parent commit. A `section:` key
+    that appears only indented is a child of another section when the root
+    mapping sits at column 0; only a document whose whole root is indented
+    stays user-owned.
+    """
+
+    ISSUE_CONFIG = """skills:
+  external_dirs:
+    - /home/u/.omh/skills
+
+webhooks:
+  routes:
+    github-pr:
+      skills:
+        - github
+"""
+
+    NESTED_SHAPES = {
+        "memory": """memory:
+  provider: omh
+
+webhooks:
+  routes:
+    pr:
+      memory:
+        - long-term
+""",
+        "plugins": """plugins:
+  enabled:
+    - omh
+
+webhooks:
+  routes:
+    pr:
+      plugins:
+        - omh
+""",
+        "display": """display:
+  skin: omh
+
+webhooks:
+  routes:
+    pr:
+      display:
+        - compact
+""",
+        "auxiliary": """auxiliary:
+  compression:
+    enabled: true
+
+webhooks:
+  routes:
+    pr:
+      auxiliary:
+        - compression
+""",
+    }
+
+    BLOCK_SCALAR_CONFIG = """skills:
+  external_dirs:
+    - /home/u/.omh/skills
+
+webhooks:
+  routes:
+    github-pr:
+      prompt: |
+        skills: are listed below
+        memory: as well
+"""
+
+    FLOW_OTHER_SECTION_CONFIG = """skills:
+  external_dirs:
+    - /home/u/.omh/skills
+
+webhooks: {routes: {a: {skills: [x]}}}
+"""
+
+    def test_the_issue_config_is_one_skills_section(self) -> None:
+        self.assertEqual(section_edit_guard(self.ISSUE_CONFIG.splitlines(), "skills"), "")
+
+    def test_a_nested_section_key_is_not_a_second_top_level_section(self) -> None:
+        for section, text in self.NESTED_SHAPES.items():
+            with self.subTest(section=section):
+                self.assertEqual(section_edit_guard(text.splitlines(), section), "")
+
+    def test_a_block_scalar_content_line_is_not_a_section(self) -> None:
+        self.assertEqual(section_edit_guard(self.BLOCK_SCALAR_CONFIG.splitlines(), "skills"), "")
+
+    def test_a_flow_mapping_of_another_section_is_not_a_section(self) -> None:
+        self.assertEqual(section_edit_guard(self.FLOW_OTHER_SECTION_CONFIG.splitlines(), "skills"), "")
+        # With no top-level `skills` block at all, the nested name is still
+        # only another root key's child.
+        self.assertEqual(
+            section_edit_guard(["webhooks: {routes: {a: {skills: [x]}}}"], "skills"),
+            "",
+        )
+
+    def test_the_skills_writer_registers_the_dir_and_leaves_the_route_alone(self) -> None:
+        change = ensure_external_dir(self.ISSUE_CONFIG, "/home/u/.omh/skills/omh")
+
+        self.assertTrue(change.changed)
+        self.assertEqual(change.message, "added external dir")
+        self.assertEqual(
+            external_dirs(change.text), ["/home/u/.omh/skills", "/home/u/.omh/skills/omh"]
+        )
+        self.assertIn("      skills:\n        - github\n", change.text)
+
+    def test_two_top_level_blocks_stay_refused(self) -> None:
+        two = "skills:\n  external_dirs:\n    - /a\nskills:\n  external_dirs:\n    - /b\n"
+        self.assertIn("duplicate skills sections", section_edit_guard(two.splitlines(), "skills"))
+
+    def test_a_column_zero_flow_section_stays_refused_as_noncanonical(self) -> None:
+        self.assertIn(
+            "noncanonical skills configuration",
+            section_edit_guard(["skills: {external_dirs: []}"], "skills"),
+        )
+
+    def test_an_indented_root_document_stays_refused(self) -> None:
+        # With no key at column 0 the whole root mapping is indented, so an
+        # indented `skills:` is the root key itself and this editor cannot
+        # locate it by its column-0 line.
+        self.assertNotEqual(section_edit_guard(["  model: x", "  skills:", "    e: []"], "skills"), "")
+
+    def test_a_profile_without_skills_gets_its_first_block_beside_a_route_skills_list(self) -> None:
+        # The other half of #2829: no top-level `skills:` yet, and a webhook
+        # route carries its own. The nested key is the route's child, not a
+        # noncanonical `skills`, so the writer appends the first block.
+        text = "model: x\nwebhooks:\n  routes:\n    a:\n      skills:\n        - github\n"
+        self.assertEqual(section_edit_guard(text.splitlines(), "skills"), "")
+        change = ensure_external_dir(text, "/home/u/.omh/skills/omh")
+        self.assertTrue(change.changed)
+        self.assertEqual(external_dirs(change.text), ["/home/u/.omh/skills/omh"])
+        self.assertTrue(change.text.startswith(text))
+        for section in ("memory", "plugins", "display", "auxiliary"):
+            nested = f"model: x\nwebhooks:\n  routes:\n    a:\n      {section}:\n        - x\n"
+            with self.subTest(section=section):
+                self.assertEqual(section_edit_guard(nested.splitlines(), section), "")
+
+    def test_a_column_zero_explicit_key_stays_refused(self) -> None:
+        text = "skills:\n  external_dirs:\n    - /a\n? skills\n: {external_dirs: [/b]}\n"
+        self.assertNotEqual(section_edit_guard(text.splitlines(), "skills"), "")
+
+    def test_the_top_level_test_reads_only_column_zero_root_keys(self) -> None:
+        # Imported here so the rest of this class runs against a checkout
+        # that predates the helper, which is how the positives below were
+        # shown to be refused.
+        from omh.config_adapter import references_top_level_section
+
+        for line in ("skills:", '"skills":', "'skills':", "? skills", "skills: {external_dirs: []}"):
+            with self.subTest(line=line):
+                self.assertTrue(references_top_level_section(line, "skills"))
+        for line in (
+            "  skills:",
+            "        skills: are listed below",
+            "webhooks: {routes: {a: {skills: [x]}}}",
+            "webhooks:",
+        ):
+            with self.subTest(line=line):
+                self.assertFalse(references_top_level_section(line, "skills"))
+
+    def test_a_section_named_only_inside_another_flow_mapping_is_not_reported(self) -> None:
+        # The uninstall report read the section's own name inside another
+        # root key's braces as an opened section, so it named a
+        # `skills.external_dirs` no root block carries.
+        nested_flow = "webhooks: {routes: {a: {skills: {external_dirs: [/home/u/test]}}}}\n"
+        self.assertFalse(config_names_key(nested_flow, "skills.external_dirs"))
+        nested_block = "webhooks:\n  routes:\n    a:\n      skills:\n        external_dirs:\n          - /home/u/test\n"
+        self.assertFalse(config_names_key(nested_block, "skills.external_dirs"))
+        self.assertTrue(config_names_key("skills:\n  external_dirs:\n    - /home/u/test\n", "skills.external_dirs"))
+        # A flow mapping on the section's own line still names its child.
+        self.assertTrue(config_names_key("display: {skin: omh}\n", "display.skin"))
