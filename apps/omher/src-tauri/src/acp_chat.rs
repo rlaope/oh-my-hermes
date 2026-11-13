@@ -160,44 +160,72 @@ const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];
 /// blanket deny.
 const KILO_ASKED: [(&str, &str); 3] = [("bash", "bash"), ("edit", "edit"), ("write", "write")];
 
-/// Each agent's rules for each of `asked` as the agent resolved them, from what its `agent list` printed (each
-/// agent's name and mode on its own line, then its ruleset as JSON, where the last matching rule decides): per
-/// tool, each pattern once at its last place with its action, in order. `None` when the listing has no `primary`
-/// agent (the default one: OpenCode's `build`, Kilo's `code`) or holds a line or rule this does not know.
-fn resolved(listing: &str, primary: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<Vec<(String, String)>>)>> {
-    let mut agents: Vec<(String, String)> = Vec::new();
+/// One agent of an `agent list` (its name and mode on one line, `name (mode)`, then its ruleset as JSON, where the
+/// last matching rule decides).
+struct Listed {
+    name: String,
+    /// `primary`, `subagent` or `all`: what the agent may be used as.
+    mode: String,
+    /// Per tool of `asked`: each pattern once at its last place with its action, in order.
+    tools: Vec<Vec<(String, String)>>,
+    /// Every rule (permission, pattern, action) under a key omher does not write (`asked`'s keys), in order, without
+    /// the rules a later one replaces for every input: what decides every other permission.
+    rest: Vec<(String, String, String)>,
+}
+
+/// `rules` without each one that a later rule replaces for every input: the later rule has the same permission key
+/// or `*`, and the same pattern or `*`. Taking those out changes no decision.
+fn effective(rules: Vec<(String, String, String)>) -> Vec<(String, String, String)> {
+    let dead = |i: usize| rules[i + 1..].iter().any(|(p, q, _)| (p == "*" || *p == rules[i].0) && (q == "*" || *q == rules[i].1));
+    (0..rules.len()).filter(|&i| !dead(i)).map(|i| rules[i].clone()).collect()
+}
+
+/// Every agent of what `agent list` printed, as the agent resolved it. `None` when the listing has no `primary`
+/// agent (the default one: OpenCode's `build`, Kilo's `code`) or holds a line, a mode or a rule this does not know.
+fn resolved(listing: &str, primary: &str, asked: &[(&str, &str)]) -> Option<Vec<Listed>> {
+    let mut agents: Vec<(String, String, String)> = Vec::new();
     for line in listing.lines() {
         let head = !line.starts_with([' ', '\t', '[', ']', '{', '}']) && line.ends_with(')') && line.contains(" (");
         if head {
-            agents.push((line[..line.rfind(" (")?].to_string(), String::new()));
+            let at = line.rfind(" (")?;
+            let mode = &line[at + 2..line.len() - 1];
+            if !matches!(mode, "primary" | "subagent" | "all") {
+                return None;
+            }
+            agents.push((line[..at].to_string(), mode.to_string(), String::new()));
         } else {
             let last = agents.last_mut()?;
-            last.1.push_str(line);
-            last.1.push('\n');
+            last.2.push_str(line);
+            last.2.push('\n');
         }
     }
-    if !agents.iter().any(|(n, _)| n == primary) {
+    if !agents.iter().any(|(n, _, _)| n == primary) {
         return None;
     }
     let mut out = Vec::new();
-    for (name, body) in agents {
-        let rules: Vec<Value> = serde_json::from_str(&body).ok()?;
-        let mut per = Vec::new();
+    for (name, mode, body) in agents {
+        let listed: Vec<Value> = serde_json::from_str(&body).ok()?;
+        let mut rules = Vec::new();
+        for r in &listed {
+            let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
+            if !matches!(action, "allow" | "ask" | "deny") {
+                return None;
+            }
+            rules.push((perm.to_string(), pattern.to_string(), action.to_string()));
+        }
+        let mut tools = Vec::new();
         for (tool, _) in asked {
             let mut seen: Vec<(String, String)> = Vec::new();
-            for r in rules.iter().rev() {
-                let (perm, pattern, action) = (r.get("permission")?.as_str()?, r.get("pattern")?.as_str()?, r.get("action")?.as_str()?);
-                if !matches!(action, "allow" | "ask" | "deny") {
-                    return None;
-                }
+            for (perm, pattern, action) in rules.iter().rev() {
                 if wildcard(tool, perm) && !seen.iter().any(|(p, _)| p == pattern) {
-                    seen.push((pattern.to_string(), action.to_string()));
+                    seen.push((pattern.clone(), action.clone()));
                 }
             }
             seen.reverse();
-            per.push(seen);
+            tools.push(seen);
         }
-        out.push((name, per));
+        let rest = effective(rules.into_iter().filter(|(perm, _, _)| !asked.iter().any(|(_, key)| key == perm)).collect());
+        out.push(Listed { name, mode, tools, rest });
     }
     Some(out)
 }
@@ -209,19 +237,32 @@ fn ask_rules(listing: &str, primary: &str, asked: &[(&str, &str)]) -> Option<Str
     let q = |v: &str| Value::String(v.into()).to_string();
     let agents = resolved(listing, primary, asked)?
         .iter()
-        .map(|(name, per)| {
+        .map(|agent| {
             let tools = asked
                 .iter()
-                .zip(per)
+                .zip(&agent.tools)
                 .map(|((_, key), rules)| {
                     let pairs: Vec<String> = rules.iter().map(|(p, a)| format!("{}:{}", q(p), q(if a == "deny" { "deny" } else { "ask" }))).collect();
                     format!("{}:{{{}}}", q(key), pairs.join(","))
                 })
                 .collect::<Vec<_>>();
-            format!("{}:{{\"permission\":{{{}}}}}", q(name), tools.join(","))
+            format!("{}:{{\"permission\":{{{}}}}}", q(&agent.name), tools.join(","))
         })
         .collect::<Vec<_>>();
     Some(format!("{{\"agent\":{{{}}}}}", agents.join(",")))
+}
+
+/// The two listings (`first` without `rules`, `listing` with them set) as far as omher's own rules cannot explain a
+/// difference: `rules` is what `first` gives, both name the same agents in the same order, each with the same mode,
+/// and every permission omher wrote no rule for is decided by the same rules ([`Listed::rest`]). `None` when any of
+/// that differs: an agent appeared, went or changed mode, or a rule of the person's (their `webfetch` or
+/// `external_directory` deny, say) is gone because the agent replaced their entry with omher's.
+fn same_but_asked(first: &str, rules: &str, listing: &str, primary: &str, asked: &[(&str, &str)]) -> Option<(Vec<Listed>, Vec<Listed>)> {
+    let (before, after) = (resolved(first, primary, asked)?, resolved(listing, primary, asked)?);
+    let same = ask_rules(first, primary, asked).as_deref() == Some(rules)
+        && before.len() == after.len()
+        && before.iter().zip(&after).all(|(b, a)| b.name == a.name && b.mode == a.mode && b.rest == a.rest);
+    same.then_some((before, after))
 }
 
 /// Whether the agent, listed again with `rules` set (`listing`), took them as meant: no agent lets any of `asked`
@@ -233,7 +274,7 @@ fn rules_kept(rules: &str, listing: &str, primary: &str, asked: &[(&str, &str)])
 
 /// No agent of `listing` lets any of `asked` run unasked for any pattern.
 fn no_allow(listing: &str, primary: &str, asked: &[(&str, &str)]) -> bool {
-    resolved(listing, primary, asked).is_some_and(|agents| agents.iter().all(|(_, per)| per.iter().flatten().all(|(_, a)| a != "allow")))
+    resolved(listing, primary, asked).is_some_and(|agents| agents.iter().all(|a| a.tools.iter().flatten().all(|(_, a)| a != "allow")))
 }
 
 /// OpenCode's ask rules (`OPENCODE_CONFIG_CONTENT`) for `bash` and `edit`, from `opencode agent list`.
@@ -241,9 +282,10 @@ pub fn opencode_ask(listing: &str) -> Option<String> {
     ask_rules(listing, "build", &ASKED)
 }
 
-/// Whether OpenCode kept [`opencode_ask`]'s rules: listed again it resolves exactly them.
-pub fn opencode_kept(_first: &str, rules: &str, listing: &str) -> bool {
-    rules_kept(rules, listing, "build", &ASKED)
+/// Whether OpenCode kept [`opencode_ask`]'s rules: listed again it resolves exactly them for `bash` and `edit`, and
+/// nothing else about any agent differs from the `first` listing ([`same_but_asked`]).
+pub fn opencode_kept(first: &str, rules: &str, listing: &str) -> bool {
+    same_but_asked(first, rules, listing, "build", &ASKED).is_some() && rules_kept(rules, listing, "build", &ASKED)
 }
 
 /// Kilo Code's ask rules (`KILO_CONFIG_CONTENT`) for `bash`, `edit` and `write`, from `kilo agent list`.
@@ -290,14 +332,15 @@ fn not_weaker(before: &[(String, String)], after: &[(String, String)], plan_edit
 
 /// Kilo moves some denies and appends built-in plan-file rules. Prove the effective rules for every tool of
 /// every agent are no weaker than the first listing; never turn a person's deny into an approval card. Unlike a
-/// representative-input check this covers all strings, and fails closed when rule ordering is ambiguous.
+/// representative-input check this covers all strings, and fails closed when rule ordering is ambiguous. Every
+/// other permission, and each agent's mode, must be what the first listing had ([`same_but_asked`]): Kilo reads a
+/// person's `agent.build` entry as `code` and lets omher's `agent.code` replace it whole.
 pub fn kilo_kept(first: &str, rules: &str, listing: &str) -> bool {
-    let (Some(before), Some(after)) = (resolved(first, "code", &KILO_ASKED), resolved(listing, "code", &KILO_ASKED)) else { return false };
-    kilo_ask(first).as_deref() == Some(rules)
-        && before.len() == after.len()
-        && before.iter().zip(&after).all(|((n1, b), (n2, a))| {
-            n1 == n2 && KILO_ASKED.iter().enumerate().all(|(i, (tool, _))| not_weaker(&b[i], &a[i], n1 == "plan" && *tool == "edit"))
+    same_but_asked(first, rules, listing, "code", &KILO_ASKED).is_some_and(|(before, after)| {
+        before.iter().zip(&after).all(|(b, a)| {
+            KILO_ASKED.iter().enumerate().all(|(i, (tool, _))| not_weaker(&b.tools[i], &a.tools[i], b.name == "plan" && *tool == "edit"))
         })
+    })
 }
 
 pub fn acp_agent(id: &str) -> Option<&'static AcpAgent> {
@@ -1499,6 +1542,124 @@ fn decide(rules: &[(String, String, String)], tool: &str, input: &str) -> &'stat
         assert_eq!(decide(&rulesets(first, &KILO_ASKED).unwrap()[0].1, "bash", "rm private"), "deny");
         assert_eq!(decide(&rulesets(after, &KILO_ASKED).unwrap()[0].1, "bash", "rm private"), "ask");
         assert!(!kilo_kept(first, &rules, after), "checking only rm x misses rm private");
+    }
+
+    /// One rule of a listing, as the agents print it.
+    fn rule(permission: &str, pattern: &str, action: &str) -> String {
+        json!({"permission": permission, "pattern": pattern, "action": action}).to_string()
+    }
+
+    /// A listing: each agent's `name (mode)` line, then its rules.
+    fn listing(agents: &[(&str, &[String])]) -> String {
+        agents.iter().map(|(head, rules)| format!("{head}\n[{}]\n", rules.join(","))).collect()
+    }
+
+    /// Kilo reads a person's `agent.build` entry as `code`, and omher's `agent.code` then replaces it whole: their
+    /// denies for permissions omher writes no rule for are gone from the second listing (seen with Kilo 7.8.27).
+    #[test]
+    fn kilo_kept_refuses_when_a_deny_outside_bash_edit_write_is_lost() {
+        let first = listing(&[("code (primary)", &[rule("*", "*", "allow"), rule("external_directory", "*", "deny"), rule("webfetch", "*", "deny")])]);
+        let rules = kilo_ask(&first).unwrap();
+        // what Kilo lists again once omher's agent.code has replaced the person's agent.build entry
+        let after = listing(&[("code (primary)", &[rule("*", "*", "allow"), rule("bash", "*", "ask"), rule("edit", "*", "ask"), rule("write", "*", "ask")])]);
+        assert!(!kilo_kept(&first, &rules, &after), "the person's external_directory and webfetch denies are gone");
+        // with those two denies still there, the same rules start
+        let held = listing(&[("code (primary)", &[rule("*", "*", "allow"), rule("external_directory", "*", "deny"), rule("webfetch", "*", "deny"), rule("bash", "*", "ask"), rule("edit", "*", "ask"), rule("write", "*", "ask")])]);
+        assert!(kilo_kept(&first, &rules, &held));
+    }
+
+    /// Any permission of any agent: a pattern deny under `read`, a `task` and a `skill` deny, in a subagent too; a
+    /// deny that only moved in front of the allow it used to follow; an allow put back for another permission.
+    #[test]
+    fn a_weaker_rule_for_any_other_permission_refuses_for_both_agents() {
+        type Ask = fn(&str) -> Option<String>;
+        type Kept = fn(&str, &str, &str) -> bool;
+        let keys: [(&str, Ask, Kept, &[&str]); 2] = [("code", kilo_ask, kilo_kept, &["bash", "edit", "write"]), ("build", opencode_ask, opencode_kept, &["bash *", "edit *"])];
+        for (primary, ask, kept, keys) in keys {
+            let head = format!("{primary} (primary)");
+            let person = [rule("*", "*", "allow"), rule("read", "*", "allow"), rule("read", "*.pem", "deny"), rule("task", "*", "deny"), rule("skill", "*", "deny")];
+            let helper = [rule("*", "*", "deny"), rule("grep", "*", "allow")];
+            let first = listing(&[(&head, &person), ("helper (subagent)", &helper)]);
+            let rules = ask(&first).unwrap();
+            // the second listing: what each agent had, then omher's own rules (ask for the person's allow, deny for
+            // the subagent's deny)
+            let own = |action: &str| keys.iter().map(|k| rule(k, "*", action)).collect::<Vec<_>>();
+            let with = |main: &[String], sub: &[String]| listing(&[(&head, &[main, &own("ask")].concat()), ("helper (subagent)", &[sub, &own("deny")].concat())]);
+            assert!(kept(&first, &rules, &with(&person, &helper)), "{primary}: nothing else changed");
+            let without = |i: usize| person.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, r)| r.clone()).collect::<Vec<_>>();
+            for (what, main, sub) in [
+                ("the read *.pem deny is gone", without(2), helper.to_vec()),
+                ("the task deny is gone", without(3), helper.to_vec()),
+                ("the skill deny became ask", [&person[..], &[rule("skill", "*", "ask")]].concat(), helper.to_vec()),
+                ("the read deny moved in front of its allow", vec![person[0].clone(), person[2].clone(), person[1].clone(), person[3].clone(), person[4].clone()], helper.to_vec()),
+                ("webfetch is allowed for the subagent", person.to_vec(), [&helper[..], &[rule("webfetch", "*", "allow")]].concat()),
+                ("the subagent's blanket deny is gone", person.to_vec(), vec![helper[1].clone()]),
+            ] {
+                assert!(!kept(&first, &rules, &with(&main, &sub)), "{primary}: {what}");
+            }
+            // a rule a later one replaces for every input is no difference: Kilo lists such rules twice
+            let twice = [&person[..], &[rule("task", "*", "ask"), rule("*", "*", "allow")], &person[..]].concat();
+            assert!(kept(&first, &rules, &with(&twice, &helper)), "{primary}: a replaced rule changes nothing");
+        }
+    }
+
+    /// With Kilo's `references` an agent the person named became `all` (one they can be put in) where it was a
+    /// `subagent`, and lost its denies: any agent whose mode differs between the listings refuses.
+    #[test]
+    fn kilo_kept_refuses_an_agent_changing_mode() {
+        let body = [rule("*", "*", "deny")];
+        let first = listing(&[("code (primary)", &body), ("mylib (subagent)", &body)]);
+        let rules = kilo_ask(&first).unwrap();
+        let own = [rule("*", "*", "deny"), rule("bash", "*", "deny"), rule("edit", "*", "deny"), rule("write", "*", "deny")];
+        assert!(kilo_kept(&first, &rules, &listing(&[("code (primary)", &own), ("mylib (subagent)", &own)])));
+        assert!(!kilo_kept(&first, &rules, &listing(&[("code (primary)", &own), ("mylib (all)", &own)])));
+        assert!(!kilo_kept(&first, &rules, &listing(&[("code (primary)", &body), ("mylib (all)", &body)])));
+        // OpenCode's check reads the mode too
+        let first = listing(&[("build (primary)", &body), ("mylib (subagent)", &body)]);
+        let rules = opencode_ask(&first).unwrap();
+        let own = [rule("*", "*", "deny"), rule("bash *", "*", "deny"), rule("edit *", "*", "deny")];
+        assert!(opencode_kept(&first, &rules, &listing(&[("build (primary)", &own), ("mylib (subagent)", &own)])));
+        assert!(!opencode_kept(&first, &rules, &listing(&[("build (primary)", &own), ("mylib (all)", &own)])));
+        assert!(!opencode_kept(&first, &rules, &listing(&[("build (primary)", &own), ("mylib (primary)", &own)])));
+    }
+
+    /// An agent that is in one listing only refuses, and so does an agent in another place.
+    #[test]
+    fn an_agent_that_appears_or_disappears_refuses() {
+        for (primary, ask, kept, own) in [
+            ("code", kilo_ask as fn(&str) -> Option<String>, kilo_kept as fn(&str, &str, &str) -> bool, vec![rule("*", "*", "deny"), rule("bash", "*", "deny"), rule("edit", "*", "deny"), rule("write", "*", "deny")]),
+            ("build", opencode_ask, opencode_kept, vec![rule("*", "*", "deny"), rule("bash *", "*", "deny"), rule("edit *", "*", "deny")]),
+        ] {
+            let head = format!("{primary} (primary)");
+            let body = [rule("*", "*", "deny")];
+            let first = listing(&[(&head, &body), ("mine (subagent)", &body)]);
+            let rules = ask(&first).unwrap();
+            assert!(kept(&first, &rules, &listing(&[(&head, &own), ("mine (subagent)", &own)])), "{primary}");
+            assert!(!kept(&first, &rules, &listing(&[(&head, &own)])), "{primary}: mine is gone");
+            assert!(!kept(&first, &rules, &listing(&[(&head, &own), ("mine (subagent)", &own), ("other (subagent)", &own)])), "{primary}: other appeared");
+            assert!(!kept(&first, &rules, &listing(&[(&head, &own), ("other (subagent)", &own)])), "{primary}: another name");
+            assert!(!kept(&first, &rules, &listing(&[("mine (subagent)", &own), (&head, &own)])), "{primary}: another order");
+        }
+    }
+
+    /// A mode this does not know refuses at the first listing; an agent the person made themselves, with a mode the
+    /// agents have, starts when nothing about it changes.
+    #[test]
+    fn an_unknown_agent_or_mode_refuses() {
+        let body = [rule("*", "*", "allow")];
+        let unknown = listing(&[("code (primary)", &body), ("never-heard-of (some-new-mode)", &body)]);
+        assert_eq!(kilo_ask(&unknown), None);
+        assert_eq!(opencode_ask(&unknown.replace("code (primary)", "build (primary)")), None);
+        for mode in ["primary", "subagent", "all"] {
+            let head = format!("reviewer (v2) ({mode})");
+            let first = listing(&[("code (primary)", &body), (&head, &[rule("*", "*", "deny"), rule("read", "*", "allow")])]);
+            let rules = kilo_ask(&first).unwrap();
+            assert!(rules.contains(r#""reviewer (v2)":{"permission":{"bash":{"*":"deny"},"edit":{"*":"deny"},"write":{"*":"deny"}}}"#), "{rules}");
+            let own = [rule("bash", "*", "ask"), rule("edit", "*", "ask"), rule("write", "*", "ask")];
+            let denied = [rule("bash", "*", "deny"), rule("edit", "*", "deny"), rule("write", "*", "deny")];
+            let after = listing(&[("code (primary)", &[&body[..], &own].concat()), (&head, &[&[rule("*", "*", "deny"), rule("read", "*", "allow")][..], &denied].concat())]);
+            assert!(kilo_kept(&first, &rules, &after), "{mode}: a person's own agent starts");
+        }
     }
 
     fn check_kilo(case: &str, want: &[(&str, &str, &str, &str)]) {
