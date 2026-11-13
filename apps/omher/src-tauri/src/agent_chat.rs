@@ -3758,6 +3758,34 @@ mod tests {
         }
     }
 
+    /// A listed pattern or agent name is not trusted config text: no second listing with a file/env token that
+    /// the CLI would substitute before the preservation proof can run.
+    #[test]
+    #[cfg(unix)]
+    fn a_config_token_refuses_before_the_second_listing() {
+        let dir = std::env::temp_dir().join(format!("omher-token-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let absent = dir.join("not-a-file.txt");
+        assert!(!absent.exists());
+        for id in ["kilo", "opencode"] {
+            let row = acp_agent(id).unwrap();
+            let probe = row.rules.as_ref().unwrap();
+            let primary = if id == "kilo" { "code" } else { "build" };
+            for token in [format!("${{file:{}}}", absent.display()), format!("{{file:{}}}", absent.display()), "${env:HOME}".into(), "{env:HOME}".into()] {
+                let first = format!("{primary} (primary)\n{}\n", json!([{"permission":"bash", "pattern":token, "action":"deny"}]));
+                // /bin/sh is a listing stand-in only: the marker would be written before the second listing's
+                // config was parsed. No file named by the token exists, and no second process is started.
+                let marker = dir.join("listed-again");
+                let script = format!("if [ -n \"${}\" ]; then printf again > '{}'; exit 1; fi; printf '%s' '{}'", probe.var, marker.display(), first);
+                let argv = ["/bin/sh".into(), "-c".into(), script.into()];
+                assert_eq!(agent_rules(probe, row.label, &argv, &dir, &std::env::var_os("PATH").unwrap(), &[]), Err(no_rules(row.label)));
+                assert!(!marker.exists(), "{id}: second listing ran for {token}");
+                assert!(!absent.exists());
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     impl Input {
         /// A message with text only.
         pub fn send(text: impl Into<String>) -> Input {

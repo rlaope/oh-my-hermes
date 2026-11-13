@@ -257,6 +257,7 @@ fn resolved(listing: &str, primary: &str, asked: &[(&str, &str)], fold: bool) ->
 /// The ask rules for a chat, from what the agent's `agent list` printed without them: for every agent and each of
 /// `asked`, the person's own resolved rules repeated after theirs, in the same order, with allow turned into ask.
 /// What they allow asks, what asks still asks, what they deny stays denied, for blanket and pattern rules alike.
+/// `None` also when the value would hold a config token ([`CONFIG_TOKENS`]).
 fn ask_rules(listing: &str, primary: &str, asked: &[(&str, &str)], fold: bool) -> Option<String> {
     let q = |v: &str| Value::String(v.into()).to_string();
     let agents = resolved(listing, primary, asked, fold)?
@@ -273,8 +274,15 @@ fn ask_rules(listing: &str, primary: &str, asked: &[(&str, &str)], fold: bool) -
             format!("{}:{{\"permission\":{{{}}}}}", q(&agent.name), tools.join(","))
         })
         .collect::<Vec<_>>();
-    Some(format!("{{\"agent\":{{{}}}}}", agents.join(",")))
+    let value = format!("{{\"agent\":{{{}}}}}", agents.join(","));
+    // The agent replaces `{file:…}` and `{env:…}` (Kilo also writes them `${…}`) inside this value with a file's
+    // content or a variable, though it left the same text literal in the project file it came from: no value at all
+    // when an agent's name or a pattern holds the start of one, so the agent is not listed again with it.
+    (!CONFIG_TOKENS.iter().any(|token| value.contains(token))).then_some(value)
 }
+
+/// How a reference to a file or to an environment variable starts in OpenCode's and Kilo Code's config text.
+const CONFIG_TOKENS: [&str; 2] = ["{file:", "{env:"];
 
 /// The two listings (`first` without `rules`, `listing` with them set) as far as omher's own rules cannot explain a
 /// difference: `rules` is what `first` gives, both name the same agents in the same order, each with the same mode,
@@ -1807,6 +1815,41 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
             assert!(plan_file(".KILO\\Plans\\*.md", fold) == fold && plan_file("C:\\Users\\me\\AppData\\kilo\\plans\\*.md", fold));
             for not_a_plan in ["plans\\*.rs", "*\\plans\\*.md", "plans\\..\\*.md", "plans\\*", "myplans\\*.md", "pl?ns\\*.md"] {
                 assert!(!plan_file(not_a_plan, fold), "{not_a_plan}");
+            }
+        }
+    }
+
+    /// A project's agent file can name a file or a variable in a pattern (`${file:…}` / `${env:…}` in Kilo,
+    /// `{file:…}` / `{env:…}` in OpenCode). The agent leaves that literal for a project file, but replaces it inside
+    /// the value omher sends, which would make it read the named file during omher's second listing. Any such token
+    /// in what omher would send (an agent's name or a pattern) builds no rules, so nothing is listed a second time.
+    #[test]
+    fn rules_never_carry_a_config_token() {
+        let first = "code (primary)\n[{\"permission\":\"bash\",\"pattern\":\"${file:/etc/passwd}\",\"action\":\"deny\"}]\n";
+        assert_eq!(kilo_ask(first), None);
+        type Ask = fn(&str, bool) -> Option<String>;
+        let both: [(&str, Ask); 2] = [("code", kilo_ask_on), ("build", opencode_ask_on)];
+        for (primary, ask) in both {
+            let head = format!("{primary} (primary)");
+            for fold in [true, false] {
+                for token in ["${file:~/.local/share/kilo/auth.json}", "{file:~/.local/share/opencode/auth.json}", "${env:HOME}", "{env:ANTHROPIC_API_KEY}", "{file:x", "{env:"] {
+                    let texts = [token.to_string(), format!("cat {token} *"), format!("*{token}")];
+                    for text in &texts {
+                        // in a pattern of a tool omher asks about, for the default agent and for another
+                        for tool in ["bash", "edit", "*"] {
+                            let l = listing(&[(&head, &[rule("*", "*", "ask"), rule(tool, text, "deny")])]);
+                            assert_eq!(ask(&l, fold), None, "{primary} {tool} {text}");
+                            let l = listing(&[(&head, &[rule("*", "*", "ask")]), ("helper (subagent)", &[rule(tool, text, "allow")])]);
+                            assert_eq!(ask(&l, fold), None, "{primary} helper {tool} {text}");
+                        }
+                        // in an agent's name
+                        let named = format!("{text} (subagent)");
+                        assert_eq!(ask(&listing(&[(&head, &[rule("*", "*", "ask")]), (&named, &[rule("*", "*", "deny")])]), fold), None, "{primary} named {text}");
+                    }
+                }
+                // a pattern of a permission omher writes no rule for is never sent, and braces alone are no token
+                let l = listing(&[(&head, &[rule("*", "*", "ask"), rule("read", "{file:notes.txt}", "deny"), rule("bash", "echo ${HOME} {a,b} file: env:", "deny")])]);
+                assert!(ask(&l, fold).unwrap().contains(r#""echo ${HOME} {a,b} file: env:":"deny""#), "{primary}");
             }
         }
     }
