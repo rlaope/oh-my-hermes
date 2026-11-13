@@ -15,8 +15,8 @@ DOC = ROOT / "docs" / "OMHER-BOUNDARY.md"
 BRIDGE = ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py"
 SHELL = ROOT / "apps" / "omher" / "src-tauri" / "src"
 UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
-SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode")
-SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat")
+SESSION_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline")
+SESSION_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat", "Chat", "Chat", "Chat", "Chat", "Chat", "Chat")
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages")
 CONTEXT = ROOT / "CONTEXT.md"
@@ -58,11 +58,15 @@ RULES = (
     " task id but not its answer, it reads that one record (`st_<task id>.json`, from the same folders and under the"
     " same rules, read-only, and only a record of that session)",
     "omher starts a terminal program only when the person asks for a session (SESSIONS `+`), and only one of a"
-    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, with no arguments,",
+    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `kilo`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
-    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`) on pipes;",
-    "An Agent Client Protocol agent (`opencode acp`) gets no such argument: omher sends the conversation id it reported",
+    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`, `kilo acp`, `gemini --acp`, `qwen --acp`, `kimi acp`, `copilot --acp`, `cline --acp`) on pipes;",
+    "An Agent Client Protocol agent (the seven `acp` rows) gets no such argument: omher sends the conversation id it reported",
+    "omher never sends the protocol's `authenticate` (Cline's opens a browser by itself) and never asks for, takes or shows a key.",
+    "Kilo Code gets the same in `KILO_CONFIG_CONTENT`, ask rules for its `bash`, `edit` and `write` tools under each tool's own key,",
+    "else Kilo is not started and the chat says so in one sentence naming Kilo Code.",
+    "Gemini CLI, Qwen Code, Kimi Code, Copilot CLI and Cline get no extra variable and no rule check:",
     "and tells the agent at `initialize` that omher offers no file reading or writing and no terminal,",
     "OpenCode also gets one environment variable, `OPENCODE_CONFIG_CONTENT`, holding ask rules for its `bash` and `edit` tools",
     "right before the chat, the shell runs `opencode agent list` (that one fixed argument, in the same folder, with the same environment, on pipes, nothing on stdin, at most 30 seconds)",
@@ -813,7 +817,8 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         chat = self.prod.split("pub fn chat_args", 1)[1].split("\n}\n", 1)[0]
         arms = re.findall(r'^\s+(.+?) => (&.+?\[\.\.\]),?$', chat, re.M)
         self.assertEqual(arms, [('"claude"', "&CLAUDE_CHAT_ARGS[..]"), ('"codex"', '&["app-server"][..]'),
-                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]'), ('"opencode"', '&["acp"][..]')])
+                                ('"pi" | "omp" | "omo"', '&["--mode", "rpc"][..]'), ('"opencode" | "kilo" | "kimi"', '&["acp"][..]'),
+                                ('"gemini" | "qwen" | "copilot" | "cline"', '&["--acp"][..]')])
         resume = self.prod.split("pub fn resume_args", 1)[1].split("\n}\n", 1)[0]
         # exactly two flags, each for named agents only; every other agent is refused
         self.assertEqual(re.findall(r'^\s+(.+?) => ("--[a-z-]+"|return Err)', resume, re.M),
@@ -867,10 +872,18 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIn("(1..=128).contains(&id.len())", acp)
         rows = re.search(r"pub const ACP_AGENTS: \[AcpAgent; (\d+)\] = \[(.*?)\];", acp, re.S)
         self.assertIsNotNone(rows)
-        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode"])
-        # OpenCode's one variable carries ask rules built from its own `agent list`: allow -> ask, deny stays deny
-        self.assertEqual(re.findall(r'rules: (.*?),\n', rows.group(2)),
-                         ['Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept })'])
+        self.assertEqual(re.findall(r'id: "([^"]+)"', rows.group(2)), ["opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"])
+        # OpenCode's and Kilo's one variable carries ask rules built from their own `agent list`: allow -> ask, deny
+        # stays deny; the other five rows add no variable
+        self.assertEqual(re.findall(r'rules: (Some\(RuleProbe \{.*?\}\)|None)', rows.group(2)),
+                         ['Some(RuleProbe { args: &["agent", "list"], var: "OPENCODE_CONFIG_CONTENT", build: opencode_ask, kept: opencode_kept })',
+                          'Some(RuleProbe { args: &["agent", "list"], var: "KILO_CONFIG_CONTENT", build: kilo_ask, kept: kilo_kept })',
+                          "None", "None", "None", "None", "None"])
+        # each row's sign-in line is the agent's own command, run by the person; omher never sends `authenticate`
+        self.assertEqual(re.findall(r'login: "([^"]+)"', rows.group(2)),
+                         ["opencode auth login", "kilo auth login", "gemini", "qwen", "kimi login", "copilot login", "cline auth"])
+        self.assertNotIn('"authenticate"', acp)
+        self.assertIn('const KILO_ASKED: [(&str, &str); 3] = [("bash", "bash"), ("edit", "edit"), ("write", "write")];', acp)
         self.assertNotIn("OPENCODE_PERMISSION", acp)
         self.assertIn('if a == "deny" { "deny" } else { "ask" }', acp)
         self.assertIn('const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];', acp)
@@ -886,7 +899,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             self.assertNotIn(needle, acp)
         # the shell adds the row's env and nothing else, and takes an ACP id only through the protocol
         start = self.chat.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn("env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);", start)
+        self.assertIn("env.push(agent_rules(probe, label, &program, cwd, &path_env, account_env)?);", start)
         # the listing runs the same resolved program with the probe's fixed arguments only, and kills it on timeout
         rules = self.chat.split("fn agent_rules(", 1)[1].split("\n}\n", 1)[0]
         self.assertIn("argv.extend(probe.args.iter().map(OsString::from));", rules)
@@ -1018,7 +1031,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         # the account's variable, plus only the ACP row's ask rules (rule 11: OpenCode's, built from its own listing)
         self.assertIn("let mut env = account_env.to_vec();", start)
         self.assertEqual(start.count("env.push("), 1)
-        self.assertIn("env.push(agent_rules(probe, &program, cwd, &path_env, account_env)?);", start)
+        self.assertIn("env.push(agent_rules(probe, label, &program, cwd, &path_env, account_env)?);", start)
         self.assertIn("self.spawn(argv, cwd, Some(path_env), &env, adapter, sink)", start)
 
     def test_start_agent_resolves_argv_from_the_allow_list_only(self) -> None:
