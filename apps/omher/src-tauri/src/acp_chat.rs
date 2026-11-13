@@ -271,6 +271,7 @@ fn guards_kept(agent: &Listed, asked: &[(&str, &str)], fold: bool) -> bool {
             agent.rules[at + 1..].iter().all(|(p, _, a)| a == "deny" || !may_overlap(p, &guard, fold))
         })
     })
+}
 
 /// The ask rules for a chat, from what the agent's `agent list` printed without them: for every agent and each of
 /// `asked`, the person's own resolved rules repeated after theirs, in the same order, with allow turned into ask.

@@ -86,7 +86,11 @@ All notable changes will be documented here.
   steps show, and each approval is a card with Deny and Allow once. Kilo Code
   starts only with ask rules built from its own `kilo agent list`, so nothing
   you allow runs unasked and nothing you deny becomes askable; its free
-  models need no account. An agent that is installed but not signed in ends
+  models need no account. Both Kilo Code and OpenCode check every permission
+  and each agent's mode, refuse file/env tokens before listing again, and
+  compare rules as Windows does there. Rules are read at session start;
+  a deny added later applies from the next session. An agent that is
+  installed but not signed in ends
   in one line with its own sign-in command (Gemini CLI is not signed in. Run
   `gemini` in a terminal and sign in.) and Open in Terminal; omher never
   signs in for it, never sends the protocol's `authenticate` and never takes
