@@ -155,7 +155,7 @@ fn wildcard(text: &str, pattern: &str) -> bool {
 const ASKED: [(&str, &str); 2] = [("bash", "bash *"), ("edit", "edit *")];
 
 /// Kilo Code's: OpenCode's two, and `write`, which Kilo's image tool asks under (its file tools ask under `edit`), each
-/// under the tool's own key. Kilo 7.8.27 merges these after the person's own rules (checked against nine configs,
+/// under the tool's own key. Kilo 7.8.27 merges these after the person's own rules (checked against recorded configs,
 /// `kilo-rules.json`); the `" *"` keys OpenCode needs would let Kilo's own plan-file allows outrank a person's
 /// blanket deny.
 const KILO_ASKED: [(&str, &str); 3] = [("bash", "bash"), ("edit", "edit"), ("write", "write")];
@@ -252,6 +252,7 @@ pub fn kilo_ask(listing: &str) -> Option<String> {
 }
 
 /// Each agent's rules for the tools in `asked` (permission, pattern, action), in order, from an `agent list`.
+#[cfg(test)]
 fn rulesets(listing: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<(String, String, String)>)>> {
     let mut agents: Vec<(String, String)> = Vec::new();
     for line in listing.lines() {
@@ -281,6 +282,7 @@ fn rulesets(listing: &str, asked: &[(&str, &str)]) -> Option<Vec<(String, Vec<(S
 
 /// What an agent decides for `tool` on `input` under `rules` (the last rule whose permission and pattern match, else
 /// ask), as OpenCode and Kilo evaluate.
+#[cfg(test)]
 fn decide(rules: &[(String, String, String)], tool: &str, input: &str) -> &'static str {
     match rules.iter().rev().find(|(p, pat, _)| wildcard(tool, p) && wildcard(input, pat)).map(|r| r.2.as_str()) {
         Some("allow") => "allow",
@@ -289,31 +291,48 @@ fn decide(rules: &[(String, String, String)], tool: &str, input: &str) -> &'stat
     }
 }
 
-/// Whether Kilo Code kept [`kilo_ask`]'s rules, judged by what it decides rather than by the rules' order (Kilo
-/// 7.8.27 moves some of a person's denies later and appends its own built-in rules after omher's): for every agent,
-/// each of `bash`, `edit` and `write`, and an input for every pattern either listing names (plus one no pattern
-/// names), Kilo with the rules never decides more loosely than without them, and never lets one run unasked. The one
-/// thing it keeps unasked is its own: `plan`'s writes to its plan files (`.kilo/plans/*.md` and the like), which Kilo
-/// appends after every config layer; that is kept only where the person's own rules allowed it too, so a person whose
-/// rules deny it (a blanket `"*": "deny"`) gets no Kilo chat rather than a looser one.
-pub fn kilo_kept(first: &str, rules: &str, listing: &str) -> bool {
-    let (Some(before), Some(after)) = (rulesets(first, &KILO_ASKED), rulesets(listing, &KILO_ASKED)) else { return false };
-    let rank = |d: &str| match d {
-        "deny" => 0,
-        "ask" => 1,
-        _ => 2,
+/// A cheap, conservative disjointness proof for two glob languages. Different literal prefixes cannot
+/// overlap. Anything less obvious is treated as overlapping (including `?` and the optional trailing `" *"`).
+fn may_overlap(a: &str, b: &str) -> bool {
+    let prefix = |p: &str| {
+        let p = p.replace('\\', "/");
+        let p = p.strip_suffix(" *").unwrap_or(&p);
+        p.split(['*', '?']).next().unwrap_or("").to_string()
     };
+    let (a, b) = (prefix(a), prefix(b));
+    a.starts_with(&b) || b.starts_with(&a)
+}
+
+/// Prove a last-match ruleset cannot get weaker, without sampling inputs. Keep every original deny. Each new
+/// non-deny must come from the same original pattern with an equal or stronger action, and every later original
+/// restriction that may overlap it must still occur later. Reordering disjoint rules or moving denies later is
+/// fine; an ordering we cannot prove safe refuses the chat. Missing rules default to ask, not allow.
+fn not_weaker(before: &[(String, String)], after: &[(String, String)], plan_edit: bool) -> bool {
+    let rank = |a: &str| match a { "deny" => 0, "ask" => 1, _ => 2 };
+    before.iter().filter(|(_, a)| a == "deny").all(|(p, _)| after.iter().any(|(q, a)| q == p && a == "deny"))
+        && after.iter().enumerate().all(|(j, (p, action))| {
+            if action == "deny" { return true; }
+            // Kilo's only unasked exception is the plan agent's own Markdown plan files, never arbitrary edits.
+            if action == "allow" && !(plan_edit && (p == "plans/*.md" || p == ".plans/*.md" || p.ends_with("/plans/*.md"))
+                && !p.strip_suffix("*.md").unwrap_or(p).contains(['*', '?'])) { return false; }
+            let Some(i) = before.iter().position(|(q, _)| q == p) else { return false };
+            if rank(&before[i].1) < rank(action) { return false; }
+            before[i + 1..].iter().all(|(q, restriction)| {
+                rank(restriction) >= rank(action) || !may_overlap(p, q)
+                    || after[j + 1..].iter().any(|(r, a)| r == q && rank(a) <= rank(restriction))
+            })
+        })
+}
+
+/// Kilo moves some denies and appends built-in plan-file rules. Prove the effective rules for every tool of
+/// every agent are no weaker than the first listing; never turn a person's deny into an approval card. Unlike a
+/// representative-input check this covers all strings, and fails closed when rule ordering is ambiguous.
+pub fn kilo_kept(first: &str, rules: &str, listing: &str) -> bool {
+    let (Some(before), Some(after)) = (resolved(first, "code", &KILO_ASKED), resolved(listing, "code", &KILO_ASKED)) else { return false };
     kilo_ask(first).as_deref() == Some(rules)
         && before.len() == after.len()
         && before.iter().zip(&after).all(|((n1, b), (n2, a))| {
-            n1 == n2
-                && KILO_ASKED.iter().all(|(tool, _)| {
-                    let inputs = b.iter().chain(a.iter()).filter(|r| wildcard(tool, &r.0)).map(|r| r.1.replace('*', "x")).chain(["x".to_string()]);
-                    inputs.into_iter().all(|i| {
-                        let (was, now) = (decide(b, tool, &i), decide(a, tool, &i));
-                        rank(now) <= rank(was) && (now != "allow" || (n1 == "plan" && *tool == "edit"))
-                    })
-                })
+            n1 == n2 && KILO_ASKED.iter().enumerate().all(|(i, (tool, _))| not_weaker(&b[i], &a[i], n1 == "plan" && *tool == "edit"))
         })
 }
 
@@ -1443,6 +1462,39 @@ mod tests {
         let all: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
         let c = &all[case];
         (s(c, "agent_list"), s(c, "agent_list_in_omher"), s(c, "env_sent"))
+    }
+
+    #[test]
+    fn kilo_rule_proof_keeps_every_restriction_in_small_glob_rulesets() {
+        let patterns = ["*", "a*", "ab", "?b", "a *"];
+        let actions = ["deny", "ask", "allow"];
+        let mut sets = Vec::new();
+        for p in patterns { for q in patterns { if p != q {
+            for a in actions { for b in actions {
+                sets.push(vec![(p.to_string(), a.to_string()), (q.to_string(), b.to_string())]);
+            } }
+        } } }
+        let rank = |a: &str| match a { "deny" => 0, "ask" => 1, _ => 2 };
+        for b in &sets { for a in &sets { if not_weaker(b, a, false) {
+            let rules = |r: &Vec<(String, String)>| r.iter().map(|(p, a)| ("bash".into(), p.clone(), a.clone())).collect::<Vec<_>>();
+            for input in ["", "a", "b", "aa", "ab", "ba", "bb", "aaa", "a b", "abc"] {
+                let (was, now) = (decide(&rules(b), "bash", input), decide(&rules(a), "bash", input));
+                assert!(rank(now) <= rank(was) && now != "allow", "{b:?} -> {a:?} on {input:?}");
+            }
+        } } }
+        // Losing a deny falls back to ask, which is still a weakening; plan is not a blanket edit exception.
+        assert!(!not_weaker(&vec![("*".into(), "deny".into())], &[], false));
+        assert!(!not_weaker(&vec![("*.rs".into(), "allow".into())], &vec![("*.rs".into(), "allow".into())], true));
+    }
+
+    #[test]
+    fn kilo_rule_verifier_rejects_an_unsampled_hole_in_a_deny() {
+        let first = "code (primary)\n[{\"permission\":\"*\",\"pattern\":\"*\",\"action\":\"deny\"}]\n";
+        let after = "code (primary)\n[{\"permission\":\"*\",\"pattern\":\"*\",\"action\":\"deny\"},{\"permission\":\"bash\",\"pattern\":\"rm *\",\"action\":\"ask\"},{\"permission\":\"bash\",\"pattern\":\"rm x\",\"action\":\"deny\"}]\n";
+        let rules = kilo_ask(first).unwrap();
+        assert_eq!(decide(&rulesets(first, &KILO_ASKED).unwrap()[0].1, "bash", "rm private"), "deny");
+        assert_eq!(decide(&rulesets(after, &KILO_ASKED).unwrap()[0].1, "bash", "rm private"), "ask");
+        assert!(!kilo_kept(first, &rules, after), "checking only rm x misses rm private");
     }
 
     fn check_kilo(case: &str, want: &[(&str, &str, &str, &str)]) {
