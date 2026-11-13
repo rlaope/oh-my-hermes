@@ -23,8 +23,12 @@
 // message by its saved copy's path. An oh-my-hermes session takes no files: the bridge attaches files to a bot's
 // main chat only.
 import { useSyncExternalStore } from "react";
-import type { ITheme, Terminal } from "@xterm/xterm";
+import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import { afterOpen, feed, onVisible } from "./term/engine";
+import { applyLook, termOptions } from "./term/look";
+import { onTermSettings, readTermSettings } from "./term/settings";
+import { termTheme } from "./term/themes";
 import { agentDef, agentLabel, CONTINUES, draftAgent, draftFolder, draftOpen, hermesOnly, INSTALL, OPEN_KEY, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, sessionMode, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
@@ -105,7 +109,22 @@ interface Term {
   el: HTMLDivElement;
   hostId: number | null;
   closed: boolean;
+  /** Undoes what the engine attached after the terminal opened (its renderer, add-ons). */
+  undo: () => void;
+  /** Bytes drawn before the shell's id for the session was known: acknowledged once it is. */
+  owed: number;
+  /** The size the program was last told (when it started, then each resize sent). */
+  told: { cols: number; rows: number } | null;
+  /** A changed size waiting to be sent (`RESIZE_SETTLE_MS`). */
+  settle: ReturnType<typeof setTimeout> | null;
 }
+
+/** A terminal's new size goes to its program once it has stopped changing for this long. Dragging a window gives
+ *  one size per frame (16.7 ms at 60 Hz), so a wait of one frame or less collapses nothing; two frames does, and
+ *  the program redraws once for the size the drag ended on instead of once per frame. */
+export const RESIZE_SETTLE_MS = 32;
+
+const utf8 = new TextEncoder();
 
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
 let xtermLoad: Promise<Xterm> | null = null;
@@ -930,6 +949,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return true;
   };
 
+  /** The app theme in force, as the terminal views last reported it. */
+  let look: "dark" | "light" = "dark";
+
   /** How many times session `id`'s terminal was started again (Restart): the view keys its terminal on it. */
   const termRuns = new Map<string, number>();
 
@@ -940,13 +962,22 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const ofChat = sessionMode(state.agents, r) !== "terminal";
     // Claude Code's terminal continues the chat's conversation
     const resume = r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
+    const { cols, rows } = t.term;
     try {
       const hostId = await host.start(
         r.agent,
         r.cwd,
-        t.term.cols,
-        t.term.rows,
-        (d) => t.term.write(d),
+        cols,
+        rows,
+        (d) => {
+          // every message is acknowledged once the terminal has taken it, in order: the shell reads the program
+          // no further ahead of the page than its credit allows
+          const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
+          feed(t.term, d, () => {
+            if (t.hostId === null) t.owed += bytes;
+            else host.ack(t.hostId, bytes);
+          });
+        },
         (code) => {
           t.closed = true;
           if (!ofChat) {
@@ -964,6 +995,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         void host.close(hostId);
         return;
       }
+      if (t.owed) host.ack(hostId, t.owed);
+      t.owed = 0;
+      // the program started at this size; one that changed while it started is sent now
+      t.told = { cols, rows };
+      if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
     } catch (e) {
       t.closed = true;
@@ -976,23 +1012,36 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
+  /** Tell the program its terminal's size, if it is not the one it was last told. */
+  const tellSize = (t: Term) => {
+    t.settle = null;
+    if (t.hostId === null || t.closed) return;
+    const { cols, rows } = t.term;
+    if (t.told?.cols === cols && t.told.rows === rows) return;
+    t.told = { cols, rows };
+    void host.resize(t.hostId, cols, rows).catch(() => undefined);
+  };
+
   const disposeTerm = (id: string) => {
     const t = terms.get(id);
     if (!t) return;
     if (t.hostId !== null && !t.closed) void host.close(t.hostId).catch(() => undefined);
     t.closed = true;
+    if (t.settle !== null) clearTimeout(t.settle);
+    t.undo();
     t.term.dispose();
     t.el.remove();
     terms.delete(id);
   };
 
   /** Mount session `id`'s terminal into `container` (creating and starting it the first time). */
-  const attach = (id: string, container: HTMLElement, theme: ITheme): (() => void) => {
-    if (xtermMods) return mount(xtermMods, id, container, theme);
+  const attach = (id: string, container: HTMLElement, mode: "dark" | "light"): (() => void) => {
+    look = mode;
+    if (xtermMods) return mount(xtermMods, id, container);
     let detach: (() => void) | null = null;
     let gone = false;
     void loadXterm().then((m) => {
-      if (!gone) detach = mount(m, id, container, theme);
+      if (!gone) detach = mount(m, id, container);
     });
     return () => {
       gone = true;
@@ -1000,34 +1049,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     };
   };
 
-  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement, theme: ITheme): (() => void) => {
+  const mount = ([{ Terminal }, { FitAddon }]: Xterm, id: string, container: HTMLElement): (() => void) => {
+    const settings = readTermSettings();
+    const theme = termTheme(look, settings);
     let t = terms.get(id);
     const fresh = !t;
     if (!t) {
       const el = document.createElement("div");
       el.className = "term-host";
-      const term = new Terminal({
-        fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace",
-        fontSize: 12.5,
-        lineHeight: 1.2,
-        cursorBlink: true,
-        allowProposedApi: false,
-        scrollback: 5000,
-        // dim text (agents use it a lot) stays readable on the light background
-        minimumContrastRatio: 4.5,
-        macOptionIsMeta: true,
-        theme,
-      });
+      const term = new Terminal(termOptions(theme, settings));
       const fit = new FitAddon();
       term.loadAddon(fit);
-      t = { term, fit, el, hostId: null, closed: false };
+      t = { term, fit, el, hostId: null, closed: false, undo: () => undefined, owed: 0, told: null, settle: null };
       terms.set(id, t);
       const tt = t;
       term.onData((d) => {
         if (tt.hostId !== null && !tt.closed) void host.write(tt.hostId, d).catch(() => undefined);
       });
-      term.onResize(({ cols, rows }) => {
-        if (tt.hostId !== null && !tt.closed) void host.resize(tt.hostId, cols, rows).catch(() => undefined);
+      term.onResize(() => {
+        // the size it ends on is sent, once (a drag gives one size per frame)
+        if (tt.settle !== null) clearTimeout(tt.settle);
+        tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
       });
       // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
       // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
@@ -1050,8 +1092,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
     const tt = t;
     container.appendChild(tt.el);
-    if (fresh) tt.term.open(tt.el);
-    tt.term.options.theme = theme;
+    if (fresh) {
+      tt.term.open(tt.el);
+      tt.undo = afterOpen(tt.term, tt.el, settings);
+    }
+    applyLook(tt.term, theme, settings);
     const refit = () => {
       if (!tt.el.isConnected || tt.el.clientWidth === 0) return;
       try {
@@ -1064,9 +1109,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (fresh) void ready().then(() => startTerm(id, tt));
     const ro = new ResizeObserver(refit);
     ro.observe(container);
+    onVisible(tt.term, true);
     tt.term.focus();
     return () => {
       ro.disconnect();
+      onVisible(tt.term, false);
       if (tt.el.parentElement === container) container.removeChild(tt.el);
     };
   };
@@ -1365,9 +1412,27 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
   };
 
-  const setTheme = (theme: ITheme) => {
-    for (const t of terms.values()) t.term.options.theme = theme;
+  /** Every open terminal takes the look again: the app theme changed, or a terminal setting did. */
+  const relook = () => {
+    const settings = readTermSettings();
+    const theme = termTheme(look, settings);
+    for (const t of terms.values()) {
+      applyLook(t.term, theme, settings);
+      // a changed font or line height changes how many cells fit
+      if (t.el.isConnected && t.el.clientWidth > 0) {
+        try {
+          t.fit.fit();
+        } catch {
+          /* not measurable yet */
+        }
+      }
+    }
   };
+  const setLook = (mode: "dark" | "light") => {
+    look = mode;
+    relook();
+  };
+  onTermSettings(relook);
 
   return {
     getState: () => state,
@@ -1389,7 +1454,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     start,
     attach,
     close,
-    setTheme,
+    setLook,
     setView,
     setModel,
     setMode,

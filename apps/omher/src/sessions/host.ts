@@ -67,6 +67,10 @@ export interface SessionHost {
     account?: string,
   ): Promise<number>;
   write(id: number, data: string): Promise<void>;
+  /** The terminal has drawn `bytes` more of session `id`'s output. The shell stops reading the program while the
+   *  page is behind and reads again as these come back, so every message handed to `onData` is acknowledged once,
+   *  in order. Never waited for; a session that is gone takes none. */
+  ack(id: number, bytes: number): void;
   resize(id: number, cols: number, rows: number): Promise<void>;
   close(id: number): Promise<void>;
   /** Start `agent` in its chat mode in `cwd` (`resume`: a Claude Code or OmO session id or a Codex thread id to continue;
@@ -102,7 +106,8 @@ export interface SessionHost {
 
 export class TauriHost implements SessionHost {
   readonly kind = "tauri" as const;
-  private async core() {
+  /** The shell's command bridge (a test stands in for it by overriding this). */
+  protected async core(): Promise<Pick<typeof import("@tauri-apps/api/core"), "invoke" | "Channel">> {
     return import("@tauri-apps/api/core");
   }
   async reset() {
@@ -189,6 +194,31 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
   }
+  /** Drawn bytes not yet sent to the shell, by session. */
+  private drawn = new Map<number, number>();
+  /** A send of `drawn` is waiting for the end of this task. */
+  private sending = false;
+  /** One `session_ack` per session for everything drawn in the same task: xterm runs the callbacks of a whole
+   *  slice of its write queue (up to 12 ms of messages) in one task, so a flood costs one call per slice instead
+   *  of one per message. A call that fails is not lost credit: its bytes go back into `drawn` and ride on the next
+   *  acknowledgement (any session's), so the shell's count of what the page has drawn stays whole. */
+  ack(id: number, bytes: number) {
+    this.drawn.set(id, (this.drawn.get(id) ?? 0) + bytes);
+    if (this.sending) return;
+    this.sending = true;
+    queueMicrotask(() => {
+      this.sending = false;
+      const all = [...this.drawn];
+      this.drawn.clear();
+      const keep = (sid: number, n: number) => void this.drawn.set(sid, (this.drawn.get(sid) ?? 0) + n);
+      void this.core().then(
+        ({ invoke }) => {
+          for (const [sid, n] of all) void invoke("session_ack", { id: sid, bytes: n }).catch(() => keep(sid, n));
+        },
+        () => all.forEach(([sid, n]) => keep(sid, n)),
+      );
+    });
+  }
   async resize(id: number, cols: number, rows: number) {
     const { invoke } = await this.core();
     await invoke("session_resize", { id, cols, rows });
@@ -206,6 +236,7 @@ export interface MockCall {
     | "reset"
     | "start"
     | "write"
+    | "ack"
     | "resize"
     | "close"
     | "chat.start"
@@ -217,6 +248,8 @@ export interface MockCall {
     | "reveal"
     | "terminal";
   id?: number;
+  /** ack: how many drawn bytes it acknowledges */
+  bytes?: number;
   agent?: string;
   cwd?: string;
   data?: string;
@@ -245,9 +278,24 @@ const BANNER: Record<AgentId, string> = {
 };
 const PROMPT = "\x1b[2m›\x1b[0m ";
 
+/** One step of a mock terminal's output: a message handed to the terminal (`feed`), or its acknowledgement. */
+export interface MockFlow {
+  op: "feed" | "ack";
+  id: number;
+  bytes: number;
+}
+
+const utf8 = new TextEncoder();
+
+/** One message of a mock program that prints fast: 64 KiB of 64-byte lines, the size the shell hands output on in
+ *  (`COALESCE_BYTES` in src-tauri/src/sessions.rs). */
+const FLOOD_MESSAGE = `${"build output ".repeat(5).slice(0, 62)}\r\n`.repeat(1024);
+
 type MockGlobals = {
   __omherPickFolder?: string | null;
   __omherSessionCalls?: MockCall[];
+  /** e2e: every message a mock terminal's program printed and every acknowledgement of one, in the order they happened */
+  __omherSessionFlow?: MockFlow[];
   __omherMockAgents?: AgentId[];
   /** e2e: Hermes is here and `omh` is not (the oh-my-hermes row reads "Hermes" and opens a Hermes chat) */
   __omherMockNoOmh?: boolean;
@@ -318,11 +366,19 @@ export class MockHost implements SessionHost {
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string) {
     const id = ++this.next;
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(account ? { account } : {}) });
-    this.live.set(id, { line: "", out: onData, exit: onExit });
+    const out = (d: string) => {
+      (this.g.__omherSessionFlow ??= []).push({ op: "feed", id, bytes: utf8.encode(d).length });
+      onData(d);
+    };
+    this.live.set(id, { line: "", out, exit: onExit });
     setTimeout(() => {
-      onData(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
+      out(`${BANNER[agent]}\r\n\x1b[2m  ${agentDef(agent).program} in ${cwd}\x1b[0m\r\n\r\n${PROMPT}`);
     }, 30);
     return id;
+  }
+  ack(id: number, bytes: number) {
+    this.log({ op: "ack", id, bytes });
+    (this.g.__omherSessionFlow ??= []).push({ op: "ack", id, bytes });
   }
   async write(id: number, data: string) {
     this.log({ op: "write", id, data });
@@ -338,9 +394,10 @@ export class MockHost implements SessionHost {
           setTimeout(() => s.exit(0), 10);
           return;
         }
-        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]`: the program rings (BEL, or an OSC 9 message),
-        // reports progress (OSC 9;4, not a ring) or ends later, as an agent does while the person looks elsewhere
-        const later = /^after (\d+) (bell|osc9|progress|exit)(?: (\d+))?$/.exec(line);
+        // `after <ms> bell|osc9|progress` / `after <ms> exit [code]` / `after <ms> flood [MiB]`: the program rings
+        // (BEL, or an OSC 9 message), reports progress (OSC 9;4, not a ring), ends, or prints a lot at once (1 MiB
+        // unless told, as 64 KiB messages) later, as an agent does while the person looks elsewhere
+        const later = /^after (\d+) (bell|osc9|progress|exit|flood)(?: (\d+))?$/.exec(line);
         if (later) {
           s.out(`\r\n${PROMPT}`);
           setTimeout(() => {
@@ -348,6 +405,10 @@ export class MockHost implements SessionHost {
             if (later[2] === "bell") return s.out("\x07");
             if (later[2] === "osc9") return s.out("\x1b]9;Needs your approval\x07");
             if (later[2] === "progress") return s.out("\x1b]9;4;1;50\x07");
+            if (later[2] === "flood") {
+              for (let i = 0; i < Number(later[3] ?? 1) * 16; i++) s.out(FLOOD_MESSAGE);
+              return;
+            }
             this.live.delete(id);
             s.exit(Number(later[3] ?? 0));
           }, Number(later[1]));

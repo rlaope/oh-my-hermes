@@ -1,0 +1,547 @@
+{
+  "commit": "be78db004 +changes",
+  "machine": "Darwin 25.6.0 arm64; Apple M4 Pro; 14 cores; 48 GB",
+  "profile": "release",
+  "runs_each": 3,
+  "load_average_at_start": [
+    9.522,
+    8.753,
+    9.261
+  ],
+  "sweep": [
+    {
+      "high": 262144,
+      "low": 65536,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 38.479,
+          "min": 38.47,
+          "max": 38.507,
+          "runs": [
+            38.479,
+            38.507,
+            38.47
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 622.125,
+          "min": 621.377,
+          "max": 622.16,
+          "runs": [
+            622.125,
+            621.377,
+            622.16
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 0.125,
+          "min": 0.058,
+          "max": 0.25,
+          "runs": [
+            0.125,
+            0.25,
+            0.058
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 4.999,
+          "min": 3.5,
+          "max": 7.247,
+          "runs": [
+            4.999,
+            7.247,
+            3.5
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 0.125,
+          "min": 0.063,
+          "max": 0.21,
+          "runs": [
+            0.063,
+            0.125,
+            0.21
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 293.123,
+          "min": 127.762,
+          "max": 441.22,
+          "runs": [
+            127.762,
+            293.123,
+            441.22
+          ]
+        }
+      }
+    },
+    {
+      "high": 524288,
+      "low": 131072,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 55.549,
+          "min": 55.426,
+          "max": 55.6,
+          "runs": [
+            55.6,
+            55.549,
+            55.426
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 896.293,
+          "min": 891.993,
+          "max": 897.855,
+          "runs": [
+            896.293,
+            897.855,
+            891.993
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 0.438,
+          "min": 0.313,
+          "max": 0.5,
+          "runs": [
+            0.313,
+            0.438,
+            0.5
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 8.32,
+          "min": 6.855,
+          "max": 8.424,
+          "runs": [
+            6.855,
+            8.32,
+            8.424
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 0.125,
+          "min": 0.064,
+          "max": 0.501,
+          "runs": [
+            0.125,
+            0.501,
+            0.064
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 314.926,
+          "min": 283.108,
+          "max": 780.974,
+          "runs": [
+            314.926,
+            780.974,
+            283.108
+          ]
+        }
+      }
+    },
+    {
+      "high": 1048576,
+      "low": 262144,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 71.33,
+          "min": 71.239,
+          "max": 71.383,
+          "runs": [
+            71.383,
+            71.239,
+            71.33
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 1147.914,
+          "min": 1145.648,
+          "max": 1148.31,
+          "runs": [
+            1148.31,
+            1145.648,
+            1147.914
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 0.523,
+          "min": 0.522,
+          "max": 0.54,
+          "runs": [
+            0.523,
+            0.54,
+            0.522
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 4.956,
+          "min": 4.862,
+          "max": 5.147,
+          "runs": [
+            4.956,
+            4.862,
+            5.147
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 0.438,
+          "min": 0.438,
+          "max": 0.501,
+          "runs": [
+            0.501,
+            0.438,
+            0.438
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 748.066,
+          "min": 677.722,
+          "max": 878.545,
+          "runs": [
+            878.545,
+            748.066,
+            677.722
+          ]
+        }
+      }
+    },
+    {
+      "high": 1048576,
+      "low": 524288,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 71.292,
+          "min": 71.203,
+          "max": 71.347,
+          "runs": [
+            71.292,
+            71.347,
+            71.203
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 1148.517,
+          "min": 1147.564,
+          "max": 1148.931,
+          "runs": [
+            1148.517,
+            1147.564,
+            1148.931
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 0.414,
+          "min": 0.011,
+          "max": 0.556,
+          "runs": [
+            0.556,
+            0.011,
+            0.414
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 4.54,
+          "min": 4.042,
+          "max": 5.278,
+          "runs": [
+            5.278,
+            4.042,
+            4.54
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 0.751,
+          "min": 0.626,
+          "max": 0.813,
+          "runs": [
+            0.626,
+            0.751,
+            0.813
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 1327.414,
+          "min": 1117.819,
+          "max": 1359.444,
+          "runs": [
+            1117.819,
+            1327.414,
+            1359.444
+          ]
+        }
+      }
+    },
+    {
+      "high": 2097152,
+      "low": 524288,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 72.913,
+          "min": 72.821,
+          "max": 72.931,
+          "runs": [
+            72.913,
+            72.931,
+            72.821
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 1179.495,
+          "min": 1175.728,
+          "max": 1180.731,
+          "runs": [
+            1179.495,
+            1180.731,
+            1175.728
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 1.084,
+          "min": 0.616,
+          "max": 1.197,
+          "runs": [
+            0.616,
+            1.084,
+            1.197
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 10.739,
+          "min": 5.724,
+          "max": 15.451,
+          "runs": [
+            5.724,
+            10.739,
+            15.451
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 0.563,
+          "min": 0.5,
+          "max": 0.625,
+          "runs": [
+            0.5,
+            0.563,
+            0.625
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 932.318,
+          "min": 921.012,
+          "max": 1028.038,
+          "runs": [
+            921.012,
+            932.318,
+            1028.038
+          ]
+        }
+      }
+    },
+    {
+      "high": 2097152,
+      "low": 1048576,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 75.548,
+          "min": 75.545,
+          "max": 75.601,
+          "runs": [
+            75.548,
+            75.545,
+            75.601
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 1216.701,
+          "min": 1214.079,
+          "max": 1216.977,
+          "runs": [
+            1216.977,
+            1214.079,
+            1216.701
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 1.184,
+          "min": 0.832,
+          "max": 1.25,
+          "runs": [
+            0.832,
+            1.25,
+            1.184
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 12.067,
+          "min": 11.49,
+          "max": 16.107,
+          "runs": [
+            11.49,
+            16.107,
+            12.067
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 1.689,
+          "min": 1.564,
+          "max": 1.689,
+          "runs": [
+            1.564,
+            1.689,
+            1.689
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 2558.774,
+          "min": 2411.012,
+          "max": 2579.562,
+          "runs": [
+            2411.012,
+            2558.774,
+            2579.562
+          ]
+        }
+      }
+    },
+    {
+      "high": 4194304,
+      "low": 1048576,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 75.665,
+          "min": 75.624,
+          "max": 75.687,
+          "runs": [
+            75.665,
+            75.687,
+            75.624
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 1221.314,
+          "min": 1217.01,
+          "max": 1224.536,
+          "runs": [
+            1221.314,
+            1217.01,
+            1224.536
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 1.432,
+          "min": 0.874,
+          "max": 1.501,
+          "runs": [
+            1.432,
+            0.874,
+            1.501
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 17.9,
+          "min": 12.413,
+          "max": 22.46,
+          "runs": [
+            17.9,
+            12.413,
+            22.46
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 2.563,
+          "min": 2.501,
+          "max": 2.626,
+          "runs": [
+            2.563,
+            2.626,
+            2.501
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 3755.664,
+          "min": 2968.48,
+          "max": 3765.106,
+          "runs": [
+            3755.664,
+            3765.106,
+            2968.48
+          ]
+        }
+      }
+    },
+    {
+      "high": 8388608,
+      "low": 2097152,
+      "results": {
+        "slice_yes_5s_mb_s": {
+          "median": 75.678,
+          "min": 75.638,
+          "max": 75.69,
+          "runs": [
+            75.69,
+            75.638,
+            75.678
+          ]
+        },
+        "slice_yes_5s_messages_per_s": {
+          "median": 1218.322,
+          "min": 1214.536,
+          "max": 1222.657,
+          "runs": [
+            1222.657,
+            1214.536,
+            1218.322
+          ]
+        },
+        "slice_interrupt_mb_after_key": {
+          "median": 2.625,
+          "min": 2.257,
+          "max": 6.454,
+          "runs": [
+            2.625,
+            2.257,
+            6.454
+          ]
+        },
+        "slice_interrupt_ms_to_last_byte": {
+          "median": 33.803,
+          "min": 26.346,
+          "max": 84.343,
+          "runs": [
+            33.803,
+            26.346,
+            84.343
+          ]
+        },
+        "page_interrupt_20ms_mb_after_key": {
+          "median": 6.501,
+          "min": 6.438,
+          "max": 6.563,
+          "runs": [
+            6.501,
+            6.563,
+            6.438
+          ]
+        },
+        "page_interrupt_20ms_ms_to_last_byte": {
+          "median": 9512.105,
+          "min": 7842.5,
+          "max": 9552.027,
+          "runs": [
+            9512.105,
+            9552.027,
+            7842.5
+          ]
+        }
+      }
+    }
+  ],
+  "load_average_at_end": [
+    7.17,
+    7.511,
+    8.45
+  ],
+  "note": "measured on the tree of commit 8d02935da while it was still uncommitted over be78db004 (the same files, byte for byte); each pair was set through OMHER_PTY_BENCH_MARKS, so the marks compiled into that tree play no part"
+}

@@ -1,0 +1,358 @@
+{
+  "commit": "a61590199 (the merge of main and the three lanes) with one uncommitted change, a bundle resource added in tauri.conf.json",
+  "machine": "Darwin 25.6.0 arm64; Apple M4 Pro; 14 cores; 48 GB",
+  "profile": "release",
+  "runs_each": 3,
+  "load_average_at_start": [
+    6.254,
+    5.095,
+    5.351
+  ],
+  "results": {
+    "sink_cat_200mb_cpu_ms_per_mb": {
+      "median": 2.899,
+      "min": 2.858,
+      "max": 2.95,
+      "runs": [
+        2.899,
+        2.858,
+        2.95
+      ]
+    },
+    "sink_cat_200mb_mb_s": {
+      "median": 204.234,
+      "min": 199.192,
+      "max": 207.609,
+      "runs": [
+        204.234,
+        207.609,
+        199.192
+      ]
+    },
+    "sink_yes_5s_mb_s": {
+      "median": 116.907,
+      "min": 114.182,
+      "max": 117.498,
+      "runs": [
+        116.907,
+        117.498,
+        114.182
+      ]
+    },
+    "sink_yes_5s_messages_per_s": {
+      "median": 1870.511,
+      "min": 1826.908,
+      "max": 1879.962,
+      "runs": [
+        1870.511,
+        1879.962,
+        1826.908
+      ]
+    },
+    "sink_slow_2ms_10s_drawn_mb_s": {
+      "median": 31.163,
+      "min": 31.161,
+      "max": 31.169,
+      "runs": [
+        31.169,
+        31.163,
+        31.161
+      ]
+    },
+    "sink_slow_2ms_10s_mean_message_kb": {
+      "median": 64,
+      "min": 64,
+      "max": 64,
+      "runs": [
+        64,
+        64,
+        64
+      ]
+    },
+    "sink_slow_2ms_10s_ms_in_page_per_message": {
+      "median": 2,
+      "min": 2,
+      "max": 2,
+      "runs": [
+        2,
+        2,
+        2
+      ]
+    },
+    "sink_slow_2ms_10s_ms_per_message": {
+      "median": 2.006,
+      "min": 2.005,
+      "max": 2.006,
+      "runs": [
+        2.005,
+        2.006,
+        2.006
+      ]
+    },
+    "sink_slow_2ms_10s_peak_rss_mb": {
+      "median": 10.75,
+      "min": 10.672,
+      "max": 10.766,
+      "runs": [
+        10.766,
+        10.75,
+        10.672
+      ]
+    },
+    "sink_slow_2ms_10s_queued_mb": {
+      "median": 0.117,
+      "min": 0.091,
+      "max": 0.126,
+      "runs": [
+        0.091,
+        0.117,
+        0.126
+      ]
+    },
+    "sink_interrupt_2ms_mb_after_key": {
+      "median": 0.125,
+      "min": 0.125,
+      "max": 0.126,
+      "runs": [
+        0.125,
+        0.126,
+        0.125
+      ]
+    },
+    "sink_interrupt_2ms_ms_to_last_byte": {
+      "median": 5.277,
+      "min": 5,
+      "max": 5.368,
+      "runs": [
+        5.277,
+        5.368,
+        5
+      ]
+    },
+    "echo_200_median_ms": {
+      "median": 23.226,
+      "min": 23.153,
+      "max": 23.923,
+      "runs": [
+        23.153,
+        23.226,
+        23.923
+      ]
+    },
+    "echo_200_p95_ms": {
+      "median": 36.041,
+      "min": 35.923,
+      "max": 36.05,
+      "runs": [
+        36.041,
+        36.05,
+        35.923
+      ]
+    },
+    "page_cat_200mb_cpu_ms_per_mb": {
+      "median": 3.008,
+      "min": 2.879,
+      "max": 3.049,
+      "runs": [
+        3.008,
+        3.049,
+        2.879
+      ]
+    },
+    "page_cat_200mb_mb_s": {
+      "median": 202.197,
+      "min": 198.189,
+      "max": 208.656,
+      "runs": [
+        202.197,
+        198.189,
+        208.656
+      ]
+    },
+    "page_yes_5s_mb_s": {
+      "median": 116.028,
+      "min": 115.469,
+      "max": 116.087,
+      "runs": [
+        115.469,
+        116.028,
+        116.087
+      ]
+    },
+    "page_yes_5s_messages_per_s": {
+      "median": 1856.443,
+      "min": 1847.502,
+      "max": 1857.394,
+      "runs": [
+        1847.502,
+        1856.443,
+        1857.394
+      ]
+    },
+    "page_slow_20ms_10s_drawn_mb_s": {
+      "median": 2.958,
+      "min": 2.955,
+      "max": 2.959,
+      "runs": [
+        2.955,
+        2.958,
+        2.959
+      ]
+    },
+    "page_slow_20ms_10s_mean_message_kb": {
+      "median": 60.626,
+      "min": 60.626,
+      "max": 60.633,
+      "runs": [
+        60.626,
+        60.633,
+        60.626
+      ]
+    },
+    "page_slow_20ms_10s_ms_in_page_per_message": {
+      "median": 20.002,
+      "min": 20.002,
+      "max": 20.003,
+      "runs": [
+        20.002,
+        20.003,
+        20.002
+      ]
+    },
+    "page_slow_20ms_10s_ms_per_message": {
+      "median": 20.019,
+      "min": 20.011,
+      "max": 20.035,
+      "runs": [
+        20.035,
+        20.019,
+        20.011
+      ]
+    },
+    "page_slow_20ms_10s_peak_rss_mb": {
+      "median": 15.234,
+      "min": 15.188,
+      "max": 15.234,
+      "runs": [
+        15.234,
+        15.234,
+        15.188
+      ]
+    },
+    "page_slow_20ms_10s_queued_mb": {
+      "median": 1.814,
+      "min": 1.751,
+      "max": 1.814,
+      "runs": [
+        1.814,
+        1.751,
+        1.814
+      ]
+    },
+    "page_interrupt_2ms_mb_after_key": {
+      "median": 1.376,
+      "min": 0.938,
+      "max": 1.625,
+      "runs": [
+        0.938,
+        1.625,
+        1.376
+      ]
+    },
+    "page_interrupt_2ms_ms_to_last_byte": {
+      "median": 46.121,
+      "min": 33.811,
+      "max": 52.558,
+      "runs": [
+        33.811,
+        52.558,
+        46.121
+      ]
+    },
+    "page_interrupt_20ms_mb_after_key": {
+      "median": 1.001,
+      "min": 0.952,
+      "max": 1.001,
+      "runs": [
+        1.001,
+        1.001,
+        0.952
+      ]
+    },
+    "page_interrupt_20ms_ms_to_last_byte": {
+      "median": 341.064,
+      "min": 339.971,
+      "max": 352.031,
+      "runs": [
+        341.064,
+        352.031,
+        339.971
+      ]
+    },
+    "slice_cat_200mb_cpu_ms_per_mb": {
+      "median": 16.098,
+      "min": 16.044,
+      "max": 16.105,
+      "runs": [
+        16.105,
+        16.044,
+        16.098
+      ]
+    },
+    "slice_cat_200mb_mb_s": {
+      "median": 75.673,
+      "min": 75.567,
+      "max": 75.69,
+      "runs": [
+        75.567,
+        75.673,
+        75.69
+      ]
+    },
+    "slice_yes_5s_mb_s": {
+      "median": 75.701,
+      "min": 75.667,
+      "max": 75.722,
+      "runs": [
+        75.701,
+        75.722,
+        75.667
+      ]
+    },
+    "slice_yes_5s_messages_per_s": {
+      "median": 1214.321,
+      "min": 1213.783,
+      "max": 1214.983,
+      "runs": [
+        1214.321,
+        1214.983,
+        1213.783
+      ]
+    },
+    "slice_interrupt_mb_after_key": {
+      "median": 1.252,
+      "min": 0.923,
+      "max": 1.366,
+      "runs": [
+        1.252,
+        1.366,
+        0.923
+      ]
+    },
+    "slice_interrupt_ms_to_last_byte": {
+      "median": 16.365,
+      "min": 11.642,
+      "max": 17.445,
+      "runs": [
+        16.365,
+        17.445,
+        11.642
+      ]
+    }
+  },
+  "load_average_at_end": [
+    5.953,
+    5.613,
+    5.515
+  ]
+}

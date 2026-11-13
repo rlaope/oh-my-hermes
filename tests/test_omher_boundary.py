@@ -130,6 +130,11 @@ RULES = (
     " (no preview, title or oEmbed request).",
     "of the bot's own messenger sessions in its `state.db` (`links.places`), never a message.",
     "A link opens only when the person clicks it, through the system opener:",
+    "A link in a SESSIONS terminal's output follows the same rule, whether omher found the address in the printed text"
+    " or the program marked it as a hyperlink itself (OSC 8):",
+    "A plain click opens nothing, and the terminal library's own confirm-and-open path for marked hyperlinks is never used.",
+    "How terminals look and behave (themes, font, cursor, scrollback, renderer, those two clipboard switches) is one"
+    " record in this computer's storage for the app (`omher.term`); omher reads no other program's terminal settings or theme files.",
     "Settings › Providers \"Add key\" may open the person's own system terminal running exactly"
     " `hermes auth add <provider> --type api-key`, and nothing else, only when the person picks a provider.",
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
@@ -411,6 +416,48 @@ class LinkChipsFetchNothing(unittest.TestCase):
         self.assertIn("!host.contains('@')", body)
         allowed = lib[lib.index("pub(crate) fn allowed_external"):]
         self.assertIn("is_control()", allowed[: allowed.index("\n}\n")])
+
+    def test_a_terminal_link_opens_only_through_the_one_opener(self) -> None:
+        # links in a SESSIONS terminal's output (found in the text, or marked by the program with OSC 8): one
+        # click rule, one address rule, the app's one opener; nothing fetched, no window opened by the terminal code
+        term = UI_SRC / "sessions" / "term"
+        links = (term / "engine-links.ts").read_text(encoding="utf-8")
+        code = "\n".join(line for line in links.splitlines() if not line.lstrip().startswith(("//", "*", "/**")))
+        self.assertIn('import { openExternal } from "../../lib/openExternal";', code)
+        # both kinds go through activateLink, which holds the modifier and the address checks
+        self.assertEqual(code.count("activateLink(e, uri)"), 2)
+        self.assertIn("term.options.linkHandler = { activate: (e, uri) => void activateLink(e, uri)", code)
+        self.assertNotIn("allowNonHttpProtocols", code)
+        body = code[code.index("export function activateLink"):]
+        body = body[: body.index("\n}\n")]
+        self.assertLess(body.index("linkModifier(event, mac)"), body.index("open(url)"))
+        self.assertLess(body.index("webLinkTarget(text)"), body.index("open(url)"))
+        rule = code[code.index("export function webLinkTarget"):]
+        rule = rule[: rule.index("\n}\n")]
+        self.assertIn('u.protocol !== "https:" && u.protocol !== "http:"', rule)
+        self.assertIn("u.username || u.password", rule)
+        for path in sorted(term.glob("*.ts")) + sorted(term.glob("*.tsx")):
+            if path.name.endswith(".test.ts"):
+                continue
+            text = "\n".join(line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith(("//", "*", "/**")))
+            for bad in ("window.open", "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "confirm("):
+                self.assertNotIn(bad, text, f"{path.name}: {bad}")
+
+    def test_terminal_settings_are_one_record_and_read_no_other_programs_files(self) -> None:
+        term = UI_SRC / "sessions" / "term"
+        settings = (term / "settings.ts").read_text(encoding="utf-8")
+        self.assertIn('export const TERM_KEY = "omher.term";', settings)
+        self.assertEqual(settings.count("localStorage.getItem("), 1)
+        self.assertEqual(settings.count("localStorage.setItem("), 1)
+        for path in sorted(term.glob("*.ts")) + sorted(term.glob("*.tsx")):
+            if path.name.endswith(".test.ts"):
+                continue
+            text = path.read_text(encoding="utf-8")
+            # nothing here reaches the shell or the disk: the palettes are data in the bundle
+            for bad in ("invoke(", "@tauri-apps", "readTextFile", "plugin-fs"):
+                self.assertNotIn(bad, text, f"{path.name}: {bad}")
+            if path.name != "settings.ts":
+                self.assertNotIn("localStorage", text, path.name)
 
 
 class OmhNeverReachesOmher(unittest.TestCase):
