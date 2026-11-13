@@ -2,9 +2,10 @@
 // - Wheel: until the visitor clicks into the window, every wheel scrolls the page (the window never traps it).
 //   After a click it scrolls the pane under the cursor when that pane can move that way, else the page.
 // - Things that would start real work (add a bot, attachments, changing an automation or a plugin, restarting a bot,
-//   a session in the agent's own terminal, taking a message back, installing oh-my-hermes) show one small note
-//   instead: "Download omher to …". Nothing is started anywhere. The Automations and Plugins pages themselves open on
-//   staged data (host.ts), so a visitor can look around them.
+//   a session in the agent's own terminal, taking a message back, installing oh-my-hermes, opening a session's folder
+//   in the file manager or the system terminal) show one small note instead: "Download omher to …". Nothing is
+//   started anywhere. The Automations and Plugins pages themselves open on staged data (host.ts), so a visitor can
+//   look around them.
 const W = window as unknown as { __omherPreviewToasts?: string[] };
 
 let focused = false;
@@ -47,7 +48,13 @@ export function toast(text: string): void {
 // bot row's menu (and every other Restart press: an offline chat, after a plugin change, Restart anyway), a session
 // run as the agent's own terminal (the draft's Terminal choice, Start, the header's terminal button), Edit on the
 // last message of a session (the agent's own rewind) and the oh-my-hermes installer behind the sidebar's "!".
-// The third field lets a note fire inside a menu (the bot row's menu); other menus keep their own items.
+// From 0.2.7: Show in Finder / Explorer and Open in Terminal in a session row's right-click menu. The staged
+// sessions' folders (/Users/you/code/…) are on nobody's computer, and the app's in-page session host only records
+// those two calls, so each was a click that did nothing. The menu's other items stay live: Rename, Copy conversation
+// id, New session here and Close session act on the staged session only, and Continue a conversation in the + menu
+// lists the in-page host's staged conversations.
+// The third field lets a note fire inside a menu (the bot row's menu, a session row's); other menus keep their own
+// items.
 type Note = Record<"en" | "ko" | "ja" | "zh", string>;
 const INERT: [string, Note, boolean?][] = [
   [
@@ -121,6 +128,16 @@ const INERT: [string, Note, boolean?][] = [
       ko: "미리보기 화면이에요. omher를 내려받으면 내 Hermes에 oh-my-hermes를 설치할 수 있어요.",
       ja: "これはプレビューです。omher をダウンロードすると Hermes に oh-my-hermes を追加できます。",
       zh: "这是预览。下载 omher 即可为你的 Hermes 添加 oh-my-hermes。",
+    },
+    true,
+  ],
+  [
+    '[data-testid="session-reveal"], [data-testid="session-system-terminal"]',
+    {
+      en: "This is a preview. Download omher to open a session's folder in your file manager or your own terminal.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 세션 폴더를 파일 관리자나 내 터미널에서 열 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、セッションのフォルダをファイルマネージャーや自分のターミナルで開けます。",
+      zh: "这是预览。下载 omher 即可在文件管理器或你自己的终端中打开会话的文件夹。",
     },
     true,
   ],
