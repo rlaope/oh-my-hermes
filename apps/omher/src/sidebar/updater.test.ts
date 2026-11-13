@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { percent, retryDelay, shortError, updateHost, watchForUpdates, type PendingUpdate } from "./updater";
 
-const realCheck = vi.hoisted(() => vi.fn(async (_options?: { timeout?: number }) => null));
-vi.mock("@tauri-apps/plugin-updater", () => ({ check: realCheck }));
-
 describe("updater helpers", () => {
   it("rounds progress down and caps it at 100", () => {
     expect(percent({ done: 0, total: 1000 })).toBe(0);
@@ -189,9 +186,15 @@ describe("an app left open keeps looking for a newer release", () => {
   });
 
   it("gives the shell's own check a time limit, so one that never answers cannot hold back the next", async () => {
-    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
-    await updateHost()!.check();
-    expect(realCheck.mock.calls).toEqual([[{ timeout: 30_000 }]]);
+    // the shell's side of the bridge: what the updater's own check hands to Tauri
+    const sent: [string, { timeout?: number }][] = [];
+    const invoke = async (cmd: string, args: { timeout?: number }) => {
+      sent.push([cmd, args]);
+      return null;
+    };
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: { invoke } });
+    expect(await updateHost()!.check()).toBeNull();
+    expect(sent.map(([cmd, args]) => [cmd, args.timeout])).toEqual([["plugin:updater|check", 30_000]]);
   });
 
   it("does not check while an install runs, and stops for good when the button is gone", async () => {
