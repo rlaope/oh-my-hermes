@@ -20,7 +20,7 @@ import { ownSetting } from "./ownSetting";
 import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, CONTINUES, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, CONTINUES, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
 import { pickTitle } from "./titles";
 import { t as tr, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -818,6 +818,19 @@ export function SessionView() {
           <span className="ss-head-bg" data-testid="session-background" title={tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}>
             {tr(rec.background === 1 ? "ss.background1" : "ss.backgroundN", { n: rec.background })}
           </span>
+        )}
+        {/* no turn runs, so the composer offers Send: the background work's own Stop sits beside the words that say
+            it runs, and sends the agent's own interrupt (Esc keeps stopping a running turn only) */}
+        {showChat && !!rec.background && !turn && rec.status === "running" && STOPS_BACKGROUND.includes(rec.agent) && (
+          <button
+            type="button"
+            className="ss-head-stop"
+            title={tr("ss.stopBackground")}
+            onClick={() => void getSessions().interrupt(rec.id)}
+            data-testid="session-background-stop"
+          >
+            {tr("ss.stopBackgroundShort")}
+          </button>
         )}
         {showRight && (
           <div className="head-right ss-head-right" data-testid="head-right">

@@ -4,7 +4,7 @@
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
 // or a click outside closes the list. Past three asks the list ends on the third, whole, and a "+2 more" row shows
 // the rest (then the list scrolls).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { askFrom, askText, isSessionChat, useStore, type Ask } from "../state/store";
@@ -34,6 +34,16 @@ export function stripText(n: number, who: string, ask: string, max = 32): { coun
   const flat = ask.replace(/`/g, "").replace(/\s+/g, " ").trim();
   const words = flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
   return { count: n === 1 ? t("needs.one") : t("needs.many", { n }), rest: ` · ${who}: ${words}` };
+}
+
+/** The strip's words with each " · " held to the word after it in one unbreakable box: where the sidebar cuts the
+ *  line, the ellipsis then never follows a lone separator ("web-app ·…"). The text stays the same. */
+export function glued(text: string): ReactNode[] {
+  return text.split(" · ").flatMap((part, i) => {
+    if (i === 0) return [part];
+    const [, word, rest] = /^(\S*)([\s\S]*)$/.exec(part)!;
+    return [" ", <span key={i} className="needs-sep">{`· ${word}`}</span>, rest];
+  });
 }
 
 /** Asks the list shows before its "+N more" row: three two-line entries fit without cutting one. */
@@ -92,7 +102,7 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
         <span className="needs-ic" aria-hidden="true" />
         <span className="needs-t" title={line.count + line.rest} data-testid="needs-line">
           {line.count}
-          <span className="needs-who">{line.rest}</span>
+          <span className="needs-who">{glued(line.rest)}</span>
         </span>
         <span className="needs-k" aria-hidden="true">
           {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘J" : "Ctrl+J"}

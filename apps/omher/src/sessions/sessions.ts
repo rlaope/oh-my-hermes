@@ -428,7 +428,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         if (proc.stopping) return;
         endLiveTurn(id, "ended");
         const code = typeof ev.code === "number" ? ev.code : null;
-        const error = proc.noChat ?? (typeof ev.error === "string" ? ev.error.trim() : "");
+        // code 0 is an orderly close: whatever the program printed (a start-up warning) is not why it ended
+        const error = proc.noChat ?? (code !== 0 && typeof ev.error === "string" ? ev.error.trim() : "");
         patchRec(id, { status: "exited", exitCode: code, ...(error ? { error } : {}) });
         // the turn the exit failed says "Failed after 0s"; its reason is the Ended line's, said once beside Restart
         const key = keys.get(id);

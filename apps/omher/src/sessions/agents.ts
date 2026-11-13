@@ -73,6 +73,13 @@ export const CONTINUES: readonly AgentId[] = ["claude", "codex", "omo", "dsh", "
 
 export const agentDef = (id: AgentId): AgentDef => AGENTS.find((a) => a.id === id)!;
 
+/** Agents whose own Stop, sent with no turn running, stops the work still running in the background: Claude Code's
+ *  `interrupt` stops its background subagents and withdraws their asks, and its `stop_task` stops a background
+ *  command (claude-13-late-ask-stop, claude-14-background-stop.jsonl). OmO's `abort` with no turn touches none of
+ *  the background commands it counts, and Codex, ACP agents and DSH refuse a Stop with no turn and count no
+ *  background work, so they get no such Stop. */
+export const STOPS_BACKGROUND: readonly AgentId[] = ["claude"];
+
 /** One allow-listed agent as found on this computer (`path: null` = not installed). */
 export interface AgentInfo {
   id: AgentId;
