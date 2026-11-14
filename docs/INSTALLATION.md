@@ -551,7 +551,10 @@ run and approval decision stays Hermes'; the screen is OMH's.
   then, while the session owns a process Hermes runs in the background, its
   row: `✳ background  terminal(<command>)  8s`, its clock ticking each second,
   and after the turn who will be told when it ends (`🔔 will ping you when
-  done`, or `🔕 Hermes won't be pinged · OMH is watching it`); once one ends
+  done`, or `🔕 Hermes won't be pinged · OMH is watching it`); who will be
+  told is what Hermes' `terminal` result said as it started the process,
+  since Hermes writes its process record before it arms the notification and
+  that record keeps saying no one will be told; once one ends
   unreported, `✓ background  terminal(<command>)  finished 0:12 ago  ↵ report
   result`, and Enter on an empty composer asks the session for the results.
   A question, a picker or the history search hides the row while it has the

@@ -574,6 +574,7 @@ REFUSAL_SENTENCES = {
     ),
 }
 TODOS_NONE_NOTICE = "No plan in this session yet: Hermes' todo tool writes one."
+BG_WAKING_KEPT = 64  # the process ids `App.bg_waking` remembers, oldest dropped first
 QUESTION_VIEW_TITLE = "the open question (q goes back to it)"  # Ctrl+O's pager while Hermes asks something
 # `/compress` (and `/compact`, its alias) while it runs: Hermes summarizes the older turns with a model call.
 COMPRESS_COMMANDS = frozenset({"compress", "compact"})
@@ -2464,6 +2465,10 @@ class App(ModesMixin, AgentViewMixin):
         self.bg_session = ""
         self.bg_running: tuple[BackgroundProcess, ...] = ()
         self.bg_quiet: dict[str, float] = {}
+        # The background processes a `terminal` result said Hermes will wake the session for (`notify_on_complete`
+        # true, or watch patterns), by Hermes' process id: Hermes writes `processes.json` at the spawn, before it
+        # sets those flags, so the checkpoint says neither until something else rewrites it (`_take_waking`).
+        self.bg_waking: dict[str, None] = {}
         self.bg_done: tuple[tuple[BackgroundProcess, ...], float] | None = None
         self.bg_drawn: int | None = None  # the row's clock second the last frame showed (`_background_second`)
         self.bg_on_info = False  # whether the info line `_info_line` last made has the row (it can give way: `info_line`)
@@ -4271,6 +4276,7 @@ class App(ModesMixin, AgentViewMixin):
             self._count_streamed(event.type, payload)
             if event.type == "tool.complete" and isinstance(payload, Mapping):
                 self._dag_moment(payload)
+                self._take_waking(payload)
             if event.type in ("tool.complete", "message.complete") and self.git is not None:
                 self.git.refresh()  # a tool or the turn may have changed the files or the branch
             if event.type == "message.start":
@@ -8997,7 +9003,8 @@ class App(ModesMixin, AgentViewMixin):
             if self.bg_session not in snapshot.earlier:
                 self.bg_running, self.bg_quiet, self.bg_done = (), {}, None
             self.bg_session = snapshot.session_id
-        running = {process.proc_id for process in snapshot.processes}
+        processes = self._with_waking(snapshot.processes)
+        running = {process.proc_id for process in processes}
         ended = tuple(
             process for process in self.bg_running
             if process.proc_id not in running and not process.notify and not process.watched and askable(process)
@@ -9007,10 +9014,37 @@ class App(ModesMixin, AgentViewMixin):
             done, at = self.bg_done or ((), self.wall_clock())
             self.bg_done = (done + ended, at)
             self._alert_background(ended[0])
-        self.bg_running = snapshot.processes
+        self.bg_running = processes
         self.bg_quiet = {key: at for key, at in self.bg_quiet.items() if key in running}
         if not self._busy() and snapshot.refreshes >= self.bg_after:
             self.bg_quiet.update((process.proc_id, self.clock()) for process in self.bg_running)
+
+    def _take_waking(self, payload: Mapping[str, Any]) -> None:
+        """A `terminal` call's result that started a background process Hermes will wake the session for: its process
+        id joins `bg_waking`, which `_with_waking` applies to every later read of the checkpoint. Only the result
+        Hermes sent says so; `notify_on_complete` is false there when Hermes could not arm it (a subagent, a session
+        that cannot take a completion), and then nothing is taken."""
+        if as_text(payload.get("name")) != "terminal":
+            return
+        result = payload.get("result")
+        if not isinstance(result, Mapping):
+            return
+        proc_id = result.get("session_id")
+        watch = result.get("watch_patterns")
+        wakes = result.get("notify_on_complete") is True or (
+            isinstance(watch, list) and any(isinstance(item, str) and item for item in watch))
+        if isinstance(proc_id, str) and proc_id.startswith("proc_") and wakes:
+            self.bg_waking[proc_id] = None
+            while len(self.bg_waking) > BG_WAKING_KEPT:
+                del self.bg_waking[next(iter(self.bg_waking))]
+            if self.bg_running:
+                self.bg_running = self._with_waking(self.bg_running)
+                self.dirty = True
+
+    def _with_waking(self, processes: tuple[BackgroundProcess, ...]) -> tuple[BackgroundProcess, ...]:
+        """`processes` with `notify` set on each one a `terminal` result said Hermes will wake the session for."""
+        return tuple(replace(process, notify=True) if process.proc_id in self.bg_waking and not (
+            process.notify or process.watched) else process for process in processes)
 
     def _alert_background(self, process: BackgroundProcess) -> None:
         """The bell a question rings (`_alert_question`), once, as a process ends unreported; none with OMH_TUI_BELL=0."""
