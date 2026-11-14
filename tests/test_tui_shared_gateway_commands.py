@@ -13,11 +13,14 @@ import unittest
 from _tui_lines import lines_text
 from test_tui_command_output import last, send
 from test_tui_modes import SID, answer, make_app, notices, type_text
+from omh.tui.frame import RULE
 from omh.tui.app import (
+    CONTEXT_GAUGE_EMPTY,
+    CONTEXT_GAUGE_FILLED,
     BRANCHED_NOTICE,
     CALL_EXPIRED_NOTICE,
     COMPRESS_ANSWER_SECONDS,
-    COMPRESS_STARTED_NOTICE,
+    COMPRESS_GAUGE_CELLS,
     COMPRESS_UNANSWERED_NOTICE,
     COMPRESSING_VERB,
     COMPRESSION_BUSY_NOTICE,
@@ -36,14 +39,14 @@ BUSY = {"code": 4001, "message": "session_busy", "data": {"reason": "session_bus
 
 
 class CompressTests(unittest.TestCase):
-    def test_compact_runs_hermes_compress_and_says_it_is_under_way_until_the_report(self) -> None:
+    def test_compact_runs_hermes_compress_and_shows_only_the_report_under_its_echo(self) -> None:
+        # The owner, 2026-11-14: the long "Compressing: Hermes summarizes…" notice repeated the working row.
         app, client = make_app()
         send(app, "/compact here 2")
         self.assertEqual(client.calls, [("slash.exec", {"command": "compress here 2", "session_id": SID})])
         block = last(app)
         self.assertIsInstance(block, CommandBlock)
-        self.assertEqual((block.command, block.parts, block.done),
-                         ("/compact here 2", [(COMPRESS_STARTED_NOTICE, NOTICE_INFO)], False))
+        self.assertEqual((block.command, block.parts, block.done), ("/compact here 2", [], False))
         report = "✓ Compressed: 24 → 12 messages\n  Approx request size: ~816 → ~1,040 tokens"
         answer(app, client, {"type": "exec", "output": report})
         self.assertEqual((block.parts[-1], block.done), ((report, NOTICE_INFO), True))
@@ -56,11 +59,14 @@ class CompressTests(unittest.TestCase):
                 app, client = make_app(clock=lambda: now[0])
                 send(app, "/compact")
                 now[0] += 42.0
-                self.assertTrue(lines_text(app._tail(80))[-1].endswith(f"{COMPRESSING_VERB}… (42s)"))
+                tail = lines_text(app._tail(80))
+                self.assertEqual(tail[-1], "")  # a blank row keeps the gauge off the composer's rule
+                self.assertIn(f"{COMPRESSING_VERB}… ", tail[-2])
+                self.assertTrue(tail[-2].endswith(" (42s)"))
                 now[0] += 46.0
-                self.assertTrue(lines_text(app._tail(80))[-1].endswith(f"{COMPRESSING_VERB}… (1m 28s)"))
-                self.assertFalse(app._busy())  # no glow, and a prompt still goes out as it did
-                self.assertEqual(app._working_rows(), 1)
+                self.assertTrue(lines_text(app._tail(80))[-2].endswith(" (1m 28s)"))
+                self.assertFalse(app._busy())  # no glow
+                self.assertEqual(app._working_rows(), 2)
                 self.assertLessEqual(app._read_timeout(), 1.0)  # the loop wakes to move the clock
                 if settle == "answered":
                     answer(app, client, {"type": "exec", "output": "✓ Compressed: 24 → 12 messages"})
@@ -69,6 +75,60 @@ class CompressTests(unittest.TestCase):
                     app._expire_calls()
                 self.assertFalse([line for line in lines_text(app._tail(80)) if f"{COMPRESSING_VERB}…" in line])
                 self.assertEqual(app._working_rows(), 0)
+
+    def test_the_gauge_fills_with_time_but_never_full_and_gives_way_on_a_narrow_row(self) -> None:
+        now = [100.0]
+        app, _client = make_app(clock=lambda: now[0])
+        send(app, "/compact")
+
+        def gauge(cols: int = 80) -> tuple[int, int]:
+            row = lines_text(app._tail(cols))[-2]
+            return row.count(CONTEXT_GAUGE_FILLED), row.count(CONTEXT_GAUGE_EMPTY)
+
+        seen = []
+        for waited in (0.0, 5.0, 20.0, 60.0, 600.0):
+            now[0] = 100.0 + waited
+            filled, empty = gauge()
+            self.assertEqual(filled + empty, COMPRESS_GAUGE_CELLS)
+            seen.append(filled)
+        self.assertEqual(seen, sorted(seen))  # it never moves back
+        self.assertLess(seen[-1], COMPRESS_GAUGE_CELLS)  # a clock, not a measure: only the answer ends it
+        self.assertGreater(seen[-1], seen[0])
+        self.assertNotIn("%", lines_text(app._tail(80))[-2])  # no percent Hermes never gave
+        narrow = lines_text(app._tail(40))[-2]
+        self.assertNotIn(CONTEXT_GAUGE_EMPTY, narrow)  # the gauge goes first
+        self.assertIn(COMPRESSING_VERB, narrow)
+
+    def test_a_prompt_typed_while_compressing_waits_and_goes_by_itself_once_it_ends(self) -> None:
+        # The owner, 2026-11-14: no steer during a compression, but a message can be sent and goes on by itself.
+        for settle in ("answered", "refused", "unanswered"):
+            with self.subTest(settle=settle):
+                now = [100.0]
+                app, client = make_app(clock=lambda: now[0])
+                send(app, "/compact")
+                type_text(app, "next please")
+                app._on_input(Key(ENTER, ctrl=True))  # Ctrl+Enter steers nothing: no turn runs
+                send(app, "and then this")
+                self.assertEqual([method for method, _params in client.calls], ["slash.exec"])
+                self.assertEqual([line.text for line in app.queued], ["next please", "and then this"])
+                self.assertEqual(app.composer.text, "")
+                if settle == "answered":
+                    app._on_response(Response(1, {"type": "exec", "output": "✓ Compressed: 24 → 12 messages"}, None))
+                elif settle == "refused":
+                    app._on_response(Response(1, None, BUSY))
+                else:
+                    now[0] += COMPRESS_ANSWER_SECONDS
+                    app._expire_calls()
+                self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": SID, "text": "next please", "queued": True}))
+                self.assertEqual([line.text for line in app.queued], ["and then this"])  # after that turn, as usual
+
+    def test_the_queued_rows_show_above_the_composer_while_compressing(self) -> None:
+        app, _client = make_app()
+        send(app, "/compact")
+        send(app, "queued while compacting")
+        slot = lines_text(app._slot_lines(80, 24))
+        self.assertTrue(any("queued while compacting" in row for row in slot))
+        self.assertFalse(any(row.startswith(RULE * 2) for row in lines_text(app._tail(80))[-1:]))
 
     def test_a_compress_sent_during_a_turn_leaves_the_turn_its_own_working_row(self) -> None:
         app, _client = make_app(busy=True)
@@ -83,7 +143,7 @@ class CompressTests(unittest.TestCase):
                 # During a turn it waits in the queue for the turn's end: nothing goes, so nothing is under way.
                 self.assertEqual(client.named("slash.exec"), [] if busy else [{"command": line[1:].replace(
                     "compact", "compress"), "session_id": SID}])
-                self.assertNotIn(COMPRESS_STARTED_NOTICE, notices(app))
+                self.assertIsNone(app._compressing_since())  # no gauge: nothing went, or only a preview
 
     def test_a_compress_is_waited_for_as_long_as_hermes_waits_and_never_sent_twice(self) -> None:
         now = [100.0]
@@ -168,9 +228,9 @@ class CompressTests(unittest.TestCase):
         app._on_response(Response(2, None, {"code": contract.NOT_MINE, "message": "skill command"}))
         self.assertEqual(client.calls[-1][0], "command.dispatch")
         self.assertEqual(app.pending[3].expires_at, 100.0 + COMPRESS_ANSWER_SECONDS + 120.0)
-        send(app, "plain prompt please")  # no turn runs: it goes, and waits behind the compression at Hermes
-        self.assertEqual(client.calls[-1][0], "prompt.submit")
-        self.assertEqual(app.pending[4].expires_at, 100.0 + COMPRESS_ANSWER_SECONDS + 120.0)
+        send(app, "plain prompt please")  # no turn runs, yet it waits here, and goes once the compression ends
+        self.assertEqual(client.calls[-1][0], "command.dispatch")
+        self.assertEqual([line.text for line in app.queued], ["plain prompt please"])
 
     def test_a_second_compress_waits_behind_the_first_but_never_past_the_cap(self) -> None:
         now = [100.0]
@@ -181,7 +241,7 @@ class CompressTests(unittest.TestCase):
         send(app, "/compress")
         second = app.pending[2]
         self.assertEqual(second.expires_at, 400.0 + HELD_ANSWER_SECONDS)  # 360 s left + 660 s, cut to 780 s
-        self.assertEqual(second.command.parts, [(COMPRESS_STARTED_NOTICE, NOTICE_INFO)])  # no held notice of its own
+        self.assertEqual(second.command.parts, [])  # no held notice of its own
         now[0] += 1.0
         send(app, "/usage")
         self.assertEqual(app.pending[3].expires_at, 401.0 + HELD_ANSWER_SECONDS)  # behind the later of the two
