@@ -8,13 +8,14 @@ import { getStore, selectUnlisted, useStore } from "../state/store";
 import { Avatar, Popover } from "../ui";
 import { addToList, refreshBots } from "./bots";
 import { t, tx } from "../i18n";
+import { SshIcon, SshMarker } from "../peers/SshMarker";
 
 /** Hermes' own command for a new profile (a new bot); omher never runs it. */
 const NEW_PROFILE = "hermes profile create <name>";
 
 export const slot = "addBot";
 
-export default function AddBot({ onClose }: SlotProps["addBot"]) {
+export default function AddBot({ onClose, onSsh }: SlotProps["addBot"]) {
   const s = useStore();
   const others = selectUnlisted(s);
 
@@ -37,7 +38,10 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
             <div key={b.name} className="ab-row" data-testid={`addbot-${b.name}`}>
               <Avatar bot={b.name} size={22} />
               <span className="ab-m">
-                <span className="ab-n">{b.display_name}</span>
+                <span className="ab-n">
+                  {b.display_name}
+                  {b.host && <SshMarker bot={b} testId={`addbot-ssh-${b.name}`} />}
+                </span>
                 <span className="ab-s">{b.model || b.name}</span>
               </span>
               <button
@@ -54,6 +58,15 @@ export default function AddBot({ onClose }: SlotProps["addBot"]) {
             </div>
           ))}
         </div>
+        <div className="ab-sep" />
+        {/* a Hermes on another computer: the same confirm card a bot's draft opens (the sidebar holds it) */}
+        <button type="button" className="ab-ssh" onClick={() => (onClose(), onSsh?.())} data-testid="addbot-ssh">
+          <SshIcon size={13} />
+          <span className="ab-m">
+            <span className="ab-n">{t("ab.ssh")}</span>
+            <span className="ab-s">{t("ab.sshSub")}</span>
+          </span>
+        </button>
       </div>
     </Popover>
   );

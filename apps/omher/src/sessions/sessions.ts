@@ -33,6 +33,7 @@ import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draft
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type PastChat, type SessionHost } from "./host";
+import { localBot } from "../peers/peerKey";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
@@ -982,7 +983,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       ...(account ? { account } : {}),
       ...(startedAs ? { startedAs } : {}),
       // oh-my-hermes runs on the bot you were looking at (else the first bot)
-      ...(mode === "hermes" ? { bot: app.selectedBot ?? app.bots[0]?.name } : {}),
+      // a folder chat runs on this computer: a bot on another one (`<peer>:<name>`) is never its engine
+      ...(mode === "hermes" ? { bot: localBot(app.selectedBot, app.bots) } : {}),
     });
     // the message is sent: the draft view goes before its composer clears its own unsent text, so clear it here
     // (a terminal starts without the text and files the draft held)
@@ -1256,7 +1258,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     disposeTerm(id);
     // a Hermes chat runs on a bot: the one in view (else the first), as a New session picks it
     const app = store().getState();
-    const bot = agentDef(r.agent).mode === "hermes" && !r.bot ? (app.selectedBot ?? app.bots[0]?.name) : undefined;
+    const bot = agentDef(r.agent).mode === "hermes" && !r.bot ? localBot(app.selectedBot, app.bots) : undefined;
     patchRec(id, { open: undefined, view: "chat", ...(bot ? { bot } : {}) });
   };
 

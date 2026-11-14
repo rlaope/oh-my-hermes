@@ -96,6 +96,14 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **Bridge** (`bridge/omher_bridge.py`): uses Hermes' `connect_gateway`, one connection per profile. It binds
   127.0.0.1 only and refuses any connection without the launch token.
 - **Mock bridge** (`e2e/mock-bridge.mjs`): the same protocol, scripted, for the Playwright tests.
+- **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
+  chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
+  `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it
+  to `~/.omher/peers.json`. The shell runs the person's own `ssh` with a fixed argv (`BatchMode=yes`, so a key or the
+  ssh agent only; a host that wants a password is told to run `ssh-copy-id`), copies omher's bridge to the other
+  computer's `~/.omher/peer/` (nothing else is written there) and forwards its loopback port. The local bridge then
+  lists that computer's bots as `<peer>:<name>`, marked **SSH · <name>** in the sidebar, header and Settings; folder
+  chats and Restart stay on this computer. The link reconnects with backoff when it drops. `BOUNDARY.md` rule 31.
 - **Sessions** (`src-tauri/src/sessions.rs`, `src/sessions/`): the SESSIONS `+` opens a menu of the agents found on
   `PATH` and in the usual install folders (`~/.local/bin`, Homebrew, npm/pnpm/bun globals, `%APPDATA%\npm`): the
   installed ones first, the last one used on top, the missing ones dimmed with their install line. Picking one

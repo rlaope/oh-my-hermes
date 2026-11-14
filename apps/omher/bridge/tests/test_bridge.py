@@ -3907,3 +3907,204 @@ class PluginReload(BridgeCase):
                 self.assertEqual(r["load"], want, case)
                 rp.assert_called_once_with(env.home / "profiles" / "kami", env.home)
             self.assertEqual(env.connects, [])  # a reload never attaches or restarts
+
+
+class Peers(BridgeCase):
+    """BOUNDARY rule 31: a second, real bridge on loopback stands in for the other computer's (its gateway is a
+    FakeClient). The local bridge attaches it, lists its bots as `<peer>:<name>`, forwards bot-scoped ops with the
+    bare name, passes its events back under the namespaced name and refuses what needs this computer."""
+
+    PEER_TOKEN = "ab" * 16
+
+    async def _two(self, stack):
+        local = await stack.enter_async_context(Env(("kami",)))
+        remote = Env(("mini", "default-two"))
+        remote.bridge = ob.Bridge(token=self.PEER_TOKEN, hermes_home=remote.home, gateway_factory=remote.factory, poll_s=3600)
+        await stack.enter_async_context(remote)
+        url = f"ws://127.0.0.1:{remote.port}/?token={self.PEER_TOKEN}"
+        return local, remote, url
+
+    async def _attach(self, s, url, peer="mac"):
+        r = await s.req("peers.attach", peer=peer, label="Mac mini", host="sionic@10.1.145.204", url=url)
+        self.assertTrue(r["ok"], r)
+        return r["result"]
+
+    async def test_attach_lists_the_peers_bots_namespaced_with_an_ssh_host(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            s = await self.open(local)
+            probe = await s.req("peers.probe", url=url)
+            self.assertTrue(probe["ok"], probe)
+            self.assertEqual(sorted(b["name"] for b in probe["result"]["bots"]), ["default", "default-two", "mini"])
+            self.assertEqual(remote.connects, [])  # a probe reads hello and bots.list only: no gateway attached
+            got = await self._attach(s, url)
+            self.assertEqual(sorted(b["name"] for b in got["bots"]), ["mac:default", "mac:default-two", "mac:mini"])
+            await s.until(lambda ev: any(e["event"] == "bots.update" for e in ev))
+            bots = (await s.req("bots.list"))["result"]["bots"]
+            by = {b["name"]: b for b in bots}
+            self.assertIn("kami", by)
+            self.assertNotIn("host", by["kami"])  # a local bot has no host field
+            self.assertEqual(by["mac:mini"]["host"], {"kind": "ssh", "peer": "mac", "label": "Mac mini", "host": "sionic@10.1.145.204"})
+            self.assertEqual(remote.connects, [])  # listing never starts a remote gateway
+
+    async def test_bot_ops_are_forwarded_with_the_bare_name_and_events_come_back_namespaced(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            s = await self.open(local)
+            await self._attach(s, url)
+            r = await s.req("chat.open", bot="mac:mini")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"]["session_id"], MAIN_RUNTIME)
+            self.assertEqual(remote.connects, ["mini"])
+            self.assertEqual(local.connects, [])  # nothing local attached for a remote bot
+            r = await s.req("chat.send", bot="mac:mini", text="hi there")
+            self.assertTrue(r["ok"], r)
+            sub = remote.clients["mini"].find("prompt.submit")
+            self.assertEqual([x["text"] for x in sub], ["hi there"])
+            c = remote.clients["mini"]
+            c.push("message.start", {})
+            c.push("message.delta", {"text": "hel"})
+            c.push("message.complete", {"text": "hello", "status": "complete"})
+            await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+            ev = [e for e in s.events if e["event"] in ("turn.start", "delta", "message", "turn.end")]
+            self.assertEqual([e["event"] for e in ev], ["turn.start", "delta", "message", "turn.end"])
+            self.assertTrue(all(e["bot"] == "mac:mini" for e in ev), ev)
+            r = await s.req("models.options", bot="mac:mini")
+            self.assertTrue(r["ok"], r)
+            # a name the peer does not have, or a peer that is not attached
+            self.assertEqual((await s.req("chat.open", bot="mac:ghost"))["error"]["code"], "unknown_bot")
+            self.assertEqual((await s.req("chat.open", bot="nope:mini"))["error"]["code"], "unknown_bot")
+            self.assertEqual((await s.req("chat.open", bot="mac:a:b"))["error"]["code"], "unknown_bot")
+
+    async def test_ops_that_need_this_computer_are_refused_with_a_reason(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            s = await self.open(local)
+            await self._attach(s, url)
+            for op, extra in (("folder.open", {"cwd": "/tmp"}), ("folder.close", {"session": "f1"}),
+                              ("bots.restart", {}), ("chat.send", {"text": "x", "session": "f1"})):
+                r = await s.req(op, bot="mac:mini", **extra)
+                self.assertFalse(r["ok"], op)
+                self.assertEqual(r["error"]["code"], "remote_bot", op)
+                self.assertIn("Mac mini", r["error"]["message"])
+            scope = (await s.req("bots.restart_scope", bot="mac:mini"))["result"]
+            self.assertEqual(scope["gateway"], "mac:mini")
+            # ops that are not bot-scoped never reach the peer: usage and accounts are this computer's own
+            for op in ("usage.read", "accounts.list", "cli.title", "runs.cli"):
+                self.assertNotIn(op, ob.PEER_FORWARD)
+            self.assertEqual(remote.connects, [])
+
+    async def test_media_comes_as_bytes_over_the_link_and_is_marked_remote(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            prof = remote.home / "profiles" / "mini"
+            pic = prof / "out.png"
+            pic.write_bytes(b"\x89PNG-remote")
+            import sqlite3
+            con = sqlite3.connect(prof / "state.db")
+            con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, title TEXT)")
+            con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT)")
+            con.execute("INSERT INTO sessions VALUES ('main', 'tui', ?)", (ob.BOT_CHAT_TITLE,))
+            con.execute("INSERT INTO messages (session_id, role, content) VALUES ('main', 'assistant', ?)", (f"MEDIA:{pic}",))
+            con.commit()
+            con.close()
+            s = await self.open(local)
+            await self._attach(s, url)
+            r = await s.req("media.read", bot="mac:mini", path=str(pic))
+            self.assertTrue(r["ok"], r)
+            import base64
+            self.assertEqual(base64.b64decode(r["result"]["data_base64"]), b"\x89PNG-remote")
+            self.assertIs(r["result"]["remote"], True)  # the app must not open that path on this computer
+
+    async def test_a_dropped_link_ends_the_live_turn_as_stopped_and_sends_nothing_again(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            s = await self.open(local)
+            await self._attach(s, url)
+            await s.req("chat.open", bot="mac:mini")
+            await s.req("chat.send", bot="mac:mini", text="long job")
+            remote.clients["mini"].push("message.start", {})
+            await s.until(lambda ev: any(e["event"] == "turn.start" and e["bot"] == "mac:mini" for e in ev))
+            await remote.bridge.close()  # the other computer's bridge goes away mid-turn
+            await s.until(lambda ev: any(e["event"] == "turn.end" and e["bot"] == "mac:mini" for e in ev))
+            end = [e for e in s.events if e["event"] == "turn.end" and e["bot"] == "mac:mini"]
+            self.assertEqual(len(end), 1)
+            self.assertEqual(end[0]["outcome"], "interrupted")
+            self.assertIn("Mac mini", end[0]["error"])
+            await s.until(lambda ev: any(e["event"] == "bot.status" and e["bot"] == "mac:mini" and e["status"] == "offline" for e in ev))
+            self.assertEqual(len(remote.clients["mini"].find("prompt.submit")), 1)  # never resent
+            bots = {b["name"]: b for b in (await s.req("bots.list"))["result"]["bots"]}
+            self.assertEqual(bots["mac:mini"]["status"], "offline")
+            self.assertFalse(bots["mac:mini"]["running"])
+            r = await s.req("chat.send", bot="mac:mini", text="again")
+            self.assertEqual(r["error"]["code"], "bot_offline")
+
+    async def test_detach_drops_the_bots_and_bad_attach_args_are_refused(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            s = await self.open(local)
+            for bad in ({"peer": "Bad", "label": "x", "host": "h", "url": url},
+                        {"peer": "fold", "label": "x", "host": "h", "url": url},
+                        {"peer": "mac", "label": "", "host": "h", "url": url},
+                        {"peer": "mac", "label": "x", "host": "-oProxyCommand=x", "url": url},
+                        {"peer": "mac", "label": "x", "host": "h", "url": "ws://10.0.0.1:1/?token=" + "a" * 32},
+                        {"peer": "mac", "label": "x", "host": "h", "url": "wss://127.0.0.1:1/"}):
+                r = await s.req("peers.attach", **bad)
+                self.assertEqual(r["error"]["code"], "bad_request", bad)
+            await self._attach(s, url)
+            r = await s.req("peers.detach", peer="mac")
+            self.assertTrue(r["ok"])
+            names = [b["name"] for b in (await s.req("bots.list"))["result"]["bots"]]
+            self.assertEqual([n for n in names if ":" in n], [])
+            self.assertIn("kami", names)
+            dead = "ws://127.0.0.1:1/?token=" + "c" * 32
+            r = await s.req("peers.attach", peer="mac", label="Mac mini", host="mini", url=dead)
+            self.assertEqual(r["error"]["code"], "peer_unreachable")
+
+    async def test_automations_of_a_peer_are_listed_under_its_namespace(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, url = await self._two(stack)
+            jobs = remote.home / "profiles" / "mini" / "cron"
+            jobs.mkdir(parents=True)
+            (jobs / "jobs.json").write_text(json.dumps({"jobs": [{"id": "j1", "name": "Nightly", "schedule": {"display": "every 1d"},
+                                                                    "prompt": "x", "deliver": "bot-chat:mini", "enabled": True}]}))
+            s = await self.open(local)
+            await self._attach(s, url)
+            autos = (await s.req("automations.list"))["result"]["automations"]
+            mine = [a for a in autos if a["bot"].startswith("mac:")]
+            self.assertEqual([(a["bot"], a["id"], a["deliver"]) for a in mine], [("mac:mini", "j1", "bot-chat:mac:mini")])
+
+
+class PeerHint(BridgeCase):
+    """A message asking to connect a bot on another computer gets one `[omher]` note so the bot answers with an
+    `omher-peer` block; any other message is sent as typed, and the note never shows back as the person's words."""
+
+    def test_which_messages_get_the_note(self):
+        yes = ("맥미니 헤르메스 붙여줘", "ssh로 붙여줘", "connect the hermes on my mac mini over ssh",
+               "add the bot on another computer", "リモートのHermesを接続して", "把另一台电脑的机器人连接上")
+        no = ("오늘 날씨 알려줘", "sshd 설정 봐줘", "원격 서버 로그 봐줘", "ssh 키 만들어줘", "deploy to the server",
+              "```omher-peer {\"host\": \"mini\"}``` 이거 맞아?")
+        for t in yes:
+            self.assertTrue(ob.peer_hint_wanted(t), t)
+        for t in no:
+            self.assertFalse(ob.peer_hint_wanted(t), t)
+
+    async def test_the_note_rides_the_turn_and_is_stripped_on_read(self):
+        async with Env() as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            await s.req("chat.send", bot="kami", text="맥미니 헤르메스 붙여줘")
+            await s.req("chat.send", bot="kami", text="hello")
+            sent = [x["text"] for x in env.clients["kami"].find("prompt.submit")]
+            self.assertEqual(sent[0], "맥미니 헤르메스 붙여줘\n\n" + ob.PEER_HINT)
+            self.assertEqual(sent[1], "hello")
+            self.assertIn("```omher-peer", ob.PEER_HINT)
+            rows = ob.chat_messages([{"role": "user", "text": sent[0], "row_id": 9}])
+            self.assertEqual(rows[0]["text"], "맥미니 헤르메스 붙여줘")

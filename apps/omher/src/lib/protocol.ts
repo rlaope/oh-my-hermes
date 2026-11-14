@@ -16,6 +16,23 @@ export interface Bot {
   running: boolean;
   /** Changes whenever the bot's own picture changes; null = no picture, the built-in face is used. */
   avatar_rev?: number | null;
+  /** A bot on another computer, reached over SSH (its name is `<peer>:<profile>`); absent for this computer's bots. */
+  host?: BotHost;
+}
+
+/** Where a bot on another computer lives: the peer omher's shell links over `ssh`. */
+export interface BotHost {
+  kind: "ssh";
+  peer: string;
+  label: string;
+  host: string;
+}
+
+/** What a forwarded peer has, for the confirm card (`peers.probe`: its hello and bots.list only). */
+export interface PeerProbe {
+  version: string;
+  hermes: { home: string; version: string };
+  bots: { name: string; display_name: string; model: string; provider: string; status: BotStatus }[];
 }
 
 /** When a plugin change takes effect for the bot, from Hermes' own answer. live: its next conversation. reload: the
@@ -317,6 +334,11 @@ export interface OpMap {
   "bots.restart": { params: { bot: string; interrupt?: boolean }; result: RestartResult };
   /** Which gateway process serves `bot` and every bot that restarts with it. */
   "bots.restart_scope": { params: { bot: string }; result: RestartScope };
+  /** A forwarded peer's hello and bots.list, for the confirm card; attaches nothing. */
+  "peers.probe": { params: { url: string; label?: string }; result: PeerProbe };
+  /** The shell's link to a peer is up: its bots join bots.list as `<peer>:<name>`. */
+  "peers.attach": { params: { peer: string; label: string; host: string; url: string }; result: { peer: string; bots: Bot[] } };
+  "peers.detach": { params: { peer: string }; result: Record<string, never> };
   "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
   "models.options": { params: { bot: string }; result: ModelOptions };
   /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
@@ -395,6 +417,8 @@ export interface MediaFile {
   /** The bytes; absent when `info` was asked or the file is over 25 MB (`too_big`). */
   data_base64?: string;
   too_big?: boolean;
+  /** The file is on another computer (a bot over SSH): its bytes came over the link, and its path is not opened here. */
+  remote?: boolean;
 }
 
 export type AccountCli = "claude" | "codex" | "pi" | "omp" | "grok" | "gemini";

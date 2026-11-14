@@ -130,6 +130,8 @@ export function FileRow({ name, size, title, testId, children }: { name: string;
 }
 
 function FileCard({ file }: { file: MediaFile }) {
+  // a file on another computer (a bot over SSH) has no path here to open: only its name and size show
+  if (file.remote) return <FileRow name={file.name} size={file.size} title={t("peer.fileThere")} testId="media-file" />;
   return (
     <FileRow name={file.name} size={file.size} title={file.path} testId="media-file">
       <span className="media-acts">

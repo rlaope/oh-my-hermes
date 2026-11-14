@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher connects a Hermes on another computer over SSH.** The sidebar + has "Connect over SSH": pick a host from
+  `~/.ssh/config` (or type `user@host`), press Check, and a card shows the exact `ssh` command omher will run, the
+  Hermes and Python found there and the bots that computer has; nothing is saved until Connect. Its bots join the
+  list marked "SSH · <name>" (the host in the tooltip) in the sidebar, the chat header and Settings, with the link's
+  state when it is reconnecting or failed. Asking a bot ("connect the Hermes on my Mac mini") makes it answer with a
+  draft that shows as a "Connect over SSH" chip under its reply, which opens the same card. omher uses your own `ssh`
+  with key login only and never asks for a password; on the other computer it writes only `~/.omher/peer/`. Settings
+  › Remote machines lists them, with Remove.
+
 - **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
   (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
   spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and

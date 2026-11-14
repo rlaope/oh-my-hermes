@@ -300,10 +300,11 @@ class DocPins(unittest.TestCase):
         # the agent's own rewind); 29: rule 29 (Restart one bot through Hermes' own `gateway restart`, `--yes` only
         # after a refusal; plugin loads through its `reload-plugins`); 30: rule 30 (continue a Claude Code or Codex
         # conversation from its own files, read-only; a row's folder in the file manager or the system terminal; the
-        # asks count on the Dock).
+        # asks count on the Dock); 31: rule 31 (a Hermes on another computer over the person's own ssh, after a
+        # Connect on the confirm card: one fixed ssh argv, key login only, remote writes only under ~/.omher/peer).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 30, len(rules))
+        self.assertTrue(6 <= len(rules) <= 31, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -387,9 +388,9 @@ class TheOneInstaller(unittest.TestCase):
         # CLIs' fixed status / sign-in argv (rule 18); hermes_auth.rs opens the system terminal with
         # `hermes auth add <id> --type api-key` (rule 23); dsh_chat.rs runs a DSH chat's message through DeepSeek
         # Harness's headless profile (rule 11); folder_open.rs opens the person's own system terminal in a session's
-        # folder with no command (rule 30). Terminal sessions start theirs through the PTY's
-        # `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+        # folder with no command (rule 30); peers.rs starts the person's own `ssh` with a fixed argv (rule 31).
+        # Terminal sessions start theirs through the PTY's `spawn_command`, not `Command::new`.
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -848,8 +849,9 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         # bridge.rs starts the bridge with Hermes' Python; accounts.rs runs the CLIs' fixed status / sign-in argv;
         # agent_chat.rs starts an allow-listed agent in its structured mode (rule 11); hermes_auth.rs opens the
         # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11);
-        # folder_open.rs opens the system terminal in a session's folder with no command (rule 30).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "setup.rs": 1})
+        # folder_open.rs opens the system terminal in a session's folder with no command (rule 30); peers.rs starts the
+        # person's own `ssh` with a fixed argv (rule 31).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1})
 
 
 
@@ -1221,12 +1223,12 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
     def test_only_the_bridge_the_session_pty_and_the_chat_spawner_start_processes(self) -> None:
         """`Command::new` only in bridge.rs (Hermes' Python), setup.rs (the one fixed installer,
         rule 12), once in agent_chat.rs (the chat spawner), in accounts.rs (rule 18's fixed status /
-        sign-in argv), in hermes_auth.rs (rule 23's terminal) and in folder_open.rs (rule 30's terminal in a session's
-        folder); `spawn_command` only in sessions.rs."""
+        sign-in argv), in hermes_auth.rs (rule 23's terminal), in folder_open.rs (rule 30's terminal in a session's
+        folder) and in peers.rs (rule 31's `ssh`); `spawn_command` only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
@@ -1769,3 +1771,100 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         folder = self.open.split("pub fn folder(", 1)[1].split("\n}\n", 1)[0]
         self.assertIn("!p.is_absolute()", folder)
         self.assertIn("real.is_dir()", folder)
+
+
+class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
+    """Rule 31: a Hermes on another computer is reached only through the person's own `ssh`, from one spawn site with a
+    fixed argv and key login only, after Connect on the confirm card; the remote script writes only ~/.omher/peer."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.peers = (SHELL / "peers.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        cls.bridge = BRIDGE.read_text(encoding="utf-8")
+        cls.doc = DOC.read_text(encoding="utf-8")
+        cls.ui = ROOT / "apps" / "omher" / "src" / "peers"
+
+    def test_one_ssh_spawn_site_with_the_fixed_options(self) -> None:
+        self.assertEqual(self.peers.count("Command::new("), 1)
+        self.assertIn('let mut cmd = Command::new("ssh");', self.peers)
+        self.assertEqual(self.peers.count("spawn_ssh("), 2)  # the fn and its one call in connect_once
+        self.assertIn("no_console_window(&mut cmd);", self.peers)
+        opts = re.search(r"pub const SSH_OPTIONS: \[&str; 5\] = \[(.*?)\];", self.peers, re.S).group(1)
+        self.assertEqual(re.findall(r'"([^"]+)"', opts),
+                         ["BatchMode=yes", "ConnectTimeout=10", "ExitOnForwardFailure=yes", "ServerAliveInterval=15", "ServerAliveCountMax=3"])
+        args = self.peers.split("pub fn ssh_args(", 1)[1].split("\n}\n", 1)[0]
+        # only fixed words, numbers made here, the checked host and port, and the script as one quoted word
+        self.assertEqual(re.findall(r'a\.push\("([^"]*)"', args), ["-o", "-T", "-L", "-p", "--"])
+        self.assertIn('format!("127.0.0.1:{local_port}:127.0.0.1:{remote_port}")', args)
+        self.assertIn('format!("sh -c {}", sh_quote(remote))', args)
+        self.assertIn("a.push(host.into());", args)
+        # the doc names the same argv
+        self.assertIn("`-o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 "
+                      "-o ServerAliveCountMax=3 -T -L 127.0.0.1:<local>:127.0.0.1:<remote> [-p <port>] -- <host>`", self.doc)
+
+    def test_the_host_is_checked_and_no_command_comes_from_the_page(self) -> None:
+        host = self.peers.split("pub fn valid_host(", 1)[1].split("\n}\n", 1)[0]
+        # a leading `-` (an ssh option), a space or a shell character never passes: the first byte must be alphanumeric
+        # (or `_` in the user part) and the rest only letters, digits, `.`, `_`, `-`
+        self.assertIn("n[0].is_ascii_alphanumeric()", host)
+        self.assertIn("b[0].is_ascii_alphanumeric() || b[0] == b'_'", host)
+        self.assertIn("n.iter().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-'))", host)
+        self.assertIn("connect(host: &str, port: Option<u16>, script: &[u8])", self.peers)
+        self.assertIn("if !valid_host(host) || !valid_port(port)", self.peers.split("pub fn connect(", 1)[1].split("\n}\n", 1)[0])
+        # the Tauri commands take a host, label, port or id, never a command, argv or script
+        for fn in ("peers_check", "peers_add", "peers_remove", "peers_retry", "peers_check_close"):
+            sig = re.search(rf"async fn {fn}\((.*?)\) -> ", self.lib, re.S).group(1)
+            params = [x.split(":", 1)[0].strip() for x in sig.split(",") if ":" in x]
+            self.assertTrue(set(params) <= {"shell", "host", "port", "label", "check", "id"}, (fn, params))
+        # the remote script's only inputs are hex and numbers made here
+        script = self.peers.split("pub fn remote_script(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("sha12: &str, size: usize, remote_port: u16, token: &str", script)
+        self.assertIn("token.bytes().all(|c| c.is_ascii_hexdigit())", script)
+
+    def test_key_login_only_and_no_secret_is_kept(self) -> None:
+        code = "\n".join(l for l in self.peers.splitlines() if not l.lstrip().startswith("//"))
+        for banned in ("password", "passphrase", "SSH_ASKPASS", "sshpass", "IdentityFile", "-i ", "StrictHostKeyChecking=no"):
+            self.assertNotIn(banned, code, banned)
+        # the token reaches the remote bridge through its environment, never its argv
+        self.assertIn("OMHER_BRIDGE_TOKEN={token} exec", self.peers)
+        self.assertNotIn("--token", self.peers.split("pub fn remote_script(", 1)[1].split("\n}\n", 1)[0])
+        self.assertIn('os.environ.get("OMHER_BRIDGE_TOKEN", "")', self.bridge)
+
+    def test_the_remote_writes_only_under_omher_peer(self) -> None:
+        script = self.peers.split("pub fn remote_script(", 1)[1].split("\n}\n", 1)[0]
+        discover = self.peers.split("pub const DISCOVER_PYTHON: &str = ", 1)[1].split('"#;', 1)[0]
+        self.assertIn('d="$HOME/.omher/peer"', script)
+        self.assertIn('f="$d/omher_bridge-{sha12}.py"', script)
+        for text in (script, discover):
+            # every write targets $t, $f or $d (all under ~/.omher/peer); the discovery only reads
+            self.assertEqual(re.findall(r'(?<![<>2])>\s*"?(\$\w+)', text), ["$t"] if text is script else [])
+        # the discovery reads Hermes' home and writes nothing: no redirect, mkdir, mv, cp, rm or tee
+        for verb in ("mkdir", "mv ", "cp ", "rm ", "tee ", "touch "):
+            self.assertNotIn(verb, discover, verb)
+        self.assertIn('mkdir -p "$d"', script)
+        self.assertIn('mv -f "$t" "$f"', script)
+        self.assertIn("--exit-on-stdin-eof", script)
+
+    def test_only_connect_writes_the_peer_list(self) -> None:
+        self.assertEqual(self.peers.count("write_peers(&self.home"), 2)  # add (Connect) and remove (Remove)
+        add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("write_peers(&self.home", add)
+        check = self.peers.split("pub fn check(", 1)[1].split("\n    }\n", 1)[0]
+        self.assertNotIn("write_peers", check)
+        card = (self.ui / "AttachCard.tsx").read_text(encoding="utf-8")
+        self.assertEqual(card.count("getPeersHost().add("), 1)
+        self.assertIn("const connect = async", card)
+        chip = (self.ui / "PeerChip.tsx").read_text(encoding="utf-8")
+        self.assertNotIn("getPeersHost", chip)  # the chip only opens the card
+
+    def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
+        refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "bots.restart"])
+        forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
+        for op in ("folder.open", "folder.close", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
+            self.assertNotIn(f'"{op}"', forward, op)
+        probe = self.bridge.split("async def op_peers_probe(", 1)[1].split("\n    async def ", 1)[0]
+        self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])
+        # the peer URL is the forwarded loopback port only
+        self.assertIn(r'PEER_URL = re.compile(r"ws://127\.0\.0\.1:[0-9]{1,5}/\?token=[0-9a-f]{32}")', self.bridge)

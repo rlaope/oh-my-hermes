@@ -73,3 +73,33 @@
 .ab-btn:disabled {
   opacity: 0.5;
 }
+.ab-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 0;
+}
+.ab-ssh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  text-align: left;
+}
+.ab-ssh:hover {
+  background: var(--hover);
+}
+.ab-ssh .ssh-ic {
+  flex: none;
+  width: 22px;
+  color: var(--muted);
+}
+.ab-ssh .ab-s {
+  font-family: inherit;
+  font-size: 11px;
+}
+.ab-n .ssh-mark {
+  margin-left: 5px;
+}

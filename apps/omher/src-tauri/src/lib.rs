@@ -10,6 +10,7 @@ mod folder_open;
 mod git_branch;
 mod hermes_auth;
 mod past_chats;
+mod peers;
 #[cfg(all(test, unix))]
 mod pty_bench;
 mod session_files;
@@ -30,6 +31,7 @@ use tauri::{Manager, RunEvent, State};
 
 struct Shell {
     bridge: Arc<Bridge>,
+    peers: Arc<peers::Peers>,
     resource_dir: Option<PathBuf>,
     installing: Arc<AtomicBool>,
     logins: Arc<accounts::Logins>,
@@ -587,6 +589,66 @@ async fn asks_badge(window: tauri::WebviewWindow, count: u32) -> Result<(), Stri
     }
 }
 
+/// The remote machines (`~/.omher/peers.json`, checked on read) and each link's state.
+#[tauri::command]
+async fn peers_list(shell: State<'_, Shell>) -> Result<Vec<peers::PeerStatus>, String> {
+    Ok(shell.peers.statuses())
+}
+
+/// Every link state change, as it happens (the UI attaches a connected peer to its bridge, detaches the rest).
+#[tauri::command]
+async fn peers_watch(shell: State<'_, Shell>, on_event: Channel<peers::PeerStatus>) -> Result<(), String> {
+    shell.peers.watch(Arc::new(move |st| {
+        let _ = on_event.send(st);
+    }));
+    Ok(())
+}
+
+/// The host field's suggestions: `Host` aliases from `~/.ssh/config` (read only; patterns skipped).
+#[tauri::command]
+async fn peers_hosts() -> Result<Vec<String>, String> {
+    let home = user_home()?;
+    let text = std::fs::read_to_string(home.join(".ssh").join("config")).unwrap_or_default();
+    Ok(peers::ssh_config_hosts(&text))
+}
+
+/// Check a host for the confirm card: the fixed `ssh` link comes up, and the card reads the remote's bots through
+/// the returned loopback URL. Nothing is written on this computer; `peers_check_close` (or Connect) ends it.
+#[tauri::command]
+async fn peers_check(shell: State<'_, Shell>, host: String, port: Option<u16>) -> Result<serde_json::Value, peers::Failure> {
+    let p = shell.peers.clone();
+    tauri::async_runtime::spawn_blocking(move || p.check(&host, port))
+        .await
+        .map_err(|e| peers::Failure { kind: peers::FailKind::Bridge, line: e.to_string() })?
+        .map(|(check, url, found)| serde_json::json!({"check": check, "url": url, "found": found}))
+}
+
+#[tauri::command]
+async fn peers_check_close(shell: State<'_, Shell>, check: String) -> Result<(), String> {
+    let p = shell.peers.clone();
+    tauri::async_runtime::spawn_blocking(move || p.check_close(&check)).await.map_err(|e| e.to_string())
+}
+
+/// The confirm card's Connect: the one call that adds a row to `~/.omher/peers.json`.
+#[tauri::command]
+async fn peers_add(shell: State<'_, Shell>, label: String, host: String, port: Option<u16>, check: Option<String>) -> Result<peers::PeerStatus, String> {
+    let p = shell.peers.clone();
+    tauri::async_runtime::spawn_blocking(move || p.add(&label, &host, port, check.as_deref())).await.map_err(|e| e.to_string())?
+}
+
+/// Settings › Remote machines' Remove: the row leaves peers.json and the link stops.
+#[tauri::command]
+async fn peers_remove(shell: State<'_, Shell>, id: String) -> Result<(), String> {
+    let p = shell.peers.clone();
+    tauri::async_runtime::spawn_blocking(move || p.remove(&id)).await.map_err(|e| e.to_string())?
+}
+
+/// Try a failed link again now.
+#[tauri::command]
+async fn peers_retry(shell: State<'_, Shell>, id: String) -> Result<(), String> {
+    shell.peers.retry(&id)
+}
+
 /// Start the bridge again (the Retry button on the failed screen).
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
@@ -644,14 +706,29 @@ pub fn run() {
             session_open_terminal,
             past_chats_list,
             past_chat_messages,
-            asks_badge
+            asks_badge,
+            peers_list,
+            peers_watch,
+            peers_hosts,
+            peers_check,
+            peers_check_close,
+            peers_add,
+            peers_remove,
+            peers_retry
         ])
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             bridge.start(resource_dir.clone());
+            let manifest = if cfg!(debug_assertions) { Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))) } else { None };
+            let peers = peers::Peers::new(user_home().unwrap_or_default());
+            if let Ok(script) = bridge::resolve_script(resource_dir.as_deref(), manifest, |p| p.is_file()) {
+                peers.set_script(script);
+            }
+            peers.start_all();
             app.manage(Shell {
                 bridge,
+                peers,
                 resource_dir,
                 installing: Arc::new(AtomicBool::new(false)),
                 logins: accounts::Logins::new(),
@@ -669,6 +746,7 @@ pub fn run() {
                 shell.sessions.close_all();
                 shell.chats.close_all();
                 shell.logins.cancel_all();
+                shell.peers.stop_all();
                 shell.bridge.stop();
             }
         }

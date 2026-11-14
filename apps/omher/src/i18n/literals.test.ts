@@ -23,6 +23,10 @@ const ALLOWED = new Set([
   "$plan",
   "dag ulw",
   "/v1/responses",
+  "ssh-copy-id",
+  "user@host",
+  // protocol names
+  "SSH",
   // key names
   "Ctrl+J",
   "Ctrl+.",
