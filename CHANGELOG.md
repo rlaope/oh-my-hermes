@@ -13,6 +13,13 @@ All notable changes will be documented here.
   into the title field and Ctrl+D asks on the card's facts row, as before. Closing it gives every row back to the transcript, with no band of blank rows left above
   the composer. On a terminal too short for two cards and the keys, or under 30 columns, it stays the one-row list.
 
+- **The OMH TUI shows a compression as one gauge row, and a prompt typed meanwhile goes on by itself.** `/compact`
+  (or `/compress`) no longer prints the long "Compressing: Hermes summarizes the older turns…" notice above a second
+  spinner row. One row now reads `✻ Compacting conversation… ━━━━━━──── (30s)`, with a blank row between it and
+  the composer. Hermes sends no progress for a compression, so the gauge follows the time waited, never fills on its
+  own and shows no percent; Hermes' `✓ Compressed: …` report closes it. A prompt sent during the compression waits in
+  the `⧗` queue (Ctrl+Enter has no turn to steer, so it queues too) and is sent by itself, oldest first, once the
+  compression is answered, refused or given up on.
 - **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
   OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
   and blinking on a 4-second loop, with one line of copy in English, Korean, Japanese and Chinese and one
@@ -981,6 +988,27 @@ All notable changes will be documented here.
   route's own `skills:` list now gets its first block. The uninstall report reads its `section.key`
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
+- **`omh coding model-routing status` and the setup profile pack now read
+  the model aliases Hermes itself writes.** `hermes config set
+  model_aliases.<name>.model <model>` stores each alias as a mapping with
+  `model`, `provider`, `base_url` and `key_env` children, under the root
+  `model_aliases` key or `model.aliases`. The shared alias parser read only
+  the flat `alias: target` form, so such a config showed `Hermes aliases
+  (corrupt)`, an empty alias map and a "Repair the Hermes config" action in
+  `omh doctor`. A nested entry's target is now its `model` child. The other
+  children are read past, and their values are never kept or returned. The flat
+  form is unchanged. A nested entry with no `model` child now names its
+  error as `model alias entry shape is unsupported` instead of a malformed
+  entry. A duplicate `model` child,
+  a deeper or misaligned child, a child key named `aliases`, and a
+  credential-shaped `model` value are still refused. Reported in #2863 by
+  @MarinWasAsleep; first fixed by @SHURIKA6 in #2867.
+
+- **Right-click an empty part of omher's Sessions list to start a new session.**
+  The menu opens the existing agent picker without starting a process; each
+  session's own right-click menu still offers a fresh conversation in its
+  folder. Chat and terminal view marks beside the session rows are smaller,
+  while their targets and the messages' type and spacing stay unchanged.
 
 ## 4.0.7 - 2026-11-09
 
