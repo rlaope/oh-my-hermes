@@ -36,8 +36,10 @@ class GatewayClientError(ValueError):
 class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
-    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=()):
+    def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=(), ready=None):
         self.name = name
+        # setup.runtime_check answers in order (a dict, or an exception to raise); the last one repeats
+        self.ready = list(ready) if ready else [{"ok": True, "provider": "claude-proxy", "model": "claude-opus-5-5", "source": "pool"}]
         self.lacks = set(lacks)  # methods this gateway does not have: they fail as Hermes' do, `unknown_method`
         self.caps = caps if caps is not None else {}  # client.capabilities answer, or an exception to raise
         self.events: asyncio.Queue = asyncio.Queue()
@@ -73,6 +75,11 @@ class FakeClient:
                         {"role": "user", "text": "secret", "display_kind": "hidden", "row_id": 4}],
                     "info": dict(self.model_info), "revision": self.revision, "execution_generation": 3,
                     "prompts": []}
+        if method == "setup.runtime_check":
+            answer = self.ready.pop(0) if len(self.ready) > 1 else self.ready[0]
+            if isinstance(answer, Exception):
+                raise answer
+            return dict(answer)
         if method == "client.capabilities":
             if isinstance(self.caps, Exception):
                 raise self.caps
@@ -408,6 +415,66 @@ class BotsAndChat(BridgeCase):
             self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"]}])
             self.assertEqual(r["current"]["model"], "claude-opus-5-5")
             self.assertEqual(r["reasoning_levels"], ["none", "low", "medium", "high", "xhigh"])
+
+
+class BotsReady(BridgeCase):
+    """bots.ready: the bot's own setup.runtime_check, read-only, answered as {ok, provider, model, error}."""
+
+    NOT_READY = {"ok": False, "error": "Hermes is not connected to any AI provider yet. Run `hermes model` to pick one."}
+
+    async def test_ready_bot(self):
+        async with Env() as env:
+            s = await self.open(env)
+            r = (await s.req("bots.ready", bot="kami"))["result"]
+            self.assertEqual(r, {"ok": True, "provider": "claude-proxy", "model": "claude-opus-5-5", "error": ""})
+            c = env.clients["kami"]
+            self.assertEqual(c.find("setup.runtime_check"), [{}])
+            # read-only: no chat is opened, nothing is changed
+            for m in ("session.create", "session.mutate", "prompt.submit", "config.set"):
+                self.assertEqual(c.find(m), [], m)
+
+    async def test_not_ready_bot_carries_hermes_error(self):
+        async with Env(ready=[self.NOT_READY]) as env:
+            s = await self.open(env)
+            r = (await s.req("bots.ready", bot="kami"))["result"]
+            self.assertEqual(r, {"ok": False, "provider": "", "model": "", "error": self.NOT_READY["error"]})
+
+    async def test_a_sign_in_provider_asks_the_strict_check(self):
+        async with Env() as env:
+            s = await self.open(env)
+            for pid in ("openai-codex", "anthropic", "nous"):
+                self.assertTrue((await s.req("bots.ready", bot="kami", provider=pid))["ok"])
+            self.assertEqual(env.clients["kami"].find("setup.runtime_check"),
+                             [{"provider": "openai-codex"}, {"provider": "anthropic"}, {"provider": "nous"}])
+            for bad in ("", 3, "anthropic --x", "Nous", "-x", "a/b", "$(id)"):
+                r = await s.req("bots.ready", bot="kami", provider=bad)
+                self.assertEqual(r["error"]["code"], "bad_request", bad)
+            self.assertEqual((await s.req("bots.ready", bot="ghost"))["error"]["code"], "unknown_bot")
+
+    async def test_still_checking_is_asked_again_then_reported_unknown(self):
+        busy = GatewayRPCError("readiness_in_progress")
+        with mock.patch.object(ob, "READY_RETRY", (0.0, 0.0, None)):
+            async with Env(ready=[busy, self.NOT_READY]) as env:
+                s = await self.open(env)
+                r = (await s.req("bots.ready", bot="kami"))["result"]
+                self.assertFalse(r["ok"])
+                self.assertEqual(len(env.clients["kami"].find("setup.runtime_check")), 2)
+            async with Env(ready=[busy]) as env:
+                s = await self.open(env)
+                r = (await s.req("bots.ready", bot="kami"))["result"]
+                self.assertEqual((r["ok"], r.get("unknown")), (True, True))
+                self.assertEqual(len(env.clients["kami"].find("setup.runtime_check")), 3)
+
+    async def test_an_older_gateway_without_the_probe_shows_no_block(self):
+        async with Env(lacks={"setup.runtime_check"}) as env:
+            s = await self.open(env)
+            r = (await s.req("bots.ready", bot="kami"))["result"]
+            self.assertEqual((r["ok"], r.get("unknown")), (True, True))
+
+    async def test_an_offline_bot_is_an_error_not_a_verdict(self):
+        async with Env(fail={"kami"}) as env:
+            s = await self.open(env)
+            self.assertEqual((await s.req("bots.ready", bot="kami"))["error"]["code"], "bot_offline")
 
 
 class EventMapping(BridgeCase):

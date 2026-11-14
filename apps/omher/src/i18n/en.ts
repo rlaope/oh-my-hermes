@@ -74,8 +74,7 @@ export const en = {
   "plans.graph": "Plan graph",
 
   // chat (the chat column's own words)
-  "chat.noBots": "No bots yet",
-  "chat.noBotsHint": "A bot is a Hermes profile. Add one with + at the top left, or create one:",
+  "chat.noBotsHint": "Hermes has no bot yet. Connect one from the + menu at the top left.",
   "chat.pick": "Pick a bot",
   "chat.connecting": "Connecting to Hermes…",
 
@@ -765,6 +764,14 @@ export const en = {
   "tl.loading": "Loading…",
   "tl.unreachable": "{bot} is not reachable ({error}). Start Hermes for this profile, then pick it again.",
   "tl.noModel": "{bot} has no model yet. Pick one from the model menu at the top right to start.",
+  "cn.needs": "{bot} needs an AI account to answer.",
+  "cn.finish": "Finish signing in in the terminal window.",
+  "cn.codex": "ChatGPT / Codex",
+  "cn.claude": "Claude",
+  "cn.nous": "Nous Portal",
+  "cn.key": "API key…",
+  "cn.manual": "Run {cmd} in a terminal.",
+  "cn.openFailed": "Couldn’t open a terminal ({error}). Run {cmd} yourself.",
   "tl.sayHi": "Say hi to {bot}",
   "ty.writing": "{name} is writing",
   "ui.working": "Working",

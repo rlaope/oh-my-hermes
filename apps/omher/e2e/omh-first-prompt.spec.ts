@@ -360,7 +360,8 @@ test("the first-run screen's install (Hermes was missing) brings the same line",
   await open(page, { gate: "missing" });
   await expect(page.getByTestId("setup-screen")).toBeVisible();
   await page.getByTestId("setup-install").click();
-  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  // Hermes was just installed: the installer's own default profile is the person's bot, and the app lands there
+  await expect(page.getByTestId("bot-default")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("omh-prompt")).toBeVisible();
   await page.getByTestId("omh-prompt-fill").click();
   await expect(page.getByTestId("composer")).toHaveValue(`/omh-model-setup ${ASK.en}`);

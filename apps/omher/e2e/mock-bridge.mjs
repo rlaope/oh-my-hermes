@@ -16,7 +16,10 @@
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
 // mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
-// drives it with mock.emit).
+// drives it with mock.emit),
+// mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
+// signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
+// models.options).
 import http from "node:http";
 import crypto from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
@@ -532,6 +535,14 @@ const PROVIDERS = [
   },
   { slug: "ollama", name: "Ollama", models: ["llama-4-maverick", "my-local-model"] },
 ];
+// bots.ready: Hermes' sentence for a bot with no AI account, and each sign-in's models as
+// models.options lists them once signed in (the first is an Opus tier, so the cost-safe pick is the second).
+const NOT_CONNECTED = "Hermes is not connected to any AI provider yet. Run `hermes model` to pick one, type `/login` in chat, or add a key with `hermes auth add <provider>`.";
+const SIGN_IN_MODELS = {
+  anthropic: { slug: "anthropic", name: "Anthropic", models: ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5"] },
+  "openai-codex": { slug: "openai-codex", name: "ChatGPT or Codex Subscription", models: ["gpt-6-sol", "gpt-6-luna"] },
+  nous: { slug: "nous", name: "Nous Portal", models: ["anthropic/claude-fable-5.2", "moonshotai/kimi-k3"] },
+};
 // mock.providers {fixture: "long"}: the long catalogs of a real profile (Nous Portal ~60, OpenRouter ~60).
 const PROVIDERS_LONG = JSON.parse(readFileSync(new URL("./fixtures/providers-long.json", import.meta.url), "utf-8"));
 let providerFixture = "default";
@@ -559,6 +570,7 @@ const subTimers = new Set();
 let manual;
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
+let notReady = new Map();
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -713,6 +725,7 @@ function reset() {
   asked = new Map();
   manual = new Set();
   noSkills = new Set();
+  notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
   submits = [];
@@ -1264,8 +1277,23 @@ const OPS = {
     plugins[p.bot] = plugins[p.bot].filter((x) => x !== row);
     return { name: row.name };
   },
+  "bots.ready": (p) => {
+    const b = needBot(p);
+    if (p.provider !== undefined && !(typeof p.provider === "string" && /^[a-z0-9][a-z0-9_-]{0,40}$/.test(p.provider))) throw new OpError("bad_request", "provider must be a Hermes provider id");
+    if (!notReady.has(b.name)) return { ok: true, provider: models[b.name].provider, model: models[b.name].model, error: "" };
+    const signed = notReady.get(b.name);
+    // the strict check for the provider the person signed in to passes; the bot's own check passes once its chat
+    // runs on that provider (chat.set_model), as with `hermes auth add anthropic` and no model in config
+    if (p.provider) return signed === p.provider ? { ok: true, provider: p.provider, model: "z-ai/glm-5.3", error: "" } : { ok: false, provider: "", model: "", error: `No usable credentials found for ${p.provider}.` };
+    if (signed && models[b.name].provider === signed) return { ok: true, provider: signed, model: models[b.name].model, error: "" };
+    return { ok: false, provider: "", model: "", error: NOT_CONNECTED };
+  },
   "models.options": (p) => {
     const b = needBot(p);
+    const signed = notReady.get(b.name);
+    if (signed && SIGN_IN_MODELS[signed]) {
+      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
+    }
     if (providerFixture === "long") {
       return { providers: PROVIDERS_LONG.providers, current: { ...models[b.name], ...PROVIDERS_LONG.current }, reasoning_levels: REASONING_LEVELS };
     }
@@ -1279,7 +1307,7 @@ const OPS = {
       return { model: p.model, provider: p.provider ?? models[b.name].provider, reasoning: models[b.name].reasoning };
     }
     const cur = models[b.name];
-    if (p.provider !== undefined && !PROVIDERS.some((x) => x.slug === p.provider)) throw new OpError("bad_request", `unknown provider ${p.provider}`);
+    if (p.provider !== undefined && !PROVIDERS.some((x) => x.slug === p.provider) && !(notReady.get(b.name) === p.provider && SIGN_IN_MODELS[p.provider])) throw new OpError("bad_request", `unknown provider ${p.provider}`);
     if (p.reasoning !== undefined && !REASONING_LEVELS.includes(p.reasoning)) throw new OpError("bad_request", `unknown reasoning level ${p.reasoning}`);
     if (p.model !== undefined && typeof p.model !== "string") throw new OpError("bad_request", "model must be a string");
     models[b.name] = {
@@ -1486,6 +1514,12 @@ const OPS = {
     needStr(p, "bot");
     if (p.on === false) manual.delete(p.bot);
     else manual.add(p.bot);
+    return {};
+  },
+  "mock.ready": (p) => {
+    const b = needBotAny(p);
+    if (p.ok) notReady.delete(b.name);
+    else notReady.set(b.name, typeof p.signIn === "string" ? p.signIn : "");
     return {};
   },
   "mock.noSkills": (p) => {

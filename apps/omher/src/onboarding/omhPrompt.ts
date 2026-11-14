@@ -36,6 +36,9 @@ export interface PromptState {
   command: string | null;
   /** With `ready`: the bot's running gateway has not loaded the oh-my-hermes plugin yet. */
   restart: boolean;
+  /** "default": the first-run screen installed Hermes, so the check waits for the default bot (the installer's own
+   *  profile is the new person's bot); null: the bot in view. */
+  want: "default" | null;
 }
 
 /** Waits before each `skills.list` read: one at once, then again for about a minute. */
@@ -69,8 +72,9 @@ export interface PromptDeps {
   /** The bot's plugins as its running gateway lists them (null when it cannot say). */
   plugins: (bot: string) => Promise<PluginRow[] | null>;
   sleep: (ms: number) => Promise<void>;
-  /** Show a bot's chat once the app's bots are known: the one in view, else the first. */
-  showChat: () => void;
+  /** Show a bot's chat once the app's bots are known: the default bot with `want` "default", else the one in view,
+   *  else the first. */
+  showChat: (want: "default" | null) => void;
   delays?: readonly number[];
 }
 
@@ -89,7 +93,7 @@ export function createOmhPrompt(deps: PromptDeps) {
       /* no storage: it holds for this run */
     }
   };
-  let state: PromptState = { phase: read() === "pending" ? "pending" : "off", bot: null, command: null, restart: false };
+  let state: PromptState = { phase: read() === "pending" ? "pending" : "off", bot: null, command: null, restart: false, want: null };
   let run = 0;
   const fns = new Set<() => void>();
   const set = (p: Partial<PromptState>) => {
@@ -97,20 +101,21 @@ export function createOmhPrompt(deps: PromptDeps) {
     for (const f of [...fns]) f();
   };
 
-  /** The installer ended well: offer the line once (never again after it was pressed or closed). */
-  const installed = () => {
+  /** The installer ended well: offer the line once (never again after it was pressed or closed). `want` "default":
+   *  Hermes itself was just installed, so the person lands in the default bot's chat. */
+  const installed = (want: "default" | null = null) => {
     if (read() === "done") return;
     write("pending");
     run += 1;
-    set({ phase: "pending", bot: null, command: null, restart: false });
-    deps.showChat();
+    set({ phase: "pending", bot: null, command: null, restart: false, want });
+    deps.showChat(want);
   };
 
   /** Ask `bot`'s skills for the command, again for about a minute; the line or the restart line follows. */
   const check = async (bot: string) => {
     if (state.phase !== "pending") return;
     const mine = ++run;
-    set({ phase: "checking", bot });
+    set({ phase: "checking", bot, want: null });
     for (const ms of deps.delays ?? CHECK_DELAYS) {
       if (ms) await deps.sleep(ms);
       if (run !== mine) return;
@@ -168,12 +173,12 @@ export function getOmhPrompt(): OmhPrompt {
       sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
       // e2e shortens the minute of re-reads (`__omherPromptDelays`); the app uses CHECK_DELAYS
       delays: typeof window === "undefined" ? undefined : (window as unknown as { __omherPromptDelays?: number[] }).__omherPromptDelays,
-      showChat() {
+      showChat(want) {
         // after the store has its bots (the first-run screen installs before the app has started)
         const store = getStore();
         void store.resumed.then(() => {
           const s = store.getState();
-          const bot = s.selectedBot ?? s.bots[0]?.name;
+          const bot = (want === "default" ? s.bots.find((b) => b.is_default)?.name : undefined) ?? s.selectedBot ?? s.bots[0]?.name;
           if (!bot) return;
           if (s.ui.runsFull) store.actions.setRunsFull(false);
           if (s.ui.view !== "chat" || s.selectedBot !== bot) void store.actions.selectBot(bot);
@@ -184,9 +189,9 @@ export function getOmhPrompt(): OmhPrompt {
   return single;
 }
 
-/** The installer's success path calls this (addOmh.ts, BridgeGate.tsx). */
-export function omhInstalled(): void {
-  getOmhPrompt().installed();
+/** The installer's success path calls this (addOmh.ts; BridgeGate.tsx with "default", Hermes was just installed). */
+export function omhInstalled(want: "default" | null = null): void {
+  getOmhPrompt().installed(want);
 }
 
 export function useOmhPrompt(): PromptState {
