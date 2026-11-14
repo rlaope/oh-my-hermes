@@ -1557,14 +1557,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   };
   /** A bot outside the sidebar list: ask its existing Bot Chat for the prompts waiting on the person. The bridge
    *  replays them as approval/clarify events, which reach Needs you; the chat itself is not kept, the bot is not
-   *  listed, and a bot with no Bot Chat yet gets none (`existing_only`; it answers not_found, which is fine). */
+   *  listed, and a bot with no Bot Chat yet gets none (`existing_only`; it answers not_found, which is fine).
+   *  One peek per bot at a time. */
+  const peeking = new Set<string>();
   const peekAsks = async (bot: string) => {
+    if (peeking.has(bot)) return;
+    peeking.add(bot);
     try {
       await bridge.request("chat.open", { bot, existing_only: true });
     } catch {
-      /* no Bot Chat, or offline: nothing can be waiting in it */
+      /* no Bot Chat, or it cannot start: nothing can be waiting in it */
+    } finally {
+      peeking.delete(bot);
     }
   };
+  /** Every bot outside the list whose chat is not loaded: asked at start, after a reconnect (events were missed),
+   *  and when the bot list changes (a new profile). bots.list reads offline for any profile not attached yet, so
+   *  this does not filter by status. */
+  const peekUnlisted = () => selectUnlisted(state).filter((b) => !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name));
   const loadElsewhere = async (bot?: string) => {
     const b = botArg(bot);
     if (!b) return;
@@ -1645,15 +1655,21 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
 
   const reloadBots = async () => {
     try {
+      const before = new Set(state.bots.map((b) => b.name));
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
       ensureRoster();
+      // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
+      await Promise.allSettled(
+        selectUnlisted(state).filter((b) => !before.has(b.name) && !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name)),
+      );
     } catch (e) {
       fail(e);
     }
   };
 
-  /** After a reconnect: events were missed, so re-read the lists and every loaded chat. */
+  /** After a reconnect: events were missed, so re-read the lists and every loaded chat, and ask the bots outside
+   *  the list again for the prompts that may have arrived meanwhile. */
   const resync = async () => {
     try {
       const r = await bridge.request("bots.list", {});
@@ -1664,7 +1680,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     }
     const names = new Set(state.bots.map((b) => b.name));
     const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
-    await Promise.allSettled([...loaded.map(loadChat), loadElsewhere(), loadRoutines(), loadAutomations()]);
+    await Promise.allSettled([...loaded.map(loadChat), ...peekUnlisted(), loadElsewhere(), loadRoutines(), loadAutomations()]);
   };
 
   const actions: Actions = {
@@ -1690,8 +1706,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
         if (ev.event === "routine.ran" || ev.event === "routines.update" || ev.event === "routine.added") void loadAutomations();
         if (ev.event === "bots.update") void reloadBots();
-        // a restarted bot is attached again: its chat re-reads itself, as after a reconnect
-        if (ev.event === "bot.restarted" && ev.ok && state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
+        // a restarted bot is attached again: its chat re-reads itself, as after a reconnect; a bot outside the list
+        // is asked again, because the restart dropped the bridge's link to its Bot Chat
+        if (ev.event === "bot.restarted" && ev.ok) {
+          if (state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
+          else if (selectUnlisted(state).some((b) => b.name === ev.bot)) void peekAsks(ev.bot);
+        }
       });
       await bridge.connect();
       try {
