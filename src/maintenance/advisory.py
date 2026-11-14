@@ -316,6 +316,11 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
     them the same way: both halves of every entry go through
     `require_opaque_metadata_ref`, so a credential cannot arrive as an alias
     target. A second parser would be a second place for that screen to lapse.
+
+    Entries are the flat `alias: target` form or the nested mapping Hermes
+    writes (`alias:` with `model:`, `provider:`, `base_url:`, `key_env:` ...
+    children, one level deep). A nested entry's target is its `model` child;
+    every other child is read past, and its value is never kept or returned.
     """
     if "\t" in text or "\x00" in text:
         return {}, "config contains unsupported tab indentation or NUL bytes"
@@ -324,12 +329,45 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
     in_model = False
     in_aliases = False
     model_indent = aliases_indent = -1
+    # State for a nested (Hermes-style) alias entry whose children follow
+    # on deeper-indented lines, e.g. `mistral:` then `model: ...`.
+    pending_alias: str | None = None
+    pending_children: dict[str, str] = {}
+    pending_had_children = False
+    entry_indent = -1
+    child_indent = -1
+
+    def _flush_pending() -> str | None:
+        # Commit a pending nested alias entry (or report why it is invalid) and
+        # reset the entry state. Returns the error message, or None on success.
+        # The `model` child was already screened when it was read.
+        nonlocal pending_alias, pending_children, pending_had_children
+        nonlocal entry_indent, child_indent
+        if pending_alias is not None:
+            if "model" in pending_children:
+                aliases[pending_alias] = pending_children["model"]
+            elif pending_had_children:
+                # Leave the pending state untouched: the caller aborts on error.
+                return "model alias entry shape is unsupported"
+            else:
+                # `alias:` with no value and no children.
+                return "model alias entry is malformed or unsafe"
+        pending_alias = None
+        pending_children = {}
+        pending_had_children = False
+        entry_indent = -1
+        child_indent = -1
+        return None
+
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         indent = len(line) - len(line.lstrip(" "))
         if indent == 0:
+            err = _flush_pending()
+            if err:
+                return {}, err
             in_model = stripped == "model:"
             in_aliases = False
             model_indent = 0 if in_model else -1
@@ -339,7 +377,14 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
                 in_aliases = True
                 aliases_indent = 0
             continue
-        if in_model and indent > model_indent and stripped.startswith("aliases:"):
+        # Inside the alias block an `aliases:` line is an entry's child key,
+        # not the block's own header; re-entering here would read that
+        # child's sub-block as top-level aliases.
+        inside_alias_block = in_aliases and indent > aliases_indent
+        if in_model and not inside_alias_block and indent > model_indent and stripped.startswith("aliases:"):
+            err = _flush_pending()
+            if err:
+                return {}, err
             if stripped != "aliases:":
                 return {}, "model.aliases must be a mapping"
             in_aliases = True
@@ -347,19 +392,69 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
             continue
         if in_aliases:
             if indent <= aliases_indent:
+                err = _flush_pending()
+                if err:
+                    return {}, err
                 in_aliases = False
                 continue
-            if ":" not in stripped:
-                return {}, "model alias entry is malformed"
-            alias, _, target = stripped.partition(":")
-            alias = alias.strip().strip("'\"")
-            target = target.strip().strip("'\"")
-            try:
-                safe_alias = require_opaque_metadata_ref(alias, field="model alias")
-                safe_target = require_opaque_metadata_ref(target, field="model alias target")
-            except ValueError:
-                return {}, "model alias entry is malformed or unsafe"
-            aliases[safe_alias] = safe_target
+            # New entry or child of a pending nested entry.
+            if entry_indent == -1 or indent <= entry_indent:
+                # Finalize any pending nested entry first.
+                err = _flush_pending()
+                if err:
+                    return {}, err
+                if ":" not in stripped:
+                    return {}, "model alias entry is malformed"
+                alias, _, target = stripped.partition(":")
+                alias = alias.strip().strip("'\"")
+                target = target.strip().strip("'\"")
+                try:
+                    safe_alias = require_opaque_metadata_ref(alias, field="model alias")
+                except ValueError:
+                    return {}, "model alias entry is malformed or unsafe"
+                if target != "":
+                    # Flat form: alias: target
+                    try:
+                        safe_target = require_opaque_metadata_ref(target, field="model alias target")
+                    except ValueError:
+                        return {}, "model alias entry is malformed or unsafe"
+                    aliases[safe_alias] = safe_target
+                else:
+                    # Nested form: alias: (children follow)
+                    pending_alias = safe_alias
+                entry_indent = indent
+                child_indent = -1
+                continue
+            else:
+                # Child line of a pending nested entry.
+                if pending_alias is None:
+                    return {}, "model alias entry is malformed"
+                if child_indent == -1:
+                    child_indent = indent
+                elif indent != child_indent:
+                    # A deeper (or misaligned) child would be a nested sub-block,
+                    # which this parser does not support; reject rather than absorb.
+                    return {}, "model alias entry is malformed or unsafe"
+                pending_had_children = True
+                if ":" not in stripped:
+                    return {}, "model alias entry is malformed"
+                ckey, _, cval = stripped.partition(":")
+                ckey = ckey.strip().strip("'\"")
+                cval = cval.strip().strip("'\"")
+                if ckey == "model":
+                    if "model" in pending_children:
+                        # Duplicate `model:` line: only one target is allowed.
+                        return {}, "model alias entry is malformed or unsafe"
+                    try:
+                        safe_val = require_opaque_metadata_ref(cval, field="model alias target")
+                    except ValueError:
+                        return {}, "model alias entry is malformed or unsafe"
+                    pending_children["model"] = safe_val
+                continue
+    # End of input: finalize any pending nested entry.
+    err = _flush_pending()
+    if err:
+        return {}, err
     return dict(sorted(aliases.items())), ""
 
 

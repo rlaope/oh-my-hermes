@@ -578,10 +578,16 @@ QUESTION_VIEW_TITLE = "the open question (q goes back to it)"  # Ctrl+O's pager 
 # `/compress` (and `/compact`, its alias) while it runs: Hermes summarizes the older turns with a model call.
 COMPRESS_COMMANDS = frozenset({"compress", "compact"})
 COMPRESS_PREVIEW_FLAGS = frozenset({"--preview", "--dry-run"})
-COMPRESS_STARTED_NOTICE = "Compressing: Hermes summarizes the older turns with a model call, so this can take a while."
-# The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`). It offers no Esc:
-# with no turn running Esc arms the rewind and sends no interrupt, so it does not stop a compression.
-COMPRESSING_VERB = "Compressing"
+# The working row's verb while a `/compress` is out and no turn runs (`App._compressing_since`), as Claude Code words
+# it; no notice under the echo repeats it (the owner, 2026-11-14). It offers no Esc: with no turn running Esc arms the
+# rewind and sends no interrupt, so it does not stop a compression.
+COMPRESSING_VERB = "Compacting conversation"
+# The gauge on that row. Hermes reports no progress for a compression, so the gauge is a clock, not a measure: it eases
+# toward COMPRESS_GAUGE_CEILING of its cells (`1 - e^(-t/COMPRESS_GAUGE_SECONDS)`), never full, and says no percent;
+# the answer closes the row and Hermes' own report (`✓ Compressed: …`) says what changed.
+COMPRESS_GAUGE_CELLS = 20
+COMPRESS_GAUGE_SECONDS = 30.0
+COMPRESS_GAUGE_CEILING = 0.9
 # Between turns, while something the session waits on still runs (a background process Hermes will wake it for, a
 # delegated child or dag-ulw node that wakes the parent as it ends), the working row says so, as it says a turn runs
 # (the owner, 2026-11-05: "걍 Musing마냥 … 계속 나오게"): `✻ Waiting… (33m 47s · 1 agent · terminal)`.
@@ -1160,6 +1166,9 @@ SESSION_RENAMED_NOTICE = "Renamed session {session} to {title}."
 SESSION_DELETED_NOTICE = "Deleted session {session}."
 # On the picker's row when Hermes answered a rename or delete with nothing that says it was done.
 SESSION_EDIT_UNCONFIRMED = "Hermes did not say it was done"
+SESSION_EDIT_READ_ONLY = "another runtime owns this session; its history is read-only here"
+# Under a message of a read-only session's history that Hermes cut to its start (`truncated` on the row).
+TRANSCRIPT_ROW_CUT = "… (Hermes sent only the start of this message)"
 SESSION_EDIT_UNANSWERED = "Hermes did not answer in {seconds:g} s"
 SESSION_EDIT_NOT_SENT = "the OMH TUI did not send it"
 SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
@@ -3384,6 +3393,7 @@ class App(ModesMixin, AgentViewMixin):
             elif call.method not in QUIET_EXPIRY_METHODS:
                 self._say_unanswered(call.command, call.method, call.seconds)
             self._command_call_done(call)
+            self._compression_settled(call)
         self._settle_switch_held()
 
     def _say_unanswered(self, command: CommandBlock | None, method: str, seconds: float) -> None:
@@ -4157,6 +4167,7 @@ class App(ModesMixin, AgentViewMixin):
             self._command_call_done(pending)
             self._settle_switch_held()
             self._drain_after_queued_command()
+            self._compression_settled(pending)
 
     def _answer_call(self, pending: _Pending, response: Response) -> None:
         if response.error is None:
@@ -6159,7 +6170,10 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             self._keep_images(images, "A prompt with no session")
             return
-        if self._queue_waits():
+        if self._queue_waits() or self._compression_left() is not None:
+            # A prompt sent while a `/compress` is out waits in the queue, never steering (no turn runs to steer), and
+            # goes by itself once the compression settles (`_compression_settled`), on either gateway entry: the
+            # stdio one would refuse it as busy, and the shared one would hold it unseen behind the compression.
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         # The prompt of a command the queue ran goes as the queue's lines go; from here the turn it starts holds the
@@ -6717,7 +6731,7 @@ class App(ModesMixin, AgentViewMixin):
             self.switch_drain_due = True
             return
         if self.queued and self.sid and not self.queue_held and self.starting is None \
-                and not self._queued_command_out():
+                and not self._queued_command_out() and self._compression_left() is None:
             line = self.queued.popleft()
             self.auto_continues = 0  # a line the person queued
             if line.shell:
@@ -7229,8 +7243,6 @@ class App(ModesMixin, AgentViewMixin):
         else:
             compressing = invocation.name.lower() in COMPRESS_COMMANDS
             preview = bool(COMPRESS_PREVIEW_FLAGS & {word.lower() for word in invocation.arg.split()})
-            if compressing and not preview and not self._busy():
-                self.transcript.add_notice(COMPRESS_STARTED_NOTICE)  # under the echo, until Hermes' report
             held = not compressing and self._compression_left() is not None
             if held and self.shared_gateway:  # the stdio entry refuses a turn-back as busy instead
                 self.transcript.add_notice(COMPRESSION_HELD_NOTICE.format(name=invocation.name))
@@ -7260,6 +7272,12 @@ class App(ModesMixin, AgentViewMixin):
         dropped while Hermes acts on it anyway."""
         ends = [call.expires_at for call in self.pending.values() if call.compressing]
         return float(math.ceil(max(0.0, max(ends) - self.clock()))) if ends else None
+
+    def _compression_settled(self, call: _Pending) -> None:
+        """A `/compress` call was answered (or refused, or given up on): once no other is out, the prompts queued
+        while it ran go on by themselves, the oldest first, as after a turn."""
+        if call.compressing and self._compression_left() is None:
+            self._drain_unless_busy()
 
     def _compressing_since(self) -> float | None:
         """When the earliest `/compress` this TUI still waits on was sent, while no turn runs; None otherwise.
@@ -7762,12 +7780,65 @@ class App(ModesMixin, AgentViewMixin):
         if action is None:
             return
         if action.kind in (RENAME, SESSION_DELETE):  # the picker stays open, its row saying how the call went
+            row = next((row for row in self.picker.rows if row.id == action.session_id), None)
+            if row is not None and row.read_only:
+                self._edit_refused(self.picker, row.id, SESSION_EDIT_READ_ONLY)
+                return
             self._edit_session(self.picker, action)
             return
         rows, self.picker = self.picker.rows, None
         if action.kind == PICK:
-            label = next((row.label for row in rows if row.id == action.session_id), "")
-            self._switch_session(action.session_id, label=label)
+            row = next((row for row in rows if row.id == action.session_id), None)
+            if row is not None and row.read_only:  # its owner is another runtime: its history is read, not resumed
+                self._read_session(row)
+                return
+            self._switch_session(action.session_id, label=row.label if row is not None else "")
+
+    def _read_session(self, row: SessionRow) -> None:
+        """`row`'s history in a pager, read from its owner without resuming it: `session.transcript` mounts the
+        stored transcript read-only, so no agent is built and no session is taken over. It is how a session another
+        runtime persisted open stays listable here; resuming it is that runtime's to allow."""
+        def done(result: dict[str, Any]) -> None:
+            messages = result.get(contract.TRANSCRIPT_ROWS)
+            lines: list[Line] = []
+            for message in messages if isinstance(messages, list) else []:
+                if not isinstance(message, dict):
+                    continue
+                role = as_text(message.get("role")) or "?"
+                content = [clean_text(line).rstrip() for line in as_text(
+                    message.get("text", message.get("content"))).splitlines()]
+                while content and not content[0]:
+                    content.pop(0)
+                while content and not content[-1]:
+                    content.pop()
+                if content:
+                    if lines:
+                        lines.append(())
+                    lines.append((Span(f"{role}: ", style="bold"), Span(content[0])))
+                    lines.extend((Span(line),) for line in content[1:])
+                    if message.get(contract.TRANSCRIPT_ROW_TRUNCATED) is True:
+                        lines.append((Span(TRANSCRIPT_ROW_CUT),))
+            if result.get(contract.TRANSCRIPT_NEXT_CURSOR):
+                lines.append((Span("Newest transcript page shown; older history remains on the server."),))
+            if not lines:
+                self.transcript.add_aside(NoticeBlock(f"No messages stored for {row.label}."))
+                return
+            self._open_pager(f"Read-only · {row.label}", lines)
+
+        def refused(error: dict[str, Any]) -> bool:
+            self.transcript.add_notice(
+                f"Hermes did not show {row.label}: {error.get('message') or error.get('code') or 'refused'}.",
+                NOTICE_ERROR,
+            )
+            return True
+
+        self._request(
+            "session.transcript",
+            {"session_id": row.id, "order": "latest", "limit": 500},
+            done,
+            refused,
+            seconds=CALL_ANSWER_SECONDS,
+        )
 
     def _edit_session(self, picker: SessionPicker, action: PickerAction) -> None:
         """A rename (`session.title`) or a delete (`session.delete`) the person asked for in the session picker, on
@@ -7915,7 +7986,11 @@ class App(ModesMixin, AgentViewMixin):
         titled = [row for row in rows if target in (row.get("title"), row.get("root_title"))]
         found = as_text(titled[0].get("resolved_id")) or as_text(titled[0].get("id")) if len(titled) == 1 else ""
         if found:
-            self._switch_session(found, notice, label=target, seq=seq)
+            projected = session_rows({"sessions": titled})
+            if projected and projected[0].read_only:
+                self._read_session(projected[0])
+            else:
+                self._switch_session(found, notice, label=target, seq=seq)
         else:
             self._scan_titles(target, error, notice, seq)
 
@@ -7953,7 +8028,10 @@ class App(ModesMixin, AgentViewMixin):
             row for row in rows if row.title.casefold() == title.casefold()
         ]
         if len(matched) == 1:
-            self._switch_session(matched[0].id, notice, label=matched[0].label, seq=seq)
+            if matched[0].read_only:
+                self._read_session(matched[0])
+            else:
+                self._switch_session(matched[0].id, notice, label=matched[0].label, seq=seq)
             return
         if not matched and SESSION_ID_SHAPE.fullmatch(title):
             self._on_resume_refused(title, error)
@@ -9721,12 +9799,10 @@ class App(ModesMixin, AgentViewMixin):
             if tip is not None:
                 lines.append(tip)
         elif compressing is not None:
-            # A `/compress` out with no turn running: the spinner and its clock, so the wait reads as alive.
-            frame = self._spinner_frame()
-            row = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
-                   *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme),
-                   Span(f" ({elapsed_text(now - compressing)})", self.theme.muted))
-            lines.append(truncate_line(row, cols))
+            # A `/compress` out with no turn running: the spinner, a gauge and its clock, so the wait reads as alive,
+            # then a blank row so it does not sit on the composer's rule (the owner, 2026-11-14).
+            lines.append(self._compress_row(now - compressing, cols))
+            lines.append(())
         elif alert is not None:
             # What the session waits on: the working row's spinner and words, the longest wait's clock, then how many
             # agents and terminals. The spinner holds while the window is unfocused (#2542); the clock counts on.
@@ -9778,12 +9854,31 @@ class App(ModesMixin, AgentViewMixin):
             return None
         return max(times, default=0.0), agents, terminals
 
+    def _compress_row(self, waited: float, cols: int) -> Line:
+        """`✻ Compacting conversation… ━━━━━━────── (11s)`: the gauge is the time waited eased toward
+        COMPRESS_GAUGE_CEILING, never a measure Hermes gave. A narrow row drops the gauge first, then the clock."""
+        frame = self._spinner_frame()
+        lead = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
+                *working_spans(f"{COMPRESSING_VERB}…", frame, self.theme))
+        part = COMPRESS_GAUGE_CEILING * (1.0 - math.exp(-max(waited, 0.0) / COMPRESS_GAUGE_SECONDS))
+        filled = min(COMPRESS_GAUGE_CELLS - 1, int(part * COMPRESS_GAUGE_CELLS))
+        gauge = (Span(" "), Span(CONTEXT_GAUGE_FILLED * filled, self.theme.accent),
+                 Span(CONTEXT_GAUGE_EMPTY * (COMPRESS_GAUGE_CELLS - filled), self.theme.dim))
+        clock = (Span(f" ({elapsed_text(waited)})", self.theme.muted),)
+        for candidate in ((*lead, *gauge, *clock), (*lead, *clock), lead):
+            row = tuple(span for span in candidate if span.text)
+            if line_width(row) <= cols:
+                return row
+        return truncate_line(lead, cols)
+
     def _working_rows(self) -> int:
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
         these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
-        if not self._busy():  # the compression's row, or the wait's, with no tip
-            return int(self._compressing_since() is not None or self._pending_wait() is not None)
+        if not self._busy():  # the compression's row and the blank row under it, or the wait's row, with no tip
+            if self._compressing_since() is not None:
+                return 2
+            return int(self._pending_wait() is not None)
         if self._framed_wait():
             return 0  # `_tail` draws no row: the framed question's key row carries the wait's clock
         return 1 + int(self.size[1] >= TIP_MIN_ROWS and self.waiting_since is None and not self.interrupting)
