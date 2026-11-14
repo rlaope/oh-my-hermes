@@ -980,6 +980,12 @@ All notable changes will be documented here.
   presence the same way, so a name inside another root key's flow mapping is
   no longer reported as OMH's own. Reported by @PabloJustDevelops in #2829.
 
+- **Right-click an empty part of omher's Sessions list to start a new session.**
+  The menu opens the existing agent picker without starting a process; each
+  session's own right-click menu still offers a fresh conversation in its
+  folder. Chat and terminal view marks beside the session rows are smaller,
+  while their targets and the messages' type and spacing stay unchanged.
+
 ## 4.0.7 - 2026-11-09
 
 - **Bare `omh` opens on a Hermes runtime of the TUI's own by default, with

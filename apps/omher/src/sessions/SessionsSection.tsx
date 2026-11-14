@@ -766,16 +766,16 @@ function StateSign({ mark }: { mark: RowMark }) {
   );
 }
 
-/** The row's view mark. The two must differ at a glance at 16 by 13: the terminal is a solid window with the prompt
- *  cut out of it, the chat an outlined bubble. The header's line icons at this size both read as "a small box". */
+/** The row's compact view mark. The terminal is a solid window with the prompt cut out of it, the chat an outlined
+ *  bubble; the original 16 by 13 geometry scales together inside a 12 by 10 box. */
 function ViewMark({ view }: { view: "chat" | "terminal" }) {
   return view === "terminal" ? (
-    <svg width="16" height="13" viewBox="0 0 16 13" aria-hidden="true">
+    <svg width="12" height="10" viewBox="0 0 16 13" aria-hidden="true">
       <rect width="16" height="13" rx="3" fill="currentColor" />
       <path d="M4 4 6.5 6.5 4 9M8.3 9.2h3.9" fill="none" stroke="var(--ss-cut)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ) : (
-    <svg width="16" height="13" viewBox="0 0 16 13" aria-hidden="true">
+    <svg width="12" height="10" viewBox="0 0 16 13" aria-hidden="true">
       <path
         d="M3 .8h10a2.2 2.2 0 0 1 2.2 2.2v4.2A2.2 2.2 0 0 1 13 9.4H7.6l-3.1 2.8V9.4H3A2.2 2.2 0 0 1 .8 7.2V3A2.2 2.2 0 0 1 3 .8Z"
         fill="none"
@@ -900,8 +900,8 @@ function Row({ rec, ctx, view, unseen, active, onClose }: { rec: SessionRec; ctx
       data-needs-you={m.needsYou ? "true" : undefined}
       data-mark={m.needsYou ? "needs" : (m.mark ?? undefined)}
       onContextMenu={(e) => {
-        e.preventDefault();
         if (editing) return;
+        e.preventDefault();
         // a draft has nothing to rename yet: right-click closes it, as before
         if (rec.status === "draft") return onClose();
         const side = wrap.current?.closest(".side")?.getBoundingClientRect();
