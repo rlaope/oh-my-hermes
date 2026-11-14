@@ -1210,7 +1210,7 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         payload.update(extra)
     if say:
         payload["say"] = say
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
 def _criteria_say(view: Mapping[str, Any]) -> str:
@@ -1405,7 +1405,7 @@ def _refused(action: str, reason: str, say: str, *, detail: str = "") -> str:
                                   "status": "refused", "reason": reason, "say": say, "exports": []}
     if detail:
         payload["detail"] = detail
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
 # Module scope, not call time (#1979), and guarded so a host missing one still registers the tool (#1623).

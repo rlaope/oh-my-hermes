@@ -241,10 +241,10 @@ def register(ctx: RegistrationContext, raw: object) -> None:
             continue
         def sync(args, _name=name, _original=original, **kwargs):
             _, forwarded, error = guard.before_handler(_name, args, kwargs)
-            return json.dumps({"error": error}) if error else _original.handler(forwarded, **kwargs)
+            return json.dumps({"error": error}, ensure_ascii=False) if error else _original.handler(forwarded, **kwargs)
         async def asynchronous(args, _name=name, _original=original, **kwargs):
             _, forwarded, error = guard.before_handler(_name, args, kwargs)
-            return json.dumps({"error": error}) if error else await _original.handler(forwarded, **kwargs)
+            return json.dumps({"error": error}, ensure_ascii=False) if error else await _original.handler(forwarded, **kwargs)
         wrapper = asynchronous if original.is_async else sync
         guard.wrappers[name] = wrapper
         try:

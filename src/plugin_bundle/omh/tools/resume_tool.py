@@ -40,7 +40,7 @@ def omh_resume_handler(args: dict[str, Any], **kwargs: Any) -> str:
     # The session comes from the host dispatch, never from `args`: the model
     # must not be able to name another person's session to read its work.
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_resume", args, kwargs)
     limit = args.get("limit")
     if not isinstance(limit, int) or isinstance(limit, bool):
@@ -55,6 +55,6 @@ def omh_resume_handler(args: dict[str, Any], **kwargs: Any) -> str:
             "work": [],
             "text": "This profile's OMH home is not bound, so no earlier work is shown.",
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     payload = read_work_resume(omh_home, hermes_home, host_session_id(kwargs), limit=limit)
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)

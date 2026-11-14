@@ -40,9 +40,9 @@ def omh_role_handler(args: dict, **kwargs) -> str:
             "aliases": role_aliases(),
             "claim_boundary": "OMH role names are prompt guidance only; they are not observed runtime agents.",
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
     if action != "read":
         payload = {"error": f"unknown action: {action}"}
     else:
         payload = role_context_payload(str(args.get("role", "") or ""))
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)

@@ -2107,7 +2107,7 @@ def dispatch_route_directive(
         return {"omh_route_fallback": result}
     if result.get("status") not in DISPATCH_ROUTE_REFUSALS:
         return None
-    return {"action": "block", "message": json.dumps(result, sort_keys=True)}
+    return {"action": "block", "message": json.dumps(result, ensure_ascii=False, sort_keys=True)}
 
 
 def _writer_matches(

@@ -224,11 +224,11 @@ def omh_loop_handler(args: dict[str, Any], **kwargs) -> str:
     # accepts no home field at all, on any host. Loop mutations are the state a
     # caller-chosen root would most obviously be abused to plant.
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observer_args = {key: args[key] for key in _OBSERVER_ARG_KEYS if key in args}
     observation = observe_plugin_tool_call("omh_loop", observer_args, kwargs)
     request = {key: value for key, value in args.items() if key != "observation"}
     payload = run_loop_tool_action(request, session_ref=host_session_id(kwargs))
     payload["plugin_tool"] = "omh_loop"
     with_say(payload, loop_say(request, payload))
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)

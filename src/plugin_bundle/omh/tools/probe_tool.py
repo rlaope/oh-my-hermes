@@ -50,7 +50,7 @@ def omh_probe_handler(args: dict, **kwargs) -> str:
     include_parity = bool(args.get("include_parity", False))
     include_roadmap = bool(args.get("include_roadmap", False))
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     omh_home = runtime_paths.plugin_home(args.get("omh_home"))
     hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
     observation = observe_plugin_tool_call("omh_probe", args, kwargs)
@@ -79,7 +79,7 @@ def omh_probe_handler(args: dict, **kwargs) -> str:
     # bundle whose interpreter has no `omh` package, and the tools that need
     # the package still have no backend (#2166).
     payload["capabilities"].append(_package_backend_capability())
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _package_probe_capability(failure: dict[str, Any]) -> dict[str, str]:

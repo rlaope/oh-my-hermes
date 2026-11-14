@@ -67,7 +67,7 @@ OMH_HUD_SCHEMA = {
 
 def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
     if error := runtime_paths.tool_home_error(args):
-        return json.dumps(error, sort_keys=True)
+        return json.dumps(error, ensure_ascii=False, sort_keys=True)
     observation = observe_plugin_tool_call("omh_hud", args, kwargs)
     token_metadata = {
         key: args.get(key)
@@ -89,4 +89,4 @@ def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
         session_ref=host_session_id(kwargs),
         delegation_graph=False,  # a model reading its status gets no drawing data (the TUI and chat show it)
     )
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)

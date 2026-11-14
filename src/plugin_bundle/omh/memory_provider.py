@@ -528,7 +528,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         """Dispatch with this provider's session, never a model-supplied identity."""
         if tool_name == REMEMBER_TOOL_NAME:
             return omh_remember_handler(args, session_id=self._session_id)
-        return json.dumps({"status": "error", "reason": "unknown_tool"}, sort_keys=True)
+        return json.dumps({"status": "error", "reason": "unknown_tool"}, ensure_ascii=False, sort_keys=True)
 
     def system_prompt_block(self) -> str:
         """A static save reminder for foreground conversations, not background agents.

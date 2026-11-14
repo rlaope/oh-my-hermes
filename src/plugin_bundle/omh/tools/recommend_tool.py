@@ -84,7 +84,7 @@ def omh_recommend_handler(args: dict, **kwargs) -> str:
             "recommendations": [],
             "claim_boundary": _claim_boundary(),
         }
-        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
     # A skill of a capability family this home turned off is not offered.
     disabled = disabled_skill_families(runtime_paths.plugin_home(args.get("omh_home")))
@@ -113,7 +113,7 @@ def omh_recommend_handler(args: dict, **kwargs) -> str:
         payload["error"] = "package_backend_error"
         payload["error_type"] = error_type
         payload["degraded"] = True
-    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
 
 
 def _recommendations(

@@ -177,7 +177,7 @@ OMH_DOCUMENT_PLAN_SCHEMA = {
 
 
 def _json(payload: dict[str, Any]) -> str:
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
 def _looks_like_path(label: str) -> bool:
