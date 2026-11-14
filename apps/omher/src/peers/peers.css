@@ -59,7 +59,7 @@
 }
 
 /* placements */
-.bot-r1 .bot-n {
+.bot-r1 .bot-n.has-ssh {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;

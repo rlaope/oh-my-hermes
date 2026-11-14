@@ -201,8 +201,8 @@ export function BotRow({
         </LiveRing>
         <span className="bot-m">
           <span className="bot-r1">
-            <span className="bot-n">
-              <span className="bot-nt">{bot.display_name}</span>
+            <span className={bot.host ? "bot-n has-ssh" : "bot-n"}>
+              {bot.host ? <span className="bot-nt">{bot.display_name}</span> : bot.display_name}
               {bot.host && <SshMarker bot={bot} testId={`ssh-mark-${bot.name}`} />}
               {pinned && <span className="bot-pin" data-testid="pinned" aria-label={t("row.pinned")} title={t("row.pinned")} />}
             </span>
