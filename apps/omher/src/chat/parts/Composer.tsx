@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Bot, Skill } from "../../lib/protocol";
 import { useStore, type OutFile, type ReplyChip } from "../../state/store";
+import type { PluginRow } from "../../lib/protocol";
 import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
-import { AttachButton, Chips, chipsFor, useDropZone, type Chip } from "./Attach";
+import { AttachButton, Chips, chipsFor, pluginName, useDropZone, type Chip } from "./Attach";
 import "./attach.css";
 import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
 import { SIGIL, findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
@@ -32,6 +33,7 @@ export function Composer({
   onClearReply,
   offlineText,
   skills: skillsOn = false,
+  plugins: pluginsOn = false,
   commands,
   tools,
   action,
@@ -53,6 +55,8 @@ export function Composer({
   offlineText?: string;
   /** Offer the bot's skills on `$` (a bot's main chat). */
   skills?: boolean;
+  /** List the bot's plugins in the + menu (a bot's main chat). */
+  plugins?: boolean;
   /** An agent's own commands and skills, listed when the box starts with `/` (or `$`); none = no menu. */
   commands?: AgentCommand[];
   /** Controls in the row before Send (a New session chat's agent picker). */
@@ -79,6 +83,17 @@ export function Composer({
   const good = chips.filter((c) => !c.reason);
   const has = text.trim().length > 0 || good.length > 0;
   const store = useStore();
+
+  const listPlugins = store.pluginsList;
+  const readPlugins = useCallback(() => listPlugins(bot.name), [listPlugins, bot.name]);
+  /** A plugin picked in the + menu: its name goes at the start of the message, so the bot knows which to use. */
+  const addPlugin = (p: PluginRow) => {
+    const lead = t("att.usePlugin", { plugin: pluginName(p) });
+    const next = text.startsWith(lead) ? text : lead + text;
+    placeCaret.current = next.length;
+    setText(next);
+    ref.current?.focus();
+  };
 
   // skills: read once, the first time the text has a `$` where a token can start, or is a single `/word` (the
   // hint below says which of the two a skill takes). The store keeps the list per bot.
@@ -306,7 +321,15 @@ export function Composer({
           </span>
         )}
         <div className="composer-row">
-          {onSendFiles && <AttachButton disabled={offline || sending} onFiles={add} />}
+          {onSendFiles && (
+            <AttachButton
+              disabled={offline || sending}
+              onFiles={add}
+              plugins={pluginsOn ? readPlugins : undefined}
+              onPlugin={addPlugin}
+              onManage={() => store.openPlugins(bot.name)}
+            />
+          )}
           <div className="cm-field">
             <div className="cm-mirror" ref={mirror} aria-hidden="true" data-testid="composer-mirror">
               {tokens.length || picking ? mirrorText(text, tokens, picking && frag ? frag.start : null, anchor) : null}

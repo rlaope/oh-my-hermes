@@ -4,10 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher's + in the message box opens one file picker.** The menu with "Photos & videos", "Files" and "Paste from
-  clipboard" is gone, in bot chats and in sessions alike: the + opens the system file picker for any kind of file,
-  ⌘O (Ctrl+O on Windows/Linux) opens the same picker, and pasting into the box or dropping on the chat still attach
-  files as before. (#2870)
+- **omher's + in the message box: one way to add files, and the bot's plugins beside it.** The menu with "Photos &
+  videos", "Files" and "Paste from clipboard" is gone. In a bot's chat the + now has two rows, "Add photos and files"
+  (one system picker for any kind of file, also ⌘O / Ctrl+O) and "Plugins ›", whose submenu lists the bot's enabled
+  plugins (a colour tile and the name, the description as the tooltip) and Manage plugins; picking a plugin puts
+  "Use <plugin>: " at the start of the message, without sending it. In a session the + opens the file picker
+  straight away. Pasting into the box and dropping on the chat attach files as before. (#2870)
 
 - **omher.app shows the bot faces as a moving scene under the desktop app.** Between the omher block and the
   OMH hero there is now a band with nine soft 3D characters in the style of omher's built-in bot faces, bouncing
