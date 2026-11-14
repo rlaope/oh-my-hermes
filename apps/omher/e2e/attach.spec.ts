@@ -108,6 +108,9 @@ test("the + menu has one file item and Plugins ›, the plugins open beside it; 
   await expect(menu.locator(":scope > [role=menuitem]")).toHaveText([/^Add photos and files.*O$/, /^Plugins›$/]);
   await expect(menu.getByText(/Photos & videos|Paste from clipboard/)).toHaveCount(0);
   expect(await page.getByTestId("attach-file-input").getAttribute("accept")).toBeNull(); // pictures, videos, documents alike
+  // the menu slides in 3px: measure once it has settled
+  const settled = () => page.waitForFunction(() => document.querySelector("[data-testid=attach-menu]")?.getAnimations().every((x) => x.playState !== "running"));
+  await settled();
   const m = (await menu.boundingBox())!;
   const c = (await page.getByTestId("composer-box").boundingBox())!;
   expect(m.y + m.height).toBeLessThanOrEqual(c.y);
@@ -131,9 +134,10 @@ test("the + menu has one file item and Plugins ›, the plugins open beside it; 
   await expect(plugins.locator(".att-n")).toHaveText(["Fal", "Holographic"]);
   await expect(plugins.first()).toHaveAttribute("title", "Image generation through fal.ai.");
   await expect(sub.getByTestId("attach-manage")).toHaveText("Manage plugins");
-  const sb = (await sub.boundingBox())!;
-  expect(sb.x).toBeGreaterThanOrEqual(m.x + m.width);
-  expect(Math.abs(sb.y + sb.height - (m.y + m.height))).toBeLessThanOrEqual(2);
+  await settled();
+  const [sb, mb] = [(await sub.boundingBox())!, (await menu.boundingBox())!];
+  expect(sb.x).toBeGreaterThanOrEqual(mb.x + mb.width);
+  expect(Math.abs(sb.y + sb.height - (mb.y + mb.height))).toBeLessThanOrEqual(2);
   for (const row of await plugins.all()) expect(await row.evaluate((e) => e.getBoundingClientRect().height)).toBe(32);
   // back on the file row the submenu closes; Escape closes everything
   await page.getByTestId("attach-files").hover();
