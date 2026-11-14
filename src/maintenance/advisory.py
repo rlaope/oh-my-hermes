@@ -346,26 +346,37 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
         # Empty target with no nested children: treat as the original malformed case.
         return "model alias entry is malformed or unsafe", None
 
+    def _flush_pending() -> str | None:
+        # Commit a pending nested alias entry (or report why it is invalid) and
+        # reset the entry state. Returns the error message, or None on success.
+        nonlocal pending_alias, pending_children, pending_had_children
+        nonlocal entry_indent, child_indent
+        if pending_alias is not None:
+            err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
+            if err:
+                # Leave the pending state untouched: the caller aborts on error.
+                return err
+            if target is not None:
+                aliases[pending_alias] = target
+        pending_alias = None
+        pending_children = {}
+        pending_had_children = False
+        entry_indent = -1
+        child_indent = -1
+        return None
+
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         indent = len(line) - len(line.lstrip(" "))
         if indent == 0:
-            if in_aliases and pending_alias is not None:
-                err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
-                if err:
-                    return {}, err
-                if target is not None:
-                    aliases[pending_alias] = target
+            err = _flush_pending()
+            if err:
+                return {}, err
             in_model = stripped == "model:"
             in_aliases = False
             model_indent = 0 if in_model else -1
-            pending_alias = None
-            pending_children = {}
-            pending_had_children = False
-            entry_indent = -1
-            child_indent = -1
             if stripped.startswith("model_aliases:"):
                 if stripped != "model_aliases:":
                     return {}, "model_aliases must be a mapping"
@@ -373,49 +384,27 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
                 aliases_indent = 0
             continue
         if in_model and indent > model_indent and stripped.startswith("aliases:"):
-            if in_aliases and pending_alias is not None:
-                err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
-                if err:
-                    return {}, err
-                if target is not None:
-                    aliases[pending_alias] = target
+            err = _flush_pending()
+            if err:
+                return {}, err
             if stripped != "aliases:":
                 return {}, "model.aliases must be a mapping"
             in_aliases = True
             aliases_indent = indent
-            pending_alias = None
-            pending_children = {}
-            pending_had_children = False
-            entry_indent = -1
-            child_indent = -1
             continue
         if in_aliases:
             if indent <= aliases_indent:
-                if pending_alias is not None:
-                    err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
-                    if err:
-                        return {}, err
-                    if target is not None:
-                        aliases[pending_alias] = target
+                err = _flush_pending()
+                if err:
+                    return {}, err
                 in_aliases = False
-                pending_alias = None
-                pending_children = {}
-                pending_had_children = False
-                entry_indent = -1
-                child_indent = -1
                 continue
             # New entry or child of a pending nested entry.
             if entry_indent == -1 or indent <= entry_indent:
                 # Finalize any pending nested entry first.
-                if pending_alias is not None:
-                    err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
-                    if err:
-                        return {}, err
-                    if target is not None:
-                        aliases[pending_alias] = target
-                pending_alias = None
-                pending_children = {}
-                pending_had_children = False
+                err = _flush_pending()
+                if err:
+                    return {}, err
                 if ":" not in stripped:
                     return {}, "model alias entry is malformed"
                 alias, _, target = stripped.partition(":")
@@ -465,12 +454,9 @@ def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
                     pending_children["model"] = safe_val
                 continue
     # End of input: finalize any pending nested entry.
-    if in_aliases and pending_alias is not None:
-        err, target = _finalize_pending(pending_alias, pending_children, pending_had_children)
-        if err:
-            return {}, err
-        if target is not None:
-            aliases[pending_alias] = target
+    err = _flush_pending()
+    if err:
+        return {}, err
     return dict(sorted(aliases.items())), ""
 
 
